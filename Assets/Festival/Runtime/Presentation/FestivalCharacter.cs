@@ -6,6 +6,9 @@ namespace Festival.Presentation
     /// <summary>Visual comedy only: no animation moves collision or changes authority.</summary>
     public sealed class FestivalCharacter : MonoBehaviour
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        internal static int DevelopmentAnimationUpdates;
+#endif
         public static Transform ViewTransform;
         public bool AlwaysHighDetail;
         public bool UsesDistantMesh { get; private set; }
@@ -201,6 +204,9 @@ namespace Festival.Presentation
             float viewDistance=ViewTransform==null?0:Vector3.Distance(ViewTransform.position,transform.position);
             if(ViewTransform!=null)UpdateDetailForDistance(viewDistance);
             if(AmbientCrowd&&viewDistance>18f&&((Time.frameCount+Mathf.FloorToInt(phase*10))&1)!=0)return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentAnimationUpdates++;
+#endif
             float animationDelta=lastAnimationTime<=0?Time.deltaTime:Mathf.Max(Time.time-lastAnimationTime,.001f);
             lastAnimationTime=Time.time;
             if(faceRenderer!=null&&blinkIndex>=0&&!HighlyIntoxicated)

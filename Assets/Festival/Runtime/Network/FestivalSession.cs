@@ -10,7 +10,6 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.AI;
-using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 namespace Festival.Network
@@ -66,7 +65,6 @@ namespace Festival.Network
         private Transform actorRoot;
         private FestivalWorld world;
         private FestivalHands firstPersonHands;
-        private VolumeProfile lightingProfile;
         private bool closing;
         private void Awake()
         {
@@ -83,18 +81,12 @@ namespace Festival.Network
             ViewCamera.cullingMask &= ~(1<<31); // Hide the local world body from its first-person camera.
             ViewCamera.clearFlags=CameraClearFlags.Skybox;ViewCamera.backgroundColor=new Color(.13f,.10f,.22f);
             ViewCamera.transform.position=new Vector3(0,1.65f,-29);
-            // Give the practical bulbs and stage strips a small halo. Keep the
-            // filter narrow so the deliberately faceted models stay crisp.
+            // The world owns the single dusk/lighting Volume. The camera only
+            // opts into it, avoiding a second, lower-priority bloom override.
             ViewCamera.GetUniversalAdditionalCameraData().renderPostProcessing=true;
-            lightingProfile=ScriptableObject.CreateInstance<VolumeProfile>();
-            var bloom=lightingProfile.Add<Bloom>(true);
-            bloom.threshold.Override(1.15f);
-            bloom.intensity.Override(.22f);
-            bloom.scatter.Override(.52f);
-            bloom.maxIterations.Override(4);
-            var lighting=cameraObject.AddComponent<Volume>();lighting.isGlobal=true;lighting.priority=5;lighting.sharedProfile=lightingProfile;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log("[Festival.Lighting] Subtle bloom enabled on the first-person camera.");
+            var graphics=cameraObject.AddComponent<DevelopmentGraphicsDiagnostics>();graphics.Session=this;
+            DevelopmentDiagnostics.GraphicsEvent("Rendering","camera_ready","post_processing=true world_volume_priority=20");
 #endif
             actorRoot=new GameObject("Authoritative actor presentation").transform;
             world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
@@ -560,6 +552,6 @@ namespace Festival.Network
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
         }
-        private void OnDestroy(){Leave();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);if(lightingProfile!=null)Destroy(lightingProfile);}
+        private void OnDestroy(){Leave();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
     }
 }

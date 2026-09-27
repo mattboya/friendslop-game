@@ -219,7 +219,7 @@ namespace Festival.Presentation
                 stageLights.Add(l);
             }
             var sun=new GameObject("Twilight sun");sun.transform.SetParent(owned,false);sun.transform.rotation=Quaternion.Euler(14,-30,0);
-            var directional=sun.AddComponent<Light>();directional.type=LightType.Directional;directional.color=new Color(1,.67f,.48f);directional.intensity=.82f;directional.shadows=LightShadows.Soft;festivalSun=directional;
+            var directional=sun.AddComponent<Light>();directional.type=LightType.Directional;directional.color=new Color(1,.67f,.48f);directional.intensity=.82f;directional.shadows=LightShadows.Hard;festivalSun=directional;
             var skyTemplate=Resources.Load<Material>("FestivalSky");
             if(skyTemplate!=null)
             {
@@ -234,7 +234,7 @@ namespace Festival.Presentation
             RenderSettings.ambientMode=AmbientMode.Flat;RenderSettings.ambientLight=new Color(.48f,.51f,.59f);
             RenderSettings.fog=true;RenderSettings.fogColor=new Color(.36f,.43f,.58f);RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=36;RenderSettings.fogEndDistance=90;
             var grade=gameObject.AddComponent<Volume>();grade.isGlobal=true;grade.priority=20;
-            duskProfile=ScriptableObject.CreateInstance<VolumeProfile>();grade.profile=duskProfile;
+            duskProfile=ScriptableObject.CreateInstance<VolumeProfile>();grade.sharedProfile=duskProfile;
             duskProfile.Add<Tonemapping>(true).mode.Override(TonemappingMode.ACES);
             var colorGrade=duskProfile.Add<ColorAdjustments>(true);
             colorGrade.postExposure.Override(.15f);colorGrade.contrast.Override(8f);colorGrade.saturation.Override(-5f);
@@ -256,7 +256,13 @@ namespace Festival.Presentation
             IsReady=NavigationReady&&CampNavigationReady;
             SetPhase("Shopping");
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log("[Festival.World] Built original 80m festival with clustered stage, grove, picnic, poi, and walking crowds.");
+            DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","built","festival_navigation="+NavigationReady+" camp_navigation="+CampNavigationReady);
+            var activePipeline=GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            DevelopmentDiagnostics.GraphicsEvent("Rendering","world_configuration",
+                "pipeline="+(activePipeline==null?"missing":activePipeline.name)
+                +" soft_supported="+(activePipeline!=null&&activePipeline.supportsSoftShadows)
+                +" festival_shadow_request="+festivalSun.shadows+" camp_shadow_request="+campSun.shadows
+                +" world_volume_priority=20");
 #endif
         }
         private void BuildCamp(Material earth,Material wood,Material mint,Material rose,Material gold,Material dark,Material path,Material lampGold,Material lampRose,Material lampMint)
@@ -388,7 +394,7 @@ namespace Festival.Presentation
             seller.transform.localScale=Vector3.Scale(Vector3.one*.85f,seller.ShapeScale);
             var campLight=new GameObject("Camp sunset");campLight.transform.SetParent(camp,false);
             campLight.transform.rotation=Quaternion.Euler(18,-35,0);
-            campSun=campLight.AddComponent<Light>();campSun.type=LightType.Directional;campSun.intensity=1.3f;campSun.color=new Color(1,.82f,.65f);campSun.shadows=LightShadows.Soft;
+            campSun=campLight.AddComponent<Light>();campSun.type=LightType.Directional;campSun.intensity=1.3f;campSun.color=new Color(1,.82f,.65f);campSun.shadows=LightShadows.Hard;
             Physics.SyncTransforms();
             campSurface=camp.gameObject.AddComponent<NavMeshSurface>();
             campSurface.collectObjects=CollectObjects.Children;
@@ -479,7 +485,7 @@ namespace Festival.Presentation
             RenderSettings.sun=festival?festivalSun:campSun;
             Physics.SyncTransforms();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log("[Festival.World] Active space: "+(festival?"festival":"campsite")+"; camp navigation="+CampNavigationReady+"; festival navigation="+NavigationReady);
+            DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","phase","space="+(festival?"festival":"campsite")+" camp_navigation="+CampNavigationReady+" festival_navigation="+NavigationReady);
 #endif
         }
         private void Update()

@@ -22,7 +22,7 @@ namespace Festival.Presentation
             if(prefab==null)
             {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                Debug.LogWarning("[Festival.Art] Missing Blender prop: "+resource);
+                Debug.LogWarning("[Festival.Rendering] action=missing_resource resource="+resource);
 #endif
                 return null;
             }

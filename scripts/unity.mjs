@@ -97,6 +97,11 @@ else if(action==='build-mac-development')
   run('build-mac-development',['-buildTarget','OSXUniversal','-executeMethod','Festival.Editor.BuildEntry.BuildMacDevelopment','-quit'],'FESTIVAL BUILD PASSED');
   console.log('FESTIVAL BUILD PASSED');
 }
+else if(action==='build-mac-release')
+{
+  run('build-mac-release',['-buildTarget','OSXUniversal','-executeMethod','Festival.Editor.BuildEntry.BuildMacRelease','-quit'],'FESTIVAL BUILD PASSED');
+  console.log('FESTIVAL RELEASE BUILD PASSED');
+}
 else if(action==='build-windows-development')
 {
   run('build-windows-development',['-buildTarget','Win64','-executeMethod','Festival.Editor.BuildEntry.BuildWindowsDevelopment','-quit'],'FESTIVAL BUILD PASSED');
@@ -109,6 +114,6 @@ else if(action==='build-windows-release')
 }
 else
 {
-  console.error('Usage: node scripts/unity.mjs generate|validate|test-edit|test-play|build-mac-development|build-windows-development|build-windows-release');
+  console.error('Usage: node scripts/unity.mjs generate|validate|test-edit|test-play|build-mac-development|build-mac-release|build-windows-development|build-windows-release');
   process.exit(2);
 }

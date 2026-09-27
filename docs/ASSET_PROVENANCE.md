@@ -22,15 +22,16 @@ The later visual pass adds three accessory silhouettes built from Unity primitiv
 
 ## September 25 playable asset pass
 
-Regenerate the original source and exports with Blender 5.2.2 LTS:
+The original source and exports were generated with Blender 5.2.2 LTS. For new production work, stage the generated base files, inspect them, then explicitly publish them:
 
 ```sh
-/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/generate_modular_character.py
-/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/generate_festival_hands.py
-/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/generate_festival_world_assets.py
+node scripts/art-pipeline.mjs stage all
+node scripts/art-pipeline.mjs publish artifacts/asset-staging/<staged-run>
 ```
 
-The manifests in `ArtSource/` record mesh groups and model counts. The character includes six body and six face meshes, four variants in each of eight wardrobe slots, six role overlays and escalating eye geometry. The hands export has three shape meshes and four sleeves. The world script exports 26 stage, location, foliage, vehicle, campsite, landmark and item FBXs. There are no downloaded or marketplace models in this pass. Runtime clothing selection, role overlays, palette assignment, eye tint, prop attachments and trails are original Unity code.
+The stage command writes generated Blender files, manifests and FBXs under ignored `artifacts/asset-staging/`; it cannot overwrite runtime assets. Publishing checks the source and export set, FBX headers, character rig and distance mesh manifest, file hashes, and existing Unity `.meta` files. It stores prior files in the stage directory, preserves stable Unity GUIDs, and copies generated Blender bases into `ArtSource/Generated/`. Hand-authored finishing files must live outside that generated directory. The top-level `.blend` files are the pre-staging baseline; new published manifests remain in `ArtSource/`. Review the staged source before publishing, then run Unity validation and inspect native renders.
+
+The manifests in `ArtSource/` record mesh groups and model counts. The character includes six body and six face meshes, four variants in each of eight wardrobe slots, six role overlays and escalating eye geometry. The hands export has three shape meshes and four sleeves. The world script exports 27 stage, location, foliage, vehicle, campsite, landmark and item FBXs. There are no downloaded or marketplace models in this pass. Runtime clothing selection, role overlays, palette assignment, eye tint, prop attachments and trails are original Unity code.
 
 ## September 25 character fit revision
 

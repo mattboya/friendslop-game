@@ -6,14 +6,16 @@ import bpy
 import bmesh
 import json
 import math
+import os
 import sys
 from pathlib import Path
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "ArtSource"
-OUT = ROOT / "Assets/Festival/Art/Resources"
+STAGE = ROOT / os.environ.get("FESTIVAL_ASSET_STAGE", "artifacts/asset-staging/manual")
+SOURCE = STAGE / "ArtSource"
+OUT = STAGE / "Resources"
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 FACE_STYLE = args[args.index("--face-style") + 1] if "--face-style" in args else "both"
 if FACE_STYLE not in {"both", "current", "scruffy", "deadpan"}:
@@ -863,7 +865,7 @@ character_groups = {obj.name: sum(len(p.vertices) - 2 for p in obj.data.polygons
 manifest = {
     "source": "Original shaped ring topology, weighted continuous limbs, tailored clothing and facial geometry; no external assets",
     "qualityRevision": 3 if FACE_STYLE == "both" else 2,
-    "runtime": str((OUT / "FestivalCharacter.fbx").relative_to(ROOT)),
+    "runtime": "Assets/Festival/Art/Resources/FestivalCharacter.fbx",
     "faceStyle": FACE_STYLE,
     "heightMetres": 2.3,
     "materials": 2,

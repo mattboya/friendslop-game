@@ -32,7 +32,7 @@ namespace Festival.Presentation
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice;
+        private Text status, notice, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel;
         private Text musicValue,lookValue,motionValue,contrastValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -71,6 +71,7 @@ namespace Festival.Presentation
         private int previousCash=-1,previousUnits=-1;
         private string previousRound="";
         private bool? appliedContrast;
+        private bool? expandedGear;
         private Image effectWash;
         private float baseFov=75;
         private float nextActionRefresh;
@@ -181,8 +182,10 @@ namespace Festival.Presentation
             Accent(noticePanel.transform,Orange);
             notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);noticePanel.SetActive(false);
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
-            var inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text="GEAR   /   1–3 EQUIP     Q USE     G DROP";
+            inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text="GEAR   /   1–3 EQUIP     Q USE     G DROP";
             Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);
+            emptyGearLabel=Label(inventoryPanel.transform,"Empty gear",20,TextAnchor.MiddleCenter);
+            emptyGearLabel.color=Mint;Fill(emptyGearLabel.rectTransform,6);emptyGearLabel.gameObject.SetActive(false);
             for(int i=0;i<3;i++)
             {
                 float left=.045f+i*.313f;
@@ -440,6 +443,7 @@ namespace Festival.Presentation
             cancelButton.SetActive(state.Phase=="Playing"&&player.InteractionId!="");
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             UpdateText(state,player);
+            UpdateGearLayout(player.Inventory.Count>0);
             UpdateActions(state,player);
             if(checkoutItem!="" && (Catalog.FindItem(checkoutItem)==null || (state.Phase=="Shopping"?(player.HeldOfferId!=checkoutItem||!Near(player,0,7)):(state.Phase!="Playing"||FocusedOffer(state,player)!=checkoutItem))))checkoutItem="";
             var checkoutDefinition=Catalog.FindItem(checkoutItem);
@@ -479,6 +483,21 @@ namespace Festival.Presentation
                     +"  spoon trust "+(player.Inventory.Exists(i=>i.ItemId=="little_spoon")?"x0.90":"off");
             }
 #endif
+        }
+
+        private void UpdateGearLayout(bool hasGear)
+        {
+            if(expandedGear!=hasGear)
+            {
+                expandedGear=hasGear;
+                // A vacant three-slot bar needlessly covers the world during
+                // arrival and after the last item is used.
+                Place(Rect(inventoryPanel),hasGear ? .714f : .758f,.024f,.978f,hasGear ? .148f : .082f);
+                inventoryHeading.gameObject.SetActive(hasGear);
+                emptyGearLabel.gameObject.SetActive(!hasGear);
+                foreach(var slot in slotFrames)slot.gameObject.SetActive(hasGear);
+            }
+            if(!hasGear)emptyGearLabel.text="0 / 3  •  NO GEAR";
         }
 
         private void UpdateText(RoundState state,PlayerState player)

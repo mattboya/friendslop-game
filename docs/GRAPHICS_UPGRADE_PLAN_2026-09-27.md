@@ -4,6 +4,7 @@ Date: September 27, 2026
 Status: Proposed implementation plan; no graphics implementation is implied by this document.  
 Reference: [Dear Passengers — “Another Friendslop Game” teaser](https://www.youtube.com/watch?v=luWunttkCgY)  
 Overall regression risk: **7/10** — estimated likelihood of disrupting existing functionality during the full upgrade, before the controls below. This is an engineering judgment, not a measured probability.
+Tool constraint: use free tools and assets with documented commercial use rights; do not depend on paid subscriptions or expiring trials.
 
 ## 1. Outcome we are building toward
 
@@ -91,10 +92,19 @@ These are planning defaults. Resolve the first four before committing substantia
 | Character direction | Polish our current adult festival identity toward the trailer's expressiveness | A major proportional redesign changes every garment, attachment, and animation |
 | Time of day | Readable dusk with warm practical lights | Preserves the established festival identity while improving contrast |
 | Performance target | 1080p, 60 fps on an explicitly named minimum Windows PC; separately measured Mac development configuration | A performance promise needs hardware, settings, and reproducible scenes |
-| Asset production | Original hero assets and a coherent original modular kit | Establishes a consistent look and clear source ownership; any purchased assets need a specific integration decision |
+| Asset production | Original hero assets and a coherent original modular kit made with free tools | Establishes a consistent look and clear source ownership without paid asset dependencies |
 | Renderer | Continue with Unity URP | The initial work can be evaluated within the current project and deployment architecture |
 | Wardrobe expansion | Freeze current variety while proving the new visual standard | Prevents multiplying fit and animation work before the master is accepted |
 | Gameplay footprint | Use existing interactions and landmark anchors for the first slice | Allows visual quality to be judged without simultaneously redesigning navigation and rules |
+
+### Free toolchain
+
+- **Blender:** modeling, sculpting, UVs, texture painting, rigging, animation, baking, and export. Keep the existing original Blender sources and generators as the production base.
+- **Krita:** optional free, open-source painting for concept art and detailed 2D texture work. Blender can cover the first texture pass without another application.
+- **Unity Personal with URP:** current game engine and renderer. Unity Personal is free while the developer or organization meets its current eligibility rules; check eligibility as the project grows. Unity's [current Personal page](https://unity.com/products/unity-personal) states a USD $200,000 revenue and funds-raised threshold over the previous 12 months.
+- **Project scripts and Git:** existing free build, validation, source-control, and asset-generation workflow.
+
+Adobe Substance 3D Painter is a paid product after its [30-day trial](https://www.adobe.com/products/substance3d/plans.html), so it is excluded from this production plan. Any free third-party asset or tool must have a license compatible with the game's intended commercial release and be recorded in [asset provenance](ASSET_PROVENANCE.md). Do not build the pipeline around an expiring trial.
 
 ## 5. Technical architecture
 
@@ -364,3 +374,7 @@ Update `IMPLEMENTATION_STATUS.md`, the art/source documentation, and this plan's
 - [ ] M5: complete human runs, final visual acceptance, release diagnostic check, source handoff.
 
 The first implementation task is M0. The first production commitment is the M2 sample area. Full-level asset production follows evidence that the sample meets the intended visual and technical standard.
+
+### September 27 implementation checkpoint
+
+M0 has a recoverable source commit, archived Mac development build, [dated native views](GRAPHICS_BASELINE_2026-09-27.md) and an [initial sampled Mac cost breakdown](GRAPHICS_PROFILE_2026-09-27.md). The graphics baseline still needs a named Windows minimum machine, controlled CPU/GPU profiling and a human-paced route. M1 technical work has a single owned post-processing volume, native verification of the active URP shadow configuration, opt-in development graphics sampling, a Mac release diagnostic exclusion check and a staged Blender path whose 36 outputs passed validation. Publishing staged assets remains unexercised. The four production decisions in Section 4 and art/sample acceptance remain open, so M0 and M1 exit gates are not marked complete.

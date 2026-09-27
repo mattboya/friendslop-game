@@ -4,6 +4,15 @@ Status date: September 27, 2026. **Playable macOS development build with a camps
 
 The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION.md). The [reference research](docs/FRIENDSLOP_RESEARCH_2026-09-27.md) explains the co-op loop choices. The [playtest guide](docs/PLAYTEST_2026-09-24.md) explains the playable route and remaining limitations.
 
+## Graphics upgrade checkpoint
+
+- The [dated graphics baseline](docs/GRAPHICS_BASELINE_2026-09-27.md) pins the clean source commit, eight native comparison captures, Mac hardware and smoke conditions. A local archive preserves the previous development player. The latest scripted rhythm frame interval was 8.3 ms p95; it is not an isolated CPU/GPU or Windows minimum-spec result.
+- The world now owns the single ACES/color/bloom volume. The first-person camera opts into that volume instead of adding a lower-priority bloom override. A native log confirmed URP soft-shadow support is disabled, so both suns now request the supported hard-shadow mode. Improving shadow quality remains an experiment, not a passed visual improvement.
+- F9 opens an opt-in graphics overlay only in editor/development builds. It samples frame percentiles, available CPU/GPU timings, visible renderer and LOD counts, animation updates, light/shadow settings, build ID, seed and camera mode. Ten-second category logs are also opt-in. The Mac release build and launch passed, and a binary check found no development diagnostic types in its runtime assembly.
+- Blender generators now stage source and exports under ignored `artifacts/asset-staging/`. `scripts/art-pipeline.mjs` validates manifests, FBX files and hashes before explicit publication while preserving Unity `.meta` files and the previous versions. All 36 staged files in a full generator run passed validation. The publish operation has not been exercised, and no staged art has been accepted into runtime yet.
+- The empty equipment bar now collapses to a compact count; it expands to the original three slots as soon as gear is owned. [Empty camp view](docs/graphics-ui-2026-09-27/empty-gear-camp.png) and [equipped camp view](docs/graphics-ui-2026-09-27/equipped-gear-camp.png) are from the native two-client smoke. The larger objective/vitals cards still need a broader HUD pass during M2.
+- Domain, static project, EditMode, PlayMode, development build, two-client native smoke and release diagnostic exclusion passed for this checkpoint. The [initial Mac profile](docs/GRAPHICS_PROFILE_2026-09-27.md) contains point samples up to 1,155 visible renderers, 15.5 ms CPU and 12.2 ms GPU in a populated view; it is not an isolated benchmark. Human-paced route review, art direction decisions, named minimum Windows hardware, controlled CPU/GPU profiling and visual acceptance remain open. The full graphics upgrade is not complete.
+
 ## Latest campsite and interaction pass
 
 - Added a timber-and-canvas checkout kiosk, shelf category signs, slatted counter details, softer model edges, and smoother tree crowns. The original Blender kit now exports 27 world and prop models.

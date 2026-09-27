@@ -9,7 +9,8 @@ if(!existsSync(binary))throw new Error('Build the macOS development player first
 const processes=[];
 const run=(role,args)=>new Promise((resolve,reject)=>{
   const log=path.join(dir,role+'.log');if(existsSync(log))unlinkSync(log);
-  const child=spawn(binary,[...args,'--port','17779','--profile','smoke_'+role,'--name',role,'--smoke-test','-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',log],{cwd:root,stdio:'ignore'});
+  const profiling=process.env.FESTIVAL_GRAPHICS_PROFILE==='1'?['--graphics-profile']:[];
+  const child=spawn(binary,[...args,'--port','17779','--profile','smoke_'+role,'--name',role,'--smoke-test',...profiling,'-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',log],{cwd:root,stdio:'ignore'});
   processes.push(child);
   child.on('error',reject);
   child.on('exit',code=>{

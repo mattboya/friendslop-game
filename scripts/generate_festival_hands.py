@@ -1,12 +1,16 @@
 """Original always-visible first-person arm source for the festival prototype."""
 import bpy
 import json
+import os
 from pathlib import Path
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "ArtSource"
-OUT = ROOT / "Assets/Festival/Art/Resources"
+STAGE = ROOT / os.environ.get("FESTIVAL_ASSET_STAGE", "artifacts/asset-staging/manual")
+SOURCE = STAGE / "ArtSource"
+OUT = STAGE / "Resources"
+SOURCE.mkdir(parents=True, exist_ok=True)
+OUT.mkdir(parents=True, exist_ok=True)
 bpy.context.preferences.filepaths.save_version = 0
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
@@ -15,7 +19,7 @@ mat = bpy.data.materials.new("FestivalPalette")
 mat.use_nodes = True
 bsdf = mat.node_tree.nodes.get("Principled BSDF")
 bsdf.inputs["Roughness"].default_value = .9
-image = bpy.data.images.load(str(OUT / "FestivalPalette.png"))
+image = bpy.data.images.load(str(ROOT / "Assets/Festival/Art/Resources/FestivalPalette.png"))
 texture = mat.node_tree.nodes.new("ShaderNodeTexImage")
 texture.image = image
 texture.interpolation = "Closest"

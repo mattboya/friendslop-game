@@ -13,6 +13,8 @@ namespace Festival.Editor
         public static void BuildWindowsRelease(){Build(BuildTarget.StandaloneWindows64,"Builds/Windows/Release/FestivalCoop.exe",false);}
         [MenuItem("Festival/Build/macOS Development")]
         public static void BuildMacDevelopment(){Build(BuildTarget.StandaloneOSX,"Builds/macOS/Development/FestivalCoop.app",true);}
+        [MenuItem("Festival/Build/macOS Release")]
+        public static void BuildMacRelease(){Build(BuildTarget.StandaloneOSX,"Builds/macOS/Release/FestivalCoop.app",false);}
         private static void Build(BuildTarget target,string path,bool development)
         {
             if(!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone,target))throw new InvalidOperationException("Install Unity platform build support for "+target);

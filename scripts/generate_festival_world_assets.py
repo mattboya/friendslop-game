@@ -2,12 +2,14 @@
 import bpy
 import json
 import math
+import os
 from pathlib import Path
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "ArtSource"
-OUT = ROOT / "Assets/Festival/Art/Resources"
+STAGE = ROOT / os.environ.get("FESTIVAL_ASSET_STAGE", "artifacts/asset-staging/manual")
+SOURCE = STAGE / "ArtSource"
+OUT = STAGE / "Resources"
 SOURCE.mkdir(exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=True)
 bpy.context.preferences.filepaths.save_version = 0
