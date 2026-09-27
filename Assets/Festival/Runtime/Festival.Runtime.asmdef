@@ -1,0 +1,16 @@
+{
+  "name": "Festival.Runtime",
+  "rootNamespace": "Festival",
+  "references": [
+    "Festival.Core",
+    "Unity.Netcode.Runtime",
+    "Unity.Networking.Transport",
+    "Unity.InputSystem",
+    "Unity.ugui",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime",
+    "Unity.AI.Navigation",
+    "Unity.Collections"
+  ],
+  "autoReferenced": true
+}

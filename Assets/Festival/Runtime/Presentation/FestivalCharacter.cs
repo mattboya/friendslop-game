@@ -1,0 +1,352 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Festival.Presentation
+{
+    /// <summary>Visual comedy only: no animation moves collision or changes authority.</summary>
+    public sealed class FestivalCharacter : MonoBehaviour
+    {
+        public static Transform ViewTransform;
+        public bool AlwaysHighDetail;
+        public bool UsesDistantMesh { get; private set; }
+        sealed class DetailPart
+        {
+            public SkinnedMeshRenderer Renderer;
+            public Mesh Detailed,Distant;
+        }
+        static Dictionary<string,Mesh> distantMeshes;
+        readonly List<DetailPart> detailParts=new List<DetailPart>();
+        string fitName;
+        readonly Dictionary<string,Transform> bones=new Dictionary<string,Transform>();
+        readonly Dictionary<string,Quaternion> rest=new Dictionary<string,Quaternion>();
+        readonly Dictionary<string,Quaternion> targets=new Dictionary<string,Quaternion>();
+        Vector3 previous;
+        float speed,phase,walkCycle;
+        bool hasPrevious;
+        int danceStyle;
+        int latestDanceDirection=-1;
+        float latestDanceStepTime=-100;
+        public string Pose="Idle";
+        public bool Crowd;
+        public bool AmbientCrowd;
+        public float Threat;
+        public FestivalAppearance Appearance { get; private set; }
+        public float HeightScale { get; private set; }=1;
+        public Vector3 ShapeScale => Appearance.Scale;
+        Material ownedMaterial;
+        Material skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
+        Color baseTint;
+        float lastAppliedThreat=-1;
+        float lastAnimationTime;
+        Material eyeMaterial;
+        Texture2D ownedPalette;
+        Renderer eyeRenderer;
+        Renderer spoonRenderer;
+        SkinnedMeshRenderer faceRenderer;
+        int blinkIndex=-1;
+        int intoxicatedEyesIndex=-1;
+        public bool HighlyIntoxicated { get; private set; }
+        public bool RedEyes { get; private set; }
+        GameObject poiLeft,poiRight,equippedProp;
+        string equippedId="";
+        public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
+        {
+            var asset=Resources.Load<GameObject>("FestivalCharacter");
+            var go=asset!=null?Instantiate(asset,parent):new GameObject(name);
+            go.name=name;go.transform.SetParent(parent,false);
+            var actor=go.AddComponent<FestivalCharacter>();
+            actor.Appearance=FestivalAppearance.For(name,role);
+            actor.fitName="Fit_"+actor.Appearance.Gender+"_"+actor.Appearance.Shape;
+            if(distantMeshes==null)
+            {
+                distantMeshes=new Dictionary<string,Mesh>();
+                var distant=Resources.Load<GameObject>("FestivalCharacterDistant");
+                if(distant!=null)foreach(var renderer in distant.GetComponentsInChildren<SkinnedMeshRenderer>(true))distantMeshes[renderer.name]=renderer.sharedMesh;
+            }
+            var template=Resources.Load<Material>("FestivalLit");
+            if(template==null)template=new Material(Shader.Find("Standard"));
+            actor.HeightScale=actor.Appearance.Scale.y;
+            actor.danceStyle=FestivalAppearance.Pick(name,"dance",3);
+            actor.ownedPalette=actor.Appearance.CreatePalette();
+            actor.ownedMaterial=new Material(template){name="Festival actor palette"};
+            actor.ownedMaterial.mainTexture=actor.ownedPalette;
+            actor.baseTint=Color.Lerp(Color.white,tint,.04f);
+            actor.ownedMaterial.color=actor.baseTint;
+            actor.ownedMaterial.SetFloat("_Smoothness",.10f);
+            actor.skinMaterial=new Material(actor.ownedMaterial){name="Festival skin"};actor.skinMaterial.SetFloat("_Smoothness",.24f);
+            actor.hairMaterial=new Material(actor.ownedMaterial){name="Festival hair"};actor.hairMaterial.SetFloat("_Smoothness",.18f);
+            actor.gearMaterial=new Material(actor.ownedMaterial){name="Festival equipment"};actor.gearMaterial.SetFloat("_Smoothness",.30f);
+            actor.lensMaterial=new Material(actor.ownedMaterial){name="Festival eyewear"};actor.lensMaterial.SetFloat("_Smoothness",.68f);
+            actor.scleraMaterial=new Material(template){name="Festival eye whites",mainTexture=Texture2D.whiteTexture,color=new Color(.98f,.95f,.88f)};
+            actor.scleraMaterial.SetFloat("_Smoothness",.22f);
+            foreach(var renderer in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if(renderer.name=="EyeGlow")
+                {
+                    actor.eyeRenderer=renderer;
+                    actor.eyeMaterial=new Material(template){name="Festival escalating eyes"};
+                    actor.eyeMaterial.mainTexture=Texture2D.whiteTexture;
+                    renderer.sharedMaterial=actor.eyeMaterial;renderer.enabled=false;
+                }
+                else
+                {
+                    // Unity imports this FBX with eye whites in submesh 0 and
+                    // palette colored iris, pupils, brows and lips in submesh 1.
+                    if(renderer.name.StartsWith("Face_"))renderer.sharedMaterials=new[]{actor.scleraMaterial,actor.skinMaterial};
+                    else renderer.sharedMaterial=actor.SurfaceFor(renderer.name);
+                    renderer.enabled=actor.KeepMesh(renderer.name);
+                    if(renderer.name=="Equipment_LittleSpoon")actor.spoonRenderer=renderer;
+                }
+                if(renderer is SkinnedMeshRenderer skin && !renderer.name.StartsWith("Body_"))
+                {
+                    for(int shape=0;shape<skin.sharedMesh.blendShapeCount;shape++)skin.SetBlendShapeWeight(shape,0);
+                    if(renderer.enabled&&renderer.name.StartsWith("Face_")){actor.faceRenderer=skin;actor.blinkIndex=skin.sharedMesh.GetBlendShapeIndex("Blink");actor.intoxicatedEyesIndex=skin.sharedMesh.GetBlendShapeIndex("WideIntoxicatedEyes");}
+                    string fit="Fit_"+actor.Appearance.Gender+"_"+actor.Appearance.Shape;
+                    int index=skin.sharedMesh.GetBlendShapeIndex(fit);
+                    if(index>=0)skin.SetBlendShapeWeight(index,100);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    else Debug.LogWarning("[Festival.Fit] Missing "+fit+" on "+renderer.name);
+#endif
+                }
+                if(renderer is SkinnedMeshRenderer detail&&(renderer.enabled||renderer.name=="EyeGlow"||renderer.name=="Equipment_LittleSpoon")&&distantMeshes.TryGetValue(renderer.name,out var distantMesh))
+                    actor.detailParts.Add(new DetailPart{Renderer=detail,Detailed=detail.sharedMesh,Distant=distantMesh});
+            }
+            var animatedBones=new HashSet<string>{"Hips","Spine","Head","ArmL","ArmR","ForearmL","ForearmR","HandL","HandR","LegL","LegR","ShinL","ShinR"};
+            // Never reset the presentation root: its facing belongs to the session.
+            foreach(var t in go.GetComponentsInChildren<Transform>())if(animatedBones.Contains(t.name)&&!actor.bones.ContainsKey(t.name)){actor.bones[t.name]=t;actor.rest[t.name]=t.localRotation;}
+            actor.phase=FestivalAppearance.Pick(name,"phase",100)*.137f;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(actor.bones.Count<13 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
+            if(actor.blinkIndex<0||actor.detailParts.Count==0)Debug.LogWarning("[Festival.Art] Facial animation or distant character meshes are missing: "+name);
+            if(!name.StartsWith("Cosmetic dancer"))Debug.Log($"[Festival.Art] {name} body={actor.Appearance.Gender}/{actor.Appearance.Shape} face={actor.Appearance.Face} head={actor.Appearance.Headgear} shades={actor.Appearance.Sunglasses} shirt={actor.Appearance.Shirt} pants={actor.Appearance.Pants} shoes={actor.Appearance.Shoes} beard={actor.Appearance.FacialHair} hair={actor.Appearance.Hairstyle}/{actor.Appearance.HairColor} accessory={actor.Appearance.Accessory} role={role}");
+#endif
+            return actor;
+        }
+        bool KeepMesh(string mesh)
+        {
+            var look=Appearance;
+            if(mesh.StartsWith("Body_"))return mesh=="Body_"+look.Gender+"_"+look.Shape;
+            if(mesh.StartsWith("Face_"))return mesh=="Face_"+look.Gender+"_"+look.Face;
+            if(mesh.StartsWith("Shirt_"))return mesh=="Shirt_"+look.Shirt;
+            if(mesh.StartsWith("Pants_"))return mesh=="Pants_"+look.Pants;
+            if(mesh.StartsWith("Shoes_"))return mesh=="Shoes_"+look.Shoes;
+            if(mesh.StartsWith("Headgear_"))return mesh=="Headgear_"+look.Headgear;
+            if(mesh.StartsWith("Sunglasses_"))return mesh=="Sunglasses_"+look.Sunglasses;
+            if(mesh.StartsWith("FacialHair_"))return mesh=="FacialHair_"+look.FacialHair;
+            if(mesh.StartsWith("HairTop_"))return mesh=="HairTop_"+look.Hairstyle && look.Headgear<0;
+            if(mesh=="HairUnderHat")return look.Headgear==2 || look.Headgear==3;
+            if(mesh.StartsWith("Hairstyle_"))return mesh=="Hairstyle_"+look.Hairstyle;
+            if(mesh.StartsWith("Accessory_"))return mesh=="Accessory_"+look.Accessory;
+            if(mesh.StartsWith("Role_"))return mesh=="Role_"+look.Role;
+            return false;
+        }
+        Material SurfaceFor(string mesh)
+        {
+            if(mesh.StartsWith("Body_")||mesh.StartsWith("Face_"))return skinMaterial;
+            if(mesh.StartsWith("Hair")||mesh.StartsWith("FacialHair_"))return hairMaterial;
+            if(mesh.StartsWith("Sunglasses_"))return lensMaterial;
+            if(mesh.StartsWith("Equipment_"))return gearMaterial;
+            return ownedMaterial;
+        }
+        public void SetLittleSpoon(bool worn)
+        {
+            if(spoonRenderer!=null)spoonRenderer.enabled=worn;
+        }
+        public void SetEquippedItem(string itemId)
+        {
+            itemId=itemId??"";
+            if(equippedId==itemId)return;
+            equippedId=itemId;
+            if(equippedProp!=null)Destroy(equippedProp);
+            equippedProp=null;
+            if(itemId==""||itemId=="little_spoon"||!bones.TryGetValue("HandR",out var hand))return;
+            var resource=Festival.Network.FestivalSession.DropModel(itemId);
+            if(resource==null)return;
+            equippedProp=FestivalArtView.Create(hand,resource);
+            if(equippedProp==null)return;
+            equippedProp.name="Equipped "+itemId;
+            equippedProp.transform.localPosition=new Vector3(0,-.23f,-.10f);
+            equippedProp.transform.localRotation=Quaternion.Euler(12,0,-18);
+            var size=hand.lossyScale;
+            equippedProp.transform.localScale=new Vector3(.27f/Mathf.Max(.01f,Mathf.Abs(size.x)),.27f/Mathf.Max(.01f,Mathf.Abs(size.y)),.27f/Mathf.Max(.01f,Mathf.Abs(size.z)));
+        }
+        public void SetHighlyIntoxicated(bool value)
+        {
+            if(HighlyIntoxicated==value)return;
+            HighlyIntoxicated=value;
+            if(faceRenderer!=null)
+            {
+                if(blinkIndex>=0)faceRenderer.SetBlendShapeWeight(blinkIndex,0);
+                if(intoxicatedEyesIndex>=0)faceRenderer.SetBlendShapeWeight(intoxicatedEyesIndex,value?100:0);
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(value&&intoxicatedEyesIndex<0)Debug.LogWarning("[Festival.Art] Wide intoxicated eyes missing: "+name);
+#endif
+        }
+        public void SetRedEyes(bool value)
+        {
+            if(RedEyes==value)return;
+            RedEyes=value;
+            if(scleraMaterial!=null)scleraMaterial.color=value?new Color(1f,.46f,.44f):new Color(.98f,.95f,.88f);
+        }
+        /// <summary>A visual response to a rhythm press; it never changes movement or scoring.</summary>
+        public void PulseDanceStep(int direction)
+        {
+            if(direction<0||direction>3)return;
+            latestDanceDirection=direction;
+            latestDanceStepTime=Time.time;
+        }
+        void LateUpdate()
+        {
+            float viewDistance=ViewTransform==null?0:Vector3.Distance(ViewTransform.position,transform.position);
+            if(ViewTransform!=null)UpdateDetailForDistance(viewDistance);
+            if(AmbientCrowd&&viewDistance>18f&&((Time.frameCount+Mathf.FloorToInt(phase*10))&1)!=0)return;
+            float animationDelta=lastAnimationTime<=0?Time.deltaTime:Mathf.Max(Time.time-lastAnimationTime,.001f);
+            lastAnimationTime=Time.time;
+            if(faceRenderer!=null&&blinkIndex>=0&&!HighlyIntoxicated)
+            {
+                float cycle=(Time.time+phase)%(3.6f+phase*.11f);
+                faceRenderer.SetBlendShapeWeight(blinkIndex,cycle<.18f?Mathf.Sin(cycle/.18f*Mathf.PI)*100:0);
+            }
+            bool performingPoi=Pose=="Poi";
+            if(performingPoi && poiLeft==null)PreparePoi();
+            if(poiLeft!=null)poiLeft.SetActive(performingPoi);
+            if(poiRight!=null)poiRight.SetActive(performingPoi);
+            var delta=hasPrevious?transform.position-previous:Vector3.zero;previous=transform.position;hasPrevious=true;
+            float measuredSpeed=hasPrevious&&delta.magnitude<2?Mathf.Min(6,delta.magnitude/animationDelta):0;
+            speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
+            if(measuredSpeed>.12f)walkCycle+=delta.magnitude*(Mathf.PI*2/1.25f);
+            float t=Time.time*4+phase,wave=Mathf.Sin(t),walk=Mathf.Sin(walkCycle);
+            if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit");
+            foreach(var item in bones)targets[item.Key]=rest[item.Key];
+            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose=="Dj"||Pose=="Distracted";
+            if(Pose=="Downed")
+            {
+                Aim("Hips",new Vector3(75,0,walk*4));Aim("Head",new Vector3(-35,0,12));
+                Aim("ArmL",new Vector3(-85+walk*20,0,20));Aim("ArmR",new Vector3(-85-walk*20,0,-20));
+                Aim("LegL",new Vector3(walk*12,0,10));Aim("LegR",new Vector3(-walk*12,0,-10));
+            }
+            else if(dance)
+            {
+                float bounce=Mathf.Max(0,Mathf.Sin(Time.time*12.56f+phase));
+                Aim("Hips",new Vector3(6+bounce*5,Mathf.Sin(t*.5f)*18,wave*12));Aim("Spine",new Vector3(-8-bounce*5,0,-wave*16));
+                Aim("Head",new Vector3(Mathf.Sin(t+1)*12-bounce*7,Mathf.Sin(t*.5f)*20,8));
+                if(danceStyle==0)
+                {
+                    Aim("ArmL",new Vector3(-75+Mathf.Sin(t+1)*38,0,-35));Aim("ArmR",new Vector3(-60+Mathf.Sin(t+.4f)*45,0,55));
+                    Aim("ForearmL",new Vector3(-50+wave*25,0,0));Aim("ForearmR",new Vector3(-65-wave*30,0,0));
+                }
+                else if(danceStyle==1)
+                {
+                    Aim("ArmL",new Vector3(-35+wave*30,0,-68));Aim("ArmR",new Vector3(-35-wave*30,0,68));
+                    Aim("ForearmL",new Vector3(-70,0,25));Aim("ForearmR",new Vector3(-70,0,-25));
+                }
+                else
+                {
+                    Aim("ArmL",new Vector3(-95+wave*18,0,-16));Aim("ArmR",new Vector3(-25-wave*40,0,25));
+                    Aim("ForearmL",new Vector3(-15,0,0));Aim("ForearmR",new Vector3(-100,0,0));
+                }
+                Aim("LegL",new Vector3(Mathf.Max(0,wave)*25+bounce*5,0,danceStyle==1?8:0));
+                Aim("LegR",new Vector3(Mathf.Max(0,-wave)*25+bounce*5,0,danceStyle==1?-8:0));
+                float step=Mathf.Clamp01(1-(Time.time-latestDanceStepTime)/.38f);
+                if(step>0)
+                {
+                    float sideways=latestDanceDirection==0?-1:latestDanceDirection==3?1:0;
+                    Layer("Hips",new Vector3(latestDanceDirection==1?18*step:-7*step,0,sideways*17*step));
+                    Layer("Spine",new Vector3(latestDanceDirection==2?-11*step:0,0,-sideways*13*step));
+                    Layer("LegL",new Vector3((latestDanceDirection==0||latestDanceDirection==2?24:-8)*step,0,-sideways*7*step));
+                    Layer("LegR",new Vector3((latestDanceDirection==3||latestDanceDirection==2?24:-8)*step,0,-sideways*7*step));
+                    Layer("ArmL",new Vector3((latestDanceDirection==2?-25:10)*step,0,-sideways*11*step));
+                    Layer("ArmR",new Vector3((latestDanceDirection==2?-25:10)*step,0,-sideways*11*step));
+                }
+            }
+            else
+            {
+                float move=Mathf.Clamp01(speed/1.6f),stride=walk*move;
+                Aim("Hips",new Vector3(5*move,0,stride*5));Aim("Spine",new Vector3(Mathf.Sin(t*.5f)*2-5*move,0,-stride*5));
+                Aim("LegL",new Vector3(stride*39,0,0));Aim("LegR",new Vector3(-stride*39,0,0));
+                Aim("ShinL",new Vector3(Mathf.Max(0,-stride)*34,0,0));Aim("ShinR",new Vector3(Mathf.Max(0,stride)*34,0,0));
+                Aim("ArmL",new Vector3(-stride*27,0,-8));Aim("ArmR",new Vector3(stride*27,0,8));
+                Aim("Head",new Vector3(Mathf.Sin(t*.4f)*3,0,Mathf.Sin(t*.6f)*4));
+                if(Pose=="Detained")
+                {Aim("Spine",new Vector3(20,0,0));Aim("Head",new Vector3(15,0,12));Aim("ArmL",new Vector3(-105,0,-18));Aim("ArmR",new Vector3(-105,0,18));}
+                else if(Pose=="Rescue"||Pose=="Drag"||Pose=="FindFriend")
+                {Aim("Spine",new Vector3(15,0,0));Aim("ArmL",new Vector3(-78,0,-18));Aim("ArmR",new Vector3(-82,0,18));Aim("ForearmL",new Vector3(-28,0,0));Aim("ForearmR",new Vector3(-28,0,0));}
+                else if(Pose=="ReadClue")
+                {Aim("Head",new Vector3(16,0,-18));Aim("ArmR",new Vector3(-72,0,18));Aim("ForearmR",new Vector3(-55,0,0));}
+                else if(Pose=="Extract")
+                {Aim("Spine",new Vector3(-15,0,0));Aim("ArmL",new Vector3(-115,0,-20));Aim("ArmR",new Vector3(-115,0,20));}
+                else if(Pose=="Accusing"||Pose=="Swarming")
+                {Aim("Spine",new Vector3(20,0,0));Aim("Head",new Vector3(-10,0,-10));Aim("ArmR",new Vector3(-90+wave*18,0,10));}
+                else if(Pose=="Questioning"||Pose=="Watching")
+                {Aim("Head",new Vector3(-8,15,20));Aim("ArmL",new Vector3(-35,0,-20));}
+                else if(Pose=="Spirit")
+                {Aim("Spine",new Vector3(-10,0,wave*8));Aim("Head",new Vector3(5,0,-wave*12));Aim("ArmL",new Vector3(-35,0,-35));Aim("ArmR",new Vector3(-35,0,35));}
+                else if(Pose=="Intoxicated")
+                {Aim("Hips",new Vector3(4,0,wave*8));Aim("Spine",new Vector3(-5,0,-wave*11));Aim("Head",new Vector3(Mathf.Sin(t*.7f)*8,0,wave*13));Aim("ArmL",new Vector3(-18+wave*8,0,-12));Aim("ArmR",new Vector3(-18-wave*8,0,12));}
+            }
+            if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)
+            {
+                lastAppliedThreat=Threat;
+                float alarm=Mathf.Clamp01((Threat-.24f)/.76f);
+                eyeRenderer.enabled=alarm>.01f;
+                if(eyeMaterial!=null)eyeMaterial.color=Color.Lerp(new Color(1,.72f,.16f),new Color(1,.08f,.32f),alarm);
+                var tint=Color.Lerp(baseTint,new Color(1,.53f,.48f),alarm*.48f);
+                if(ownedMaterial!=null)ownedMaterial.color=tint;
+                if(skinMaterial!=null)skinMaterial.color=tint;
+                if(hairMaterial!=null)hairMaterial.color=tint;
+                if(gearMaterial!=null)gearMaterial.color=tint;
+                if(lensMaterial!=null)lensMaterial.color=tint;
+            }
+            float blend=1-Mathf.Exp(-(Pose=="Downed"?7:12)*animationDelta);
+            foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
+        }
+        public void UpdateDetailForDistance(float metres)
+        {
+            bool distant=!AlwaysHighDetail&&(UsesDistantMesh?metres>=8:metres>10);
+            if(distant==UsesDistantMesh)return;
+            UsesDistantMesh=distant;
+            foreach(var part in detailParts)
+            {
+                part.Renderer.sharedMesh=distant?part.Distant:part.Detailed;
+                for(int shape=0;shape<part.Renderer.sharedMesh.blendShapeCount;shape++)part.Renderer.SetBlendShapeWeight(shape,0);
+                int fit=part.Renderer.sharedMesh.GetBlendShapeIndex(fitName);
+                if(fit>=0)part.Renderer.SetBlendShapeWeight(fit,100);
+            }
+            if(faceRenderer!=null)
+            {
+                blinkIndex=faceRenderer.sharedMesh.GetBlendShapeIndex("Blink");
+                intoxicatedEyesIndex=faceRenderer.sharedMesh.GetBlendShapeIndex("WideIntoxicatedEyes");
+                if(intoxicatedEyesIndex>=0)faceRenderer.SetBlendShapeWeight(intoxicatedEyesIndex,HighlyIntoxicated?100:0);
+            }
+        }
+        void Aim(string bone,Vector3 angle){if(rest.ContainsKey(bone))targets[bone]=rest[bone]*Quaternion.Euler(angle);}
+        void Layer(string bone,Vector3 angle){if(targets.TryGetValue(bone,out var target))targets[bone]=target*Quaternion.Euler(angle);}
+        void PreparePoi()
+        {
+            if(bones.TryGetValue("HandL",out var left))poiLeft=Poi(left,0);
+            if(bones.TryGetValue("HandR",out var right))poiRight=Poi(right,1);
+        }
+        static GameObject Poi(Transform hand,int side)
+        {
+            var go=FestivalArtView.Create(hand,"FestivalPoi");if(go==null)return null;
+            go.transform.localPosition=new Vector3(0,-.55f,0);
+            go.transform.localRotation=Quaternion.Euler(0,0,side==0?-18:18);
+            var inherited=hand.lossyScale;
+            go.transform.localScale=new Vector3(.53f/Mathf.Max(.01f,Mathf.Abs(inherited.x)),.53f/Mathf.Max(.01f,Mathf.Abs(inherited.y)),.53f/Mathf.Max(.01f,Mathf.Abs(inherited.z)));
+            var trailPoint=new GameObject("LED poi trail point");trailPoint.transform.SetParent(go.transform,false);trailPoint.transform.localPosition=new Vector3(0,.13f,0);
+            var trail=trailPoint.AddComponent<TrailRenderer>();trail.time=.28f;trail.startWidth=.11f;trail.endWidth=.01f;
+            trail.minVertexDistance=.06f;trail.material=FestivalArtView.MaterialFor(side==0?"Mint":"Rose");
+            trail.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+            return go;
+        }
+        void OnDestroy()
+        {
+            if(ownedMaterial!=null){if(Application.isPlaying)Destroy(ownedMaterial);else DestroyImmediate(ownedMaterial);}
+            if(ownedPalette!=null){if(Application.isPlaying)Destroy(ownedPalette);else DestroyImmediate(ownedPalette);}
+            if(eyeMaterial!=null){if(Application.isPlaying)Destroy(eyeMaterial);else DestroyImmediate(eyeMaterial);}
+            foreach(var material in new[]{skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial})
+                if(material!=null){if(Application.isPlaying)Destroy(material);else DestroyImmediate(material);}
+        }
+    }
+}

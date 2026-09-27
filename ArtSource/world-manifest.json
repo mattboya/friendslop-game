@@ -1,0 +1,141 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalStage": {
+      "parts": 68,
+      "renderers": 6,
+      "triangles": 3520
+    },
+    "FestivalDJDeck": {
+      "parts": 16,
+      "renderers": 8,
+      "triangles": 1280
+    },
+    "FestivalStallSupplies": {
+      "parts": 30,
+      "renderers": 6,
+      "triangles": 1192
+    },
+    "FestivalStallPerformance": {
+      "parts": 32,
+      "renderers": 7,
+      "triangles": 1984
+    },
+    "FestivalStallStock": {
+      "parts": 30,
+      "renderers": 7,
+      "triangles": 1112
+    },
+    "FestivalMedical": {
+      "parts": 17,
+      "renderers": 6,
+      "triangles": 1260
+    },
+    "FestivalSecurity": {
+      "parts": 28,
+      "renderers": 5,
+      "triangles": 1392
+    },
+    "FestivalShuttle": {
+      "parts": 40,
+      "renderers": 8,
+      "triangles": 2688
+    },
+    "FestivalSun": {
+      "parts": 12,
+      "renderers": 3,
+      "triangles": 636
+    },
+    "FestivalMoon": {
+      "parts": 5,
+      "renderers": 3,
+      "triangles": 592
+    },
+    "FestivalTreeA": {
+      "parts": 8,
+      "renderers": 3,
+      "triangles": 1444
+    },
+    "FestivalTreeB": {
+      "parts": 7,
+      "renderers": 3,
+      "triangles": 1180
+    },
+    "FestivalTent": {
+      "parts": 21,
+      "renderers": 6,
+      "triangles": 548
+    },
+    "FestivalPoi": {
+      "parts": 4,
+      "renderers": 4,
+      "triangles": 928
+    },
+    "FestivalWristband": {
+      "parts": 3,
+      "renderers": 3,
+      "triangles": 204
+    },
+    "FestivalCampCar": {
+      "parts": 38,
+      "renderers": 7,
+      "triangles": 1496
+    },
+    "FestivalCampShade": {
+      "parts": 19,
+      "renderers": 6,
+      "triangles": 1092
+    },
+    "FestivalCampShop": {
+      "parts": 33,
+      "renderers": 7,
+      "triangles": 1756
+    },
+    "FestivalPortaPotty": {
+      "parts": 5,
+      "renderers": 4,
+      "triangles": 252
+    },
+    "FestivalLittleSpoon": {
+      "parts": 3,
+      "renderers": 2,
+      "triangles": 472
+    },
+    "FestivalConfetti": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 176
+    },
+    "FestivalMerchBag": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 288
+    },
+    "FestivalMap": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 24
+    },
+    "FestivalStagePass": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 24
+    },
+    "FestivalStock": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 80
+    },
+    "FestivalVoucher": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 24
+    },
+    "FestivalStash": {
+      "parts": 2,
+      "renderers": 2,
+      "triangles": 120
+    }
+  }
+}

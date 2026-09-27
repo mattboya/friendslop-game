@@ -1,0 +1,1 @@
+{"name":"Festival.Editor","rootNamespace":"Festival.Editor","references":["Festival.Core","Festival.Runtime","Unity.Netcode.Runtime","Unity.InputSystem","Unity.RenderPipelines.Universal.Runtime","Unity.RenderPipelines.Core.Runtime"],"includePlatforms":["Editor"]}

@@ -1,0 +1,661 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+using System;
+using System.Collections;
+using System.IO;
+using Festival.Core;
+using Festival.Network;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace Festival.Presentation
+{
+    /// <summary>Explicit opt-in native transport/render smoke test. Absent from release builds.</summary>
+    public sealed class DevelopmentSmoke : MonoBehaviour
+    {
+        Camera captureCamera;
+        Vector3 capturePosition=new Vector3(0,2.3f,-10);
+        Quaternion captureRotation=Quaternion.Euler(8,0,0);
+        readonly float[] rhythmFrameMs=new float[512];
+        int rhythmFrameCount;
+        bool recordRhythmFrames;
+        void LateUpdate()
+        {
+            if(captureCamera!=null){captureCamera.transform.position=capturePosition;captureCamera.transform.rotation=captureRotation;}
+            if(recordRhythmFrames&&rhythmFrameCount<rhythmFrameMs.Length)rhythmFrameMs[rhythmFrameCount++]=Time.unscaledDeltaTime*1000f;
+        }
+        IEnumerator Start()
+        {
+            var session=GetComponent<FestivalSession>();
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"--solo-smoke-test")>=0)
+            {
+                yield return SoloSmoke(session);
+                yield break;
+            }
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"--ui-screens")>=0)
+            {
+                yield return new WaitForSeconds(.7f);
+                string interfaceDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(interfaceDir);
+                string connectionPath=Path.Combine(interfaceDir,"connection.png");
+                if(File.Exists(connectionPath))File.Delete(connectionPath);
+                ScreenCapture.CaptureScreenshot(connectionPath);
+                yield return new WaitForSeconds(.7f);
+                if(!File.Exists(connectionPath)){Fail("connection render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CONNECTION RENDER PASSED: "+connectionPath);
+                transform.Find("Festival HUD/Connection/PORT").GetComponent<InputField>().text="0";
+                transform.Find("Festival HUD/Connection/JOIN GAME").GetComponent<Button>().onClick.Invoke();
+                yield return new WaitForSeconds(.15f);
+                string connectionErrorPath=Path.Combine(interfaceDir,"connection-error.png");
+                if(File.Exists(connectionErrorPath))File.Delete(connectionErrorPath);
+                ScreenCapture.CaptureScreenshot(connectionErrorPath);
+                yield return new WaitForSeconds(.6f);
+                if(!File.Exists(connectionErrorPath)){Fail("connection error render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CONNECTION ERROR RENDER PASSED: "+connectionErrorPath);
+                transform.Find("Festival HUD/Connection/PORT").GetComponent<InputField>().text="17781";
+                transform.Find("Festival HUD/Connection/CREATE GAME").GetComponent<Button>().onClick.Invoke();
+                float createDeadline=Time.realtimeSinceStartup+12;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<createDeadline)yield return null;
+                if(session.LocalPlayer==null||session.State.Phase!="Shopping"||session.MenuOpen){Fail("menu create enters campsite");yield break;}
+                yield return new WaitForSeconds(.3f);
+                string createdCampPath=Path.Combine(interfaceDir,"created-camp.png");
+                if(File.Exists(createdCampPath))File.Delete(createdCampPath);
+                ScreenCapture.CaptureScreenshot(createdCampPath);
+                yield return new WaitForSeconds(.7f);
+                if(!File.Exists(createdCampPath)){Fail("menu create camp render");yield break;}
+                Debug.Log("FESTIVAL SMOKE MENU CREATE PASSED: "+createdCampPath);
+                Application.Quit(0);
+                yield break;
+            }
+            float deadline=Time.realtimeSinceStartup+85;
+            while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.LocalPlayer==null){Debug.LogError("FESTIVAL SMOKE FAILED: no local identity");Application.Quit(2);yield break;}
+            var festivalFont=Resources.Load<Font>("FestivalDisplay");
+            if(festivalFont==null){Fail("festival display font");yield break;}
+            foreach(var label in transform.Find("Festival HUD").GetComponentsInChildren<Text>(true))
+                if(label.font!=festivalFont){Fail("interface font on "+label.name);yield break;}
+            int wideEyes=0,redEyes=0,combinedEyes=0;
+            foreach(var npc in session.State.Npcs)if(npc.Kind=="Wook")
+            {
+                if(npc.HighlyIntoxicated)wideEyes++;
+                if(npc.RedEyes)redEyes++;
+                if(npc.HighlyIntoxicated&&npc.RedEyes)combinedEyes++;
+            }
+            if(wideEyes<3||redEyes<4||combinedEyes<1){Fail("replicated crowd eye states");yield break;}
+            Debug.Log("FESTIVAL SMOKE EYE STATES PASSED: wide="+wideEyes+" red="+redEyes+" both="+combinedEyes);
+            var sim=session.DevelopmentSimulation;
+            if(session.IsHost)
+            {
+                while(sim.State.Players.Count<2&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(sim.State.Players.Count<2){Fail("camp peers");yield break;}
+                sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;
+                sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
+            }
+            float campX=session.IsHost?-1:1;
+            while(!Near(session.LocalPlayer,campX,6)&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(Time.realtimeSinceStartup>=deadline){Fail("camp placement");yield break;}
+            var campMenu=transform.Find("Festival HUD/Festival pass");
+            var campGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.CampRootName+"/Campsite shelf goods");
+            if(campMenu==null||campMenu.Find("Pass home/RESUME FESTIVAL")==null||campMenu.Find("Pass home/SETTINGS")==null||campGoods==null||campGoods.childCount!=session.State.VendorOffers.Count)
+            {Fail("physical camp shop and pass controls");yield break;}
+            session.MenuOpen=false;
+            captureCamera=session.ViewCamera;
+            capturePosition=new Vector3(0,2.1f,-1);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,1.35f,9)-capturePosition);
+            yield return new WaitForSeconds(.3f);
+            string shopDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(shopDir);
+            string shopPath=Path.Combine(shopDir,session.IsHost?"host-camp-shop.png":"client-camp-shop.png");
+            if(File.Exists(shopPath))File.Delete(shopPath);
+            ScreenCapture.CaptureScreenshot(shopPath);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(shopPath)){Fail("camp shop render");yield break;}
+            Debug.Log("FESTIVAL SMOKE CAMP SHOP PASSED: "+shopPath);
+            session.MenuOpen=true;
+            yield return new WaitForSeconds(.2f);
+            var passPath=Path.Combine(shopDir,session.IsHost?"host-pass.png":"client-pass.png");
+            if(File.Exists(passPath))File.Delete(passPath);
+            ScreenCapture.CaptureScreenshot(passPath);
+            yield return new WaitForSeconds(.6f);
+            if(!File.Exists(passPath)){Fail("festival pass render");yield break;}
+            Debug.Log("FESTIVAL SMOKE PASS RENDER PASSED: "+passPath);
+            campMenu.Find("Pass home/SETTINGS").GetComponent<Button>().onClick.Invoke();
+            yield return new WaitForSeconds(.2f);
+            var settingsPath=Path.Combine(shopDir,session.IsHost?"host-settings.png":"client-settings.png");
+            if(File.Exists(settingsPath))File.Delete(settingsPath);
+            ScreenCapture.CaptureScreenshot(settingsPath);
+            yield return new WaitForSeconds(.6f);
+            if(!File.Exists(settingsPath)){Fail("settings render");yield break;}
+            Debug.Log("FESTIVAL SMOKE SETTINGS RENDER PASSED: "+settingsPath);
+            campMenu.Find("Pass settings/BACK TO PASS").GetComponent<Button>().onClick.Invoke();
+            session.MenuOpen=false;
+            var interfaceHud=GetComponent<FestivalHud>();
+            interfaceHud.DevelopmentMapVisible=true;
+            yield return new WaitForSeconds(.2f);
+            var mapPath=Path.Combine(shopDir,session.IsHost?"host-map.png":"client-map.png");
+            if(File.Exists(mapPath))File.Delete(mapPath);
+            ScreenCapture.CaptureScreenshot(mapPath);
+            yield return new WaitForSeconds(.6f);
+            interfaceHud.DevelopmentMapVisible=false;
+            if(!File.Exists(mapPath)){Fail("map render");yield break;}
+            Debug.Log("FESTIVAL SMOKE MAP RENDER PASSED: "+mapPath);
+            captureCamera=null;
+            if(session.IsHost)
+            {
+                var spoon=Catalog.ShopPoint(true,session.State.VendorOffers.IndexOf("little_spoon"));
+                sim.State.Players[0].X=spoon.X-.4f;sim.State.Players[0].Z=spoon.Z-1;
+                sim.State.Players[1].X=spoon.X+.4f;sim.State.Players[1].Z=spoon.Z-1;
+            }
+            var shelfPoint=Catalog.ShopPoint(true,session.State.VendorOffers.IndexOf("little_spoon"));
+            while(!Within(session.LocalPlayer,shelfPoint.X,shelfPoint.Z,2.8f)&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command("HoldOffer",item:"little_spoon");
+            while(session.LocalPlayer.HeldOfferId!="little_spoon"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(Time.realtimeSinceStartup>=deadline){Fail("shared shelf pickup");yield break;}
+            yield return new WaitForSeconds(.15f);
+            string heldPath=Path.Combine(shopDir,session.IsHost?"host-held.png":"client-held.png");
+            if(File.Exists(heldPath))File.Delete(heldPath);
+            ScreenCapture.CaptureScreenshot(heldPath);
+            yield return new WaitForSeconds(.6f);
+            if(!File.Exists(heldPath)){Fail("held prop render");yield break;}
+            Debug.Log("FESTIVAL SMOKE HELD RENDER PASSED: "+heldPath);
+            if(session.IsHost)
+            {
+                while(!sim.State.Players.TrueForAll(p=>p.HeldOfferId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("two peers reserved separate shelf copies");yield break;}
+                sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
+            }
+            while(!Near(session.LocalPlayer,campX,6)&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command("Buy",item:"little_spoon");
+            while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(Time.realtimeSinceStartup>=deadline){Fail("camp spoon purchase");yield break;}
+            if(session.LocalPlayer.HeldOfferId!=""){Fail("purchase still held");yield break;}
+            if(session.IsHost)
+            {
+                while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="little_spoon"))&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("two camp purchases");yield break;}
+                sim.State.Players[0].X=-2;sim.State.Players[0].Z=-13;
+                sim.State.Players[1].X=2;sim.State.Players[1].Z=-13;
+            }
+            float overviewX=session.IsHost?-2:2;
+            while(!Near(session.LocalPlayer,overviewX,-13)&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(Time.realtimeSinceStartup>=deadline){Fail("camp overview placement");yield break;}
+            yield return new WaitForSeconds(.4f);
+            string campDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(campDir);
+            string campPath=Path.Combine(campDir,session.IsHost?"host-camp.png":"client-camp.png");
+            ScreenCapture.CaptureScreenshot(campPath);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(campPath)){Fail("camp render");yield break;}
+            Debug.Log("FESTIVAL SMOKE CAMP PASSED: "+campPath);
+            captureCamera=session.ViewCamera;
+            capturePosition=new Vector3(0,19,-31);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,0,0)-capturePosition);
+            yield return new WaitForSeconds(.2f);
+            var overviewPath=Path.Combine(campDir,session.IsHost?"host-camp-overview.png":"client-camp-overview.png");
+            ScreenCapture.CaptureScreenshot(overviewPath);
+            yield return new WaitForSeconds(.7f);
+            captureCamera=null;
+            if(!File.Exists(overviewPath)){Fail("camp overview render");yield break;}
+            Debug.Log("FESTIVAL SMOKE CAMP OVERVIEW PASSED: "+overviewPath);
+            if(session.IsHost){sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;}
+            while(!Within(session.LocalPlayer,0,19,3.2f)&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command("Ready");
+            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
+            {
+                yield return new WaitForSeconds(.2f);
+            }
+            if(session.State.Phase!="Playing"||session.State.Players.Count!=2){Debug.LogError("FESTIVAL SMOKE FAILED: two-player loading barrier");Application.Quit(3);yield break;}
+            Debug.Log("FESTIVAL SMOKE TRANSPORT PASSED: two peers ready and playing; host="+session.IsHost);
+            var crowd=FindFirstObjectByType<FestivalAmbientCrowd>();
+            if(crowd==null||crowd.MemberCount!=62||crowd.WalkerCount!=12){Fail("festival crowd population");yield break;}
+            var walkerStart=crowd.FirstWalkerPosition;
+            yield return new WaitForSeconds(.35f);
+            if(Vector3.Distance(walkerStart,crowd.FirstWalkerPosition)<.15f){Fail("festival crowd walking");yield break;}
+            Debug.Log("FESTIVAL SMOKE CROWD PASSED: "+crowd.MemberCount+" ambient attendees, "+crowd.WalkerCount+" moving walkers; host="+session.IsHost);
+            var previousPosition=capturePosition;var previousRotation=captureRotation;
+            captureCamera=session.ViewCamera;
+            capturePosition=new Vector3(0,2.1f,5);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,1.8f,23)-capturePosition);
+            yield return new WaitForSeconds(.3f);
+            string liveCrowdDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(liveCrowdDir);
+            var liveCrowdPath=Path.Combine(liveCrowdDir,session.IsHost?"host-crowd-live.png":"client-crowd-live.png");
+            ScreenCapture.CaptureScreenshot(liveCrowdPath);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(liveCrowdPath)){Fail("live crowd render");yield break;}
+            Debug.Log("FESTIVAL SMOKE CROWD LIVE PASSED: "+liveCrowdPath);
+            capturePosition=previousPosition;captureRotation=previousRotation;
+            session.Command("Buy",item:"medical_voucher");
+            yield return new WaitForSeconds(.2f);
+            if(session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")){Fail("remote night market purchase");yield break;}
+            Debug.Log("FESTIVAL SMOKE MARKET RANGE PASSED: remote purchase blocked; host="+session.IsHost);
+            // Only test actor placement is privileged. The client uses the
+            // ordinary command channel for every mission action and note.
+            if(session.IsHost)
+            {
+                // Give the client time to verify remote browsing at the normal entry
+                // before host-only test placement moves both peers to the market.
+                yield return new WaitForSeconds(1f);
+                sim.State.Npcs.RemoveAll(n=>n.Id!="wook_0");
+                PlaceBoth(sim,-15.75f,-22);
+                sim.Player(sim.State.HostPlayerId).X=-15;
+            }
+            else
+            {
+                while(!Near(session.LocalPlayer,-15.75f,-22)&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("night market placement");yield break;}
+                var marketGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.RootName+"/Night market goods");
+                if(marketGoods==null||marketGoods.childCount!=session.State.VendorOffers.Count){Fail("night market physical display");yield break;}
+                session.Command("Buy",item:"medical_voucher");
+                while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("night market direct purchase");yield break;}
+                captureCamera=session.ViewCamera;
+                capturePosition=new Vector3(-18,2.2f,-24.5f);
+                captureRotation=Quaternion.LookRotation(new Vector3(-18,1.5f,-20)-capturePosition);
+                yield return new WaitForSeconds(.3f);
+                string marketDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(marketDir);
+                string marketPath=Path.Combine(marketDir,"client-market.png");
+                if(File.Exists(marketPath))File.Delete(marketPath);
+                ScreenCapture.CaptureScreenshot(marketPath);
+                yield return new WaitForSeconds(.7f);
+                if(!File.Exists(marketPath)){Fail("night market UI render");yield break;}
+                Debug.Log("FESTIVAL SMOKE MARKET RENDER PASSED: "+marketPath);
+                captureCamera=null;
+                yield return new WaitForSeconds(.2f);
+                string marketApproachPath=Path.Combine(marketDir,"client-market-approach.png");
+                if(File.Exists(marketApproachPath))File.Delete(marketApproachPath);
+                ScreenCapture.CaptureScreenshot(marketApproachPath);
+                yield return new WaitForSeconds(.7f);
+                if(!File.Exists(marketApproachPath)){Fail("night market approach render");yield break;}
+                Debug.Log("FESTIVAL SMOKE MARKET APPROACH PASSED: "+marketApproachPath);
+                session.Command("ClueSupply");
+            }
+            while((session.IsHost?sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Effects.Count:session.LocalPlayer.Effects.Count)==0&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(Time.realtimeSinceStartup>=deadline){Fail("client clue tasting");yield break;}
+            if(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes){Fail("teammate intoxication face state");yield break;}
+            var clueVisuals=GetComponent<FestivalClueVisuals>();
+            bool shouldSeeClue=!session.IsHost;
+            while(clueVisuals.Visible!=shouldSeeClue&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(clueVisuals.Visible!=shouldSeeClue){Fail("private clue visibility");yield break;}
+            Debug.Log("FESTIVAL SMOKE CLUE VISIBILITY PASSED: visible="+clueVisuals.Visible+" host="+session.IsHost);
+            for(int clue=0;clue<2;clue++)
+            {
+                var point=FestivalSimulation.CluePoint(session.State.Seed,clue);
+                if(session.IsHost)
+                {
+                    PlaceBoth(sim,point.X,point.Z);
+                    // A real helper stands alongside the reader, not inside
+                    // their first-person camera. Three metres still qualifies.
+                    sim.Player(sim.State.HostPlayerId).X=point.X+3;
+                }
+                else
+                {
+                    while(!Near(session.LocalPlayer,point.X,point.Z)&&Time.realtimeSinceStartup<deadline)yield return null;
+                    if(Time.realtimeSinceStartup>=deadline){Fail("totem placement");yield break;}
+                    if(clue==0)
+                    {
+                        yield return new WaitForSeconds(.35f);
+                        string clueDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(clueDir);
+                        string cluePath=Path.Combine(clueDir,"client-clue.png");if(File.Exists(cluePath))File.Delete(cluePath);
+                        ScreenCapture.CaptureScreenshot(cluePath);
+                        yield return new WaitForSeconds(.7f);
+                        if(!File.Exists(cluePath)){Fail("private clue render");yield break;}
+                        Debug.Log("FESTIVAL SMOKE CLUE RENDER PASSED: "+cluePath);
+                    }
+                    session.Command("ReadClue");
+                }
+                while(session.State.CluesRead<=clue&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(session.State.CluesRead<=clue)
+                {
+                    var reader=session.State.Players.Find(p=>p.Id!=session.State.HostPlayerId);
+                    var helper=session.State.Players.Find(p=>p.Id==session.State.HostPlayerId);
+                    var task=session.State.Interactions.Find(i=>i.PlayerId==reader?.Id&&i.Kind=="ReadClue"&&i.TargetId==clue.ToString());
+                    Fail("cooperative clue "+clue+" host="+session.IsHost+" t="+Time.realtimeSinceStartup.ToString("F1")+" sim="+session.State.SimulationSeconds.ToString("F1")+" reader="+(reader==null?"missing":reader.X.ToString("F1")+","+reader.Z.ToString("F1")+" effects="+reader.Effects.Count)+" helper="+(helper==null?"missing":helper.X.ToString("F1")+","+helper.Z.ToString("F1"))+" task="+(task==null?"none":task.Status)+" message="+session.Message);
+                    yield break;
+                }
+            }
+            if(session.IsHost)
+            {
+                PlaceBoth(sim,0,0);
+                sim.Player(sim.State.HostPlayerId).X=-2.5f;
+                var dancer=sim.State.Npcs[0];dancer.X=0;dancer.Z=1;dancer.Yaw=180;
+            }
+            else
+            {
+                while((!Near(session.LocalPlayer,0,0)||!Near(session.State.Npcs.Find(n=>n.Id=="wook_0"),0,1))&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("performance placement");yield break;}
+                session.MenuOpen=true;
+                campMenu.Find("Pass home/CREW + NEARBY").GetComponent<Button>().onClick.Invoke();
+                yield return new WaitForSeconds(.3f);
+                string actionPath=Path.Combine(Application.persistentDataPath,"smoke","client-actions.png");
+                if(File.Exists(actionPath))File.Delete(actionPath);
+                ScreenCapture.CaptureScreenshot(actionPath);
+                yield return new WaitForSeconds(.6f);
+                if(!File.Exists(actionPath)){Fail("nearby actions render");yield break;}
+                Debug.Log("FESTIVAL SMOKE ACTIONS RENDER PASSED: "+actionPath);
+                session.MenuOpen=false;
+                session.Command("Dance","wook_0");
+                InteractionState performance=null;
+                while(performance==null&&Time.realtimeSinceStartup<deadline)
+                {
+                    performance=session.State.Interactions.Find(i=>i.PlayerId==session.LocalPlayerId&&i.Kind=="Dance"&&i.Status=="Active");
+                    yield return null;
+                }
+                if(performance==null){Fail("dance challenge");yield break;}
+                var dancePreview=GetComponent<FestivalDancePreview>();
+                while((dancePreview==null||!dancePreview.IsVisible||dancePreview.Dancer==null)&&Time.realtimeSinceStartup<deadline)yield return null;
+                var liveDancer=transform.Find("Festival HUD/Live dancer/Dancer window/Live character view")?.GetComponent<RawImage>();
+                if(dancePreview==null||!dancePreview.IsVisible||dancePreview.Dancer==null||dancePreview.Dancer!=session.LocalWorldCharacter||dancePreview.Dancer.Pose!="Dance"||liveDancer==null||liveDancer.texture==null)
+                {Fail("live dance avatar");yield break;}
+                var lane=transform.Find("Festival HUD/Rhythm lane")?.GetComponent<RectTransform>();
+                var dancerPanel=transform.Find("Festival HUD/Live dancer")?.GetComponent<RectTransform>();
+                var controls=transform.Find("Festival HUD/Rhythm lane/Controls")?.GetComponent<Text>();
+                if(lane==null||dancerPanel==null||controls==null||lane.anchorMax.x>.5f||dancerPanel.anchorMin.x<.5f||Mathf.Abs((lane.anchorMax.x-lane.anchorMin.x)-(dancerPanel.anchorMax.x-dancerPanel.anchorMin.x))>.001f||!controls.text.Contains("/ A")||!controls.text.Contains("/ D"))
+                {Fail("split dance layout and WASD hint");yield break;}
+                rhythmFrameCount=0;recordRhythmFrames=true;
+                string rhythmPath=Path.Combine(Application.persistentDataPath,"smoke","client-rhythm.png");
+                if(File.Exists(rhythmPath))File.Delete(rhythmPath);
+                string judgmentPath=Path.Combine(Application.persistentDataPath,"smoke","client-rhythm-judgment.png");
+                if(File.Exists(judgmentPath))File.Delete(judgmentPath);
+                var chart=RhythmChart.Create(performance.ChartSeed,performance.NoteCount,performance.BeatSeconds);
+                bool rhythmCaptured=false,judgmentCaptured=false;
+                foreach(var note in chart.Notes)
+                {
+                    if(!rhythmCaptured)
+                    {
+                        while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.72&&Time.realtimeSinceStartup<deadline)yield return null;
+                        ScreenCapture.CaptureScreenshot(rhythmPath);rhythmCaptured=true;
+                    }
+                    while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
+                    if(Time.realtimeSinceStartup>=deadline){Fail("rhythm clock");yield break;}
+                    session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
+                    if(!judgmentCaptured)
+                    {
+                        while((session.State.Interactions.Find(i=>i.Id==performance.Id)?.Inputs.Count??0)<1&&Time.realtimeSinceStartup<deadline)yield return null;
+                        float stepDeadline=Time.realtimeSinceStartup+.25f;
+                        while(session.LocalPlayer.VisualDanceStepSequence<1&&Time.realtimeSinceStartup<stepDeadline)yield return null;
+                        if(session.LocalPlayer.VisualDanceStepSequence<1||session.LocalPlayer.VisualDanceStepDirection!=note.Direction)
+                        {Fail("replicated dance step: seq="+session.LocalPlayer.VisualDanceStepSequence+" direction="+session.LocalPlayer.VisualDanceStepDirection+" expected="+note.Direction);yield break;}
+                        var judgment=transform.Find("Festival HUD/Rhythm lane/Judgment")?.GetComponent<Text>();
+                        while(judgment!=null&&judgment.text!="PERFECT"&&Time.realtimeSinceStartup<stepDeadline)yield return null;
+                        if(judgment==null||judgment.text!="PERFECT"){Fail("rhythm judgment UI");yield break;}
+                        ScreenCapture.CaptureScreenshot(judgmentPath);judgmentCaptured=true;
+                    }
+                }
+                yield return null;
+                recordRhythmFrames=false;
+                if(!File.Exists(rhythmPath)||!File.Exists(judgmentPath)){Fail("rhythm render");yield break;}
+                Debug.Log("FESTIVAL SMOKE RHYTHM RENDER PASSED: "+rhythmPath);
+                Debug.Log("FESTIVAL SMOKE RHYTHM JUDGMENT RENDER PASSED: "+judgmentPath);
+                if(rhythmFrameCount>0)
+                {
+                    var measured=new float[rhythmFrameCount];Array.Copy(rhythmFrameMs,measured,rhythmFrameCount);Array.Sort(measured);
+                    Debug.Log("FESTIVAL SMOKE RHYTHM FRAME P95 "+measured[Mathf.Clamp(Mathf.CeilToInt(rhythmFrameCount*.95f)-1,0,rhythmFrameCount-1)].ToString("0.0")+" MS; MAX "+measured[rhythmFrameCount-1].ToString("0.0")+" MS; SAMPLES "+rhythmFrameCount);
+                }
+            }
+            while(!session.State.GateOpened&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(!session.State.GateOpened){Fail("networked rhythm unlock");yield break;}
+            if(session.IsHost)
+            {
+                sim.State.FriendPosition=new WorldPoint(10,10);PlaceBoth(sim,10,10);
+            }
+            else
+            {
+                while((!Near(session.LocalPlayer,10,10)||!Near(session.State.FriendPosition,10,10))&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("friend reveal");yield break;}
+                session.Command("FindFriend");
+            }
+            while(!session.State.FriendFound&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(!session.State.FriendFound){Fail("friend recruitment");yield break;}
+            if(session.IsHost)
+            {
+                sim.State.FriendPosition=new WorldPoint(0,-32);PlaceBoth(sim,0,-32);
+            }
+            else
+            {
+                while((!Near(session.LocalPlayer,0,-32)||!Near(session.State.FriendPosition,0,-32))&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("shuttle placement");yield break;}
+                session.Command("Extract");
+            }
+            while(session.State!=null&&session.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.State==null){Fail("networked mission settlement: session closed, "+session.Message);yield break;}
+            if(session.State.Result!="Success"||session.State.CluesRead!=2||session.State.Survivors!=2||session.State.SurvivorBonus!=10)
+            {
+                var s=session.State;
+                var active=s.Interactions.Find(i=>i.Kind=="Extract");
+                Fail("networked mission settlement: phase="+s.Phase+" result="+s.Result+" clues="+s.CluesRead+" survivors="+s.Survivors+" bonus="+s.SurvivorBonus+" elapsed="+s.ElapsedSeconds.ToString("F1")+" extract="+(active==null?"none":active.Status)+" message="+session.Message);
+                yield break;
+            }
+            Debug.Log("FESTIVAL SMOKE MISSION PASSED: two clues, dance, friend, extraction, two survivors; host="+session.IsHost);
+            session.MenuOpen=true;
+            // Move the view only, leaving the authority/player positions untouched.
+            captureCamera=session.ViewCamera;
+            capturePosition=new Vector3(0,2.3f,-10);
+            captureRotation=Quaternion.Euler(8,0,0);
+            session.ViewCamera.transform.position=new Vector3(0,3,-10);
+            session.ViewCamera.transform.rotation=Quaternion.Euler(8,0,0);
+            var preview=FestivalCharacter.Create(transform,"Festival preview 1",Color.white);
+            preview.transform.position=new Vector3(-2,0,-6);preview.transform.rotation=Quaternion.identity;preview.Pose="Dance";
+            var second=FestivalCharacter.Create(transform,"Festival preview 2",Color.white);
+            second.transform.position=new Vector3(0,0,-6);second.transform.rotation=Quaternion.Euler(0,180,0);second.Pose="Rescue";
+            var third=FestivalCharacter.Create(transform,"Festival preview 3",Color.white);
+            third.transform.position=new Vector3(2,0,-6);third.transform.rotation=Quaternion.Euler(0,180,0);third.Pose="ReadClue";
+            var hud=GetComponent<FestivalHud>();if(hud!=null)hud.enabled=false;
+            foreach(var canvas in GetComponentsInChildren<Canvas>())canvas.enabled=false;
+            yield return new WaitForSeconds(1);
+            string dir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(dir);
+            string path=Path.Combine(dir,session.IsHost?"host.png":"client.png");
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSeconds(2);
+            if(!File.Exists(path)){Debug.LogError("FESTIVAL SMOKE FAILED: screenshot missing");Application.Quit(4);yield break;}
+            Debug.Log("FESTIVAL SMOKE RENDER PASSED: "+path);
+            Destroy(preview.gameObject);Destroy(second.gameObject);Destroy(third.gameObject);
+            yield return null;
+            session.MenuOpen=false;
+            captureCamera.fieldOfView=67;
+            capturePosition=new Vector3(0,2.1f,5);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,1.8f,23)-capturePosition);
+            yield return new WaitForSeconds(.35f);
+            var crowdStagePath=Path.Combine(dir,session.IsHost?"host-crowd-stage.png":"client-crowd-stage.png");
+            ScreenCapture.CaptureScreenshot(crowdStagePath);
+            yield return new WaitForSeconds(1);
+            if(!File.Exists(crowdStagePath)){Fail("stage crowd render");yield break;}
+            Debug.Log("FESTIVAL SMOKE CROWD STAGE PASSED: "+crowdStagePath);
+            capturePosition=new Vector3(-10,2.4f,-4);
+            captureRotation=Quaternion.LookRotation(new Vector3(-24,1.3f,6)-capturePosition);
+            yield return new WaitForSeconds(.35f);
+            var crowdGrovePath=Path.Combine(dir,session.IsHost?"host-crowd-grove.png":"client-crowd-grove.png");
+            ScreenCapture.CaptureScreenshot(crowdGrovePath);
+            yield return new WaitForSeconds(1);
+            if(!File.Exists(crowdGrovePath)){Fail("grove crowd render");yield break;}
+            Debug.Log("FESTIVAL SMOKE CROWD GROVE PASSED: "+crowdGrovePath);
+            var gallery=new FestivalCharacter[6];
+            var roles=new[]{"Security","Medic","Friend","Vendor0","Vendor1","Vendor2"};
+            var poses=new[]{"Accusing","Rescue","ReadClue","Idle","Dance","Extract"};
+            for(int i=0;i<gallery.Length;i++)
+            {
+                var id=GalleryId(i%2,i/2,-1,-1);
+                gallery[i]=FestivalCharacter.Create(transform,id,Color.white,roles[i]);
+                gallery[i].transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
+                gallery[i].transform.rotation=Quaternion.Euler(0,180,0);
+                gallery[i].transform.localScale=Vector3.Scale(Vector3.one*.84f,gallery[i].ShapeScale);
+                gallery[i].Pose=poses[i];
+                if(i==0)gallery[i].SetLittleSpoon(true);
+            }
+            yield return new WaitForSeconds(1);
+            var rolePath=Path.Combine(dir,session.IsHost?"host-fit-roles.png":"client-fit-roles.png");
+            ScreenCapture.CaptureScreenshot(rolePath);
+            yield return new WaitForSeconds(1);
+            if(!File.Exists(rolePath)){Fail("role fit gallery");yield break;}
+            Debug.Log("FESTIVAL SMOKE FIT ROLES PASSED: "+rolePath);
+            foreach(var actor in gallery)Destroy(actor.gameObject);
+            yield return null;
+            for(int i=0;i<gallery.Length;i++)
+            {
+                var id=GalleryId(i%2,i/2,i%4,(i+1)%4);
+                gallery[i]=FestivalCharacter.Create(transform,id,Color.white);
+                gallery[i].transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
+                gallery[i].transform.rotation=Quaternion.Euler(0,180,0);
+                gallery[i].transform.localScale=Vector3.Scale(Vector3.one*.84f,gallery[i].ShapeScale);
+                gallery[i].Pose=i%2==0?"Dance":"Rescue";
+            }
+            yield return new WaitForSeconds(1);
+            var outfitPath=Path.Combine(dir,session.IsHost?"host-fit-outfits.png":"client-fit-outfits.png");
+            ScreenCapture.CaptureScreenshot(outfitPath);
+            yield return new WaitForSeconds(1);
+            if(!File.Exists(outfitPath)){Fail("outfit fit gallery");yield break;}
+            Debug.Log("FESTIVAL SMOKE FIT OUTFITS PASSED: "+outfitPath);
+            foreach(var actor in gallery)Destroy(actor.gameObject);
+            yield return null;
+            var portraitIds=new[]{GalleryFaceId(false,0),GalleryFaceId(true,0),GalleryFaceId(false,1)};
+            var portraits=new FestivalCharacter[3];
+            capturePosition=new Vector3(0,1.3f,-9.7f);captureRotation=Quaternion.Euler(2,0,0);captureCamera.fieldOfView=46;
+            var hands=captureCamera.GetComponentInChildren<FestivalHands>();if(hands!=null)hands.gameObject.SetActive(false);
+            for(int i=0;i<portraits.Length;i++)
+            {
+                portraits[i]=FestivalCharacter.Create(transform,portraitIds[i],Color.white);
+                portraits[i].transform.position=new Vector3((i-1)*1.35f,0,-5.5f);
+                portraits[i].transform.rotation=Quaternion.Euler(0,180,0);
+                portraits[i].transform.localScale=Vector3.Scale(Vector3.one*.88f,portraits[i].ShapeScale);
+                if(i==2){portraits[i].SetHighlyIntoxicated(true);portraits[i].SetRedEyes(true);}
+            }
+            yield return new WaitForSeconds(.8f);
+            var qualityPath=Path.Combine(dir,session.IsHost?"host-character-quality.png":"client-character-quality.png");
+            ScreenCapture.CaptureScreenshot(qualityPath);yield return new WaitForSeconds(1);
+            if(!File.Exists(qualityPath)){Fail("character quality gallery");yield break;}
+            Debug.Log("FESTIVAL SMOKE CHARACTER QUALITY PASSED: "+qualityPath);
+            capturePosition=new Vector3(0,1.62f,-8.0f);captureCamera.fieldOfView=40;
+            for(int i=0;i<portraits.Length;i++)portraits[i].transform.position=new Vector3((i-1)*1.00f,0,-5.5f);
+            yield return new WaitForSeconds(.5f);
+            var facePath=Path.Combine(dir,session.IsHost?"host-face-states.png":"client-face-states.png");
+            ScreenCapture.CaptureScreenshot(facePath);yield return new WaitForSeconds(1);
+            if(!File.Exists(facePath)){Fail("native face states gallery");yield break;}
+            Debug.Log("FESTIVAL SMOKE FACE STATES PASSED: "+facePath);
+            foreach(var actor in portraits)Destroy(actor.gameObject);
+            yield return null;
+            capturePosition=new Vector3(0,1.2f,-18.5f);captureRotation=Quaternion.identity;captureCamera.fieldOfView=12;
+            var detailPair=new FestivalCharacter[2];
+            for(int i=0;i<2;i++)
+            {
+                detailPair[i]=FestivalCharacter.Create(transform,portraitIds[0],Color.white);
+                detailPair[i].AlwaysHighDetail=i==0;
+                detailPair[i].transform.position=new Vector3(i==0?-.72f:.72f,0,-5.5f);
+                detailPair[i].transform.rotation=Quaternion.Euler(0,180,0);
+            }
+            yield return new WaitForSeconds(.8f);
+            if(detailPair[0].UsesDistantMesh||!detailPair[1].UsesDistantMesh){Fail("distance character switching");yield break;}
+            var distancePath=Path.Combine(dir,session.IsHost?"host-character-distance.png":"client-character-distance.png");
+            ScreenCapture.CaptureScreenshot(distancePath);yield return new WaitForSeconds(1);
+            if(!File.Exists(distancePath)){Fail("character distance gallery");yield break;}
+            Debug.Log("FESTIVAL SMOKE CHARACTER DISTANCE PASSED: "+distancePath);
+            Application.Quit(0);
+        }
+        IEnumerator SoloSmoke(FestivalSession session)
+        {
+            float deadline=Time.realtimeSinceStartup+110;
+            while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
+            var sim=session.DevelopmentSimulation;
+            var player=sim.Player(session.LocalPlayerId);
+            var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_mushrooms"));
+            player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"stock_mushrooms");
+            if(player.HeldOfferId!="stock_mushrooms"){Fail("solo shelf pickup");yield break;}
+            player.X=0;player.Z=7;session.Command("Buy",item:"stock_mushrooms");
+            if(!player.Inventory.Exists(item=>item.ItemId=="stock_mushrooms")){Fail("solo camp purchase");yield break;}
+            if(player.EquippedItemId!="stock_mushrooms"){Fail("solo purchased gear equips");yield break;}
+            player.Z=1;
+            yield return new WaitForSeconds(.3f);
+            string soloCaptureDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(soloCaptureDir);
+            string equippedCapture=Path.Combine(soloCaptureDir,"solo-equipped-camp.png");
+            if(File.Exists(equippedCapture))File.Delete(equippedCapture);
+            ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
+            if(!File.Exists(equippedCapture)){Fail("solo equipped camp render");yield break;}
+            player.Z=19;session.Command("Ready");
+            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.State.Phase!="Playing"){Fail("solo campsite countdown");yield break;}
+            sim.State.Npcs.Clear();
+            player.X=-18;player.Z=-22;session.Command("Use",item:"stock_mushrooms");
+            if(player.Effects.Count==0){Fail("solo consumable use");yield break;}
+            yield return new WaitForSeconds(.25f);
+            var effectWash=transform.Find("Festival HUD/Effect wash")?.GetComponent<Image>();
+            if(effectWash==null||effectWash.color.a<=0||!session.LocalPlayer.VisualWideEyes){Fail("solo intoxication first-person and face cues: wash="+(effectWash==null?"missing":effectWash.color.a.ToString("F3"))+" eyes="+session.LocalPlayer.VisualWideEyes);yield break;}
+            for(int clue=0;clue<2;clue++)
+            {
+                var point=FestivalSimulation.CluePoint(sim.State.Seed,clue);player.X=point.X;player.Z=point.Z;
+                session.Command("ReadClue");
+                while(sim.State.CluesRead<=clue&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(sim.State.CluesRead<=clue){Fail("solo clue "+clue);yield break;}
+            }
+            player.X=0;player.Z=0;
+            var npc=new NpcState{Id="solo_wook",X=0,Z=1,Yaw=180,CanTalk=true};sim.State.Npcs.Add(npc);
+            session.Command("Talk",npc.Id);
+            if(string.IsNullOrEmpty(player.NpcSpeech)||player.NpcSpeechUntil<=sim.State.SimulationSeconds){Fail("solo NPC short chat");yield break;}
+            yield return new WaitForSeconds(.2f);
+            string chatCapture=Path.Combine(soloCaptureDir,"solo-npc-chat.png");
+            if(File.Exists(chatCapture))File.Delete(chatCapture);
+            ScreenCapture.CaptureScreenshot(chatCapture);yield return new WaitForSeconds(.65f);
+            if(!File.Exists(chatCapture)){Fail("solo NPC chat render");yield break;}
+            session.Command("Conversation",npc.Id);
+            var talk=sim.Interaction(player.InteractionId);
+            if(talk==null||talk.Kind!="Conversation"||string.IsNullOrEmpty(talk.DialogueText)){Fail("solo NPC conversation");yield break;}
+            foreach(var note in RhythmChart.Create(talk.ChartSeed,talk.NoteCount,talk.BeatSeconds).Notes)
+            {
+                while(sim.State.SimulationSeconds-talk.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
+                session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
+            }
+            while(player.InteractionId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(player.LastRhythmScore<.6){Fail("solo NPC conversation result");yield break;}
+            player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});session.Command("Use",item:"confetti");
+            if(npc.DistractedUntil<=sim.State.SimulationSeconds){Fail("solo wook distraction");yield break;}
+            session.Command("Dance",npc.Id);
+            var dance=sim.Interaction(player.InteractionId);
+            if(dance==null||dance.Kind!="Dance"){Fail("solo dance start");yield break;}
+            foreach(var note in RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes)
+            {
+                while(sim.State.SimulationSeconds-dance.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
+                session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
+            }
+            while(!sim.State.GateOpened&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(!sim.State.GateOpened){Fail("solo dance unlock");yield break;}
+            player.Life="Downed";player.DownedRemaining=.1;
+            while(player.Life!="Spirit"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(sim.State.Phase!="Playing"){Fail("solo death recovery window");yield break;}
+            player.X=24;player.Z=-20;session.Command("BeginRevival",player.Id);
+            while(player.Life!="Alive"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(player.Life!="Alive"||player.RevivalCount!=1){Fail("solo medical revival");yield break;}
+            player.X=sim.State.FriendPosition.X;player.Z=sim.State.FriendPosition.Z;session.Command("FindFriend");
+            while(!sim.State.FriendFound&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(!sim.State.FriendFound){Fail("solo friend recruitment");yield break;}
+            player.X=0;player.Z=-32;sim.State.FriendPosition=new WorldPoint(0,-32);session.Command("Extract");
+            while(sim.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(sim.State.Result!="Success"||sim.State.Survivors!=1){Fail("solo shuttle result");yield break;}
+            Debug.Log("FESTIVAL SOLO SMOKE PASSED: camp, purchase, intoxication, clues, conversation, distraction, dance, death, revival, shuttle");
+            Application.Quit(0);
+        }
+        static string GalleryFaceId(bool deadpan,int ordinal)
+        {
+            for(int index=0,found=0;index<10000;index++)
+            {
+                var id="face_gallery_"+index;
+                var look=FestivalAppearance.For(id);
+                if((look.Face>=3)==deadpan&&look.Headgear<0&&look.Sunglasses<0&&look.FacialHair<0&&look.Accessory!=3&&found++==ordinal)return id;
+            }
+            throw new System.InvalidOperationException("Face gallery profile unavailable");
+        }
+        static string GalleryId(int gender,int shape,int shirt,int pants)
+        {
+            for(int index=0;index<10000;index++)
+            {
+                string id="fit_gallery_"+index;
+                var look=FestivalAppearance.For(id);
+                if(look.Gender==gender&&look.Shape==shape&&(shirt<0||look.Shirt==shirt)&&(pants<0||look.Pants==pants))return id;
+            }
+            throw new InvalidOperationException("Could not find a deterministic fit gallery profile.");
+        }
+        static void Fail(string stage){Debug.LogError("FESTIVAL SMOKE FAILED: "+stage);Application.Quit(5);}
+        static bool Near(PlayerState p,float x,float z)=>p!=null&&Mathf.Abs(p.X-x)<.1f&&Mathf.Abs(p.Z-z)<.1f;
+        static bool Within(PlayerState p,float x,float z,float range)=>p!=null&&Vector2.Distance(new Vector2(p.X,p.Z),new Vector2(x,z))<=range;
+        static bool Near(NpcState p,float x,float z)=>p!=null&&Mathf.Abs(p.X-x)<.1f&&Mathf.Abs(p.Z-z)<.1f;
+        static bool Near(WorldPoint p,float x,float z)=>p!=null&&Mathf.Abs(p.X-x)<.1f&&Mathf.Abs(p.Z-z)<.1f;
+        static void PlaceBoth(FestivalSimulation sim,float x,float z)
+        {
+            foreach(var player in sim.State.Players){player.X=x;player.Z=z;}
+        }
+    }
+}
+#endif

@@ -1,0 +1,9 @@
+# Festival face styles and eye states
+
+The approved scruffy festival regular and deadpan comedy faces now share the live character asset. Each style has three small facial variations for each gender pool. `FestivalAppearance` assigns one of the six faces deterministically from the character ID, preserving the current clothing and body selection system.
+
+NPCs carry two independent visual flags in their authoritative round state. About three or four of the 24 attendees per round have very large pupils and widened eyes. About four to six have red eye whites, with at least one overlap. The flags do not change gameplay rules or tell players what caused the appearance. Player characters also show wide eyes while LSD, mushrooms, or ecstasy is active, and red eyes while weed is active; the host sends only the visual flags to other players. The wide eye shape changes the sclera, iris, pupil, catchlight, and eyelids only; nose, brows, mouth, and head shape stay in place. Red eyes use a separate tintable eye material within the same face mesh. Regular faces retain blinking; wide eyed faces hold their gaze open.
+
+`scripts/generate_modular_character.py` produces the detailed and distance FBXs from the editable `ArtSource/FestivalCharacter.blend`. Both mesh levels preserve the eye shape and face material slots. The two earlier comparison sources remain under `ArtSource/FaceComparisons`; the game uses the combined master.
+
+Visual checks are under `artifacts/face-implementation`, including regular and combined wide/red close views of both styles. The native smoke character lineup shows both base styles and one combined eye state, and checks that both clients receive the same NPC eye flags. `scripts/audit_facial_states.py` verifies all 12 face meshes have both shape keys and confirms the wide eye morph changes only eye parts. The existing fit audit checks the full wardrobe against the revised master.

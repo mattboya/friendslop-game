@@ -1,0 +1,7 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtime": "Assets/Festival/Art/Resources/FestivalHands.fbx",
+  "skinShapes": 3,
+  "sleeveVariants": 4,
+  "visible": "Whenever the local player camera is active in a round"
+}

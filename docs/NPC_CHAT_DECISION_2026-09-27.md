@@ -1,0 +1,7 @@
+# NPC chat in the first playable
+
+Selected festivalgoers (about one in four host-controlled wooks) support short, varied text chats. The host chooses a line, validates proximity, enforces a two-second cooldown, and sends the response only to the talking player. Other attendees can still dance or trade but do not offer conversation. Chat text appears in the dialogue card for seven seconds. The existing rhythm conversation remains available for the selected speakers.
+
+The shipped first playable uses authored lines so they are immediate, local, deterministic across host and client, and easy to QA. This also avoids adding a model dependency to the timed mission. `llama.cpp` demonstrates that local inference on macOS with Metal is technically feasible and supports quantized models, so a future optional pack could provide generated flavor text. That pack would need a licensed model, Unity native bindings for each target platform, async inference with frame-time limits, prompt and output controls, host-authoritative delivery, a fallback line bank, and measurements of download size, memory, latency, and multiplayer behavior before shipping.
+
+Sources: [llama.cpp README](https://github.com/ggml-org/llama.cpp/blob/master/README.md), [build documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md), [models documentation](https://github.com/ggml-org/llama.cpp/blob/master/docs/models.md).

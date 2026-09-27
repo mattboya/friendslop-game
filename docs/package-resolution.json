@@ -1,0 +1,46 @@
+{
+  "checked": "2026-09-15",
+  "editor": "6000.3.24f1",
+  "status": "PINNED_NOT_EDITOR_RESOLVED",
+  "packages": {
+    "com.unity.netcode.gameobjects": {
+      "version": "2.13.2",
+      "minimumUnity": "6000.0",
+      "dependencies": {
+        "com.unity.transport": "2.6.0",
+        "com.unity.nuget.mono-cecil": "1.11.4"
+      },
+      "tarball": "https://download.packages.unity.com/com.unity.netcode.gameobjects/-/com.unity.netcode.gameobjects-2.13.2.tgz"
+    },
+    "com.unity.inputsystem": {
+      "version": "1.20.0",
+      "minimumUnity": "6000.0",
+      "dependencies": {
+        "com.unity.modules.uielements": "1.0.0"
+      },
+      "tarball": "https://download.packages.unity.com/com.unity.inputsystem/-/com.unity.inputsystem-1.20.0.tgz"
+    },
+    "com.unity.ai.navigation": {
+      "version": "2.0.14",
+      "minimumUnity": "6000.0",
+      "dependencies": {
+        "com.unity.modules.ai": "1.0.0"
+      },
+      "tarball": "https://download.packages.unity.com/com.unity.ai.navigation/-/com.unity.ai.navigation-2.0.14.tgz"
+    },
+    "com.unity.test-framework": {
+      "version": "1.4.6",
+      "minimumUnity": "2019.4",
+      "dependencies": {
+        "com.unity.ext.nunit": "2.0.3",
+        "com.unity.modules.imgui": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      },
+      "tarball": "https://download.packages.unity.com/com.unity.test-framework/-/com.unity.test-framework-1.4.6.tgz"
+    },
+    "com.unity.render-pipelines.universal": {
+      "version": "17.3.0",
+      "source": "https://raw.githubusercontent.com/Unity-Technologies/Graphics/6000.3/staging/Packages/com.unity.render-pipelines.universal/package.json"
+    }
+  }
+}
