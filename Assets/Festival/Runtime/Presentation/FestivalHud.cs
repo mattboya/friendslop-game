@@ -53,6 +53,7 @@ namespace Festival.Presentation
         private string lastRhythmJudgment="";
         private float rhythmJudgmentUntil;
         private readonly List<GameObject> dynamicActions = new List<GameObject>();
+        private readonly List<ItemStack> handGear = new List<ItemStack>(3);
         private int activeActionCount;
         private Action primaryAction;
         private int selectedSlot;
@@ -175,8 +176,9 @@ namespace Festival.Presentation
             rosterPanel=Card(root.transform,"Crew card",new Vector2(.815f,.807f),new Vector2(.978f,.853f),true);
             roster=Label(rosterPanel.transform,"Roster",18,TextAnchor.MiddleRight);Fill(roster.rectTransform,10);
             voice=Label(root.transform,"Voice",17,TextAnchor.LowerLeft);voice.color=MutedPaper;SetRect(voice.rectTransform,new Vector2(.023f,.012f),new Vector2(.23f,.052f),Vector2.zero,Vector2.zero);
-            // Keep the center-lower image clear for hands and anything they hold.
-            promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.10f),new Vector2(.36f,.18f),true);
+            // The upper-left information rail keeps both palms, held props and
+            // the ground immediately ahead visible during close interactions.
+            promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.715f),new Vector2(.405f,.80f),true);
             promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
             prompt=Label(promptPanel.transform,"Prompt",19,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
             reviewPanel=Card(root.transform,"Camp round review",new Vector2(.29f,.40f),new Vector2(.71f,.80f),true);
@@ -279,7 +281,7 @@ namespace Festival.Presentation
             var layout=content.AddComponent<VerticalLayoutGroup>();layout.spacing=10;layout.padding=new RectOffset(4,4,4,4);layout.childAlignment=TextAnchor.UpperCenter;layout.childControlHeight=true;layout.childControlWidth=true;layout.childForceExpandHeight=false;layout.childForceExpandWidth=true;
             var fitter=content.AddComponent<ContentSizeFitter>();fitter.verticalFit=ContentSizeFitter.FitMode.PreferredSize;
             actionsScroll=actionsPanel.AddComponent<ScrollRect>();actionsScroll.viewport=Rect(viewport);actionsScroll.content=actionsContent;actionsScroll.horizontal=false;actionsScroll.vertical=true;actionsScroll.scrollSensitivity=26;actionsScroll.movementType=ScrollRect.MovementType.Clamped;
-            checkoutPanel=Card(root.transform,"Counter price confirmation",new Vector2(.335f,.15f),new Vector2(.665f,.235f),false);
+            checkoutPanel=Card(root.transform,"Counter price confirmation",new Vector2(.022f,.625f),new Vector2(.405f,.705f),false);
             Accent(checkoutPanel.transform,Orange);
             checkoutText=Label(checkoutPanel.transform,"Handoff price",22,TextAnchor.MiddleCenter);checkoutText.color=Ink;Fill(checkoutText.rectTransform,12);
             heldDetailPanel=Card(root.transform,"Held item label",new Vector2(.61f,.245f),new Vector2(.955f,.365f),false);
@@ -439,6 +441,7 @@ namespace Festival.Presentation
             if(!session.Connected){objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
+            handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
             reviewPanel.SetActive(state.Phase=="CampReview"&&!showMenu);
             if(state.Phase=="CampReview")
             {
@@ -464,7 +467,7 @@ namespace Festival.Presentation
             cancelButton.SetActive(state.Phase=="Playing"&&player.InteractionId!="");
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             UpdateText(state,player);
-            UpdateGearLayout(player.Inventory.Count>0);
+            UpdateGearLayout(handGear.Count>0);
             UpdateActions(state,player);
             if(checkoutItem!="" && (Catalog.FindItem(checkoutItem)==null || (state.Phase=="Shopping"?(player.HeldOfferId!=checkoutItem||!Near(player,0,7)):(state.Phase!="Playing"||FocusedOffer(state,player)!=checkoutItem))))checkoutItem="";
             var checkoutDefinition=Catalog.FindItem(checkoutItem);
@@ -488,8 +491,9 @@ namespace Festival.Presentation
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
-            foreach(var item in player.Inventory)gear.Add(Catalog.FindItem(item.ItemId)?.Name??item.ItemId);
-            preview.text=gear.Count==0?"0 / 3   •   NOTHING PACKED":gear.Count+" / 3   •   "+string.Join("  /  ",gear);
+            foreach(var item in handGear)gear.Add(Catalog.FindItem(item.ItemId)?.Name??item.ItemId);
+            preview.text=(gear.Count==0?"0 / 3   •   NOTHING PACKED":gear.Count+" / 3   •   "+string.Join("  /  ",gear))
+                +(player.Inventory.Exists(i=>i.ItemId=="little_spoon")?"   •   LITTLE SPOON WORN":"");
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(Keyboard.current!=null&&Keyboard.current.f8Key.wasPressedThisFrame)diagnostics.gameObject.SetActive(!diagnostics.gameObject.activeSelf);
             if(diagnostics.gameObject.activeSelf)
@@ -536,14 +540,14 @@ namespace Festival.Presentation
             vitals.text="HP "+player.Health+"  •  $"+player.Cash+"  •  STASH $"+state.StashCash+"\n"
                 +"SALES $"+state.GrossSales+" / $50  •  "+player.Life.ToUpperInvariant()+"  •  "
                 +(player.Effects.Count>0?effects.ToUpperInvariant():suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+threatState.ToUpperInvariant():police==null?"CROWD CLEAR":"SECURITY "+police.Mode.ToUpperInvariant());
-            int equippedIndex=player.Inventory.FindIndex(item=>item.ItemId==player.EquippedItemId);
+            int equippedIndex=handGear.FindIndex(item=>item.ItemId==player.EquippedItemId);
             if(equippedIndex>=0)selectedSlot=equippedIndex;
             for(int i=0;i<slotFrames.Length;i++)
             {
-                var item=i<player.Inventory.Count?player.Inventory[i]:null;
+                var item=i<handGear.Count?handGear[i]:null;
                 bool equipped=item!=null&&item.ItemId==player.EquippedItemId;
                 slotFrames[i].color=equipped?new Color(.13f,.34f,.32f,1):new Color(.07f,.13f,.15f,1);
-                slotTexts[i].text=(i+1)+"  "+(item==null?"EMPTY":item.ItemId=="little_spoon"?"Little Spoon • WORN":(Catalog.FindItem(item.ItemId)?.Name??item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
+                slotTexts[i].text=(i+1)+"  "+(item==null?"EMPTY":(Catalog.FindItem(item.ItemId)?.Name??item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
                 slotTexts[i].color=equipped?new Color(1,.79f,.53f):Paper;
             }
             int ready=state.Players.FindAll(p=>p.Ready).Count;
@@ -564,7 +568,7 @@ namespace Festival.Presentation
                 session.Command("ExitCamp");return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
-            if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<player.Inventory.Count&&player.Inventory[equipSlot].ItemId!="little_spoon")session.Command("Equip",item:player.Inventory[equipSlot].ItemId);}
+            if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId=="")
             {
                 var speaker=NearestTalker(state.Npcs,player.X,player.Z,2.7f);
@@ -573,14 +577,9 @@ namespace Festival.Presentation
             if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen)primaryAction?.Invoke();
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
-            if(player.Inventory.Count>0)
+            if(handGear.Count>0)
             {
-                selectedSlot=Mathf.Clamp(selectedSlot,0,player.Inventory.Count-1);string item=player.EquippedItemId!=""?player.EquippedItemId:player.Inventory[selectedSlot].ItemId;
-                if(item=="little_spoon")
-                {
-                    if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Drop",item:item);
-                    return;
-                }
+                selectedSlot=Mathf.Clamp(selectedSlot,0,handGear.Count-1);string item=player.EquippedItemId!=""?player.EquippedItemId:handGear[selectedSlot].ItemId;
                 if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Use",item:item);
                 if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Drop",item:item);
             }
@@ -809,9 +808,9 @@ namespace Festival.Presentation
                 string stashId=stash.Id;
                 if(player.Cash>=5)AddAction("Deposit $5 in shared stash",()=>session.Command("Deposit",stashId,amount:5),ref y);
                 if(state.StashCash>=5)AddAction("Withdraw $5 from shared stash",()=>session.Command("Withdraw",stashId,amount:5),ref y);
-                if(player.Inventory.Count>0)
+                if(handGear.Count>0)
                 {
-                    string item=player.Inventory[Mathf.Clamp(selectedSlot,0,player.Inventory.Count-1)].ItemId;
+                    string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
                     AddAction("Deposit "+item,()=>session.Command("Deposit",stashId,item,1),ref y);
                 }
                 var stored=stash.Items.Find(i=>i.Count>0);
@@ -822,7 +821,7 @@ namespace Festival.Presentation
                 if(mate.Id==player.Id||Distance(player.X,player.Z,mate.X,mate.Z)>2.5f)continue;
                 if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
                 if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay $10 release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
-                if(player.Inventory.Count>0){string item=player.Inventory[Mathf.Clamp(selectedSlot,0,player.Inventory.Count-1)].ItemId;AddAction("Offer "+item+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);}
+                if(handGear.Count>0){string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;AddAction("Offer "+item+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);}
             }
             if(player.Life=="Spirit")
             {

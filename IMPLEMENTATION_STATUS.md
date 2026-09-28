@@ -4,6 +4,12 @@ Status date: September 27, 2026. **Playable macOS development build with a camps
 
 The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION.md). The [reference research](docs/FRIENDSLOP_RESEARCH_2026-09-27.md) explains the co-op loop choices. The [playtest guide](docs/PLAYTEST_2026-09-24.md) explains the playable route and remaining limitations.
 
+## Latest camp, equipment and location checkpoint
+
+- The [dated evidence record](docs/GRAPHICS_CAMP_LOCATIONS_PASS_2026-09-27.md) covers the revised HUD rail, first-person poi tether, passive Little Spoon capacity, garment detail, six cars and eight tents with two silhouettes each, doorway-specific camp interior positions, and rebuilt medical/security/shuttle shells. The existing camp DJ and post-round review gate remain in the playable flow.
+- Project static, domain, Unity validation, EditMode and PlayMode, macOS development and release builds, and release diagnostic exclusion pass. The new location exports also passed a scripted two-client native mission with before/after captures. The final build's screenshot run was interrupted by a locked Mac graphical session, so its latest poi, camp and interior presentation still needs native visual verification after unlock. The final development player has been launched on port 7777 for that review.
+- Character and environment polish, human-paced cooperative play, named minimum Windows hardware, and sustained performance remain open against the supplied trailer target.
+
 ## Graphics upgrade checkpoint
 
 - The [dated graphics baseline](docs/GRAPHICS_BASELINE_2026-09-27.md) pins the clean source commit, eight native comparison captures, Mac hardware and smoke conditions. A local archive preserves the previous development player. The latest scripted rhythm frame interval was 8.3 ms p95; it is not an isolated CPU/GPU or Windows minimum-spec result.

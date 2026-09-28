@@ -22,6 +22,34 @@ namespace Festival.Tests
             Assert.That(game.Execute(player.Id,new GameCommand{Id="reequip",Kind="Equip",ItemId="little_spoon"}).Accepted,Is.False);
         }
 
+        [Test] public void SeparateCampDoorsKeepPlayersInSeparateInteriors()
+        {
+            var game=new FestivalSimulation(21);
+            var first=game.AddPlayer("first","First");var second=game.AddPlayer("second","Second");
+            var left=CampFeatures.Find("tent_1");var right=CampFeatures.Find("tent_7");
+            first.X=left.X;first.Z=left.Z;second.X=right.X;second.Z=right.Z;
+            Assert.That(game.Execute(first.Id,new GameCommand{Id="enter-first",Kind="EnterCamp",TargetId=left.Id}).Accepted,Is.True);
+            Assert.That(game.Execute(second.Id,new GameCommand{Id="enter-second",Kind="EnterCamp",TargetId=right.Id}).Accepted,Is.True);
+            Assert.That(first.CampInteriorX!=second.CampInteriorX||first.CampInteriorZ!=second.CampInteriorZ,Is.True);
+            Assert.That(game.TryMove(first.Id,first.CampInteriorX,first.CampInteriorZ+.1f,0,.1),Is.True);
+            Assert.That(game.TryMove(first.Id,second.CampInteriorX,second.CampInteriorZ,0,.1),Is.False);
+        }
+
+        [Test] public void WornNecklaceDoesNotConsumeOneOfThreeHandGearSlots()
+        {
+            var game=new FestivalSimulation(21);var player=game.AddPlayer("host","Host");
+            player.Cash=100;
+            foreach(var id in new[]{"map","poi_practice","merch_bag"})
+                player.Inventory.Add(new ItemStack{ItemId=id,Count=1});
+            var point=Catalog.ShopPoint(true,game.State.VendorOffers.IndexOf("little_spoon"));
+            player.X=point.X;player.Z=point.Z;
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="hold-necklace",Kind="HoldOffer",ItemId="little_spoon"}).Accepted,Is.True);
+            player.X=0;player.Z=7;
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="buy-necklace",Kind="Buy",ItemId="little_spoon"}).Accepted,Is.True);
+            Assert.That(player.Inventory.Count,Is.EqualTo(4));
+            Assert.That(player.EquippedItemId,Is.Empty);
+        }
+
         [Test] public void OnlyDesignatedFestivalgoersChatAndLinesVary()
         {
             var game=new FestivalSimulation(21);var player=game.AddPlayer("host","Host");game.State.Phase="Playing";

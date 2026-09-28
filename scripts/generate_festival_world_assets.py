@@ -401,16 +401,48 @@ def camp_shop():
 
 def medical():
     box("Clean tent floor", (0, 0, .12), (6, 5, .24), "Cream")
-    # Walls run 0.1-3.15 so they seat into the roof underside at 3.13.
-    box("Back wall", (0, -2.35, 1.625), (6, .25, 3.05), "White")
-    for x in (-2.85, 2.85):
-        box("Clinic side wall", (x, 0, 1.625), (.25, 4.8, 3.05), "White")
-    box("Clinic roof", (0, 0, 3.25), (6.3, 5.2, .24), "Mint")
+    # The collision walls remain simple Unity proxies; the visible envelope
+    # behaves like stretched field canvas, with a raised central ridge.
+    fabric_grid("Clinic rear canvas",14,9,
+                lambda u,v: ((u-.5)*6,-2.36+.035*math.sin(u*math.tau*3)*math.sin(v*math.pi),
+                             .10+v*3.05),"CanvasCream",uv_scale=(3,2),thickness=.09)
+    for side in (-1,1):
+        fabric_grid("Clinic side canvas",12,9,
+                    lambda u,v,s=side: (s*(2.88+.06*math.sin(u*math.tau*3)*math.sin(v*math.pi)),
+                                         (u-.5)*4.8,.10+v*3.05),
+                    "CanvasCream",uv_scale=(3,2),thickness=.09)
+    def clinic_roof_z(x,y):
+        return 3.16+.92*(1-abs(x)/3.18)**1.25-.055*(1-(y/2.62)**2)
+    fabric_grid("Clinic pitched roof",16,12,
+                lambda u,v: ((u-.5)*6.36,(v-.5)*5.24,
+                             clinic_roof_z((u-.5)*6.36,(v-.5)*5.24)),
+                "CanvasMint",uv_scale=(3,3),thickness=.08)
+    strut("Clinic ridge tape",(0,-2.6,4.08),(0,2.6,4.08),.045,"CanvasCream",8)
+    for x in (-3.1,3.1):
+        strut("Clinic roof hem",(x,-2.6,3.18),(x,2.6,3.18),.055,"CanvasCream",8)
+        for y in (-2.36,2.36):
+            box("Clinic tubular corner",(x,y,1.58),(.10,.11,3.15),"Metal")
+    for y in (-1.55,0,1.55):
+        for x in (-2.96,2.96):
+            box("Clinic sewn wall seam",(x,y,1.62),(.025,.035,2.97),"CanvasMint")
+    for x in (-2.48,2.48):
+        box("Clinic tied-back entrance flap",(x,2.46,1.57),(.53,.07,2.79),"CanvasCream")
+        round_part("Canvas tie",(x,2.52,1.40),(.07,.07,.10),"Mint")
     box("Reception", (-1.65, 1.25, .84), (2.3, .55, 1.2), "White")
+    box("Reception warm worktop",(-1.65,1.24,1.49),(2.47,.67,.12),"Wood")
+    box("Clinic first-aid case",(-1.42,1.14,1.71),(.47,.29,.32),"White")
+    box("Case handle",(-1.42,1.14,1.90),(.22,.07,.045),"Metal")
+    box("Case cross vertical",(-1.42,1.30,1.73),(.055,.025,.18),"Rose")
+    box("Case cross horizontal",(-1.42,1.31,1.73),(.18,.025,.055),"Rose")
     box("Recovery cot", (1.2, -.65, .62), (2.7, 1.2, .25), "Blue")
+    box("Clinic mattress",(1.2,-.65,.79),(2.55,1.09,.13),"CanvasCream")
+    box("Clinic pillow",(2.11,-.65,.88),(.42,.87,.16),"White")
+    box("Folded patient blanket",(.44,-.65,.89),(.64,1.04,.08),"CanvasMint")
     for dx in (-1.2, 1.2):
         for dy in (-.5, .5):
             box("Cot leg", (1.2+dx, -.65+dy, .37), (.08, .08, .28), "Metal")
+    for y in (-1.29,-.01):
+        strut("Cot frame rail",(-.16,y,.70),(2.56,y,.70),.045,"Metal",8)
     box("Cot head", (1.2, -1.25, .9), (2.7, .13, .65), "White")
     arch("Clinic entry", 0, 2.36, .23, 2.3, 2.57, "Mint")
     # Cross is mounted on the entry lintel's front face (y=2.44).
@@ -423,9 +455,34 @@ def security():
     box("Cabin back", (0, -2.38, 1.65), (6, .25, 3), "Blue")
     for x in (-2.88, 2.88):
         box("Cabin side", (x, 0, 1.65), (.25, 5, 3), "Blue")
-    box("Cabin roof", (0, 0, 3.25), (6.4, 5.25, .26), "Dark")
+        side=1 if x>0 else -1
+        for y in (-1.22,1.22):
+            box("Shack inset side window",(side*3.02,y,1.96),(.055,1.23,.91),"AutoGlass")
+            for frameY in (y-.67,y+.67):
+                box("Window vertical frame",(side*3.07,frameY,1.96),(.075,.055,1.06),"Metal")
+            for height in (1.45,2.48):
+                box("Window sill frame",(side*3.07,y,height),(.075,1.37,.07),"Metal")
+        for y in (-2.24,0,2.24):
+            box("Prefab wall seam",(side*3.04,y,1.55),(.04,.045,2.76),"Metal")
+    fabric_grid("Folded steel shack roof",14,10,
+                lambda u,v: ((u-.5)*6.45,(v-.5)*5.45,
+                             3.33+.24*(.5-v)+.035*math.sin(u*math.pi*8)),
+                "Metal",uv_scale=(4,3),thickness=.10)
+    for x in (-2.62,-1.31,0,1.31,2.62):
+        strut("Roof standing seam",(x,-2.7,3.46),(x,2.7,3.22),.035,"Dark",8)
+    for y in (-2.72,2.72):
+        box("Shack roof gutter",(0,y,3.32),(6.5,.11,.13),"Metal")
     box("Front left", (-2.1, 2.35, 1.65), (1.8, .22, 3), "Blue")
     box("Front right", (2.1, 2.35, 1.65), (1.8, .22, 3), "Blue")
+    for x in (-2.08,2.08):
+        box("Front counter window",(x,2.475,1.95),(1.2,.055,.82),"AutoGlass")
+        box("Front window sill",(x,2.51,1.51),(1.34,.09,.09),"Metal")
+        for dx in (-.68,.68):
+            box("Front window jamb",(x+dx,2.51,1.95),(.07,.09,.97),"Metal")
+    for x in (-2.77,2.77):
+        box("Shack structural corner",(x,2.48,1.57),(.15,.13,3.05),"Metal")
+    box("Security door tread",(0,2.48,.20),(2.5,.52,.16),"Gold")
+    box("Security entrance lintel",(0,2.48,2.99),(2.52,.16,.23),"Metal")
     box("Holding bench", (0, -1.55, .7), (3.3, .60, .35), "Wood")
     for x in (-1.4, 1.4):
         box("Holding bench leg", (x, -1.55, .40), (.12, .5, .30), "Metal")
@@ -438,43 +495,70 @@ def security():
         box("Holding side rail", (x, -1.30, 2.8), (.09, 1.95, .09), "Metal")
     box("Holding crossbar", (0, -.35, 2.8), (3.54, .09, .09), "Metal")
     box("Officer counter", (2.1, .75, .755), (1.3, .9, 1), "Wood")
-    box("Security sign", (0, 2.49, 2.95), (2.5, .06, .37), "Gold")
+    box("Security sign", (0, 2.55, 3.03), (2.5, .08, .37), "Gold")
+    round_part("Front warning lamp",(2.56,2.56,2.92),(.13,.13,.13),"Rose","sphere")
 
 
 def shuttle():
     # Matches Unity's shuttle collision: floor top 0.32 m, door side at -Y
     # (Unity north, toward the festival) with a 2.6 m opening between the
     # doorway proxies at x=+/-1.3, solid far wall at +Y.
-    box("Bus undercarriage", (0, 0, .12), (8.0, 2.8, .16), "Dark")
+    box("Bus undercarriage", (0, 0, .12), (8.0, 2.8, .16), "Dark",
+        edge_radius=.07,edge_segments=3)
     box("Bus floor", (0, 0, .26), (7.7, 2.7, .12), "Wood")
-    box("Bus roof", (0, 0, 2.85), (8.1, 3.2, .24), "Mint")
-    box("Bus far wall", (0, 1.45, 1.535), (8.0, .23, 2.43), "Mint")
+    fabric_grid("Curved shuttle roof",18,12,
+                lambda u,v: ((u-.5)*8.2,(v-.5)*3.15,
+                             2.78+.19*(1-((v-.5)*2)**2)),
+                "PaintMint",uv_scale=(4,2),thickness=.11)
+    for y in (-1.55,1.55):
+        strut("Shuttle rain gutter",(-4.05,y,2.77),(4.05,y,2.77),.035,"Metal",8)
+    box("Bus far wall", (0, 1.45, 1.535), (8.0, .23, 2.43), "PaintMint")
     for x in (-3.88, 3.88):
-        box("Bus end", (x, 0, 1.535), (.24, 2.9, 2.43), "Mint")
+        box("Bus end", (x, 0, 1.535), (.24, 2.9, 2.43), "PaintMint")
     for x in (-2.55, 0, 2.55):
-        box("Far side window", (x, 1.575, 1.75), (1.7, .04, .72), "Glass")
+        box("Far side window", (x, 1.575, 1.76), (1.65, .04, .78), "AutoGlass")
+        box("Far side window sill",(x,1.615,1.33),(1.75,.06,.08),"Metal")
     # Door side: two panels leave a 2.6 m opening; a header spans above it.
     for x in (-2.65, 2.65):
-        box("Bus door-side panel", (x, -1.45, 1.535), (2.7, .23, 2.43), "Rose")
-        box("Big side window", (x, -1.575, 1.75), (1.7, .04, .72), "Glass")
-    box("Door header", (0, -1.45, 2.60), (2.7, .23, .30), "Rose")
+        box("Bus door-side panel", (x, -1.45, 1.535), (2.7, .23, 2.43), "PaintRose")
+        box("Big side window", (x, -1.575, 1.75), (1.72, .04, .79), "AutoGlass")
+        box("Side window sill",(x,-1.625,1.31),(1.85,.07,.09),"Metal")
+        for windowX in (x-.92,x+.92):
+            box("Side glazing pillar",(windowX,-1.63,1.73),(.06,.07,.90),"Metal")
+        box("Side body rub strip",(x,-1.58,.92),(2.45,.085,.13),"Cream")
+    box("Door header", (0, -1.45, 2.60), (2.7, .23, .30), "PaintRose")
     for x in (-1.36, 1.36):
         box("Open bus door post", (x, -1.49, 1.39), (.12, .16, 2.14), "Gold")
+        strut("Boarding grab bar",(x*.87,-1.60,.54),(x*.87,-1.60,2.22),.037,"Metal",8)
     box("Open bus door lintel", (0, -1.49, 2.45), (2.84, .16, .12), "Gold")
+    box("Boarding step",(0,-1.52,.20),(2.64,.42,.11),"Metal")
     for x in (-2.7, -1.1, 1.1, 2.7):
         box("Comical bus seat", (x, .55, .62), (1.1, .72, .60), "Blue")
         box("Bus seat back", (x, .90, 1.01), (1.1, .13, .82), "Blue")
-    # Front (+X) has a windshield and headlamps so the box reads as a bus.
-    box("Windshield", (4.015, 0, 1.75), (.04, 2.3, .95), "Glass")
-    box("Destination plate", (4.015, 0, 2.48), (.05, 2.0, .28), "Gold")
+    # Rounded front/rear cabs distinguish the vehicle from a cargo crate.
+    box("Molded shuttle nose",(3.86,0,1.34),(.39,3.02,2.5),"PaintMint",
+        edge_radius=.18,edge_segments=4)
+    box("Molded shuttle tail",(-3.86,0,1.34),(.39,3.02,2.5),"PaintRose",
+        edge_radius=.18,edge_segments=4)
+    box("Windshield", (4.067, 0, 1.80), (.045, 2.3, .93), "AutoGlass")
+    box("Windshield center divider",(4.10,0,1.80),(.05,.065,.91),"Metal")
+    box("Destination plate", (4.08, 0, 2.49), (.05, 2.0, .30), "Dark")
+    box("Destination plate border",(4.113,0,2.49),(.04,2.07,.035),"Gold")
     for y in (-1.0, 1.0):
-        box("Bus headlamp", (4.02, y, .70), (.05, .42, .24), "Gold")
-        box("Bus taillamp", (-4.02, y, .70), (.05, .36, .24), "Rose")
-    box("Rear window", (-4.015, 0, 1.85), (.04, 2.0, .60), "Glass")
+        box("Bus headlamp", (4.085, y, .70), (.06, .42, .24), "Cream")
+        box("Bus taillamp", (-4.085, y, .70), (.06, .36, .24), "Rose")
+    box("Bus nose grille",(4.083,0,.77),(.05,1.55,.31),"Dark")
+    for y in (-.55,-.18,.18,.55):
+        box("Bus grille vane",(4.119,y,.77),(.04,.055,.24),"Metal")
+    box("Shuttle front bumper",(4.08,0,.38),(.18,3.10,.16),"Metal")
+    box("Shuttle rear bumper",(-4.08,0,.38),(.18,3.10,.16),"Metal")
+    box("Rear window", (-4.085, 0, 1.85), (.05, 2.0, .60), "AutoGlass")
     for x in (-2.75, 2.75):
         for y in (-1.52, 1.52):
             disc("Round wheel", (x, y, .42), .42, .30, "Dark", 16)
             disc("Wheel hub", (x, y*1.1, .42), .18, .06, "Metal", 10)
+            add("Shuttle wheel arch",(x,y,.43),(1,1,1),"Rubber","torus",
+                (math.pi/2,0,0),vertices=20,major=.47,minor=.045)
 
 
 def totem(sun):
@@ -569,11 +653,65 @@ def tent():
             round_part("Tent stake", (stake[0], stake[1], .07), (.04, .04, .22), "Metal")
 
 
+def dome_tent():
+    """A low rounded sleeping tent that reads differently from the A-frames."""
+    box("Dome footprint tarp", (0, 0, .045), (3.75, 3.35, .09), "Dark")
+    for panel in range(8):
+        a0, a1 = panel*math.tau/8, (panel+1)*math.tau/8
+        def shell(u, v):
+            angle = a0+(a1-a0)*u
+            elevation = v*math.pi/2
+            radius = math.cos(elevation)
+            return (1.78*radius*math.cos(angle),
+                    1.58*radius*math.sin(angle),
+                    .10+1.68*math.sin(elevation))
+        # Two front panels stop above the door, leaving a real walk-in gap.
+        front_opening = panel in (1, 2)
+        fabric_grid("Dome rainfly panel", 4, 10,
+                    (lambda u, v: shell(u, .55+.45*v)) if front_opening else shell,
+                    "CanvasRose" if panel%2==0 else "CanvasCream",
+                    uv_scale=(.75,1.8), thickness=.045)
+        for i in range(10):
+            a = a0
+            v0, v1 = i/10, (i+1)/10
+            p0 = Vector((1.79*math.cos(v0*math.pi/2)*math.cos(a),
+                         1.59*math.cos(v0*math.pi/2)*math.sin(a),
+                         .12+1.68*math.sin(v0*math.pi/2)))
+            p1 = Vector((1.79*math.cos(v1*math.pi/2)*math.cos(a),
+                         1.59*math.cos(v1*math.pi/2)*math.sin(a),
+                         .12+1.68*math.sin(v1*math.pi/2)))
+            strut("Dome pole and taped seam", p0, p1, .021, "CanvasDark", 8)
+    # Rolled front door and zip lines frame the open centre of the shell.
+    strut("Dome door roll",(-.49,1.29,1.17),(.49,1.29,1.17),.075,"CanvasGold")
+    for side in (-1,1):
+        strut("Dome entry zipper",(side*.53,1.57,.16),(side*.46,1.30,1.13),.018,"Cream",8)
+        strut("Dome guy rope",(side*1.29,1.00,.95),(side*2.05,1.83,.08),.018,"Cream",8)
+        round_part("Dome stake",(side*2.05,1.83,.08),(.04,.04,.18),"Metal")
+    box("Dome floor edging",(0,0,.13),(3.45,3.03,.075),"CanvasDark")
+
+
+def wheel_wells(body, positions, radius, height):
+    """Cut the tyre clearance into the painted shell before adding trim."""
+    for side in (-1, 1):
+        for y in positions:
+            bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=radius, depth=.78,
+                location=(side*1.44,y,height), rotation=(0,math.pi/2,0))
+            cutter = bpy.context.object
+            modifier = body.modifiers.new("Wheel opening", "BOOLEAN")
+            modifier.operation = "DIFFERENCE"
+            modifier.object = cutter
+            modifier.solver = "EXACT"
+            bpy.context.view_layer.objects.active = body
+            bpy.ops.object.modifier_apply(modifier=modifier.name)
+            bpy.data.objects.remove(cutter)
+
+
 def camp_car():
     # A readable small hatchback: hood, separate passenger cabin, glass,
     # four round wheels, mirrors, lamps and recognizable front/rear ends.
-    box("Camp car rounded lower shell", (0, 0, .65), (2.85, 4.75, .86), "PaintRose",
+    body = box("Camp car rounded lower shell", (0, 0, .65), (2.85, 4.75, .86), "PaintRose",
         edge_radius=.18,edge_segments=4)
+    wheel_wells(body, (-1.51,1.52), .53, .40)
     formed_mesh("Shaped car bonnet",
         [(-1.31,1.20,1.07),(0,1.20,1.17),(1.31,1.20,1.07),
          (-1.31,2.31,.98),(0,2.31,1.09),(1.31,2.31,.98)],
@@ -610,6 +748,10 @@ def camp_car():
         strut("Rear window lower seal",(x,-1.35,1.13),(x,-.19,1.13),.025,"Dark",8)
         box("Camp car door seam", (side*1.43, .03, .70), (.028, .035, .61), "Dark")
         box("Camp car door handle", (side*1.46, .38, 1.01), (.07, .28, .07), "Metal")
+        box("Camp car rear door seam", (side*1.43, -1.00, .70), (.028, .035, .61), "Dark")
+        box("Camp car rear door handle", (side*1.46, -1.27, 1.01), (.07, .23, .07), "Metal")
+        strut("Painted beltline crease",(side*1.44,-2.16,1.09),(side*1.44,2.02,1.09),.015,"PaintRose",8)
+        box("Side turn signal",(side*1.44,1.86,1.02),(.055,.22,.09),"Gold")
         box("Camp car wing mirror", (side*1.50, .96, 1.18), (.26, .27, .15), "Dark")
         box("Camp car sill", (side*1.43, 0, .28), (.07, 2.8, .10), "Dark")
         for y in (-1.51, 1.52):
@@ -626,16 +768,68 @@ def camp_car():
         strut("Car roof gutter",(side*1.14,-1.12,1.83),(side*1.14,.76,1.83),.025,"Metal",8)
     for x in (-.95, .95):
         box("Camp car headlamp", (x, 2.40, .92), (.39, .06, .22), "Cream")
-        box("Camp car taillamp", (x, -2.40, .89), (.35, .06, .24), "Gold")
+        box("Camp car taillamp", (x, -2.40, .89), (.35, .06, .24), "Rose")
+        box("Camp car amber indicator", (x, -2.42, 1.03), (.28, .065, .09), "Gold")
     box("Camp car front grille", (0, 2.41, .67), (1.28, .07, .23), "Dark")
     box("Camp car lower intake", (0, 2.43, .42), (1.65, .055, .095), "Dark")
     for x in (-.43,-.15,.15,.43):
         box("Grille opening",(x,2.45,.67),(.06,.035,.15),"Metal")
     box("Camp car front bumper", (0, 2.43, .36), (2.88, .15, .16), "Metal")
+    for x in (-1.05,1.05):
+        box("Inset fog lamp",(x,2.51,.45),(.25,.035,.11),"Cream")
     box("Camp car rear bumper", (0, -2.43, .36), (2.88, .15, .16), "Metal")
     box("Camp car number plate", (0, 2.52, .47), (.66, .02, .18), "Cream")
     for side in (-1,1):
         strut("Windshield wiper",(side*.15,1.30,1.12),(side*.82,1.27,1.22),.018,"Dark",8)
+
+
+def camp_van():
+    """A distinct tall camper van with windows, sliding door and usable road stance."""
+    body=box("Camper van lower body",(0,0,.78),(2.95,5.26,1.22),"PaintRose",
+        edge_radius=.22,edge_segments=5)
+    wheel_wells(body, (-1.68,1.72), .56, .43)
+    box("Camper van raised cabin",(0,-.24,1.66),(2.72,3.95,1.38),"PaintRose",
+        edge_radius=.18,edge_segments=4)
+    box("Camper van roof",(0,-.26,2.39),(2.76,4.04,.14),"PaintRose",
+        edge_radius=.065,edge_segments=3)
+    # The sloped windscreen, long glazed cabin and back doors carry its identity.
+    add("Camper windscreen",(0,1.97,1.74),(2.33,.055,1.04),"AutoGlass","cube",(.22,0,0))
+    box("Camper windshield visor",(0,2.03,2.29),(2.61,.17,.12),"PaintRose")
+    for side in (-1,1):
+        x=side*1.385
+        box("Driver side glass",(x,1.05,1.76),(.038,.90,.78),"AutoGlass")
+        box("Passenger side glass",(x,-.45,1.75),(.038,1.43,.79),"AutoGlass")
+        box("Rear quarter glass",(x,-1.73,1.75),(.038,.66,.79),"AutoGlass")
+        for y in (-1.15,.29,1.48):
+            box("Camper window pillar",(side*1.41,y,1.75),(.065,.09,.86),"PaintRose")
+        box("Camper sliding door track",(side*1.45,-.42,1.27),(.055,2.1,.055),"Metal")
+        box("Camper sliding door rear seam",(side*1.46,-1.53,.91),(.055,.035,.77),"Dark")
+        box("Camper sliding door handle",(side*1.47,-.10,1.08),(.065,.30,.065),"Metal")
+        box("Camper driver door seam",(side*1.46,1.39,.86),(.055,.035,.78),"Dark")
+        box("Camper driver door handle",(side*1.47,1.00,1.09),(.065,.26,.065),"Metal")
+        box("Camper wing mirror",(side*1.53,2.16,1.43),(.28,.23,.22),"Dark")
+        box("Camper sill",(side*1.45,-.06,.36),(.08,4.65,.13),"Dark")
+        for y in (-1.68,1.72):
+            add("Camper wheel",(side*1.48,y,.43),(.48,.48,.18),"Rubber","cylinder",
+                (0,math.pi/2,0),vertices=24)
+            add("Camper wheel hub",(side*1.60,y,.43),(.23,.23,.055),"Metal","cylinder",
+                (0,math.pi/2,0),vertices=20)
+            add("Camper wheel arch",(side*1.48,y,.43),(1,1,1),"Dark","torus",
+                (0,math.pi/2,0),vertices=24,major=.48,minor=.04)
+        strut("Camper roof rail",(side*1.08,-1.86,2.53),(side*1.08,1.19,2.53),.05,"Metal")
+        box("Camper headlamp",(side*.97,2.65,.98),(.42,.07,.27),"Cream")
+        box("Camper tail light",(side*1.15,-2.66,.91),(.19,.075,.51),"Rose")
+    for y in (-1.38,.75):
+        box("Camper roof rack crossbar",(0,y,2.56),(2.38,.065,.065),"Metal")
+    box("Camper front grille",(0,2.65,.72),(1.41,.075,.30),"Dark")
+    for x in (-.46,-.23,0,.23,.46):
+        box("Camper grille slot",(x,2.70,.72),(.075,.036,.22),"Metal")
+    box("Camper rear door seam",(0,-2.66,1.52),(.045,.04,1.43),"Dark")
+    box("Camper rear window",(0,-2.65,1.98),(2.32,.045,.68),"AutoGlass")
+    box("Camper rear door handle",(.45,-2.71,1.08),(.31,.065,.07),"Metal")
+    box("Camper front bumper",(0,2.71,.34),(2.97,.20,.20),"Metal")
+    box("Camper rear bumper",(0,-2.71,.34),(2.97,.20,.20),"Metal")
+    box("Camper front registration",(0,2.82,.46),(.72,.025,.17),"Cream")
 
 
 def camp_shade():
@@ -777,9 +971,9 @@ for name, build in (
     ("FestivalShuttle", shuttle), ("FestivalSun", lambda: totem(True)),
     ("FestivalMoon", lambda: totem(False)),
     ("FestivalTreeA", lambda: tree(0)), ("FestivalTreeB", lambda: tree(1)),
-    ("FestivalTent", tent), ("FestivalPoi", poi),
+    ("FestivalTent", tent), ("FestivalDomeTent", dome_tent), ("FestivalPoi", poi),
     ("FestivalWristband", wristband),
-    ("FestivalCampCar", camp_car), ("FestivalCampShade", camp_shade),
+    ("FestivalCampCar", camp_car), ("FestivalCampVan", camp_van), ("FestivalCampShade", camp_shade),
     ("FestivalCampShop", camp_shop),
     ("FestivalPortaPotty", porta_potty), ("FestivalLittleSpoon", little_spoon),
 ):

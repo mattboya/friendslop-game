@@ -35,14 +35,19 @@ scene.camera = camera
 
 for name, position, target, scale in (
     ("FestivalTent", (6,-8,4.2), (0,0,1.15), 5.9),
+    ("FestivalDomeTent", (6,8,4.2), (0,0,1.0), 5.9),
     ("FestivalCampShade", (9,-11,7), (0,0,2), 11.5),
     ("FestivalTreeA", (8,-10,7), (0,0,3.1), 8.2),
     ("FestivalTreeB", (8,-10,7), (0,0,3.1), 8.2),
     ("FestivalCampCar", (7,8,3.5), (0,0,.85), 7.5),
+    ("FestivalCampVan", (7,8,4), (0,0,1.2), 8.0),
     ("FestivalStage", (24,34,16), (0,0,3.8), 27),
     ("FestivalStallSupplies", (5,8,5), (0,0,1.6), 8.5),
     ("FestivalStallPerformance", (5,8,5), (0,0,1.6), 8.5),
     ("FestivalStallStock", (5,8,5), (0,0,1.6), 8.5),
+    ("FestivalMedical", (7,9,6), (0,0,1.5), 8.6),
+    ("FestivalSecurity", (7,9,6), (0,0,1.5), 8.6),
+    ("FestivalShuttle", (11,-9,6), (0,0,1.5), 11),
 ):
     index = names.index(name)
     shift_x, shift_y = (index % 4)*25, -(index // 4)*25

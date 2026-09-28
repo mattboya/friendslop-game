@@ -28,7 +28,7 @@ namespace Festival.Presentation
             }
             var go=Instantiate(prefab,camera.transform);
             go.name="First-person festival hands";
-            go.transform.localPosition=new Vector3(0,-.28f,.35f);
+            go.transform.localPosition=new Vector3(0,-.20f,.35f);
             go.transform.localRotation=Quaternion.identity;
             go.transform.localScale=Vector3.one*.56f;
             var hands=go.AddComponent<FestivalHands>();
@@ -68,7 +68,7 @@ namespace Festival.Presentation
                 if(unpaidId!=""&&held==""&&player!=null&&previousCash>=0&&player.Cash<previousCash)handoffAt=Time.time;
                 if(unpaidProp!=null)Destroy(unpaidProp);
                 unpaidProp=null;unpaidId=held;
-                if(held!="")
+                if(held!=""&&held!="little_spoon")
                 {
                     var resource=FestivalSession.DropModel(held);
                     if(resource!=null)unpaidProp=Held(transform,resource,new Vector3(.38f,-.14f,1.0f),.42f);
@@ -87,6 +87,9 @@ namespace Festival.Presentation
                     var resource=FestivalSession.DropModel(equipped);
                     if(resource!=null)equippedProp=Held(transform,resource,new Vector3(.42f,-.36f,.90f),.42f);
                 }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_equipment","item="+(equipped==""?"none":equipped)+" grip="+(equippedPoi!=null?"poi":equippedProp!=null?"prop":"none"));
+#endif
             }
             bool poi=player!=null && player.VisualPose=="Poi";
             if(leftPoi!=null){leftPoi.gameObject.SetActive(poi);leftPoi.Spinning=poi;}

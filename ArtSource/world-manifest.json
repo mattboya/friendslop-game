@@ -28,19 +28,19 @@
       "triangles": 3004
     },
     "FestivalMedical": {
-      "parts": 17,
-      "renderers": 6,
-      "triangles": 1260
+      "parts": 44,
+      "renderers": 9,
+      "triangles": 4236
     },
     "FestivalSecurity": {
-      "parts": 28,
-      "renderers": 5,
-      "triangles": 1392
+      "parts": 74,
+      "renderers": 7,
+      "triangles": 3340
     },
     "FestivalShuttle": {
-      "parts": 40,
-      "renderers": 8,
-      "triangles": 2688
+      "parts": 71,
+      "renderers": 11,
+      "triangles": 5760
     },
     "FestivalSun": {
       "parts": 12,
@@ -67,6 +67,11 @@
       "renderers": 6,
       "triangles": 2172
     },
+    "FestivalDomeTent": {
+      "parts": 97,
+      "renderers": 7,
+      "triangles": 4260
+    },
     "FestivalPoi": {
       "parts": 4,
       "renderers": 4,
@@ -78,9 +83,14 @@
       "triangles": 204
     },
     "FestivalCampCar": {
-      "parts": 76,
-      "renderers": 6,
-      "triangles": 3544
+      "parts": 88,
+      "renderers": 7,
+      "triangles": 4136
+    },
+    "FestivalCampVan": {
+      "parts": 63,
+      "renderers": 7,
+      "triangles": 4260
     },
     "FestivalCampShade": {
       "parts": 128,

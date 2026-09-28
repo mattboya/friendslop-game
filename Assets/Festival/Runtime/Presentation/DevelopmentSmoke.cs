@@ -205,6 +205,26 @@ namespace Festival.Presentation
                 captureCamera=null;
                 if(!File.Exists(carPath)){Fail("camp car render");yield break;}
                 Debug.Log("FESTIVAL SMOKE CAMP CAR PASSED: "+carPath);
+                captureCamera=session.ViewCamera;
+                capturePosition=new Vector3(-13f,2.4f,-30f);
+                captureRotation=Quaternion.LookRotation(new Vector3(-8,1.2f,-25)-capturePosition);
+                yield return new WaitForSeconds(.3f);
+                var vanPath=Path.Combine(campDir,"host-camp-van.png");
+                ScreenCapture.CaptureScreenshot(vanPath);
+                yield return new WaitForSeconds(.7f);
+                captureCamera=null;
+                if(!File.Exists(vanPath)){Fail("camp van render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CAMP VAN PASSED: "+vanPath);
+                captureCamera=session.ViewCamera;
+                capturePosition=new Vector3(-31f,2.7f,11f);
+                captureRotation=Quaternion.LookRotation(new Vector3(-27,1.0f,17)-capturePosition);
+                yield return new WaitForSeconds(.3f);
+                var domePath=Path.Combine(campDir,"host-camp-dome-tent.png");
+                ScreenCapture.CaptureScreenshot(domePath);
+                yield return new WaitForSeconds(.7f);
+                captureCamera=null;
+                if(!File.Exists(domePath)){Fail("camp dome tent render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CAMP DOME TENT PASSED: "+domePath);
             }
             if(session.IsHost){sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;}
             while(!Within(session.LocalPlayer,0,19,3.2f)&&Time.realtimeSinceStartup<deadline)yield return null;
@@ -258,6 +278,21 @@ namespace Festival.Presentation
                 while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("night market direct purchase");yield break;}
                 captureCamera=session.ViewCamera;
+                foreach(var location in new[]{
+                    new {Name="medical",Camera=new Vector3(18,2.2f,-23),Target=new Vector3(24,1.7f,-17)},
+                    new {Name="security",Camera=new Vector3(21,2.2f,2),Target=new Vector3(27,1.7f,8)},
+                    new {Name="shuttle",Camera=new Vector3(8,2.2f,-30),Target=new Vector3(0,1.6f,-36)} })
+                {
+                    capturePosition=location.Camera;
+                    captureRotation=Quaternion.LookRotation(location.Target-location.Camera);
+                    yield return new WaitForSeconds(.25f);
+                    var locationPath=Path.Combine(liveCrowdDir,"client-"+location.Name+".png");
+                    if(File.Exists(locationPath))File.Delete(locationPath);
+                    ScreenCapture.CaptureScreenshot(locationPath);
+                    yield return new WaitForSeconds(.7f);
+                    if(!File.Exists(locationPath)){Fail(location.Name+" location render");yield break;}
+                    Debug.Log("FESTIVAL SMOKE LOCATION "+location.Name.ToUpperInvariant()+" RENDER PASSED: "+locationPath);
+                }
                 capturePosition=new Vector3(-18,2.2f,-24.5f);
                 captureRotation=Quaternion.LookRotation(new Vector3(-18,1.5f,-20)-capturePosition);
                 yield return new WaitForSeconds(.3f);
@@ -566,7 +601,7 @@ namespace Festival.Presentation
             var sim=session.DevelopmentSimulation;
             var player=sim.Player(session.LocalPlayerId);
             string soloCaptureDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(soloCaptureDir);
-            foreach(var id in new[]{"car_1","tent_1","potty_1"})
+            foreach(var id in new[]{"car_1","car_5","tent_1","tent_7","potty_1"})
             {
                 var site=CampFeatures.Find(id);player.X=site.X;player.Z=site.Z;
                 session.Command("EnterCamp",site.Id);

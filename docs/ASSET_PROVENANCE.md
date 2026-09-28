@@ -62,3 +62,7 @@ The character generator adds original seams, cuff bindings, yokes, belt loops an
 ## September 27 market and stage pass
 
 The stage and three market stall exports add original scripted canvas roofs, stage structure, speaker fronts, slatted counters and small product forms. `FestivalWorld` uses the existing original surface images for canvas, bark, leaves and wood, plus a runtime-generated uncollidable dirt border along the main festival path. The stage lettering is generated from the already licensed project font. No reference-game asset, external texture, model, font or recording was added.
+
+## September 27 camp and location follow-up
+
+The world source now exports 29 FBXs, adding an original camper van and dome tent to the existing hatchback and A-frame tent. The car and van shells have modeled wheel openings and separate windows, doors, lamps and trim. The medical tent, security cabin and shuttle were rebuilt from the same scripted Blender source with shaped roofs, openings and construction detail. Character and first-person hand sources gained original garment stitching, cuffs and patch forms. All source assets were staged through `scripts/art-pipeline.mjs`, reviewed in Blender, and published with Unity GUIDs preserved. Runtime interior rooms, poi tether motion and HUD placement are original Unity code. No external models, textures, recordings or reference-game artwork were added.

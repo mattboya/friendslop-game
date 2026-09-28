@@ -114,7 +114,7 @@ namespace Festival.Tests
                 var camp=root.transform.Find(FestivalWorld.CampRootName);Assert.That(camp,Is.Not.Null);
                 Assert.That(world.IsReady,Is.True);Assert.That(world.NavigationReady,Is.True);Assert.That(world.CampNavigationReady,Is.True);
                 Assert.That(world.IsCampVisible,Is.True);
-                foreach(var name in new[]{"FestivalCampShade","FestivalCampCar","FestivalTent","FestivalPortaPotty","camp_seller_2"})
+                foreach(var name in new[]{"FestivalCampShade","FestivalCampCar","FestivalCampVan","FestivalTent","FestivalDomeTent","FestivalPortaPotty","camp_seller_2"})
                     Assert.That(camp.Find(name),Is.Not.Null,name+" campsite object missing");
                 world.SetPhase("Playing");
                 Assert.That(world.IsCampVisible,Is.False);

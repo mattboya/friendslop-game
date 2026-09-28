@@ -20,11 +20,17 @@ namespace Festival.Core
             new Site("tent_1","Tent",-15,8,20),new Site("tent_2","Tent",-15,-5,340),
             new Site("tent_3","Tent",15,12,25),new Site("tent_4","Tent",15,-5,330),
             new Site("tent_5","Tent",-19,15,65),new Site("tent_6","Tent",19,16,300),
+            new Site("tent_7","Tent",-27,17,35),new Site("tent_8","Tent",27,17,325),
             new Site("car_1","Car",-14,-15,0),new Site("car_2","Car",14,-15,0),
             new Site("car_3","Car",-19,-15,8),new Site("car_4","Car",19,-15,352),
+            new Site("car_5","Car",-8,-25,7),new Site("car_6","Car",8,-25,353),
             new Site("potty_1","Potty",19,6,0),new Site("potty_2","Potty",-19,1,0),
         };
         public static Site Find(string id){foreach(var site in Sites)if(site.Id==id)return site;return null;}
+        // Every physical doorway owns a separate interior cell. Two players
+        // entering different tents no longer appear in the same room.
+        public static float InteriorSlotX(Site site)=>Array.IndexOf(Sites,site)<8?-32:32;
+        public static float InteriorSlotZ(Site site)=>(Array.IndexOf(Sites,site)%8-3.5f)*9f;
         public static string Activity(string kind,int turn)
         {
             string[] choices=kind=="Car"

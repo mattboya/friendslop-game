@@ -86,9 +86,11 @@ def sleeves(variant):
         front, back = Vector((x * .365, -.31, -.37)), Vector((x * .40, .10, -.62))
         tilt = (back - front).to_track_quat("Z", "Y").to_euler()
         part("sleeve " + side, (front + back) / 2, (radius, radius, (back - front).length), 1, "tube", tilt)
-        if variant == 3:
-            part("jacket cuff " + side, front + (back - front).normalized() * .02,
-                 (radius + .012, radius + .012, .04), 7, "tube", tilt)
+        part("stitched sleeve cuff " + side, front + (back - front).normalized() * .035,
+             (radius + .008, radius + .008, .045), 7, "tube", tilt)
+        if variant in (1, 3):
+            part("outer sleeve patch " + side, (front + back) / 2 + Vector((x * .012, -.014, -.016)),
+                 (.060, .084, .008), 7, "cube", tilt)
 
 
 for variant in range(3):

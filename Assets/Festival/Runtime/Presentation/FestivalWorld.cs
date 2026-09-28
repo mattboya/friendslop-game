@@ -40,6 +40,7 @@ namespace Festival.Presentation
         private int displayedCampAntics;
         private bool campAnticArmed;
         private string visibleInterior="";
+        private string visibleInteriorKind="";
         private string displayedRound="";
         public bool IsReady { get; private set; }
         public bool NavigationReady => surface != null && surface.navMeshData != null;
@@ -141,7 +142,7 @@ namespace Festival.Presentation
             ProxyBox("Shuttle doorway west",new Vector3(-2.65f,1.55f,-34.5f),new Vector3(2.7f,3,.2f),dark);
             ProxyBox("Shuttle doorway east",new Vector3(2.65f,1.55f,-34.5f),new Vector3(2.7f,3,.2f),dark);
             Visual("FestivalShuttle",new Vector3(0,0,-36));
-            Sign("LAST SHUTTLE",new Vector3(0,2.1f,-34.4f),dark,.16f,180);
+            Sign("LAST SHUTTLE",new Vector3(0,2.72f,-34.4f),dark,.14f,180);
             for (int i=0;i<8;i++)
             {
                 float x = i%2==0 ? -33 : 33; float z=-28+(i/2)*17;
@@ -326,11 +327,12 @@ namespace Festival.Presentation
             foreach(var site in CampFeatures.Sites)
             {
                 var center=new Vector3(site.X,0,site.Z);
-                var resource=site.Kind=="Tent"?"FestivalTent":site.Kind=="Car"?"FestivalCampCar":"FestivalPortaPotty";
+                var resource=site.Kind=="Tent"?(site.Id.EndsWith("7")||site.Id.EndsWith("8")?"FestivalDomeTent":"FestivalTent"):
+                    site.Kind=="Car"?(site.Id.EndsWith("5")||site.Id.EndsWith("6")?"FestivalCampVan":"FestivalCampCar"):"FestivalPortaPotty";
                 var prop=Visual(resource,center);
                 if(prop!=null)
                 {
-                    prop.name=site.Id.EndsWith("1")?resource:site.Id+" "+resource;
+                    prop.name=site.Id.EndsWith("1")||site.Id=="car_5"||site.Id=="tent_7"?resource:site.Id+" "+resource;
                     prop.transform.localRotation=Quaternion.Euler(0,site.Yaw,0);
                     // Shared meshes; roof and car colors vary by a small, fixed camp palette.
                     if(site.Kind=="Car"||site.Kind=="Tent")
@@ -486,8 +488,22 @@ namespace Festival.Presentation
                 Box(kind+" lamp shade",center+new Vector3(0,2.95f,-.35f),new Vector3(.65f,.12f,.65f),gold,false);
                 if(kind=="Car")
                 {
-                    Box("Car windshield",center+new Vector3(0,1.85f,2.76f),new Vector3(4.45f,1.4f,.07f),artMaterials["Glass"],false);
-                    Box("Car dashboard",center+new Vector3(0,.95f,1.7f),new Vector3(4.7f,.35f,1.2f),artMaterials["Metal"],false);
+                    Box("Car windshield",center+new Vector3(0,1.91f,2.76f),new Vector3(4.13f,1.08f,.07f),artMaterials["Glass"],false);
+                    Box("Car windscreen header",center+new Vector3(0,2.55f,2.65f),new Vector3(5.1f,.16f,.25f),dark,false);
+                    foreach(float side in new[]{-1f,1f})
+                    {
+                        Box("Car A pillar",center+new Vector3(side*2.23f,1.87f,2.60f),new Vector3(.20f,1.38f,.24f),dark,false);
+                        Box("Car side window",center+new Vector3(side*2.78f,1.92f,.20f),new Vector3(.07f,.94f,2.20f),artMaterials["Glass"],false);
+                        Box("Car window sill",center+new Vector3(side*2.72f,1.39f,.20f),new Vector3(.18f,.10f,2.42f),artMaterials["Metal"],false);
+                        Box("Car door latch",center+new Vector3(side*2.71f,1.09f,-.62f),new Vector3(.17f,.08f,.30f),gold,false);
+                        Box("Car bucket seat cushion",center+new Vector3(side*1.36f,.52f,.05f),new Vector3(1.27f,.36f,1.18f),rose,false);
+                        var back=Box("Car bucket seat back",center+new Vector3(side*1.36f,1.12f,.49f),new Vector3(1.22f,1.25f,.27f),rose,false);
+                        back.transform.localRotation=Quaternion.Euler(-9,0,0);
+                        Box("Car headrest",center+new Vector3(side*1.36f,1.87f,.52f),new Vector3(.60f,.29f,.24f),rose,false);
+                        Box("Car floor mat",center+new Vector3(side*1.36f,.11f,1.15f),new Vector3(1.35f,.02f,1.40f),dark,false);
+                    }
+                    Box("Car dashboard",center+new Vector3(0,1.02f,1.88f),new Vector3(4.75f,.39f,.97f),artMaterials["Metal"],false);
+                    Box("Car instrument cowl",center+new Vector3(-1.08f,1.27f,1.48f),new Vector3(1.26f,.24f,.44f),dark,false);
                     for(int spoke=0;spoke<8;spoke++)
                     {
                         float angle=spoke*Mathf.PI/4;
@@ -496,16 +512,28 @@ namespace Festival.Presentation
                     }
                     Box("Car steering wheel hub",center+new Vector3(-1,1.48f,1.04f),new Vector3(.21f,.21f,.16f),gold,false);
                     Box("Car radio",center+new Vector3(.7f,1.18f,1.08f),new Vector3(.62f,.24f,.12f),dark,false);
+                    for(int dial=0;dial<3;dial++)
+                        Box("Car ridiculous radio dial",center+new Vector3(.49f+dial*.20f,1.19f,1.015f),new Vector3(.075f,.075f,.04f),gold,false);
+                    Box("Car rear view mirror",center+new Vector3(0,2.30f,2.32f),new Vector3(.72f,.22f,.09f),dark,false);
+                    Box("Car hanging fuzzy dice",center+new Vector3(0,1.99f,2.30f),new Vector3(.18f,.18f,.18f),mint,false);
                     Box("Car bobblehead body",center+new Vector3(1.7f,1.35f,1.1f),new Vector3(.18f,.25f,.18f),rose,false);
                     campAnticProps[kind]=Box("Car bobblehead head",center+new Vector3(1.7f,1.55f,1.1f),Vector3.one*.24f,gold,false).transform;
-                    Box("Car seat",center+new Vector3(0,.51f,-1.2f),new Vector3(3.9f,1.0f,1.0f),rose,false);
+                    Box("Car rear bench",center+new Vector3(0,.45f,-2.38f),new Vector3(4.6f,.72f,.65f),rose,false);
                 }
                 else if(kind=="Tent")
                 {
+                    foreach(float side in new[]{-1f,1f})
+                    {
+                        var roof=Box("Tent pitched interior liner",center+new Vector3(side*1.42f,2.47f,0),new Vector3(3.16f,.09f,5.55f),
+                            FestivalArtView.MaterialFor(side<0?"CanvasCream":"CanvasRose"),false);
+                        roof.transform.localRotation=Quaternion.Euler(0,0,side<0?25:-25);
+                        Box("Tent interior guy tape",center+new Vector3(side*2.34f,1.59f,0),new Vector3(.08f,.07f,5.30f),gold,false);
+                    }
                     foreach(float x in new[]{-1.15f,1.15f})
                     {
                         Box("Tent sleeping bag",center+new Vector3(x,.19f,.1f),new Vector3(1.1f,.19f,3.2f),x<0?mint:gold,false);
                         Box("Tent pillow",center+new Vector3(x,.32f,1.0f),new Vector3(.85f,.18f,.42f),artMaterials["Cream"],false);
+                        Box("Tent sleeping bag stitched stripe",center+new Vector3(x,.30f,-.42f),new Vector3(.95f,.025f,.11f),rose,false);
                     }
                     Box("Tent tiny lantern",center+new Vector3(0,2.35f,1.9f),Vector3.one*.38f,gold,false);
                     Box("Tent camp cooler",center+new Vector3(0,.37f,2.1f),new Vector3(.85f,.65f,.7f),artMaterials["Blue"],false);
@@ -514,29 +542,41 @@ namespace Festival.Presentation
                 }
                 else
                 {
+                    Box("Porta molded wall panel",center+new Vector3(0,1.53f,2.78f),new Vector3(4.95f,2.61f,.05f),artMaterials["Blue"],false);
                     Box("Porta seat",center+new Vector3(0,.55f,1.7f),new Vector3(1.15f,1.1f,.9f),artMaterials["Cream"],false);
                     campAnticProps[kind]=Box("Porta lid",center+new Vector3(0,1.15f,2.13f),new Vector3(1.23f,1.15f,.1f),artMaterials["Cream"],false).transform;
                     Box("Porta mirror",center+new Vector3(0,1.9f,2.75f),new Vector3(1.2f,.9f,.08f),artMaterials["Glass"],false);
                     Box("Emergency paper roll",center+new Vector3(1.9f,1.1f,.4f),new Vector3(.5f,.5f,.5f),artMaterials["Cream"],false);
                     Box("Porta occupied sign",center+new Vector3(0,2.55f,2.68f),new Vector3(.6f,.22f,.1f),rose,false);
+                    Box("Porta coat hook",center+new Vector3(-1.9f,1.81f,.36f),new Vector3(.22f,.24f,.16f),gold,false);
+                    Box("Porta hand sanitizer",center+new Vector3(1.8f,1.27f,1.12f),new Vector3(.26f,.39f,.22f),mint,false);
                 }
                 room.SetActive(false);
             }
             owned=previous;
         }
         public static Vector3 CampInteriorPosition(string kind)=>new Vector3(CampFeatures.InteriorX,0,CampFeatures.InteriorZ(kind));
-        public void SetInterior(string kind)
+        public void SetInterior(string siteId)
         {
-            kind=kind??"";
-            if(visibleInterior==kind)return;
+            siteId=siteId??"";
+            if(visibleInterior==siteId)return;
             if(campAnticTarget!=null)campAnticTarget.localPosition=campAnticRest;
-            visibleInterior=kind;
+            visibleInterior=siteId;
+            var site=CampFeatures.Find(siteId);
+            string kind=site?.Kind??"";
+            visibleInteriorKind=kind;
             foreach(var entry in campInteriors)entry.Value.SetActive(entry.Key==kind);
+            if(site!=null&&campInteriors.TryGetValue(kind,out var room))
+            {
+                var original=CampInteriorPosition(kind);
+                room.transform.localPosition=new Vector3(CampFeatures.InteriorSlotX(site)-original.x,
+                    0,CampFeatures.InteriorSlotZ(site)-original.z);
+            }
             campAnticTarget=campAnticProps.TryGetValue(kind,out var prop)?prop:null;
             campAnticRest=campAnticTarget==null?Vector3.zero:campAnticTarget.localPosition;
             campAnticArmed=false;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","interior","kind="+(kind==""?"outside":kind));
+            DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","interior","site="+(siteId==""?"outside":siteId)+" kind="+kind);
 #endif
         }
         public void SetCampAntics(int count)
@@ -636,7 +676,7 @@ namespace Festival.Presentation
             {
                 float remaining=Mathf.Clamp01((campAnticUntil-time)/1.1f);
                 float bounce=Mathf.Abs(Mathf.Sin(time*17f))*remaining;
-                campAnticTarget.localPosition=campAnticRest+Vector3.up*bounce*(visibleInterior=="Potty" ? .36f : .22f);
+                campAnticTarget.localPosition=campAnticRest+Vector3.up*bounce*(visibleInteriorKind=="Potty" ? .36f : .22f);
             }
             var view=FestivalCharacter.ViewTransform;
             if(view!=null)
@@ -772,7 +812,9 @@ namespace Festival.Presentation
                 var canopy=Box(name+" canopy",p+new Vector3(0,3,3),new Vector3(6,.25f,4),accent);
                 if(name=="Vendor")canopy.GetComponent<Renderer>().enabled=false;
             }
-            Sign(label,p+new Vector3(0,2.4f,2.2f),accent,.055f);
+            bool locationEntrance=name=="Medical"||name=="Holding";
+            Sign(label,p+(locationEntrance?new Vector3(0,3.02f,.1f):new Vector3(0,2.4f,2.2f)),
+                accent,locationEntrance ? .12f : .055f);
         }
         private void Totem(string label,Vector3 position,Material accent,Material wood,Material ink)
         {

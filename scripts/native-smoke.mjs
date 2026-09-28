@@ -28,14 +28,14 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
       const approach=text.match(/FESTIVAL SMOKE MARKET APPROACH PASSED: (.+)/)?.[1]?.trim();
       if(!approach||!existsSync(approach))return reject(new Error('Client market approach screenshot missing'));
       copyFileSync(approach,path.join(dir,'client-market-approach.png'));
-      for(const [marker,name] of [['FESTIVAL SMOKE ACTIONS RENDER PASSED','actions'],['FESTIVAL SMOKE RHYTHM RENDER PASSED','rhythm'],['FESTIVAL SMOKE RHYTHM JUDGMENT RENDER PASSED','rhythm-judgment']]){
+      for(const [marker,name] of [['FESTIVAL SMOKE ACTIONS RENDER PASSED','actions'],['FESTIVAL SMOKE RHYTHM RENDER PASSED','rhythm'],['FESTIVAL SMOKE RHYTHM JUDGMENT RENDER PASSED','rhythm-judgment'],['FESTIVAL SMOKE LOCATION MEDICAL RENDER PASSED','medical'],['FESTIVAL SMOKE LOCATION SECURITY RENDER PASSED','security'],['FESTIVAL SMOKE LOCATION SHUTTLE RENDER PASSED','shuttle']]){
         const capture=text.match(new RegExp(marker+': (.+)'))?.[1]?.trim();
         if(!capture||!existsSync(capture))return reject(new Error('Client '+name+' screenshot missing'));
         copyFileSync(capture,path.join(dir,'client-'+name+'.png'));
       }
     }
     const captures=[['FESTIVAL SMOKE CAMP PASSED','camp'],['FESTIVAL SMOKE CAMP SHOP PASSED','camp-shop'],['FESTIVAL SMOKE PASS RENDER PASSED','pass'],['FESTIVAL SMOKE SETTINGS RENDER PASSED','settings'],['FESTIVAL SMOKE MAP RENDER PASSED','map'],['FESTIVAL SMOKE HELD RENDER PASSED','held'],['FESTIVAL SMOKE CAMP OVERVIEW PASSED','camp-overview'],['FESTIVAL SMOKE CROWD LIVE PASSED','crowd-live'],['FESTIVAL SMOKE CROWD STAGE PASSED','crowd-stage'],['FESTIVAL SMOKE CROWD GROVE PASSED','crowd-grove'],['FESTIVAL SMOKE FIT ROLES PASSED','fit-roles'],['FESTIVAL SMOKE FIT OUTFITS PASSED','fit-outfits'],['FESTIVAL SMOKE CHARACTER QUALITY PASSED','character-quality'],['FESTIVAL SMOKE FACE STATES PASSED','face-states'],['FESTIVAL SMOKE CHARACTER DISTANCE PASSED','character-distance']];
-    if(role==='host')captures.push(['FESTIVAL SMOKE CAMP CAR PASSED','camp-car']);
+    if(role==='host')captures.push(['FESTIVAL SMOKE CAMP CAR PASSED','camp-car'],['FESTIVAL SMOKE CAMP VAN PASSED','camp-van'],['FESTIVAL SMOKE CAMP DOME TENT PASSED','camp-dome-tent']);
     for(const [marker,suffix] of captures){
       const capture=text.match(new RegExp(marker+': (.+)'))?.[1]?.trim();
       if(!capture||!existsSync(capture))return reject(new Error(role+' '+suffix+' screenshot missing'));

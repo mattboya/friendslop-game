@@ -7,6 +7,7 @@ namespace Festival.Presentation
     public sealed class FestivalPoiRig : MonoBehaviour
     {
         const float RopeLength=.43f;
+        const float FirstPersonRopeLength=.34f;
         Vector3 ball,velocity,previousGrip;
         LineRenderer rope;
         Transform head;
@@ -52,12 +53,13 @@ namespace Festival.Presentation
         }
         void LateUpdate()
         {
-            // Camera hands sit low in frame. The cord leaves the visible top
-            // of their handle and its head rests forward where both stay visible.
+            // Anchor the cord at the palm end of the handle. The weighted head
+            // hangs below the grip and lags behind movement like a short flail.
             Vector3 grip=transform.position+transform.up*(firstPerson ? .055f : -.19f);
+            float length=firstPerson?FirstPersonRopeLength:RopeLength;
             Vector3 rest=firstPerson
-                ? (transform.forward*.30f-transform.up*.20f-transform.right*(side==0?-.27f:.27f)).normalized*RopeLength
-                : Vector3.down*RopeLength;
+                ? (transform.forward*.22f-transform.up*.14f+transform.right*(side==0?-.28f:.28f)).normalized*length
+                : Vector3.down*length;
             if(!initialized||Vector3.Distance(previousGrip,grip)>3)
             {
                 ball=grip+rest;velocity=Vector3.zero;initialized=true;
@@ -68,7 +70,7 @@ namespace Festival.Presentation
                 // A damped rope constraint lets the head lag when the hand moves.
                 // Performance adds a sideways impulse; gravity returns it below the grip.
                 Vector3 acceleration=firstPerson
-                    ? (grip+rest-ball)*38f-velocity*5f+Physics.gravity*.18f
+                    ? (grip+rest-ball)*18f-velocity*4f+Physics.gravity*.28f
                     : Physics.gravity*1.35f;
                 if(Spinning)acceleration+=transform.right*(side==0?-1:1)*Mathf.Sin(Time.time*7f+side)*22f;
                 velocity+=acceleration*dt;
@@ -76,7 +78,7 @@ namespace Festival.Presentation
                 ball+=velocity*dt;
                 Vector3 offset=ball-grip;
                 if(offset.sqrMagnitude<.0001f)offset=Vector3.down;
-                Vector3 constrained=grip+offset.normalized*RopeLength;
+                Vector3 constrained=grip+offset.normalized*length;
                 velocity=(constrained-(ball-velocity*dt))/Mathf.Max(dt,.001f);
                 ball=constrained;
             }

@@ -537,8 +537,10 @@ def shirt(v):
     # wardrobe fit rather than painted-on noise.
     for side in (-1,1):
         x=side*(width*.54)
-        cord("front panel stitch",[(x,-.233,bottom+.07),(x*1.03,-.248,1.13),(x*.96,-.231,1.36)],.0045,7,"Spine")
-    cord("upper chest yoke",[(-.27,-.18,1.37),(-.14,-.232,1.385),(0,-.24,1.39),(.14,-.232,1.385),(.27,-.18,1.37)],.006,7,"Spine")
+        cord("front panel stitch",[(x,-.233,bottom+.07),(x*1.03,-.248,1.13),(x*.96,-.231,1.36)],.008,7,"Spine")
+    cord("upper chest yoke",[(-.27,-.18,1.37),(-.14,-.232,1.385),(0,-.24,1.39),(.14,-.232,1.385),(.27,-.18,1.37)],.010,7,"Spine")
+    cord("front hem topstitch",[(-width*.8,-.175,bottom+.055),(-width*.4,-.235,bottom+.045),
+         (0,-.259,bottom+.042),(width*.4,-.235,bottom+.045),(width*.8,-.175,bottom+.055)],.008,7,"Spine")
     for x in (-.10,.10):
         piece("small woven badge rivet",(x,-.254,bottom+.085),(.013,.009,.013),7,"Spine")
     for side,x in (("L",-1),("R",1)):
@@ -546,20 +548,29 @@ def shirt(v):
         refine(loft("tailored sleeve",[(end,.111,.132,0),(end+.025,.12,.143,0),(1.36,.135,.15,0),(1.44,.10,.119,0)],1,"Arm"+side,center=(x*.375,0),sides=24))
         for k in range(2):
             cord("sleeve fold",[(x*.375+t,-.13,1.30+k*.055+abs(t)*.16) for t in (-.085,-.045,0,.045,.085)],.006,1,"Arm"+side)
-        cord("sleeve cuff binding",[(x*.375+.113*math.cos(a*math.tau/12),.133*math.sin(a*math.tau/12),end+.012) for a in range(13)],.007,7,"Arm"+side)
+        cord("sleeve cuff binding",[(x*.375+.113*math.cos(a*math.tau/12),.133*math.sin(a*math.tau/12),end+.012) for a in range(13)],.012,7,"Arm"+side)
+        cord("shoulder tape",[(x*.255,-.158,1.49),(x*.32,-.165,1.45),(x*.38,-.14,1.40)],.015,7,"Arm"+side)
     if v==1:
         piece("folded hood",(0,.165,1.53),(.24,.12,.12),1,"Spine")
         piece("kangaroo pocket",(0,-.249,1.10),(.195,.021,.092),1,"Spine","cube")
+        cord("kangaroo pocket opening",[(-.18,-.276,1.15),(-.08,-.278,1.17),(.08,-.278,1.17),(.18,-.276,1.15)],.012,7,"Spine")
+        cord("hood sewn edge",[(-.23,.14,1.55),(0,.05,1.65),(.23,.14,1.55)],.013,7,"Spine")
         for x in (-.06,.06):
             cord("drawstring",[(x,-.16,1.54),(x*1.1,-.24,1.43),(x*.9,-.266,1.30)],.009,4,"Spine")
     if v in (2,3):
-        cord("zipper",[(0,-.258,1.01),(0,-.259,1.25),(0,-.22,1.45),(0,-.15,1.55)],.008,5,"Spine")
+        cord("zipper",[(0,-.258,1.01),(0,-.259,1.25),(0,-.22,1.45),(0,-.15,1.55)],.015,5,"Spine")
         piece("zip pull",(0,-.277,1.28),(.024,.012,.045),7,"Spine","cube")
         for x in (-.19,.19):
             piece("jacket pocket",(x,-.241,1.16),(.10,.02,.07),1,"Spine","cube")
             cord("pocket welt",[(x-.08,-.264,1.19),(x+.08,-.264,1.19)],.008,7,"Spine")
+        cord("jacket placket edge",[(-.026,-.261,1.01),(-.026,-.264,1.25),(-.026,-.23,1.45)],.011,7,"Spine")
+        if v==3:
+            cord("jacket contrast chest band",[(-.29,-.19,1.36),(-.15,-.25,1.34),(0,-.26,1.33),
+                 (.15,-.25,1.34),(.29,-.19,1.36)],.023,7,"Spine")
     else:
         piece("sewn chest patch",(-.16,-.238,1.37),(.062,.012,.047),7,"Spine","cube")
+        if v==0:
+            cord("tee chest graphic",[(.09,-.25,1.28),(.19,-.224,1.33),(.09,-.25,1.38)],.016,7,"Spine")
     for x in (-1,1):
         cord("side seam",[(x*width*.83,-.14,bottom+.06),(x*width*.86,-.14,1.16),(x*width*.9,-.14,1.37)],.005,1,"Spine")
 

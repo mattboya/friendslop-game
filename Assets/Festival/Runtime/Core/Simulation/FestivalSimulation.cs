@@ -113,8 +113,8 @@ namespace Festival.Core
             if(p.CampVisitId!="")
             {
                 var site=CampFeatures.Find(p.CampVisitId);if(site==null)return false;
-                float roomZ=CampFeatures.InteriorZ(site.Kind);
-                if(Math.Abs(x-CampFeatures.InteriorX)>2.3f||Math.Abs(z-roomZ)>2.3f)return false;
+                float roomZ=CampFeatures.InteriorSlotZ(site);
+                if(Math.Abs(x-CampFeatures.InteriorSlotX(site))>2.3f||Math.Abs(z-roomZ)>2.3f)return false;
                 if(Distance(p.CampInteriorX,p.CampInteriorZ,x,z)>4.2*deltaSeconds+.03)return false;
                 p.CampInteriorX=x;p.CampInteriorZ=z;p.Yaw=yaw%360;return true;
             }
@@ -134,9 +134,9 @@ namespace Festival.Core
         string Id(string prefix){return prefix+"_"+(++State.EntitySequence);}
         static int Count(PlayerState p,string item){return p.Inventory.Find(i=>i.ItemId==item)?.Count??0;}
         static bool Stock(string id){return id=="stock_lsd"||id=="stock_mushrooms";}
-        static bool CanAdd(PlayerState p,string item,int count) {var def=Catalog.FindItem(item);if(def==null||count<=0)return false;var stack=p.Inventory.Find(i=>i.ItemId==item);return stack!=null?stack.Count+count<=def.StackLimit:p.Inventory.Count<3&&count<=def.StackLimit;}
+        static bool CanAdd(PlayerState p,string item,int count) {var def=Catalog.FindItem(item);if(def==null||count<=0)return false;var stack=p.Inventory.Find(i=>i.ItemId==item);if(stack!=null)return stack.Count+count<=def.StackLimit;if(count>def.StackLimit)return false;if(item=="little_spoon")return true;int handSlots=0;foreach(var owned in p.Inventory)if(owned.ItemId!="little_spoon")handSlots++;return handSlots<3;}
         static void Add(PlayerState p,string item,int count){var s=p.Inventory.Find(i=>i.ItemId==item);if(s==null)p.Inventory.Add(new ItemStack{ItemId=item,Count=count});else s.Count+=count;}
-        static void Take(PlayerState p,string item,int count){var s=p.Inventory.Find(i=>i.ItemId==item);s.Count-=count;if(s.Count==0){p.Inventory.Remove(s);if(p.EquippedItemId==item)p.EquippedItemId=p.Inventory.Count>0?p.Inventory[0].ItemId:"";}}
+        static void Take(PlayerState p,string item,int count){var s=p.Inventory.Find(i=>i.ItemId==item);s.Count-=count;if(s.Count==0){p.Inventory.Remove(s);if(p.EquippedItemId==item)p.EquippedItemId=p.Inventory.Find(i=>i.ItemId!="little_spoon")?.ItemId??"";}}
         void StartRound(List<PlayerState> connected)
         {
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
@@ -186,7 +186,7 @@ namespace Festival.Core
                 var site=CampFeatures.Find(c.TargetId);
                 if(p.Ready||p.CampVisitId!=""||site==null||!Near(p,site.X,site.Z,3.5))return Reject("Stand beside a camp door to enter");
                 p.CampVisitId=site.Id;p.CampGag="";p.X=site.X;p.Z=site.Z;
-                p.CampInteriorX=CampFeatures.InteriorX;p.CampInteriorZ=CampFeatures.InteriorZ(site.Kind)-1.5f;
+                p.CampInteriorX=CampFeatures.InteriorSlotX(site);p.CampInteriorZ=CampFeatures.InteriorSlotZ(site)-1.5f;
                 return Ok("Inside the "+site.Kind.ToLowerInvariant());
             }
             if(p.CampVisitId=="")return Reject("Enter a camp space first");

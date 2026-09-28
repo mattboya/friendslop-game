@@ -341,7 +341,7 @@ namespace Festival.Network
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
             var player=LocalPlayer;if(player==null)return;
-            if(world!=null){world.SetPhase(State.Phase);world.SetInterior(CampFeatures.Find(player.CampVisitId)?.Kind);world.SetCampAntics(player.CampAntics);world.UpdateShop(State);}
+            if(world!=null){world.SetPhase(State.Phase);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
             {
                 if(world!=null&&world.IsReady&&world.NavigationReady){loadedRound=State.RoundId;Command("MapReady");}
@@ -457,9 +457,12 @@ namespace Festival.Network
             foreach(var p in State.Players)
             {
                 if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
-                Actor(p.Id,p.Name,p.X,p.Z,p.Yaw,p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,p.EquippedItemId);seen.Add(p.Id);
-                if(p.CampVisitId=="")seen.Add(p.Id);
-                else seen.Remove(p.Id);
+                bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
+                if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
+                Actor(p.Id,p.Name,togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.Yaw,
+                    p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
+                    p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,p.EquippedItemId);
+                seen.Add(p.Id);
                 if(p.Id==LocalPlayerId)
                 {
                     if(actors[p.Id].gameObject.layer!=31)
