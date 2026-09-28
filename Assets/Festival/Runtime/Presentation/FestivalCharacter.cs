@@ -27,6 +27,8 @@ namespace Festival.Presentation
         FestivalDjHandContact djHandContact;
         Vector3 previous;
         float speed,phase,walkCycle;
+        float previousYaw,turnRate,accelerationLean;
+        bool hasFacingSample;
         internal float MotionPhase => phase;
         bool hasPrevious;
         int danceStyle;
@@ -236,8 +238,17 @@ namespace Festival.Presentation
             if(poiLeft!=null){poiLeft.gameObject.SetActive(performingPoi);poiLeft.Spinning=performingPoi;}
             if(poiRight!=null){poiRight.gameObject.SetActive(performingPoi);poiRight.Spinning=performingPoi;}
             var delta=hasPrevious?transform.position-previous:Vector3.zero;previous=transform.position;hasPrevious=true;
+            float yaw=transform.eulerAngles.y;
+            float yawChange=hasFacingSample?Mathf.DeltaAngle(previousYaw,yaw):0;
+            previousYaw=yaw;hasFacingSample=true;
+            float measuredTurn=delta.sqrMagnitude<.04f&&Mathf.Abs(yawChange)<75f
+                ?Mathf.Clamp(yawChange/animationDelta,-240f,240f):0;
+            turnRate=Mathf.Lerp(turnRate,measuredTurn,1-Mathf.Exp(-9f*animationDelta));
             float measuredSpeed=hasPrevious&&delta.magnitude<2?Mathf.Min(6,delta.magnitude/animationDelta):0;
+            float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
+            float acceleration=Mathf.Clamp((speed-previousSpeed)/animationDelta,-5f,5f);
+            accelerationLean=Mathf.Lerp(accelerationLean,acceleration,1-Mathf.Exp(-8f*animationDelta));
             // Smaller festivalgoers take shorter, more frequent steps. The
             // contact distance must scale with their actual leg reach.
             float strideDistance=Mathf.Lerp(1.0f,1.22f,Mathf.Clamp01((measuredSpeed-1.4f)/2.4f))
@@ -357,13 +368,16 @@ namespace Festival.Presentation
             else
             {
                 float move=Mathf.Clamp01(speed/1.6f),stride=walk*move;
-                Aim("Hips",new Vector3(5*move,0,stride*5));Aim("Spine",new Vector3(Mathf.Sin(t*.5f)*2-5*move,0,-stride*5));
+                float turn=Mathf.Clamp(turnRate/180f,-1f,1f);
+                float lean=Mathf.Clamp(accelerationLean*1.1f,-5f,5f);
+                Aim("Hips",new Vector3(5*move+lean,turn*4f,stride*5-turn*3f));
+                Aim("Spine",new Vector3(Mathf.Sin(t*.5f)*2-5*move-lean*.6f,turn*9f,-stride*5+turn*4f));
                 Aim("LegL",new Vector3(stride*39,0,0));Aim("LegR",new Vector3(-stride*39,0,0));
                 Aim("ShinL",new Vector3(Mathf.Max(0,-stride)*34,0,0));Aim("ShinR",new Vector3(Mathf.Max(0,stride)*34,0,0));
                 Aim("FootL",new Vector3(-stride*39-Mathf.Max(0,-stride)*34,0,0));
                 Aim("FootR",new Vector3(stride*39-Mathf.Max(0,stride)*34,0,0));
                 Aim("ArmL",new Vector3(-stride*27,0,-8));Aim("ArmR",new Vector3(stride*27,0,8));
-                Aim("Head",new Vector3(Mathf.Sin(t*.4f)*3,0,Mathf.Sin(t*.6f)*4));
+                Aim("Head",new Vector3(Mathf.Sin(t*.4f)*3,turn*12f,Mathf.Sin(t*.6f)*4));
                 if(Pose=="Detained")
                 {Aim("Spine",new Vector3(20,0,0));Aim("Head",new Vector3(15,0,12));Aim("ArmL",new Vector3(-105,0,-18));Aim("ArmR",new Vector3(-105,0,18));}
                 else if(Pose=="Rescue"||Pose=="Drag"||Pose=="FindFriend")
@@ -399,7 +413,8 @@ namespace Festival.Presentation
             if(dance&&Pose!="Dj")
                 footPlant?.Dance(Time.time*(danceStyle==0?12.5f:danceStyle==1?9.5f:10.8f)+phase,
                     danceStyle,animationDelta);
-            else footPlant?.Update(!dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
+            else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit",
+                !dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
                 delta,speed,walkCycle,strideDistance,animationDelta);
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
             {

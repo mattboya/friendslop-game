@@ -662,12 +662,48 @@ namespace Festival.Presentation
                 }
                 yield return null;
             }
+            int stopFrame=0;
+            float stopStart=Time.time;
+            while(Time.time-stopStart<.44f)
+            {
+                if(stopFrame<2&&Time.time-stopStart>=stopFrame*.30f)
+                {
+                    var stopPath=Path.Combine(dir,(session.IsHost?"host":"client")+
+                        "-stop-motion-"+stopFrame+".png");
+                    if(File.Exists(stopPath))File.Delete(stopPath);
+                    ScreenCapture.CaptureScreenshot(stopPath);
+                    stopFrame++;
+                }
+                yield return null;
+            }
+            int turnFrame=0;
+            float turnStart=Time.time;
+            while(Time.time-turnStart<.72f)
+            {
+                float elapsed=Time.time-turnStart;
+                walker.transform.rotation=Quaternion.Euler(0,90+Mathf.Min(90,elapsed/.52f*90),0);
+                if(turnFrame<3&&elapsed>=.12f+turnFrame*.21f)
+                {
+                    var turnPath=Path.Combine(dir,(session.IsHost?"host":"client")+
+                        "-turn-motion-"+turnFrame+".png");
+                    if(File.Exists(turnPath))File.Delete(turnPath);
+                    ScreenCapture.CaptureScreenshot(turnPath);
+                    turnFrame++;
+                }
+                yield return null;
+            }
             yield return new WaitForSeconds(.7f);
-            if(walkFrame!=3){Fail("walking motion frame count");yield break;}
+            if(walkFrame!=3||stopFrame!=2||turnFrame!=3){Fail("locomotion transition frame count");yield break;}
             for(int frame=0;frame<3;frame++)
                 if(!File.Exists(Path.Combine(dir,(session.IsHost?"host":"client")+"-walk-motion-"+frame+".png")))
                     {Fail("walking motion frame "+frame);yield break;}
-            Debug.Log("FESTIVAL SMOKE WALK MOTION PASSED: "+dir);
+            for(int frame=0;frame<2;frame++)
+                if(!File.Exists(Path.Combine(dir,(session.IsHost?"host":"client")+"-stop-motion-"+frame+".png")))
+                    {Fail("stopping motion frame "+frame);yield break;}
+            for(int frame=0;frame<3;frame++)
+                if(!File.Exists(Path.Combine(dir,(session.IsHost?"host":"client")+"-turn-motion-"+frame+".png")))
+                    {Fail("turning motion frame "+frame);yield break;}
+            Debug.Log("FESTIVAL SMOKE LOCOMOTION MOTION PASSED: "+dir);
             Destroy(walker.gameObject);yield return null;
             capturePosition=new Vector3(0,1.2f,-18.5f);captureRotation=Quaternion.identity;captureCamera.fieldOfView=12;
             var detailPair=new FestivalCharacter[2];

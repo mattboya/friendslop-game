@@ -300,6 +300,45 @@ namespace Festival.Tests
             }
             finally{Application.targetFrameRate=previousFrameRate;Object.Destroy(root);}
         }
+        [UnityTest]public IEnumerator StoppingAndTurningStepsAroundAPlantedFoot()
+        {
+            var root=new GameObject("Locomotion transition test");
+            int previousFrameRate=Application.targetFrameRate;
+            Application.targetFrameRate=60;
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Turning contact actor",Color.white);
+                actor.transform.localScale=Vector3.one*.82f;
+                var left=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FootL");
+                var right=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FootR");
+                Assert.That(left,Is.Not.Null);Assert.That(right,Is.Not.Null);
+                yield return null;
+                float start=Time.time;
+                while(Time.time-start<.65f)
+                {
+                    actor.transform.position+=Vector3.forward*(1.6f*Time.deltaTime);
+                    yield return null;
+                }
+                yield return new WaitForSeconds(.45f);
+                float floorL=left.position.y,floorR=right.position.y;
+                var fixedRoot=actor.transform.position;
+                float lift=0,turnStart=Time.time;
+                int supportFrames=0,samples=0;
+                while(Time.time-turnStart<.72f)
+                {
+                    actor.transform.rotation=Quaternion.Euler(0,
+                        Mathf.Min(90f,(Time.time-turnStart)/.52f*90f),0);
+                    yield return null;
+                    lift=Mathf.Max(lift,left.position.y-floorL,right.position.y-floorR);
+                    if(left.position.y<floorL+.055f||right.position.y<floorR+.055f)supportFrames++;
+                    samples++;
+                }
+                Assert.That(Vector3.Distance(actor.transform.position,fixedRoot),Is.LessThan(.001f));
+                Assert.That(lift,Is.GreaterThan(.035f),"The stationary turn never lifts a repositioning foot");
+                Assert.That(supportFrames,Is.GreaterThan(samples*.7f),"The turn loses both supporting feet");
+            }
+            finally{Application.targetFrameRate=previousFrameRate;Object.Destroy(root);}
+        }
         [UnityTest]public IEnumerator FirstPersonHandsSelectTheSameBodyAndSleeveAsPlayer()
         {
             var cameraObject=new GameObject("First-person hand test camera");

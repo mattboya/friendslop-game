@@ -5,6 +5,7 @@ Status: Active implementation plan. See the dated checkpoints below for complete
 Latest motion checkpoint: [poi, dance, and player DJ contact](GRAPHICS_POI_DANCE_DJ_PASS_2026-09-28.md).
 Latest terrain checkpoint: [stage-route ground and grove composition](GRAPHICS_TERRAIN_PASS_2026-09-28.md).
 Latest object checkpoint: [medical, security and shuttle forms](GRAPHICS_MEDICAL_SECURITY_SHUTTLE_PASS_2026-09-28.md).
+Latest movement checkpoint: [walking stop and turn transitions](GRAPHICS_LOCOMOTION_TRANSITIONS_PASS_2026-09-28.md).
 Reference: [Dear Passengers — “Another Friendslop Game” teaser](https://www.youtube.com/watch?v=luWunttkCgY)  
 Overall regression risk: **7/10** — estimated likelihood of disrupting existing functionality during the full upgrade, before the controls below. This is an engineering judgment, not a measured probability.
 Tool constraint: use free tools and assets with documented commercial use rights; do not depend on paid subscriptions or expiring trials.
@@ -407,3 +408,5 @@ The [September 28 stage contact checkpoint](GRAPHICS_STAGE_CONTACT_PASS_2026-09-
 The [September 28 terrain checkpoint](GRAPHICS_TERRAIN_PASS_2026-09-28.md) replaces the main path's straight visual slab with an irregular surface and authored dirt marks, combines grass into one visual mesh, and moves existing trees inward to frame the stage and grove. Dated native before/after views, Unity tests, macOS builds and two-client smoke pass. Broader environment art, a human-paced route and target-hardware acceptance remain open; M2 remains open.
 
 The [September 28 medical, security and shuttle checkpoint](GRAPHICS_MEDICAL_SECURITY_SHUTTLE_PASS_2026-09-28.md) gives the last shuttle a shaped passenger-vehicle cab and glass, adds side-facing identity and detailing to the clinic and security cabin, and keeps their entrances and collision proxies intact. Dated native comparisons, the PlayMode world route, both macOS builds and two-client smoke pass. The body forms, material finish, HUD footprint, human route and target hardware still need production review; M2 and M3 remain open.
+
+The [September 28 locomotion-transition checkpoint](GRAPHICS_LOCOMOTION_TRANSITIONS_PASS_2026-09-28.md) keeps a support foot planted through stops and in-place turns, adds a small body response to heading and speed changes, and records a native walk-stop-turn sequence. A red-to-green PlayMode transition test, macOS builds, release diagnostic exclusion and two-client native smoke pass. Authored upper-body choreography, terrain response and a continuous human-paced motion review remain open; M2 remains open.
