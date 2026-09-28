@@ -28,19 +28,19 @@
       "triangles": 3004
     },
     "FestivalMedical": {
-      "parts": 44,
-      "renderers": 9,
-      "triangles": 4236
+      "parts": 78,
+      "renderers": 10,
+      "triangles": 4676
     },
     "FestivalSecurity": {
-      "parts": 74,
+      "parts": 103,
       "renderers": 7,
-      "triangles": 3340
+      "triangles": 4112
     },
     "FestivalShuttle": {
-      "parts": 71,
+      "parts": 82,
       "renderers": 11,
-      "triangles": 5760
+      "triangles": 6356
     },
     "FestivalSun": {
       "parts": 12,

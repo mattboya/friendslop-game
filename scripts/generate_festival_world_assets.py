@@ -251,6 +251,28 @@ def longitudinal_prism(label, outline, half_width, color):
     return obj
 
 
+def xz_prism(label, outline, center_y, depth, color, bevel=.045):
+    """A closed, lightly rounded coach body section with an X/Z profile."""
+    n = len(outline)
+    verts = [(x, center_y-depth/2, z) for x, z in outline]
+    verts += [(x, center_y+depth/2, z) for x, z in outline]
+    faces = [tuple(range(n-1, -1, -1)), tuple(range(n, 2*n))]
+    faces += [(i, (i+1) % n, n+(i+1) % n, n+i) for i in range(n)]
+    obj = formed_mesh(label, verts, faces, color)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    if bevel:
+        modifier = obj.modifiers.new("Soft coach panel edges", "BEVEL")
+        modifier.width, modifier.segments = bevel, 3
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    obj.select_set(False)
+    return obj
+
+
 def arch(label, x, y, z, width, height, color):
     box(label + " left", (x-width/2, y, z+height/2), (.15, .16, height), color)
     box(label + " right", (x+width/2, y, z+height/2), (.15, .16, height), color)
@@ -505,6 +527,30 @@ def medical():
     for y in (-1.55,0,1.55):
         for x in (-2.96,2.96):
             box("Clinic sewn wall seam",(x,y,1.62),(.025,.035,2.97),"CanvasMint")
+    for side in (-1,1):
+        x=side*2.99
+        box("Clinic weather skirt",(x,0,.44),(.045,4.65,.58),"CanvasMint")
+        for y in (-1.32,1.32):
+            box("Clinic screened side window",(x+side*.018,y,2.14),
+                (.035,.91,.67),"CanvasDark")
+            for edge in (y-.50,y+.50):
+                box("Clinic window tape",(x+side*.048,edge,2.14),
+                    (.025,.045,.78),"CanvasMint")
+            for height in (1.76,2.52):
+                box("Clinic window hem",(x+side*.048,y,height),
+                    (.025,1.03,.04),"CanvasMint")
+            box("Clinic rolled mesh flap",(x+side*.075,y,2.62),
+                (.105,.98,.13),"CanvasCream")
+        # A cross at eye height identifies the treatment space from either
+        # side approach, even when the front sign is outside the camera.
+        box("Clinic side cross vertical",(x+side*.09,0,2.12),
+            (.045,.16,.61),"Rose")
+        box("Clinic side cross horizontal",(x+side*.095,0,2.12),
+            (.045,.53,.16),"Rose")
+        strut("Clinic roof guy line",(side*3.06,1.93,3.15),
+              (side*3.75,3.45,.13),.018,"CanvasCream",8)
+        box("Clinic guy line stake",(side*3.75,3.45,.12),
+            (.09,.09,.24),"Wood")
     for x in (-2.48,2.48):
         box("Clinic tied-back entrance flap",(x,2.46,1.57),(.53,.07,2.79),"CanvasCream")
         round_part("Canvas tie",(x,2.52,1.40),(.07,.07,.10),"Mint")
@@ -536,6 +582,8 @@ def security():
     for x in (-2.88, 2.88):
         box("Cabin side", (x, 0, 1.65), (.25, 5, 3), "Blue")
         side=1 if x>0 else -1
+        box("Security kick plate",(side*3.025,0,.43),(.06,4.65,.55),"Dark")
+        box("Security warning band",(side*3.055,0,1.30),(.042,4.60,.105),"Gold")
         for y in (-1.22,1.22):
             box("Shack inset side window",(side*3.02,y,1.96),(.055,1.23,.91),"AutoGlass")
             for frameY in (y-.67,y+.67):
@@ -544,6 +592,15 @@ def security():
                 box("Window sill frame",(side*3.07,y,height),(.075,1.37,.07),"Metal")
         for y in (-2.24,0,2.24):
             box("Prefab wall seam",(side*3.04,y,1.55),(.04,.045,2.76),"Metal")
+        for y in (-1.90,-1.54,-.76,-.40,.40,.76,1.54,1.90):
+            box("Security pressed-metal rib",(side*3.07,y,.86),
+                (.045,.04,.66),"Metal")
+        add("Security shield backing",(side*3.12,0,2.12),
+            (.36,.36,.075),"Gold","cylinder",(0,math.pi/2,0),vertices=20)
+        add("Security shield center",(side*3.17,0,2.12),
+            (.27,.27,.04),"Dark","cylinder",(0,math.pi/2,0),vertices=20)
+        box("Security shield bar",(side*3.195,0,2.12),
+            (.035,.34,.075),"Gold")
     fabric_grid("Folded steel shack roof",14,10,
                 lambda u,v: ((u-.5)*6.45,(v-.5)*5.45,
                              3.33+.24*(.5-v)+.035*math.sin(u*math.pi*8)),
@@ -577,6 +634,12 @@ def security():
     box("Officer counter", (2.1, .75, .755), (1.3, .9, 1), "Wood")
     box("Security sign", (0, 2.55, 3.03), (2.5, .08, .37), "Gold")
     round_part("Front warning lamp",(2.56,2.56,2.92),(.13,.13,.13),"Rose","sphere")
+    round_part("Security rooftop beacon base",(2.07,1.80,3.52),
+               (.21,.21,.10),"Dark")
+    round_part("Security rooftop beacon lens",(2.07,1.80,3.68),
+               (.15,.15,.24),"Rose")
+    round_part("Security rooftop beacon cap",(2.07,1.80,3.83),
+               (.16,.16,.045),"Metal")
 
 
 def shuttle():
@@ -587,20 +650,31 @@ def shuttle():
         edge_radius=.07,edge_segments=3)
     box("Bus floor", (0, 0, .26), (7.7, 2.7, .12), "Wood")
     fabric_grid("Curved shuttle roof",18,12,
-                lambda u,v: ((u-.5)*8.2,(v-.5)*3.15,
+                lambda u,v: ((u-.5)*7.50,(v-.5)*3.15,
                              2.78+.19*(1-((v-.5)*2)**2)),
                 "PaintMint",uv_scale=(4,2),thickness=.11)
     for y in (-1.55,1.55):
-        strut("Shuttle rain gutter",(-4.05,y,2.77),(4.05,y,2.77),.035,"Metal",8)
-    box("Bus far wall", (0, 1.45, 1.535), (8.0, .23, 2.43), "PaintMint")
-    for x in (-3.88, 3.88):
-        box("Bus end", (x, 0, 1.535), (.24, 2.9, 2.43), "PaintMint")
+        strut("Shuttle rain gutter",(-3.72,y,2.77),(3.72,y,2.77),.035,"Metal",8)
+    # Lower corners remain within the old 8 m collision envelope. The upper
+    # corners sweep inward to form a believable cab and rear hatch profile.
+    for side in (-1,1):
+        inner, outer, crown = side*1.31, side*4.00, side*3.53
+        profile=[(inner,.28),(outer,.28),(outer,1.30),
+                 (side*3.74,2.45),(crown,2.75),(inner,2.75)]
+        xz_prism("Passenger-side coach panel",profile,-1.45,.23,
+                 "PaintRose" if side<0 else "PaintMint")
+        xz_prism("Far-side coach panel",profile,1.45,.23,"PaintMint")
+        end=[(side*3.44,.25),(side*4.04,.25),(side*4.07,.43),
+             (side*4.07,1.30),(side*3.74,2.45),
+             (side*3.54,2.76),(side*3.44,2.76)]
+        xz_prism("Molded shuttle end",end,0,2.94,
+                 "PaintRose" if side<0 else "PaintMint",.075)
+    box("Far-side center panel",(0,1.45,1.535),(2.62,.23,2.43),"PaintMint")
     for x in (-2.55, 0, 2.55):
         box("Far side window", (x, 1.575, 1.76), (1.65, .04, .78), "AutoGlass")
         box("Far side window sill",(x,1.615,1.33),(1.75,.06,.08),"Metal")
-    # Door side: two panels leave a 2.6 m opening; a header spans above it.
+    # Door side: the shaped panels leave the original 2.6 m opening.
     for x in (-2.65, 2.65):
-        box("Bus door-side panel", (x, -1.45, 1.535), (2.7, .23, 2.43), "PaintRose")
         box("Big side window", (x, -1.575, 1.75), (1.72, .04, .79), "AutoGlass")
         box("Side window sill",(x,-1.625,1.31),(1.85,.07,.09),"Metal")
         for windowX in (x-.92,x+.92):
@@ -615,15 +689,23 @@ def shuttle():
     for x in (-2.7, -1.1, 1.1, 2.7):
         box("Comical bus seat", (x, .55, .62), (1.1, .72, .60), "Blue")
         box("Bus seat back", (x, .90, 1.01), (1.1, .13, .82), "Blue")
-    # Rounded front/rear cabs distinguish the vehicle from a cargo crate.
-    box("Molded shuttle nose",(3.86,0,1.34),(.39,3.02,2.5),"PaintMint",
-        edge_radius=.18,edge_segments=4)
-    box("Molded shuttle tail",(-3.86,0,1.34),(.39,3.02,2.5),"PaintRose",
-        edge_radius=.18,edge_segments=4)
-    box("Windshield", (4.067, 0, 1.80), (.045, 2.3, .93), "AutoGlass")
-    box("Windshield center divider",(4.10,0,1.80),(.05,.065,.91),"Metal")
-    box("Destination plate", (4.08, 0, 2.49), (.05, 2.0, .30), "Dark")
-    box("Destination plate border",(4.113,0,2.49),(.04,2.07,.035),"Gold")
+    # Windscreen follows the sloped shell at a constant small offset, rather
+    # than floating as an upright rectangle ahead of it.
+    front_glass=[(4.057,-1.19,1.42),(4.057,1.19,1.42),
+                 (3.762,1.14,2.43),(3.762,-1.14,2.43)]
+    formed_mesh("Integrated sloped windscreen",front_glass,[(0,1,2,3)],
+                "AutoGlass",thickness=.018)
+    for a,b in ((0,1),(1,2),(2,3),(3,0)):
+        strut("Windscreen rubber seal",front_glass[a],front_glass[b],.025,"Rubber",8)
+    strut("Windscreen center divider",(4.069,0,1.42),(3.774,0,2.43),.027,"Metal",8)
+    rear_glass=[(-4.055,-1.04,1.51),(-4.055,1.04,1.51),
+                (-3.782,1.04,2.36),(-3.782,-1.04,2.36)]
+    formed_mesh("Inset rear hatch glass",rear_glass,[(3,2,1,0)],
+                "AutoGlass",thickness=.018)
+    for a,b in ((0,1),(1,2),(2,3),(3,0)):
+        strut("Rear hatch glass seal",rear_glass[a],rear_glass[b],.024,"Rubber",8)
+    box("Destination plate", (3.765, 0, 2.51), (.055, 1.78, .20), "Dark")
+    box("Destination plate border",(3.794,0,2.51),(.025,1.85,.035),"Gold")
     for y in (-1.0, 1.0):
         box("Bus headlamp", (4.085, y, .70), (.06, .42, .24), "Cream")
         box("Bus taillamp", (-4.085, y, .70), (.06, .36, .24), "Rose")
@@ -632,7 +714,9 @@ def shuttle():
         box("Bus grille vane",(4.119,y,.77),(.04,.055,.24),"Metal")
     box("Shuttle front bumper",(4.08,0,.38),(.18,3.10,.16),"Metal")
     box("Shuttle rear bumper",(-4.08,0,.38),(.18,3.10,.16),"Metal")
-    box("Rear window", (-4.085, 0, 1.85), (.05, 2.0, .60), "AutoGlass")
+    box("Rear hatch seam", (-4.082, 0, .89), (.025, 2.34, .035), "Dark")
+    box("Rear registration plate",(-4.097,0,.55),(.028,.73,.21),"Cream")
+    box("Rear hatch pull",(-4.115,0,1.22),(.045,.45,.05),"Metal")
     for x in (-2.75, 2.75):
         for y in (-1.52, 1.52):
             disc("Round wheel", (x, y, .42), .42, .30, "Dark", 16)

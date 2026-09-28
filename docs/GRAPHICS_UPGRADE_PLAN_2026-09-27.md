@@ -4,6 +4,7 @@ Date: September 27, 2026
 Status: Active implementation plan. See the dated checkpoints below for completed and open work.
 Latest motion checkpoint: [poi, dance, and player DJ contact](GRAPHICS_POI_DANCE_DJ_PASS_2026-09-28.md).
 Latest terrain checkpoint: [stage-route ground and grove composition](GRAPHICS_TERRAIN_PASS_2026-09-28.md).
+Latest object checkpoint: [medical, security and shuttle forms](GRAPHICS_MEDICAL_SECURITY_SHUTTLE_PASS_2026-09-28.md).
 Reference: [Dear Passengers — “Another Friendslop Game” teaser](https://www.youtube.com/watch?v=luWunttkCgY)  
 Overall regression risk: **7/10** — estimated likelihood of disrupting existing functionality during the full upgrade, before the controls below. This is an engineering judgment, not a measured probability.
 Tool constraint: use free tools and assets with documented commercial use rights; do not depend on paid subscriptions or expiring trials.
@@ -404,3 +405,5 @@ The [September 28 grounded locomotion checkpoint](GRAPHICS_FOOT_CONTACT_PASS_202
 The [September 28 stage contact checkpoint](GRAPHICS_STAGE_CONTACT_PASS_2026-09-28.md) adds original folded scenic wings, a lighted backline, two stage dancers and a resident DJ whose hands reach the raised mixer. A close native capture and PlayMode contact check support the hand placement; two-client smoke and macOS builds pass. Player DJ takeover choreography, sustained performance and reference-level environment finish remain open; M2 remains open.
 
 The [September 28 terrain checkpoint](GRAPHICS_TERRAIN_PASS_2026-09-28.md) replaces the main path's straight visual slab with an irregular surface and authored dirt marks, combines grass into one visual mesh, and moves existing trees inward to frame the stage and grove. Dated native before/after views, Unity tests, macOS builds and two-client smoke pass. Broader environment art, a human-paced route and target-hardware acceptance remain open; M2 remains open.
+
+The [September 28 medical, security and shuttle checkpoint](GRAPHICS_MEDICAL_SECURITY_SHUTTLE_PASS_2026-09-28.md) gives the last shuttle a shaped passenger-vehicle cab and glass, adds side-facing identity and detailing to the clinic and security cabin, and keeps their entrances and collision proxies intact. Dated native comparisons, the PlayMode world route, both macOS builds and two-client smoke pass. The body forms, material finish, HUD footprint, human route and target hardware still need production review; M2 and M3 remain open.
