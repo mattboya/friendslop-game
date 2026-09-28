@@ -69,7 +69,7 @@ namespace Festival.Tests
             try
             {
                 var actor=FestivalCharacter.Create(root.transform,"Poi performer",Color.white);
-                actor.Pose="Poi";yield return null;yield return null;
+                actor.Pose="Poi";yield return new WaitForSeconds(.28f);
                 var props=actor.GetComponentsInChildren<FestivalPoiRig>(true);
                 Assert.That(props.Length,Is.EqualTo(2));
                 foreach(var prop in props)
@@ -80,6 +80,8 @@ namespace Festival.Tests
                     Assert.That(Vector3.Distance(rope.GetPosition(0),rope.GetPosition(1)),Is.InRange(.58f,.66f));
                     Assert.That(Vector3.Distance(actor.transform.position,rope.GetPosition(0)),Is.LessThan(2.5f),
                         "The imported bone scale must not move the grip away from the actor");
+                    Assert.That(rope.GetPosition(0).y,Is.GreaterThan(1.1f*actor.transform.lossyScale.y),
+                        "The poi grip should sit at upper-chest height so the high arc reaches the face");
                     foreach(var renderer in prop.GetComponentsInChildren<MeshRenderer>())
                         Assert.That(renderer.bounds.size.magnitude,Is.LessThan(2f),renderer.name+" is oversized");
                 }
@@ -115,27 +117,36 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
-        [UnityTest]public IEnumerator PoiHeadsTradeHighAndLowPositions()
+        [UnityTest]public IEnumerator PoiButterflyHeadsRiseTogetherAndMirrorAcrossTheBody()
         {
-            var root=new GameObject("Poi counterphase test");
+            var root=new GameObject("Poi butterfly test");
             try
             {
-                var actor=FestivalCharacter.Create(root.transform,"Opposed poi performer",Color.white);
+                var actor=FestivalCharacter.Create(root.transform,"Butterfly poi performer",Color.white);
                 actor.Pose="Poi";yield return new WaitForSeconds(.3f);
                 var rigs=actor.GetComponentsInChildren<FestivalPoiRig>();
                 Assert.That(rigs.Length,Is.EqualTo(2));
                 var first=rigs[0].GetComponent<LineRenderer>();
                 var second=rigs[1].GetComponent<LineRenderer>();
-                float mostOpposed=1;
+                int matchingVertical=0,mirroredHorizontal=0,samples=0;
+                float highest=-1,lowest=1;
                 float start=Time.time;
                 while(Time.time-start<.8f)
                 {
                     yield return null;
-                    float a=(first.GetPosition(1)-first.GetPosition(0)).normalized.y;
-                    float b=(second.GetPosition(1)-second.GetPosition(0)).normalized.y;
-                    mostOpposed=Mathf.Min(mostOpposed,a*b);
+                    Vector3 a=(first.GetPosition(1)-first.GetPosition(0)).normalized;
+                    Vector3 b=(second.GetPosition(1)-second.GetPosition(0)).normalized;
+                    float height=(a.y+b.y)*.5f;
+                    highest=Mathf.Max(highest,height);lowest=Mathf.Min(lowest,height);
+                    if(a.y*b.y>.3f)matchingVertical++;
+                    if(Vector3.Dot(a,actor.transform.right)*Vector3.Dot(b,actor.transform.right)<-.3f)mirroredHorizontal++;
+                    Assert.That(Vector3.Distance(first.GetPosition(1),second.GetPosition(1)),
+                        Is.GreaterThan(.16f*actor.transform.lossyScale.y),"Weighted heads should not collide");
+                    samples++;
                 }
-                Assert.That(mostOpposed,Is.LessThan(-.4f),"The two heads should trade high and low positions");
+                Assert.That(highest,Is.GreaterThan(.6f));Assert.That(lowest,Is.LessThan(-.6f));
+                Assert.That(matchingVertical,Is.GreaterThan(samples*.4f),"Butterfly poi should rise and fall together");
+                Assert.That(mirroredHorizontal,Is.GreaterThan(samples*.25f),"The heads should mirror across the performer");
             }
             finally{Object.Destroy(root);}
         }

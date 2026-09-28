@@ -79,15 +79,19 @@ namespace Festival.Presentation
             {
                 if(Spinning&&performer!=null)
                 {
-                    // The hand drives a continuous full circle. The weighted
-                    // head follows a little late, including when the grip
-                    // moves, and the taut cord retains its physical length.
-                    // Opposed heads trade the high and low positions. A small
-                    // depth wobble gives the cord a visible front/back pass.
-                    float angle=Time.time*9f+motionPhase+side*Mathf.PI;
-                    Vector3 orbit=performer.right*Mathf.Sin(angle)
+                    // Paired butterfly circles: the hands lead the two heads
+                    // through the same high/low beat, while their lateral
+                    // travel mirrors across the performer's center line.
+                    // Smooth following supplies lag without stretching the cord.
+                    float angle=Time.time*9f+motionPhase;
+                    float mirroredSide=side==0?-1f:1f;
+                    // A small outward bias keeps the two weighted heads from
+                    // occupying the same point at the top of the circle.
+                    Vector3 orbit=performer.right*(mirroredSide*(Mathf.Sin(angle)-.2f))
                         +performer.up*Mathf.Cos(angle)
-                        +performer.forward*(.20f*Mathf.Sin(angle*.5f+side*.7f));
+                        // As in a real butterfly, the heads pass in separate
+                        // front/back planes instead of striking one another.
+                        +performer.forward*(mirroredSide*.3f+.10f*Mathf.Sin(angle+.55f*mirroredSide));
                     Vector3 offset=ball-grip;
                     if(offset.sqrMagnitude<.0001f)offset=Vector3.down;
                     Vector3 previousBall=ball;

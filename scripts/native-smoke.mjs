@@ -48,6 +48,11 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
       if(!existsSync(source))return reject(new Error(role+' '+kind+' capture '+frame+' missing'));
       copyFileSync(source,path.join(dir,role+'-'+kind+'-motion-'+frame+'.png'));
     }
+    for(const [kind,count] of [['motion',5],['poi-motion',5]])for(let frame=0;frame<count;frame++){
+      const source=path.join(motionDir,role+'-'+kind+'-'+frame+'.png');
+      if(!existsSync(source))return reject(new Error(role+' '+kind+' capture '+frame+' missing'));
+      copyFileSync(source,path.join(dir,role+'-'+kind+'-'+frame+'.png'));
+    }
     copyFileSync(screenshot,path.join(dir,role+'.png'));console.log(role.toUpperCase()+' NATIVE SMOKE PASSED');resolve();
   });
 });

@@ -604,7 +604,7 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE CHARACTER QUALITY PASSED: "+qualityPath);
             portraits[0].Pose="Dance";portraits[1].Pose="Poi";portraits[2].Pose="Dance";
             yield return new WaitForSeconds(.4f);
-            for(int motionFrame=0;motionFrame<3;motionFrame++)
+            for(int motionFrame=0;motionFrame<5;motionFrame++)
             {
                 var motionPath=Path.Combine(dir,(session.IsHost?"host":"client")+"-motion-"+motionFrame+".png");
                 ScreenCapture.CaptureScreenshot(motionPath);
@@ -622,11 +622,11 @@ namespace Festival.Presentation
                 Debug.Log("FESTIVAL SMOKE POI MOTION: actor="+portraits[1].transform.position+
                     " grip="+visibleCord.GetPosition(0)+" head="+visibleCord.GetPosition(1));
             }
-            for(int poiFrame=0;poiFrame<2;poiFrame++)
+            for(int poiFrame=0;poiFrame<5;poiFrame++)
             {
                 var poiPath=Path.Combine(dir,(session.IsHost?"host":"client")+"-poi-motion-"+poiFrame+".png");
                 ScreenCapture.CaptureScreenshot(poiPath);
-                yield return new WaitForSeconds(.2f);
+                yield return new WaitForSeconds(.14f);
                 if(!File.Exists(poiPath)){Fail("poi motion frame "+poiFrame);yield break;}
             }
             portraits[0].gameObject.SetActive(true);portraits[2].gameObject.SetActive(true);
