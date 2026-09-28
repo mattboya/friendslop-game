@@ -326,11 +326,24 @@ namespace Festival.Presentation
             }
             foreach(float x in new[]{-4.3f,4.3f})
             {
-                Visual("FestivalCampShade",new Vector3(x,0,0));
+                var shade=Visual("FestivalCampShade",new Vector3(x,0,0));
+                if(x>0&&shade!=null)
+                    foreach(var renderer in shade.GetComponentsInChildren<Renderer>())
+                        if(renderer.name.Contains("__CanvasMint"))renderer.sharedMaterial=FestivalArtView.MaterialFor("CanvasCream");
+                ProxyBox("Shade center mast",new Vector3(x,2.08f,0),new Vector3(.28f,4.16f,.28f),wood);
                 foreach(float dx in new[]{-3.6f,3.6f})foreach(float dz in new[]{-3.6f,3.6f})
                     ProxyBox("Shade pole",new Vector3(x+dx,1.8f,dz),new Vector3(.13f,3.6f,.13f),wood);
                 for(int i=0;i<5;i++)
-                    Box("Shade fringe light",new Vector3(x-3.2f+i*1.6f,3.15f,-3.55f),new Vector3(.24f,.24f,.24f),i%2==0?lampGold:lampRose,false);
+                {
+                    float bulbX=x-3.2f+i*1.6f;
+                    Box("Shade bulb cord",new Vector3(bulbX,3.35f,-3.55f),new Vector3(.025f,.28f,.025f),dark,false);
+                    Box("Shade bulb socket",new Vector3(bulbX,3.21f,-3.55f),new Vector3(.17f,.08f,.17f),dark,false);
+                    SoftProp("Shade warm bulb",new Vector3(bulbX,3.09f,-3.55f),new Vector3(.15f,.13f,.15f),i%2==0?lampGold:lampRose,Quaternion.identity);
+                }
+                var workLamp=new GameObject("Pavilion warm pool");workLamp.transform.SetParent(camp,false);
+                workLamp.transform.localPosition=new Vector3(x,2.75f,0);
+                var workLight=workLamp.AddComponent<Light>();workLight.type=LightType.Point;workLight.range=6.5f;workLight.intensity=1.25f;
+                workLight.color=new Color(1f,.78f,.55f);workLight.shadows=LightShadows.None;
             }
             for(int i=0;i<4;i++)
             {

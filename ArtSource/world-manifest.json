@@ -103,14 +103,14 @@
       "triangles": 4420
     },
     "FestivalCampShade": {
-      "parts": 128,
+      "parts": 160,
       "renderers": 6,
-      "triangles": 5076
+      "triangles": 8444
     },
     "FestivalCampShop": {
-      "parts": 33,
-      "renderers": 7,
-      "triangles": 1756
+      "parts": 95,
+      "renderers": 11,
+      "triangles": 4440
     },
     "FestivalPortaPotty": {
       "parts": 5,

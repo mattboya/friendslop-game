@@ -25,6 +25,7 @@ namespace Festival.Presentation
         readonly Dictionary<string,Quaternion> targets=new Dictionary<string,Quaternion>();
         Vector3 previous;
         float speed,phase,walkCycle;
+        internal float MotionPhase => phase;
         bool hasPrevious;
         int danceStyle;
         int latestDanceDirection=-1;
@@ -175,10 +176,12 @@ namespace Festival.Presentation
             equippedProp=FestivalArtView.Create(hand,resource);
             if(equippedProp==null)return;
             equippedProp.name="Equipped "+itemId;
-            equippedProp.transform.localPosition=new Vector3(0,-.23f,-.10f);
+            var handScale=hand.lossyScale;
+            equippedProp.transform.localPosition=new Vector3(0,
+                -.23f/Mathf.Max(.01f,Mathf.Abs(handScale.y)),
+                -.10f/Mathf.Max(.01f,Mathf.Abs(handScale.z)));
             equippedProp.transform.localRotation=Quaternion.Euler(12,0,-18);
-            var size=hand.lossyScale;
-            equippedProp.transform.localScale=new Vector3(.27f/Mathf.Max(.01f,Mathf.Abs(size.x)),.27f/Mathf.Max(.01f,Mathf.Abs(size.y)),.27f/Mathf.Max(.01f,Mathf.Abs(size.z)));
+            equippedProp.transform.localScale=new Vector3(.27f/Mathf.Max(.01f,Mathf.Abs(handScale.x)),.27f/Mathf.Max(.01f,Mathf.Abs(handScale.y)),.27f/Mathf.Max(.01f,Mathf.Abs(handScale.z)));
         }
         public void SetHighlyIntoxicated(bool value)
         {
@@ -242,26 +245,66 @@ namespace Festival.Presentation
             }
             else if(dance)
             {
-                float bounce=Mathf.Max(0,Mathf.Sin(Time.time*12.56f+phase));
-                Aim("Hips",new Vector3(6+bounce*5,Mathf.Sin(t*.5f)*18,wave*12));Aim("Spine",new Vector3(-8-bounce*5,0,-wave*16));
-                Aim("Head",new Vector3(Mathf.Sin(t+1)*12-bounce*7,Mathf.Sin(t*.5f)*20,8));
-                if(danceStyle==0)
+                // Footwork and torso accents share a beat, while each actor's
+                // phase and style keep a crowd from moving in lockstep.
+                float beatTime=Time.time*(danceStyle==0?12.5f:danceStyle==1?9.5f:10.8f)+phase;
+                float feet=Mathf.Sin(beatTime),opposite=Mathf.Sin(beatTime+Mathf.PI);
+                float landing=Mathf.Pow(Mathf.Max(0,Mathf.Cos(beatTime*2)),2);
+                float sway=Mathf.Sin(beatTime*.5f);
+                Aim("Hips",new Vector3(7+landing*6,sway*9,feet*8));
+                Aim("Spine",new Vector3(-8-landing*4,-sway*5,-feet*11));
+                Aim("Head",new Vector3(2-landing*5,Mathf.Sin(beatTime*.5f+1)*9,-feet*4));
+                if(performingPoi)
                 {
-                    Aim("ArmL",new Vector3(-75+Mathf.Sin(t+1)*38,0,-35));Aim("ArmR",new Vector3(-60+Mathf.Sin(t+.4f)*45,0,55));
-                    Aim("ForearmL",new Vector3(-50+wave*25,0,0));Aim("ForearmR",new Vector3(-65-wave*30,0,0));
+                    // Handles stay in front of the chest. Wrist and shoulder
+                    // accents lead the two circling weighted heads.
+                    float circle=Time.time*9f+phase;
+                    Aim("ArmL",new Vector3(-65+Mathf.Sin(circle)*9,0,-33));
+                    Aim("ArmR",new Vector3(-65+Mathf.Sin(circle+1.05f)*9,0,33));
+                    Aim("ForearmL",new Vector3(-66,0,18+Mathf.Sin(circle)*12));
+                    Aim("ForearmR",new Vector3(-66,0,-18-Mathf.Sin(circle+1.05f)*12));
+                    Aim("HandL",new Vector3(Mathf.Cos(circle)*16,0,Mathf.Sin(circle)*12));
+                    Aim("HandR",new Vector3(Mathf.Cos(circle+1.05f)*16,0,-Mathf.Sin(circle+1.05f)*12));
+                    Aim("LegL",new Vector3(Mathf.Max(0,feet)*13,0,0));
+                    Aim("LegR",new Vector3(Mathf.Max(0,opposite)*13,0,0));
+                    Aim("ShinL",new Vector3(Mathf.Max(0,feet)*14,0,0));
+                    Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*14,0,0));
+                    Layer("Spine",new Vector3(0,Mathf.Sin(circle*.5f)*5,0));
+                }
+                else if(danceStyle==0)
+                {
+                    // Hakken: compact running steps and driving elbows.
+                    Aim("LegL",new Vector3(Mathf.Max(0,feet)*39-8,0,feet*5));
+                    Aim("LegR",new Vector3(Mathf.Max(0,opposite)*39-8,0,opposite*5));
+                    Aim("ShinL",new Vector3(Mathf.Max(0,feet)*30,0,0));
+                    Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*30,0,0));
+                    Aim("ArmL",new Vector3(-35-feet*27,0,-18));
+                    Aim("ArmR",new Vector3(-35+feet*27,0,18));
+                    Aim("ForearmL",new Vector3(-65,0,0));Aim("ForearmR",new Vector3(-65,0,0));
                 }
                 else if(danceStyle==1)
                 {
-                    Aim("ArmL",new Vector3(-35+wave*30,0,-68));Aim("ArmR",new Vector3(-35-wave*30,0,68));
-                    Aim("ForearmL",new Vector3(-70,0,25));Aim("ForearmR",new Vector3(-70,0,-25));
+                    // Shuffle: lateral weight transfer, one foot skimming out.
+                    Aim("Hips",new Vector3(8+landing*4,sway*15,feet*16));
+                    Aim("LegL",new Vector3(12+feet*24,0,8+Mathf.Max(0,sway)*15));
+                    Aim("LegR",new Vector3(12-feet*24,0,-8-Mathf.Max(0,-sway)*15));
+                    Aim("ShinL",new Vector3(Mathf.Max(0,feet)*18,0,0));
+                    Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*18,0,0));
+                    Aim("ArmL",new Vector3(-55+feet*22,0,-35));
+                    Aim("ArmR",new Vector3(-55-feet*22,0,35));
+                    Aim("ForearmL",new Vector3(-55,0,15));Aim("ForearmR",new Vector3(-55,0,-15));
                 }
                 else
                 {
-                    Aim("ArmL",new Vector3(-95+wave*18,0,-16));Aim("ArmR",new Vector3(-25-wave*40,0,25));
-                    Aim("ForearmL",new Vector3(-15,0,0));Aim("ForearmR",new Vector3(-100,0,0));
+                    // Jumpstyle: larger alternating kicks and a firm landing.
+                    Aim("LegL",new Vector3(Mathf.Max(0,feet)*52-10,0,feet*5));
+                    Aim("LegR",new Vector3(Mathf.Max(0,opposite)*52-10,0,opposite*5));
+                    Aim("ShinL",new Vector3(Mathf.Max(0,feet)*18,0,0));
+                    Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*18,0,0));
+                    Aim("ArmL",new Vector3(-55-feet*30,0,-24));
+                    Aim("ArmR",new Vector3(-55+feet*30,0,24));
+                    Aim("ForearmL",new Vector3(-40,0,0));Aim("ForearmR",new Vector3(-40,0,0));
                 }
-                Aim("LegL",new Vector3(Mathf.Max(0,wave)*25+bounce*5,0,danceStyle==1?8:0));
-                Aim("LegR",new Vector3(Mathf.Max(0,-wave)*25+bounce*5,0,danceStyle==1?-8:0));
                 float step=Mathf.Clamp01(1-(Time.time-latestDanceStepTime)/.38f);
                 if(step>0)
                 {

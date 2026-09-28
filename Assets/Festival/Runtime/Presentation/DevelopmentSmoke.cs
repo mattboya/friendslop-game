@@ -567,6 +567,35 @@ namespace Festival.Presentation
             ScreenCapture.CaptureScreenshot(qualityPath);yield return new WaitForSeconds(1);
             if(!File.Exists(qualityPath)){Fail("character quality gallery");yield break;}
             Debug.Log("FESTIVAL SMOKE CHARACTER QUALITY PASSED: "+qualityPath);
+            portraits[0].Pose="Dance";portraits[1].Pose="Poi";portraits[2].Pose="Dance";
+            yield return new WaitForSeconds(.4f);
+            for(int motionFrame=0;motionFrame<3;motionFrame++)
+            {
+                var motionPath=Path.Combine(dir,(session.IsHost?"host":"client")+"-motion-"+motionFrame+".png");
+                ScreenCapture.CaptureScreenshot(motionPath);
+                yield return new WaitForSeconds(.18f);
+                if(!File.Exists(motionPath)){Fail("character motion frame "+motionFrame);yield break;}
+            }
+            portraits[0].gameObject.SetActive(false);portraits[2].gameObject.SetActive(false);
+            capturePosition=new Vector3(0,1.35f,-8.8f);captureCamera.fieldOfView=40;
+            portraits[1].transform.position=new Vector3(0,0,-5.5f);
+            yield return new WaitForSeconds(.25f);
+            var visiblePoi=portraits[1].GetComponentInChildren<FestivalPoiRig>();
+            if(visiblePoi!=null)
+            {
+                var visibleCord=visiblePoi.GetComponent<LineRenderer>();
+                Debug.Log("FESTIVAL SMOKE POI MOTION: actor="+portraits[1].transform.position+
+                    " grip="+visibleCord.GetPosition(0)+" head="+visibleCord.GetPosition(1));
+            }
+            for(int poiFrame=0;poiFrame<2;poiFrame++)
+            {
+                var poiPath=Path.Combine(dir,(session.IsHost?"host":"client")+"-poi-motion-"+poiFrame+".png");
+                ScreenCapture.CaptureScreenshot(poiPath);
+                yield return new WaitForSeconds(.2f);
+                if(!File.Exists(poiPath)){Fail("poi motion frame "+poiFrame);yield break;}
+            }
+            portraits[0].gameObject.SetActive(true);portraits[2].gameObject.SetActive(true);
+            foreach(var actor in portraits)actor.Pose="Idle";
             capturePosition=new Vector3(0,1.62f,-8.0f);captureCamera.fieldOfView=40;
             for(int i=0;i<portraits.Length;i++)portraits[i].transform.position=new Vector3((i-1)*1.00f,0,-5.5f);
             yield return new WaitForSeconds(.5f);

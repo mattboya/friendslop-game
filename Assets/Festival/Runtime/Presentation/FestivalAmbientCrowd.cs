@@ -131,10 +131,41 @@ namespace Festival.Presentation
             int segment=0;
             while(segment<walker.Lengths.Length-1&&distance>walker.Lengths[segment])
                 distance-=walker.Lengths[segment++];
-            var from=walker.Points[segment];var to=walker.Points[(segment+1)%walker.Points.Length];
-            walker.Actor.transform.localPosition=Vector3.Lerp(from,to,distance/walker.Lengths[segment]);
-            var direction=to-from;
+            int count=walker.Points.Length;
+            var from=walker.Points[segment];var to=walker.Points[(segment+1)%count];
+            var incoming=(to-from).normalized;
+            float length=walker.Lengths[segment];
+            Vector3 position,direction;
+            float startRadius=Mathf.Min(1.15f,Mathf.Min(walker.Lengths[(segment+count-1)%count],length)*.24f);
+            float endRadius=Mathf.Min(1.15f,Mathf.Min(length,walker.Lengths[(segment+1)%count])*.24f);
+            if(distance<startRadius)
+            {
+                var before=(from-walker.Points[(segment+count-1)%count]).normalized;
+                float t=.5f+distance/(2*startRadius);
+                position=Corner(from,before,incoming,startRadius,t);
+                direction=Vector3.Lerp(before,incoming,t).normalized;
+            }
+            else if(distance>length-endRadius)
+            {
+                var outgoing=(walker.Points[(segment+2)%count]-to).normalized;
+                float t=(distance-(length-endRadius))/(2*endRadius);
+                position=Corner(to,incoming,outgoing,endRadius,t);
+                direction=Vector3.Lerp(incoming,outgoing,t).normalized;
+            }
+            else
+            {
+                position=Vector3.Lerp(from,to,distance/length);
+                direction=incoming;
+            }
+            walker.Actor.transform.localPosition=position;
             walker.Actor.transform.localRotation=Quaternion.LookRotation(direction);
+        }
+        static Vector3 Corner(Vector3 vertex,Vector3 incoming,Vector3 outgoing,float radius,float t)
+        {
+            var a=vertex-incoming*radius;
+            var c=vertex+outgoing*radius;
+            float inverse=1-t;
+            return inverse*inverse*a+2*inverse*t*vertex+t*t*c;
         }
         void Update()
         {

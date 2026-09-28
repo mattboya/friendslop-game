@@ -406,8 +406,9 @@ def stall(kind):
 def camp_shop():
     """A small timber-and-canvas checkout kiosk; collision stays in Unity."""
     for x in (-1.65, 1.65):
-        round_part("Turned checkout post", (x, 0, 1.48), (.12, .12, 2.96), "Wood")
+        round_part("Turned checkout post", (x, 0, 1.61), (.12, .12, 3.22), "Wood")
         round_part("Checkout post foot", (x, 0, .12), (.23, .23, .18), "Metal")
+        strut("Checkout timber knee brace",(x,0,2.55),(x*.83,-.56,3.14),.065,"Wood",10)
     for i in range(5):
         box("Horizontal checkout timber", (0, 1.0, .24+i*.19), (3.22, .12, .13), "Wood" if i%2 else "Cream")
     disc("Painted counter emblem", (0, 1.09, .68), .32, .08, "Gold", 24)
@@ -415,9 +416,30 @@ def camp_shop():
     for i in range(7):
         x=-1.43+i*.475
         box("Countertop plank", (x, .57, 1.25), (.44, 1.05, .10), "Wood")
-    box("Checkout canvas awning", (0, -.25, 3.03), (4.10, 2.8, .22), "Mint")
-    for x in (-1.7, -1.0, -.3, .4, 1.1, 1.8):
-        box("Awning scallop", (x, 1.17, 2.89), (.62, .07, .33), "Rose" if x < 0 else "Gold")
+    def awning_z(x,y):
+        front=(y+1.65)/2.8
+        return 3.33-.38*front+.09*(1-(x/2.05)**2)
+    fabric_grid("Checkout shaped canvas awning",20,12,
+                lambda u,v: ((u-.5)*4.10,-1.65+v*2.8,awning_z((u-.5)*4.10,-1.65+v*2.8)),
+                "CanvasMint",uv_scale=(2.4,1.8),thickness=.075)
+    for side in (-1,1):
+        for i in range(12):
+            y0=-1.65+i*2.8/12
+            y1=-1.65+(i+1)*2.8/12
+            strut("Awning canvas hem",(side*2.05,y0,awning_z(side*2.05,y0)),
+                  (side*2.05,y1,awning_z(side*2.05,y1)),.035,"CanvasCream",8)
+    for i in range(6):
+        x0=-2.05+i*4.10/6
+        fabric_grid("Checkout scalloped valance",6,1,
+                    lambda u,v,a=x0: (a+u*4.10/6,1.15,
+                        awning_z(a+u*4.10/6,1.15)-(.14+.16*math.sin(math.pi*u))*v),
+                    "CanvasRose" if i%2==0 else "CanvasGold",uv_scale=(.55,.55),thickness=.035)
+    for y in (-1.3,.0,1.03):
+        for i in range(12):
+            x0=-1.99+i*3.98/12
+            x1=-1.99+(i+1)*3.98/12
+            strut("Checkout underside seam",(x0,y,awning_z(x0,y)-.07),
+                  (x1,y,awning_z(x1,y)-.07),.019,"CanvasCream",6)
     for x in (-1.45, 1.45):
         strut("Warm string light", (x, 1.12, 2.91), (x, -1.42, 2.91), .035, "Gold", 12)
     for x, color in ((-.68,"Rose"),(.22,"Glass"),(.83,"Gold")):
@@ -973,11 +995,15 @@ def camp_van():
 
 def camp_shade():
     def canopy_z(x,y):
-        radial=max(abs(x),abs(y))/4
-        return 3.30+.25*radial**1.6+.11*abs(x*y)/16
-    fabric_grid("Draped shade canvas",16,16,
+        radial=math.sqrt((x/4)**2+(y/4)**2)
+        lift=max(0,1-radial)
+        return 3.48+.72*lift**1.45-.045*(x*y/16)**2
+    fabric_grid("Raised tension canopy",24,24,
                 lambda u,v: ((u-.5)*8,(v-.5)*8,canopy_z((u-.5)*8,(v-.5)*8)),
-                "CanvasMint",uv_scale=(4,4),thickness=.065)
+                "CanvasMint",uv_scale=(4,4),thickness=.075)
+    round_part("Pavilion center mast",(0,0,2.08),(.13,.13,4.16),"Wood")
+    round_part("Pavilion mast foot",(0,0,.11),(.26,.26,.20),"Metal")
+    round_part("Pavilion canvas crown",(0,0,4.21),(.25,.25,.13),"Gold")
     for edge in (-4,4):
         for i in range(16):
             lo=-4+i*.5
@@ -986,19 +1012,29 @@ def camp_shade():
                   (hi,edge,canopy_z(hi,edge)),.035,"CanvasCream",8)
             strut("Shade sewn edge",(edge,lo,canopy_z(edge,lo)),
                   (edge,hi,canopy_z(edge,hi)),.035,"CanvasCream",8)
+    # Scalloped valances make the thin canvas edge legible at walking height.
+    for side in (-1,1):
+        for panel in range(8):
+            start=-4+panel
+            fabric_grid("Pavilion front valance",8,1,
+                lambda u,v,s=side,a=start: (a+u,s*4,canopy_z(a+u,s*4)-(.15+.17*math.sin(math.pi*u))*v),
+                "CanvasRose" if side<0 else "CanvasCream",uv_scale=(.55,.55),thickness=.035)
+            fabric_grid("Pavilion side valance",8,1,
+                lambda u,v,s=side,a=start: (s*4,a+u,canopy_z(s*4,a+u)-(.15+.17*math.sin(math.pi*u))*v),
+                "CanvasCream",uv_scale=(.55,.55),thickness=.035)
     for x in (-3.62, 3.62):
         for y in (-3.62, 3.62):
-            box("Canvas support pole", (x, y, 1.75), (.16, .16, 3.5), "Wood")
-            box("Canvas pole foot", (x, y, .06), (.32, .32, .12), "Metal")
-            round_part("Shade corner eyelet",(x,y,3.53),(.16,.16,.08),"Metal", "cylinder")
-    for y in (-1.7, 0, 1.7):
-        for i in range(16):
-            lo=-3.85+i*.48
-            hi=lo+.48
-            strut("Shade stitched span",(lo,y,canopy_z(lo,y)+.025),
-                  (hi,y,canopy_z(hi,y)+.025),.018,"CanvasRose" if y==0 else "CanvasGold",6)
-    for x in (-2.4, 0, 2.4):
-        box("Shade hanging trim", (x, 3.95, 3.43), (1.3, .08, .19), "CanvasRose")
+            round_part("Turned pavilion corner post", (x, y, 1.75), (.11, .11, 3.5), "Wood")
+            round_part("Pavilion post foot", (x, y, .08), (.20, .20, .16), "Metal")
+            round_part("Pavilion corner eyelet",(x,y,3.53),(.16,.16,.08),"Metal", "cylinder")
+    # Seams follow the lifted canvas rather than floating across its top.
+    for sx in (-1,1):
+        for sy in (-1,1):
+            for step in range(12):
+                t0,t1=step/12,(step+1)/12
+                p0=(sx*3.85*t0,sy*3.85*t0,canopy_z(sx*3.85*t0,sy*3.85*t0)-.055)
+                p1=(sx*3.85*t1,sy*3.85*t1,canopy_z(sx*3.85*t1,sy*3.85*t1)-.055)
+                strut("Radial pavilion seam",p0,p1,.018,"CanvasCream",6)
 
 
 def porta_potty():

@@ -4,9 +4,10 @@ using UnityEngine.Rendering;
 namespace Festival.Presentation
 {
     /// <summary>Cosmetic handle, rope and weighted head. The grip is the attachment point.</summary>
+    [DefaultExecutionOrder(100)]
     public sealed class FestivalPoiRig : MonoBehaviour
     {
-        const float RopeLength=.43f;
+        const float RopeLength=.62f;
         const float FirstPersonRopeLength=.34f;
         Vector3 ball,velocity,previousGrip;
         LineRenderer rope;
@@ -14,18 +15,25 @@ namespace Festival.Presentation
         bool initialized;
         bool firstPerson;
         int side;
+        Transform performer;
+        float motionPhase;
         public bool Spinning;
 
         public static FestivalPoiRig Create(Transform parent,Vector3 grip,int side,bool led,bool firstPerson=false)
         {
             var root=new GameObject("Poi grip and tether");root.transform.SetParent(parent,false);
-            root.transform.localPosition=grip;
             // Blender hand bones carry an imported scale. Cancel it so the
-            // handle stays hand sized in both the world rig and camera rig.
+            // handle and its offset stay hand sized in both camera and world.
             var inherited=parent.lossyScale;
-            root.transform.localScale=new Vector3(1/Mathf.Max(.01f,Mathf.Abs(inherited.x)),
-                1/Mathf.Max(.01f,Mathf.Abs(inherited.y)),1/Mathf.Max(.01f,Mathf.Abs(inherited.z)));
+            var invX=1/Mathf.Max(.01f,Mathf.Abs(inherited.x));
+            var invY=1/Mathf.Max(.01f,Mathf.Abs(inherited.y));
+            var invZ=1/Mathf.Max(.01f,Mathf.Abs(inherited.z));
+            root.transform.localPosition=new Vector3(grip.x*invX,grip.y*invY,grip.z*invZ);
+            root.transform.localScale=new Vector3(invX,invY,invZ);
             var rig=root.AddComponent<FestivalPoiRig>();rig.side=side;rig.firstPerson=firstPerson;
+            var actor=parent.GetComponentInParent<FestivalCharacter>();
+            rig.performer=actor!=null?actor.transform:null;
+            rig.motionPhase=actor!=null?actor.MotionPhase:0;
             var handle=GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             handle.name="Poi handle held in palm";handle.transform.SetParent(root.transform,false);
             handle.transform.localPosition=new Vector3(0,-.10f,0);
@@ -39,7 +47,7 @@ namespace Festival.Presentation
             Destroy(cap.GetComponent<Collider>());
             var ballObject=GameObject.CreatePrimitive(PrimitiveType.Sphere);
             ballObject.name=led?"LED weighted poi head":"Weighted practice poi head";
-            ballObject.transform.localScale=Vector3.one*.20f;
+            ballObject.transform.localScale=Vector3.one*.15f;
             ballObject.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor(led?"Mint":"Gold");
             ballObject.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.Off;
             Destroy(ballObject.GetComponent<Collider>());
@@ -67,20 +75,36 @@ namespace Festival.Presentation
             float dt=Mathf.Min(Time.deltaTime,.033f);
             if(dt>0)
             {
-                // A damped rope constraint lets the head lag when the hand moves.
-                // Performance adds a sideways impulse; gravity returns it below the grip.
-                Vector3 acceleration=firstPerson
-                    ? (grip+rest-ball)*18f-velocity*4f+Physics.gravity*.28f
-                    : Physics.gravity*1.35f;
-                if(Spinning)acceleration+=transform.right*(side==0?-1:1)*Mathf.Sin(Time.time*7f+side)*22f;
-                velocity+=acceleration*dt;
-                velocity*=Mathf.Exp(-2.6f*dt);
-                ball+=velocity*dt;
-                Vector3 offset=ball-grip;
-                if(offset.sqrMagnitude<.0001f)offset=Vector3.down;
-                Vector3 constrained=grip+offset.normalized*length;
-                velocity=(constrained-(ball-velocity*dt))/Mathf.Max(dt,.001f);
-                ball=constrained;
+                if(Spinning&&performer!=null)
+                {
+                    // The hand drives a continuous full circle. The weighted
+                    // head follows a little late, including when the grip
+                    // moves, and the taut cord retains its physical length.
+                    float angle=Time.time*9f+motionPhase+side*1.05f;
+                    Vector3 orbit=performer.right*Mathf.Sin(angle)
+                        +performer.up*Mathf.Cos(angle)
+                        +performer.forward*(.20f*Mathf.Sin(angle*.5f+side));
+                    Vector3 offset=ball-grip;
+                    if(offset.sqrMagnitude<.0001f)offset=Vector3.down;
+                    Vector3 previousBall=ball;
+                    ball=grip+Vector3.Slerp(offset.normalized,orbit.normalized,
+                        1-Mathf.Exp(-23f*dt))*length;
+                    velocity=(ball-previousBall)/dt;
+                }
+                else
+                {
+                    Vector3 acceleration=firstPerson
+                        ? (grip+rest-ball)*18f-velocity*4f+Physics.gravity*.28f
+                        : Physics.gravity*1.35f-velocity*.5f;
+                    velocity+=acceleration*dt;
+                    velocity*=Mathf.Exp(-.8f*dt);
+                    Vector3 previousBall=ball;
+                    ball+=velocity*dt;
+                    Vector3 offset=ball-grip;
+                    if(offset.sqrMagnitude<.0001f)offset=Vector3.down;
+                    ball=grip+offset.normalized*length;
+                    velocity=(ball-previousBall)/dt;
+                }
             }
             head.position=ball;
             rope.SetPosition(0,grip);rope.SetPosition(1,ball);

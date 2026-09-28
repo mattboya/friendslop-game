@@ -29,7 +29,7 @@ scene.display.shading.background_type = "WORLD"
 scene.world.color = (.14, .17, .20)
 camera_data = bpy.data.cameras.new("Disposable turnaround lens")
 camera_data.type = "ORTHO"
-camera_data.ortho_scale = 7.0
+camera_data.ortho_scale = 12.0 if asset_name == "FestivalCampShade" else 7.0
 camera = bpy.data.objects.new("Disposable turnaround camera", camera_data)
 scene.collection.objects.link(camera)
 scene.camera = camera

@@ -77,12 +77,63 @@ namespace Festival.Tests
                     Assert.That(prop.gameObject.activeSelf,Is.True);
                     var rope=prop.GetComponent<LineRenderer>();
                     Assert.That(rope,Is.Not.Null);
-                    Assert.That(Vector3.Distance(rope.GetPosition(0),rope.GetPosition(1)),Is.InRange(.35f,.5f));
+                    Assert.That(Vector3.Distance(rope.GetPosition(0),rope.GetPosition(1)),Is.InRange(.58f,.66f));
+                    Assert.That(Vector3.Distance(actor.transform.position,rope.GetPosition(0)),Is.LessThan(2.5f),
+                        "The imported bone scale must not move the grip away from the actor");
                     foreach(var renderer in prop.GetComponentsInChildren<MeshRenderer>())
                         Assert.That(renderer.bounds.size.magnitude,Is.LessThan(2f),renderer.name+" is oversized");
                 }
                 actor.Pose="Idle";yield return null;
                 foreach(var prop in props)Assert.That(prop.gameObject.activeSelf,Is.False);
+            }
+            finally{Object.Destroy(root);}
+        }
+        [UnityTest]public IEnumerator PoiHeadsCompleteVerticalCirclesWithTautRopes()
+        {
+            var root=new GameObject("Poi orbit test");
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Poi orbit performer",Color.white);
+                actor.Pose="Poi";yield return null;
+                var rig=actor.GetComponentInChildren<FestivalPoiRig>();
+                Assert.That(rig,Is.Not.Null);
+                var rope=rig.GetComponent<LineRenderer>();
+                float minVertical=1,maxVertical=-1,minHorizontal=1,maxHorizontal=-1;
+                float start=Time.time;
+                while(Time.time-start<.9f)
+                {
+                    yield return null;
+                    Vector3 offset=(rope.GetPosition(1)-rope.GetPosition(0)).normalized;
+                    float vertical=Vector3.Dot(offset,actor.transform.up);
+                    float horizontal=Vector3.Dot(offset,actor.transform.right);
+                    minVertical=Mathf.Min(minVertical,vertical);maxVertical=Mathf.Max(maxVertical,vertical);
+                    minHorizontal=Mathf.Min(minHorizontal,horizontal);maxHorizontal=Mathf.Max(maxHorizontal,horizontal);
+                    Assert.That(Vector3.Distance(rope.GetPosition(0),rope.GetPosition(1)),Is.InRange(.58f,.66f));
+                }
+                Assert.That(minVertical,Is.LessThan(-.6f));Assert.That(maxVertical,Is.GreaterThan(.6f));
+                Assert.That(minHorizontal,Is.LessThan(-.6f));Assert.That(maxHorizontal,Is.GreaterThan(.6f));
+            }
+            finally{Object.Destroy(root);}
+        }
+        [UnityTest]public IEnumerator DanceMovesShinsAsWellAsArmsWithoutMovingGameplayRoot()
+        {
+            var root=new GameObject("Dance footwork test");
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Dance footwork performer",Color.white);
+                actor.Pose="Dance";
+                var shin=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="ShinL");
+                Assert.That(shin,Is.Not.Null);
+                yield return null;
+                var first=shin.localRotation;var position=actor.transform.position;
+                float maximum=0,start=Time.time;
+                while(Time.time-start<.35f)
+                {
+                    yield return null;
+                    maximum=Mathf.Max(maximum,Quaternion.Angle(first,shin.localRotation));
+                }
+                Assert.That(maximum,Is.GreaterThan(4f));
+                Assert.That(actor.transform.position,Is.EqualTo(position));
             }
             finally{Object.Destroy(root);}
         }
