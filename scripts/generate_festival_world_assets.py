@@ -31,6 +31,8 @@ COLORS = {
     "CanvasMint": (.16, .78, .64, 1), "CanvasCream": (.91, .84, .65, 1),
     "CanvasDark": (.13, .20, .24, 1), "Rubber": (.10, .12, .16, 1),
     "Needle": (.13, .28, .24, 1), "Stone": (.38, .42, .39, 1),
+    "StageGlowGold": (1.0, .64, .28, 1),
+    "StageGlowMint": (.28, .92, .75, 1),
 }
 MATS = {}
 for name, color in COLORS.items():
@@ -314,9 +316,39 @@ def stage():
         box("Side LED spine", (x, -4.195, 3.63), (.32, .08, 4.8), "Blue")
         for z in (1.8, 2.7, 3.6, 4.5, 5.4):
             box("Side LED cell", (x, -4.13, z), (.23, .08, .47), "Rose" if z<3.7 else "Mint")
-    for x, color in ((-7.15,"CanvasRose"),(7.15,"CanvasMint")):
-        box("Back wall hanging banner",(x,-4.17,4.0),(1.5,.055,3.8),color)
-        box("Banner bottom weight",(x,-4.11,2.10),(1.55,.07,.08),"Metal")
+    # The rear elevation needs to read as architecture from the crowd, not
+    # isolated colored pixels on a black rectangle. These folded touring
+    # panels frame a central lit opening without narrowing the playable deck.
+    for side, fabric in ((-1,"CanvasRose"),(1,"CanvasMint")):
+        outline=[(5.18,1.48),(8.10,1.48),(8.10,6.12),(7.42,6.12),
+                 (6.23,5.48),(5.18,3.75)]
+        verts=[(side*x,-4.07+(.17 if x<6.3 else .04),z) for x,z in outline]
+        formed_mesh("Folded rear scenic wing",verts,[(0,1,2,3,4,5)],fabric,
+                    [(x/8.5,z/7.0) for x,z in outline],thickness=.075)
+        for a,b in ((0,1),(1,2),(2,3),(3,4),(4,5),(5,0)):
+            strut("Scenic wing bound edge",verts[a],verts[b],.035,"CanvasCream",8)
+        for height in (2.02,2.72,3.42,4.12,4.82):
+            x=7.59-(height-2.02)*.23
+            box("Wing recessed light cassette",(side*x,-3.93,height),(.68,.12,.39),"Dark")
+            box("Wing luminous window",(side*x,-3.86,height),(.49,.025,.18),
+                "StageGlowGold" if height<3.5 else "StageGlowMint")
+        strut("Wing diagonal stiffener",(side*5.35,-3.88,1.60),
+              (side*7.40,-3.88,5.95),.070,"Metal",10)
+    # Curved pipework and an inset luminous ring create a deliberate focal
+    # target behind the DJ. The segmented tubing has physical highlight and
+    # shadow; none of it is a screen-space decal or a borrowed logo.
+    for radius,color,depth in ((2.52,"Metal",-3.93),(2.34,"StageGlowGold",-3.84),
+                                (1.82,"StageGlowMint",-3.79)):
+        for i in range(28):
+            a=math.pi*(.06+i*.88/28)
+            b=math.pi*(.06+(i+1)*.88/28)
+            p0=(math.cos(a)*radius,depth,3.40+math.sin(a)*radius)
+            p1=(math.cos(b)*radius,depth,3.40+math.sin(b)*radius)
+            strut("Backline halo tubing",p0,p1,.052 if color=="Metal" else .036,
+                  color,8)
+    for x in (-2.28,2.28):
+        strut("Halo grounded support",(x,-3.95,1.42),(x,-3.95,3.30),.080,"Metal",10)
+        box("Halo support foot",(x,-3.94,1.43),(.36,.32,.14),"Dark")
     for x in (-2.4, 0, 2.4):
         box("Front light block", (x, 4.04, 6.95), (.5, .48, .5), "Gold")
     # Interlocking Sun/Moon mark: gold disc on the wall, mint crescent over it.

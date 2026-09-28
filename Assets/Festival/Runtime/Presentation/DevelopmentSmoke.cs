@@ -504,6 +504,24 @@ namespace Festival.Presentation
             yield return new WaitForSeconds(1);
             if(!File.Exists(crowdStagePath)){Fail("stage crowd render");yield break;}
             Debug.Log("FESTIVAL SMOKE CROWD STAGE PASSED: "+crowdStagePath);
+            capturePosition=new Vector3(0,1.9f,14);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,3.3f,32)-capturePosition);
+            yield return new WaitForSeconds(.35f);
+            var stageDetailPath=Path.Combine(dir,session.IsHost?"host-stage-detail.png":"client-stage-detail.png");
+            if(File.Exists(stageDetailPath))File.Delete(stageDetailPath);
+            ScreenCapture.CaptureScreenshot(stageDetailPath);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(stageDetailPath)){Fail("stage detail render");yield break;}
+            Debug.Log("FESTIVAL SMOKE STAGE DETAIL PASSED: "+stageDetailPath);
+            capturePosition=new Vector3(2.4f,2.8f,26.1f);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,2.17f,30.3f)-capturePosition);
+            yield return new WaitForSeconds(.35f);
+            var djContactPath=Path.Combine(dir,session.IsHost?"host-dj-contact.png":"client-dj-contact.png");
+            if(File.Exists(djContactPath))File.Delete(djContactPath);
+            ScreenCapture.CaptureScreenshot(djContactPath);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(djContactPath)){Fail("DJ contact render");yield break;}
+            Debug.Log("FESTIVAL SMOKE DJ CONTACT PASSED: "+djContactPath);
             capturePosition=new Vector3(-10,2.4f,-4);
             captureRotation=Quaternion.LookRotation(new Vector3(-24,1.3f,6)-capturePosition);
             yield return new WaitForSeconds(.35f);

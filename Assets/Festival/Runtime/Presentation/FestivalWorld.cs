@@ -111,7 +111,23 @@ namespace Festival.Presentation
             ProxyBox("Stage backdrop",new Vector3(0,4,36),new Vector3(18,6,.5f),dark);
             Visual("FestivalStage",new Vector3(0,0,32));
             Sign("AFTER HOURS",new Vector3(0,6.50f,27.10f),gold,.20f);
-            Visual("FestivalDJDeck",new Vector3(0,1.4f,30));
+            Box("DJ console raised base",new Vector3(0,1.51f,30.15f),new Vector3(3.8f,.22f,1.4f),dark,false);
+            var djConsole=Visual("FestivalDJDeck",new Vector3(0,1.62f,30.15f));
+            Box("Resident DJ low riser",new Vector3(0,1.44f,30.88f),new Vector3(2.25f,.08f,.75f),dark,false);
+            var stageDj=FestivalCharacter.Create(owned,"resident_stage_dj",Color.white,"Attendee");
+            stageDj.Pose="Dj";
+            stageDj.DjConsole=djConsole==null?null:djConsole.transform;
+            stageDj.transform.localPosition=new Vector3(0,1.48f,30.84f);
+            stageDj.transform.localRotation=Quaternion.Euler(0,180,0);
+            stageDj.transform.localScale=Vector3.Scale(Vector3.one,stageDj.ShapeScale);
+            foreach(float x in new[]{-3.65f,3.65f})
+            {
+                var performer=FestivalCharacter.Create(owned,x<0?"stage_hype_west":"stage_hype_east",Color.white);
+                performer.Pose="Dance";
+                performer.transform.localPosition=new Vector3(x,1.4f,29.55f);
+                performer.transform.localRotation=Quaternion.Euler(0,x<0?165:195,0);
+                performer.transform.localScale=Vector3.Scale(Vector3.one*.88f,performer.ShapeScale);
+            }
             Box("Stage lip glow",new Vector3(0,1.46f,27.55f),new Vector3(18,.08f,.13f),lampRose,false);
             Box("Stage frame left",new Vector3(-8.8f,4.4f,35.65f),new Vector3(.15f,5.6f,.12f),lampMint,false);
             Box("Stage frame right",new Vector3(8.8f,4.4f,35.65f),new Vector3(.15f,5.6f,.12f),lampMint,false);
@@ -901,7 +917,8 @@ namespace Festival.Presentation
                     var key=name.Substring(mark+2).Split('.')[0];
                     if(key=="Wood"||key=="Bark"||key=="Leaf"||key=="LeafWarm"||key=="Needle"||key=="Stone"||
                         key=="Rubber"||key=="AutoGlass"||key.StartsWith("Canvas",System.StringComparison.Ordinal)||
-                        key.StartsWith("Paint",System.StringComparison.Ordinal))
+                        key.StartsWith("Paint",System.StringComparison.Ordinal)||
+                        key.StartsWith("StageGlow",System.StringComparison.Ordinal))
                     {
                         var surface=FestivalArtView.MaterialFor(key);
                         if(surface!=null)renderer.sharedMaterial=surface;

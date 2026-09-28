@@ -3,9 +3,9 @@
   "runtimeDirectory": "Assets/Festival/Art/Resources",
   "models": {
     "FestivalStage": {
-      "parts": 188,
-      "renderers": 12,
-      "triangles": 7756
+      "parts": 308,
+      "renderers": 14,
+      "triangles": 11996
     },
     "FestivalDJDeck": {
       "parts": 16,

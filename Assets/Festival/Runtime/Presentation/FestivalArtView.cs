@@ -27,6 +27,8 @@ namespace Festival.Presentation
             {"CanvasMint",new Color(.16f,.78f,.64f)},
             {"CanvasCream",new Color(.91f,.84f,.65f)},
             {"CanvasDark",new Color(.13f,.20f,.24f)},
+            {"StageGlowGold",new Color(1f,.64f,.28f)},
+            {"StageGlowMint",new Color(.28f,.92f,.75f)},
             {"Rubber",new Color(.10f,.12f,.16f)},
             {"Glass",new Color(.30f,.73f,.79f)},{"White",new Color(.86f,.90f,.82f)}
         };
@@ -80,6 +82,11 @@ namespace Festival.Presentation
                 // broad specular highlight otherwise washes the glass white.
                 if(material.HasProperty("_SpecularHighlights"))material.SetFloat("_SpecularHighlights",0);
                 material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            }
+            if(color.StartsWith("StageGlow",System.StringComparison.Ordinal) && material.HasProperty("_EmissionColor"))
+            {
+                material.EnableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor",material.color*1.6f);
             }
             material.enableInstancing=true;materials[color]=material;return material;
         }

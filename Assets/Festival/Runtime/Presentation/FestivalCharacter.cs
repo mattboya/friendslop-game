@@ -24,6 +24,7 @@ namespace Festival.Presentation
         readonly Dictionary<string,Quaternion> rest=new Dictionary<string,Quaternion>();
         readonly Dictionary<string,Quaternion> targets=new Dictionary<string,Quaternion>();
         FestivalFootPlant footPlant;
+        FestivalDjHandContact djHandContact;
         Vector3 previous;
         float speed,phase,walkCycle;
         internal float MotionPhase => phase;
@@ -32,6 +33,7 @@ namespace Festival.Presentation
         int latestDanceDirection=-1;
         float latestDanceStepTime=-100;
         public string Pose="Idle";
+        public Transform DjConsole { get; set; }
         public bool Crowd;
         public bool AmbientCrowd;
         public float Threat;
@@ -282,6 +284,23 @@ namespace Festival.Presentation
                     Aim("FootR",new Vector3(-Mathf.Max(0,opposite)*27,0,0));
                     Layer("Spine",new Vector3(0,Mathf.Sin(circle*.5f)*5,0));
                 }
+                else if(Pose=="Dj")
+                {
+                    // A resident DJ works the actual console rather than doing
+                    // floor footwork on the raised stage. One hand alternates
+                    // between platter and mixer while the other keeps time.
+                    Aim("Hips",new Vector3(3,sway*4,feet*3));
+                    Aim("Spine",new Vector3(10,-sway*6,-feet*5));
+                    Aim("Head",new Vector3(12,Mathf.Sin(beatTime*.5f)*8,feet*3));
+                    Aim("ArmL",new Vector3(-62+feet*8,0,-22));
+                    Aim("ArmR",new Vector3(-64-opposite*10,0,22));
+                    Aim("ForearmL",new Vector3(-58+opposite*10,0,12));
+                    Aim("ForearmR",new Vector3(-57+feet*12,0,-12));
+                    Aim("HandL",new Vector3(12+feet*13,0,0));
+                    Aim("HandR",new Vector3(10+opposite*16,0,0));
+                    Aim("LegL",new Vector3(2+feet*3,0,0));
+                    Aim("LegR",new Vector3(2-feet*3,0,0));
+                }
                 else if(danceStyle==0)
                 {
                     // Hakken: compact running steps and driving elbows.
@@ -378,6 +397,14 @@ namespace Festival.Presentation
             foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
             footPlant?.Update(!dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
                 delta,speed,walkCycle,strideDistance,animationDelta);
+            if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
+            {
+                if(djHandContact==null)
+                    djHandContact=new FestivalDjHandContact(transform,DjConsole,
+                        bones["ArmL"],bones["ForearmL"],bones["HandL"],
+                        bones["ArmR"],bones["ForearmR"],bones["HandR"]);
+                djHandContact.Update(Time.time*6f+phase);
+            }
         }
         public void UpdateDetailForDistance(float metres)
         {

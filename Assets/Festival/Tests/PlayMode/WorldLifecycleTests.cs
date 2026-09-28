@@ -137,6 +137,37 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
+        [UnityTest]public IEnumerator ResidentDjHandsStayOnTheConsole()
+        {
+            var root=new GameObject("DJ contact test");
+            try
+            {
+                var console=new GameObject("DJ console");console.transform.SetParent(root.transform,false);
+                console.transform.position=new Vector3(0,1.62f,30.15f);
+                var actor=FestivalCharacter.Create(root.transform,"resident_stage_dj",Color.white);
+                actor.Pose="Dj";actor.DjConsole=console.transform;
+                actor.transform.position=new Vector3(0,1.48f,30.84f);
+                actor.transform.rotation=Quaternion.Euler(0,180,0);
+                actor.transform.localScale=actor.ShapeScale;
+                var left=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="HandL");
+                var right=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="HandR");
+                Assert.That(left,Is.Not.Null);Assert.That(right,Is.Not.Null);
+                yield return new WaitForSeconds(.25f);
+                var authorityPosition=actor.transform.position;
+                var leftDeck=console.transform.TransformPoint(new Vector3(-.46f,.81f,.36f));
+                var rightDeck=console.transform.TransformPoint(new Vector3(.38f,.81f,.33f));
+                var arm=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="ArmL");
+                var elbow=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="ForearmL");
+                Debug.Log("[Festival.Test] dj reach shoulder="+arm.position.ToString("F3")+
+                    " elbow="+elbow.position.ToString("F3")+" hand="+left.position.ToString("F3")+
+                    " target="+leftDeck.ToString("F3")+" upper="+Vector3.Distance(arm.position,elbow.position).ToString("F3")+
+                    " lower="+Vector3.Distance(elbow.position,left.position).ToString("F3"));
+                Assert.That(Vector3.Distance(left.position,leftDeck),Is.LessThan(.13f),"Left hand misses the mixer");
+                Assert.That(Vector3.Distance(right.position,rightDeck),Is.LessThan(.13f),"Right hand misses the mixer");
+                Assert.That(actor.transform.position,Is.EqualTo(authorityPosition));
+            }
+            finally{Object.Destroy(root);}
+        }
         [UnityTest]public IEnumerator WalkingPlantsEachFootThenClearsTheGround()
         {
             var root=new GameObject("Walking contact test");
