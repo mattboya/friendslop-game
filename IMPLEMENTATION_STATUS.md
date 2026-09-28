@@ -4,6 +4,11 @@ Status date: September 28, 2026. **Playable macOS development build with a camps
 
 The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION.md). The [reference research](docs/FRIENDSLOP_RESEARCH_2026-09-27.md) explains the co-op loop choices. The [playtest guide](docs/PLAYTEST_2026-09-24.md) explains the playable route and remaining limitations.
 
+## Latest grounded locomotion checkpoint
+
+- The [dated motion evidence](docs/GRAPHICS_FOOT_CONTACT_PASS_2026-09-28.md) shows world-space planted feet, lifted swing feet and visual pelvis motion on the original 15-bone player/NPC rig. The cosmetic solver preserves collision and network authority, scales stride length to character size, and resets at route jumps.
+- Project static and domain checks, Unity EditMode and ten PlayMode tests, scripted solo and two-client native routes, macOS development and release builds, and release diagnostic exclusion passed. Populated festival point samples were 16.6–17.6 ms p95 at 1280×720 Ultra; no sustained target-hardware headroom is claimed. Stops, turns, uneven terrain, dance weight transfer and object interaction still need authored motion.
+
 ## Latest wagon form checkpoint
 
 - The [dated wagon evidence](docs/GRAPHICS_WAGON_FORM_PASS_2026-09-28.md) compares the original camp car to a new tapered body, raked glasshouse, crowned roof and seated windows in neutral and native views. The four wagons share the revised original FBX while retaining their color and cargo variation.

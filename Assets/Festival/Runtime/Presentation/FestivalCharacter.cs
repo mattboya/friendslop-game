@@ -23,6 +23,7 @@ namespace Festival.Presentation
         readonly Dictionary<string,Transform> bones=new Dictionary<string,Transform>();
         readonly Dictionary<string,Quaternion> rest=new Dictionary<string,Quaternion>();
         readonly Dictionary<string,Quaternion> targets=new Dictionary<string,Quaternion>();
+        FestivalFootPlant footPlant;
         Vector3 previous;
         float speed,phase,walkCycle;
         internal float MotionPhase => phase;
@@ -119,6 +120,10 @@ namespace Festival.Presentation
             var animatedBones=new HashSet<string>{"Hips","Spine","Head","ArmL","ArmR","ForearmL","ForearmR","HandL","HandR","LegL","LegR","ShinL","ShinR","FootL","FootR"};
             // Never reset the presentation root: its facing belongs to the session.
             foreach(var t in go.GetComponentsInChildren<Transform>())if(animatedBones.Contains(t.name)&&!actor.bones.ContainsKey(t.name)){actor.bones[t.name]=t;actor.rest[t.name]=t.localRotation;}
+            if(actor.bones.Count==15)
+                actor.footPlant=new FestivalFootPlant(actor.transform,actor.bones["Hips"],
+                    actor.bones["LegL"],actor.bones["ShinL"],actor.bones["FootL"],
+                    actor.bones["LegR"],actor.bones["ShinR"],actor.bones["FootR"]);
             actor.phase=FestivalAppearance.Pick(name,"phase",100)*.137f;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(actor.bones.Count<15 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
@@ -231,7 +236,11 @@ namespace Festival.Presentation
             var delta=hasPrevious?transform.position-previous:Vector3.zero;previous=transform.position;hasPrevious=true;
             float measuredSpeed=hasPrevious&&delta.magnitude<2?Mathf.Min(6,delta.magnitude/animationDelta):0;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
-            if(measuredSpeed>.12f)walkCycle+=delta.magnitude*(Mathf.PI*2/1.25f);
+            // Smaller festivalgoers take shorter, more frequent steps. The
+            // contact distance must scale with their actual leg reach.
+            float strideDistance=Mathf.Lerp(1.0f,1.22f,Mathf.Clamp01((measuredSpeed-1.4f)/2.4f))
+                *Mathf.Max(.65f,transform.lossyScale.y);
+            if(measuredSpeed>.12f)walkCycle+=delta.magnitude*(Mathf.PI*2/strideDistance);
             float t=Time.time*4+phase,wave=Mathf.Sin(t),walk=Mathf.Sin(walkCycle);
             if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit");
             if(equippedPoi!=null)equippedPoi.gameObject.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit");
@@ -367,6 +376,8 @@ namespace Festival.Presentation
             }
             float blend=1-Mathf.Exp(-(Pose=="Downed"?7:12)*animationDelta);
             foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
+            footPlant?.Update(!dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
+                delta,speed,walkCycle,strideDistance,animationDelta);
         }
         public void UpdateDetailForDistance(float metres)
         {

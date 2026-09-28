@@ -137,6 +137,66 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
+        [UnityTest]public IEnumerator WalkingPlantsEachFootThenClearsTheGround()
+        {
+            var root=new GameObject("Walking contact test");
+            int previousFrameRate=Application.targetFrameRate;
+            Application.targetFrameRate=60;
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Walking contact actor",Color.white);
+                actor.transform.localScale=Vector3.one*.82f;
+                var left=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FootL");
+                var right=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FootR");
+                Assert.That(left,Is.Not.Null);Assert.That(right,Is.Not.Null);
+                yield return null;
+                float floorL=left.position.y,floorR=right.position.y;
+                int leftContacts=0,rightContacts=0;
+                float leftLift=0,rightLift=0,start=Time.time;
+                float bestLeft=100,bestRight=100,maxRootStep=0;
+                int samples=0;
+                while(Time.time-start<1.2f)
+                {
+                    var lastRoot=actor.transform.position;
+                    var lastLeft=left.position;var lastRight=right.position;
+                    actor.transform.position+=Vector3.forward*(1.6f*Time.deltaTime);
+                    yield return null;
+                    float rootStep=Vector3.Distance(lastRoot,actor.transform.position);
+                    maxRootStep=Mathf.Max(maxRootStep,rootStep);
+                    if(rootStep>.003f)
+                    {
+                        bestLeft=Mathf.Min(bestLeft,Vector3.Distance(lastLeft,left.position)/rootStep);
+                        bestRight=Mathf.Min(bestRight,Vector3.Distance(lastRight,right.position)/rootStep);
+                        if(Vector3.Distance(lastLeft,left.position)<rootStep*.40f&&
+                            Mathf.Abs(left.position.y-floorL)<.04f)leftContacts++;
+                        if(Vector3.Distance(lastRight,right.position)<rootStep*.40f&&
+                            Mathf.Abs(right.position.y-floorR)<.04f)rightContacts++;
+                    }
+                    leftLift=Mathf.Max(leftLift,left.position.y-floorL);
+                    rightLift=Mathf.Max(rightLift,right.position.y-floorR);
+                    samples++;
+                }
+                var hips=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="Hips");
+                Debug.Log("[Festival.Test] walking contacts="+leftContacts+"/"+rightContacts+
+                    " samples="+samples+" bestRatio="+bestLeft.ToString("F2")+"/"+bestRight.ToString("F2")+
+                    " maxRootStep="+maxRootStep.ToString("F3")+" lift="+leftLift.ToString("F3")+
+                    "/"+rightLift.ToString("F3")+" footY="+left.position.y.ToString("F3")+
+                    "/"+right.position.y.ToString("F3")+" floor="+floorL.ToString("F3")+
+                    "/"+floorR.ToString("F3")+" hips="+hips.position.ToString("F3")+
+                    " hipsLocal="+hips.localPosition.ToString("F4")+
+                    " hipsParentScale="+hips.parent.lossyScale.ToString("F3"));
+                Assert.That(leftContacts,Is.GreaterThan(4),"Left sole never carries a planted step");
+                Assert.That(rightContacts,Is.GreaterThan(4),"Right sole never carries a planted step");
+                Assert.That(leftLift,Is.GreaterThan(.035f),"Left foot never clears the floor");
+                Assert.That(rightLift,Is.GreaterThan(.035f),"Right foot never clears the floor");
+                var destination=actor.transform.position+Vector3.forward*8;
+                actor.transform.position=destination;
+                yield return null;
+                Assert.That(Vector3.Distance(actor.transform.position,left.position),Is.LessThan(2f));
+                Assert.That(Vector3.Distance(actor.transform.position,right.position),Is.LessThan(2f));
+            }
+            finally{Application.targetFrameRate=previousFrameRate;Object.Destroy(root);}
+        }
         [UnityTest]public IEnumerator FirstPersonHandsSelectTheSameBodyAndSleeveAsPlayer()
         {
             var cameraObject=new GameObject("First-person hand test camera");

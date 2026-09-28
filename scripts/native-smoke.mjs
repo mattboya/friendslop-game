@@ -15,7 +15,7 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
   child.on('error',reject);
   child.on('exit',code=>{
     const text=existsSync(log)?readFileSync(log,'utf8'):'';
-    if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(text)||!text.includes('FESTIVAL SMOKE EYE STATES PASSED')||!text.includes('FESTIVAL SMOKE CAMP PASSED')||!text.includes('FESTIVAL SMOKE CAMP SHOP PASSED')||!text.includes('FESTIVAL SMOKE PASS RENDER PASSED')||!text.includes('FESTIVAL SMOKE SETTINGS RENDER PASSED')||!text.includes('FESTIVAL SMOKE MAP RENDER PASSED')||!text.includes('FESTIVAL SMOKE HELD RENDER PASSED')||!text.includes('FESTIVAL SMOKE CAMP OVERVIEW PASSED')||!text.includes('FESTIVAL SMOKE TRANSPORT PASSED')||!text.includes('FESTIVAL SMOKE CROWD PASSED')||!text.includes('FESTIVAL SMOKE CLUE VISIBILITY PASSED')||!text.includes('FESTIVAL SMOKE MISSION PASSED')||!text.includes('FESTIVAL SMOKE RENDER PASSED')||!text.includes('FESTIVAL SMOKE FIT ROLES PASSED')||!text.includes('FESTIVAL SMOKE FIT OUTFITS PASSED'))return reject(new Error(role+' smoke failed; inspect '+log));
+    if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(text)||!text.includes('FESTIVAL SMOKE EYE STATES PASSED')||!text.includes('FESTIVAL SMOKE CAMP PASSED')||!text.includes('FESTIVAL SMOKE CAMP SHOP PASSED')||!text.includes('FESTIVAL SMOKE PASS RENDER PASSED')||!text.includes('FESTIVAL SMOKE SETTINGS RENDER PASSED')||!text.includes('FESTIVAL SMOKE MAP RENDER PASSED')||!text.includes('FESTIVAL SMOKE HELD RENDER PASSED')||!text.includes('FESTIVAL SMOKE CAMP OVERVIEW PASSED')||!text.includes('FESTIVAL SMOKE TRANSPORT PASSED')||!text.includes('FESTIVAL SMOKE CROWD PASSED')||!text.includes('FESTIVAL SMOKE CLUE VISIBILITY PASSED')||!text.includes('FESTIVAL SMOKE MISSION PASSED')||!text.includes('FESTIVAL SMOKE RENDER PASSED')||!text.includes('FESTIVAL SMOKE FIT ROLES PASSED')||!text.includes('FESTIVAL SMOKE FIT OUTFITS PASSED')||!text.includes('FESTIVAL SMOKE WALK MOTION PASSED'))return reject(new Error(role+' smoke failed; inspect '+log));
     const screenshot=text.match(/FESTIVAL SMOKE RENDER PASSED: (.+)/)?.[1]?.trim();
     if(!screenshot||!existsSync(screenshot))return reject(new Error(role+' screenshot missing'));
     if(role==='client'){
@@ -40,6 +40,13 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
       const capture=text.match(new RegExp(marker+': (.+)'))?.[1]?.trim();
       if(!capture||!existsSync(capture))return reject(new Error(role+' '+suffix+' screenshot missing'));
       copyFileSync(capture,path.join(dir,role+'-'+suffix+'.png'));
+    }
+    const walkDir=text.match(/FESTIVAL SMOKE WALK MOTION PASSED: (.+)/)?.[1]?.trim();
+    if(!walkDir)return reject(new Error(role+' walking capture directory missing'));
+    for(let frame=0;frame<3;frame++){
+      const source=path.join(walkDir,role+'-walk-motion-'+frame+'.png');
+      if(!existsSync(source))return reject(new Error(role+' walking capture '+frame+' missing'));
+      copyFileSync(source,path.join(dir,role+'-walk-motion-'+frame+'.png'));
     }
     copyFileSync(screenshot,path.join(dir,role+'.png'));console.log(role.toUpperCase()+' NATIVE SMOKE PASSED');resolve();
   });

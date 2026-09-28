@@ -605,6 +605,35 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE FACE STATES PASSED: "+facePath);
             foreach(var actor in portraits)Destroy(actor.gameObject);
             yield return null;
+            var walker=FestivalCharacter.Create(transform,"Walking motion review",Color.white);
+            walker.transform.position=new Vector3(-1.0f,0,-5.5f);
+            walker.transform.rotation=Quaternion.Euler(0,90,0);
+            walker.transform.localScale=Vector3.one*.88f;
+            capturePosition=new Vector3(0,1.52f,-9.2f);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,1.05f,-5.5f)-capturePosition);
+            captureCamera.fieldOfView=46;
+            int walkFrame=0;
+            float walkStart=Time.time;
+            while(Time.time-walkStart<.82f)
+            {
+                walker.transform.position+=Vector3.right*(1.55f*Time.deltaTime);
+                if(walkFrame<3&&Time.time-walkStart>=walkFrame*.25f)
+                {
+                    var walkPath=Path.Combine(dir,(session.IsHost?"host":"client")+
+                        "-walk-motion-"+walkFrame+".png");
+                    if(File.Exists(walkPath))File.Delete(walkPath);
+                    ScreenCapture.CaptureScreenshot(walkPath);
+                    walkFrame++;
+                }
+                yield return null;
+            }
+            yield return new WaitForSeconds(.7f);
+            if(walkFrame!=3){Fail("walking motion frame count");yield break;}
+            for(int frame=0;frame<3;frame++)
+                if(!File.Exists(Path.Combine(dir,(session.IsHost?"host":"client")+"-walk-motion-"+frame+".png")))
+                    {Fail("walking motion frame "+frame);yield break;}
+            Debug.Log("FESTIVAL SMOKE WALK MOTION PASSED: "+dir);
+            Destroy(walker.gameObject);yield return null;
             capturePosition=new Vector3(0,1.2f,-18.5f);captureRotation=Quaternion.identity;captureCamera.fieldOfView=12;
             var detailPair=new FestivalCharacter[2];
             for(int i=0;i<2;i++)
