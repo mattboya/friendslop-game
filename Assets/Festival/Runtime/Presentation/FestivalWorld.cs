@@ -55,6 +55,7 @@ namespace Festival.Presentation
             earth.mainTextureScale=new Vector2(10,10);
             var dark = Material(new Color(.12f,.10f,.20f));
             var wood = Material(new Color(.42f,.27f,.23f));
+            wood.mainTexture=Resources.Load<Texture2D>("FestivalWood");
             var mint = Material(new Color(.20f,.85f,.65f));
             var rose = Material(new Color(.92f,.25f,.49f));
             var gold = Material(new Color(.98f,.68f,.22f));
@@ -63,8 +64,8 @@ namespace Festival.Presentation
             artMaterials["Cream"]=Material(new Color(.90f,.83f,.65f));
             artMaterials["Blue"]=Material(new Color(.22f,.43f,.74f));
             artMaterials["Metal"]=Material(new Color(.37f,.42f,.49f));
-            artMaterials["Leaf"]=Material(new Color(.13f,.33f,.25f));
-            artMaterials["LeafWarm"]=Material(new Color(.29f,.42f,.23f));
+            artMaterials["Leaf"]=Material(new Color(.19f,.39f,.27f));
+            artMaterials["LeafWarm"]=Material(new Color(.33f,.46f,.26f));
             artMaterials["Glass"]=Material(new Color(.30f,.74f,.78f));
             artMaterials["White"]=Material(new Color(.88f,.91f,.83f));
             if(artMaterials["Metal"].HasProperty("_Smoothness"))artMaterials["Metal"].SetFloat("_Smoothness",.46f);
@@ -75,6 +76,8 @@ namespace Festival.Presentation
             Box("Distant festival woodland",new Vector3(0,-.35f,0),new Vector3(220,.68f,220),distantFestivalEarth,false);
             Box("Ground", new Vector3(0,-.3f,0),new Vector3(80,.6f,80),earth);
             var path=Material(new Color(.57f,.39f,.30f));
+            path.mainTexture=Resources.Load<Texture2D>("FestivalDirt");
+            path.mainTextureScale=new Vector2(2,3);
             var lampGold=Glow(new Color(1f,.56f,.20f),2.3f);
             var lampRose=Glow(new Color(1f,.18f,.47f),2.1f);
             var lampMint=Glow(new Color(.19f,1f,.76f),2.1f);
@@ -291,7 +294,10 @@ namespace Festival.Presentation
             ProxyBox("Camp east boundary",new Vector3(24,1.1f,0),new Vector3(.5f,2.2f,48),wood);
             Box("Camp footpath",new Vector3(0,.024f,0),new Vector3(3.3f,.035f,21),path,false);
             Box("Camp shade lane",new Vector3(0,.025f,-1),new Vector3(13,.036f,3.8f),path,false);
-            Box("Camp gathering mat",new Vector3(0,.02f,0),new Vector3(17,.04f,15),wood,false);
+            var campMat=Material(new Color(.46f,.32f,.27f));
+            campMat.mainTexture=Resources.Load<Texture2D>("FestivalCanvas");
+            campMat.mainTextureScale=new Vector2(5,5);
+            Box("Camp gathering mat",new Vector3(0,.02f,0),new Vector3(17,.04f,15),campMat,false);
             for(int stripe=0;stripe<7;stripe++)
             {
                 float z=-6+stripe*2;
@@ -326,7 +332,9 @@ namespace Festival.Presentation
                     {
                         string accent=site.Id.EndsWith("1")||site.Id.EndsWith("4")?"Rose":site.Id.EndsWith("2")||site.Id.EndsWith("5")?"Mint":"Gold";
                         foreach(var renderer in prop.GetComponentsInChildren<Renderer>())
-                            if(renderer.name.Contains("__Rose"))renderer.sharedMaterial=FestivalArtView.MaterialFor(accent);
+                            if(renderer.name.Contains("__CanvasRose"))renderer.sharedMaterial=FestivalArtView.MaterialFor("Canvas"+accent);
+                            else if(renderer.name.Contains("__PaintRose"))renderer.sharedMaterial=FestivalArtView.MaterialFor("Paint"+accent);
+                            else if(renderer.name.Contains("__Rose"))renderer.sharedMaterial=FestivalArtView.MaterialFor(accent);
                         if(site.Kind=="Tent")prop.transform.localScale=Vector3.one*((site.Id.EndsWith("5")||site.Id.EndsWith("6")) ? .87f : 1f);
                     }
                 }
@@ -407,6 +415,14 @@ namespace Festival.Presentation
                 float radius=22.0f+(i%4)*1.15f;
                 var point=new Vector3(Mathf.Cos(angle)*radius,0,Mathf.Sin(angle)*radius);
                 if(Mathf.Abs(point.x)<4f&&point.z>17f)continue;
+                bool overlapsSite=false;
+                foreach(var site in CampFeatures.Sites)
+                {
+                    float clearance=site.Kind=="Car"?4.6f:site.Kind=="Tent"?3.8f:3.1f;
+                    if(new Vector2(point.x-site.X,point.z-site.Z).sqrMagnitude<clearance*clearance)
+                    {overlapsSite=true;break;}
+                }
+                if(overlapsSite)continue;
                 var tree=Visual(i%3==0?"FestivalTreeB":"FestivalTreeA",point);
                 if(tree!=null)
                 {

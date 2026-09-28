@@ -20,6 +20,12 @@ The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION
 - Car, tent and porta potty interactions enter bounded, walkable room views. Each has a gag with original synthesized sound and a moving prop; the [car interior](docs/graphics-camp-2026-09-27/car-interior.png) is a native capture. The camp DJ offers silence and three original generated loops. [Round review](docs/graphics-camp-2026-09-27/round-review.png) records the prior result and crew antics, takes a crew award vote, then lets the host open the next shop.
 - Domain, project static, Unity EditMode and PlayMode, macOS development build, solo native full-route smoke and two-client native smoke passed after this pass. [Follow-up point samples](docs/GRAPHICS_PROFILE_2026-09-27.md) show 9.2 ms camp and 16.7–17.1 ms festival/results rolling p95 windows on this Mac. Human-paced play, tactile prop polish and target Windows performance remain open.
 
+## September 27 environment shape and surface checkpoint
+
+- [Native comparison captures and measurements](docs/GRAPHICS_ENVIRONMENT_PASS_2026-09-27.md) show shaped camp shade and tent canvas, revised tree silhouettes and vehicle details, separate automotive paint/glass response, six original reusable surface images, and perimeter-tree clearance around camp features. Original interaction locations and collision proxies remain in place.
+- The final two-client development smoke passed. Its client point samples were 8.9 ms rolling p95 at camp and 16.7–16.9 ms in populated festival views at 1280×720 Ultra on the baseline Mac. These short, different-seed samples do not establish a sustained frame rate or visual acceptance.
+- The campsite is more legible, but the captured stage, broad ground areas, trees and persistent HUD still read as prototype work against the supplied trailer. The full graphics objective remains open pending a finished route, human review and target-hardware evidence.
+
 ## Latest campsite and interaction pass
 
 - Added a timber-and-canvas checkout kiosk, shelf category signs, slatted counter details, softer model edges, and smoother tree crowns. The original Blender kit now exports 27 world and prop models.

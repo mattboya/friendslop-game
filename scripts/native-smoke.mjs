@@ -34,7 +34,9 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
         copyFileSync(capture,path.join(dir,'client-'+name+'.png'));
       }
     }
-    for(const [marker,suffix] of [['FESTIVAL SMOKE CAMP PASSED','camp'],['FESTIVAL SMOKE CAMP SHOP PASSED','camp-shop'],['FESTIVAL SMOKE PASS RENDER PASSED','pass'],['FESTIVAL SMOKE SETTINGS RENDER PASSED','settings'],['FESTIVAL SMOKE MAP RENDER PASSED','map'],['FESTIVAL SMOKE HELD RENDER PASSED','held'],['FESTIVAL SMOKE CAMP OVERVIEW PASSED','camp-overview'],['FESTIVAL SMOKE CROWD LIVE PASSED','crowd-live'],['FESTIVAL SMOKE CROWD STAGE PASSED','crowd-stage'],['FESTIVAL SMOKE CROWD GROVE PASSED','crowd-grove'],['FESTIVAL SMOKE FIT ROLES PASSED','fit-roles'],['FESTIVAL SMOKE FIT OUTFITS PASSED','fit-outfits'],['FESTIVAL SMOKE CHARACTER QUALITY PASSED','character-quality'],['FESTIVAL SMOKE FACE STATES PASSED','face-states'],['FESTIVAL SMOKE CHARACTER DISTANCE PASSED','character-distance']]){
+    const captures=[['FESTIVAL SMOKE CAMP PASSED','camp'],['FESTIVAL SMOKE CAMP SHOP PASSED','camp-shop'],['FESTIVAL SMOKE PASS RENDER PASSED','pass'],['FESTIVAL SMOKE SETTINGS RENDER PASSED','settings'],['FESTIVAL SMOKE MAP RENDER PASSED','map'],['FESTIVAL SMOKE HELD RENDER PASSED','held'],['FESTIVAL SMOKE CAMP OVERVIEW PASSED','camp-overview'],['FESTIVAL SMOKE CROWD LIVE PASSED','crowd-live'],['FESTIVAL SMOKE CROWD STAGE PASSED','crowd-stage'],['FESTIVAL SMOKE CROWD GROVE PASSED','crowd-grove'],['FESTIVAL SMOKE FIT ROLES PASSED','fit-roles'],['FESTIVAL SMOKE FIT OUTFITS PASSED','fit-outfits'],['FESTIVAL SMOKE CHARACTER QUALITY PASSED','character-quality'],['FESTIVAL SMOKE FACE STATES PASSED','face-states'],['FESTIVAL SMOKE CHARACTER DISTANCE PASSED','character-distance']];
+    if(role==='host')captures.push(['FESTIVAL SMOKE CAMP CAR PASSED','camp-car']);
+    for(const [marker,suffix] of captures){
       const capture=text.match(new RegExp(marker+': (.+)'))?.[1]?.trim();
       if(!capture||!existsSync(capture))return reject(new Error(role+' '+suffix+' screenshot missing'));
       copyFileSync(capture,path.join(dir,role+'-'+suffix+'.png'));

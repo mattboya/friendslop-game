@@ -13,7 +13,16 @@ namespace Festival.Presentation
             {"Mint",new Color(.16f,.78f,.64f)},{"Rose",new Color(.93f,.26f,.47f)},
             {"Gold",new Color(.98f,.68f,.21f)},{"Cream",new Color(.91f,.84f,.65f)},
             {"Blue",new Color(.23f,.42f,.73f)},{"Metal",new Color(.37f,.41f,.47f)},
-            {"Leaf",new Color(.15f,.36f,.25f)},{"LeafWarm",new Color(.33f,.43f,.24f)},
+            {"Leaf",new Color(.22f,.43f,.28f)},{"LeafWarm",new Color(.38f,.48f,.27f)},
+            {"Bark",new Color(.44f,.31f,.24f)},
+            {"PaintRose",new Color(.65f,.21f,.34f)},
+            {"PaintMint",new Color(.21f,.56f,.51f)},
+            {"PaintGold",new Color(.72f,.48f,.22f)},
+            {"AutoGlass",new Color(.18f,.30f,.38f)},
+            {"CanvasRose",new Color(.93f,.26f,.47f)},
+            {"CanvasGold",new Color(.98f,.68f,.21f)},
+            {"CanvasMint",new Color(.16f,.78f,.64f)},
+            {"CanvasCream",new Color(.91f,.84f,.65f)},
             {"Glass",new Color(.30f,.73f,.79f)},{"White",new Color(.86f,.90f,.82f)}
         };
         public static GameObject Create(Transform parent,string resource)
@@ -47,6 +56,17 @@ namespace Festival.Presentation
             var template=Resources.Load<Material>("FestivalLit");
             if(template==null)return null;
             material=new Material(template){name="Festival art "+color,color=colors.TryGetValue(color,out var tint)?tint:Color.white};
+            string map=color.StartsWith("Canvas",System.StringComparison.Ordinal)?"FestivalCanvas"
+                :color=="Bark"?"FestivalBark"
+                :color=="Wood"?"FestivalWood"
+                :color=="Leaf"||color=="LeafWarm"?"FestivalLeaf":"";
+            if(map!="")material.mainTexture=Resources.Load<Texture2D>(map);
+            if(material.HasProperty("_Smoothness"))
+                material.SetFloat("_Smoothness",color=="Metal" ? .48f : color=="Glass" ? .68f :
+                    color=="AutoGlass" ? .82f : color.StartsWith("Paint",System.StringComparison.Ordinal) ? .56f :
+                    color.StartsWith("Canvas",System.StringComparison.Ordinal) ? .06f : color=="Bark" ? .04f : .16f);
+            if(material.HasProperty("_Metallic") && color.StartsWith("Paint",System.StringComparison.Ordinal))
+                material.SetFloat("_Metallic",.20f);
             material.enableInstancing=true;materials[color]=material;return material;
         }
     }

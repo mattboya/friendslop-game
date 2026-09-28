@@ -53,19 +53,19 @@
       "triangles": 592
     },
     "FestivalTreeA": {
-      "parts": 8,
+      "parts": 12,
       "renderers": 3,
-      "triangles": 1444
+      "triangles": 3132
     },
     "FestivalTreeB": {
-      "parts": 7,
+      "parts": 11,
       "renderers": 3,
-      "triangles": 1180
+      "triangles": 2812
     },
     "FestivalTent": {
-      "parts": 21,
+      "parts": 29,
       "renderers": 6,
-      "triangles": 548
+      "triangles": 2172
     },
     "FestivalPoi": {
       "parts": 4,
@@ -78,14 +78,14 @@
       "triangles": 204
     },
     "FestivalCampCar": {
-      "parts": 37,
+      "parts": 76,
       "renderers": 6,
-      "triangles": 1628
+      "triangles": 3544
     },
     "FestivalCampShade": {
-      "parts": 19,
+      "parts": 128,
       "renderers": 6,
-      "triangles": 1092
+      "triangles": 5076
     },
     "FestivalCampShop": {
       "parts": 33,

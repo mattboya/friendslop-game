@@ -1,5 +1,7 @@
 # Initial Mac graphics profile — September 27, 2026
 
+The later [environment checkpoint](GRAPHICS_ENVIRONMENT_PASS_2026-09-27.md) contains a second native capture set and the post-shape-pass point samples. The measurement limits below still apply.
+
 This is an initial cost breakdown for the [graphics upgrade plan](GRAPHICS_UPGRADE_PLAN_2026-09-27.md). It is a scripted two-client smoke run on the Mac listed in the [baseline](GRAPHICS_BASELINE_2026-09-27.md), at 1280×720, Unity Ultra quality, seed `57479502`, development build GUID `5a5842f7ad3b4a869c8be0bbba0ca1f4`. The client ran with `FESTIVAL_GRAPHICS_PROFILE=1`; the F9 overlay remained hidden so it did not appear in captures. Both clients passed the native mission.
 
 | Client point sample | Frame p95, recent window | CPU frame | GPU frame | Visible renderers | Distant characters | Animation updates/s |

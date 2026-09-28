@@ -23,6 +23,11 @@ COLORS = {
     "Blue": (.23, .42, .73, 1), "Metal": (.37, .41, .47, 1),
     "Leaf": (.15, .36, .25, 1), "LeafWarm": (.33, .43, .24, 1),
     "Glass": (.30, .73, .79, 1), "White": (.86, .90, .82, 1),
+    "Bark": (.44, .31, .24, 1),
+    "PaintRose": (.65, .21, .34, 1), "PaintMint": (.21, .56, .51, 1),
+    "PaintGold": (.72, .48, .22, 1), "AutoGlass": (.18, .30, .38, 1),
+    "CanvasRose": (.93, .26, .47, 1), "CanvasGold": (.98, .68, .21, 1),
+    "CanvasMint": (.16, .78, .64, 1), "CanvasCream": (.91, .84, .65, 1),
 }
 MATS = {}
 for name, color in COLORS.items():
@@ -39,7 +44,7 @@ manifest = {}
 
 
 def add(label, position, scale, color, shape="cube", rotation=(0, 0, 0), vertices=18,
-        major=1, minor=.25):
+        major=1, minor=.25, edge_radius=None, edge_segments=2):
     # `scale` is applied in the primitive's own axes before `rotation`.
     if shape == "cube":
         bpy.ops.mesh.primitive_cube_add(size=1, location=position)
@@ -59,8 +64,8 @@ def add(label, position, scale, color, shape="cube", rotation=(0, 0, 0), vertice
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
     if shape == "cube" and min(scale) >= .12:
         bevel = obj.modifiers.new("Soft manufactured edges", "BEVEL")
-        bevel.width = min(scale) * .10
-        bevel.segments = 2
+        bevel.width = edge_radius if edge_radius is not None else min(scale) * .10
+        bevel.segments = edge_segments
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_apply(modifier=bevel.name)
         for poly in obj.data.polygons:
@@ -74,8 +79,8 @@ def add(label, position, scale, color, shape="cube", rotation=(0, 0, 0), vertice
     return obj
 
 
-def box(label, p, s, color):
-    return add(label, p, s, color)
+def box(label, p, s, color, **kwargs):
+    return add(label, p, s, color, **kwargs)
 
 
 def round_part(label, p, s, color, kind="cylinder"):
@@ -107,6 +112,90 @@ def strut(label, a, b, radius, color, vertices=6):
     a, b = Vector(a), Vector(b)
     rotation = (b - a).to_track_quat("Z", "Y").to_euler()
     return add(label, (a + b) / 2, (radius, radius, (b - a).length), color, "cylinder", rotation, vertices)
+
+
+def formed_mesh(label, vertices, faces, color, uv_coords=None, thickness=0):
+    """A shaped, UV-mapped surface with enough contour to catch light."""
+    mesh = bpy.data.meshes.new(label)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.validate()
+    obj = bpy.data.objects.new(label + "__" + color, mesh)
+    bpy.context.collection.objects.link(obj)
+    mesh.materials.append(MATS[color])
+    if uv_coords is not None:
+        uv = mesh.uv_layers.new(name="Surface UV")
+        for polygon in mesh.polygons:
+            for loop in polygon.loop_indices:
+                uv.data[loop].uv = uv_coords[mesh.loops[loop].vertex_index]
+    for polygon in mesh.polygons:
+        polygon.use_smooth = True
+    if thickness:
+        solid = obj.modifiers.new("Canvas edge thickness", "SOLIDIFY")
+        solid.thickness = thickness
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.modifier_apply(modifier=solid.name)
+        obj.select_set(False)
+    current.append(obj)
+    return obj
+
+
+def tapered_wood(label, points, radii, segments=12):
+    vertices, faces, uvs = [], [], []
+    points = [Vector(p) for p in points]
+    length = 0
+    for ring, point in enumerate(points):
+        if ring:
+            length += (point-points[ring-1]).length
+        tangent = (points[min(ring+1,len(points)-1)]-points[max(0,ring-1)]).normalized()
+        side = tangent.cross(Vector((0,1,0))).normalized()
+        if side.length < .1:
+            side = Vector((1,0,0))
+        other = tangent.cross(side).normalized()
+        for spoke in range(segments):
+            angle = spoke * 2*math.pi/segments
+            radius = radii[ring]*(1+.045*math.sin(spoke*3+ring*1.7))
+            vertices.append(tuple(point + (side*math.cos(angle)+other*math.sin(angle))*radius))
+            uvs.append((spoke/segments*2, length/1.2))
+    for ring in range(len(points)-1):
+        for spoke in range(segments):
+            a=ring*segments+spoke
+            b=ring*segments+(spoke+1)%segments
+            faces.append((a,b,b+segments,a+segments))
+    return formed_mesh(label, vertices, faces, "Bark", uvs)
+
+
+def leaf_cluster(label, center, size, seed, color):
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=1, location=center)
+    obj = bpy.context.object
+    obj.name = label + "__" + color
+    for vertex in obj.data.vertices:
+        direction = vertex.co.normalized()
+        variation = 1 + .095*math.sin(direction.x*5+seed)*math.sin(direction.y*4-seed*.3)
+        variation += .055*math.sin(direction.z*6+direction.x*3+seed*.8)
+        vertex.co = Vector((direction.x*size[0],direction.y*size[1],direction.z*size[2]))*variation
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    obj.data.materials.append(MATS[color])
+    current.append(obj)
+    obj.select_set(False)
+    return obj
+
+
+def fabric_grid(label, u_steps, v_steps, surface, color, flip=False, uv_scale=(1,1), thickness=.045):
+    vertices, faces, uvs = [], [], []
+    for i in range(u_steps+1):
+        for j in range(v_steps+1):
+            u, v = i/u_steps, j/v_steps
+            vertices.append(surface(u,v))
+            uvs.append((u*uv_scale[0],v*uv_scale[1]))
+    stride=v_steps+1
+    for i in range(u_steps):
+        for j in range(v_steps):
+            a=i*stride+j
+            quad=(a,a+stride,a+stride+1,a+1)
+            faces.append(tuple(reversed(quad)) if flip else quad)
+    return formed_mesh(label, vertices, faces, color, uvs, thickness)
 
 
 def prism(label, outline, y0, y1, color):
@@ -351,20 +440,29 @@ def totem(sun):
 
 
 def tree(kind):
-    # Trunk, branches and clustered canopies share explicit overlap; the
-    # scattered crowns read as trees rather than stacked green boulders.
-    round_part("Tapered woodland trunk", (0, 0, 2.0), (.48, .48, 4.0), "Wood")
-    for side in (-1, 1):
-        add("Forking branch", (side*.53, 0, 3.34), (.15, .17, 1.65), "Wood", "cylinder",
-            (0, side*.56, 0), vertices=8)
-    crowns = ((-.80, 0, 4.17, 1.10), (.73, .12, 4.22, 1.15),
-              (-.25, -.47, 4.85, 1.12), (.30, .40, 5.05, 1.06),
-              (0, 0, 5.65, .81)) if kind == 0 else (
-              (-.96, 0, 3.95, 1.12), (.83, -.12, 4.12, 1.18),
-              (0, .55, 4.78, 1.16), (-.13, -.32, 5.31, .96))
-    for i, (x, y, z, r) in enumerate(crowns):
-        add("Asymmetric leaf crown", (x, y, z), (r*1.04, r*.92, r*.83),
-            "LeafWarm" if i%3==1 else "Leaf", "sphere", vertices=12)
+    # The trunk flares into roots and branches grow through overlapping,
+    # irregular foliage masses. Two crown profiles break up the forest line.
+    bend = -.12 if kind == 0 else .17
+    tapered_wood("Rooted woodland trunk", [(0,0,-.08),(.04,0,.18),(.01,0,.65),
+        (bend*.45,.04,1.7),(bend,.05,2.8),(bend*1.2,.08,3.85),
+        (bend*1.4,.10,4.7)], [.68,.58,.46,.36,.27,.19,.07])
+    for side, depth in ((-1,-.28),(1,.21)):
+        tapered_wood("Canopy fork", [(bend*.6,0,2.5),
+            (side*.43,depth*.4,3.25),(side*.95,depth,3.95),
+            (side*1.35,depth*1.3,4.38)], [.24,.18,.11,.035], 9)
+    crowns = (
+        [(-1.12,-.15,4.04,1.08,.84,.77),(-.38,.18,4.46,1.21,.91,.87),
+         (.74,-.33,4.12,1.17,.94,.80),(1.28,.33,4.56,.88,.78,.70),
+         (-1.29,.52,4.75,.78,.75,.66),(-.45,-.72,4.98,.89,.85,.78),
+         (.53,.68,5.14,1.02,.81,.84),(.05,-.08,5.58,.95,.91,.80),
+         (.30,.20,6.0,.70,.68,.58)] if kind == 0 else
+        [(-1.31,-.22,3.92,1.17,.86,.81),(-.56,.50,4.29,1.06,.93,.77),
+         (.72,-.42,4.00,1.18,.89,.80),(1.37,.36,4.40,.82,.79,.70),
+         (-1.08,-.65,4.76,.86,.72,.70),(.05,.53,4.90,1.13,.91,.82),
+         (.36,-.10,5.40,.95,.86,.80),(-.30,.01,5.79,.78,.73,.62)])
+    for i, (x,y,z,sx,sy,sz) in enumerate(crowns):
+        leaf_cluster("Sculpted foliage mass", (x,y,z), (sx,sy,sz), kind*29+i*7,
+                     "LeafWarm" if i%4==1 else "Leaf")
 
 
 def tent():
@@ -373,13 +471,20 @@ def tent():
     # A-frame: both panels run from the shared ridge (0, 2.2) to eaves on
     # the floor top (+/-1.75, .16) and cross 8 cm past the ridge to close it.
     ridge, eave_x, eave_z, half = 2.2, 1.75, .16, 1.45
-    run, tilt = math.hypot(eave_x, ridge-eave_z), math.atan2(ridge-eave_z, eave_x)
     slope = (ridge-eave_z) / eave_x
-    for side, name, color in ((-1, "left", "Rose"), (1, "right", "Gold")):
-        down = Vector((side*math.cos(tilt), 0, -math.sin(tilt)))
-        add("Ridged tent roof " + name, Vector((0, 0, ridge)) + down*((run-.08)/2),
-            (run+.08, 2*half, .08), color, "cube", (0, side*tilt, 0))
+    for side, name, color in ((-1, "left", "CanvasRose"), (1, "right", "CanvasGold")):
+        def roof(u,v,s=side):
+            x=s*eave_x*u
+            y=-half+2*half*v
+            tension=.055*math.sin(math.pi*u)*math.sin(math.pi*v)
+            fold=.025*math.sin(4*math.pi*v+u*1.3)*math.sin(math.pi*u)
+            return (x,y,ridge-(ridge-eave_z)*u-tension+fold)
+        fabric_grid("Tensioned tent roof "+name,12,12,roof,color,flip=side<0,
+                    uv_scale=(1.8,2.8),thickness=.045)
         strut("Tent eave piping", (side*1.72, -half, .22), (side*1.72, half, .22), .04, "Cream")
+        for y in (-.74,.74):
+            strut("Tent stitched panel seam", (0,y,ridge+.018),
+                  (side*eave_x,y,eave_z+.026), .018, "Cream", 8)
     # Closed back gable; front gable framed around a 1.1 x 1.29 m doorway.
     prism("Tent back gable", [(-eave_x, eave_z), (eave_x, eave_z), (0, ridge)], -half, -half+.05, "Cream")
     door, door_top = .55, 1.45
@@ -390,6 +495,10 @@ def tent():
           half-.05, half, "Cream")
     strut("Tent rolled door", (-.6, half+.06, door_top+.05), (.6, half+.06, door_top+.05), .06, "Cream", 8)
     strut("Tent ridge piping", (0, -half-.05, ridge+.06), (0, half+.05, ridge+.06), .05, "Cream", 8)
+    for s in (-1,1):
+        strut("Door zip track", (s*door,half+.055,eave_z),
+              (s*door,half+.055,door_top), .018, "Dark", 8)
+        round_part("Tent zipper pull", (s*door,half+.07,1.14), (.055,.04,.08), "Metal")
     box("Tent mesh vent", (0, -half-.015, 1.3), (.6, .03, .3), "Dark")
     # Guy lines run from the gable edge of each roof panel to a ground stake.
     for sx in (-1, 1):
@@ -403,9 +512,14 @@ def tent():
 def camp_car():
     # A readable small hatchback: hood, separate passenger cabin, glass,
     # four round wheels, mirrors, lamps and recognizable front/rear ends.
-    box("Camp car body lower shell", (0, 0, .65), (2.85, 4.75, .86), "Rose")
-    box("Camp car hood", (0, 1.72, 1.08), (2.64, 1.19, .16), "Rose")
-    box("Camp car rear deck", (0, -1.74, 1.08), (2.64, 1.05, .16), "Rose")
+    box("Camp car rounded lower shell", (0, 0, .65), (2.85, 4.75, .86), "PaintRose",
+        edge_radius=.18,edge_segments=4)
+    formed_mesh("Shaped car bonnet",
+        [(-1.31,1.20,1.07),(0,1.20,1.17),(1.31,1.20,1.07),
+         (-1.31,2.31,.98),(0,2.31,1.09),(1.31,2.31,.98)],
+        [(0,3,4,1),(1,4,5,2)],"PaintRose",thickness=.09)
+    box("Camp car rear deck", (0, -1.74, 1.08), (2.64, 1.05, .16), "PaintRose",
+        edge_radius=.055,edge_segments=3)
     # Cabin silhouette is a sloped trapezoid when seen from either side.
     outline = [(-1.51, 1.05), (-1.05, 1.83), (.77, 1.83), (1.38, 1.05)]
     n = len(outline)
@@ -415,50 +529,83 @@ def camp_car():
     mesh = bpy.data.meshes.new("Cabin shell")
     mesh.from_pydata(vertices, [], faces)
     mesh.validate()
-    cabin = bpy.data.objects.new("Camp car cabin shell__Rose", mesh)
+    cabin = bpy.data.objects.new("Camp car cabin shell__PaintRose", mesh)
     bpy.context.collection.objects.link(cabin)
-    mesh.materials.append(MATS["Rose"])
+    mesh.materials.append(MATS["PaintRose"])
     current.append(cabin)
-    box("Camp car roof skin", (0, -.15, 1.84), (2.27, 1.80, .07), "Rose")
-    add("Camp car front windshield", (0, 1.07, 1.46), (2.08, .035, .83), "Glass", "cube", (.66, 0, 0))
-    add("Camp car rear windshield", (0, -1.29, 1.45), (2.08, .035, .78), "Glass", "cube", (-.48, 0, 0))
+    box("Camp car roof skin", (0, -.15, 1.84), (2.27, 1.80, .11), "PaintRose",
+        edge_radius=.045,edge_segments=3)
+    add("Camp car front windshield", (0, 1.07, 1.46), (2.08, .035, .83), "AutoGlass", "cube", (.66, 0, 0))
+    add("Camp car rear windshield", (0, -1.29, 1.45), (2.08, .035, .78), "AutoGlass", "cube", (-.48, 0, 0))
+    strut("Windshield lower gasket",(-1.03,1.36,1.09),(1.03,1.36,1.09),.025,"Dark",8)
+    strut("Windshield upper gasket",(-1.03,.80,1.83),(1.03,.80,1.83),.025,"Dark",8)
     for side in (-1, 1):
         x = side*1.19
-        box("Camp car side window front", (x, .43, 1.49), (.027, .68, .45), "Glass")
-        box("Camp car side window rear", (x, -.59, 1.49), (.027, .69, .45), "Glass")
-        box("Camp car B pillar", (x, -.07, 1.48), (.07, .09, .55), "Rose")
+        formed_mesh("Shaped front side glass",[(x,.12,1.14),(x,1.17,1.14),
+            (x,.84,1.72),(x,.12,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
+        formed_mesh("Shaped rear side glass",[(x,-1.35,1.14),(x,-.19,1.14),
+            (x,-.19,1.72),(x,-1.08,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
+        box("Camp car B pillar", (x, -.07, 1.48), (.07, .09, .55), "PaintRose")
+        strut("Front window lower seal",(x,.12,1.13),(x,1.17,1.13),.025,"Dark",8)
+        strut("Rear window lower seal",(x,-1.35,1.13),(x,-.19,1.13),.025,"Dark",8)
         box("Camp car door seam", (side*1.43, .03, .70), (.028, .035, .61), "Dark")
         box("Camp car door handle", (side*1.46, .38, 1.01), (.07, .28, .07), "Metal")
         box("Camp car wing mirror", (side*1.50, .96, 1.18), (.26, .27, .15), "Dark")
         box("Camp car sill", (side*1.43, 0, .28), (.07, 2.8, .10), "Dark")
         for y in (-1.51, 1.52):
+            add("Molded wheel arch trim",(side*1.48,y,.40),(1,1,1),"Dark","torus",
+                (0,math.pi/2,0),vertices=24,major=.46,minor=.045)
             add("Round rubber tyre", (side*1.43, y, .40), (.43, .43, .16), "Dark", "cylinder",
                 (0, math.pi/2, 0), vertices=20)
             add("Wheel hub", (side*1.54, y, .40), (.25, .25, .055), "Metal", "cylinder",
                 (0, math.pi/2, 0), vertices=20)
+            for spoke in range(5):
+                theta=spoke*math.pi*2/5
+                box("Pressed wheel spoke",(side*1.605,y+math.sin(theta)*.13,.40+math.cos(theta)*.13),
+                    (.025,.055,.18),"Metal",rotation=(theta,0,0))
+        strut("Car roof gutter",(side*1.14,-1.12,1.83),(side*1.14,.76,1.83),.025,"Metal",8)
     for x in (-.95, .95):
         box("Camp car headlamp", (x, 2.40, .92), (.39, .06, .22), "Cream")
         box("Camp car taillamp", (x, -2.40, .89), (.35, .06, .24), "Gold")
     box("Camp car front grille", (0, 2.41, .67), (1.28, .07, .23), "Dark")
+    box("Camp car lower intake", (0, 2.43, .42), (1.65, .055, .095), "Dark")
+    for x in (-.43,-.15,.15,.43):
+        box("Grille opening",(x,2.45,.67),(.06,.035,.15),"Metal")
     box("Camp car front bumper", (0, 2.43, .36), (2.88, .15, .16), "Metal")
     box("Camp car rear bumper", (0, -2.43, .36), (2.88, .15, .16), "Metal")
     box("Camp car number plate", (0, 2.52, .47), (.66, .02, .18), "Cream")
+    for side in (-1,1):
+        strut("Windshield wiper",(side*.15,1.30,1.12),(side*.82,1.27,1.22),.018,"Dark",8)
 
 
 def camp_shade():
-    box("Lopsided sun shade", (0, 0, 3.55), (8.0, 8.0, .16), "Mint")
-    for y in (-3.76, 3.76):
-        box("Sun shade edge binding", (0, y, 3.56), (8.04, .16, .08), "Cream")
-    for x in (-3.76, 3.76):
-        box("Sun shade edge binding", (x, 0, 3.56), (.16, 8.04, .08), "Cream")
+    def canopy_z(x,y):
+        radial=max(abs(x),abs(y))/4
+        return 3.30+.25*radial**1.6+.11*abs(x*y)/16
+    fabric_grid("Draped shade canvas",16,16,
+                lambda u,v: ((u-.5)*8,(v-.5)*8,canopy_z((u-.5)*8,(v-.5)*8)),
+                "CanvasMint",uv_scale=(4,4),thickness=.065)
+    for edge in (-4,4):
+        for i in range(16):
+            lo=-4+i*.5
+            hi=lo+.5
+            strut("Shade sewn edge",(lo,edge,canopy_z(lo,edge)),
+                  (hi,edge,canopy_z(hi,edge)),.035,"CanvasCream",8)
+            strut("Shade sewn edge",(edge,lo,canopy_z(edge,lo)),
+                  (edge,hi,canopy_z(edge,hi)),.035,"CanvasCream",8)
     for x in (-3.62, 3.62):
         for y in (-3.62, 3.62):
             box("Canvas support pole", (x, y, 1.75), (.16, .16, 3.5), "Wood")
             box("Canvas pole foot", (x, y, .06), (.32, .32, .12), "Metal")
+            round_part("Shade corner eyelet",(x,y,3.53),(.16,.16,.08),"Metal", "cylinder")
     for y in (-1.7, 0, 1.7):
-        box("Shade woven color band", (0, y, 3.64), (7.5, .14, .03), "Rose" if y==0 else "Gold")
+        for i in range(16):
+            lo=-3.85+i*.48
+            hi=lo+.48
+            strut("Shade stitched span",(lo,y,canopy_z(lo,y)+.025),
+                  (hi,y,canopy_z(hi,y)+.025),.018,"CanvasRose" if y==0 else "CanvasGold",6)
     for x in (-2.4, 0, 2.4):
-        box("Shade trim", (x, 3.95, 3.44), (1.3, .1, .16), "Rose")
+        box("Shade hanging trim", (x, 3.95, 3.43), (1.3, .08, .19), "CanvasRose")
 
 
 def porta_potty():

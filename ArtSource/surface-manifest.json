@@ -1,0 +1,13 @@
+{
+  "source": "Original deterministic procedural maps; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "size": 1024,
+  "textures": [
+    "FestivalCanvas.png",
+    "FestivalWood.png",
+    "FestivalBark.png",
+    "FestivalLeaf.png",
+    "FestivalDirt.png",
+    "FestivalGround.png"
+  ]
+}

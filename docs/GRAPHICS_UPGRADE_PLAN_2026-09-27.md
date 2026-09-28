@@ -1,7 +1,7 @@
 # After Hours graphics upgrade plan
 
 Date: September 27, 2026  
-Status: Proposed implementation plan; no graphics implementation is implied by this document.  
+Status: Active implementation plan. See the dated checkpoints below for completed and open work.
 Reference: [Dear Passengers — “Another Friendslop Game” teaser](https://www.youtube.com/watch?v=luWunttkCgY)  
 Overall regression risk: **7/10** — estimated likelihood of disrupting existing functionality during the full upgrade, before the controls below. This is an engineering judgment, not a measured probability.
 Tool constraint: use free tools and assets with documented commercial use rights; do not depend on paid subscriptions or expiring trials.
@@ -378,3 +378,5 @@ The first implementation task is M0. The first production commitment is the M2 s
 ### September 27 implementation checkpoint
 
 M0 has a recoverable source commit, archived Mac development build, [dated native views](GRAPHICS_BASELINE_2026-09-27.md) and an [initial sampled Mac cost breakdown](GRAPHICS_PROFILE_2026-09-27.md). The graphics baseline still needs a named Windows minimum machine, controlled CPU/GPU profiling and a human-paced route. M1 technical work has a single owned post-processing volume, native verification of the active URP shadow configuration, opt-in development graphics sampling and a Mac release diagnostic exclusion check. The staged Blender path validated a full generated set and published updated character and car sources and FBXs with stable Unity GUIDs. The requested campsite pass also adds varied vehicles and tents, enterable interior views, a camp DJ, a post-round review vote, passive Little Spoon wear, and first-person held poi with a cosmetic cord and weighted head. The four production decisions in Section 4 and art/sample acceptance remain open, so M0 and M1 exit gates are not marked complete.
+
+The [environment shape and surface checkpoint](GRAPHICS_ENVIRONMENT_PASS_2026-09-27.md) adds original reusable surfaces, shaped fabric, revised foliage, a more defined car and a native comparison capture set. Camp feature clearance was corrected without changing collision or interaction locations. The market-to-stage route, remaining architecture, animation/contact, HUD, human acceptance and target performance are still open; this is progress within M2, not its exit.

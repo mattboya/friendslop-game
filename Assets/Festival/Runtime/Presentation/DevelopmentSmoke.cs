@@ -204,6 +204,7 @@ namespace Festival.Presentation
                 yield return new WaitForSeconds(.7f);
                 captureCamera=null;
                 if(!File.Exists(carPath)){Fail("camp car render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CAMP CAR PASSED: "+carPath);
             }
             if(session.IsHost){sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;}
             while(!Within(session.LocalPlayer,0,19,3.2f)&&Time.realtimeSinceStartup<deadline)yield return null;

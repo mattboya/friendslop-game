@@ -10,6 +10,7 @@ const groups={
   character:{script:'generate_modular_character.py',source:'FestivalCharacter.blend',manifest:'character-manifest.json',exports:['FestivalCharacter.fbx','FestivalCharacterDistant.fbx']},
   hands:{script:'generate_festival_hands.py',source:'FestivalHands.blend',manifest:'hands-manifest.json',exports:['FestivalHands.fbx']},
   world:{script:'generate_festival_world_assets.py',source:'FestivalWorld.blend',manifest:'world-manifest.json',exports:null},
+  surfaces:{script:'generate_festival_surfaces.py',source:null,manifest:'surface-manifest.json',exports:['FestivalCanvas.png','FestivalWood.png','FestivalBark.png','FestivalLeaf.png','FestivalDirt.png','FestivalGround.png']},
 };
 const hash=file=>createHash('sha256').update(readFileSync(file)).digest('hex');
 const fail=message=>{throw new Error(message);};
@@ -27,7 +28,8 @@ function expectedFiles(dir,kinds)
     if(kind==='world'&&exports.length<27)fail('World manifest is incomplete.');
     if(kind==='character'&&(!manifest.distantGroups||manifest.bones?.length!==13))fail('Character rig or LOD manifest is incomplete.');
     if(kind==='hands'&&manifest.skinShapes!==3)fail('Hand shape contract changed.');
-    files.push({stage:path.join('ArtSource',group.source),target:path.join('ArtSource/Generated',group.source)});
+    if(kind==='surfaces'&&(manifest.size!==1024||JSON.stringify(manifest.textures)!==JSON.stringify(exports)))fail('Surface texture contract changed.');
+    if(group.source)files.push({stage:path.join('ArtSource',group.source),target:path.join('ArtSource/Generated',group.source)});
     files.push({stage:path.join('ArtSource',group.manifest),target:path.join('ArtSource',group.manifest)});
     for(const name of exports)files.push({stage:path.join('Resources',name),target:path.join('Assets/Festival/Art/Resources',name)});
   }
@@ -38,6 +40,8 @@ function expectedFiles(dir,kinds)
     if(!existsSync(staged)||statSync(staged).size<minimumBytes)fail(`Missing or empty staged file: ${file.stage}`);
     if(file.stage.endsWith('.fbx')&&!readFileSync(staged).subarray(0,20).toString().startsWith('Kaydara FBX Binary'))
       fail(`Invalid FBX header: ${file.stage}`);
+    if(file.stage.endsWith('.png')&&!readFileSync(staged).subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))
+      fail(`Invalid PNG header: ${file.stage}`);
     if(file.target.endsWith('.fbx')&&!existsSync(path.join(root,file.target+'.meta')))
       fail(`Stable Unity GUID is missing: ${file.target}.meta`);
   }
@@ -49,7 +53,7 @@ function writeReceipt(dir,kinds)
   const files=expectedFiles(dir,kinds);
   const receipt={kinds,files:files.map(file=>({...file,sha256:hash(path.join(dir,file.stage))}))};
   writeFileSync(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2)+'\n');
-  process.stdout.write(`Staged ${files.length} source, manifest and FBX files at ${dir}\nInspect them, then run: node scripts/art-pipeline.mjs publish '${dir}'\n`);
+  process.stdout.write(`Staged ${files.length} source, manifest and runtime files at ${dir}\nInspect them, then run: node scripts/art-pipeline.mjs publish '${dir}'\n`);
 }
 
 function stage(kinds)
@@ -109,7 +113,7 @@ function publish(dir)
 try
 {
   const [action,arg]=process.argv.slice(2);
-  if(action==='stage')stage(arg==='all'?Object.keys(groups):groups[arg]?[arg]:fail('Use stage character|hands|world|all.'));
+  if(action==='stage')stage(arg==='all'?Object.keys(groups):groups[arg]?[arg]:fail('Use stage character|hands|world|surfaces|all.'));
   else if(action==='validate'&&arg)
   {
     const dir=path.resolve(arg);
@@ -119,6 +123,6 @@ try
     writeReceipt(dir,kinds);
   }
   else if(action==='publish'&&arg)publish(arg);
-  else fail('Usage: node scripts/art-pipeline.mjs stage character|hands|world|all | validate <stage-directory> | publish <stage-directory>');
+  else fail('Usage: node scripts/art-pipeline.mjs stage character|hands|world|surfaces|all | validate <stage-directory> | publish <stage-directory>');
 }
 catch(error){console.error(error.message);process.exitCode=1;}
