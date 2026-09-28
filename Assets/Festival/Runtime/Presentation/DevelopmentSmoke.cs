@@ -613,7 +613,13 @@ namespace Festival.Presentation
                 if(!File.Exists(interior)){Fail("solo interior render "+id);yield break;}
                 session.Command("CampAntic");
                 if(player.CampGag==""){Fail("solo antic "+id);yield break;}
-                session.Command("ExitCamp");
+                if(site.Kind=="Tent")
+                {
+                    for(int step=0;step<16&&player.CampVisitId!="";step++)
+                        if(!sim.TryMove(player.Id,player.CampInteriorX,player.CampInteriorZ-.1f,180,.1))
+                        {Fail("solo walk out of "+id+" at step "+step);yield break;}
+                }
+                else session.Command("ExitCamp");
                 if(player.CampVisitId!=""){Fail("solo exit "+id);yield break;}
             }
             player.X=CampFeatures.DjX;player.Z=CampFeatures.DjZ;

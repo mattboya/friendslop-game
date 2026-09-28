@@ -114,8 +114,16 @@ namespace Festival.Core
             {
                 var site=CampFeatures.Find(p.CampVisitId);if(site==null)return false;
                 float roomZ=CampFeatures.InteriorSlotZ(site);
-                if(Math.Abs(x-CampFeatures.InteriorSlotX(site))>2.3f||Math.Abs(z-roomZ)>2.3f)return false;
+                float roomX=CampFeatures.InteriorSlotX(site);
+                if(Math.Abs(x-roomX)>2.3f||z-roomZ>2.3f||z-roomZ< -2.7f)return false;
                 if(Distance(p.CampInteriorX,p.CampInteriorZ,x,z)>4.2*deltaSeconds+.03)return false;
+                // The front wall has a visible doorway. Crossing its center
+                // returns the player to the same outdoor door they entered.
+                if(z-roomZ< -2.35f&&Math.Abs(x-roomX)<.9f)
+                {
+                    LeaveCamp(p,site);p.Yaw=yaw%360;
+                    return true;
+                }
                 p.CampInteriorX=x;p.CampInteriorZ=z;p.Yaw=yaw%360;return true;
             }
             if(Math.Abs(x)>39||Math.Abs(z)>39)return false;
@@ -193,8 +201,7 @@ namespace Festival.Core
             if(p.CampVisitId=="")return Reject("Enter a camp space first");
             if(c.Kind=="ExitCamp")
             {
-                var site=CampFeatures.Find(p.CampVisitId);p.CampVisitId="";p.CampGag="";
-                if(site!=null){p.X=site.X;p.Z=site.Z-3.2f;}
+                LeaveCamp(p,CampFeatures.Find(p.CampVisitId));
                 return Ok("Back outside");
             }
             if(c.Kind=="CampAntic")
@@ -204,6 +211,11 @@ namespace Festival.Core
                 return Ok(p.CampGag);
             }
             return Reject("Unknown camp action");
+        }
+        static void LeaveCamp(PlayerState p,CampFeatures.Site site)
+        {
+            p.CampVisitId="";p.CampGag="";
+            if(site!=null){p.X=site.X;p.Z=site.Z-3.2f;}
         }
     }
 }

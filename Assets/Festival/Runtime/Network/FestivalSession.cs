@@ -390,7 +390,13 @@ namespace Festival.Network
                 var delta=Quaternion.Euler(0,input.Yaw,0)*local*(speed*(float)dt);
                 var origin=player.CampVisitId!=""?new Vector3(player.CampInteriorX,0,player.CampInteriorZ):new Vector3(player.X,0,player.Z);
                 var target=player.CampVisitId!=""||player.Life=="Spirit"?origin+delta:Slide(origin,delta);
-                simulation.TryMove(player.Id,target.x,target.z,input.Yaw,dt);
+                var previousCamp=player.CampVisitId;
+                if(simulation.TryMove(player.Id,target.x,target.z,input.Yaw,dt)&&previousCamp!=""&&player.CampVisitId=="")
+                {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    DevelopmentDiagnostics.Transition("ExitCampDoor",previousCamp,simulation.State.RoundId,simulation.State.SimulationSeconds);
+#endif
+                }
             }
         }
         private static Vector3 Slide(Vector3 origin,Vector3 delta)

@@ -40,9 +40,9 @@ node scripts/launch-local-clients.mjs --binary "Builds/macOS/Development/Festiva
 | --- | --- |
 | WASD / mouse | Move / look |
 | Shift | Sprint |
-| E | Primary nearby interaction |
-| F | Chat with a nearby talkative festivalgoer |
-| Q / G | Use / drop equipped item; G exits a camp interior |
+| E | Primary nearby interaction; exit a camp interior |
+| F | Chat with a nearby talkative festivalgoer; perform an interior antic |
+| Q / G | Use / drop equipped item; G also exits a camp interior |
 | 1–3 | Equip inventory slot; vote for a review award after a round |
 | Arrow keys | Rhythm inputs |
 | Tab | Hold festival map/objective view |

@@ -567,6 +567,10 @@ namespace Festival.Presentation
             {
                 session.Command("ExitCamp");return;
             }
+            if(player.CampVisitId!=""&&!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame())
+            {
+                session.Command("CampAntic");return;
+            }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
             if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId=="")
@@ -729,6 +733,13 @@ namespace Festival.Presentation
             nextActionRefresh=Time.unscaledTime+.2f;
             activeActionCount=0;primaryAction=null;
             float y=.89f;
+            if(player.CampVisitId!="")
+            {
+                var site=CampFeatures.Find(player.CampVisitId);
+                string antic=site?.Kind=="Car"?"HONK / FIDDLE":site?.Kind=="Tent"?"SHADOW PUPPET":"MYSTERY FLUSH";
+                SetPromptAction("E  EXIT "+(site?.Kind??"CAMP SPACE").ToUpperInvariant()+"   •   F "+antic+"   •   G EXIT",()=>session.Command("ExitCamp"));
+                FinishActions();return;
+            }
             if(state.Phase=="CampReview")
             {
                 var voted=state.ReviewVotes.Find(v=>v.PlayerId==player.Id)!=null;
@@ -739,12 +750,6 @@ namespace Festival.Presentation
             }
             if(state.Phase=="Shopping")
             {
-                if(player.CampVisitId!="")
-                {
-                    var site=CampFeatures.Find(player.CampVisitId);
-                    SetPromptAction("E  "+(site?.Kind=="Car"?"HONK / FIDDLE":site?.Kind=="Tent"?"SHADOW PUPPET":"MYSTERY FLUSH")+"   •   G EXIT",()=>session.Command("CampAntic"));
-                    FinishActions();return;
-                }
                 if(Near(player,CampFeatures.DjX,CampFeatures.DjZ,3f))
                 {
                     int next=(state.CampMusicTrack+1)%CampFeatures.Tracks.Length;

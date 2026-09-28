@@ -510,7 +510,12 @@ namespace Festival.Presentation
                 var wall=kind=="Tent"?rose:kind=="Potty"?artMaterials["Blue"]:dark;
                 Box(kind+" interior floor",center+new Vector3(0,.02f,0),new Vector3(5.8f,.12f,5.8f),kind=="Tent"?artMaterials["Cream"]:wood,false);
                 Box(kind+" interior rear",center+new Vector3(0,1.55f,2.9f),new Vector3(5.8f,3.1f,.18f),wall,false);
-                Box(kind+" interior front",center+new Vector3(0,1.55f,-2.9f),new Vector3(5.8f,3.1f,.18f),wall,false);
+                // Keep the front wall open where the movement exit is. A solid
+                // wall here made the room read as a sealed box.
+                foreach(float side in new[]{-1f,1f})
+                    Box(kind+" interior front side",center+new Vector3(side*1.9f,1.55f,-2.9f),new Vector3(2f,3.1f,.18f),wall,false);
+                Box(kind+" interior front header",center+new Vector3(0,2.83f,-2.9f),new Vector3(1.8f,.55f,.18f),wall,false);
+                Box(kind+" interior exit threshold",center+new Vector3(0,.07f,-2.56f),new Vector3(1.7f,.035f,.22f),gold,false);
                 Box(kind+" interior left",center+new Vector3(-2.9f,1.55f,0),new Vector3(.18f,3.1f,5.8f),wall,false);
                 Box(kind+" interior right",center+new Vector3(2.9f,1.55f,0),new Vector3(.18f,3.1f,5.8f),wall,false);
                 Box(kind+" interior ceiling",center+new Vector3(0,3.1f,0),new Vector3(5.8f,.18f,5.8f),wall,false);

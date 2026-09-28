@@ -36,6 +36,22 @@ namespace Festival.Tests
             Assert.That(game.TryMove(first.Id,second.CampInteriorX,second.CampInteriorZ,0,.1),Is.False);
         }
 
+        [Test] public void WalkingBackThroughAnyCampDoorReturnsPlayerOutside()
+        {
+            var game=new FestivalSimulation(21);var player=game.AddPlayer("host","Host");
+            foreach(var site in CampFeatures.Sites)
+            {
+                player.X=site.X;player.Z=site.Z;
+                Assert.That(game.Execute(player.Id,new GameCommand{Id="enter-"+site.Id,Kind="EnterCamp",TargetId=site.Id}).Accepted,Is.True,site.Id);
+                float roomZ=CampFeatures.InteriorSlotZ(site);
+                for(int step=1;step<=10&&player.CampVisitId!="";step++)
+                    Assert.That(game.TryMove(player.Id,CampFeatures.InteriorSlotX(site),roomZ-1.5f-step*.1f,180,.1),Is.True,site.Id+" step "+step);
+                Assert.That(player.CampVisitId,Is.Empty,site.Id+" should have a walk-out exit");
+                Assert.That(player.X,Is.EqualTo(site.X),site.Id);
+                Assert.That(player.Z,Is.EqualTo(site.Z-3.2f),site.Id);
+            }
+        }
+
         [Test] public void EveryCampDoorAndExitFitInsideThePlayableFootprint()
         {
             foreach(var site in CampFeatures.Sites)
