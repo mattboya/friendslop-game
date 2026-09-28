@@ -1,11 +1,13 @@
 """Temporary orthographic Solid-style review captures, never saved as art cameras."""
 from pathlib import Path
+import os
 
 import bpy
 from mathutils import Vector
 
 root = Path(__file__).resolve().parents[1]
-bpy.ops.wm.open_mainfile(filepath=str(root / "artifacts/character-fit-review.blend"))
+bpy.ops.wm.open_mainfile(filepath=str(Path(os.environ.get(
+    "FESTIVAL_CHARACTER_REVIEW", root / "artifacts/character-fit-review.blend"))))
 scene = bpy.context.scene
 scene.render.engine = "BLENDER_WORKBENCH"
 scene.render.resolution_x = 480
@@ -24,7 +26,7 @@ camera_data.type = "ORTHO"
 camera = bpy.data.objects.new("Temporary fit review camera", camera_data)
 scene.collection.objects.link(camera)
 scene.camera = camera
-output = root / "artifacts/fit-review"
+output = Path(os.environ.get("FESTIVAL_CHARACTER_REVIEW_OUTPUT", root / "artifacts/fit-review"))
 output.mkdir(parents=True, exist_ok=True)
 shots = {
     "front": ((0, -6, 1.2), (0, 0, 1.2), 3.3),

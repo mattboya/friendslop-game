@@ -116,12 +116,12 @@ namespace Festival.Presentation
                 if(renderer is SkinnedMeshRenderer detail&&(renderer.enabled||renderer.name=="EyeGlow"||renderer.name=="Equipment_LittleSpoon")&&distantMeshes.TryGetValue(renderer.name,out var distantMesh))
                     actor.detailParts.Add(new DetailPart{Renderer=detail,Detailed=detail.sharedMesh,Distant=distantMesh});
             }
-            var animatedBones=new HashSet<string>{"Hips","Spine","Head","ArmL","ArmR","ForearmL","ForearmR","HandL","HandR","LegL","LegR","ShinL","ShinR"};
+            var animatedBones=new HashSet<string>{"Hips","Spine","Head","ArmL","ArmR","ForearmL","ForearmR","HandL","HandR","LegL","LegR","ShinL","ShinR","FootL","FootR"};
             // Never reset the presentation root: its facing belongs to the session.
             foreach(var t in go.GetComponentsInChildren<Transform>())if(animatedBones.Contains(t.name)&&!actor.bones.ContainsKey(t.name)){actor.bones[t.name]=t;actor.rest[t.name]=t.localRotation;}
             actor.phase=FestivalAppearance.Pick(name,"phase",100)*.137f;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if(actor.bones.Count<13 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
+            if(actor.bones.Count<15 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
             if(actor.blinkIndex<0||actor.detailParts.Count==0)Debug.LogWarning("[Festival.Art] Facial animation or distant character meshes are missing: "+name);
             if(!name.StartsWith("Cosmetic dancer"))Debug.Log($"[Festival.Art] {name} body={actor.Appearance.Gender}/{actor.Appearance.Shape} face={actor.Appearance.Face} head={actor.Appearance.Headgear} shades={actor.Appearance.Sunglasses} shirt={actor.Appearance.Shirt} pants={actor.Appearance.Pants} shoes={actor.Appearance.Shoes} beard={actor.Appearance.FacialHair} hair={actor.Appearance.Hairstyle}/{actor.Appearance.HairColor} accessory={actor.Appearance.Accessory} role={role}");
 #endif
@@ -269,6 +269,8 @@ namespace Festival.Presentation
                     Aim("LegR",new Vector3(Mathf.Max(0,opposite)*13,0,0));
                     Aim("ShinL",new Vector3(Mathf.Max(0,feet)*14,0,0));
                     Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*14,0,0));
+                    Aim("FootL",new Vector3(-Mathf.Max(0,feet)*27,0,0));
+                    Aim("FootR",new Vector3(-Mathf.Max(0,opposite)*27,0,0));
                     Layer("Spine",new Vector3(0,Mathf.Sin(circle*.5f)*5,0));
                 }
                 else if(danceStyle==0)
@@ -278,6 +280,8 @@ namespace Festival.Presentation
                     Aim("LegR",new Vector3(Mathf.Max(0,opposite)*39-8,0,opposite*5));
                     Aim("ShinL",new Vector3(Mathf.Max(0,feet)*30,0,0));
                     Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*30,0,0));
+                    Aim("FootL",new Vector3(8-Mathf.Max(0,feet)*69,0,0));
+                    Aim("FootR",new Vector3(8-Mathf.Max(0,opposite)*69,0,0));
                     Aim("ArmL",new Vector3(-35-feet*27,0,-18));
                     Aim("ArmR",new Vector3(-35+feet*27,0,18));
                     Aim("ForearmL",new Vector3(-65,0,0));Aim("ForearmR",new Vector3(-65,0,0));
@@ -290,6 +294,8 @@ namespace Festival.Presentation
                     Aim("LegR",new Vector3(12-feet*24,0,-8-Mathf.Max(0,-sway)*15));
                     Aim("ShinL",new Vector3(Mathf.Max(0,feet)*18,0,0));
                     Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*18,0,0));
+                    Aim("FootL",new Vector3(-12-feet*24-Mathf.Max(0,feet)*18,0,0));
+                    Aim("FootR",new Vector3(-12+feet*24-Mathf.Max(0,opposite)*18,0,0));
                     Aim("ArmL",new Vector3(-55+feet*22,0,-35));
                     Aim("ArmR",new Vector3(-55-feet*22,0,35));
                     Aim("ForearmL",new Vector3(-55,0,15));Aim("ForearmR",new Vector3(-55,0,-15));
@@ -301,6 +307,8 @@ namespace Festival.Presentation
                     Aim("LegR",new Vector3(Mathf.Max(0,opposite)*52-10,0,opposite*5));
                     Aim("ShinL",new Vector3(Mathf.Max(0,feet)*18,0,0));
                     Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*18,0,0));
+                    Aim("FootL",new Vector3(10-Mathf.Max(0,feet)*70,0,0));
+                    Aim("FootR",new Vector3(10-Mathf.Max(0,opposite)*70,0,0));
                     Aim("ArmL",new Vector3(-55-feet*30,0,-24));
                     Aim("ArmR",new Vector3(-55+feet*30,0,24));
                     Aim("ForearmL",new Vector3(-40,0,0));Aim("ForearmR",new Vector3(-40,0,0));
@@ -323,6 +331,8 @@ namespace Festival.Presentation
                 Aim("Hips",new Vector3(5*move,0,stride*5));Aim("Spine",new Vector3(Mathf.Sin(t*.5f)*2-5*move,0,-stride*5));
                 Aim("LegL",new Vector3(stride*39,0,0));Aim("LegR",new Vector3(-stride*39,0,0));
                 Aim("ShinL",new Vector3(Mathf.Max(0,-stride)*34,0,0));Aim("ShinR",new Vector3(Mathf.Max(0,stride)*34,0,0));
+                Aim("FootL",new Vector3(-stride*39-Mathf.Max(0,-stride)*34,0,0));
+                Aim("FootR",new Vector3(stride*39-Mathf.Max(0,stride)*34,0,0));
                 Aim("ArmL",new Vector3(-stride*27,0,-8));Aim("ArmR",new Vector3(stride*27,0,8));
                 Aim("Head",new Vector3(Mathf.Sin(t*.4f)*3,0,Mathf.Sin(t*.6f)*4));
                 if(Pose=="Detained")

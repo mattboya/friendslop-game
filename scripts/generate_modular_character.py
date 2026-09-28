@@ -63,6 +63,8 @@ bones = {
     "LegR": ((.19, 0, .84), "Hips"),
     "ShinL": ((-.2, 0, .46), "LegL"),
     "ShinR": ((.2, 0, .46), "LegR"),
+    "FootL": ((-.2, -.02, .17), "ShinL"),
+    "FootR": ((.2, -.02, .17), "ShinR"),
 }
 arm = bpy.data.armatures.new("FestivalRig")
 rig = bpy.data.objects.new("FestivalRig", arm)
@@ -346,8 +348,8 @@ def fit_keys(obj):
                 groups = vertex.groups
                 bone_name = obj.vertex_groups[groups[0].group].name if groups else ""
                 anchor = (-.38 if bone_name == "ArmL" else .38 if bone_name == "ArmR"
-                          else -.20 if bone_name in {"LegL", "ShinL"}
-                          else .20 if bone_name in {"LegR", "ShinR"} else 0)
+                          else -.20 if bone_name in {"LegL", "ShinL", "FootL"}
+                          else .20 if bone_name in {"LegR", "ShinR", "FootR"} else 0)
                 world_x = vertex.co.x + origin_x
                 key.data[vertex.index].co.x = anchor + (world_x - anchor) * factor - origin_x
 
@@ -618,18 +620,18 @@ def shoes(v):
                 j=(i+1)%sides
                 faces.append((row*sides+j,row*sides+i,(row+1)*sides+i,(row+1)*sides+j))
         faces.extend((tuple(range(sides)),tuple(reversed([(len(profiles)-1)*sides+i for i in range(sides)]))))
-        surface("shaped sneaker upper",vertices,faces,3,"Shin"+side)
+        surface("shaped sneaker upper",vertices,faces,3,"Foot"+side)
         loft("contoured rubber sole",[(.008,.135,.224,-.105),(.024,.148,.238,-.105),
-             (.052 if v!=3 else .076,.145,.234,-.105)],5,"Shin"+side,center=(x,0),sides=36,power=.55)
-        piece("shoe tongue",(x,-.075,.213),(.056,.075,.013),3,"Shin"+side)
+             (.052 if v!=3 else .076,.145,.234,-.105)],5,"Foot"+side,center=(x,0),sides=36,power=.55)
+        piece("shoe tongue",(x,-.075,.213),(.056,.075,.013),3,"Foot"+side)
         if v==1:
             loft("boot ankle",[(.14,.092,.108,0),(.27,.095,.105,0),(.29,.091,.10,0)],3,"Shin"+side,center=(x,0),sides=24)
         for i in range(3):
             y=-.18+i*.055
-            cord("lace",[(x-.064,y,.198+i*.006),(x,y-.008,.211+i*.006),(x+.064,y,.198+i*.006)],.007,4,"Shin"+side)
-        piece("heel tab",(x,.118,.17),(.025,.016,.054),7,"Shin"+side,"cube")
+            cord("lace",[(x-.064,y,.198+i*.006),(x,y-.008,.211+i*.006),(x+.064,y,.198+i*.006)],.007,4,"Foot"+side)
+        piece("heel tab",(x,.118,.17),(.025,.016,.054),7,"Foot"+side,"cube")
         if v==2:
-            cord("sport strap",[(x-.13,-.18,.14),(x-.07,-.18,.21),(x+.07,-.18,.21),(x+.13,-.18,.14)],.018,7,"Shin"+side)
+            cord("sport strap",[(x-.13,-.18,.14),(x-.07,-.18,.21),(x+.07,-.18,.21),(x+.13,-.18,.14)],.018,7,"Foot"+side)
 
 
 def headgear(v):
@@ -823,7 +825,7 @@ def role_piece(role):
     else:
         v=int(role[-1]);color=7 if v!=1 else 4
         vertices=[]
-        for z,width,depth in ((.78,.30,.265),(1.05,.34,.282),(1.32,.31,.274),(1.47,.19,.258)):
+        for z,width,depth in ((.78,.30,.305),(1.05,.34,.322),(1.32,.31,.314),(1.47,.19,.298)):
             for i in range(9):
                 x=(i/8*2-1)*width
                 vertices.append((x,-depth+.10*(x/width)**2,z))
@@ -833,8 +835,8 @@ def role_piece(role):
         obj=surface("curved cloth apron",vertices,faces,color,"Spine")
         bpy.context.view_layer.objects.active=obj
         solid=obj.modifiers.new("Apron thickness","SOLIDIFY");solid.thickness=.009;bpy.ops.object.modifier_apply(modifier=solid.name)
-        piece("apron pocket",(0,-.284,1.13),(.15,.016,.079),color,"Spine","cube")
-        piece("vendor badge",(-.10,-.256,1.40),(.043,.012,.032),5,"Spine","cube")
+        piece("apron pocket",(0,-.324,1.13),(.15,.016,.079),color,"Spine","cube")
+        piece("vendor badge",(-.10,-.336,1.40),(.043,.012,.032),5,"Spine","cube")
 
 
 for role in ("Security", "Medic", "Friend", "Vendor0", "Vendor1", "Vendor2"):
@@ -888,7 +890,7 @@ bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / "FestivalCharacter.blend"))
 character_groups = {obj.name: sum(len(p.vertices) - 2 for p in obj.data.polygons) for obj in groups}
 manifest = {
     "source": "Original shaped ring topology, weighted continuous limbs, tailored clothing and facial geometry; no external assets",
-    "qualityRevision": 3 if FACE_STYLE == "both" else 2,
+    "qualityRevision": 4 if FACE_STYLE == "both" else 3,
     "runtime": "Assets/Festival/Art/Resources/FestivalCharacter.fbx",
     "faceStyle": FACE_STYLE,
     "heightMetres": 2.3,

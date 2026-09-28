@@ -8,6 +8,7 @@ stress poses; native visual review remains a separate acceptance gate.
 """
 import json
 import math
+import os
 from pathlib import Path
 
 import bpy
@@ -15,8 +16,8 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "ArtSource/FestivalCharacter.blend"
-REPORT = ROOT / "artifacts/character-fit-audit.json"
+SOURCE = Path(os.environ.get("FESTIVAL_CHARACTER_SOURCE", ROOT / "ArtSource/Generated/FestivalCharacter.blend"))
+REPORT = Path(os.environ.get("FESTIVAL_CHARACTER_AUDIT", ROOT / "artifacts/character-fit-audit.json"))
 bpy.ops.wm.open_mainfile(filepath=str(SOURCE))
 rig = bpy.data.objects["FestivalRig"]
 meshes = [obj for obj in bpy.data.objects if obj.type == "MESH"]

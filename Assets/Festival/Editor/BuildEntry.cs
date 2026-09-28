@@ -12,7 +12,12 @@ namespace Festival.Editor
         [MenuItem("Festival/Build/Windows Release")]
         public static void BuildWindowsRelease(){Build(BuildTarget.StandaloneWindows64,"Builds/Windows/Release/FestivalCoop.exe",false);}
         [MenuItem("Festival/Build/macOS Development")]
-        public static void BuildMacDevelopment(){Build(BuildTarget.StandaloneOSX,"Builds/macOS/Development/FestivalCoop.app",true);}
+        public static void BuildMacDevelopment()
+        {
+            var output=Environment.GetEnvironmentVariable("FESTIVAL_MAC_DEV_OUTPUT");
+            Build(BuildTarget.StandaloneOSX,string.IsNullOrWhiteSpace(output)
+                ? "Builds/macOS/Development/FestivalCoop.app" : output,true);
+        }
         [MenuItem("Festival/Build/macOS Release")]
         public static void BuildMacRelease(){Build(BuildTarget.StandaloneOSX,"Builds/macOS/Release/FestivalCoop.app",false);}
         private static void Build(BuildTarget target,string path,bool development)

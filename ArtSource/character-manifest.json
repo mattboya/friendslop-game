@@ -1,6 +1,6 @@
 {
   "source": "Original shaped ring topology, weighted continuous limbs, tailored clothing and facial geometry; no external assets",
-  "qualityRevision": 3,
+  "qualityRevision": 4,
   "runtime": "Assets/Festival/Art/Resources/FestivalCharacter.fbx",
   "faceStyle": "both",
   "heightMetres": 2.3,
@@ -18,7 +18,9 @@
     "LegL",
     "LegR",
     "ShinL",
-    "ShinR"
+    "ShinR",
+    "FootL",
+    "FootR"
   ],
   "groups": {
     "Body_0_0": 12464,

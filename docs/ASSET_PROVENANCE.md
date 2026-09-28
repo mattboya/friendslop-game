@@ -74,3 +74,5 @@ The later [vehicle shape checkpoint](GRAPHICS_VEHICLE_SHAPE_PASS_2026-09-27.md) 
 ## September 28 camp shelter and motion pass
 
 The original world generator now produces a raised, tensioned camp shade and shaped seller canvas. These replace only the two affected runtime FBXs; the Blender master and manifest were updated through the staging and publication workflow. Hanging lights, poi handles, cords, heads, and movement are original Unity presentation code. The user-supplied poi and rave videos informed broad motion characteristics only; no animation, frames, audio, or artwork from them was imported. See the [native comparison and motion checkpoint](GRAPHICS_CAMP_AND_MOTION_PASS_2026-09-28.md).
+
+The later [ankle rig checkpoint](GRAPHICS_ANKLE_RIG_PASS_2026-09-28.md) adds two original foot bones to the generated character source and both derived FBXs, bringing the current skeleton to 15 bones. Shoe meshes follow the foot joints; the vendor apron moves forward for fit clearance. The audit now examines the actual published generated master. The stage and explicit publish preserved the existing Unity asset GUIDs. No external asset was introduced.

@@ -3,7 +3,7 @@ import {mkdirSync,readFileSync,existsSync,copyFileSync,unlinkSync} from 'node:fs
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const binary=path.join(root,'Builds/macOS/Development/FestivalCoop.app/Contents/MacOS/Festival Co-op Prototype');
+const binary=process.env.FESTIVAL_NATIVE_BINARY||path.join(root,'Builds/macOS/Development/FestivalCoop.app/Contents/MacOS/Festival Co-op Prototype');
 const dir=path.join(root,'artifacts/native-smoke');mkdirSync(dir,{recursive:true});
 if(!existsSync(binary))throw new Error('Build the macOS development player first.');
 const processes=[];

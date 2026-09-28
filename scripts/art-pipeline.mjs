@@ -26,7 +26,9 @@ function expectedFiles(dir,kinds)
     const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
     const exports=kind==='world'?Object.keys(manifest.models||{}).map(name=>name+'.fbx'):group.exports;
     if(kind==='world'&&exports.length<27)fail('World manifest is incomplete.');
-    if(kind==='character'&&(!manifest.distantGroups||manifest.bones?.length!==13))fail('Character rig or LOD manifest is incomplete.');
+    if(kind==='character'&&(!manifest.distantGroups||manifest.bones?.length!==15||
+        !manifest.bones.includes('FootL')||!manifest.bones.includes('FootR')))
+      fail('Character rig or LOD manifest is incomplete.');
     if(kind==='hands'&&manifest.skinShapes!==3)fail('Hand shape contract changed.');
     if(kind==='surfaces'&&(manifest.size!==1024||JSON.stringify(manifest.textures)!==JSON.stringify(exports)))fail('Surface texture contract changed.');
     if(group.source)files.push({stage:path.join('ArtSource',group.source),target:path.join('ArtSource/Generated',group.source)});

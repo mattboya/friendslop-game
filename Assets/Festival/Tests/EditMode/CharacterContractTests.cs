@@ -115,6 +115,10 @@ namespace Festival.Tests
             Assert.That(skin.sharedMaterials.Length,Is.EqualTo(1));
             foreach(var name in new[]{"Hips","Spine","Head","ArmL","ArmR","ForearmL","ForearmR","LegL","LegR","ShinL","ShinR"})
                 Assert.That(System.Array.Exists(skin.bones,b=>b.name==name),Is.True,"Missing animation bone: "+name);
+            var shoes=System.Array.Find(model.GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.name=="Shoes_0");
+            Assert.That(shoes,Is.Not.Null);
+            foreach(var name in new[]{"FootL","FootR"})
+                Assert.That(System.Array.Exists(shoes.bones,b=>b.name==name),Is.True,"Shoes lack ankle control: "+name);
             Assert.That(Resources.Load<Texture2D>("FestivalPalette"),Is.Not.Null);
         }
         [Test]public void BlenderCharacterIncludesIndependentWardrobeSlotsAndThreeBodyShapes()

@@ -4,7 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const binary=path.join(root,'Builds/macOS/Development/FestivalCoop.app/Contents/MacOS/Festival Co-op Prototype');
+const binary=process.env.FESTIVAL_NATIVE_BINARY||path.join(root,'Builds/macOS/Development/FestivalCoop.app/Contents/MacOS/Festival Co-op Prototype');
 const directory=path.join(root,'artifacts/native-smoke');
 const log=path.join(directory,'solo.log');
 mkdirSync(directory,{recursive:true});
