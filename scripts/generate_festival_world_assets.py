@@ -25,7 +25,8 @@ COLORS = {
     "Glass": (.30, .73, .79, 1), "White": (.86, .90, .82, 1),
     "Bark": (.44, .31, .24, 1),
     "PaintRose": (.65, .21, .34, 1), "PaintMint": (.21, .56, .51, 1),
-    "PaintGold": (.72, .48, .22, 1), "AutoGlass": (.18, .30, .38, 1),
+    "PaintGold": (.72, .48, .22, 1), "PaintCream": (.82, .77, .62, 1),
+    "AutoGlass": (.18, .30, .38, 1),
     "CanvasRose": (.93, .26, .47, 1), "CanvasGold": (.98, .68, .21, 1),
     "CanvasMint": (.16, .78, .64, 1), "CanvasCream": (.91, .84, .65, 1),
     "CanvasDark": (.13, .20, .24, 1), "Rubber": (.10, .12, .16, 1),
@@ -219,6 +220,30 @@ def prism(label, outline, y0, y1, color):
     bpy.ops.object.mode_set(mode="OBJECT")
     obj.select_set(False)
     mesh.uv_layers.new()
+    mesh.materials.append(MATS[color])
+    current.append(obj)
+    return obj
+
+
+def longitudinal_prism(label, outline, half_width, color):
+    """Extrude a YZ silhouette across a vehicle without disconnected cab boxes."""
+    n = len(outline)
+    verts = [(-half_width, y, z) for y, z in outline]
+    verts += [(half_width, y, z) for y, z in outline]
+    faces = [tuple(range(n-1, -1, -1)), tuple(range(n, 2*n))]
+    faces += [(i, (i+1) % n, n+(i+1) % n, n+i) for i in range(n)]
+    mesh = bpy.data.meshes.new(label)
+    mesh.from_pydata(verts, [], faces)
+    mesh.validate()
+    obj = bpy.data.objects.new(label + "__" + color, mesh)
+    bpy.context.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    obj.select_set(False)
     mesh.materials.append(MATS[color])
     current.append(obj)
     return obj
@@ -776,19 +801,18 @@ def wheel_wells(body, positions, radius, height):
 
 
 def camp_car():
-    # A readable small hatchback: hood, separate passenger cabin, glass,
-    # four round wheels, mirrors, lamps and recognizable front/rear ends.
+    # A compact camp wagon with a long cabin, vertical hatch and distinct hood.
+    # It shares its gameplay footprint with the previous hatchback.
     body = box("Camp car rounded lower shell", (0, 0, .65), (2.85, 4.75, .86), "PaintRose",
         edge_radius=.18,edge_segments=4)
     wheel_wells(body, (-1.51,1.52), .53, .40)
     formed_mesh("Shaped car bonnet",
-        [(-1.31,1.20,1.07),(0,1.20,1.17),(1.31,1.20,1.07),
-         (-1.31,2.31,.98),(0,2.31,1.09),(1.31,2.31,.98)],
+        [(-1.31,1.20,1.10),(0,1.20,1.13),(1.31,1.20,1.10),
+         (-1.31,2.31,1.04),(0,2.31,1.07),(1.31,2.31,1.04)],
         [(0,3,4,1),(1,4,5,2)],"PaintRose",thickness=.09)
-    box("Camp car rear deck", (0, -1.74, 1.08), (2.64, 1.05, .16), "PaintRose",
-        edge_radius=.055,edge_segments=3)
-    # Cabin silhouette is a sloped trapezoid when seen from either side.
-    outline = [(-1.51, 1.05), (-1.05, 1.83), (.77, 1.83), (1.38, 1.05)]
+    # An extended roof and upright rear hatch make the car's cargo volume
+    # believable and distinguish it from the taller camper van.
+    outline = [(-2.18, 1.05), (-2.07, 1.83), (.77, 1.83), (1.38, 1.05)]
     n = len(outline)
     vertices = [(-1.18, y, z) for y, z in outline] + [(1.18, y, z) for y, z in outline]
     faces = [tuple(range(n)), tuple(reversed(range(n, 2*n)))]
@@ -800,21 +824,33 @@ def camp_car():
     bpy.context.collection.objects.link(cabin)
     mesh.materials.append(MATS["PaintRose"])
     current.append(cabin)
-    box("Camp car roof skin", (0, -.15, 1.84), (2.27, 1.80, .11), "PaintRose",
+    box("Camp car roof skin", (0, -.65, 1.84), (2.27, 2.91, .11), "PaintRose",
         edge_radius=.045,edge_segments=3)
     add("Camp car front windshield", (0, 1.07, 1.46), (2.08, .035, .83), "AutoGlass", "cube", (.66, 0, 0))
-    add("Camp car rear windshield", (0, -1.29, 1.45), (2.08, .035, .78), "AutoGlass", "cube", (-.48, 0, 0))
+    rear_glass_y=-2.151
+    # The hatch sheet slopes 0.11 m over a 0.78 m rise. Seat the glass 2 cm
+    # behind that plane; the old rear glass hung over the separate rear deck.
+    rear_sheet_y=lambda z: -2.18+(z-1.05)*(.11/.78)
+    assert -.035 < rear_glass_y-rear_sheet_y(1.45) < -.015
+    add("Camp wagon rear hatch glass",(0,rear_glass_y,1.45),(2.08,.028,.69),
+        "AutoGlass","cube",(-.14,0,0))
+    strut("Camp wagon hatch window seal",(-1.06,-2.17,1.10),
+          (1.06,-2.17,1.10),.025,"Rubber",8)
+    box("Camp wagon rear hatch lip",(0,-2.30,1.04),(2.57,.10,.12),"PaintRose",
+        edge_radius=.025,edge_segments=2)
     strut("Windshield lower gasket",(-1.03,1.36,1.09),(1.03,1.36,1.09),.025,"Dark",8)
     strut("Windshield upper gasket",(-1.03,.80,1.83),(1.03,.80,1.83),.025,"Dark",8)
     for side in (-1, 1):
         x = side*1.19
         formed_mesh("Shaped front side glass",[(x,.12,1.14),(x,1.17,1.14),
             (x,.84,1.72),(x,.12,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
-        formed_mesh("Shaped rear side glass",[(x,-1.35,1.14),(x,-.19,1.14),
-            (x,-.19,1.72),(x,-1.08,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
+        formed_mesh("Shaped wagon rear side glass",[(x,-2.04,1.14),(x,-.19,1.14),
+            (x,-.19,1.72),(x,-1.95,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
         box("Camp car B pillar", (x, -.07, 1.48), (.07, .09, .55), "PaintRose")
+        box("Camp wagon C pillar",(x,-1.23,1.48),(.08,.10,.59),"PaintRose")
+        box("Camp wagon rear D pillar", (x,-2.07,1.46),(.10,.10,.70),"PaintRose")
         strut("Front window lower seal",(x,.12,1.13),(x,1.17,1.13),.025,"Dark",8)
-        strut("Rear window lower seal",(x,-1.35,1.13),(x,-.19,1.13),.025,"Dark",8)
+        strut("Rear window lower seal",(x,-2.04,1.13),(x,-.19,1.13),.025,"Dark",8)
         box("Camp car door seam", (side*1.43, .03, .70), (.028, .035, .61), "Dark")
         box("Camp car door handle", (side*1.46, .38, 1.01), (.07, .28, .07), "Metal")
         box("Camp car rear door seam", (side*1.43, -1.00, .70), (.028, .035, .61), "Dark")
@@ -834,7 +870,12 @@ def camp_car():
                 theta=spoke*math.pi*2/5
                 box("Pressed wheel spoke",(side*1.605,y+math.sin(theta)*.13,.40+math.cos(theta)*.13),
                     (.025,.055,.18),"Metal",rotation=(theta,0,0))
-        strut("Car roof gutter",(side*1.14,-1.12,1.83),(side*1.14,.76,1.83),.025,"Metal",8)
+        strut("Car roof gutter",(side*1.14,-2.06,1.83),(side*1.14,.76,1.83),.025,"Metal",8)
+        strut("Camp wagon roof rail",(side*1.00,-1.92,1.94),
+              (side*1.00,.55,1.94),.035,"Metal",8)
+    box("Camp wagon rear hatch handle",(0,-2.45,.96),(.54,.055,.08),"Metal")
+    strut("Camp wagon rear wiper",(-.70,-2.16,1.17),
+          (.48,-2.17,1.25),.018,"Rubber",8)
     for x in (-.95, .95):
         box("Camp car headlamp", (x, 2.40, .92), (.39, .06, .22), "Cream")
         box("Camp car taillamp", (x, -2.40, .89), (.35, .06, .24), "Rose")
@@ -853,52 +894,81 @@ def camp_car():
 
 
 def camp_van():
-    """A distinct tall camper van with windows, sliding door and usable road stance."""
-    body=box("Camper van lower body",(0,0,.78),(2.95,5.26,1.22),"PaintRose",
-        edge_radius=.22,edge_segments=5)
+    """An original two-tone camper with a continuous cab and seated glazing."""
+    body=box("Camper van lower body",(0,0,.76),(2.95,5.26,1.18),"PaintRose",
+        edge_radius=.16,edge_segments=4)
     wheel_wells(body, (-1.68,1.72), .56, .43)
-    box("Camper van raised cabin",(0,-.24,1.66),(2.72,3.95,1.38),"PaintRose",
-        edge_radius=.18,edge_segments=4)
-    box("Camper van roof",(0,-.26,2.39),(2.76,4.04,.14),"PaintRose",
+    # Side profile and roof are joined along z=2.27. The rear face sits over
+    # the lower body rather than ending 40 cm before its rear glazing.
+    profile=[(-2.52,1.22),(2.43,1.22),(2.20,1.38),
+             (1.69,2.27),(-2.38,2.27),(-2.52,2.13)]
+    longitudinal_prism("Camper continuous cab",profile,1.31,"PaintCream")
+    box("Camper gently crowned roof",(0,-.40,2.34),(2.71,4.38,.16),"PaintCream",
         edge_radius=.065,edge_segments=3)
-    # The sloped windscreen, long glazed cabin and back doors carry its identity.
-    add("Camper windscreen",(0,1.97,1.74),(2.33,.055,1.04),"AutoGlass","cube",(.22,0,0))
-    box("Camper windshield visor",(0,2.03,2.29),(2.61,.17,.12),"PaintRose")
+    # The windshield corners are positioned 2-3 cm outside the sloped cab
+    # face. The checks make a floating glass panel a generation error.
+    def face_y(z):
+        return 2.20+(1.69-2.20)*(z-1.38)/(2.27-1.38)
+    glass_low=(2.18,1.45)
+    glass_high=(1.762,2.18)
+    assert .015 < glass_low[0]-face_y(glass_low[1]) < .04
+    assert .015 < glass_high[0]-face_y(glass_high[1]) < .04
+    corners=[(-1.16,glass_low[0],glass_low[1]),
+             (1.16,glass_low[0],glass_low[1]),
+             (1.12,glass_high[0],glass_high[1]),
+             (-1.12,glass_high[0],glass_high[1])]
+    formed_mesh("Camper integrated sloped windscreen",corners,[(0,3,2,1)],
+                "AutoGlass",thickness=.018)
+    for a,b in ((0,1),(1,2),(2,3),(3,0)):
+        strut("Camper windscreen rubber seal",corners[a],corners[b],.025,"Rubber",8)
+    strut("Camper visor lip",(-1.27,1.68,2.29),(1.27,1.68,2.29),.055,"PaintCream",8)
     for side in (-1,1):
-        x=side*1.385
-        box("Driver side glass",(x,1.05,1.76),(.038,.90,.78),"AutoGlass")
-        box("Passenger side glass",(x,-.45,1.75),(.038,1.43,.79),"AutoGlass")
-        box("Rear quarter glass",(x,-1.73,1.75),(.038,.66,.79),"AutoGlass")
-        for y in (-1.15,.29,1.48):
-            box("Camper window pillar",(side*1.41,y,1.75),(.065,.09,.86),"PaintRose")
+        x=side*1.335
+        box("Camper cab side glass",(x,1.12,1.78),(.04,.81,.72),"AutoGlass")
+        box("Camper sliding side glass",(x,-.33,1.78),(.04,1.51,.72),"AutoGlass")
+        box("Camper rear quarter glass",(x,-1.76,1.78),(.04,.73,.72),"AutoGlass")
+        for y in (-1.34,.47,1.55):
+            box("Camper structural window pillar",(side*1.34,y,1.78),(.09,.11,.80),"PaintCream")
+        strut("Camper black window sill",(side*1.36,-2.15,1.40),
+              (side*1.36,1.58,1.40),.027,"Rubber",8)
         box("Camper sliding door track",(side*1.45,-.42,1.27),(.055,2.1,.055),"Metal")
-        box("Camper sliding door rear seam",(side*1.46,-1.53,.91),(.055,.035,.77),"Dark")
+        box("Camper sliding door rear seam",(side*1.46,-1.55,.87),(.055,.035,.67),"Dark")
         box("Camper sliding door handle",(side*1.47,-.10,1.08),(.065,.30,.065),"Metal")
-        box("Camper driver door seam",(side*1.46,1.39,.86),(.055,.035,.78),"Dark")
+        box("Camper driver door seam",(side*1.46,1.42,.87),(.055,.035,.67),"Dark")
         box("Camper driver door handle",(side*1.47,1.00,1.09),(.065,.26,.065),"Metal")
-        box("Camper wing mirror",(side*1.53,2.16,1.43),(.28,.23,.22),"Dark")
+        strut("Camper mirror stalk",(side*1.31,1.82,1.48),
+              (side*1.65,1.99,1.47),.038,"Metal",8)
+        box("Camper wing mirror",(side*1.68,2.01,1.49),(.19,.22,.19),"Dark")
         box("Camper sill",(side*1.45,-.06,.36),(.08,4.65,.13),"Dark")
         for y in (-1.68,1.72):
             add("Camper wheel",(side*1.48,y,.43),(.48,.48,.18),"Rubber","cylinder",
                 (0,math.pi/2,0),vertices=24)
-            add("Camper wheel hub",(side*1.60,y,.43),(.23,.23,.055),"Metal","cylinder",
+            add("Camper wheel hub",(side*1.60,y,.43),(.25,.25,.055),"Metal","cylinder",
                 (0,math.pi/2,0),vertices=20)
             add("Camper wheel arch",(side*1.48,y,.43),(1,1,1),"Dark","torus",
                 (0,math.pi/2,0),vertices=24,major=.48,minor=.04)
-        strut("Camper roof rail",(side*1.08,-1.86,2.53),(side*1.08,1.19,2.53),.05,"Metal")
-        box("Camper headlamp",(side*.97,2.65,.98),(.42,.07,.27),"Cream")
+        strut("Camper roof rail",(side*1.08,-2.13,2.52),(side*1.08,1.36,2.52),.05,"Metal")
+        disc("Camper round inset headlamp",(side*1.00,2.69,.91),.20,.07,"Cream",20)
+        disc("Camper headlamp bezel",(side*1.00,2.66,.91),.245,.035,"Metal",24)
+        box("Camper amber signal",(side*1.31,2.65,1.10),(.24,.065,.11),"Gold")
         box("Camper tail light",(side*1.15,-2.66,.91),(.19,.075,.51),"Rose")
-    for y in (-1.38,.75):
-        box("Camper roof rack crossbar",(0,y,2.56),(2.38,.065,.065),"Metal")
-    box("Camper front grille",(0,2.65,.72),(1.41,.075,.30),"Dark")
-    for x in (-.46,-.23,0,.23,.46):
-        box("Camper grille slot",(x,2.70,.72),(.075,.036,.22),"Metal")
+    for y in (-1.64,.64):
+        box("Camper roof rack crossbar",(0,y,2.57),(2.38,.065,.065),"Metal")
+    box("Camper ventilation grille inset",(0,2.65,1.06),(1.36,.042,.21),"Dark")
+    for x in (-.54,-.39,-.24,-.09,.06,.21,.36,.51):
+        box("Camper ventilation slot",(x,2.68,1.06),(.035,.026,.13),"Metal")
+    box("Camper lower front intake",(0,2.67,.64),(1.25,.07,.18),"Dark")
     box("Camper rear door seam",(0,-2.66,1.52),(.045,.04,1.43),"Dark")
-    box("Camper rear window",(0,-2.65,1.98),(2.32,.045,.68),"AutoGlass")
+    # Rear glass is 2.5 cm outside the cab's rear face, and inside the roof.
+    assert abs(-2.545-profile[0][0]) < .04
+    box("Camper rear window",(0,-2.545,1.75),(2.27,.045,.73),"AutoGlass")
     box("Camper rear door handle",(.45,-2.71,1.08),(.31,.065,.07),"Metal")
     box("Camper front bumper",(0,2.71,.34),(2.97,.20,.20),"Metal")
     box("Camper rear bumper",(0,-2.71,.34),(2.97,.20,.20),"Metal")
     box("Camper front registration",(0,2.82,.46),(.72,.025,.17),"Cream")
+    for side in (-1,1):
+        strut("Camper windscreen wiper",(side*.12,2.17,1.47),
+              (side*1.02,2.10,1.57),.018,"Rubber",8)
 
 
 def camp_shade():

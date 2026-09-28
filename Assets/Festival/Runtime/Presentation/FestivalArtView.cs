@@ -20,6 +20,7 @@ namespace Festival.Presentation
             {"PaintRose",new Color(.65f,.21f,.34f)},
             {"PaintMint",new Color(.21f,.56f,.51f)},
             {"PaintGold",new Color(.72f,.48f,.22f)},
+            {"PaintCream",new Color(.82f,.77f,.62f)},
             {"AutoGlass",new Color(.18f,.30f,.38f)},
             {"CanvasRose",new Color(.93f,.26f,.47f)},
             {"CanvasGold",new Color(.98f,.68f,.21f)},
