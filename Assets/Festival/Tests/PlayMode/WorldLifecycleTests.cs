@@ -104,6 +104,26 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(cameraObject);}
         }
+        [UnityTest]public IEnumerator CampInteriorsStayClearOfTheDecorativeWoodlandRise()
+        {
+            var root=new GameObject("Interior scenery clearance test");
+            try
+            {
+                var world=root.AddComponent<FestivalWorld>();yield return null;
+                var camp=root.transform.Find(FestivalWorld.CampRootName);
+                var rise=camp.Find("Camp distant woodland rise").GetComponent<Renderer>();
+                foreach(var site in Festival.Core.CampFeatures.Sites)
+                {
+                    world.SetInterior(site.Id);
+                    var room=camp.Find(site.Kind+" interior room");
+                    var floor=room.Find(site.Kind+" interior floor").GetComponent<Renderer>();
+                    Assert.That(rise.bounds.Intersects(floor.bounds),Is.False,site.Id+" floor is hidden by the woodland rise");
+                    Assert.That(room.GetComponentsInChildren<Collider>(true),Is.Empty,site.Id+" decoration blocks interior movement");
+                }
+            }
+            finally{Object.Destroy(root);}
+            yield return null;
+        }
         [UnityTest]public IEnumerator AwakeBuildsWorldAndCrowdWalksWithoutBlockingNavigation()
         {
             var root=new GameObject("Play test world");

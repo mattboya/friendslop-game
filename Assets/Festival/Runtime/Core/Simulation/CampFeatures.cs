@@ -8,8 +8,9 @@ namespace Festival.Core
     {
         public const float DjX=8,DjZ=-3.5f;
         public const float CampHalfWidth=31,CampHalfDepth=30;
-        // Interior cells live outside the outdoor camp and its visible woodland.
-        public const float InteriorX=70;
+        // Keep interior cells beyond the 100 m decorative woodland rise. At
+        // 70 m the hill rendered over their floors and furnishings.
+        public const float InteriorX=125;
         public static float InteriorZ(string kind)=>kind=="Car"?-12:kind=="Tent"?0:12;
         public sealed class Site
         {

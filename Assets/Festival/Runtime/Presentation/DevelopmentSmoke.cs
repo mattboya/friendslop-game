@@ -611,6 +611,18 @@ namespace Festival.Presentation
                 if(File.Exists(interior))File.Delete(interior);
                 ScreenCapture.CaptureScreenshot(interior);yield return new WaitForSeconds(.55f);
                 if(!File.Exists(interior)){Fail("solo interior render "+id);yield break;}
+                if(id=="tent_1")
+                {
+                    captureCamera=session.ViewCamera;
+                    capturePosition=new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ);
+                    captureRotation=Quaternion.Euler(0,180,0);
+                    yield return new WaitForSeconds(.2f);
+                    string exitView=Path.Combine(soloCaptureDir,"solo-tent_1-exit.png");
+                    if(File.Exists(exitView))File.Delete(exitView);
+                    ScreenCapture.CaptureScreenshot(exitView);yield return new WaitForSeconds(.55f);
+                    captureCamera=null;
+                    if(!File.Exists(exitView)){Fail("solo tent doorway render");yield break;}
+                }
                 session.Command("CampAntic");
                 if(player.CampGag==""){Fail("solo antic "+id);yield break;}
                 if(site.Kind=="Tent")

@@ -507,8 +507,8 @@ namespace Festival.Presentation
                 var room=new GameObject(kind+" interior room");room.transform.SetParent(camp,false);
                 campInteriors[kind]=room;owned=room.transform;
                 var center=CampInteriorPosition(kind);
-                var wall=kind=="Tent"?rose:kind=="Potty"?artMaterials["Blue"]:dark;
-                Box(kind+" interior floor",center+new Vector3(0,.02f,0),new Vector3(5.8f,.12f,5.8f),kind=="Tent"?artMaterials["Cream"]:wood,false);
+                var wall=kind=="Tent"?FestivalArtView.MaterialFor("CanvasRose"):kind=="Potty"?artMaterials["Blue"]:dark;
+                Box(kind+" interior floor",center+new Vector3(0,.02f,0),new Vector3(5.8f,.12f,5.8f),kind=="Tent"?FestivalArtView.MaterialFor("CanvasCream"):wood,false);
                 Box(kind+" interior rear",center+new Vector3(0,1.55f,2.9f),new Vector3(5.8f,3.1f,.18f),wall,false);
                 // Keep the front wall open where the movement exit is. A solid
                 // wall here made the room read as a sealed box.
@@ -516,6 +516,15 @@ namespace Festival.Presentation
                     Box(kind+" interior front side",center+new Vector3(side*1.9f,1.55f,-2.9f),new Vector3(2f,3.1f,.18f),wall,false);
                 Box(kind+" interior front header",center+new Vector3(0,2.83f,-2.9f),new Vector3(1.8f,.55f,.18f),wall,false);
                 Box(kind+" interior exit threshold",center+new Vector3(0,.07f,-2.56f),new Vector3(1.7f,.035f,.22f),gold,false);
+                // A short fabric/trim vestibule closes the view beyond this
+                // teleported room, while the near threshold stays walkable.
+                Box(kind+" exit vestibule floor",center+new Vector3(0,.02f,-3.65f),new Vector3(1.8f,.12f,1.6f),wall,false);
+                foreach(float side in new[]{-1f,1f})
+                    Box(kind+" exit vestibule side",center+new Vector3(side*.92f,1.24f,-3.65f),new Vector3(.08f,2.48f,1.6f),wall,false);
+                Box(kind+" exit vestibule canopy",center+new Vector3(0,2.51f,-3.65f),new Vector3(1.92f,.10f,1.6f),wall,false);
+                Box(kind+" exit vestibule flap",center+new Vector3(0,1.25f,-4.44f),new Vector3(1.86f,2.5f,.08f),
+                    kind=="Tent"?FestivalArtView.MaterialFor("CanvasDark"):dark,false);
+                Box(kind+" exit flap pull",center+new Vector3(0,1.28f,-4.38f),new Vector3(.045f,.34f,.06f),gold,false);
                 Box(kind+" interior left",center+new Vector3(-2.9f,1.55f,0),new Vector3(.18f,3.1f,5.8f),wall,false);
                 Box(kind+" interior right",center+new Vector3(2.9f,1.55f,0),new Vector3(.18f,3.1f,5.8f),wall,false);
                 Box(kind+" interior ceiling",center+new Vector3(0,3.1f,0),new Vector3(5.8f,.18f,5.8f),wall,false);
@@ -561,20 +570,39 @@ namespace Festival.Presentation
                 }
                 else if(kind=="Tent")
                 {
+                    var groundsheet=FestivalArtView.MaterialFor("CanvasDark");
+                    foreach(float side in new[]{-1f,1f})
+                        Box("Tent groundsheet bound edge",center+new Vector3(side*2.70f,.11f,0),new Vector3(.08f,.035f,5.45f),groundsheet,false);
                     foreach(float side in new[]{-1f,1f})
                     {
                         var roof=Box("Tent pitched interior liner",center+new Vector3(side*1.42f,2.47f,0),new Vector3(3.16f,.09f,5.55f),
                             FestivalArtView.MaterialFor(side<0?"CanvasCream":"CanvasRose"),false);
                         roof.transform.localRotation=Quaternion.Euler(0,0,side<0?25:-25);
                         Box("Tent interior guy tape",center+new Vector3(side*2.34f,1.59f,0),new Vector3(.08f,.07f,5.30f),gold,false);
+                        foreach(float seamZ in new[]{-1.62f,1.62f})
+                        {
+                            var seam=Box("Tent liner stitched panel join",center+new Vector3(side*1.42f,2.49f,seamZ),new Vector3(3.12f,.025f,.045f),
+                                FestivalArtView.MaterialFor("CanvasGold"),false);
+                            seam.transform.localRotation=roof.transform.localRotation;
+                        }
                     }
                     foreach(float x in new[]{-1.15f,1.15f})
                     {
-                        Box("Tent sleeping bag",center+new Vector3(x,.19f,.1f),new Vector3(1.1f,.19f,3.2f),x<0?mint:gold,false);
-                        Box("Tent pillow",center+new Vector3(x,.32f,1.0f),new Vector3(.85f,.18f,.42f),artMaterials["Cream"],false);
-                        Box("Tent sleeping bag stitched stripe",center+new Vector3(x,.30f,-.42f),new Vector3(.95f,.025f,.11f),rose,false);
+                        Box("Tent sleeping mat",center+new Vector3(x,.14f,.1f),new Vector3(1.3f,.055f,3.48f),groundsheet,false);
+                        SoftProp("Tent padded sleeping bag",center+new Vector3(x,.30f,.05f),new Vector3(1.05f,1.48f,.22f),
+                            x<0?FestivalArtView.MaterialFor("CanvasMint"):FestivalArtView.MaterialFor("CanvasGold"),Quaternion.Euler(90,0,0));
+                        SoftProp("Tent stuffed pillow",center+new Vector3(x,.42f,1.30f),new Vector3(.85f,.30f,.18f),
+                            FestivalArtView.MaterialFor("CanvasCream"),Quaternion.Euler(90,0,0));
+                        Box("Tent folded blanket",center+new Vector3(x,.39f,-1.04f),new Vector3(.88f,.06f,.38f),
+                            x<0?FestivalArtView.MaterialFor("CanvasRose"):FestivalArtView.MaterialFor("CanvasMint"),false);
                     }
-                    Box("Tent tiny lantern",center+new Vector3(0,2.35f,1.9f),Vector3.one*.38f,gold,false);
+                    Box("Tent hanging lantern cord",center+new Vector3(0,2.75f,1.9f),new Vector3(.035f,.40f,.035f),groundsheet,false);
+                    Box("Tent tiny lantern shade",center+new Vector3(0,2.49f,1.9f),new Vector3(.52f,.15f,.52f),groundsheet,false);
+                    Box("Tent tiny lantern",center+new Vector3(0,2.34f,1.9f),new Vector3(.30f,.27f,.30f),gold,false);
+                    Box("Tent rear organizer rail",center+new Vector3(-1.92f,1.68f,2.75f),new Vector3(1.15f,.07f,.06f),groundsheet,false);
+                    foreach(float x in new[]{-2.25f,-1.59f})
+                        Box("Tent canvas wall pocket",center+new Vector3(x,1.30f,2.72f),new Vector3(.49f,.53f,.10f),
+                            FestivalArtView.MaterialFor("CanvasGold"),false);
                     Box("Tent camp cooler",center+new Vector3(0,.37f,2.1f),new Vector3(.85f,.65f,.7f),artMaterials["Blue"],false);
                     campAnticProps[kind]=Box("Tent cooler lid",center+new Vector3(0,.72f,2.1f),new Vector3(.9f,.08f,.74f),artMaterials["Cream"],false).transform;
                     Box("Tent zipper line",center+new Vector3(0,1.5f,2.78f),new Vector3(.05f,2.7f,.05f),gold,false);
@@ -758,6 +786,14 @@ namespace Festival.Presentation
         {
             var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name=label;go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localScale=scale;go.GetComponent<Renderer>().sharedMaterial=material;
             if(!solid){var c=go.GetComponent<Collider>();c.enabled=false;Dispose(c);}return go;
+        }
+        private GameObject SoftProp(string label,Vector3 position,Vector3 scale,Material material,Quaternion rotation)
+        {
+            var go=GameObject.CreatePrimitive(PrimitiveType.Capsule);go.name=label;go.transform.SetParent(owned,false);
+            go.transform.localPosition=position;go.transform.localRotation=rotation;go.transform.localScale=scale;
+            go.GetComponent<Renderer>().sharedMaterial=material;
+            var collider=go.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
+            return go;
         }
         private void DistantRise(string label,float innerRadius,float crestRadius,float outerRadius,Material material)
         {
