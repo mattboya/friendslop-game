@@ -39,6 +39,10 @@ for name, position, target, scale in (
     ("FestivalTreeA", (8,-10,7), (0,0,3.1), 8.2),
     ("FestivalTreeB", (8,-10,7), (0,0,3.1), 8.2),
     ("FestivalCampCar", (7,8,3.5), (0,0,.85), 7.5),
+    ("FestivalStage", (24,34,16), (0,0,3.8), 27),
+    ("FestivalStallSupplies", (5,8,5), (0,0,1.6), 8.5),
+    ("FestivalStallPerformance", (5,8,5), (0,0,1.6), 8.5),
+    ("FestivalStallStock", (5,8,5), (0,0,1.6), 8.5),
 ):
     index = names.index(name)
     shift_x, shift_y = (index % 4)*25, -(index // 4)*25

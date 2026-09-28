@@ -28,6 +28,7 @@ COLORS = {
     "PaintGold": (.72, .48, .22, 1), "AutoGlass": (.18, .30, .38, 1),
     "CanvasRose": (.93, .26, .47, 1), "CanvasGold": (.98, .68, .21, 1),
     "CanvasMint": (.16, .78, .64, 1), "CanvasCream": (.91, .84, .65, 1),
+    "CanvasDark": (.13, .20, .24, 1), "Rubber": (.10, .12, .16, 1),
 }
 MATS = {}
 for name, color in COLORS.items():
@@ -233,7 +234,29 @@ def stage():
     # deck (placed at y=1.4) stand on the visible surface.
     box("Chunky stage deck", (0, 0, .70), (18, 9, 1.40), "Dark")
     box("Back LED wall", (0, -4.35, 4.1), (17, .23, 5.5), "Dark")
-    box("Canopy", (0, -.2, 7.2), (19, 10, .35), "Dark")
+    def roof_z(x,y):
+        # The touring roof peaks at the middle and pulls down to the rails.
+        return 7.08+.74*(1-abs(y)/5)**1.45+.08*(1-(x/9.5)**2)
+    fabric_grid("Tensioned stage roof",24,14,
+                lambda u,v: ((u-.5)*19,(v-.5)*10,roof_z((u-.5)*19,(v-.5)*10)),
+                "CanvasDark",uv_scale=(7,3),thickness=.11)
+    for x in (-9.35,-4.7,0,4.7,9.35):
+        for j in range(10):
+            y0=-5+j
+            y1=y0+1
+            strut("Roof webbing rib",(x,y0,roof_z(x,y0)+.025),
+                  (x,y1,roof_z(x,y1)+.025),.038,"CanvasCream",8)
+    for y in (-5,5):
+        strut("Touring roof edge",(-9.5,y,roof_z(-9.5,y)),
+              (9.5,y,roof_z(9.5,y)),.07,"Metal",8)
+    for i in range(12):
+        x=-8.7+i*1.58
+        box("Front canvas drop",(x,4.96,6.91),(.99,.07,.42),
+            "CanvasRose" if i%3==0 else "CanvasDark")
+    for i in range(18):
+        x=-8.35+i*.98
+        box("Stage deck front plank",(x,4.53,.65),(.88,.055,1.13),"Wood")
+        box("Stage deck plank bracket",(x,4.59,.14),(.12,.04,.14),"Metal")
     for x in (-8.5, 8.5):
         for y in (-4, 4):
             box("Touring truss leg", (x, y, 4), (.3, .3, 8), "Metal")
@@ -241,7 +264,11 @@ def stage():
         # Footprint sits inside Unity's 2 x 2 m speaker proxy at (+/-10, y=1).
         box("Speaker tower", (x, 1.0, 2.1), (1.9, 1.9, 4.2), "Dark")
         for z in (.9, 2.1, 3.3):
-            disc("Speaker cone", (x, 1.98, z), .45, .08, "Gold")
+            disc("Speaker rim", (x, 1.98, z), .51, .08, "Metal")
+            disc("Speaker rubber cone", (x, 2.04, z), .39, .09, "Rubber")
+            disc("Speaker dust cap", (x, 2.11, z), .13, .04, "Dark")
+        for side in (-.77,.77):
+            box("Speaker flight-case rail",(x+side,2.01,2.1),(.08,.09,3.9),"Metal")
     for z in (4.8, 7.1):
         box("Front touring truss", (0, 4, z), (18, .26, .26), "Metal")
     for i in range(8):
@@ -249,7 +276,7 @@ def stage():
         angle=math.atan2(2.125, 2.3)*(1 if i%2==0 else -1)
         add("Truss diagonal", (center, 4.0, 5.95), (.115, .115, math.hypot(2.125,2.3)),
             "Metal", "cube", (0, angle, 0))
-    box("Canopy front fascia", (0, 4.69, 7.05), (18.8, .16, .37), "Blue")
+    box("Canopy front fascia", (0, 4.69, 7.04), (18.8, .16, .21), "Blue")
     box("Low stage light rail", (0, 4.20, 4.75), (17.5, .17, .13), "Metal")
     for i in range(9):
         x = -7.5 + i*1.875
@@ -261,11 +288,14 @@ def stage():
         box("Side LED spine", (x, -4.195, 3.63), (.32, .08, 4.8), "Blue")
         for z in (1.8, 2.7, 3.6, 4.5, 5.4):
             box("Side LED cell", (x, -4.13, z), (.23, .08, .47), "Rose" if z<3.7 else "Mint")
+    for x, color in ((-7.15,"CanvasRose"),(7.15,"CanvasMint")):
+        box("Back wall hanging banner",(x,-4.17,4.0),(1.5,.055,3.8),color)
+        box("Banner bottom weight",(x,-4.11,2.10),(1.55,.07,.08),"Metal")
     for x in (-2.4, 0, 2.4):
         box("Front light block", (x, 4.04, 6.95), (.5, .48, .5), "Gold")
     # Interlocking Sun/Moon mark: gold disc on the wall, mint crescent over it.
-    disc("Sun brand disc", (-.35, -4.21, 5.7), .66, .06, "Gold", 24)
-    crescent("Moon brand crescent", (.35, -4.155, 5.7), .66, .06, "Mint")
+    disc("Sun brand disc", (-.53, -4.21, 5.78), .90, .06, "Gold", 24)
+    crescent("Moon brand crescent", (.52, -4.155, 5.78), .90, .06, "Mint")
     for x in (-6.4, 6.4):
         box("Stage flight case", (x, 2.65, 1.73), (1.15, .72, .66), "Metal")
         for y in (2.30, 2.98):
@@ -293,28 +323,58 @@ def stall(kind):
     accent, label = accents[kind]
     for x in (-2.25, 2.25):
         box(label + " pole", (x, 0, 1.7), (.15, .15, 3.4), "Wood")
-    box(label + " counter", (0, 1.15, .70), (4.6, 1.35, 1.40), "Wood")
-    box(label + " canopy", (0, 0, 3.25), (5.3, 3.2, .26), accent)
+    box(label + " counter dark backing", (0, 1.73, .65), (4.55, .11, 1.22), "Dark")
+    box(label + " counter top", (0, 1.16, 1.36), (4.86, 1.52, .16), "Wood",
+        edge_radius=.065,edge_segments=3)
+    box(label + " lower shelf", (0, 1.11, .29), (4.5, 1.25, .10), "Wood")
+    for x in (-2.13,2.13):
+        for y in (.55,1.77):
+            box(label + " counter leg",(x,y,.69),(.16,.17,1.35),"Wood")
+            box(label + " counter foot",(x,y,.10),(.27,.28,.12),"Metal")
+    for i in range(10):
+        x=-2.02+i*.45
+        box(label + " counter front slat",(x,1.805,.72),(.39,.095,1.10),
+            "Wood" if i%3 else "Cream")
+    box(label + " counter upper trim",(0,1.87,1.28),(4.64,.13,.09),"Metal")
+    def awning_z(x,y):
+        return 3.43-.32*(y+1.6)/3.2-.075*(1-(x/2.65)**2)
+    fabric_grid(label + " shaped awning",14,10,
+                lambda u,v: ((u-.5)*5.3,(v-.5)*3.2,awning_z((u-.5)*5.3,(v-.5)*3.2)),
+                "Canvas"+accent,uv_scale=(3,2),thickness=.075)
     for x in (-2.38, 2.38):
-        strut(label + " arched canopy edge", (x, -1.62, 3.1), (x, 1.62, 3.1), .07, "Cream", 12)
+        strut(label + " awning edge", (x, -1.62, awning_z(x,-1.6)),
+              (x, 1.62, awning_z(x,1.6)), .06, "CanvasCream", 12)
     for i in range(9):
         x=-2.1+i*.525
-        box(label + " canvas valance", (x, 1.62, 3.02), (.48, .07, .34), "Gold" if i%2 else accent)
+        box(label + " canvas valance", (x, 1.62, 2.96), (.48, .07, .31),
+            "CanvasGold" if i%2 else "Canvas"+accent)
         box(label + " counter plank", (x, 1.22, 1.44), (.47, .13, .09), "Cream" if i%3==0 else "Wood")
+    for x in (-2.2,2.2):
+        box(label + " post bracket",(x,1.2,2.91),(.15,.72,.08),"Metal")
+    for i in range(5):
+        x=-1.9+i*.95
+        box(label + " back curtain fold",(x,-1.54,2.06),(.85,.055,1.72),
+            "CanvasCream" if i%2==0 else "Canvas"+accent)
     box(label + " hanging sign", (0, 1.61, 2.72), (3.7, .12, .52), "Dark")
     for x in (-1.5, 1.5):
         box(label + " sign hanger", (x, 1.61, 3.05), (.04, .04, .18), "Metal")
     if kind == 0:
         for x in (-1.2, 0, 1.2):
-            box("Supply crate", (x, 1.0, 1.68), (.7, .65, .65), "Cream")
+            box("Supply canvas bundle", (x, 1.0, 1.58), (.70, .56, .42), "CanvasCream")
+            box("Supply folded top",(x,1.0,1.83),(.74,.60,.08),"CanvasRose")
+            for side in (-.29,.29):
+                box("Bundle tie",(x+side,1.0,1.84),(.04,.61,.035),"Wood")
     elif kind == 1:
         for x in (-1.0, 1.0):
             round_part("Poi display", (x, 1.35, 1.69), (.30, .30, .30), "Rose", "sphere")
+            round_part("Poi spool base",(x,1.35,1.53),(.24,.24,.08),"Dark")
         arch("Performance frame", 0, -.9, 0, 2.4, 2.75, "Metal")
     else:
         box("Tilted seller banner", (0, -.7, 3.46), (4.1, .12, .42), "Rose")
         for x in (-1.2, 1.2):
             round_part("Fictional stock jar", (x, 1.3, 1.58), (.28, .28, .47), "Mint")
+            round_part("Jar lid",(x,1.3,1.82),(.30,.30,.07),"Metal")
+            box("Jar paper label",(x,1.59,1.56),(.38,.035,.18),"Cream")
 
 
 def camp_shop():

@@ -9,12 +9,13 @@ using Festival.Network;
 
 namespace Festival.Presentation
 {
-    /// <summary>Original, runtime-built greybox. All generated objects belong to one owned child.</summary>
+    /// <summary>Original runtime world with separate visual assemblies and gameplay collision.</summary>
     public sealed class FestivalWorld : MonoBehaviour
     {
         public const string RootName = "Festival generated world";
         public const string CampRootName = "Festival campsite lobby";
         private readonly List<Material> materials = new List<Material>();
+        private readonly List<Mesh> generatedMeshes = new List<Mesh>();
         private readonly Dictionary<string,Material> artMaterials = new Dictionary<string,Material>();
         private readonly List<Light> stageLights = new List<Light>();
         private VolumeProfile duskProfile;
@@ -86,6 +87,9 @@ namespace Festival.Presentation
             Box("East footpath",new Vector3(12,.013f,-20),new Vector3(24,.02f,4),path,false);
             Box("West crosspath",new Vector3(-14,.013f,5),new Vector3(28,.02f,3),path,false);
             Box("East crosspath",new Vector3(13,.013f,-4),new Vector3(26,.02f,3),path,false);
+            var wornEdge=Material(new Color(.44f,.32f,.25f));
+            wornEdge.mainTexture=Resources.Load<Texture2D>("FestivalDirt");
+            WornPathEdges("Main path worn borders",3.5f,-31f,27f,wornEdge);
             // A few bright edges read as a touring event from a distance while
             // keeping the walking lanes and collision proxies simple.
             for(int i=0;i<9;i++)
@@ -102,6 +106,7 @@ namespace Festival.Presentation
             ProxyBox("Stage",new Vector3(0,.7f,32),new Vector3(18,1.4f,9),dark);
             ProxyBox("Stage backdrop",new Vector3(0,4,36),new Vector3(18,6,.5f),dark);
             Visual("FestivalStage",new Vector3(0,0,32));
+            Sign("AFTER HOURS",new Vector3(0,6.50f,27.10f),gold,.20f);
             Visual("FestivalDJDeck",new Vector3(0,1.4f,30));
             Box("Stage lip glow",new Vector3(0,1.46f,27.55f),new Vector3(18,.08f,.13f),lampRose,false);
             Box("Stage frame left",new Vector3(-8.8f,4.4f,35.65f),new Vector3(.15f,5.6f,.12f),lampMint,false);
@@ -637,7 +642,8 @@ namespace Festival.Presentation
             if(view!=null)
             {
                 foreach(var sign in worldSigns)
-                    if(sign!=null)sign.GetComponent<Renderer>().enabled=Vector3.SqrMagnitude(view.position-sign.transform.position)<(sign.text=="CREW STASH"?64f:sign.text=="NIGHT MARKET"?484f:225f);
+                    if(sign!=null)sign.GetComponent<Renderer>().enabled=Vector3.SqrMagnitude(view.position-sign.transform.position)<
+                        (sign.text=="CREW STASH"?64f:sign.text=="AFTER HOURS"?1600f:sign.text=="NIGHT MARKET"?484f:225f);
                 foreach(var tag in campTags)
                     if(tag!=null)tag.GetComponent<Renderer>().enabled=Vector3.SqrMagnitude(view.position-tag.transform.position)<64f;
                 foreach(var tag in marketTags)
@@ -674,6 +680,43 @@ namespace Festival.Presentation
             var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name=label;go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localScale=scale;go.GetComponent<Renderer>().sharedMaterial=material;
             if(!solid){var c=go.GetComponent<Collider>();c.enabled=false;Dispose(c);}return go;
         }
+        private void WornPathEdges(string label,float halfWidth,float startZ,float endZ,Material material)
+        {
+            const int steps=58;
+            var vertices=new Vector3[(steps+1)*4];
+            var uv=new Vector2[vertices.Length];
+            var triangles=new int[steps*12];
+            for(int sideIndex=0;sideIndex<2;sideIndex++)
+            {
+                float side=sideIndex==0?-1f:1f;
+                int baseIndex=sideIndex*(steps+1)*2;
+                for(int i=0;i<=steps;i++)
+                {
+                    float z=Mathf.Lerp(startZ,endZ,i/(float)steps);
+                    float drift=.15f*Mathf.Sin(i*.73f+sideIndex*1.9f)
+                        +.12f*Mathf.Sin(i*1.91f+sideIndex*.8f);
+                    vertices[baseIndex+i*2]=new Vector3(side*(halfWidth-.12f),.033f,z);
+                    vertices[baseIndex+i*2+1]=new Vector3(side*(halfWidth+.53f+drift),.012f,z);
+                    uv[baseIndex+i*2]=new Vector2(0,z*.43f);
+                    uv[baseIndex+i*2+1]=new Vector2(1,z*.43f);
+                    if(i==steps)continue;
+                    int offset=(sideIndex*steps+i)*6;
+                    int a=baseIndex+i*2,b=a+1,c=a+2,d=a+3;
+                    if(sideIndex==0)
+                    {triangles[offset]=a;triangles[offset+1]=b;triangles[offset+2]=c;
+                     triangles[offset+3]=b;triangles[offset+4]=d;triangles[offset+5]=c;}
+                    else
+                    {triangles[offset]=a;triangles[offset+1]=c;triangles[offset+2]=b;
+                     triangles[offset+3]=b;triangles[offset+4]=c;triangles[offset+5]=d;}
+                }
+            }
+            var mesh=new Mesh{name=label};mesh.vertices=vertices;mesh.uv=uv;mesh.triangles=triangles;
+            mesh.RecalculateNormals();mesh.RecalculateBounds();generatedMeshes.Add(mesh);
+            var go=new GameObject(label);go.transform.SetParent(owned,false);
+            go.AddComponent<MeshFilter>().sharedMesh=mesh;
+            var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
+            renderer.shadowCastingMode=ShadowCastingMode.Off;
+        }
         private GameObject ProxyBox(string label,Vector3 position,Vector3 scale,Material material)
         {
             var go=Box(label,position,scale,material);
@@ -698,7 +741,14 @@ namespace Festival.Presentation
                 if(mark>=0)
                 {
                     var key=name.Substring(mark+2).Split('.')[0];
-                    if(artMaterials.TryGetValue(key,out var tint))renderer.sharedMaterial=tint;
+                    if(key=="Wood"||key=="Bark"||key=="Leaf"||key=="LeafWarm"||
+                        key=="Rubber"||key=="AutoGlass"||key.StartsWith("Canvas",System.StringComparison.Ordinal)||
+                        key.StartsWith("Paint",System.StringComparison.Ordinal))
+                    {
+                        var surface=FestivalArtView.MaterialFor(key);
+                        if(surface!=null)renderer.sharedMaterial=surface;
+                    }
+                    else if(artMaterials.TryGetValue(key,out var tint))renderer.sharedMaterial=tint;
                 }
                 renderer.shadowCastingMode=resource.StartsWith("FestivalTree")?ShadowCastingMode.Off:ShadowCastingMode.On;
             }
@@ -754,6 +804,7 @@ namespace Festival.Presentation
             if(surface!=null){surface.RemoveData();if(surface.navMeshData!=null)Dispose(surface.navMeshData);}
             if(campSurface!=null){campSurface.RemoveData();if(campSurface.navMeshData!=null)Dispose(campSurface.navMeshData);}
             foreach(var material in materials)if(material!=null)Dispose(material);
+            foreach(var mesh in generatedMeshes)if(mesh!=null)Dispose(mesh);
             if(duskProfile!=null)Dispose(duskProfile);
         }
     }

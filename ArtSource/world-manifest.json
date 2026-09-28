@@ -3,9 +3,9 @@
   "runtimeDirectory": "Assets/Festival/Art/Resources",
   "models": {
     "FestivalStage": {
-      "parts": 68,
-      "renderers": 6,
-      "triangles": 3520
+      "parts": 188,
+      "renderers": 12,
+      "triangles": 7756
     },
     "FestivalDJDeck": {
       "parts": 16,
@@ -13,19 +13,19 @@
       "triangles": 1280
     },
     "FestivalStallSupplies": {
-      "parts": 30,
-      "renderers": 6,
-      "triangles": 1192
+      "parts": 67,
+      "renderers": 7,
+      "triangles": 3032
     },
     "FestivalStallPerformance": {
-      "parts": 32,
-      "renderers": 7,
-      "triangles": 1984
+      "parts": 62,
+      "renderers": 8,
+      "triangles": 3852
     },
     "FestivalStallStock": {
-      "parts": 30,
-      "renderers": 7,
-      "triangles": 1112
+      "parts": 62,
+      "renderers": 8,
+      "triangles": 3004
     },
     "FestivalMedical": {
       "parts": 17,

@@ -26,6 +26,11 @@ The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION
 - The final two-client development smoke passed. Its client point samples were 8.9 ms rolling p95 at camp and 16.7–16.9 ms in populated festival views at 1280×720 Ultra on the baseline Mac. These short, different-seed samples do not establish a sustained frame rate or visual acceptance.
 - The campsite is more legible, but the captured stage, broad ground areas, trees and persistent HUD still read as prototype work against the supplied trailer. The full graphics objective remains open pending a finished route, human review and target-hardware evidence.
 
+## September 27 market-to-stage visual checkpoint
+
+- The [native comparison and cost record](docs/GRAPHICS_MARKET_STAGE_PASS_2026-09-27.md) shows shaped market awnings, constructed counters and displays, a pitched stage roof and deck face, readable stage name, and a narrow irregular border on the approach path. Runtime world meshes now receive the authored canvas, wood, bark and leaf materials rather than importer defaults. Collision, purchase anchors and NavMesh geometry retain their prior positions.
+- The two-client scripted mission passed on the revised route. Its populated festival point samples were 16.8–16.9 ms rolling p95 at 1280×720 Ultra on the baseline Mac. This does not prove sustained target performance or visual acceptance; large HUD cards, architecture outside the stage/market, motion and material finish remain open.
+
 ## Latest campsite and interaction pass
 
 - Added a timber-and-canvas checkout kiosk, shelf category signs, slatted counter details, softer model edges, and smoother tree crowns. The original Blender kit now exports 27 world and prop models.
