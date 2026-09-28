@@ -85,9 +85,41 @@ def leaf():
 
 
 def dirt():
-    field = .89 + (noise(8, 61)-.5)*.075 + (noise(64, 67)-.5)*.055
-    field += (noise(256, 71)-.5)*.045
+    # At the stage-approach scale one tile covers about four metres. Broad
+    # pressed-earth patches, boot marks and visible gravel need different
+    # spatial frequencies; noise alone reads as flat brown from the camera.
+    field = .87 + (noise(8, 61)-.5)*.11 + (noise(64, 67)-.5)*.055
+    field += (noise(256, 71)-.5)*.025
     rgb = np.stack((field, field*.95, field*.88), axis=2)
+    rng = np.random.default_rng(103)
+    for _ in range(16):
+        px, py = rng.integers(0, SIZE, size=2)
+        angle = float(rng.uniform(-.5, .5))
+        ca, sa = np.cos(angle), np.sin(angle)
+        for offset, length, width, shade in ((-15, 22, 12, -.10), (15, 17, 15, -.075)):
+            radius = 35
+            yy, xx = np.mgrid[-radius:radius+1, -radius:radius+1]
+            along = xx*sa + yy*ca - offset
+            across = xx*ca - yy*sa
+            falloff = np.clip(1-(along/length)**2-(across/width)**2, 0, 1)**2
+            xs = (px+xx) % SIZE
+            ys = (py+yy) % SIZE
+            rgb[xs, ys] += shade*falloff[:, :, None]
+    for _ in range(230):
+        px, py = rng.integers(0, SIZE, size=2)
+        radius = int(rng.integers(3, 9))
+        yy, xx = np.mgrid[-radius:radius+1, -radius:radius+1]
+        mask = (xx/(radius+.1))**2+(yy/(radius*.72+.1))**2 < 1
+        xs = (px+xx) % SIZE
+        ys = (py+yy) % SIZE
+        pebble = np.where(mask, .08-.04*yy/max(radius, 1), 0)
+        rgb[xs, ys] += pebble[:, :, None]
+    for _ in range(380):
+        px, py = rng.integers(0, SIZE, size=2)
+        length = int(rng.integers(9, 29))
+        drift = int(rng.integers(-4, 5))
+        for step in range(length):
+            rgb[(px+drift*step//length)%SIZE,(py+step)%SIZE] += (.035,.031,.019)
     write("FestivalDirt", rgb)
 
 

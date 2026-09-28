@@ -83,11 +83,16 @@ namespace Festival.Presentation
             Box("Ground", new Vector3(0,-.3f,0),new Vector3(80,.6f,80),earth);
             var path=Material(new Color(.57f,.39f,.30f));
             path.mainTexture=Resources.Load<Texture2D>("FestivalDirt");
-            path.mainTextureScale=new Vector2(2,3);
+            path.mainTextureScale=new Vector2(2,6);
+            var longPath=Material(path.color);
+            longPath.mainTexture=path.mainTexture;
+            // A 1024 px tile now spans roughly four metres along the approach.
+            // The old three repeats over 58 m stretched individual marks away.
+            longPath.mainTextureScale=new Vector2(2,15);
             var lampGold=Glow(new Color(1f,.56f,.20f),2.3f);
             var lampRose=Glow(new Color(1f,.18f,.47f),2.1f);
             var lampMint=Glow(new Color(.19f,1f,.76f),2.1f);
-            Box("Main footpath",new Vector3(0,.012f,-2),new Vector3(7,.02f,58),path,false);
+            WornMainPath("Main footpath",3.5f,-31f,27f,longPath);
             Box("Market footpath",new Vector3(-11,.013f,-22),new Vector3(23,.02f,4),path,false);
             Box("East footpath",new Vector3(12,.013f,-20),new Vector3(24,.02f,4),path,false);
             Box("West crosspath",new Vector3(-14,.013f,5),new Vector3(28,.02f,3),path,false);
@@ -207,15 +212,23 @@ namespace Festival.Presentation
                 var tree=Visual(i%4==0?"FestivalTreeFir":i%2==0?"FestivalTreeA":"FestivalTreeB",new Vector3(x,0,z));
                 if(tree!=null)tree.transform.localScale=Vector3.one*(.85f+i%3*.08f);
             }
+            var approachTrees=new[]{
+                new Vector3(-15,0,23),new Vector3(-25,0,26),
+                new Vector3(-21,0,11),new Vector3(-19,0,-7),
+                new Vector3(15,0,23),new Vector3(25,0,24),
+                new Vector3(20,0,11),new Vector3(18,0,-7)};
             for(int i=0;i<44;i++)
             {
                 float angle=(i+.5f)*(Mathf.PI*2/44f);
                 float radius=46f+(i%4)*3.2f;
+                bool framesApproach=i%6==0;
+                var position=framesApproach?approachTrees[i/6]:
+                    new Vector3(Mathf.Cos(angle)*radius,0,Mathf.Sin(angle)*radius);
                 var tree=Visual(i%4==0?"FestivalTreeFir":i%3==0?"FestivalTreeB":"FestivalTreeA",
-                    new Vector3(Mathf.Cos(angle)*radius,0,Mathf.Sin(angle)*radius));
+                    position);
                 if(tree!=null)
                 {
-                    tree.transform.localScale=Vector3.one*(1.2f+(i%5)*.12f);
+                    tree.transform.localScale=Vector3.one*(framesApproach?1.05f+(i%4)*.08f:1.2f+(i%5)*.12f);
                     tree.transform.localRotation=Quaternion.Euler(0,(i*97)%360,0);
                 }
             }
@@ -246,15 +259,7 @@ namespace Festival.Presentation
                 float x=i%2==0?-35:35,z=-22+(i/2)*15;
                 Visual("FestivalTent",new Vector3(x,0,z));
             }
-            for(int i=0;i<130;i++)
-            {
-                // Small crossed grass cards add foreground texture without
-                // adding collision or blocking the navigation mesh.
-                float x=-36+((i*37)%73),z=-35+((i*53)%71);
-                if(Mathf.Abs(x)<5||Mathf.Abs(z+20)<3)continue;
-                var tuft=Box("Grass tuft",new Vector3(x,.16f,z),new Vector3(.08f,.32f,.36f),i%4==0?gold:leafWarm,false);
-                tuft.transform.localRotation=Quaternion.Euler(0,(i*137)%180,0);
-            }
+            GrassBanks("Meadow grass banks",leafWarm);
             // A few larger, authored undergrowth shapes ground the woodland
             // without filling the walkable route or creating navigation edges.
             for(int i=0;i<28;i++)
@@ -869,6 +874,80 @@ namespace Festival.Presentation
             var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
             renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
         }
+        private static float PathHalfWidthAt(float z,int sideIndex,float halfWidth)
+        {
+            // Change the outline slowly so the trail reads as foot-worn earth.
+            return halfWidth-.12f+.13f*Mathf.Sin(z*.37f+sideIndex*1.7f)
+                +.06f*Mathf.Sin(z*1.19f+sideIndex*2.3f);
+        }
+        private void WornMainPath(string label,float halfWidth,float startZ,float endZ,Material material)
+        {
+            const int steps=116;
+            var vertices=new Vector3[(steps+1)*2];
+            var uv=new Vector2[vertices.Length];
+            var triangles=new int[steps*6];
+            for(int i=0;i<=steps;i++)
+            {
+                float t=i/(float)steps,z=Mathf.Lerp(startZ,endZ,t);
+                vertices[i*2]=new Vector3(-PathHalfWidthAt(z,0,halfWidth),.027f,z);
+                vertices[i*2+1]=new Vector3(PathHalfWidthAt(z,1,halfWidth),.027f,z);
+                uv[i*2]=new Vector2(0,t);
+                uv[i*2+1]=new Vector2(1,t);
+                if(i==steps)continue;
+                int a=i*2,o=i*6;
+                triangles[o]=a;triangles[o+1]=a+2;triangles[o+2]=a+1;
+                triangles[o+3]=a+1;triangles[o+4]=a+2;triangles[o+5]=a+3;
+            }
+            var mesh=new Mesh{name=label};mesh.vertices=vertices;mesh.uv=uv;mesh.triangles=triangles;
+            mesh.RecalculateNormals();mesh.RecalculateBounds();generatedMeshes.Add(mesh);
+            var go=new GameObject(label);go.transform.SetParent(owned,false);
+            go.AddComponent<MeshFilter>().sharedMesh=mesh;
+            var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
+            renderer.shadowCastingMode=ShadowCastingMode.Off;
+        }
+        private void GrassBanks(string label,Material material)
+        {
+            // One visual mesh replaces hundreds of individual grass renderers.
+            // All strips are outside the main path and attraction clearances.
+            var vertices=new List<Vector3>(5000);
+            var uv=new List<Vector2>(5000);
+            var triangles=new List<int>(7500);
+            for(int i=0;i<420;i++)
+            {
+                float x=-34f+((i*97)%683)/10f;
+                float z=-32f+((i*151)%627)/10f;
+                if(Mathf.Abs(x)<4.7f||z>22f&&Mathf.Abs(x)<17f||
+                    z> -27f&&z< -15f&&x< -10f||z> -24f&&z< -13f&&x>19f)continue;
+                float height=.18f+.035f*(i%5);
+                for(int blade=0;blade<3;blade++)
+                {
+                    float angle=(i*43+blade*67)*Mathf.Deg2Rad;
+                    float dx=Mathf.Cos(angle),dz=Mathf.Sin(angle);
+                    float width=.065f+.015f*(i%3);
+                    int a=vertices.Count;
+                    vertices.Add(new Vector3(x-dx*width,.018f,z-dz*width));
+                    vertices.Add(new Vector3(x+dx*width,.018f,z+dz*width));
+                    vertices.Add(new Vector3(x+dz*.09f,height,z-dx*.09f));
+                    uv.Add(new Vector2(0,0));uv.Add(new Vector2(1,0));uv.Add(new Vector2(.5f,1));
+                    triangles.Add(a);triangles.Add(a+2);triangles.Add(a+1);
+                    triangles.Add(a+1);triangles.Add(a+2);triangles.Add(a);
+                }
+            }
+            var mesh=new Mesh{name=label};mesh.SetVertices(vertices);mesh.SetUVs(0,uv);
+            mesh.SetTriangles(triangles,0);
+            // Both faces share positions; calculating normals would cancel them
+            // and turn the tiny cards black under the directional dusk light.
+            var normals=new Vector3[vertices.Count];
+            for(int i=0;i<normals.Length;i++)normals[i]=Vector3.up;
+            mesh.normals=normals;mesh.RecalculateBounds();generatedMeshes.Add(mesh);
+            var go=new GameObject(label);go.transform.SetParent(owned,false);
+            go.AddComponent<MeshFilter>().sharedMesh=mesh;
+            var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
+            renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("Environment","grass_banks","blades="+(vertices.Count/3));
+#endif
+        }
         private void WornPathEdges(string label,float halfWidth,float startZ,float endZ,Material material)
         {
             const int steps=58;
@@ -882,10 +961,11 @@ namespace Festival.Presentation
                 for(int i=0;i<=steps;i++)
                 {
                     float z=Mathf.Lerp(startZ,endZ,i/(float)steps);
-                    float drift=.15f*Mathf.Sin(i*.73f+sideIndex*1.9f)
-                        +.12f*Mathf.Sin(i*1.91f+sideIndex*.8f);
-                    vertices[baseIndex+i*2]=new Vector3(side*(halfWidth-.12f),.033f,z);
-                    vertices[baseIndex+i*2+1]=new Vector3(side*(halfWidth+.53f+drift),.012f,z);
+                    float edge=PathHalfWidthAt(z,sideIndex,halfWidth);
+                    float drift=.10f*Mathf.Sin(z*.83f+sideIndex*1.9f)
+                        +.07f*Mathf.Sin(z*1.91f+sideIndex*.8f);
+                    vertices[baseIndex+i*2]=new Vector3(side*(edge-.015f),.028f,z);
+                    vertices[baseIndex+i*2+1]=new Vector3(side*(edge+.53f+drift),.012f,z);
                     uv[baseIndex+i*2]=new Vector2(0,z*.43f);
                     uv[baseIndex+i*2+1]=new Vector2(1,z*.43f);
                     if(i==steps)continue;
