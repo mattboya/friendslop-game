@@ -4,6 +4,11 @@ Status date: September 28, 2026. **Playable macOS development build with a camps
 
 The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION.md). The [reference research](docs/FRIENDSLOP_RESEARCH_2026-09-27.md) explains the co-op loop choices. The [playtest guide](docs/PLAYTEST_2026-09-24.md) explains the playable route and remaining limitations.
 
+## Latest wagon form checkpoint
+
+- The [dated wagon evidence](docs/GRAPHICS_WAGON_FORM_PASS_2026-09-28.md) compares the original camp car to a new tapered body, raked glasshouse, crowned roof and seated windows in neutral and native views. The four wagons share the revised original FBX while retaining their color and cargo variation.
+- Static checks, Unity validation, macOS development and release builds, release diagnostic exclusion, and scripted solo and two-client missions passed. The car still needs richer lamps, wheels, materials and door choreography; the broader trailer quality target remains open.
+
 ## Latest character ankle rig checkpoint
 
 - The [dated ankle rig evidence](docs/GRAPHICS_ANKLE_RIG_PASS_2026-09-28.md) records the original 15-bone character export, shoe counter-rotation during walking and dance, corrected vendor apron clearance, and published-source fit audit. The updated Blender master and both character FBXs were staged and explicitly published with stable Unity GUIDs.

@@ -822,57 +822,101 @@ def wheel_wells(body, positions, radius, height):
             bpy.data.objects.remove(cutter)
 
 
+def wagon_body():
+    """Crowned, tapered panel shell instead of a bevelled rectangular block."""
+    sections = [
+        (-2.39, 1.16, .92, .96), (-2.32, 1.27, 1.00, 1.04),
+        (-2.12, 1.38, 1.10, 1.14), (-1.65, 1.43, 1.13, 1.17),
+        (-.75, 1.43, 1.13, 1.17), (.30, 1.43, 1.13, 1.17),
+        (1.10, 1.40, 1.13, 1.17), (1.55, 1.38, 1.10, 1.14),
+        (2.08, 1.34, 1.02, 1.07), (2.32, 1.25, .93, .97),
+        (2.40, 1.12, .86, .89),
+    ]
+    vertices, faces = [], []
+    for y, width, edge, crown in sections:
+        lower = width*.91
+        profile = [(-lower*.72,.24),(-lower,.33),(-width,.51),
+                   (-width,.82),(-width*.965,edge-.065),
+                   (-width*.83,edge),(0,crown),
+                   (width*.83,edge),(width*.965,edge-.065),
+                   (width,.82),(width,.51),(lower,.33),(lower*.72,.24),(0,.23)]
+        vertices.extend((x,y,z) for x,z in profile)
+    ring = 14
+    faces.append(tuple(reversed(range(ring))))
+    for station in range(len(sections)-1):
+        for spoke in range(ring):
+            a=station*ring+spoke
+            b=station*ring+(spoke+1)%ring
+            faces.append((a,b,b+ring,a+ring))
+    last=(len(sections)-1)*ring
+    faces.append(tuple(last+i for i in range(ring)))
+    body=formed_mesh("Camp wagon formed painted body",vertices,faces,"PaintRose")
+    # Correct the winding after the longitudinal loft, before cutting the arches.
+    bpy.context.view_layer.objects.active=body
+    body.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    body.select_set(False)
+    return body
+
+
+def wagon_cabin():
+    """Wagon glasshouse with a raked windshield, sloped hatch and crowned roof."""
+    # Longitudinal stations are shared by the side panel and upper roof.
+    outline = [(-2.20,1.08,1.19),(-2.08,1.73,1.08),
+               (-1.97,1.83,1.03),(.70,1.83,1.03),
+               (.83,1.76,1.07),(1.38,1.09,1.20)]
+    vertices=[(-half,y,z) for y,z,half in outline]
+    vertices += [(half,y,z) for y,z,half in outline]
+    n=len(outline)
+    faces=[tuple(reversed(range(n))),tuple(range(n,2*n))]
+    faces += [(i,(i+1)%n,n+(i+1)%n,n+i) for i in range(n)]
+    cabin=formed_mesh("Camp wagon tapered cabin shell",vertices,faces,"PaintRose")
+    roof=[(-1.97,1.84),(-1.66,1.85),(.42,1.85),(.70,1.84)]
+    fabric_grid("Camp wagon crowned roof",8,3,
+        lambda u,v:(-1.035+2.07*u,roof[0][0]+(roof[-1][0]-roof[0][0])*v,
+                    1.83+.055*(1-(2*u-1)**2)),"PaintRose",thickness=.035)
+    return cabin
+
+
 def camp_car():
-    # A compact camp wagon with a long cabin, vertical hatch and distinct hood.
+    # A compact camp wagon with formed panels, a long cabin and useful cargo hatch.
     # It shares its gameplay footprint with the previous hatchback.
-    body = box("Camp car rounded lower shell", (0, 0, .65), (2.85, 4.75, .86), "PaintRose",
-        edge_radius=.18,edge_segments=4)
+    body = wagon_body()
     wheel_wells(body, (-1.51,1.52), .53, .40)
-    formed_mesh("Shaped car bonnet",
-        [(-1.31,1.20,1.10),(0,1.20,1.13),(1.31,1.20,1.10),
-         (-1.31,2.31,1.04),(0,2.31,1.07),(1.31,2.31,1.04)],
-        [(0,3,4,1),(1,4,5,2)],"PaintRose",thickness=.09)
-    # An extended roof and upright rear hatch make the car's cargo volume
-    # believable and distinguish it from the taller camper van.
-    outline = [(-2.18, 1.05), (-2.07, 1.83), (.77, 1.83), (1.38, 1.05)]
-    n = len(outline)
-    vertices = [(-1.18, y, z) for y, z in outline] + [(1.18, y, z) for y, z in outline]
-    faces = [tuple(range(n)), tuple(reversed(range(n, 2*n)))]
-    faces += [(i, (i+1)%n, n+(i+1)%n, n+i) for i in range(n)]
-    mesh = bpy.data.meshes.new("Cabin shell")
-    mesh.from_pydata(vertices, [], faces)
-    mesh.validate()
-    cabin = bpy.data.objects.new("Camp car cabin shell__PaintRose", mesh)
-    bpy.context.collection.objects.link(cabin)
-    mesh.materials.append(MATS["PaintRose"])
-    current.append(cabin)
-    box("Camp car roof skin", (0, -.65, 1.84), (2.27, 2.91, .11), "PaintRose",
-        edge_radius=.045,edge_segments=3)
-    add("Camp car front windshield", (0, 1.07, 1.46), (2.08, .035, .83), "AutoGlass", "cube", (.66, 0, 0))
-    rear_glass_y=-2.151
-    # The hatch sheet slopes 0.11 m over a 0.78 m rise. Seat the glass 2 cm
-    # behind that plane; the old rear glass hung over the separate rear deck.
-    rear_sheet_y=lambda z: -2.18+(z-1.05)*(.11/.78)
-    assert -.035 < rear_glass_y-rear_sheet_y(1.45) < -.015
-    add("Camp wagon rear hatch glass",(0,rear_glass_y,1.45),(2.08,.028,.69),
-        "AutoGlass","cube",(-.14,0,0))
-    strut("Camp wagon hatch window seal",(-1.06,-2.17,1.10),
-          (1.06,-2.17,1.10),.025,"Rubber",8)
+    wagon_cabin()
+    strut("Camp wagon bonnet crease",(-1.15,1.39,1.12),(-1.08,2.27,.99),.012,"PaintRose",8)
+    strut("Camp wagon bonnet crease",(1.15,1.39,1.12),(1.08,2.27,.99),.012,"PaintRose",8)
+    windshield=[(-1.08,1.415,1.13),(1.08,1.415,1.13),
+                (1.00,.855,1.75),(-1.00,.855,1.75)]
+    formed_mesh("Camp wagon raked windshield",windshield,[(0,1,2,3)],"AutoGlass",thickness=.018)
+    for a,b in ((0,1),(1,2),(2,3),(3,0)):
+        strut("Camp wagon windshield gasket",windshield[a],windshield[b],.027,"Rubber",8)
+    hatch=[(-1.08,-2.25,1.12),(1.08,-2.25,1.12),
+           (1.00,-2.13,1.71),(-1.00,-2.13,1.71)]
+    formed_mesh("Camp wagon rear hatch glass",hatch,[(3,2,1,0)],"AutoGlass",thickness=.018)
+    for a,b in ((0,1),(1,2),(2,3),(3,0)):
+        strut("Camp wagon hatch seal",hatch[a],hatch[b],.025,"Rubber",8)
     box("Camp wagon rear hatch lip",(0,-2.30,1.04),(2.57,.10,.12),"PaintRose",
         edge_radius=.025,edge_segments=2)
-    strut("Windshield lower gasket",(-1.03,1.36,1.09),(1.03,1.36,1.09),.025,"Dark",8)
-    strut("Windshield upper gasket",(-1.03,.80,1.83),(1.03,.80,1.83),.025,"Dark",8)
     for side in (-1, 1):
-        x = side*1.19
-        formed_mesh("Shaped front side glass",[(x,.12,1.14),(x,1.17,1.14),
-            (x,.84,1.72),(x,.12,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
-        formed_mesh("Shaped wagon rear side glass",[(x,-2.04,1.14),(x,-.19,1.14),
-            (x,-.19,1.72),(x,-1.95,1.72)],[(0,1,2,3)],"AutoGlass",thickness=.025)
-        box("Camp car B pillar", (x, -.07, 1.48), (.07, .09, .55), "PaintRose")
-        box("Camp wagon C pillar",(x,-1.23,1.48),(.08,.10,.59),"PaintRose")
-        box("Camp wagon rear D pillar", (x,-2.07,1.46),(.10,.10,.70),"PaintRose")
-        strut("Front window lower seal",(x,.12,1.13),(x,1.17,1.13),.025,"Dark",8)
-        strut("Rear window lower seal",(x,-2.04,1.13),(x,-.19,1.13),.025,"Dark",8)
+        x = side*1.225
+        front=[(x,.03,1.17),(x,1.15,1.17),(side*1.12,.76,1.68),(side*1.12,.03,1.68)]
+        rear=[(x,-1.88,1.17),(x,-.13,1.17),(side*1.12,-.13,1.68),
+              (side*1.12,-1.82,1.68)]
+        formed_mesh("Camp wagon front door glass",front,[(0,1,2,3)],"AutoGlass",thickness=.018)
+        formed_mesh("Camp wagon cargo glass",rear,[(0,1,2,3)],"AutoGlass",thickness=.018)
+        for pane in (front,rear):
+            for a,b in ((0,1),(1,2),(2,3),(3,0)):
+                strut("Camp wagon side glass gasket",pane[a],pane[b],.020,"Rubber",8)
+        strut("Camp wagon B pillar",(side*1.245,-.06,1.13),
+              (side*1.13,-.06,1.74),.055,"PaintRose",8)
+        strut("Camp wagon cargo pillar",(side*1.245,-1.13,1.13),
+              (side*1.13,-1.13,1.74),.055,"PaintRose",8)
+        strut("Camp wagon rear D pillar",(side*1.23,-2.09,1.13),
+              (side*1.12,-1.95,1.76),.065,"PaintRose",8)
         box("Camp car door seam", (side*1.43, .03, .70), (.028, .035, .61), "Dark")
         box("Camp car door handle", (side*1.46, .38, 1.01), (.07, .28, .07), "Metal")
         box("Camp car rear door seam", (side*1.43, -1.00, .70), (.028, .035, .61), "Dark")
@@ -896,8 +940,8 @@ def camp_car():
         strut("Camp wagon roof rail",(side*1.00,-1.92,1.94),
               (side*1.00,.55,1.94),.035,"Metal",8)
     box("Camp wagon rear hatch handle",(0,-2.45,.96),(.54,.055,.08),"Metal")
-    strut("Camp wagon rear wiper",(-.70,-2.16,1.17),
-          (.48,-2.17,1.25),.018,"Rubber",8)
+    strut("Camp wagon rear wiper",(-.70,-2.255,1.17),
+          (.48,-2.245,1.25),.018,"Rubber",8)
     for x in (-.95, .95):
         box("Camp car headlamp", (x, 2.40, .92), (.39, .06, .22), "Cream")
         box("Camp car taillamp", (x, -2.40, .89), (.35, .06, .24), "Rose")

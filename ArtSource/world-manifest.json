@@ -93,9 +93,9 @@
       "triangles": 204
     },
     "FestivalCampCar": {
-      "parts": 97,
+      "parts": 115,
       "renderers": 8,
-      "triangles": 4132
+      "triangles": 4836
     },
     "FestivalCampVan": {
       "parts": 81,

@@ -1,5 +1,6 @@
 """Disposable neutral-light geometry views of staged Blender world assets."""
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -51,6 +52,8 @@ for name, position, target, scale in (
     ("FestivalSecurity", (7,9,6), (0,0,1.5), 8.6),
     ("FestivalShuttle", (11,-9,6), (0,0,1.5), 11),
 ):
+    if os.environ.get("FESTIVAL_REVIEW_ASSET") and name != os.environ["FESTIVAL_REVIEW_ASSET"]:
+        continue
     index = names.index(name)
     shift_x, shift_y = (index % 4)*25, -(index // 4)*25
     for obj in scene.objects:
