@@ -533,11 +533,20 @@ def shirt(v):
          (1.46,width*.98,.215,0),(1.51,.25,.177,0),(1.56,.156,.133,0)],1,"Spine"))
     ring("neck binding",1.545,1.575,(.162,.143),(.140,.121),7,"Spine",28)
     ring("garment hem",bottom,bottom+.028,(width,.253),(width-.018,.229),1,"Spine",28)
+    # Readable sewn construction at conversational distance, shared by every
+    # wardrobe fit rather than painted-on noise.
+    for side in (-1,1):
+        x=side*(width*.54)
+        cord("front panel stitch",[(x,-.233,bottom+.07),(x*1.03,-.248,1.13),(x*.96,-.231,1.36)],.0045,7,"Spine")
+    cord("upper chest yoke",[(-.27,-.18,1.37),(-.14,-.232,1.385),(0,-.24,1.39),(.14,-.232,1.385),(.27,-.18,1.37)],.006,7,"Spine")
+    for x in (-.10,.10):
+        piece("small woven badge rivet",(x,-.254,bottom+.085),(.013,.009,.013),7,"Spine")
     for side,x in (("L",-1),("R",1)):
         end=1.17 if v!=2 else 1.29
         refine(loft("tailored sleeve",[(end,.111,.132,0),(end+.025,.12,.143,0),(1.36,.135,.15,0),(1.44,.10,.119,0)],1,"Arm"+side,center=(x*.375,0),sides=24))
         for k in range(2):
             cord("sleeve fold",[(x*.375+t,-.13,1.30+k*.055+abs(t)*.16) for t in (-.085,-.045,0,.045,.085)],.006,1,"Arm"+side)
+        cord("sleeve cuff binding",[(x*.375+.113*math.cos(a*math.tau/12),.133*math.sin(a*math.tau/12),end+.012) for a in range(13)],.007,7,"Arm"+side)
     if v==1:
         piece("folded hood",(0,.165,1.53),(.24,.12,.12),1,"Spine")
         piece("kangaroo pocket",(0,-.249,1.10),(.195,.021,.092),1,"Spine","cube")
@@ -545,6 +554,7 @@ def shirt(v):
             cord("drawstring",[(x,-.16,1.54),(x*1.1,-.24,1.43),(x*.9,-.266,1.30)],.009,4,"Spine")
     if v in (2,3):
         cord("zipper",[(0,-.258,1.01),(0,-.259,1.25),(0,-.22,1.45),(0,-.15,1.55)],.008,5,"Spine")
+        piece("zip pull",(0,-.277,1.28),(.024,.012,.045),7,"Spine","cube")
         for x in (-.19,.19):
             piece("jacket pocket",(x,-.241,1.16),(.10,.02,.07),1,"Spine","cube")
             cord("pocket welt",[(x-.08,-.264,1.19),(x+.08,-.264,1.19)],.008,7,"Spine")
@@ -556,6 +566,8 @@ def shirt(v):
 
 def lower(v):
     loft("fitted waistband",[(.79,.305,.23,0),(.86,.33,.245,0),(.92,.30,.224,0)],2,"Hips")
+    for x in (-.23,-.07,.07,.23):
+        piece("belt loop",(x,-.244,.865),(.026,.013,.09),7,"Hips","cube")
     if v in (0,1):
         for side,x in (("L",-1),("R",1)):
             if v==0:
@@ -567,6 +579,7 @@ def lower(v):
                 loft("trouser cuff",[(.145,.107,.116,0),(.18,.108,.116,0)],2,"Shin"+side,center=(x*.20,0),sides=24)
             piece("stitched side pocket",(x*.30,-.035,.77),(.041,.079,.084),2,"Leg"+side,"cube")
             cord("pocket seam",[(x*.25,-.15,.82),(x*.28,-.15,.77),(x*.30,-.12,.72)],.006,2,"Leg"+side)
+            cord("contrast trouser side seam",[(x*.34,-.02,.76),(x*.32,-.02,.56),(x*.27,-.02,.38)],.005,7,"Leg"+side)
     elif v==2:
         tapered_shell("A-line skirt shell",.43,.89,(.45,.51),(.34,.29),2)
         for i in range(12):

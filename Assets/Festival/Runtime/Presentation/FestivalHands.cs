@@ -10,7 +10,8 @@ namespace Festival.Presentation
         Material material;
         Texture2D palette;
         Vector3 rest;
-        GameObject leftPoi,rightPoi,carriedBand;
+        FestivalPoiRig leftPoi,rightPoi,equippedPoi;
+        GameObject carriedBand;
         GameObject unpaidProp,equippedProp;
         string unpaidId="",equippedId="";
         int previousCash=-1;
@@ -27,7 +28,7 @@ namespace Festival.Presentation
             }
             var go=Instantiate(prefab,camera.transform);
             go.name="First-person festival hands";
-            go.transform.localPosition=new Vector3(0,-.30f,.08f);
+            go.transform.localPosition=new Vector3(0,-.28f,.35f);
             go.transform.localRotation=Quaternion.identity;
             go.transform.localScale=Vector3.one*.56f;
             var hands=go.AddComponent<FestivalHands>();
@@ -44,8 +45,8 @@ namespace Festival.Presentation
                 renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
             }
             hands.rest=go.transform.localPosition;
-            hands.leftPoi=Held(go.transform,"FestivalPoi",new Vector3(-.38f,-.14f,1.05f),.45f);
-            hands.rightPoi=Held(go.transform,"FestivalPoi",new Vector3(.38f,-.14f,1.05f),.45f);
+            hands.leftPoi=FestivalPoiRig.Create(camera.transform,new Vector3(-.24f,-.48f,.72f),0,true,true);
+            hands.rightPoi=FestivalPoiRig.Create(camera.transform,new Vector3(.24f,-.48f,.72f),1,true,true);
             hands.carriedBand=Held(go.transform,"FestivalWristband",new Vector3(.30f,-.36f,.84f),.32f);
             hands.SetState(null);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -74,18 +75,25 @@ namespace Festival.Presentation
                 }
             }
             string equipped=player?.EquippedItemId??"";
+            if(equipped=="little_spoon")equipped=""; // Passive neck item, never a hand prop.
             if(equipped!=equippedId)
             {
                 if(equippedProp!=null)Destroy(equippedProp);
+                if(equippedPoi!=null)Destroy(equippedPoi.gameObject);
                 equippedProp=null;equippedId=equipped;
-                var resource=FestivalSession.DropModel(equipped);
-                if(resource!=null)equippedProp=Held(transform,resource,new Vector3(.38f,-.14f,1.0f),.42f);
+                if(equipped=="poi_led"||equipped=="poi_practice")equippedPoi=FestivalPoiRig.Create(transform,new Vector3(.42f,-.28f,.90f),1,equipped=="poi_led",true);
+                else
+                {
+                    var resource=FestivalSession.DropModel(equipped);
+                    if(resource!=null)equippedProp=Held(transform,resource,new Vector3(.42f,-.36f,.90f),.42f);
+                }
             }
             bool poi=player!=null && player.VisualPose=="Poi";
-            if(leftPoi!=null)leftPoi.SetActive(poi);
-            if(rightPoi!=null)rightPoi.SetActive(poi);
+            if(leftPoi!=null){leftPoi.gameObject.SetActive(poi);leftPoi.Spinning=poi;}
+            if(rightPoi!=null){rightPoi.gameObject.SetActive(poi);rightPoi.Spinning=poi;}
             if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !poi && held=="");
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&player.Life=="Alive");
+            if(equippedPoi!=null)equippedPoi.gameObject.SetActive(held==""&&!poi&&player.Life=="Alive");
             previousCash=player?.Cash??-1;
         }
         void LateUpdate()
@@ -93,8 +101,6 @@ namespace Festival.Presentation
             // Small, non-authoritative breathing motion. Hands never move gameplay targets.
             float handoff=Mathf.Clamp01(1-(Time.time-handoffAt)/.38f);
             transform.localPosition=rest+new Vector3(Mathf.Sin(Time.time*1.7f)*.006f,Mathf.Sin(Time.time*2.1f)*.008f,.16f*Mathf.Sin((1-handoff)*Mathf.PI)*handoff);
-            if(leftPoi!=null&&leftPoi.activeSelf)leftPoi.transform.localRotation=Quaternion.Euler(0,0,Mathf.Sin(Time.time*7)*18);
-            if(rightPoi!=null&&rightPoi.activeSelf)rightPoi.transform.localRotation=Quaternion.Euler(0,0,-Mathf.Sin(Time.time*7+1)*18);
         }
         void OnDestroy()
         {

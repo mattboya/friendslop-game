@@ -9,11 +9,11 @@ namespace Festival.Core
     [Serializable] public sealed class ItemStack { public string ItemId=""; public int Count; }
     [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId=""; public double RemainingSeconds, StartSeconds; }
     [Serializable] public sealed class PlayerState {
-        public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", HeldOfferId="", EquippedItemId="";
+        public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
         public bool Ready, Connected=true, MapReady, HasCosmetic, WearingLittleSpoon, VisualWideEyes, VisualRedEyes;
-        public float X,Z,Yaw; public int Cash=20,Health=100,RevivalCount;
+        public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
-        public int Performances; public double LastRhythmScore=-1;
+        public int Performances, CampAntics; public double LastRhythmScore=-1;
         public int EscapeProgress; public string VisualPose="Idle",NpcSpeech="",NpcSpeaker=""; public double NpcSpeechUntil;
         public int VisualDanceStepSequence,VisualDanceStepDirection=-1;
         public List<ItemStack> Inventory=new List<ItemStack>(); public List<ActiveEffect> Effects=new List<ActiveEffect>();
@@ -37,13 +37,16 @@ namespace Festival.Core
     [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
     [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); }
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }
+    [Serializable] public sealed class CampReviewVote { public string PlayerId=""; public int Award; }
     [Serializable] public sealed class RoundState {
         public int SchemaVersion=1, Seed; public string RoundId="",Phase="Shopping",Result="",HostPlayerId="",MissionId="rescue_compact";
         public double ElapsedSeconds,DurationSeconds=600,SimulationSeconds,LaunchAtSeconds; public long Tick,TransactionSequence,EntitySequence;
         public int CluesRead, ObjectiveReward, SurvivorBonus, Survivors, ConnectedCrewCount;
         public bool GateOpened;
         public string PrivateClue="";
-        public int GrossSales,StashCash,LostPropertyTask=1; public bool FriendFound,RewardCommitted;
+        public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
+        public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
+        public List<CampReviewVote> ReviewVotes=new List<CampReviewVote>();
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();

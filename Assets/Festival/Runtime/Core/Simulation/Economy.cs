@@ -42,7 +42,8 @@ public sealed partial class FestivalSimulation {
         }
         if(p.Cash<item.Price)return Reject("Insufficient cash");
         if(!CanAdd(p,c.ItemId,1))return Reject("Three slots or stack limit reached");
-        p.Cash-=item.Price;Add(p,c.ItemId,1);p.EquippedItemId=c.ItemId;
+        p.Cash-=item.Price;Add(p,c.ItemId,1);
+        if(c.ItemId!="little_spoon")p.EquippedItemId=c.ItemId;
         if(camp)p.HeldOfferId="";else stock.MarketAvailable--;
         return Ok(item.Name+" bought for $"+item.Price);
     }
@@ -50,6 +51,7 @@ public sealed partial class FestivalSimulation {
     {
         if(string.IsNullOrEmpty(c.ItemId)) {p.EquippedItemId="";return Ok("Hands free");}
         if(Count(p,c.ItemId)<1)return Reject("Item not owned");
+        if(c.ItemId=="little_spoon")return Reject("Little Spoon is worn automatically as a necklace");
         p.EquippedItemId=c.ItemId;
         return Ok("Equipped "+Catalog.FindItem(c.ItemId).Name+". Press Q to use.");
     }

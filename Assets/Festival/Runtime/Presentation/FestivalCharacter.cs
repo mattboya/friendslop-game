@@ -50,7 +50,8 @@ namespace Festival.Presentation
         int intoxicatedEyesIndex=-1;
         public bool HighlyIntoxicated { get; private set; }
         public bool RedEyes { get; private set; }
-        GameObject poiLeft,poiRight,equippedProp;
+        FestivalPoiRig poiLeft,poiRight,equippedPoi;
+        GameObject equippedProp;
         string equippedId="";
         public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
         {
@@ -161,8 +162,14 @@ namespace Festival.Presentation
             if(equippedId==itemId)return;
             equippedId=itemId;
             if(equippedProp!=null)Destroy(equippedProp);
+            if(equippedPoi!=null)Destroy(equippedPoi.gameObject);
             equippedProp=null;
             if(itemId==""||itemId=="little_spoon"||!bones.TryGetValue("HandR",out var hand))return;
+            if(itemId=="poi_led"||itemId=="poi_practice")
+            {
+                equippedPoi=FestivalPoiRig.Create(hand,new Vector3(0,-.05f,0),1,itemId=="poi_led");
+                return;
+            }
             var resource=Festival.Network.FestivalSession.DropModel(itemId);
             if(resource==null)return;
             equippedProp=FestivalArtView.Create(hand,resource);
@@ -216,14 +223,15 @@ namespace Festival.Presentation
             }
             bool performingPoi=Pose=="Poi";
             if(performingPoi && poiLeft==null)PreparePoi();
-            if(poiLeft!=null)poiLeft.SetActive(performingPoi);
-            if(poiRight!=null)poiRight.SetActive(performingPoi);
+            if(poiLeft!=null){poiLeft.gameObject.SetActive(performingPoi);poiLeft.Spinning=performingPoi;}
+            if(poiRight!=null){poiRight.gameObject.SetActive(performingPoi);poiRight.Spinning=performingPoi;}
             var delta=hasPrevious?transform.position-previous:Vector3.zero;previous=transform.position;hasPrevious=true;
             float measuredSpeed=hasPrevious&&delta.magnitude<2?Mathf.Min(6,delta.magnitude/animationDelta):0;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
             if(measuredSpeed>.12f)walkCycle+=delta.magnitude*(Mathf.PI*2/1.25f);
             float t=Time.time*4+phase,wave=Mathf.Sin(t),walk=Mathf.Sin(walkCycle);
             if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit");
+            if(equippedPoi!=null)equippedPoi.gameObject.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit");
             foreach(var item in bones)targets[item.Key]=rest[item.Key];
             bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose=="Dj"||Pose=="Distracted";
             if(Pose=="Downed")
@@ -330,21 +338,8 @@ namespace Festival.Presentation
         void Layer(string bone,Vector3 angle){if(targets.TryGetValue(bone,out var target))targets[bone]=target*Quaternion.Euler(angle);}
         void PreparePoi()
         {
-            if(bones.TryGetValue("HandL",out var left))poiLeft=Poi(left,0);
-            if(bones.TryGetValue("HandR",out var right))poiRight=Poi(right,1);
-        }
-        static GameObject Poi(Transform hand,int side)
-        {
-            var go=FestivalArtView.Create(hand,"FestivalPoi");if(go==null)return null;
-            go.transform.localPosition=new Vector3(0,-.55f,0);
-            go.transform.localRotation=Quaternion.Euler(0,0,side==0?-18:18);
-            var inherited=hand.lossyScale;
-            go.transform.localScale=new Vector3(.53f/Mathf.Max(.01f,Mathf.Abs(inherited.x)),.53f/Mathf.Max(.01f,Mathf.Abs(inherited.y)),.53f/Mathf.Max(.01f,Mathf.Abs(inherited.z)));
-            var trailPoint=new GameObject("LED poi trail point");trailPoint.transform.SetParent(go.transform,false);trailPoint.transform.localPosition=new Vector3(0,.13f,0);
-            var trail=trailPoint.AddComponent<TrailRenderer>();trail.time=.28f;trail.startWidth=.11f;trail.endWidth=.01f;
-            trail.minVertexDistance=.06f;trail.material=FestivalArtView.MaterialFor(side==0?"Mint":"Rose");
-            trail.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
-            return go;
+            if(bones.TryGetValue("HandL",out var left))poiLeft=FestivalPoiRig.Create(left,new Vector3(0,-.05f,0),0,true);
+            if(bones.TryGetValue("HandR",out var right))poiRight=FestivalPoiRig.Create(right,new Vector3(0,-.05f,0),1,true);
         }
         void OnDestroy()
         {

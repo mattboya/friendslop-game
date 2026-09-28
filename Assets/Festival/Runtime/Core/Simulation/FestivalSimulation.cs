@@ -40,7 +40,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.StashCash<0||state.GrossSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.StashCash<0||state.GrossSales<0)throw new ArgumentException("Incomplete snapshot");
             State=state;
         }
         public CommandResult Execute(string playerId,GameCommand command) {
@@ -62,7 +62,10 @@ namespace Festival.Core
                 StartRound(connected);return Ok();
             }
             if(c.Kind=="MapReady") {if(State.Phase!="Loading")return Reject("Map is not loading");p.MapReady=true;if(!State.Players.Exists(x=>x.Connected&&!x.MapReady)){for(int index=0;index<State.Players.Count;index++){var teammate=State.Players[index];teammate.X=-7+2*index;teammate.Z=-29;}State.Phase="Playing";}return Ok();}
-            if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can reset after results");ResetRound();return Ok();}
+            if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can bring the crew back after results");BeginCampReview();return Ok("Back at camp: review the round before shopping");}
+            if(c.Kind=="ReviewVote")return VoteForReview(p,c);
+            if(c.Kind=="FinishReview")return FinishCampReview(p);
+            if(c.Kind=="EnterCamp"||c.Kind=="ExitCamp"||c.Kind=="CampAntic"||c.Kind=="ChooseCampTrack")return CampAction(p,c);
             if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");p.Dialogue.Acknowledge(c.TargetId,current.Id);return Ok();}
             if(c.Kind=="Cancel") {Cancel(p,"Cancelled");return Ok();}
             if(c.Kind=="Rhythm")return Submit(p,c);
@@ -71,6 +74,7 @@ namespace Festival.Core
             if(c.Kind=="BeginRevival"&&p.Life=="Spirit")return Revive(p,c);
             if(p.Life!="Alive")return Reject("Requires a living, free player");
             if(State.Phase!="Playing"&&State.Phase!="Shopping")return Reject("Round is not interactive");
+            if(p.CampVisitId!="")return Reject("Leave the camp interior first");
             if(c.Kind=="HoldOffer")return HoldOffer(p,c);
             if(c.Kind=="ReturnOffer")return ReturnHeldOffer(p);
             if(c.Kind=="Buy")return Buy(p,c);
@@ -105,7 +109,15 @@ namespace Festival.Core
             }
         }
         public bool TryMove(string playerId,float x,float z,float yaw,double deltaSeconds) {
-            var p=Player(playerId);if(p==null||!p.Connected||(State.Phase!="Shopping"&&State.Phase!="Playing")||!Finite(x)||!Finite(z)||!Finite(yaw)||!Finite(deltaSeconds)||deltaSeconds<=0||deltaSeconds>.5||Math.Abs(x)>39||Math.Abs(z)>39)return false;
+            var p=Player(playerId);if(p==null||!p.Connected||(State.Phase!="Shopping"&&State.Phase!="CampReview"&&State.Phase!="Playing")||!Finite(x)||!Finite(z)||!Finite(yaw)||!Finite(deltaSeconds)||deltaSeconds<=0||deltaSeconds>.5||Math.Abs(x)>39||Math.Abs(z)>39)return false;
+            if(p.CampVisitId!="")
+            {
+                var site=CampFeatures.Find(p.CampVisitId);if(site==null)return false;
+                float roomZ=CampFeatures.InteriorZ(site.Kind);
+                if(Math.Abs(x-CampFeatures.InteriorX)>2.3f||Math.Abs(z-roomZ)>2.3f)return false;
+                if(Distance(p.CampInteriorX,p.CampInteriorZ,x,z)>4.2*deltaSeconds+.03)return false;
+                p.CampInteriorX=x;p.CampInteriorZ=z;p.Yaw=yaw%360;return true;
+            }
             if(State.Phase=="Shopping"&&p.Ready&&Distance(p.X,p.Z,x,z)>.001)return false;
             double speed=6*Intoxication.MovementMultiplier(p);if(p.InteractionId!="")speed=1;if(p.DragTargetId!="")speed=2;
             if(p.Life=="Downed")speed=.8;
@@ -130,6 +142,67 @@ namespace Festival.Core
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             State.LaunchAtSeconds=0;State.Phase="Loading";
         }
-        void ResetRound(){var old=State;State=CreateRound(old.Seed+1);foreach(var p in old.Players){var fresh=AddPlayer(p.Id,p.Name);fresh.Connected=p.Connected;fresh.HasCosmetic=p.HasCosmetic;fresh.Dialogue=p.Dialogue;}State.HostPlayerId=old.HostPlayerId;}
+        void BeginCampReview()
+        {
+            var old=State;
+            var next=CreateRound(old.Seed+1);
+            next.ReviewResult=old.Result;next.ReviewSales=old.GrossSales;
+            next.ReviewSurvivors=old.Survivors;
+            foreach(var player in old.Players)next.ReviewAntics+=player.CampAntics;
+            next.CampMusicTrack=old.CampMusicTrack;
+            State=next;
+            foreach(var player in old.Players)
+            {
+                var fresh=AddPlayer(player.Id,player.Name);fresh.Connected=player.Connected;
+                fresh.HasCosmetic=player.HasCosmetic;fresh.Dialogue=player.Dialogue;
+            }
+            State.HostPlayerId=old.HostPlayerId;
+            State.Phase="CampReview";
+        }
+        CommandResult VoteForReview(PlayerState p,GameCommand c)
+        {
+            if(State.Phase!="CampReview"||c.Amount<0||c.Amount>=CampFeatures.ReviewAwards.Length)return Reject("Choose a camp review award");
+            var vote=State.ReviewVotes.Find(v=>v.PlayerId==p.Id);
+            if(vote==null)State.ReviewVotes.Add(new CampReviewVote{PlayerId=p.Id,Award=c.Amount});
+            else vote.Award=c.Amount;
+            return Ok("Review vote: "+CampFeatures.ReviewAwards[c.Amount]);
+        }
+        CommandResult FinishCampReview(PlayerState p)
+        {
+            if(State.Phase!="CampReview"||p.Id!=State.HostPlayerId)return Reject("Only the host can close the camp review");
+            if(State.Players.Exists(player=>player.Connected&&!State.ReviewVotes.Exists(v=>v.PlayerId==player.Id)))return Reject("Wait for every connected player to review the round");
+            State.Phase="Shopping";return Ok("Review closed. Camp supplies are open for the next round");
+        }
+        CommandResult CampAction(PlayerState p,GameCommand c)
+        {
+            if(State.Phase!="Shopping"&&State.Phase!="CampReview")return Reject("Camp activities happen between rounds");
+            if(c.Kind=="ChooseCampTrack")
+            {
+                if(p.CampVisitId!=""||!Near(p,CampFeatures.DjX,CampFeatures.DjZ,3)||c.Amount<0||c.Amount>=CampFeatures.Tracks.Length)return Reject("Choose a track at the camp DJ table");
+                State.CampMusicTrack=c.Amount;return Ok("Camp DJ: "+CampFeatures.Tracks[c.Amount]);
+            }
+            if(c.Kind=="EnterCamp")
+            {
+                var site=CampFeatures.Find(c.TargetId);
+                if(p.Ready||p.CampVisitId!=""||site==null||!Near(p,site.X,site.Z,3.5))return Reject("Stand beside a camp door to enter");
+                p.CampVisitId=site.Id;p.CampGag="";p.X=site.X;p.Z=site.Z;
+                p.CampInteriorX=CampFeatures.InteriorX;p.CampInteriorZ=CampFeatures.InteriorZ(site.Kind)-1.5f;
+                return Ok("Inside the "+site.Kind.ToLowerInvariant());
+            }
+            if(p.CampVisitId=="")return Reject("Enter a camp space first");
+            if(c.Kind=="ExitCamp")
+            {
+                var site=CampFeatures.Find(p.CampVisitId);p.CampVisitId="";p.CampGag="";
+                if(site!=null){p.X=site.X;p.Z=site.Z-3.2f;}
+                return Ok("Back outside");
+            }
+            if(c.Kind=="CampAntic")
+            {
+                var site=CampFeatures.Find(p.CampVisitId);if(site==null)return Reject("Unknown camp space");
+                p.CampGag=CampFeatures.Activity(site.Kind,++p.CampAntics);
+                return Ok(p.CampGag);
+            }
+            return Reject("Unknown camp action");
+        }
     }
 }

@@ -31,6 +31,14 @@ namespace Festival.Presentation
         private readonly List<TextMesh> campTags=new List<TextMesh>();
         private readonly List<TextMesh> marketTags=new List<TextMesh>();
         private readonly List<TextMesh> worldSigns=new List<TextMesh>();
+        private readonly Dictionary<string,GameObject> campInteriors=new Dictionary<string,GameObject>();
+        private readonly Dictionary<string,Transform> campAnticProps=new Dictionary<string,Transform>();
+        private Transform campAnticTarget;
+        private Vector3 campAnticRest;
+        private float campAnticUntil;
+        private int displayedCampAntics;
+        private bool campAnticArmed;
+        private string visibleInterior="";
         private string displayedRound="";
         public bool IsReady { get; private set; }
         public bool NavigationReady => surface != null && surface.navMeshData != null;
@@ -304,20 +312,50 @@ namespace Festival.Presentation
                 var lantern=Box("Camp lantern",new Vector3(x,1.48f,z),new Vector3(.42f,.36f,.42f),i%2==0?lampGold:lampMint,false);
                 var light=lantern.AddComponent<Light>();light.type=LightType.Point;light.range=8;light.intensity=1.8f;light.color=i%2==0?new Color(1,.63f,.35f):new Color(.4f,1,.8f);
             }
-            foreach(var site in new[]{new Vector3(-15,0,8),new Vector3(-15,0,-5),new Vector3(15,0,12),new Vector3(15,0,-5)})
+            foreach(var site in CampFeatures.Sites)
             {
-                Visual("FestivalTent",site);
-                ProxyBox("Tent footprint",site+new Vector3(0,.6f,0),new Vector3(3.4f,1.2f,3.1f),dark);
+                var center=new Vector3(site.X,0,site.Z);
+                var resource=site.Kind=="Tent"?"FestivalTent":site.Kind=="Car"?"FestivalCampCar":"FestivalPortaPotty";
+                var prop=Visual(resource,center);
+                if(prop!=null)
+                {
+                    prop.name=site.Id.EndsWith("1")?resource:site.Id+" "+resource;
+                    prop.transform.localRotation=Quaternion.Euler(0,site.Yaw,0);
+                    // Shared meshes; roof and car colors vary by a small, fixed camp palette.
+                    if(site.Kind=="Car"||site.Kind=="Tent")
+                    {
+                        string accent=site.Id.EndsWith("1")||site.Id.EndsWith("4")?"Rose":site.Id.EndsWith("2")||site.Id.EndsWith("5")?"Mint":"Gold";
+                        foreach(var renderer in prop.GetComponentsInChildren<Renderer>())
+                            if(renderer.name.Contains("__Rose"))renderer.sharedMaterial=FestivalArtView.MaterialFor(accent);
+                        if(site.Kind=="Tent")prop.transform.localScale=Vector3.one*((site.Id.EndsWith("5")||site.Id.EndsWith("6")) ? .87f : 1f);
+                    }
+                }
+                if(site.Kind=="Tent")ProxyBox("Tent footprint",center+new Vector3(0,.6f,0),new Vector3(3.4f,1.2f,3.1f),dark);
+                else if(site.Kind=="Car")
+                {
+                    ProxyBox("Parked car body",center+new Vector3(0,.7f,0),new Vector3(3.4f,1.4f,5.3f),dark);
+                    if(site.Id.EndsWith("2"))Box("Festival road trip surfboard",center+new Vector3(0,1.98f,0),new Vector3(.62f,.11f,2.4f),mint,false);
+                    if(site.Id.EndsWith("3"))Box("Overpacked roof box",center+new Vector3(0,2.03f,-.1f),new Vector3(1.4f,.36f,1.9f),gold,false);
+                    if(site.Id.EndsWith("4"))Box("Camp luggage stack",center+new Vector3(0,1.99f,-.3f),new Vector3(1.5f,.32f,1.3f),rose,false);
+                }
+                else
+                {
+                    ProxyBox("Porta potty cabin",center+new Vector3(0,1.35f,0),new Vector3(2.2f,2.7f,2.2f),dark);
+                    Sign("PORTA POTTY",center+new Vector3(0,2.3f,-1.24f),dark,.1f);
+                }
             }
-            foreach(float x in new[]{-15f,15f})
+            BuildCampInteriors(wood,dark,mint,rose,gold);
+            // The shared DJ is on the gathering mat. The server owns the track choice.
+            Box("Camp DJ table",new Vector3(CampFeatures.DjX,.76f,CampFeatures.DjZ),new Vector3(2.5f,.16f,1.0f),wood,false);
+            Box("Camp DJ deck",new Vector3(CampFeatures.DjX,.89f,CampFeatures.DjZ),new Vector3(1.65f,.10f,.68f),dark,false);
+            foreach(float x in new[]{-1.45f,1.45f})
             {
-                float z=-15;
-                Visual("FestivalCampCar",new Vector3(x,0,z));
-                ProxyBox("Parked car body",new Vector3(x,.7f,z),new Vector3(3.4f,1.4f,5.3f),dark);
+                Box("Camp DJ speaker",new Vector3(CampFeatures.DjX+x,1.16f,CampFeatures.DjZ),new Vector3(.52f,.86f,.44f),dark,false);
+                Box("Camp DJ speaker cone",new Vector3(CampFeatures.DjX+x,1.16f,CampFeatures.DjZ-.25f),new Vector3(.30f,.30f,.04f),mint,false);
             }
-            Visual("FestivalPortaPotty",new Vector3(19,0,6));
-            ProxyBox("Porta potty cabin",new Vector3(19,1.35f,6),new Vector3(2.2f,2.7f,2.2f),dark);
-            Sign("PORTA POTTY",new Vector3(19,2.3f,4.76f),dark,.1f);
+            Sign("CAMP DJ  •  PICK THE VIBE",new Vector3(CampFeatures.DjX,1.78f,CampFeatures.DjZ-.25f),gold,.037f);
+            Box("Round review podium",new Vector3(-8,.62f,3.6f),new Vector3(1.7f,1.2f,.8f),wood,false);
+            Sign("ROUND REVIEW",new Vector3(-8,1.39f,3.15f),rose,.038f);
             // Camp life clusters make the shaded center feel used and provide
             // landmarks without obstructing the seller-to-trailhead route.
             foreach(float x in new[]{-5.2f,5.2f})
@@ -403,6 +441,88 @@ namespace Festival.Presentation
             campSurface.BuildNavMesh();
             campShopRoot=ShopDisplayRoot("Campsite shelf goods",camp);
             owned=festival;
+        }
+        private void BuildCampInteriors(Material wood,Material dark,Material mint,Material rose,Material gold)
+        {
+            var previous=owned;
+            foreach(var kind in new[]{"Car","Tent","Potty"})
+            {
+                var room=new GameObject(kind+" interior room");room.transform.SetParent(camp,false);
+                campInteriors[kind]=room;owned=room.transform;
+                var center=CampInteriorPosition(kind);
+                var wall=kind=="Tent"?rose:kind=="Potty"?artMaterials["Blue"]:dark;
+                Box(kind+" interior floor",center+new Vector3(0,.02f,0),new Vector3(5.8f,.12f,5.8f),kind=="Tent"?artMaterials["Cream"]:wood,false);
+                Box(kind+" interior rear",center+new Vector3(0,1.55f,2.9f),new Vector3(5.8f,3.1f,.18f),wall,false);
+                Box(kind+" interior front",center+new Vector3(0,1.55f,-2.9f),new Vector3(5.8f,3.1f,.18f),wall,false);
+                Box(kind+" interior left",center+new Vector3(-2.9f,1.55f,0),new Vector3(.18f,3.1f,5.8f),wall,false);
+                Box(kind+" interior right",center+new Vector3(2.9f,1.55f,0),new Vector3(.18f,3.1f,5.8f),wall,false);
+                Box(kind+" interior ceiling",center+new Vector3(0,3.1f,0),new Vector3(5.8f,.18f,5.8f),wall,false);
+                var roomLamp=new GameObject(kind+" interior lamp");roomLamp.transform.SetParent(room.transform,false);
+                roomLamp.transform.position=center+new Vector3(0,2.65f,-.35f);
+                var interiorLight=roomLamp.AddComponent<Light>();interiorLight.type=LightType.Point;
+                interiorLight.range=7;interiorLight.intensity=2.8f;interiorLight.shadows=LightShadows.None;
+                interiorLight.color=kind=="Potty"?new Color(.7f,.9f,1f):new Color(1f,.86f,.66f);
+                Box(kind+" lamp shade",center+new Vector3(0,2.95f,-.35f),new Vector3(.65f,.12f,.65f),gold,false);
+                if(kind=="Car")
+                {
+                    Box("Car windshield",center+new Vector3(0,1.85f,2.76f),new Vector3(4.45f,1.4f,.07f),artMaterials["Glass"],false);
+                    Box("Car dashboard",center+new Vector3(0,.95f,1.7f),new Vector3(4.7f,.35f,1.2f),artMaterials["Metal"],false);
+                    for(int spoke=0;spoke<8;spoke++)
+                    {
+                        float angle=spoke*Mathf.PI/4;
+                        var segment=Box("Car steering wheel rim",center+new Vector3(-1+Mathf.Sin(angle)*.35f,1.48f+Mathf.Cos(angle)*.35f,1.04f),new Vector3(.29f,.07f,.11f),dark,false);
+                        segment.transform.rotation=Quaternion.Euler(0,0,-spoke*45);
+                    }
+                    Box("Car steering wheel hub",center+new Vector3(-1,1.48f,1.04f),new Vector3(.21f,.21f,.16f),gold,false);
+                    Box("Car radio",center+new Vector3(.7f,1.18f,1.08f),new Vector3(.62f,.24f,.12f),dark,false);
+                    Box("Car bobblehead body",center+new Vector3(1.7f,1.35f,1.1f),new Vector3(.18f,.25f,.18f),rose,false);
+                    campAnticProps[kind]=Box("Car bobblehead head",center+new Vector3(1.7f,1.55f,1.1f),Vector3.one*.24f,gold,false).transform;
+                    Box("Car seat",center+new Vector3(0,.51f,-1.2f),new Vector3(3.9f,1.0f,1.0f),rose,false);
+                }
+                else if(kind=="Tent")
+                {
+                    foreach(float x in new[]{-1.15f,1.15f})
+                    {
+                        Box("Tent sleeping bag",center+new Vector3(x,.19f,.1f),new Vector3(1.1f,.19f,3.2f),x<0?mint:gold,false);
+                        Box("Tent pillow",center+new Vector3(x,.32f,1.0f),new Vector3(.85f,.18f,.42f),artMaterials["Cream"],false);
+                    }
+                    Box("Tent tiny lantern",center+new Vector3(0,2.35f,1.9f),Vector3.one*.38f,gold,false);
+                    Box("Tent camp cooler",center+new Vector3(0,.37f,2.1f),new Vector3(.85f,.65f,.7f),artMaterials["Blue"],false);
+                    campAnticProps[kind]=Box("Tent cooler lid",center+new Vector3(0,.72f,2.1f),new Vector3(.9f,.08f,.74f),artMaterials["Cream"],false).transform;
+                    Box("Tent zipper line",center+new Vector3(0,1.5f,2.78f),new Vector3(.05f,2.7f,.05f),gold,false);
+                }
+                else
+                {
+                    Box("Porta seat",center+new Vector3(0,.55f,1.7f),new Vector3(1.15f,1.1f,.9f),artMaterials["Cream"],false);
+                    campAnticProps[kind]=Box("Porta lid",center+new Vector3(0,1.15f,2.13f),new Vector3(1.23f,1.15f,.1f),artMaterials["Cream"],false).transform;
+                    Box("Porta mirror",center+new Vector3(0,1.9f,2.75f),new Vector3(1.2f,.9f,.08f),artMaterials["Glass"],false);
+                    Box("Emergency paper roll",center+new Vector3(1.9f,1.1f,.4f),new Vector3(.5f,.5f,.5f),artMaterials["Cream"],false);
+                    Box("Porta occupied sign",center+new Vector3(0,2.55f,2.68f),new Vector3(.6f,.22f,.1f),rose,false);
+                }
+                room.SetActive(false);
+            }
+            owned=previous;
+        }
+        public static Vector3 CampInteriorPosition(string kind)=>new Vector3(CampFeatures.InteriorX,0,CampFeatures.InteriorZ(kind));
+        public void SetInterior(string kind)
+        {
+            kind=kind??"";
+            if(visibleInterior==kind)return;
+            if(campAnticTarget!=null)campAnticTarget.localPosition=campAnticRest;
+            visibleInterior=kind;
+            foreach(var entry in campInteriors)entry.Value.SetActive(entry.Key==kind);
+            campAnticTarget=campAnticProps.TryGetValue(kind,out var prop)?prop:null;
+            campAnticRest=campAnticTarget==null?Vector3.zero:campAnticTarget.localPosition;
+            campAnticArmed=false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","interior","kind="+(kind==""?"outside":kind));
+#endif
+        }
+        public void SetCampAntics(int count)
+        {
+            if(!campAnticArmed){displayedCampAntics=count;campAnticArmed=true;return;}
+            if(count<=displayedCampAntics){displayedCampAntics=count;return;}
+            displayedCampAntics=count;campAnticUntil=Time.time+1.1f;
         }
         private static Transform ShopDisplayRoot(string name,Transform parent)
         {
@@ -491,6 +611,12 @@ namespace Festival.Presentation
         private void Update()
         {
             float time=Time.time;
+            if(campAnticTarget!=null)
+            {
+                float remaining=Mathf.Clamp01((campAnticUntil-time)/1.1f);
+                float bounce=Mathf.Abs(Mathf.Sin(time*17f))*remaining;
+                campAnticTarget.localPosition=campAnticRest+Vector3.up*bounce*(visibleInterior=="Potty" ? .36f : .22f);
+            }
             var view=FestivalCharacter.ViewTransform;
             if(view!=null)
             {

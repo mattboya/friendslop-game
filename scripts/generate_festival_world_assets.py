@@ -401,32 +401,48 @@ def tent():
 
 
 def camp_car():
-    box("Boxy camp car body", (0, 0, .60), (3.4, 5.2, .85), "Rose")
-    box("Slightly crooked cabin", (0, .20, 1.25), (2.8, 2.8, .82), "Blue")
-    box("Front windshield", (0, 1.63, 1.31), (2.35, .08, .56), "Glass")
-    box("Rear windshield", (0, -1.24, 1.31), (2.35, .08, .56), "Glass")
+    # A readable small hatchback: hood, separate passenger cabin, glass,
+    # four round wheels, mirrors, lamps and recognizable front/rear ends.
+    box("Camp car body lower shell", (0, 0, .65), (2.85, 4.75, .86), "Rose")
+    box("Camp car hood", (0, 1.72, 1.08), (2.64, 1.19, .16), "Rose")
+    box("Camp car rear deck", (0, -1.74, 1.08), (2.64, 1.05, .16), "Rose")
+    # Cabin silhouette is a sloped trapezoid when seen from either side.
+    outline = [(-1.51, 1.05), (-1.05, 1.83), (.77, 1.83), (1.38, 1.05)]
+    n = len(outline)
+    vertices = [(-1.18, y, z) for y, z in outline] + [(1.18, y, z) for y, z in outline]
+    faces = [tuple(range(n)), tuple(reversed(range(n, 2*n)))]
+    faces += [(i, (i+1)%n, n+(i+1)%n, n+i) for i in range(n)]
+    mesh = bpy.data.meshes.new("Cabin shell")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.validate()
+    cabin = bpy.data.objects.new("Camp car cabin shell__Rose", mesh)
+    bpy.context.collection.objects.link(cabin)
+    mesh.materials.append(MATS["Rose"])
+    current.append(cabin)
+    box("Camp car roof skin", (0, -.15, 1.84), (2.27, 1.80, .07), "Rose")
+    add("Camp car front windshield", (0, 1.07, 1.46), (2.08, .035, .83), "Glass", "cube", (.66, 0, 0))
+    add("Camp car rear windshield", (0, -1.29, 1.45), (2.08, .035, .78), "Glass", "cube", (-.48, 0, 0))
     for side in (-1, 1):
-        box("Side glass", (side*1.415, .24, 1.31), (.045, 2.07, .49), "Glass")
-        box("Door seam", (side*1.70, .12, .71), (.025, .035, .54), "Dark")
-        box("Door handle", (side*1.73, .37, .87), (.07, .33, .08), "Metal")
-        box("Wheel arch", (side*1.69, 1.58, .58), (.08, 1.02, .74), "Dark")
-        box("Roof rack rail", (side*1.02, .20, 1.77), (.10, 3.18, .09), "Metal")
-        for y in (-1.1, 1.5):
-            box("Roof rack foot", (side*1.02, y, 1.695), (.12, .12, .09), "Metal")
-    for y in (-1.25, 1.30):
-        box("Roof rack crossbar", (0, y, 1.80), (2.18, .12, .09), "Metal")
-    for x in (-1.58, 1.58):
-        for y in (-1.55, 1.55):
-            add("Chunky wheel", (x, y, .37), (.42, .75, .75), "Dark", "sphere", vertices=8)
-            add("Wheel hub", (x*1.18, y, .37), (.08, .31, .31), "Metal", "cylinder",
-                (0, math.pi/2, 0), vertices=10)
-    for x in (-1.04, 1.04):
-        box("Camp car headlamp", (x, 2.63, .72), (.42, .06, .23), "Gold")
-        box("Camp car taillamp", (x, -2.62, .74), (.40, .06, .23), "Rose")
-    box("Front grille", (0, 2.63, .63), (1.18, .07, .30), "Dark")
-    for i in range(4):
-        box("Grille tooth", (-.39+i*.26, 2.67, .63), (.10, .03, .22), "Metal")
-    box("Front bumper", (0, 2.67, .30), (2.98, .17, .17), "Cream")
+        x = side*1.19
+        box("Camp car side window front", (x, .43, 1.49), (.027, .68, .45), "Glass")
+        box("Camp car side window rear", (x, -.59, 1.49), (.027, .69, .45), "Glass")
+        box("Camp car B pillar", (x, -.07, 1.48), (.07, .09, .55), "Rose")
+        box("Camp car door seam", (side*1.43, .03, .70), (.028, .035, .61), "Dark")
+        box("Camp car door handle", (side*1.46, .38, 1.01), (.07, .28, .07), "Metal")
+        box("Camp car wing mirror", (side*1.50, .96, 1.18), (.26, .27, .15), "Dark")
+        box("Camp car sill", (side*1.43, 0, .28), (.07, 2.8, .10), "Dark")
+        for y in (-1.51, 1.52):
+            add("Round rubber tyre", (side*1.43, y, .40), (.43, .43, .16), "Dark", "cylinder",
+                (0, math.pi/2, 0), vertices=20)
+            add("Wheel hub", (side*1.54, y, .40), (.25, .25, .055), "Metal", "cylinder",
+                (0, math.pi/2, 0), vertices=20)
+    for x in (-.95, .95):
+        box("Camp car headlamp", (x, 2.40, .92), (.39, .06, .22), "Cream")
+        box("Camp car taillamp", (x, -2.40, .89), (.35, .06, .24), "Gold")
+    box("Camp car front grille", (0, 2.41, .67), (1.28, .07, .23), "Dark")
+    box("Camp car front bumper", (0, 2.43, .36), (2.88, .15, .16), "Metal")
+    box("Camp car rear bumper", (0, -2.43, .36), (2.88, .15, .16), "Metal")
+    box("Camp car number plate", (0, 2.52, .47), (.66, .02, .18), "Cream")
 
 
 def camp_shade():

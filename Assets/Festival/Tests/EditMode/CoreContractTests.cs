@@ -7,7 +7,7 @@ namespace Festival.Tests
     {
         [Test] public void CooperativeMissionAndActiveRecovery(){global::MissionTests.Run();}
 
-        [Test] public void BoughtGearEquipsAndSelectionRequiresOwnership()
+        [Test] public void LittleSpoonIsWornAndCannotOccupyAHandSlot()
         {
             var game=new FestivalSimulation(21);var player=game.AddPlayer("host","Host");
             var point=Catalog.ShopPoint(true,game.State.VendorOffers.IndexOf("little_spoon"));
@@ -15,11 +15,11 @@ namespace Festival.Tests
             Assert.That(game.Execute(player.Id,new GameCommand{Id="hold",Kind="HoldOffer",ItemId="little_spoon"}).Accepted,Is.True);
             player.X=0;player.Z=7;
             Assert.That(game.Execute(player.Id,new GameCommand{Id="buy",Kind="Buy",ItemId="little_spoon"}).Accepted,Is.True);
-            Assert.That(player.EquippedItemId,Is.EqualTo("little_spoon"));
+            Assert.That(player.EquippedItemId,Is.Empty);
             Assert.That(game.Execute(player.Id,new GameCommand{Id="unowned",Kind="Equip",ItemId="confetti"}).Accepted,Is.False);
             Assert.That(game.Execute(player.Id,new GameCommand{Id="unequip",Kind="Equip"}).Accepted,Is.True);
             Assert.That(player.EquippedItemId,Is.Empty);
-            Assert.That(game.Execute(player.Id,new GameCommand{Id="reequip",Kind="Equip",ItemId="little_spoon"}).Accepted,Is.True);
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="reequip",Kind="Equip",ItemId="little_spoon"}).Accepted,Is.False);
         }
 
         [Test] public void OnlyDesignatedFestivalgoersChatAndLinesVary()
@@ -124,9 +124,14 @@ namespace Festival.Tests
             Assert.That(host.Inventory.Exists(item=>item.ItemId=="little_spoon"),Is.True);
             game.State.Phase="Results";
             Assert.That(game.Execute(host.Id,Command("next-round","Reset")).Accepted,Is.True);
-            Assert.That(game.State.Phase,Is.EqualTo("Shopping"));
+            Assert.That(game.State.Phase,Is.EqualTo("CampReview"));
             Assert.That(game.Player(host.Id).Z,Is.EqualTo(-9));
             Assert.That(game.Player(host.Id).Inventory,Is.Empty);
+            Assert.That(game.Execute(host.Id,Command("early-shop","FinishReview")).Accepted,Is.False);
+            Assert.That(game.Execute(host.Id,new GameCommand{Id="host-award",Kind="ReviewVote",Amount=0}).Accepted,Is.True);
+            Assert.That(game.Execute(guest.Id,new GameCommand{Id="guest-award",Kind="ReviewVote",Amount=2}).Accepted,Is.True);
+            Assert.That(game.Execute(host.Id,Command("open-shop","FinishReview")).Accepted,Is.True);
+            Assert.That(game.State.Phase,Is.EqualTo("Shopping"));
         }
 
         [Test] public void SharedShelfReservesLastRareCopyAndReturnsUnpaidGearOnLaunch()

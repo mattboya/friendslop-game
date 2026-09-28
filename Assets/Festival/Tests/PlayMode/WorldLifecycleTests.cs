@@ -63,21 +63,23 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
-        [UnityTest]public IEnumerator PoiPoseUsesBlenderPropsWithoutOversizedBoneAttachment()
+        [UnityTest]public IEnumerator PoiPoseKeepsBothGripsAndWeightedHeadsNearHands()
         {
             var root=new GameObject("Poi attachment test");
             try
             {
                 var actor=FestivalCharacter.Create(root.transform,"Poi performer",Color.white);
-                actor.Pose="Poi";yield return null;
-                var props=System.Array.FindAll(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FestivalPoi");
+                actor.Pose="Poi";yield return null;yield return null;
+                var props=actor.GetComponentsInChildren<FestivalPoiRig>(true);
                 Assert.That(props.Length,Is.EqualTo(2));
                 foreach(var prop in props)
                 {
                     Assert.That(prop.gameObject.activeSelf,Is.True);
-                    var renderers=prop.GetComponentsInChildren<MeshRenderer>();
-                    Assert.That(renderers.Length,Is.GreaterThan(0));
-                    foreach(var renderer in renderers)Assert.That(renderer.bounds.size.magnitude,Is.LessThan(2f),renderer.name+" is oversized");
+                    var rope=prop.GetComponent<LineRenderer>();
+                    Assert.That(rope,Is.Not.Null);
+                    Assert.That(Vector3.Distance(rope.GetPosition(0),rope.GetPosition(1)),Is.InRange(.35f,.5f));
+                    foreach(var renderer in prop.GetComponentsInChildren<MeshRenderer>())
+                        Assert.That(renderer.bounds.size.magnitude,Is.LessThan(2f),renderer.name+" is oversized");
                 }
                 actor.Pose="Idle";yield return null;
                 foreach(var prop in props)Assert.That(prop.gameObject.activeSelf,Is.False);

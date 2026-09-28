@@ -8,7 +8,7 @@ The Unity project compiles, automated rule and Unity tests pass, and a macOS dev
 
 ## Open the playable build
 
-Open `Builds/macOS/Development/FestivalCoop.app`. On the main menu, choose **CREATE GAME** to enter the campsite immediately; friends can choose **JOIN GAME** with your LAN address. Pick up a shelf item with E, carry it to the seller, then press E twice to inspect and pay. Bought gear equips automatically; press 1–3 to equip another item and Q to use it. At the lit trailhead, press E to ready. When every connected player is ready, a five-second countdown starts the ten-minute festival level. One player can also complete the full route alone.
+Open `Builds/macOS/Development/FestivalCoop.app`. On the main menu, choose **CREATE GAME** to enter the campsite immediately; friends can choose **JOIN GAME** with your LAN address. Pick up a shelf item with E, carry it to the seller, then press E twice to inspect and pay. Handheld gear equips automatically; the Little Spoon is worn as a necklace. Press 1–3 to equip another handheld item and Q to use it. Explore a car, tent or porta potty with E, use E for its gag, and G to leave; use E at the camp DJ to change the music. At the lit trailhead, press E to ready. When every connected player is ready, a five-second countdown starts the ten-minute festival level. After the round, everyone votes for a silly award with 1–3, and the host opens the shop with E. One player can also complete the full route alone.
 
 See [the playtest guide](docs/PLAYTEST_2026-09-24.md) for the complete objective and recovery steps.
 
@@ -42,8 +42,8 @@ node scripts/launch-local-clients.mjs --binary "Builds/macOS/Development/Festiva
 | Shift | Sprint |
 | E | Primary nearby interaction |
 | F | Chat with a nearby talkative festivalgoer |
-| Q / G | Use / drop equipped item |
-| 1–3 | Equip inventory slot |
+| Q / G | Use / drop equipped item; G exits a camp interior |
+| 1–3 | Equip inventory slot; vote for a review award after a round |
 | Arrow keys | Rhythm inputs |
 | Tab | Hold festival map/objective view |
 | Escape | Menu, shop, detailed nearby actions |

@@ -9,6 +9,7 @@ namespace Festival.Core
         {
             if(state==null||player==null)return "";
             if(state.Phase=="Shopping")return "GATHER AT CAMP • BUY GEAR • READY UP";
+            if(state.Phase=="CampReview")return "CAMP DEBRIEF • VOTE BEFORE SHOPPING";
             if(state.Phase=="Loading")return "HEADING TO THE FESTIVAL";
             if(state.Phase=="Results")return state.Result=="Success"?"FRIEND RESCUED • BACK TO CAMP":"ROUND OVER • BACK TO CAMP";
             if(player.Life=="Downed")return "DOWNED • CALL FOR HELP";
@@ -38,6 +39,7 @@ namespace Festival.Core
                     :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E. Ready at lit trailhead "+Route(player,0,19)+".";
             }
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
+            if(state.Phase=="CampReview")return "Press 1, 2 or 3 to pick the crew's absurd award. Then the host opens the camp shop.";
             if(state.Phase=="Results")return player.Id==state.HostPlayerId
                 ?"Open Escape menu and choose NEXT ROUND to return to camp."
                 :"Waiting for the host to start the next camp round.";

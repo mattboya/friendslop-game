@@ -193,6 +193,18 @@ namespace Festival.Presentation
             captureCamera=null;
             if(!File.Exists(overviewPath)){Fail("camp overview render");yield break;}
             Debug.Log("FESTIVAL SMOKE CAMP OVERVIEW PASSED: "+overviewPath);
+            if(session.IsHost)
+            {
+                captureCamera=session.ViewCamera;
+                capturePosition=new Vector3(-18.5f,1.9f,-19f);
+                captureRotation=Quaternion.LookRotation(new Vector3(-14,1.0f,-15)-capturePosition);
+                yield return new WaitForSeconds(.3f);
+                var carPath=Path.Combine(campDir,"host-camp-car.png");
+                ScreenCapture.CaptureScreenshot(carPath);
+                yield return new WaitForSeconds(.7f);
+                captureCamera=null;
+                if(!File.Exists(carPath)){Fail("camp car render");yield break;}
+            }
             if(session.IsHost){sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;}
             while(!Within(session.LocalPlayer,0,19,3.2f)&&Time.realtimeSinceStartup<deadline)yield return null;
             session.Command("Ready");
@@ -552,6 +564,25 @@ namespace Festival.Presentation
             if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
             var sim=session.DevelopmentSimulation;
             var player=sim.Player(session.LocalPlayerId);
+            string soloCaptureDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(soloCaptureDir);
+            foreach(var id in new[]{"car_1","tent_1","potty_1"})
+            {
+                var site=CampFeatures.Find(id);player.X=site.X;player.Z=site.Z;
+                session.Command("EnterCamp",site.Id);
+                if(player.CampVisitId!=site.Id||!sim.TryMove(player.Id,player.CampInteriorX+.1f,player.CampInteriorZ,0,.1)){Fail("solo enter and walk in "+id);yield break;}
+                yield return new WaitForSeconds(.25f);
+                string interior=Path.Combine(soloCaptureDir,"solo-"+id+"-interior.png");
+                if(File.Exists(interior))File.Delete(interior);
+                ScreenCapture.CaptureScreenshot(interior);yield return new WaitForSeconds(.55f);
+                if(!File.Exists(interior)){Fail("solo interior render "+id);yield break;}
+                session.Command("CampAntic");
+                if(player.CampGag==""){Fail("solo antic "+id);yield break;}
+                session.Command("ExitCamp");
+                if(player.CampVisitId!=""){Fail("solo exit "+id);yield break;}
+            }
+            player.X=CampFeatures.DjX;player.Z=CampFeatures.DjZ;
+            session.Command("ChooseCampTrack",amount:2);
+            if(sim.State.CampMusicTrack!=2){Fail("solo DJ track selection");yield break;}
             var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_mushrooms"));
             player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"stock_mushrooms");
             if(player.HeldOfferId!="stock_mushrooms"){Fail("solo shelf pickup");yield break;}
@@ -560,7 +591,6 @@ namespace Festival.Presentation
             if(player.EquippedItemId!="stock_mushrooms"){Fail("solo purchased gear equips");yield break;}
             player.Z=1;
             yield return new WaitForSeconds(.3f);
-            string soloCaptureDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(soloCaptureDir);
             string equippedCapture=Path.Combine(soloCaptureDir,"solo-equipped-camp.png");
             if(File.Exists(equippedCapture))File.Delete(equippedCapture);
             ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
@@ -568,6 +598,12 @@ namespace Festival.Presentation
             player.Z=19;session.Command("Ready");
             while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.State.Phase!="Playing"){Fail("solo campsite countdown");yield break;}
+            player.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});session.Command("Equip",item:"poi_practice");
+            yield return new WaitForSeconds(.2f);
+            string poiCapture=Path.Combine(soloCaptureDir,"solo-poi-grip.png");
+            if(File.Exists(poiCapture))File.Delete(poiCapture);
+            ScreenCapture.CaptureScreenshot(poiCapture);yield return new WaitForSeconds(.55f);
+            if(!File.Exists(poiCapture)){Fail("solo poi grip render");yield break;}
             sim.State.Npcs.Clear();
             player.X=-18;player.Z=-22;session.Command("Use",item:"stock_mushrooms");
             if(player.Effects.Count==0){Fail("solo consumable use");yield break;}
@@ -624,7 +660,16 @@ namespace Festival.Presentation
             player.X=0;player.Z=-32;sim.State.FriendPosition=new WorldPoint(0,-32);session.Command("Extract");
             while(sim.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(sim.State.Result!="Success"||sim.State.Survivors!=1){Fail("solo shuttle result");yield break;}
-            Debug.Log("FESTIVAL SOLO SMOKE PASSED: camp, purchase, intoxication, clues, conversation, distraction, dance, death, revival, shuttle");
+            session.Command("Reset");
+            if(sim.State.Phase!="CampReview"||sim.State.ReviewResult!="Success"){Fail("solo camp review transition");yield break;}
+            yield return new WaitForSeconds(.2f);
+            string reviewCapture=Path.Combine(soloCaptureDir,"solo-camp-review.png");
+            if(File.Exists(reviewCapture))File.Delete(reviewCapture);
+            ScreenCapture.CaptureScreenshot(reviewCapture);yield return new WaitForSeconds(.55f);
+            if(!File.Exists(reviewCapture)){Fail("solo review render");yield break;}
+            session.Command("ReviewVote",amount:2);session.Command("FinishReview");
+            if(sim.State.Phase!="Shopping"){Fail("solo review before shopping");yield break;}
+            Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, mission, camp review, next shopping");
             Application.Quit(0);
         }
         static string GalleryFaceId(bool deadpan,int ordinal)

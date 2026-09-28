@@ -14,6 +14,19 @@ The scripted rhythm harness separately reported **16.8 ms p95**, 41.7 ms maximum
 
 The expensive view's 1,155 visible renderers and 15.5 ms reported CPU frame time suggest crowd rendering and animation need targeted profiling before denser scenery is accepted. This is an inference from one sampled view, not an identified root cause. Capture CPU/GPU profiler timelines, draw calls, material slots, skinned mesh cost and memory before choosing optimizations or a quality preset.
 
+## Campsite pass follow-up sample
+
+After the camp and character changes, the same two-process 1280×720 Ultra development smoke ran with opt-in graphics sampling. Build `52924ede798a409aaf60dd060728d780`, seed `61446558`:
+
+| Client point sample | Rolling frame p95 | CPU frame | GPU frame | Visible renderers |
+| --- | ---: | ---: | ---: | ---: |
+| Expanded camp | 9.2 ms | 8.3 ms | 1.3 ms | 369 |
+| Populated festival | 16.9 ms | 8.3 ms | 10.4 ms | 1,084 |
+| Populated festival, second sample | 16.7 ms | 12.6 ms | 12.1 ms | 1,076 |
+| Results | 17.1 ms | 8.3 ms | 7.3 ms | 905 |
+
+The camp has more visible geometry while its point sample remains near the earlier frame time. These are different seeds and short rolling windows, so they do not prove a performance gain or a 60 fps guarantee. The populated festival remains near or above a 16.7 ms frame budget. Raw ignored logs: `artifacts/native-smoke/client.log` SHA-256 `4191897edfd9d8bdbd4d8a6e10bf8f037701cde3f7739cb368f02a43009c22a4` and `host.log` SHA-256 `bf1c6d7ff66e04b15a7d7207dd75c8b354d733b858c545a5188ce7864a5fcbf3`.
+
 ## Repeatable visual views
 
 - [Camp arrival](graphics-profile-2026-09-27/created-camp.png)

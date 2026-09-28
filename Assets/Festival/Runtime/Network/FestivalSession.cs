@@ -57,7 +57,8 @@ namespace Festival.Network
         private readonly List<Material> actorMaterials=new List<Material>();
         private readonly Dictionary<string,TextMesh> names=new Dictionary<string,TextMesh>();
         private readonly Dictionary<string,Transform> nameBubbles=new Dictionary<string,Transform>();
-        private float yaw,pitch;
+        private float yaw,pitch,preVisitYaw,preVisitPitch;
+        private string lastCampVisit="";
         private double accumulator,nextSnapshot,nextInput,snapshotReceivedAt,serverClockAtSnapshot,connectAt;
         private int movementSequence;
         private string token="", endpoint="", loadedRound="", acknowledgedDialogue="", profileId="default";
@@ -75,6 +76,7 @@ namespace Festival.Network
             profileId=Argument(args,"--profile","default");
             Profile=new LocalProfile(profileId);Controls=new FestivalInput(profileId);
             gameObject.AddComponent<FestivalRhythmAudio>();
+            gameObject.AddComponent<FestivalCampAudio>();
             var cameraObject=new GameObject("First-person camera");ViewCamera=cameraObject.AddComponent<Camera>();cameraObject.AddComponent<AudioListener>();
             ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=130;ViewCamera.fieldOfView=75;
             FestivalCharacter.ViewTransform=ViewCamera.transform;
@@ -339,13 +341,13 @@ namespace Festival.Network
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
             var player=LocalPlayer;if(player==null)return;
-            if(world!=null){world.SetPhase(State.Phase);world.UpdateShop(State);}
+            if(world!=null){world.SetPhase(State.Phase);world.SetInterior(CampFeatures.Find(player.CampVisitId)?.Kind);world.SetCampAntics(player.CampAntics);world.UpdateShop(State);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
             {
                 if(world!=null&&world.IsReady&&world.NavigationReady){loadedRound=State.RoundId;Command("MapReady");}
                 else Message="Waiting for festival navigation to finish…";
             }
-            if(State.Phase=="Playing" && MenuOpen && lastPhase!="Playing")MenuOpen=false;
+            if((State.Phase=="Playing"||State.Phase=="CampReview") && MenuOpen && lastPhase!=State.Phase)MenuOpen=false;
             lastPhase=State.Phase;
             if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)MenuOpen=!MenuOpen;
             Cursor.lockState=MenuOpen?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=MenuOpen;
@@ -386,7 +388,8 @@ namespace Festival.Network
                 var local=active!=null&&active.Status=="Active"&&FestivalInput.IsRhythmKind(active.Kind)?Vector3.zero:Vector3.ClampMagnitude(new Vector3(input.X,0,input.Z),1);
                 if(local.sqrMagnitude>.0001f)local=Vector3.ClampMagnitude(local+new Vector3(Intoxication.LateralDrift(player,simulation.State.SimulationSeconds)*local.magnitude,0,0),1);
                 var delta=Quaternion.Euler(0,input.Yaw,0)*local*(speed*(float)dt);
-                var origin=new Vector3(player.X,0,player.Z);var target=player.Life=="Spirit"?origin+delta:Slide(origin,delta);
+                var origin=player.CampVisitId!=""?new Vector3(player.CampInteriorX,0,player.CampInteriorZ):new Vector3(player.X,0,player.Z);
+                var target=player.CampVisitId!=""||player.Life=="Spirit"?origin+delta:Slide(origin,delta);
                 simulation.TryMove(player.Id,target.x,target.z,input.Yaw,dt);
             }
         }
@@ -421,7 +424,8 @@ namespace Festival.Network
             // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials.
             var source=simulation.State;var local=simulation.Player(viewer);bool spirit=local?.Life=="Spirit";
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
-                SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,StashCash=source.StashCash,
+                SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
+                ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=source.ReviewVotes,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=!spirit&&source.FriendFound?source.FriendPosition:new WorldPoint(0,0),
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,PrivateClue=FestivalSimulation.ClueHint(source,local),ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count};
             foreach(var p in source.Players)
@@ -454,6 +458,8 @@ namespace Festival.Network
             {
                 if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
                 Actor(p.Id,p.Name,p.X,p.Z,p.Yaw,p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,p.EquippedItemId);seen.Add(p.Id);
+                if(p.CampVisitId=="")seen.Add(p.Id);
+                else seen.Remove(p.Id);
                 if(p.Id==LocalPlayerId)
                 {
                     if(actors[p.Id].gameObject.layer!=31)
@@ -525,9 +531,16 @@ namespace Festival.Network
         private static Color PlayerColor(string id){int h=0;foreach(char c in id)h=unchecked(h*31+c);return Color.HSVToRGB((h&0xffff)/65536f,.6f,.95f);}
         private void UpdateCamera(PlayerState player)
         {
+            if(player.CampVisitId!=lastCampVisit)
+            {
+                if(player.CampVisitId!=""){preVisitYaw=yaw;preVisitPitch=pitch;yaw=0;pitch=0;}
+                else {yaw=preVisitYaw;pitch=preVisitPitch;}
+                lastCampVisit=player.CampVisitId;
+            }
             if(firstPersonHands==null && ViewCamera!=null && !string.IsNullOrEmpty(LocalPlayerId))firstPersonHands=FestivalHands.Create(ViewCamera,LocalPlayerId);
             if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance");firstPersonHands.SetState(player);}
-            var target=new Vector3(player.X,player.Life=="Downed"?.55f:1.65f,player.Z);
+            var visit=CampFeatures.Find(player.CampVisitId);
+            var target=visit==null?new Vector3(player.X,player.Life=="Downed"?.55f:1.65f,player.Z):new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ);
             ViewCamera.transform.position=Vector3.Distance(ViewCamera.transform.position,target)>5?target:Vector3.Lerp(ViewCamera.transform.position,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;
             if(!Profile.Data.ReducedMotion)
@@ -547,7 +560,7 @@ namespace Festival.Network
         {
             closing=true;Connecting=false;Voice.Leave();
             if(manager!=null){manager.OnClientConnectedCallback-=PeerConnected;manager.OnClientDisconnectCallback-=PeerDisconnected;manager.OnTransportFailure-=TransportFailed;manager.Shutdown();Destroy(manager.gameObject);manager=null;}
-            State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";MenuOpen=true;accumulator=0;
+            State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";MenuOpen=true;accumulator=0;
             if(firstPersonHands!=null){Destroy(firstPersonHands.gameObject);firstPersonHands=null;}
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
