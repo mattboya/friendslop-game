@@ -44,8 +44,11 @@ namespace Festival.Presentation
         void LateUpdate(){if(IsVisible&&dancer!=null)PositionCamera();}
         void PositionCamera()
         {
-            var target=dancer.transform.position+Vector3.up*1.05f;
-            var offset=dancer.transform.forward*3.2f+dancer.transform.right*2.6f+Vector3.up*.65f;
+            bool atDeck=dancer.Pose=="Dj";
+            var target=dancer.transform.position+Vector3.up*(atDeck?1.55f:1.05f);
+            var offset=atDeck
+                ? dancer.transform.forward*1.2f+dancer.transform.right*2.4f+Vector3.up*1.1f
+                : dancer.transform.forward*3.2f+dancer.transform.right*2.6f+Vector3.up*.65f;
             // Check scenery along the viewing ray so the camera cannot sit inside a wall.
             float distance=offset.magnitude;
             if(Physics.SphereCast(target,.15f,offset.normalized,out var hit,distance,~(1<<31),QueryTriggerInteraction.Ignore))

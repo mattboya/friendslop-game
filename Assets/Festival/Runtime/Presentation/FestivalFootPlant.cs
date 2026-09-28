@@ -26,6 +26,8 @@ namespace Festival.Presentation
         readonly Transform actor,hips;
         readonly Vector3 restHips;
         readonly Foot left,right;
+        bool danceMode;
+        Vector3 previousDancePosition;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         bool warnedReach;
         bool loggedRouteJump;
@@ -41,6 +43,7 @@ namespace Festival.Presentation
 
         public void Update(bool walking,Vector3 displacement,float speed,float cycle,float strideDistance,float dt)
         {
+            if(danceMode){left.Reset();right.Reset();danceMode=false;}
             if(!walking||displacement.sqrMagnitude>.04f)
             {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -68,6 +71,101 @@ namespace Festival.Presentation
             direction.Normalize();
             Step(left,Mathf.Repeat(cycle/(2*Mathf.PI),1f),direction,strideDistance);
             Step(right,Mathf.Repeat(cycle/(2*Mathf.PI)+.5f,1f),direction,strideDistance);
+        }
+
+        /// <summary>Alternating support and swing feet for in-place festival dance poses.</summary>
+        public void Dance(float beat,int style,float dt)
+        {
+            if(!danceMode||Vector3.Distance(previousDancePosition,actor.position)>.45f)
+            {
+                left.Reset();right.Reset();danceMode=true;
+            }
+            previousDancePosition=actor.position;
+            float scale=actor.lossyScale.y;
+            float pulse=Mathf.Abs(Mathf.Sin(beat));
+            var shift=actor.right*(Mathf.Sin(beat)*.035f*scale)
+                +Vector3.down*((.13f-.020f*pulse)*scale);
+            var pelvis=restHips+hips.parent.InverseTransformVector(shift);
+            hips.localPosition=Vector3.Lerp(hips.localPosition,pelvis,1-Mathf.Exp(-16f*dt));
+            float cycle=beat/(2*Mathf.PI);
+            int phrase=Mathf.FloorToInt(cycle);
+            DanceStep(left,Mathf.Repeat(cycle,1f),-1,style,phrase);
+            DanceStep(right,Mathf.Repeat(cycle+.5f,1f),1,style,phrase);
+        }
+
+        void DanceStep(Foot foot,float phase,int side,int style,int phrase)
+        {
+            const float stanceFraction=.56f;
+            bool stance=phase<stanceFraction;
+            if(!foot.Initialized)
+            {
+                foot.Anchor=foot.Ankle.position;
+                foot.Anchor.y=GroundAnkleHeight(foot);
+                foot.AnchorRotation=foot.Ankle.rotation;
+                foot.SwingFrom=foot.Anchor;
+                foot.SwingFromRotation=foot.AnchorRotation;
+                PlanDanceLanding(foot,side,style,phrase);
+                foot.WasStance=stance;foot.Initialized=true;
+            }
+            else if(stance&&!foot.WasStance)
+            {
+                foot.Anchor=foot.SwingTo;
+                foot.AnchorRotation=foot.SwingToRotation;
+            }
+            else if(!stance&&foot.WasStance)
+            {
+                foot.SwingFrom=foot.Anchor;
+                foot.SwingFromRotation=foot.AnchorRotation;
+                PlanDanceLanding(foot,side,style,phrase);
+            }
+            foot.WasStance=stance;
+            Vector3 target=foot.Anchor;
+            Quaternion orientation=foot.AnchorRotation;
+            if(!stance)
+            {
+                float u=Mathf.Clamp01((phase-stanceFraction)/(1f-stanceFraction));
+                float smooth=u*u*(3-2*u);
+                float lift=(style==0?.15f:style==1?.11f:.20f)*actor.lossyScale.y;
+                target=Vector3.Lerp(foot.SwingFrom,foot.SwingTo,smooth)
+                    +Vector3.up*(lift*Mathf.Sin(u*Mathf.PI));
+                orientation=Quaternion.Slerp(foot.SwingFromRotation,foot.SwingToRotation,smooth);
+            }
+            // The first planted sole may inherit an unreachable position from
+            // the preceding pose, before a planned dance landing exists.
+            target=ClampDanceTarget(foot,target);
+            if(stance)foot.Anchor=target;
+            SolveLeg(foot,target);
+            foot.Ankle.rotation=orientation;
+        }
+
+        void PlanDanceLanding(Foot foot,int side,int style,int phrase)
+        {
+            float direction=(phrase&1)==0?1f:-1f;
+            float lateral=style==1?side*.22f*direction:side*.025f;
+            float forward=style==0?side*.23f*direction:
+                style==1?.055f*direction:side*.27f*direction;
+            foot.SwingTo=actor.TransformPoint(foot.RestInActor)
+                +actor.right*(lateral*actor.lossyScale.y)
+                +actor.forward*(forward*actor.lossyScale.y);
+            foot.SwingTo.y=GroundAnkleHeight(foot);
+            foot.SwingTo=ClampDanceTarget(foot,foot.SwingTo);
+            foot.SwingToRotation=actor.rotation*foot.RestRotationInActor;
+        }
+
+        Vector3 ClampDanceTarget(Foot foot,Vector3 target)
+        {
+            // Clothes and body families change leg length. Keep the landing
+            // on the ground and inside this actor's actual two-bone reach.
+            Vector3 hip=foot.Thigh.position;
+            float reach=Vector3.Distance(hip,foot.Shin.position)
+                +Vector3.Distance(foot.Shin.position,foot.Ankle.position)-.025f;
+            float vertical=target.y-hip.y;
+            float horizontalReach=Mathf.Sqrt(Mathf.Max(0,reach*reach-vertical*vertical));
+            Vector3 horizontal=Vector3.ProjectOnPlane(target-hip,Vector3.up);
+            if(horizontal.sqrMagnitude>horizontalReach*horizontalReach)
+                target=new Vector3(hip.x,target.y,hip.z)
+                    +horizontal.normalized*horizontalReach;
+            return target;
         }
 
         void Step(Foot foot,float phase,Vector3 direction,float strideDistance)

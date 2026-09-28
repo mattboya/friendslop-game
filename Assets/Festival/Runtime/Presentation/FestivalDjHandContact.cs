@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>Visual-only two-bone hand contact with the resident DJ console.</summary>
+    /// <summary>Visual-only two-bone hand contact with a DJ console.</summary>
     internal sealed class FestivalDjHandContact
     {
         readonly Transform actor,console;

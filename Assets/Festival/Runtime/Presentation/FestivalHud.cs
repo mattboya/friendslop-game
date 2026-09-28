@@ -32,7 +32,7 @@ namespace Festival.Presentation
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText;
+        private Text status, notice, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText;
         private Text musicValue,lookValue,motionValue,contrastValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -214,7 +214,7 @@ namespace Festival.Presentation
             rhythmShade=Panel(root.transform,"Rhythm dimmer",new Color(.006f,.019f,.023f,.76f),Vector2.zero,Vector2.one);rhythmShade.GetComponent<Image>().raycastTarget=false;rhythmShade.SetActive(false);
             dancePanel=Card(root.transform,"Live dancer",new Vector2(.505f,.05f),new Vector2(.985f,.95f),true);
             Accent(dancePanel.transform,Mint);
-            var dancerHeading=Label(dancePanel.transform,"Dancer heading",19,TextAnchor.MiddleLeft);dancerHeading.text="YOU  /  ON THE FLOOR";dancerHeading.fontStyle=FontStyle.Normal;dancerHeading.color=Mint;Place(dancerHeading.rectTransform,.07f,.915f,.93f,.985f);
+            dancerHeading=Label(dancePanel.transform,"Dancer heading",19,TextAnchor.MiddleLeft);dancerHeading.text="YOU  /  ON THE FLOOR";dancerHeading.fontStyle=FontStyle.Normal;dancerHeading.color=Mint;Place(dancerHeading.rectTransform,.07f,.915f,.93f,.985f);
             var dancerWindow=Panel(dancePanel.transform,"Dancer window",new Color(.025f,.073f,.083f,1),new Vector2(.04f,.20f),new Vector2(.96f,.90f));dancerWindow.GetComponent<Image>().raycastTarget=false;
             var dancerImageObject=new GameObject("Live character view",typeof(RectTransform),typeof(CanvasRenderer),typeof(RawImage));dancerImageObject.transform.SetParent(dancerWindow.transform,false);
             var dancerImage=dancerImageObject.GetComponent<RawImage>();dancerImage.color=Color.white;dancerImage.raycastTarget=false;Fill(dancerImage.rectTransform,0);
@@ -594,10 +594,15 @@ namespace Festival.Presentation
             var interaction=state.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
             bool rhythm=interaction!=null&&FestivalInput.IsRhythmKind(interaction.Kind);
             rhythmPanel.SetActive(rhythm);
-            bool showDancer=rhythm&&interaction.Kind=="Dance"&&!session.MenuOpen;
+            bool showDancer=rhythm&&(interaction.Kind=="Dance"||interaction.Kind=="Poi"||interaction.Kind=="Dj")&&!session.MenuOpen;
             rhythmShade.SetActive(rhythm&&!session.MenuOpen);
             Place(rhythmPanel.GetComponent<RectTransform>(),showDancer ? .015f : .32f,showDancer ? .05f : .06f,showDancer ? .495f : .68f,showDancer ? .95f : .87f);
             dancePanel.SetActive(showDancer);
+            if(showDancer)
+            {
+                dancerHeading.text=interaction.Kind=="Poi"?"YOU  /  POI CIRCLE":interaction.Kind=="Dj"?"YOU  /  AT THE DECK":"YOU  /  ON THE FLOOR";
+                dancerCaption.text=interaction.Kind=="Poi"?"YOUR POI • YOUR FLOW":interaction.Kind=="Dj"?"YOUR LOOK • YOUR MIX":"YOUR LOOK • YOUR MOVES";
+            }
             if(showDancer)dancePreview.Show(session.LocalWorldCharacter,session.ViewCamera);
             else dancePreview.Hide();
             bool chatter=!rhythm&&!session.MenuOpen&&player.NpcSpeechUntil>session.EstimatedSimulationSeconds&&!string.IsNullOrEmpty(player.NpcSpeech);
@@ -853,7 +858,7 @@ namespace Festival.Presentation
                     if(spirit!=null){AddAction("Revive "+spirit.Name+" — free task",()=>session.Command("BeginRevival",spirit.Id),ref y);AddAction("Revive "+spirit.Name+" — pay $10",()=>session.Command("BeginRevival",spirit.Id,amount:1),ref y);}
                     if(player.Effects.Count>0&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher",()=>session.Command("Use",item:"medical_voucher"),ref y);
                 }
-                if(Near(player,0,26)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
+                if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
                 var npc=Nearest(state.Npcs,player.X,player.Z,2.5f);
                 if(npc!=null)
                 {

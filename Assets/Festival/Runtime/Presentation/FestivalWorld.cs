@@ -46,6 +46,7 @@ namespace Festival.Presentation
         public bool NavigationReady => surface != null && surface.navMeshData != null;
         public bool CampNavigationReady => campSurface != null && campSurface.navMeshData != null;
         public bool IsCampVisible => camp != null && camp.gameObject.activeSelf;
+        public Transform PlayerDjConsole { get; private set; }
         private void Awake() { Build(); }
         public void Build()
         {
@@ -120,6 +121,20 @@ namespace Festival.Presentation
             stageDj.transform.localPosition=new Vector3(0,1.48f,30.84f);
             stageDj.transform.localRotation=Quaternion.Euler(0,180,0);
             stageDj.transform.localScale=Vector3.Scale(Vector3.one,stageDj.ShapeScale);
+            // A reachable satellite deck belongs to the stage-front takeover
+            // anchor. The resident stays at the main mixer behind the stage lip.
+            Box("Takeover deck flight case",new Vector3(Catalog.StageTakeoverX,.48f,Catalog.StageTakeoverZ+.65f),
+                new Vector3(2.45f,.96f,.55f),dark);
+            Box("Takeover case rim",new Vector3(Catalog.StageTakeoverX,.98f,Catalog.StageTakeoverZ+.65f),
+                new Vector3(2.52f,.075f,.62f),artMaterials["Metal"],false);
+            var playerDeck=Visual("FestivalDJDeck",new Vector3(Catalog.StageTakeoverX,.75f,Catalog.StageTakeoverZ+.65f));
+            if(playerDeck!=null)
+            {
+                playerDeck.name="Festival takeover DJ deck";
+                playerDeck.transform.localRotation=Quaternion.Euler(0,180,0);
+                playerDeck.transform.localScale=Vector3.one*.68f;
+                PlayerDjConsole=playerDeck.transform;
+            }
             foreach(float x in new[]{-3.65f,3.65f})
             {
                 var performer=FestivalCharacter.Create(owned,x<0?"stage_hype_west":"stage_hype_east",Color.white);

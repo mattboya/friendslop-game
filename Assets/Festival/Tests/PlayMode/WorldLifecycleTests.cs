@@ -115,6 +115,49 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
+        [UnityTest]public IEnumerator PoiHeadsTradeHighAndLowPositions()
+        {
+            var root=new GameObject("Poi counterphase test");
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Opposed poi performer",Color.white);
+                actor.Pose="Poi";yield return new WaitForSeconds(.3f);
+                var rigs=actor.GetComponentsInChildren<FestivalPoiRig>();
+                Assert.That(rigs.Length,Is.EqualTo(2));
+                var first=rigs[0].GetComponent<LineRenderer>();
+                var second=rigs[1].GetComponent<LineRenderer>();
+                float mostOpposed=1;
+                float start=Time.time;
+                while(Time.time-start<.8f)
+                {
+                    yield return null;
+                    float a=(first.GetPosition(1)-first.GetPosition(0)).normalized.y;
+                    float b=(second.GetPosition(1)-second.GetPosition(0)).normalized.y;
+                    mostOpposed=Mathf.Min(mostOpposed,a*b);
+                }
+                Assert.That(mostOpposed,Is.LessThan(-.4f),"The two heads should trade high and low positions");
+            }
+            finally{Object.Destroy(root);}
+        }
+        [UnityTest]public IEnumerator FirstPersonPoiHeadsSpinWithCameraHands()
+        {
+            var root=new GameObject("First-person poi test");
+            try
+            {
+                var rig=FestivalPoiRig.Create(root.transform,new Vector3(.18f,-.35f,.82f),1,true,true);
+                rig.Spinning=true;
+                var cord=rig.GetComponent<LineRenderer>();
+                float low=1,high=-1,start=Time.time;
+                while(Time.time-start<.9f)
+                {
+                    yield return null;
+                    float vertical=(cord.GetPosition(1)-cord.GetPosition(0)).normalized.y;
+                    low=Mathf.Min(low,vertical);high=Mathf.Max(high,vertical);
+                }
+                Assert.That(low,Is.LessThan(-.5f));Assert.That(high,Is.GreaterThan(.5f));
+            }
+            finally{Object.Destroy(root);}
+        }
         [UnityTest]public IEnumerator DanceMovesShinsAsWellAsArmsWithoutMovingGameplayRoot()
         {
             var root=new GameObject("Dance footwork test");
@@ -134,6 +177,35 @@ namespace Festival.Tests
                 }
                 Assert.That(maximum,Is.GreaterThan(4f));
                 Assert.That(actor.transform.position,Is.EqualTo(position));
+            }
+            finally{Object.Destroy(root);}
+        }
+        [UnityTest]public IEnumerator DanceAlternatesLiftedFeetWithoutMovingTheActor()
+        {
+            var root=new GameObject("Dance support test");
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Dance support performer",Color.white);
+                var left=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FootL");
+                var right=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="FootR");
+                yield return null;
+                float floor=Mathf.Min(left.position.y,right.position.y);
+                var authorityPosition=actor.transform.position;
+                actor.Pose="Dance";
+                float leftLift=0,rightLift=0,start=Time.time;
+                int support=0,samples=0;
+                while(Time.time-start<1f)
+                {
+                    yield return null;
+                    leftLift=Mathf.Max(leftLift,left.position.y-floor);
+                    rightLift=Mathf.Max(rightLift,right.position.y-floor);
+                    if(Mathf.Min(left.position.y,right.position.y)<floor+.065f)support++;
+                    samples++;
+                }
+                Assert.That(leftLift,Is.GreaterThan(.045f));
+                Assert.That(rightLift,Is.GreaterThan(.045f));
+                Assert.That(support,Is.GreaterThan(samples*.6f),"Dance should retain a supporting foot");
+                Assert.That(actor.transform.position,Is.EqualTo(authorityPosition));
             }
             finally{Object.Destroy(root);}
         }
@@ -280,6 +352,7 @@ namespace Festival.Tests
                     Assert.That(camp.Find(name),Is.Not.Null,name+" campsite object missing");
                 world.SetPhase("Playing");
                 Assert.That(world.IsCampVisible,Is.False);
+                Assert.That(world.PlayerDjConsole,Is.Not.Null,"The player takeover needs a physical console");
                 var path=new NavMeshPath();
                 Assert.That(NavMesh.CalculatePath(new Vector3(0,0,-29),new Vector3(24,0,-20),NavMesh.AllAreas,path),Is.True);
                 Assert.That(path.status,Is.EqualTo(NavMeshPathStatus.PathComplete));
@@ -305,6 +378,16 @@ namespace Festival.Tests
                 int count=generated.childCount;world.Build();Assert.That(generated.childCount,Is.EqualTo(count));
                 var crowd=generated.GetComponent<FestivalAmbientCrowd>();Assert.That(crowd,Is.Not.Null);
                 Assert.That(crowd.MemberCount,Is.EqualTo(62));
+                var takeover=FestivalCharacter.Create(generated,"Test player DJ",Color.white);
+                takeover.Pose="Dj";takeover.DjConsole=world.PlayerDjConsole;
+                takeover.transform.position=new Vector3(0,0,26);
+                takeover.transform.localScale=Vector3.Scale(Vector3.one*.82f,takeover.ShapeScale);
+                yield return new WaitForSeconds(.25f);
+                var handL=System.Array.Find(takeover.GetComponentsInChildren<Transform>(),t=>t.name=="HandL");
+                var handR=System.Array.Find(takeover.GetComponentsInChildren<Transform>(),t=>t.name=="HandR");
+                Assert.That(Vector3.Distance(handL.position,world.PlayerDjConsole.TransformPoint(new Vector3(-.46f,.81f,.36f))),Is.LessThan(.17f),"Left hand misses the takeover mixer");
+                Assert.That(Vector3.Distance(handR.position,world.PlayerDjConsole.TransformPoint(new Vector3(.38f,.81f,.33f))),Is.LessThan(.17f),"Right hand misses the takeover mixer");
+                Object.Destroy(takeover.gameObject);
                 var performer=generated.Find("ambient_PoiPerformer_26");Assert.That(performer,Is.Not.Null);
                 Assert.That(performer.GetComponentsInChildren<Collider>(true),Is.Empty);
                 foreach(var name in new[]{"FestivalStage","FestivalDJDeck","FestivalStallSupplies","FestivalStallPerformance","FestivalStallStock","FestivalMedical","FestivalSecurity","FestivalShuttle","FestivalSun","FestivalMoon","FestivalTreeA","FestivalTreeB","FestivalTreeFir","FestivalGroveDetail"})

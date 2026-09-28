@@ -23,6 +23,21 @@ namespace Festival.Tests
             Assert.That(game.Execute(player.Id,new GameCommand{Id="reequip",Kind="Equip",ItemId="little_spoon"}).Accepted,Is.False);
         }
 
+        [Test] public void DjTakeoverPlacesThePlayerAtTheStageFrontDeck()
+        {
+            var game=new FestivalSimulation(23);var player=game.AddPlayer("host","Host");
+            game.State.Phase="Playing";
+            player.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+            player.X=1.4f;player.Z=26;
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="dj-too-far",Kind="Dj"}).Accepted,Is.False);
+            player.X=1.0f;player.Yaw=113;
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="dj-start",Kind="Dj"}).Accepted,Is.True);
+            Assert.That(player.X,Is.EqualTo(0));Assert.That(player.Z,Is.EqualTo(26));
+            Assert.That(player.Yaw,Is.EqualTo(0));
+            Assert.That(game.Interaction(player.InteractionId).Kind,Is.EqualTo("Dj"));
+            Assert.That(player.Inventory.Exists(item=>item.ItemId=="stage_pass"),Is.False);
+        }
+
         [Test] public void SeparateCampDoorsKeepPlayersInSeparateInteriors()
         {
             var game=new FestivalSimulation(21);

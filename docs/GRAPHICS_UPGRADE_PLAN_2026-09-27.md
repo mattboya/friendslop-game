@@ -2,6 +2,7 @@
 
 Date: September 27, 2026  
 Status: Active implementation plan. See the dated checkpoints below for completed and open work.
+Latest motion checkpoint: [poi, dance, and player DJ contact](GRAPHICS_POI_DANCE_DJ_PASS_2026-09-28.md).
 Reference: [Dear Passengers — “Another Friendslop Game” teaser](https://www.youtube.com/watch?v=luWunttkCgY)  
 Overall regression risk: **7/10** — estimated likelihood of disrupting existing functionality during the full upgrade, before the controls below. This is an engineering judgment, not a measured probability.
 Tool constraint: use free tools and assets with documented commercial use rights; do not depend on paid subscriptions or expiring trials.

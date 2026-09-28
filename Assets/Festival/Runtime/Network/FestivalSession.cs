@@ -304,7 +304,7 @@ namespace Festival.Network
                 preview.Execute(player.Id,new GameCommand{Id="preview_start",Kind="Start"});
                 preview.Execute(player.Id,new GameCommand{Id="preview_loaded",Kind="MapReady"});
                 preview.Execute(friend.Id,new GameCommand{Id="preview_friend_loaded",Kind="MapReady"});
-                if(itemId=="stage_pass"){player.X=0;player.Z=26;}
+                if(itemId=="stage_pass"){player.X=Catalog.StageTakeoverX;player.Z=Catalog.StageTakeoverZ;}
                 if(itemId=="medical_voucher")
                 {
                     player.X=24;player.Z=-20;
@@ -465,7 +465,7 @@ namespace Festival.Network
                 if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
                 bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
                 if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
-                Actor(p.Id,p.Name,togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.Yaw,
+                Actor(p.Id,p.Name,togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.VisualPose=="Dj"?0:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,p.EquippedItemId);
                 seen.Add(p.Id);
@@ -514,7 +514,7 @@ namespace Festival.Network
                 names[id]=text;
                 foreach(var child in textObject.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
             }
-            var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);}
+            var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.PlayerDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);}
             tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:pose=="Downed"?-.4f:0,z);
             tr.position=Vector3.Distance(tr.position,target)>5?target:Vector3.Lerp(tr.position,target,1-Mathf.Exp(-15*Time.unscaledDeltaTime));tr.rotation=Quaternion.Euler(0,angle,0);
             var nameTag=names[id];nameTag.text=label;nameTag.transform.parent.rotation=ViewCamera.transform.rotation;

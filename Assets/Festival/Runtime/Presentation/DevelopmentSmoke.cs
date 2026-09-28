@@ -522,6 +522,23 @@ namespace Festival.Presentation
             yield return new WaitForSeconds(.7f);
             if(!File.Exists(djContactPath)){Fail("DJ contact render");yield break;}
             Debug.Log("FESTIVAL SMOKE DJ CONTACT PASSED: "+djContactPath);
+            var playerConsole=FindFirstObjectByType<FestivalWorld>()?.PlayerDjConsole;
+            if(playerConsole==null){Fail("player DJ console");yield break;}
+            var takeoverActor=FestivalCharacter.Create(transform,"Takeover motion review",Color.white);
+            takeoverActor.transform.position=new Vector3(Catalog.StageTakeoverX,0,Catalog.StageTakeoverZ);
+            takeoverActor.transform.localScale=Vector3.Scale(Vector3.one*.82f,takeoverActor.ShapeScale);
+            takeoverActor.Pose="Dj";takeoverActor.DjConsole=playerConsole;
+            capturePosition=new Vector3(2.7f,2.35f,24.45f);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,1.4f,26.55f)-capturePosition);
+            captureCamera.fieldOfView=48;
+            yield return new WaitForSeconds(.45f);
+            var takeoverPath=Path.Combine(dir,session.IsHost?"host-player-dj-contact.png":"client-player-dj-contact.png");
+            if(File.Exists(takeoverPath))File.Delete(takeoverPath);
+            ScreenCapture.CaptureScreenshot(takeoverPath);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(takeoverPath)){Fail("player DJ contact render");yield break;}
+            Debug.Log("FESTIVAL SMOKE PLAYER DJ CONTACT PASSED: "+takeoverPath);
+            Destroy(takeoverActor.gameObject);
             capturePosition=new Vector3(-10,2.4f,-4);
             captureRotation=Quaternion.LookRotation(new Vector3(-24,1.3f,6)-capturePosition);
             yield return new WaitForSeconds(.35f);

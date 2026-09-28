@@ -32,7 +32,9 @@ namespace Festival.Presentation
             root.transform.localScale=new Vector3(invX,invY,invZ);
             var rig=root.AddComponent<FestivalPoiRig>();rig.side=side;rig.firstPerson=firstPerson;
             var actor=parent.GetComponentInParent<FestivalCharacter>();
-            rig.performer=actor!=null?actor.transform:null;
+            // Camera hands have no FestivalCharacter parent. Their own camera
+            // attachment frame still drives the same opposed orbit in first person.
+            rig.performer=actor!=null?actor.transform:firstPerson?parent:null;
             rig.motionPhase=actor!=null?actor.MotionPhase:0;
             var handle=GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             handle.name="Poi handle held in palm";handle.transform.SetParent(root.transform,false);
@@ -80,10 +82,12 @@ namespace Festival.Presentation
                     // The hand drives a continuous full circle. The weighted
                     // head follows a little late, including when the grip
                     // moves, and the taut cord retains its physical length.
-                    float angle=Time.time*9f+motionPhase+side*1.05f;
+                    // Opposed heads trade the high and low positions. A small
+                    // depth wobble gives the cord a visible front/back pass.
+                    float angle=Time.time*9f+motionPhase+side*Mathf.PI;
                     Vector3 orbit=performer.right*Mathf.Sin(angle)
                         +performer.up*Mathf.Cos(angle)
-                        +performer.forward*(.20f*Mathf.Sin(angle*.5f+side));
+                        +performer.forward*(.20f*Mathf.Sin(angle*.5f+side*.7f));
                     Vector3 offset=ball-grip;
                     if(offset.sqrMagnitude<.0001f)offset=Vector3.down;
                     Vector3 previousBall=ball;

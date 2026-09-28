@@ -21,6 +21,8 @@ namespace Festival.Core
     }
     public static class Catalog
     {
+        public const float StageTakeoverX=0f,StageTakeoverZ=26f;
+        public const float StageTakeoverStartRange=1.25f;
         public static readonly ItemDefinition[] Items = {
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
             Item("stock_lsd", "Prism tabs", "Sell for up to $10 or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),

@@ -270,12 +270,13 @@ namespace Festival.Presentation
                     // Handles stay in front of the chest. Wrist and shoulder
                     // accents lead the two circling weighted heads.
                     float circle=Time.time*9f+phase;
-                    Aim("ArmL",new Vector3(-65+Mathf.Sin(circle)*9,0,-33));
-                    Aim("ArmR",new Vector3(-65+Mathf.Sin(circle+1.05f)*9,0,33));
-                    Aim("ForearmL",new Vector3(-66,0,18+Mathf.Sin(circle)*12));
-                    Aim("ForearmR",new Vector3(-66,0,-18-Mathf.Sin(circle+1.05f)*12));
-                    Aim("HandL",new Vector3(Mathf.Cos(circle)*16,0,Mathf.Sin(circle)*12));
-                    Aim("HandR",new Vector3(Mathf.Cos(circle+1.05f)*16,0,-Mathf.Sin(circle+1.05f)*12));
+                    float exchange=Mathf.Sin(circle*.5f);
+                    Aim("ArmL",new Vector3(-53+Mathf.Sin(circle)*12,0,-40+exchange*10));
+                    Aim("ArmR",new Vector3(-53-Mathf.Sin(circle)*12,0,40+exchange*10));
+                    Aim("ForearmL",new Vector3(-50,0,24+exchange*14));
+                    Aim("ForearmR",new Vector3(-50,0,-24+exchange*14));
+                    Aim("HandL",new Vector3(Mathf.Cos(circle)*23,0,Mathf.Sin(circle)*16));
+                    Aim("HandR",new Vector3(-Mathf.Cos(circle)*23,0,-Mathf.Sin(circle)*16));
                     Aim("LegL",new Vector3(Mathf.Max(0,feet)*13,0,0));
                     Aim("LegR",new Vector3(Mathf.Max(0,opposite)*13,0,0));
                     Aim("ShinL",new Vector3(Mathf.Max(0,feet)*14,0,0));
@@ -395,14 +396,23 @@ namespace Festival.Presentation
             }
             float blend=1-Mathf.Exp(-(Pose=="Downed"?7:12)*animationDelta);
             foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
-            footPlant?.Update(!dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
+            if(dance&&Pose!="Dj")
+                footPlant?.Dance(Time.time*(danceStyle==0?12.5f:danceStyle==1?9.5f:10.8f)+phase,
+                    danceStyle,animationDelta);
+            else footPlant?.Update(!dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
                 delta,speed,walkCycle,strideDistance,animationDelta);
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
             {
                 if(djHandContact==null)
+                {
                     djHandContact=new FestivalDjHandContact(transform,DjConsole,
                         bones["ArmL"],bones["ForearmL"],bones["HandL"],
                         bones["ArmR"],bones["ForearmR"],bones["HandR"]);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","dj_console_contact",
+                        "actor="+name+" console="+DjConsole.name);
+#endif
+                }
                 djHandContact.Update(Time.time*6f+phase);
             }
         }
