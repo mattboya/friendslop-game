@@ -59,6 +59,8 @@ The character generator adds original seams, cuff bindings, yokes, belt loops an
 
 `scripts/generate_festival_world_assets.py` now creates shaped canvas for the central shade and tents, branched trunks with varied foliage masses, and a more detailed compact car. It adds distinct vehicle paint and dark glass material families. `scripts/render_world_asset_review.py` produces disposable neutral-light Blender inspection renders from a staged world source. Gameplay collision remains authored in Unity and separate from these visual meshes. The source blend and manifest live in `ArtSource/Generated/` and `ArtSource/`; the reviewed car, shade, tent, and tree FBXs live in `Assets/Festival/Art/Resources`.
 
+The later [grove checkpoint](GRAPHICS_GROVE_AND_CAMP_REACHABILITY_2026-09-27.md) adds original scripted `FestivalTreeFir` and `FestivalGroveDetail` FBXs. Fir needles use the generated leaf surface; fieldstones use the generated ground surface. Both are visual-only and reuse the same staged-source and stable-GUID workflow. The neutral Blender images are inspection evidence rather than native acceptance.
+
 ## September 27 market and stage pass
 
 The stage and three market stall exports add original scripted canvas roofs, stage structure, speaker fronts, slatted counters and small product forms. `FestivalWorld` uses the existing original surface images for canvas, bark, leaves and wood, plus a runtime-generated uncollidable dirt border along the main festival path. The stage lettering is generated from the already licensed project font. No reference-game asset, external texture, model, font or recording was added.

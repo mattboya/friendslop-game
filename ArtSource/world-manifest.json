@@ -62,6 +62,16 @@
       "renderers": 3,
       "triangles": 2812
     },
+    "FestivalTreeFir": {
+      "parts": 31,
+      "renderers": 3,
+      "triangles": 1490
+    },
+    "FestivalGroveDetail": {
+      "parts": 12,
+      "renderers": 5,
+      "triangles": 1722
+    },
     "FestivalTent": {
       "parts": 29,
       "renderers": 6,

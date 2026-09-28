@@ -76,6 +76,9 @@ namespace Festival.Presentation
             distantFestivalEarth.mainTexture=Resources.Load<Texture2D>("FestivalGround");
             distantFestivalEarth.mainTextureScale=new Vector2(32,32);
             Box("Distant festival woodland",new Vector3(0,-.35f,0),new Vector3(220,.68f,220),distantFestivalEarth,false);
+            var farRise=Material(distantFestivalEarth.color);
+            farRise.mainTexture=Resources.Load<Texture2D>("FestivalGround");
+            DistantRise("Festival distant woodland rise",62,79,100,farRise);
             Box("Ground", new Vector3(0,-.3f,0),new Vector3(80,.6f,80),earth);
             var path=Material(new Color(.57f,.39f,.30f));
             path.mainTexture=Resources.Load<Texture2D>("FestivalDirt");
@@ -170,14 +173,14 @@ namespace Festival.Presentation
             {
                 float x=-37+(i%11)*7.4f,z=i<11?38:-38;
                 if(Mathf.Abs(x)<8&&z<0)continue;
-                var tree=Visual(i%2==0?"FestivalTreeA":"FestivalTreeB",new Vector3(x,0,z));
+                var tree=Visual(i%4==0?"FestivalTreeFir":i%2==0?"FestivalTreeA":"FestivalTreeB",new Vector3(x,0,z));
                 if(tree!=null)tree.transform.localScale=Vector3.one*(.85f+i%3*.08f);
             }
             for(int i=0;i<44;i++)
             {
                 float angle=(i+.5f)*(Mathf.PI*2/44f);
                 float radius=46f+(i%4)*3.2f;
-                var tree=Visual(i%3==0?"FestivalTreeB":"FestivalTreeA",
+                var tree=Visual(i%4==0?"FestivalTreeFir":i%3==0?"FestivalTreeB":"FestivalTreeA",
                     new Vector3(Mathf.Cos(angle)*radius,0,Mathf.Sin(angle)*radius));
                 if(tree!=null)
                 {
@@ -220,6 +223,15 @@ namespace Festival.Presentation
                 if(Mathf.Abs(x)<5||Mathf.Abs(z+20)<3)continue;
                 var tuft=Box("Grass tuft",new Vector3(x,.16f,z),new Vector3(.08f,.32f,.36f),i%4==0?gold:leafWarm,false);
                 tuft.transform.localRotation=Quaternion.Euler(0,(i*137)%180,0);
+            }
+            // A few larger, authored undergrowth shapes ground the woodland
+            // without filling the walkable route or creating navigation edges.
+            for(int i=0;i<28;i++)
+            {
+                float x=-33f+(i*19%67),z=-32f+(i*37%65);
+                if(Mathf.Abs(x)<10f||x< -10f&&z< -15f&&z> -28f||x>18f&&z< -14f&&z> -25f)continue;
+                var detail=Visual("FestivalGroveDetail",new Vector3(x,0,z));
+                if(detail!=null){detail.transform.localScale=Vector3.one*(.78f+i%4*.09f);detail.transform.localRotation=Quaternion.Euler(0,i*113%360,0);}
             }
             for(int row=0;row<3;row++)for(int i=0;i<15;i++)
             {
@@ -291,13 +303,16 @@ namespace Festival.Presentation
             distantEarth.mainTexture=Resources.Load<Texture2D>("FestivalGround");
             distantEarth.mainTextureScale=new Vector2(34,34);
             Box("Distant woodland ground",new Vector3(0,-.35f,0),new Vector3(220,.68f,220),distantEarth,false);
-            Box("Camp earth",new Vector3(0,-.3f,0),new Vector3(48,.6f,48),earth);
+            var campRise=Material(distantEarth.color);
+            campRise.mainTexture=Resources.Load<Texture2D>("FestivalGround");
+            DistantRise("Camp distant woodland rise",54,72,100,campRise);
+            Box("Camp earth",new Vector3(0,-.3f,0),new Vector3(CampFeatures.CampHalfWidth*2,.6f,CampFeatures.CampHalfDepth*2),earth);
             // Keep the existing play boundary, but let woodland scenery make the
             // edge instead of a four-sided brown wall in every camera angle.
-            ProxyBox("Camp north boundary",new Vector3(0,1.1f,24),new Vector3(49,2.2f,.5f),wood);
-            ProxyBox("Camp south boundary",new Vector3(0,1.1f,-24),new Vector3(49,2.2f,.5f),wood);
-            ProxyBox("Camp west boundary",new Vector3(-24,1.1f,0),new Vector3(.5f,2.2f,48),wood);
-            ProxyBox("Camp east boundary",new Vector3(24,1.1f,0),new Vector3(.5f,2.2f,48),wood);
+            ProxyBox("Camp north boundary",new Vector3(0,1.1f,CampFeatures.CampHalfDepth),new Vector3(CampFeatures.CampHalfWidth*2+1,2.2f,.5f),wood);
+            ProxyBox("Camp south boundary",new Vector3(0,1.1f,-CampFeatures.CampHalfDepth),new Vector3(CampFeatures.CampHalfWidth*2+1,2.2f,.5f),wood);
+            ProxyBox("Camp west boundary",new Vector3(-CampFeatures.CampHalfWidth,1.1f,0),new Vector3(.5f,2.2f,CampFeatures.CampHalfDepth*2),wood);
+            ProxyBox("Camp east boundary",new Vector3(CampFeatures.CampHalfWidth,1.1f,0),new Vector3(.5f,2.2f,CampFeatures.CampHalfDepth*2),wood);
             Box("Camp footpath",new Vector3(0,.024f,0),new Vector3(3.3f,.035f,21),path,false);
             Box("Camp shade lane",new Vector3(0,.025f,-1),new Vector3(13,.036f,3.8f),path,false);
             var campMat=Material(new Color(.46f,.32f,.27f));
@@ -430,7 +445,7 @@ namespace Festival.Presentation
                     {overlapsSite=true;break;}
                 }
                 if(overlapsSite)continue;
-                var tree=Visual(i%3==0?"FestivalTreeB":"FestivalTreeA",point);
+                var tree=Visual(i%4==0?"FestivalTreeFir":i%3==0?"FestivalTreeB":"FestivalTreeA",point);
                 if(tree!=null)
                 {
                     tree.transform.localScale=Vector3.one*(.94f+(i%5)*.10f);
@@ -441,13 +456,27 @@ namespace Festival.Presentation
             {
                 float angle=(i+.61f)*(Mathf.PI*2/40f);
                 float radius=32f+(i%5)*3.4f;
-                var tree=Visual(i%3==1?"FestivalTreeB":"FestivalTreeA",
+                var tree=Visual(i%3==1?"FestivalTreeFir":i%3==2?"FestivalTreeB":"FestivalTreeA",
                     new Vector3(Mathf.Cos(angle)*radius,0,Mathf.Sin(angle)*radius));
                 if(tree!=null)
                 {
                     tree.transform.localScale=Vector3.one*(1.15f+(i%6)*.13f);
                     tree.transform.localRotation=Quaternion.Euler(0,(i*47)%360,0);
                 }
+            }
+            for(int i=0;i<36;i++)
+            {
+                float x=-29f+(i*17%59),z=-28f+(i*23%57);
+                if(Mathf.Abs(x)<10f&&z> -13f&&z<22f)continue;
+                bool nearEntrance=false;
+                foreach(var site in CampFeatures.Sites)
+                {
+                    float dx=x-site.X,dz=z-site.Z;
+                    if(dx*dx+dz*dz<25f){nearEntrance=true;break;}
+                }
+                if(nearEntrance)continue;
+                var detail=Visual("FestivalGroveDetail",new Vector3(x,0,z));
+                if(detail!=null){detail.transform.localScale=Vector3.one*(.72f+i%3*.14f);detail.transform.localRotation=Quaternion.Euler(0,i*79%360,0);}
             }
             var seller=FestivalCharacter.Create(camp,"camp_seller_2",Color.white,"Vendor0");
             seller.transform.localPosition=new Vector3(0,0,7);
@@ -463,6 +492,11 @@ namespace Festival.Presentation
             campSurface.overrideVoxelSize=true;campSurface.voxelSize=.12f;
             campSurface.BuildNavMesh();
             campShopRoot=ShopDisplayRoot("Campsite shelf goods",camp);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","camp_layout",
+                "half_width="+CampFeatures.CampHalfWidth+" half_depth="+CampFeatures.CampHalfDepth+
+                " sites="+CampFeatures.Sites.Length+" navigation="+CampNavigationReady);
+#endif
             owned=festival;
         }
         private void BuildCampInteriors(Material wood,Material dark,Material mint,Material rose,Material gold)
@@ -720,6 +754,36 @@ namespace Festival.Presentation
             var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name=label;go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localScale=scale;go.GetComponent<Renderer>().sharedMaterial=material;
             if(!solid){var c=go.GetComponent<Collider>();c.enabled=false;Dispose(c);}return go;
         }
+        private void DistantRise(string label,float innerRadius,float crestRadius,float outerRadius,Material material)
+        {
+            const int steps=128;
+            var vertices=new Vector3[(steps+1)*3];
+            var uv=new Vector2[vertices.Length];
+            var triangles=new int[steps*12];
+            for(int ring=0;ring<3;ring++)for(int i=0;i<=steps;i++)
+            {
+                float angle=i*Mathf.PI*2/steps;
+                float radius=ring==0?innerRadius:ring==1?crestRadius:outerRadius;
+                float crest=3.8f+1.05f*Mathf.Sin(angle*3+.4f)
+                    +.72f*Mathf.Sin(angle*7-1.2f)+.32f*Mathf.Sin(angle*13+2.1f);
+                vertices[ring*(steps+1)+i]=new Vector3(Mathf.Cos(angle)*radius,
+                    ring==1?crest:-.025f,Mathf.Sin(angle)*radius);
+                uv[ring*(steps+1)+i]=new Vector2(i/(float)steps*18,ring*2f);
+            }
+            for(int ring=0;ring<2;ring++)for(int i=0;i<steps;i++)
+            {
+                int a=ring*(steps+1)+i,b=a+1,c=(ring+1)*(steps+1)+i,d=c+1;
+                int offset=(ring*steps+i)*6;
+                triangles[offset]=a;triangles[offset+1]=b;triangles[offset+2]=c;
+                triangles[offset+3]=b;triangles[offset+4]=d;triangles[offset+5]=c;
+            }
+            var mesh=new Mesh{name=label};mesh.vertices=vertices;mesh.uv=uv;mesh.triangles=triangles;
+            mesh.RecalculateNormals();mesh.RecalculateBounds();generatedMeshes.Add(mesh);
+            var go=new GameObject(label);go.transform.SetParent(owned,false);
+            go.AddComponent<MeshFilter>().sharedMesh=mesh;
+            var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
+            renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
+        }
         private void WornPathEdges(string label,float halfWidth,float startZ,float endZ,Material material)
         {
             const int steps=58;
@@ -781,7 +845,7 @@ namespace Festival.Presentation
                 if(mark>=0)
                 {
                     var key=name.Substring(mark+2).Split('.')[0];
-                    if(key=="Wood"||key=="Bark"||key=="Leaf"||key=="LeafWarm"||
+                    if(key=="Wood"||key=="Bark"||key=="Leaf"||key=="LeafWarm"||key=="Needle"||key=="Stone"||
                         key=="Rubber"||key=="AutoGlass"||key.StartsWith("Canvas",System.StringComparison.Ordinal)||
                         key.StartsWith("Paint",System.StringComparison.Ordinal))
                     {
@@ -790,7 +854,7 @@ namespace Festival.Presentation
                     }
                     else if(artMaterials.TryGetValue(key,out var tint))renderer.sharedMaterial=tint;
                 }
-                renderer.shadowCastingMode=resource.StartsWith("FestivalTree")?ShadowCastingMode.Off:ShadowCastingMode.On;
+                renderer.shadowCastingMode=resource.StartsWith("FestivalTree")||resource=="FestivalGroveDetail"?ShadowCastingMode.Off:ShadowCastingMode.On;
             }
             foreach(var collider in go.GetComponentsInChildren<Collider>()){collider.enabled=false;Dispose(collider);}
             return go;

@@ -29,6 +29,7 @@ COLORS = {
     "CanvasRose": (.93, .26, .47, 1), "CanvasGold": (.98, .68, .21, 1),
     "CanvasMint": (.16, .78, .64, 1), "CanvasCream": (.91, .84, .65, 1),
     "CanvasDark": (.13, .20, .24, 1), "Rubber": (.10, .12, .16, 1),
+    "Needle": (.13, .28, .24, 1), "Stone": (.38, .42, .39, 1),
 }
 MATS = {}
 for name, color in COLORS.items():
@@ -609,6 +610,74 @@ def tree(kind):
                      "LeafWarm" if i%4==1 else "Leaf")
 
 
+def fir_tree():
+    """Tall narrow firs interrupt the broadleaf canopy and frame long views."""
+    tapered_wood("Fir trunk", [(0,0,-.06),(.04,0,.28),(.08,.02,1.3),
+        (.13,.03,3.0),(.10,.05,5.3),(.04,.07,7.55)],
+        [.50,.41,.33,.25,.16,.045], 10)
+    tiers = ((1.55,1.34,1.92),(2.65,1.62,2.05),(3.85,1.48,2.05),
+             (5.05,1.17,1.89),(6.11,.78,1.51))
+    for level,(base,radius,height) in enumerate(tiers):
+        verts,faces,uvs=[],[],[]
+        spokes=20
+        rings=((0,.70),(.18,1.0),(.49,.83),(.75,.52),(1.0,.025))
+        for ring,(t,relative_radius) in enumerate(rings):
+            for spoke in range(spokes):
+                angle=spoke*math.tau/spokes
+                scallop=1+.075*math.sin(angle*7+level*1.7)
+                spread=radius*relative_radius*scallop
+                verts.append((.10*base/7.5+math.cos(angle)*spread,
+                              math.sin(angle)*spread,
+                              base+height*t+.085*math.sin(angle*7+level)*relative_radius))
+                uvs.append((spoke/spokes,t))
+        for ring in range(len(rings)-1):
+            for spoke in range(spokes):
+                a=ring*spokes+spoke;b=ring*spokes+(spoke+1)%spokes
+                faces.append((a,b,b+spokes,a+spokes))
+        faces.append(tuple(range(spokes-1,-1,-1)))
+        formed_mesh("Layered fir boughs",verts,faces,
+                    "Needle" if level%3 else "LeafWarm",uvs)
+        for spoke in range(0,spokes,4):
+            angle=spoke*math.tau/spokes
+            strut("Visible fir branch",(.1,0,base+.27),
+                  (math.cos(angle)*radius*.82,math.sin(angle)*radius*.82,base+.12),
+                  .035,"Bark",6)
+
+
+def grove_detail():
+    """Small rock and fern assembly for the playable meadow's quiet margins."""
+    for index,(x,y,r) in enumerate(((-.60,-.13,.41),(.02,.15,.29),(.58,-.13,.36))):
+        rock=add("Weathered fieldstone",(x,y,.18*r/.4),
+                 (r*1.10,r*.78,r*.61),"Stone","sphere",vertices=12)
+        for vertex in rock.data.vertices:
+            direction=vertex.co.normalized()
+            vertex.co *= 1+.065*math.sin(direction.x*7+index*2)*math.cos(direction.y*5)
+    for plant,(px,py,scale) in enumerate(((-.82,.41,1.0),(.78,.43,.76),(.25,-.62,.64))):
+        verts,faces,uvs=[],[],[]
+        for blade in range(7):
+            angle=blade*math.tau/7+plant*.41
+            tangent=Vector((math.cos(angle),math.sin(angle),0))
+            side=Vector((-math.sin(angle),math.cos(angle),0))
+            start=len(verts)
+            for row in range(6):
+                t=row/5
+                center=Vector((px,py,.11))+tangent*(.68*scale*t)
+                center.z+=scale*(.12+.60*math.sin(t*math.pi*.80)-.12*t)
+                width=.16*scale*math.sin(math.pi*t)**.75
+                for edge in (-1,1):
+                    p=center+side*(edge*width)
+                    verts.append(tuple(p));uvs.append(((edge+1)*.5,t))
+            for row in range(5):
+                a=start+row*2
+                faces.append((a,a+1,a+3,a+2))
+                faces.append((a+2,a+3,a+1,a))
+        formed_mesh("Two-sided fern fronds",verts,faces,
+                    "LeafWarm" if plant==1 else "Leaf",uvs)
+    for index,(x,y) in enumerate(((-.28,.72),(.93,-.39),(-1.03,-.42))):
+        strut("Dry meadow stem",(x,y,.07),(x+.07,y,.42),.018,"Bark",6)
+        add("Seed head",(x+.07,y,.43),(.065,.065,.11),"Gold","sphere",vertices=10)
+
+
 def tent():
     box("Ground tarp", (0, 0, .045), (3.9, 3.15, .09), "Dark")
     box("Camp tent floor", (0, 0, .11), (3.6, 2.7, .10), "Wood")
@@ -971,6 +1040,7 @@ for name, build in (
     ("FestivalShuttle", shuttle), ("FestivalSun", lambda: totem(True)),
     ("FestivalMoon", lambda: totem(False)),
     ("FestivalTreeA", lambda: tree(0)), ("FestivalTreeB", lambda: tree(1)),
+    ("FestivalTreeFir", fir_tree), ("FestivalGroveDetail", grove_detail),
     ("FestivalTent", tent), ("FestivalDomeTent", dome_tent), ("FestivalPoi", poi),
     ("FestivalWristband", wristband),
     ("FestivalCampCar", camp_car), ("FestivalCampVan", camp_van), ("FestivalCampShade", camp_shade),

@@ -15,6 +15,8 @@ namespace Festival.Presentation
             {"Blue",new Color(.23f,.42f,.73f)},{"Metal",new Color(.37f,.41f,.47f)},
             {"Leaf",new Color(.22f,.43f,.28f)},{"LeafWarm",new Color(.38f,.48f,.27f)},
             {"Bark",new Color(.44f,.31f,.24f)},
+            {"Needle",new Color(.16f,.31f,.26f)},
+            {"Stone",new Color(.43f,.46f,.42f)},
             {"PaintRose",new Color(.65f,.21f,.34f)},
             {"PaintMint",new Color(.21f,.56f,.51f)},
             {"PaintGold",new Color(.72f,.48f,.22f)},
@@ -61,15 +63,23 @@ namespace Festival.Presentation
             string map=color.StartsWith("Canvas",System.StringComparison.Ordinal)?"FestivalCanvas"
                 :color=="Bark"?"FestivalBark"
                 :color=="Wood"?"FestivalWood"
-                :color=="Leaf"||color=="LeafWarm"?"FestivalLeaf":"";
+                :color=="Leaf"||color=="LeafWarm"||color=="Needle"?"FestivalLeaf"
+                :color=="Stone"?"FestivalGround":"";
             if(map!="")material.mainTexture=Resources.Load<Texture2D>(map);
             if(material.HasProperty("_Smoothness"))
                 material.SetFloat("_Smoothness",color=="Metal" ? .48f : color=="Glass" ? .68f :
-                    color=="AutoGlass" ? .82f : color.StartsWith("Paint",System.StringComparison.Ordinal) ? .56f :
+                    color=="AutoGlass" ? .46f : color.StartsWith("Paint",System.StringComparison.Ordinal) ? .56f :
                     color.StartsWith("Canvas",System.StringComparison.Ordinal) ? .06f : color=="Bark" ? .04f :
-                    color=="Rubber" ? .02f : .16f);
+                    color=="Rubber"||color=="Stone"||color=="Needle" ? .02f : .16f);
             if(material.HasProperty("_Metallic") && color.StartsWith("Paint",System.StringComparison.Ordinal))
                 material.SetFloat("_Metallic",.20f);
+            if(color=="AutoGlass")
+            {
+                // The shallow windscreen faces the sunset key light; URP's
+                // broad specular highlight otherwise washes the glass white.
+                if(material.HasProperty("_SpecularHighlights"))material.SetFloat("_SpecularHighlights",0);
+                material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            }
             material.enableInstancing=true;materials[color]=material;return material;
         }
     }

@@ -39,6 +39,8 @@ for name, position, target, scale in (
     ("FestivalCampShade", (9,-11,7), (0,0,2), 11.5),
     ("FestivalTreeA", (8,-10,7), (0,0,3.1), 8.2),
     ("FestivalTreeB", (8,-10,7), (0,0,3.1), 8.2),
+    ("FestivalTreeFir", (8,-10,8), (0,0,3.8), 9.8),
+    ("FestivalGroveDetail", (4,-5,3.0), (0,0,.4), 4.2),
     ("FestivalCampCar", (7,8,3.5), (0,0,.85), 7.5),
     ("FestivalCampVan", (7,8,4), (0,0,1.2), 8.0),
     ("FestivalStage", (24,34,16), (0,0,3.8), 27),

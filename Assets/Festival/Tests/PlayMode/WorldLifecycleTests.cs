@@ -145,7 +145,7 @@ namespace Festival.Tests
                 Assert.That(crowd.MemberCount,Is.EqualTo(62));
                 var performer=generated.Find("ambient_PoiPerformer_26");Assert.That(performer,Is.Not.Null);
                 Assert.That(performer.GetComponentsInChildren<Collider>(true),Is.Empty);
-                foreach(var name in new[]{"FestivalStage","FestivalDJDeck","FestivalStallSupplies","FestivalStallPerformance","FestivalStallStock","FestivalMedical","FestivalSecurity","FestivalShuttle","FestivalSun","FestivalMoon","FestivalTreeA","FestivalTreeB"})
+                foreach(var name in new[]{"FestivalStage","FestivalDJDeck","FestivalStallSupplies","FestivalStallPerformance","FestivalStallStock","FestivalMedical","FestivalSecurity","FestivalShuttle","FestivalSun","FestivalMoon","FestivalTreeA","FestivalTreeB","FestivalTreeFir","FestivalGroveDetail"})
                     Assert.That(generated.Find(name),Is.Not.Null,name+" Blender visual missing");
                 var walkerStart=crowd.FirstWalkerPosition;
                 yield return new WaitForSeconds(.15f);
@@ -156,6 +156,12 @@ namespace Festival.Tests
                 Assert.That(path.status,Is.EqualTo(NavMeshPathStatus.PathComplete));
                 Assert.That(NavMesh.CalculatePath(new Vector3(0,0,7),new Vector3(0,0,19),NavMesh.AllAreas,path),Is.True);
                 Assert.That(path.status,Is.EqualTo(NavMeshPathStatus.PathComplete),"Seller to ready trailhead must remain walkable");
+                foreach(var site in Festival.Core.CampFeatures.Sites)
+                {
+                    var doorApproach=new Vector3(site.X,0,site.Z-3.2f);
+                    Assert.That(NavMesh.CalculatePath(Vector3.zero,doorApproach,NavMesh.AllAreas,path),Is.True,site.Id+" has no path query");
+                    Assert.That(path.status,Is.EqualTo(NavMeshPathStatus.PathComplete),site.Id+" is unreachable");
+                }
                 Assert.That(camp.Find("Trailhead crown"),Is.Not.Null);
             }
             finally{Object.Destroy(root);}

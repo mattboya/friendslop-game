@@ -109,7 +109,7 @@ namespace Festival.Core
             }
         }
         public bool TryMove(string playerId,float x,float z,float yaw,double deltaSeconds) {
-            var p=Player(playerId);if(p==null||!p.Connected||(State.Phase!="Shopping"&&State.Phase!="CampReview"&&State.Phase!="Playing")||!Finite(x)||!Finite(z)||!Finite(yaw)||!Finite(deltaSeconds)||deltaSeconds<=0||deltaSeconds>.5||Math.Abs(x)>39||Math.Abs(z)>39)return false;
+            var p=Player(playerId);if(p==null||!p.Connected||(State.Phase!="Shopping"&&State.Phase!="CampReview"&&State.Phase!="Playing")||!Finite(x)||!Finite(z)||!Finite(yaw)||!Finite(deltaSeconds)||deltaSeconds<=0||deltaSeconds>.5)return false;
             if(p.CampVisitId!="")
             {
                 var site=CampFeatures.Find(p.CampVisitId);if(site==null)return false;
@@ -118,6 +118,7 @@ namespace Festival.Core
                 if(Distance(p.CampInteriorX,p.CampInteriorZ,x,z)>4.2*deltaSeconds+.03)return false;
                 p.CampInteriorX=x;p.CampInteriorZ=z;p.Yaw=yaw%360;return true;
             }
+            if(Math.Abs(x)>39||Math.Abs(z)>39)return false;
             if(State.Phase=="Shopping"&&p.Ready&&Distance(p.X,p.Z,x,z)>.001)return false;
             double speed=6*Intoxication.MovementMultiplier(p);if(p.InteractionId!="")speed=1;if(p.DragTargetId!="")speed=2;
             if(p.Life=="Downed")speed=.8;

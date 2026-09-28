@@ -1,3 +1,4 @@
+using System;
 using Festival.Core;
 using NUnit.Framework;
 
@@ -33,6 +34,16 @@ namespace Festival.Tests
             Assert.That(first.CampInteriorX!=second.CampInteriorX||first.CampInteriorZ!=second.CampInteriorZ,Is.True);
             Assert.That(game.TryMove(first.Id,first.CampInteriorX,first.CampInteriorZ+.1f,0,.1),Is.True);
             Assert.That(game.TryMove(first.Id,second.CampInteriorX,second.CampInteriorZ,0,.1),Is.False);
+        }
+
+        [Test] public void EveryCampDoorAndExitFitInsideThePlayableFootprint()
+        {
+            foreach(var site in CampFeatures.Sites)
+            {
+                Assert.That(Math.Abs(site.X)+3.5f,Is.LessThan(CampFeatures.CampHalfWidth),site.Id+" width");
+                Assert.That(Math.Abs(site.Z)+3.5f,Is.LessThan(CampFeatures.CampHalfDepth),site.Id+" depth");
+                Assert.That(site.Z-3.2f,Is.GreaterThan(-CampFeatures.CampHalfDepth),site.Id+" exit");
+            }
         }
 
         [Test] public void WornNecklaceDoesNotConsumeOneOfThreeHandGearSlots()

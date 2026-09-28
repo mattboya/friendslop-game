@@ -58,7 +58,7 @@ namespace Festival.Presentation
             Vector3 grip=transform.position+transform.up*(firstPerson ? .055f : -.19f);
             float length=firstPerson?FirstPersonRopeLength:RopeLength;
             Vector3 rest=firstPerson
-                ? (transform.forward*.22f-transform.up*.14f+transform.right*(side==0?-.28f:.28f)).normalized*length
+                ? (transform.forward*.18f-transform.up*.04f+transform.right*(side==0?-.32f:.32f)).normalized*length
                 : Vector3.down*length;
             if(!initialized||Vector3.Distance(previousGrip,grip)>3)
             {

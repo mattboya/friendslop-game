@@ -595,7 +595,7 @@ namespace Festival.Presentation
         }
         IEnumerator SoloSmoke(FestivalSession session)
         {
-            float deadline=Time.realtimeSinceStartup+110;
+            float deadline=Time.realtimeSinceStartup+160;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
             var sim=session.DevelopmentSimulation;

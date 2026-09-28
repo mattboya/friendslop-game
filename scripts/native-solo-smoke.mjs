@@ -12,7 +12,9 @@ if(!existsSync(binary))throw new Error('Build the macOS development player first
 if(existsSync(log))unlinkSync(log);
 
 const child=spawn(binary,['--host','--port','17780','--profile','smoke_solo','--name','Solo','--solo-smoke-test','-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',log],{cwd:root,stdio:'ignore'});
-const timeout=setTimeout(()=>child.kill(),120000);
+// The script has its own explicit failure deadline. Leave enough room for
+// player startup and PNG writes on a loaded or screen-locked development Mac.
+const timeout=setTimeout(()=>child.kill(),180000);
 child.on('error',error=>{clearTimeout(timeout);console.error(error);process.exitCode=1;});
 child.on('exit',code=>{
   clearTimeout(timeout);

@@ -4,10 +4,15 @@ Status date: September 27, 2026. **Playable macOS development build with a camps
 
 The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION.md). The [reference research](docs/FRIENDSLOP_RESEARCH_2026-09-27.md) explains the co-op loop choices. The [playtest guide](docs/PLAYTEST_2026-09-24.md) explains the playable route and remaining limitations.
 
-## Latest camp, equipment and location checkpoint
+## Latest grove and camp reachability checkpoint
+
+- The [dated evidence record](docs/GRAPHICS_GROVE_AND_CAMP_REACHABILITY_2026-09-27.md) covers the expanded camp boundary, a path to every car/tent/porta potty approach, new fir and ground-cover assets, distant woodland contours, and a native first-person poi grip correction. The two new source assets were staged in Blender and reviewed in neutral and native views.
+- Scripted solo and two-client macOS missions pass with saved gameplay captures. Final native point samples reached 9.2 ms rolling p95 in camp and 16.7–17.5 ms in populated festival views at 1280×720 Ultra on the baseline Mac. These are short samples, and the populated views have no established 60 fps headroom; user visual acceptance, human-paced route checks and named Windows hardware remain open. The original trailer-level graphics target is still unmet.
+
+## Earlier camp, equipment and location checkpoint
 
 - The [dated evidence record](docs/GRAPHICS_CAMP_LOCATIONS_PASS_2026-09-27.md) covers the revised HUD rail, first-person poi tether, passive Little Spoon capacity, garment detail, six cars and eight tents with two silhouettes each, doorway-specific camp interior positions, and rebuilt medical/security/shuttle shells. The existing camp DJ and post-round review gate remain in the playable flow.
-- Project static, domain, Unity validation, EditMode and PlayMode, macOS development and release builds, and release diagnostic exclusion pass. The new location exports also passed a scripted two-client native mission with before/after captures. The final build's screenshot run was interrupted by a locked Mac graphical session, so its latest poi, camp and interior presentation still needs native visual verification after unlock. The final development player has been launched on port 7777 for that review.
+- Project static, domain, Unity validation, EditMode and PlayMode, macOS development and release builds, and release diagnostic exclusion passed. The new location exports passed a scripted two-client native mission with before/after captures. Later native screenshot runs covered the poi, camp and interiors while the Mac remained locked; human visual review still requires an unlocked desktop.
 - Character and environment polish, human-paced cooperative play, named minimum Windows hardware, and sustained performance remain open against the supplied trailer target.
 
 ## Graphics upgrade checkpoint
@@ -21,7 +26,7 @@ The current product direction is [APPROVED_DIRECTION.md](docs/APPROVED_DIRECTION
 
 ## September 27 camp expansion and equipment pass
 
-- First-person interaction prompts now sit at the lower left, clear of the hands. The [native poi view](docs/graphics-camp-2026-09-27/poi-grip.png) shows the handle in the right hand and a separate visible cord and weighted ball. Other players' poi use the same cosmetic tether simulation. Little Spoon stays in the necklace slot and cannot be equipped as a hand prop.
+- First-person interaction prompts now sit in the upper-left information rail, clear of the hands. The later [native poi view](docs/graphics-grove-2026-09-27/poi-after-grip-native.png) shows the handle at the right palm with a separate visible cord and weighted ball. Other players' poi use the same cosmetic tether simulation. Little Spoon stays in the necklace slot and cannot be equipped as a hand prop.
 - The original car source was rebuilt as a recognizable hatchback with separate hood, cabin, glass, lamps, wheels and mirrors. Four cars vary in color and roof cargo; six tents vary in color and scale. See the [close car](docs/graphics-camp-2026-09-27/car.png) and [camp overview](docs/graphics-camp-2026-09-27/camp-overview.png). Clothes have added seams, cuffs, yokes, belt loops and zipper details.
 - Car, tent and porta potty interactions enter bounded, walkable room views. Each has a gag with original synthesized sound and a moving prop; the [car interior](docs/graphics-camp-2026-09-27/car-interior.png) is a native capture. The camp DJ offers silence and three original generated loops. [Round review](docs/graphics-camp-2026-09-27/round-review.png) records the prior result and crew antics, takes a crew award vote, then lets the host open the next shop.
 - Domain, project static, Unity EditMode and PlayMode, macOS development build, solo native full-route smoke and two-client native smoke passed after this pass. [Follow-up point samples](docs/GRAPHICS_PROFILE_2026-09-27.md) show 9.2 ms camp and 16.7–17.1 ms festival/results rolling p95 windows on this Mac. Human-paced play, tactile prop polish and target Windows performance remain open.

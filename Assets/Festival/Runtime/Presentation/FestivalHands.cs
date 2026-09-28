@@ -7,10 +7,12 @@ namespace Festival.Presentation
     /// <summary>Camera-local arms; only presentation, never authoritative physics.</summary>
     public sealed class FestivalHands : MonoBehaviour
     {
+        static readonly Vector3 RightPalm=new Vector3(.18f,-.35f,.82f);
         Material material;
         Texture2D palette;
         Vector3 rest;
-        FestivalPoiRig leftPoi,rightPoi,equippedPoi;
+        Transform attachments;
+        FestivalPoiRig leftPoi,rightPoi,equippedPoi,unpaidPoi;
         GameObject carriedBand;
         GameObject unpaidProp,equippedProp;
         string unpaidId="",equippedId="";
@@ -45,8 +47,12 @@ namespace Festival.Presentation
                 renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
             }
             hands.rest=go.transform.localPosition;
-            hands.leftPoi=FestivalPoiRig.Create(camera.transform,new Vector3(-.24f,-.48f,.72f),0,true,true);
-            hands.rightPoi=FestivalPoiRig.Create(camera.transform,new Vector3(.24f,-.48f,.72f),1,true,true);
+            // The Blender palm centers are x=+/-.32, y=-.26, forward=.84;
+            // the .56 hand scale and camera offset put them here in camera space.
+            hands.attachments=new GameObject("First-person hand attachments").transform;
+            hands.attachments.SetParent(camera.transform,false);
+            hands.leftPoi=FestivalPoiRig.Create(hands.attachments,new Vector3(-RightPalm.x,RightPalm.y,RightPalm.z),0,true,true);
+            hands.rightPoi=FestivalPoiRig.Create(hands.attachments,RightPalm,1,true,true);
             hands.carriedBand=Held(go.transform,"FestivalWristband",new Vector3(.30f,-.36f,.84f),.32f);
             hands.SetState(null);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -67,11 +73,17 @@ namespace Festival.Presentation
             {
                 if(unpaidId!=""&&held==""&&player!=null&&previousCash>=0&&player.Cash<previousCash)handoffAt=Time.time;
                 if(unpaidProp!=null)Destroy(unpaidProp);
-                unpaidProp=null;unpaidId=held;
+                if(unpaidPoi!=null)Destroy(unpaidPoi.gameObject);
+                unpaidProp=null;unpaidPoi=null;unpaidId=held;
                 if(held!=""&&held!="little_spoon")
                 {
-                    var resource=FestivalSession.DropModel(held);
-                    if(resource!=null)unpaidProp=Held(transform,resource,new Vector3(.38f,-.14f,1.0f),.42f);
+                    if(held=="poi_led"||held=="poi_practice")
+                        unpaidPoi=FestivalPoiRig.Create(attachments,RightPalm,1,held=="poi_led",true);
+                    else
+                    {
+                        var resource=FestivalSession.DropModel(held);
+                        if(resource!=null)unpaidProp=Held(attachments,resource,RightPalm,.30f);
+                    }
                 }
             }
             string equipped=player?.EquippedItemId??"";
@@ -81,20 +93,22 @@ namespace Festival.Presentation
                 if(equippedProp!=null)Destroy(equippedProp);
                 if(equippedPoi!=null)Destroy(equippedPoi.gameObject);
                 equippedProp=null;equippedId=equipped;
-                if(equipped=="poi_led"||equipped=="poi_practice")equippedPoi=FestivalPoiRig.Create(transform,new Vector3(.42f,-.28f,.90f),1,equipped=="poi_led",true);
+                if(equipped=="poi_led"||equipped=="poi_practice")equippedPoi=FestivalPoiRig.Create(attachments,RightPalm,1,equipped=="poi_led",true);
                 else
                 {
                     var resource=FestivalSession.DropModel(equipped);
-                    if(resource!=null)equippedProp=Held(transform,resource,new Vector3(.42f,-.36f,.90f),.42f);
+                    if(resource!=null)equippedProp=Held(attachments,resource,RightPalm,.30f);
                 }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_equipment","item="+(equipped==""?"none":equipped)+" grip="+(equippedPoi!=null?"poi":equippedProp!=null?"prop":"none"));
+                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_equipment","item="+(equipped==""?"none":equipped)+" grip="+(equippedPoi!=null?"poi":equippedProp!=null?"prop":"none")+" palm="+RightPalm);
 #endif
             }
             bool poi=player!=null && player.VisualPose=="Poi";
             if(leftPoi!=null){leftPoi.gameObject.SetActive(poi);leftPoi.Spinning=poi;}
             if(rightPoi!=null){rightPoi.gameObject.SetActive(poi);rightPoi.Spinning=poi;}
             if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !poi && held=="");
+            if(unpaidPoi!=null)unpaidPoi.gameObject.SetActive(player!=null&&player.Life=="Alive"&&!poi);
+            if(unpaidProp!=null)unpaidProp.SetActive(player!=null&&player.Life=="Alive"&&!poi);
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&player.Life=="Alive");
             if(equippedPoi!=null)equippedPoi.gameObject.SetActive(held==""&&!poi&&player.Life=="Alive");
             previousCash=player?.Cash??-1;
@@ -107,6 +121,7 @@ namespace Festival.Presentation
         }
         void OnDestroy()
         {
+            if(attachments!=null){if(Application.isPlaying)Destroy(attachments.gameObject);else DestroyImmediate(attachments.gameObject);}
             if(material!=null){if(Application.isPlaying)Destroy(material);else DestroyImmediate(material);}
             if(palette!=null){if(Application.isPlaying)Destroy(palette);else DestroyImmediate(palette);}
         }

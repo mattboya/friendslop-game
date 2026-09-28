@@ -7,7 +7,9 @@ namespace Festival.Core
     public static class CampFeatures
     {
         public const float DjX=8,DjZ=-3.5f;
-        public const float InteriorX=32;
+        public const float CampHalfWidth=31,CampHalfDepth=30;
+        // Interior cells live outside the outdoor camp and its visible woodland.
+        public const float InteriorX=70;
         public static float InteriorZ(string kind)=>kind=="Car"?-12:kind=="Tent"?0:12;
         public sealed class Site
         {
@@ -29,7 +31,7 @@ namespace Festival.Core
         public static Site Find(string id){foreach(var site in Sites)if(site.Id==id)return site;return null;}
         // Every physical doorway owns a separate interior cell. Two players
         // entering different tents no longer appear in the same room.
-        public static float InteriorSlotX(Site site)=>Array.IndexOf(Sites,site)<8?-32:32;
+        public static float InteriorSlotX(Site site)=>Array.IndexOf(Sites,site)<8?-InteriorX:InteriorX;
         public static float InteriorSlotZ(Site site)=>(Array.IndexOf(Sites,site)%8-3.5f)*9f;
         public static string Activity(string kind,int turn)
         {
