@@ -10,6 +10,7 @@ const groups={
   character:{script:'generate_modular_character.py',source:'FestivalCharacter.blend',manifest:'character-manifest.json',exports:['FestivalCharacter.fbx','FestivalCharacterDistant.fbx']},
   hands:{script:'generate_festival_hands.py',source:'FestivalHands.blend',manifest:'hands-manifest.json',exports:['FestivalHands.fbx']},
   world:{script:'generate_festival_world_assets.py',source:'FestivalWorld.blend',manifest:'world-manifest.json',exports:null},
+  gear:{script:'generate_festival_world_assets.py',source:'FestivalGear.blend',manifest:'gear-manifest.json',exports:['Confetti','MerchBag','Map','StagePass','Stock','Voucher','Stash'].map(name=>'Festival'+name+'.fbx')},
   surfaces:{script:'generate_festival_surfaces.py',source:null,manifest:'surface-manifest.json',exports:['FestivalCanvas.png','FestivalWood.png','FestivalBark.png','FestivalLeaf.png','FestivalDirt.png','FestivalGround.png']},
 };
 const hash=file=>createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -25,6 +26,7 @@ function expectedFiles(dir,kinds)
     if(!existsSync(manifestPath))fail(`Missing ${group.manifest}`);
     const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
     const exports=kind==='world'?Object.keys(manifest.models||{}).map(name=>name+'.fbx'):group.exports;
+    if(kind==='gear'&&JSON.stringify(Object.keys(manifest.models||{}).map(name=>name+'.fbx'))!==JSON.stringify(exports))fail('Gear manifest is incomplete.');
     if(kind==='world'&&exports.length<27)fail('World manifest is incomplete.');
     if(kind==='character'&&(!manifest.distantGroups||manifest.bones?.length!==15||
         !manifest.bones.includes('FootL')||!manifest.bones.includes('FootR')))
@@ -67,7 +69,7 @@ function stage(kinds)
   for(const kind of kinds)
   {
     const result=spawnSync(blender,['--background','--factory-startup','--python',path.join(root,'scripts',groups[kind].script)],
-      {cwd:root,env:{...process.env,FESTIVAL_ASSET_STAGE:dir},encoding:'utf8',maxBuffer:64*1024*1024});
+      {cwd:root,env:{...process.env,FESTIVAL_ASSET_STAGE:dir,FESTIVAL_ASSET_KIND:kind},encoding:'utf8',maxBuffer:64*1024*1024});
     writeFileSync(path.join(dir,`blender-${kind}.log`),(result.stdout||'')+(result.stderr||''));
     if(result.status!==0)fail(`Blender ${kind} failed; inspect ${path.join(dir,`blender-${kind}.log`)}`);
   }
@@ -115,7 +117,7 @@ function publish(dir)
 try
 {
   const [action,arg]=process.argv.slice(2);
-  if(action==='stage')stage(arg==='all'?Object.keys(groups):groups[arg]?[arg]:fail('Use stage character|hands|world|surfaces|all.'));
+  if(action==='stage')stage(arg==='all'?Object.keys(groups).filter(kind=>kind!=='gear'):groups[arg]?[arg]:fail('Use stage character|hands|world|gear|surfaces|all.'));
   else if(action==='validate'&&arg)
   {
     const dir=path.resolve(arg);
@@ -125,6 +127,6 @@ try
     writeReceipt(dir,kinds);
   }
   else if(action==='publish'&&arg)publish(arg);
-  else fail('Usage: node scripts/art-pipeline.mjs stage character|hands|world|surfaces|all | validate <stage-directory> | publish <stage-directory>');
+  else fail('Usage: node scripts/art-pipeline.mjs stage character|hands|world|gear|surfaces|all | validate <stage-directory> | publish <stage-directory>');
 }
 catch(error){console.error(error.message);process.exitCode=1;}

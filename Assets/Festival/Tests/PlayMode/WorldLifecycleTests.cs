@@ -359,7 +359,7 @@ namespace Festival.Tests
                 yield return null;
                 Assert.That(Vector3.Distance(bag.transform.position,new Vector3(0,-.05f,0)),Is.LessThan(.001f));
                 foreach(var child in bag.GetComponentsInChildren<Transform>())Assert.That(child.gameObject.layer,Is.EqualTo(31),"Hidden local-world equipment must not leak into first person");
-                var handle=System.Array.Find(bag.GetComponentsInChildren<Renderer>(),r=>r.name.Contains("Gold"));
+                var handle=System.Array.Find(bag.GetComponentsInChildren<Renderer>(),r=>r.name.EndsWith("__Gold"));
                 Assert.That(handle,Is.Not.Null);
                 var handleTop=new Vector3(handle.bounds.center.x,handle.bounds.max.y,handle.bounds.center.z);
                 Assert.That(Vector3.Distance(handleTop,bag.transform.position),Is.LessThan(.025f),"The palm must meet the top of the handle");

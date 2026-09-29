@@ -4,9 +4,11 @@ import json
 import math
 import os
 from pathlib import Path
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 ROOT = Path(__file__).resolve().parents[1]
+GEAR_ONLY = os.environ.get("FESTIVAL_ASSET_KIND") == "gear"
+GEAR_NAMES = ("Confetti", "MerchBag", "Map", "StagePass", "Stock", "Voucher", "Stash")
 STAGE = ROOT / os.environ.get("FESTIVAL_ASSET_STAGE", "artifacts/asset-staging/manual")
 SOURCE = STAGE / "ArtSource"
 OUT = STAGE / "Resources"
@@ -1226,25 +1228,148 @@ def wristband():
     box("Rescue icon bar", (0, -.38, .19), (.15, .03, .045), "White")
 
 
+def print_text(label, text, position, size, color="Dark", rotation=(0,0,0), surface=None):
+    bpy.ops.object.text_add(location=position, rotation=rotation)
+    obj=bpy.context.object
+    obj.name=label+"__"+color
+    obj.data.body=text
+    obj.data.align_x="CENTER"
+    obj.data.align_y="CENTER"
+    obj.data.size=size
+    obj.data.extrude=0
+    obj.data.resolution_u=3
+    obj.data.materials.append(MATS[color])
+    bpy.ops.object.convert(target="MESH")
+    obj=bpy.context.object
+    if surface is not None:
+        inverse=obj.matrix_world.inverted()
+        for vertex in obj.data.vertices:
+            vertex.co=inverse@Vector(surface(obj.matrix_world@vertex.co))
+        obj.data.update()
+    current.append(obj)
+    obj.select_set(False)
+
+
+def merch_bag():
+    # 55 cm body / 19 cm handle rise in source space; runtime scales to .65.
+    # Both straps converge at the authored palm anchor (0,0,.79).
+    for side in (-1,1):
+        def panel(u,v,side=side):
+            x=(u-.5)*(.49+.065*math.sin(v*math.pi))
+            y=side*(.095+.025*math.sin(u*math.pi)*math.sin(v*math.pi))
+            y+=side*.006*math.sin(u*math.pi*6)*math.sin(v*math.pi)
+            return (x,y,.045+.58*v)
+        fabric_grid("Tote bowed canvas panel",16,16,panel,"CanvasCream",flip=side>0,thickness=.006)
+        fabric_grid("Reinforced sewn rim",16,1,lambda u,v,side=side: ((u-.5)*.49,side*.097,.603+.023*v),"CanvasGold",flip=side>0,thickness=.008)
+        for x in (-.23,.23):
+            for z in (.12,.20,.28,.36,.44,.52):
+                strut("Tote small seam stitch",(x,side*.104,z),(x,side*.104,z+.026),.0018,"Cream",6)
+        vertices=[]
+        for i in range(25):
+            t=math.pi*i/24
+            for offset in (-.015,.015):
+                vertices.append(((.17+offset)*math.cos(t),side*.095*(1-math.sin(t)),.60+(.19+offset)*math.sin(t)))
+        faces=[(i*2,i*2+1,i*2+3,i*2+2) for i in range(24)]
+        formed_mesh("Continuous woven tote strap",vertices,faces,"Gold",thickness=.006)
+        for x in (-.17,.17):
+            box("Strap sewn reinforcement",(x,side*.103,.58),(.042,.009,.070),"CanvasGold")
+    for side in (-1,1):
+        fabric_grid("Tote folded gusset",6,12,lambda u,v,side=side:(side*(.245+.0325*math.sin(v*math.pi)-.018*math.sin(u*math.pi)),(u-.5)*.19,.045+.58*v),"CanvasGold",flip=side<0,thickness=.006)
+    box("Tote bottom seam",(0,0,.049),(.49,.19,.008),"CanvasGold")
+    box("Dark open tote interior",(0,0,.611),(.46,.17,.005),"CanvasDark")
+    disc("Printed festival sun",(0,-.123,.37),.069,.002,"Rose",24)
+    for i in range(8):
+        a=i*math.tau/8
+        strut("Sun print ray",(.082*math.cos(a),-.124,.37+.082*math.sin(a)),(.103*math.cos(a),-.124,.37+.103*math.sin(a)),.003,"Rose",6)
+    print_text("Tote festival print","AFTER HOURS",(0,-.126,.22),.045,"Dark",(math.pi/2,0,0))
+
+
+def stock_tin():
+    # Connected lathed wall, rolled base, lid seam and raised cap.
+    rings=[(.010,.211),(.018,.236),(.032,.241),(.045,.229),(.495,.229),(.508,.240),(.525,.240),(.532,.232)]
+    vertices=[]
+    for z,r in rings:
+        for i in range(40):
+            a=i*math.tau/40
+            vertices.append((r*math.cos(a),r*math.sin(a),z))
+    faces=[]
+    for ring in range(len(rings)-1):
+        for i in range(40):
+            a=ring*40+i;b=ring*40+(i+1)%40
+            faces.append((a,b,b+40,a+40))
+    faces.extend([tuple(reversed(range(40))),tuple((len(rings)-1)*40+i for i in range(40))])
+    formed_mesh("Tin formed metal wall",vertices,faces,"Metal")
+    add("Rolled lid",(0,0,.553),(.245,.245,.042),"PaintMint","cylinder",vertices=40)
+    add("Lid seal",(0,0,.528),(.241,.241,.009),"Dark","cylinder",vertices=40)
+    add("Inset lid face",(0,0,.577),(.214,.214,.004),"Cream","cylinder",vertices=40)
+    fabric_grid("Wrapped printed paper label",40,1,lambda u,v:(.2305*math.cos(u*math.tau),.2305*math.sin(u*math.tau),.12+.31*v),"Cream",uv_scale=(3,1),thickness=.001)
+    for z in (.145,.409):
+        fabric_grid("Label color band",40,1,lambda u,v,z=z:(.232*math.cos(u*math.tau),.232*math.sin(u*math.tau),z+.012*v),"Rose",thickness=.001)
+    for side in (-1,1):
+        # Two-sided printing remains visible in either hand orientation.
+        rotation=(math.pi/2,0,0 if side<0 else math.pi)
+        print_text("Tin label name","PRISM",(0,side*.233,.32),.062,"Dark",rotation,surface=lambda p,side=side:(p.x,side*math.sqrt(.233**2-p.x**2),p.z))
+        print_text("Tin label subtitle","FESTIVAL SUPPLY",(0,side*.234,.245),.027,"Rose",rotation,surface=lambda p,side=side:(p.x,side*math.sqrt(.234**2-p.x**2),p.z))
+    for i in range(5):
+        box("Lid embossed ribs",(-.10+i*.05,0,.581),(.015,.14,.004),"Metal")
+
+
+def map_height(x):
+    points=[(-.25,.028),(-.083,.038),(.083,.025),(.25,.034)]
+    for (a,za),(b,zb) in zip(points,points[1:]):
+        if x<=b:return za+(zb-za)*(x-a)/(b-a)
+    return points[-1][1]
+
+
+def paper_map():
+    fabric_grid("Three folded paper panels",3,1,lambda u,v:((u-.5)*.5,(v-.5)*.68,map_height((u-.5)*.5)),"Cream",thickness=.003)
+    print_text("Map title","SITE GUIDE",(0,.265,.043),.052,surface=lambda p:(p.x,p.y,map_height(p.x)+.002))
+    route=[(-.14,-.26),(-.14,-.11),(-.02,-.07),(.10,.03),(.10,.18)]
+    for (x,y),(xx,yy) in zip(route,route[1:]):
+        segments=max(2,math.ceil(math.hypot(xx-x,yy-y)/.012))
+        for i in range(segments):
+            ax=x+(xx-x)*i/segments;ay=y+(yy-y)*i/segments
+            bx=x+(xx-x)*(i+1)/segments;by=y+(yy-y)*(i+1)/segments
+            strut("Printed walking route",(ax,ay,map_height(ax)+.003),(bx,by,map_height(bx)+.003),.003,"Mint",6)
+    for x,y,label,color in [(-.14,-.25,"CAMP","Rose"),(.10,.16,"SUN","Gold"),(-.14,.12,"MOON","Blue"),(.15,-.17,"HELP","Mint")]:
+        add("Printed map landmark",(x,y,map_height(x)+.004),(.026,.026,.001),color,"cylinder",vertices=16)
+        print_text("Map landmark label",label,(x,y-.044,map_height(x)+.007),.028,surface=lambda p:(p.x,p.y,map_height(p.x)+.002))
+    for x in (-.083,.083):
+        strut("Paper fold highlight",(x,-.335,map_height(x)+.003),(x,.335,map_height(x)+.003),.0015,"White",6)
+
+
+def printed_card(voucher=False):
+    width,height=(.60,.37) if voucher else (.45,.67)
+    box("Printed paper stock",(0,0,.02),(width,height,.004),"White" if voucher else "Gold")
+    box("Card header band",(0,height*.32,.023),(width*.90,height*.19,.001),"Mint" if voucher else "Dark")
+    print_text("Card heading","FIRST AID" if voucher else "STAGE CREW",(0,height*.32,.025),.047,"Dark" if voucher else "Cream")
+    if voucher:
+        box("Aid cross upright",(-.19,-.01,.025),(.028,.10,.001),"Mint")
+        box("Aid cross horizontal",(-.19,-.01,.026),(.10,.028,.001),"Mint")
+        print_text("Voucher instruction","ONE GOOD DEED",(.04,-.015,.025),.028)
+        print_text("Voucher footer","AFTER HOURS",(0,-.13,.025),.03)
+    else:
+        print_text("Pass access","ALL NIGHT",(0,.02,.025),.065)
+        print_text("Pass festival","AFTER HOURS",(0,-.10,.025),.038)
+        for i in range(23):
+            box("Printed pass barcode",(-.16+i*.014,-.23,.025),(.004+(i%3)*.001,.085,.001),"Dark")
+        box("Pass punched slot",(0,.295,.026),(.095,.014,.001),"Dark")
+
+
 def small_gear(kind):
     if kind == "Confetti":
         round_part("Goofy confetti barrel", (0, 0, .36), (.17, .17, .65), "Rose")
         box("Handle", (0, -.19, .18), (.20, .17, .33), "Dark")
     elif kind == "MerchBag":
-        box("Merch bag body", (0, 0, .34), (.55, .25, .60), "Cream")
-        add("Bag handle", (0, 0, .67), (.22, .12, .08), "Gold", "torus", (math.pi/2, 0, 0))
+        merch_bag()
     elif kind == "Map":
-        box("Folded map", (0, 0, .03), (.50, .68, .06), "Cream")
-        box("Map route", (0, 0, .07), (.09, .45, .02), "Mint")
+        paper_map()
     elif kind == "StagePass":
-        box("Stage pass", (0, 0, .02), (.45, .67, .04), "Gold")
-        box("Pass icon", (0, 0, .045), (.18, .20, .02), "Dark")
+        printed_card()
     elif kind == "Stock":
-        round_part("Fictional stock tin", (0, 0, .28), (.24, .24, .55), "Mint")
-        box("Fictional label", (0, -.23, .31), (.32, .03, .20), "Rose")
+        stock_tin()
     elif kind == "Voucher":
-        box("Clinic voucher", (0, 0, .02), (.60, .37, .04), "White")
-        box("Clinic voucher cross", (0, 0, .045), (.21, .06, .02), "Mint")
+        printed_card(True)
     else:
         box("Shared stash crate", (0, 0, .50), (1.5, 1.15, 1), "Wood")
         box("Stash lock", (0, .59, .62), (.25, .08, .27), "Gold")
@@ -1274,8 +1399,14 @@ def merge_by_material(name):
 
 
 def export(name, build):
+    if GEAR_ONLY and name not in {"Festival"+n for n in GEAR_NAMES}:
+        return
     current.clear()
     build()
+    # Paper faces the reader in the authored handheld orientation.
+    if name in ("FestivalMap", "FestivalStagePass", "FestivalVoucher"):
+        for obj in current:
+            obj.matrix_world = Matrix.Rotation(math.pi, 4, "Z") @ obj.matrix_world
     primitives = len(current)
     merge_by_material(name)
     bpy.ops.object.select_all(action="DESELECT")
@@ -1315,11 +1446,11 @@ for name, build in (
 ):
     export(name, build)
 
-for name in ("Confetti", "MerchBag", "Map", "StagePass", "Stock", "Voucher", "Stash"):
+for name in GEAR_NAMES:
     export("Festival" + name, lambda n=name: small_gear(n))
 
-bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / "FestivalWorld.blend"))
-(SOURCE / "world-manifest.json").write_text(json.dumps({
+bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / ("FestivalGear.blend" if GEAR_ONLY else "FestivalWorld.blend")))
+(SOURCE / ("gear-manifest.json" if GEAR_ONLY else "world-manifest.json")).write_text(json.dumps({
     "source": "Original scripted Blender geometry; no external assets",
     "runtimeDirectory": "Assets/Festival/Art/Resources",
     "models": manifest,

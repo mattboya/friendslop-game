@@ -82,3 +82,7 @@ The later [wagon form checkpoint](GRAPHICS_WAGON_FORM_PASS_2026-09-28.md) replac
 The [grounded locomotion checkpoint](GRAPHICS_FOOT_CONTACT_PASS_2026-09-28.md) adds original procedural Unity foot-contact code for the existing character rig. No external animation clip, motion capture, model or texture was added. The user-supplied motion references remain visual direction only.
 
 The [stage contact checkpoint](GRAPHICS_STAGE_CONTACT_PASS_2026-09-28.md) adds original scripted Blender stage wings, curved tubing and two stage glow material slots to the generated world master. Only `FestivalStage.fbx` was retained as a changed runtime export; the manifest and source blend were published through staging with the existing Unity GUID. The resident DJ, stage dancers and mixer hand solver use the existing original character and console assets. No external model, texture, animation or sound was added.
+
+## Close-up gear construction — September 28, 2026
+
+The tote, tin, folded map, pass and voucher details are original geometry and printing authored in `scripts/generate_festival_world_assets.py`. The gear-only staging group publishes `ArtSource/Generated/FestivalGear.blend` and `ArtSource/gear-manifest.json` with the seven gear FBXs, preserving the campsite source. Text is converted to geometry using Blender’s bundled font; no downloaded artwork or commercial asset pack was introduced. Full world generation also uses the updated gear recipes.

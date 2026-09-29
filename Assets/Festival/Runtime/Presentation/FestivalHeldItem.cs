@@ -33,9 +33,6 @@ namespace Festival.Presentation
             if(prop==null){Object.Destroy(root);return null;}
             prop.transform.localRotation=rotation;
             var modelScale=Vector3.one*size;
-            // Shelf cards are deliberately thick for distant readability. In a
-            // hand they need paper-like thickness, while retaining their face area.
-            if(item=="map"||item=="stage_pass"||item=="medical_voucher")modelScale.y*=.12f;
             prop.transform.localScale=modelScale;
             prop.transform.localPosition=-(rotation*Vector3.Scale(grip,modelScale));
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
