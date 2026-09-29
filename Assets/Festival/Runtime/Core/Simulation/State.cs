@@ -16,6 +16,9 @@ namespace Festival.Core
         public int Performances, CampAntics; public double LastRhythmScore=-1;
         public int EscapeProgress; public string VisualPose="Idle",NpcSpeech="",NpcSpeaker=""; public double NpcSpeechUntil;
         public int VisualDanceStepSequence,VisualDanceStepDirection=-1;
+        public string VisualOfferItem="",VisualOfferTarget="",VisualReceivedItem="";
+        public int VisualReceiptSequence;
+        public double VisualReceiptAt;
         public List<ItemStack> Inventory=new List<ItemStack>(); public List<ActiveEffect> Effects=new List<ActiveEffect>();
         public List<string> Wristbands=new List<string>(); public DialogueHistory Dialogue=new DialogueHistory();
     }

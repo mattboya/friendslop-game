@@ -60,7 +60,28 @@ namespace Festival.Presentation
         public bool RedEyes { get; private set; }
         FestivalPoiRig poiLeft,poiRight,equippedPoi;
         GameObject equippedProp;
-        string equippedId="";
+        string equippedId="",requestedItem="",offeredItem="",receivedItem="";
+        bool exchanging;
+        Vector3 exchangeTarget;
+        float exchangeWeight,receiptAt=-10;
+        int receiptSequence;
+        SkinnedMeshRenderer bodyRenderer;
+        int gripLeft=-1,gripRight=-1,smileIndex=-1,concernIndex=-1;
+        public void SetExchange(bool active,string item,Vector3 target)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(active!=exchanging)DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","exchange","actor="+name+" active="+active);
+#endif
+            exchanging=active;offeredItem=active?item:"";if(active)exchangeTarget=target;
+            RefreshEquipment();
+        }
+        public void SetReceipt(int sequence,string item,float age)
+        {
+            if(sequence==receiptSequence)return;
+            receiptSequence=sequence;
+            if(age<0||age>1||string.IsNullOrEmpty(item))return;
+            receivedItem=item;receiptAt=Time.time-age;RefreshEquipment();
+        }
         public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
         {
             var asset=Resources.Load<GameObject>("FestivalCharacter");
@@ -132,6 +153,18 @@ namespace Festival.Presentation
                 actor.footPlant=new FestivalFootPlant(actor.transform,actor.bones["Hips"],
                     actor.bones["LegL"],actor.bones["ShinL"],actor.bones["FootL"],
                     actor.bones["LegR"],actor.bones["ShinR"],actor.bones["FootR"]);
+            foreach(var skin in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+                if(skin.enabled&&skin.name.StartsWith("Body_"))actor.bodyRenderer=skin;
+            if(actor.bodyRenderer!=null)for(int i=0;i<actor.bodyRenderer.sharedMesh.blendShapeCount;i++)
+            {
+                var key=actor.bodyRenderer.sharedMesh.GetBlendShapeName(i);
+                if(key.EndsWith("GripL"))actor.gripLeft=i;if(key.EndsWith("GripR"))actor.gripRight=i;
+            }
+            if(actor.faceRenderer!=null)for(int i=0;i<actor.faceRenderer.sharedMesh.blendShapeCount;i++)
+            {
+                var key=actor.faceRenderer.sharedMesh.GetBlendShapeName(i);
+                if(key.EndsWith("Smile"))actor.smileIndex=i;if(key.EndsWith("Concern"))actor.concernIndex=i;
+            }
             actor.phase=FestivalAppearance.Pick(name,"phase",100)*.137f;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(actor.bones.Count<15 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
@@ -173,7 +206,11 @@ namespace Festival.Presentation
         }
         public void SetEquippedItem(string itemId)
         {
-            itemId=itemId??"";
+            requestedItem=itemId??"";RefreshEquipment();
+        }
+        void RefreshEquipment()
+        {
+            string itemId=exchanging?offeredItem:Time.time-receiptAt<.85f?receivedItem:requestedItem;
             if(equippedId==itemId)return;
             equippedId=itemId;
             if(equippedProp!=null)Destroy(equippedProp);
@@ -215,6 +252,7 @@ namespace Festival.Presentation
         }
         void LateUpdate()
         {
+            RefreshEquipment();
             float viewDistance=ViewTransform==null?0:Vector3.Distance(ViewTransform.position,transform.position);
             if(ViewTransform!=null)UpdateDetailForDistance(viewDistance);
             if(AmbientCrowd&&viewDistance>18f&&((Time.frameCount+Mathf.FloorToInt(phase*10))&1)!=0)return;
@@ -416,6 +454,28 @@ namespace Festival.Presentation
                 Aim("ForearmR",new Vector3(bag?-18:-62,0,0));
                 Aim("HandR",new Vector3(0,0,-6));
             }
+            float presentation=Mathf.Sin(Mathf.Clamp01((Time.time-receiptAt)/.85f)*Mathf.PI);
+            if(presentation>.01f&&!dance&&Pose!="Downed"&&Pose!="Spirit")
+            {Aim("ArmR",new Vector3(-28-25*presentation,0,8));Aim("ForearmR",new Vector3(-62+15*presentation,0,0));Layer("Head",new Vector3(6*presentation,0,0));}
+            bool canExchange=Pose!="Downed"&&Pose!="Spirit"&&!dance;
+            exchangeWeight=Mathf.MoveTowards(exchangeWeight,exchanging&&canExchange?1:0,animationDelta*4);
+            if(exchangeWeight>.001f)
+            {
+                Layer("Spine",new Vector3(7,0,0)*exchangeWeight);
+                Layer("Head",new Vector3(9,0,0)*exchangeWeight);
+                Aim("ArmR",new Vector3(-55,0,12));Aim("ForearmR",new Vector3(-45,0,0));
+            }
+            // ponytail: one third-person curl; use item-specific morphs if close-up playtests show clipping.
+            if(bodyRenderer!=null&&!UsesDistantMesh)
+            {
+                if(gripLeft>=0)bodyRenderer.SetBlendShapeWeight(gripLeft,Mathf.Lerp(bodyRenderer.GetBlendShapeWeight(gripLeft),performingPoi?100:0,1-Mathf.Exp(-12*animationDelta)));
+                if(gripRight>=0)bodyRenderer.SetBlendShapeWeight(gripRight,Mathf.Lerp(bodyRenderer.GetBlendShapeWeight(gripRight),equippedId!=""||performingPoi?100:0,1-Mathf.Exp(-12*animationDelta)));
+            }
+            if(faceRenderer!=null&&!UsesDistantMesh)
+            {
+                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),dance?65:Time.time-receiptAt<1.4f?80:0,1-Mathf.Exp(-7*animationDelta)));
+                if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:Threat*65,1-Mathf.Exp(-7*animationDelta)));
+            }
             if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)
             {
                 lastAppliedThreat=Threat;
@@ -438,6 +498,12 @@ namespace Festival.Presentation
             else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit",
                 !dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
                 delta,speed,walkCycle,strideDistance,animationDelta);
+            if(exchangeWeight>.001f&&bones.Count==15)
+            {
+                var hand=bones["HandR"];
+                var target=Vector3.Lerp(hand.position,exchangeTarget+hand.up*.05f,exchangeWeight);
+                FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],hand,target,1);
+            }
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
             {
                 if(djHandContact==null)

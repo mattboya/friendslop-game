@@ -10,5 +10,9 @@
     "TinR",
     "PaperR"
   ],
+  "restShapes": [
+    "RestL",
+    "RestR"
+  ],
   "visible": "Whenever the local player camera is active in a round"
 }

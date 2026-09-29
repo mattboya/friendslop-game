@@ -380,6 +380,7 @@ namespace Festival.Tests
                 yield return null;
                 var prop=root.transform.Find("First-person hand attachments/Held grip merch_bag");
                 Assert.That(prop,Is.Not.Null);
+                yield return new WaitForSeconds(.9f);
                 var localContact=hands.transform.InverseTransformPoint(prop.position);
                 yield return new WaitForSeconds(.2f);
                 Assert.That(Vector3.Distance(localContact,hands.transform.InverseTransformPoint(prop.position)),Is.LessThan(.001f));
@@ -387,6 +388,40 @@ namespace Festival.Tests
                 Assert.That(prop.gameObject.activeInHierarchy,Is.False);
                 hands.gameObject.SetActive(true);yield return null;
                 Assert.That(prop.gameObject.activeInHierarchy,Is.True);
+            }
+            finally{Object.Destroy(root);}
+        }
+        [UnityTest]public IEnumerator EmptyArmsLowerAndUnusedArmStaysRelaxed()
+        {
+            var root=new GameObject("Arm rest camera");
+            try
+            {
+                var hands=FestivalHands.Create(root.AddComponent<Camera>(),"arm_rest");
+                yield return new WaitForSeconds(.8f);
+                foreach(var renderer in hands.GetComponentsInChildren<SkinnedMeshRenderer>())
+                {
+                    if(!renderer.enabled)continue;
+                    int left=-1,right=-1;
+                    for(int i=0;i<renderer.sharedMesh.blendShapeCount;i++)
+                    {
+                        var key=renderer.sharedMesh.GetBlendShapeName(i);
+                        if(key.EndsWith("RestL"))left=i;
+                        if(key.EndsWith("RestR"))right=i;
+                    }
+                    Assert.That(left,Is.GreaterThanOrEqualTo(0),renderer.name);
+                    Assert.That(right,Is.GreaterThanOrEqualTo(0),renderer.name);
+                    Assert.That(renderer.GetBlendShapeWeight(left),Is.GreaterThan(99));
+                    Assert.That(renderer.GetBlendShapeWeight(right),Is.GreaterThan(99));
+                    hands.SetState(new Festival.Core.PlayerState{EquippedItemId="merch_bag",Life="Alive"});
+                    yield return new WaitForSeconds(.8f);
+                    Assert.That(renderer.GetBlendShapeWeight(left),Is.GreaterThan(99),"Unused arm stays down");
+                    Assert.That(renderer.GetBlendShapeWeight(right),Is.LessThan(1),"Carrying arm raises");
+                    hands.SetState(null);yield return new WaitForSeconds(.8f);
+                    Assert.That(renderer.GetBlendShapeWeight(right),Is.GreaterThan(99),"Arm lowers after release");
+                }
+                var cameraPosition=root.transform.position;
+                root.transform.rotation=Quaternion.Euler(0,45,0);yield return null;
+                Assert.That(root.transform.position,Is.EqualTo(cameraPosition),"Arm sway never moves camera");
             }
             finally{Object.Destroy(root);}
         }

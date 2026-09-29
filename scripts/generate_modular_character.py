@@ -9,7 +9,7 @@ import math
 import os
 import sys
 from pathlib import Path
-from mathutils import Vector
+from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -203,7 +203,10 @@ def cord(label, points, radius, color, bone, sides=8):
             k=(j+1)%sides
             faces.append((row*sides+j,row*sides+k,(row+1)*sides+k,(row+1)*sides+j))
     faces.extend((tuple(reversed(range(sides))),tuple((len(points)-1)*sides+j for j in range(sides))))
-    return surface(label, vertices, faces, color, bone)
+    obj=surface(label, vertices, faces, color, bone)
+    if any(word in label for word in ("mouth","lip","smile crease","eyebrow")):
+        obj.vertex_groups.new(name="ExpressionBrow" if "eyebrow" in label else "ExpressionMouth").add(list(range(len(obj.data.vertices))),1,"REPLACE")
+    return obj
 
 
 _skin = []
@@ -332,6 +335,25 @@ def tapered_shell(label, z_bottom, z_top, bottom, top, color, bone="Hips", sides
 def fit_keys(obj):
     """Six authored-width fits share one renderer per wardrobe slot."""
     category = obj.name.split("_")[0]
+    if category=="Body":
+        obj.shape_key_add(name="Basis")
+        for side in ("L","R"):
+            key=obj.shape_key_add(name="Grip"+side,from_mix=False)
+            key.value=0
+            mask=obj.vertex_groups.get("FingerGrip"+side)
+            if mask:
+                for v in obj.data.vertices:
+                    if any(g.group==mask.index for g in v.groups):
+                        world=obj.matrix_world@v.co
+                        pivot=Vector((world.x,-.035,.715))
+                        curl=max(0,min(1,(.715-world.z)/.115))*-2.2
+                        key.data[v.index].co=obj.matrix_world.inverted()@(pivot+Matrix.Rotation(curl,3,"X")@(world-pivot))
+            thumb=obj.vertex_groups.get("ThumbGrip"+side)
+            if thumb:
+                for v in obj.data.vertices:
+                    if any(g.group==thumb.index for g in v.groups):
+                        key.data[v.index].co+=Vector((.028 if side=="R" else -.028,-.035,-.014))
+        return
     if category not in {"Face", "Shirt", "Pants", "Shoes", "Headgear",
                         "Sunglasses", "FacialHair", "Hairstyle", "HairTop", "HairUnderHat",
                         "Accessory", "Role", "EyeGlow", "Equipment"}:
@@ -354,6 +376,22 @@ def fit_keys(obj):
                 key.data[vertex.index].co.x = anchor + (world_x - anchor) * factor - origin_x
 
     if category=="Face":
+        for expression in ("Smile","Concern"):
+            key=obj.shape_key_add(name=expression,from_mix=False)
+            key.value=0
+            for v in obj.data.vertices:
+                names=[obj.vertex_groups[g.group].name for g in v.groups]
+                if "ExpressionMouth" not in names and "ExpressionBrow" not in names:continue
+                world=obj.matrix_world@v.co
+                if "ExpressionMouth" in names:
+                    dz=(.026 if expression=="Smile" else -.017)*min(1,abs(world.x)/.08)**1.5
+                else:
+                    dz=.012 if expression=="Smile" else .029*(1-min(1,abs(world.x)/.18))-.009
+                old=skin_tree().ray_cast(Vector((world.x,-1,world.z)),Vector((0,1,0)))[0]
+                new=skin_tree().ray_cast(Vector((world.x,-1,world.z+dz)),Vector((0,1,0)))[0]
+                world.z+=dz
+                if old is not None and new is not None:world.y+=new.y-old.y
+                key.data[v.index].co=obj.matrix_world.inverted()@world
         blink=obj.shape_key_add(name="Blink",from_mix=False)
         mask=obj.vertex_groups.get("FaceBlink")
         if mask is not None:
@@ -431,8 +469,11 @@ def base_body(gender, shape):
         piece("palm",(x*.52,-.04,.725),(.084*broad,.064,.10),0,"Hand"+side)
         for finger in range(4):
             px=x*.52+(finger-1.5)*.036
-            piece("finger",(px,-.052,.65+abs(finger-1.5)*.012),(.020,.032,.060),0,"Hand"+side,sides=12)
+            length=.11-abs(finger-1.5)*.010
+            digit=cord("connected finger",[(px,-.047,.716),(px,-.050,.69),(px,-.060,.65),(px,-.071,.716-length)],.017,0,"Hand"+side,sides=10)
+            digit.vertex_groups.new(name="FingerGrip"+side).add(list(range(len(digit.data.vertices))),1,"REPLACE")
         piece("thumb",(x*.435,-.058,.72),(.035,.039,.065),0,"Hand"+side,rotation=(0,x*.45,0))
+        parts[-1].vertex_groups.new(name="ThumbGrip"+side).add(list(range(len(parts[-1].data.vertices))),1,"REPLACE")
         limb("continuous leg "+side,[(x*.19,0,.88,.118,.125),(x*.19,0,.72,.119,.122),
              (x*.195,0,.57,.098,.104),(x*.20,-.01,.47,.087,.095),(x*.20,0,.40,.091,.10),
              (x*.20,.012,.28,.083,.085),(x*.20,0,.085,.064,.065)],0,"Leg"+side,"Shin"+side,.46,broad)

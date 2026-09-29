@@ -438,6 +438,8 @@ namespace Festival.Network
             {
                 if(spirit && p.Life!="Spirit")continue;
                 var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")?.Kind??(p.Effects.Count>0?"Intoxicated":"Idle");
+                var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
+                copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
                 copy.WearingLittleSpoon=p.Inventory.Exists(item=>item.ItemId=="little_spoon"&&item.Count>0);
                 copy.VisualWideEyes=p.Effects.Exists(effect=>effect.Id=="lsd"||effect.Id=="mushrooms"||effect.Id=="ecstasy");
                 copy.VisualRedEyes=p.Effects.Exists(effect=>effect.Id=="weed");
@@ -469,6 +471,15 @@ namespace Festival.Network
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
                     string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId);
+                var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
+                if(exchangeCharacter!=null)
+                {
+                    var peer=string.IsNullOrEmpty(p.VisualOfferTarget)?State.Players.Find(other=>other.VisualOfferTarget==p.Id):State.Players.Find(other=>other.Id==p.VisualOfferTarget);
+                    bool exchange=peer!=null&&peer.Connected&&p.Life=="Alive"&&peer.Life=="Alive"&&p.CampVisitId==peer.CampVisitId;
+                    var contact=exchange?new Vector3(togetherInside?(p.CampInteriorX+peer.CampInteriorX)*.5f:(p.X+peer.X)*.5f,1.08f,togetherInside?(p.CampInteriorZ+peer.CampInteriorZ)*.5f:(p.Z+peer.Z)*.5f):Vector3.zero;
+                    exchangeCharacter.SetExchange(exchange,p.VisualOfferItem,contact);
+                    exchangeCharacter.SetReceipt(p.VisualReceiptSequence,p.VisualReceivedItem,(float)(State.SimulationSeconds-p.VisualReceiptAt));
+                }
                 seen.Add(p.Id);
                 if(p.Id==LocalPlayerId)
                 {
@@ -548,7 +559,7 @@ namespace Festival.Network
                 lastCampVisit=player.CampVisitId;
             }
             if(firstPersonHands==null && ViewCamera!=null && !string.IsNullOrEmpty(LocalPlayerId))firstPersonHands=FestivalHands.Create(ViewCamera,LocalPlayerId);
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance");firstPersonHands.SetState(player);}
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance");firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
             var visit=CampFeatures.Find(player.CampVisitId);
             var target=visit==null?new Vector3(player.X,player.Life=="Downed"?.55f:1.65f,player.Z):new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ);
             ViewCamera.transform.position=Vector3.Distance(ViewCamera.transform.position,target)>5?target:Vector3.Lerp(ViewCamera.transform.position,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));

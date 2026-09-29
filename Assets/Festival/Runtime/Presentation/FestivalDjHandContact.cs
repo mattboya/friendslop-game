@@ -7,9 +7,6 @@ namespace Festival.Presentation
     {
         readonly Transform actor,console;
         readonly Transform leftArm,leftForearm,leftHand,rightArm,rightForearm,rightHand;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        bool warnedReach;
-#endif
 
         public FestivalDjHandContact(Transform actor,Transform console,
             Transform leftArm,Transform leftForearm,Transform leftHand,
@@ -33,20 +30,18 @@ namespace Festival.Presentation
 
         void Solve(Transform arm,Transform forearm,Transform hand,Vector3 target,int side)
         {
+            Reach(actor,arm,forearm,hand,target,side);
+        }
+
+        internal static void Reach(Transform actor,Transform arm,Transform forearm,Transform hand,Vector3 target,int side)
+        {
             Vector3 shoulder=arm.position;
             float upper=Vector3.Distance(shoulder,forearm.position);
             float lower=Vector3.Distance(forearm.position,hand.position);
             if(upper<.01f||lower<.01f)return;
             var offset=target-shoulder;
             float desired=offset.magnitude;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if(!warnedReach&&desired>upper+lower+.045f)
-            {
-                warnedReach=true;
-                Debug.LogWarning("[Festival.Motion] action=dj_hand_reach actor="+actor.name+
-                    " excess="+(desired-upper-lower).ToString("F3"));
-            }
-#endif
+
             float distance=Mathf.Clamp(desired,Mathf.Abs(upper-lower)+.001f,upper+lower-.001f);
             Vector3 axis=desired>.00001f?offset/desired:actor.forward;
             Vector3 pole=Vector3.ProjectOnPlane(Vector3.down+actor.right*(side*.35f),axis).normalized;

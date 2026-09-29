@@ -1,9 +1,10 @@
 """Original always-visible first-person arm source for the festival prototype."""
 import bpy
 import json
+import math
 import os
 from pathlib import Path
-from mathutils import Vector, Euler
+from mathutils import Vector, Euler, Matrix
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT / os.environ.get("FESTIVAL_ASSET_STAGE", "artifacts/asset-staging/manual")
@@ -87,12 +88,29 @@ def finger_chain(label, paths, radius):
         part(label+str(segment),position,size,0,rotation=rotation,poses=poses)
 
 
+def forearm(sign,width):
+    profiles=[(-.29,-.385,.087,.086),(-.40,-.385,.095,.085),(-.55,-.355,.084,.075),(-.68,-.322,.068,.062),(-.78,-.285,.065,.054)]
+    vertices=[]
+    for y,z,rx,rz in profiles:
+        for i in range(20):
+            angle=i*math.tau/20
+            vertices.append((sign*(.34+(.78+y)*.035)+rx*width*math.cos(angle),y,z+rz*math.sin(angle)))
+    faces=[(r*20+i,r*20+(i+1)%20,(r+1)*20+(i+1)%20,(r+1)*20+i) for r in range(4) for i in range(20)]
+    faces.extend([tuple(reversed(range(20))),tuple(80+i for i in range(20))])
+    mesh=bpy.data.meshes.new("Tapered forearm");mesh.from_pydata(vertices,[],faces);mesh.update()
+    obj=bpy.data.objects.new("Continuous forearm",mesh);bpy.context.collection.objects.link(obj)
+    mesh.materials.append(mat)
+    for polygon in mesh.polygons:polygon.use_smooth=True
+    uv=mesh.uv_layers.new()
+    for loop in uv.data:loop.uv=(.5/8,.5)
+    objects.append(obj)
+
+
 def hands(shape):
     width = (.85, 1, 1.16)[shape]
     # The FBX forward-axis conversion mirrors source X in the Unity camera view.
     for side, x in (("L", 1), ("R", -1)):
-        part("tapered forearm " + side, (x*.36, -.55, -.36), (.082*width, .30, .095), 0)
-        part("wrist " + side, (x*.34, -.75, -.30), (.075*width, .09, .075), 0)
+        forearm(x,width)
         # A smaller palm leaves the articulated phalanges visible from the camera.
         part("palm " + side, (x*.32, -.798, -.26), (.095*width, .091, .061), 0)
         def point(dx,dy,dz):
@@ -148,6 +166,25 @@ for variant in range(3):
 for variant in range(4):
     group(f"HandsSleeve_{variant}", lambda v=variant: sleeves(v))
 
+# Lower each complete arm from its shoulder, including sleeves. Keep the
+# raised pose as Basis so existing grip coordinates remain the contact anchors.
+for obj in bpy.data.objects:
+    if obj.type!="MESH":continue
+    if not obj.data.shape_keys:obj.shape_key_add(name="Basis")
+    for key in obj.data.shape_keys.key_blocks:key.value=0
+    inverse=obj.matrix_world.inverted()
+    for side,sign in (("L",1),("R",-1)):
+        key=obj.shape_key_add(name="Rest"+side,from_mix=False)
+        pivot=Vector((sign*.40,.10,-.62))
+        for vertex,base in zip(key.data,obj.data.shape_keys.key_blocks["Basis"].data):
+            world=obj.matrix_world@base.co
+            if world.x*sign>0:
+                lowered=pivot+Matrix.Rotation(.55850536,3,"X")@(world-pivot)
+                lowered.x+=sign*.06
+                vertex.co=inverse@lowered
+            else:
+                assert (vertex.co-base.co).length<1e-6,"Rest shape moved the opposite hand"
+
 grip_names = ["RodL", "RodR", "BagR", "TinR", "PaperR"]
 for obj in bpy.data.objects:
     if obj.name.startswith("HandsSkin_"):
@@ -159,6 +196,11 @@ bpy.ops.export_scene.fbx(
     filepath=str(OUT / "FestivalHands.fbx"), use_selection=True,
     object_types={"MESH"}, bake_anim=False, axis_forward="-Z", axis_up="Y",
     apply_unit_scale=True)
+# FBX export leaves shape values changed in memory; save an editable neutral source.
+for obj in bpy.data.objects:
+    if obj.type=="MESH" and obj.data.shape_keys:
+        for key in obj.data.shape_keys.key_blocks:key.value=0
+bpy.context.view_layer.update()
 bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / "FestivalHands.blend"))
 (SOURCE / "hands-manifest.json").write_text(json.dumps({
     "source": "Original scripted Blender geometry; no external assets",
@@ -166,6 +208,7 @@ bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE / "FestivalHands.blend"))
     "skinShapes": 3,
     "sleeveVariants": 4,
     "gripShapes": ["RodL", "RodR", "BagR", "TinR", "PaperR"],
+    "restShapes": ["RestL", "RestR"],
     "visible": "Whenever the local player camera is active in a round",
 }, indent=2) + "\n")
 print("FESTIVAL FIRST PERSON HANDS EXPORTED")
