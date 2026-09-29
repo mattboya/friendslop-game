@@ -390,6 +390,50 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
+        [UnityTest]public IEnumerator FirstPersonFingersDeformForEquipmentAndRelease()
+        {
+            var root=new GameObject("Finger deformation camera");
+            var baked=new Mesh();
+            try
+            {
+                var hands=FestivalHands.Create(root.AddComponent<Camera>(),"grip_deformation");
+                yield return null;
+                var skin=System.Array.Find(hands.GetComponentsInChildren<SkinnedMeshRenderer>(),r=>r.enabled);
+                Assert.That(skin,Is.Not.Null,"Hands must import with usable shape keys");
+                int tin=-1,paper=-1;
+                for(int i=0;i<skin.sharedMesh.blendShapeCount;i++)
+                {
+                    string name=skin.sharedMesh.GetBlendShapeName(i);
+                    if(name.EndsWith("TinR"))tin=i;
+                    if(name.EndsWith("PaperR"))paper=i;
+                }
+                Assert.That(tin,Is.GreaterThanOrEqualTo(0));Assert.That(paper,Is.GreaterThanOrEqualTo(0));
+                hands.SetState(new Festival.Core.PlayerState{EquippedItemId="stock_lsd",Life="Alive"});
+                yield return new WaitForSeconds(.35f);
+                Assert.That(skin.GetBlendShapeWeight(tin),Is.GreaterThan(98));
+                // Compare the two shapes within one frame so breathing and imported
+                // skin-root transforms cannot contaminate the deformation measurement.
+                float weight=skin.GetBlendShapeWeight(tin);
+                skin.SetBlendShapeWeight(tin,0);skin.BakeMesh(baked);var relaxed=baked.vertices;
+                skin.SetBlendShapeWeight(tin,weight);skin.BakeMesh(baked);var wrapped=baked.vertices;
+                float movement=0,emptyHandMovement=0;
+                for(int i=0;i<wrapped.Length;i++)
+                {
+                    float delta=skin.transform.TransformVector(wrapped[i]-relaxed[i]).magnitude;
+                    if(root.transform.InverseTransformPoint(skin.transform.TransformPoint(relaxed[i])).x>0)movement=Mathf.Max(movement,delta);
+                    else emptyHandMovement=Mathf.Max(emptyHandMovement,delta);
+                }
+                Assert.That(emptyHandMovement,Is.LessThan(.001f),"Equipped right-hand gear must not deform the empty left hand");
+                Assert.That(movement,Is.GreaterThan(.03f),"Imported fingers must actually move around the object");
+                hands.SetState(new Festival.Core.PlayerState{EquippedItemId="stock_lsd",HeldOfferId="map",Life="Alive"});
+                yield return new WaitForSeconds(.35f);
+                Assert.That(skin.GetBlendShapeWeight(paper),Is.GreaterThan(98));
+                Assert.That(skin.GetBlendShapeWeight(tin),Is.LessThan(2),"Unpaid carried paper takes precedence over equipped tin");
+                hands.SetState(null);yield return new WaitForSeconds(.35f);
+                Assert.That(skin.GetBlendShapeWeight(paper),Is.LessThan(2));
+            }
+            finally{Object.Destroy(baked);Object.Destroy(root);}
+        }
         [UnityTest]public IEnumerator FirstPersonHandsSelectTheSameBodyAndSleeveAsPlayer()
         {
             var cameraObject=new GameObject("First-person hand test camera");

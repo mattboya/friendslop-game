@@ -7,6 +7,7 @@ Latest terrain checkpoint: [stage-route ground and grove composition](GRAPHICS_T
 Latest object checkpoint: [medical, security and shuttle forms](GRAPHICS_MEDICAL_SECURITY_SHUTTLE_PASS_2026-09-28.md).
 Latest movement checkpoint: [walking stop and turn transitions](GRAPHICS_LOCOMOTION_TRANSITIONS_PASS_2026-09-28.md).
 Latest gear checkpoint: [close-up bag, tin and printed paper construction](GRAPHICS_GEAR_CONSTRUCTION_PASS_2026-09-28.md).
+Latest hand checkpoint: [articulated first-person finger grips](GRAPHICS_FINGER_GRIP_PASS_2026-09-28.md).
 Reference: [Dear Passengers — “Another Friendslop Game” teaser](https://www.youtube.com/watch?v=luWunttkCgY)  
 Overall regression risk: **7/10** — estimated likelihood of disrupting existing functionality during the full upgrade, before the controls below. This is an engineering judgment, not a measured probability.
 Tool constraint: use free tools and assets with documented commercial use rights; do not depend on paid subscriptions or expiring trials.

@@ -27,6 +27,7 @@ function expectedFiles(dir,kinds)
     const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
     const exports=kind==='world'?Object.keys(manifest.models||{}).map(name=>name+'.fbx'):group.exports;
     if(kind==='gear'&&JSON.stringify(Object.keys(manifest.models||{}).map(name=>name+'.fbx'))!==JSON.stringify(exports))fail('Gear manifest is incomplete.');
+    if(kind==='hands'&&JSON.stringify(manifest.gripShapes)!==JSON.stringify(['RodL','RodR','BagR','TinR','PaperR']))fail('Hands manifest lacks articulated grips.');
     if(kind==='world'&&exports.length<27)fail('World manifest is incomplete.');
     if(kind==='character'&&(!manifest.distantGroups||manifest.bones?.length!==15||
         !manifest.bones.includes('FootL')||!manifest.bones.includes('FootR')))

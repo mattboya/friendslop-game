@@ -3,5 +3,12 @@
   "runtime": "Assets/Festival/Art/Resources/FestivalHands.fbx",
   "skinShapes": 3,
   "sleeveVariants": 4,
+  "gripShapes": [
+    "RodL",
+    "RodR",
+    "BagR",
+    "TinR",
+    "PaperR"
+  ],
   "visible": "Whenever the local player camera is active in a round"
 }

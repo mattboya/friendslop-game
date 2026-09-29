@@ -610,10 +610,10 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE ITEM GRIPS PASSED: "+gripPath);
             captureCamera.fieldOfView=75;
             var gripHands=FestivalHands.Create(captureCamera,"native_grip_preview");
-            foreach(var item in new[]{"merch_bag","stock_lsd","map"})
+            foreach(var item in new[]{"merch_bag","stock_lsd","map","poi_practice"})
             {
                 gripHands.SetState(new PlayerState{EquippedItemId=item,Life="Alive"});
-                yield return new WaitForSeconds(.2f);
+                yield return new WaitForSeconds(.35f);
                 var firstPersonPath=Path.Combine(dir,(session.IsHost?"host":"client")+"-grip-"+item+".png");
                 ScreenCapture.CaptureScreenshot(firstPersonPath);yield return new WaitForSeconds(.2f);
                 if(!File.Exists(firstPersonPath)){Fail("first-person grip "+item);yield break;}

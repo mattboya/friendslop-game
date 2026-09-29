@@ -11,6 +11,11 @@ namespace Festival.Presentation
         Material material;
         Texture2D palette;
         Vector3 rest;
+        static readonly string[] GripNames={"RodL","RodR","BagR","TinR","PaperR"};
+        readonly int[] gripIndices={-1,-1,-1,-1,-1};
+        readonly float[] gripTargets=new float[5];
+        SkinnedMeshRenderer gripSkin;
+        string gripState="";
         Transform attachments;
         FestivalPoiRig leftPoi,rightPoi,equippedPoi,unpaidPoi;
         GameObject carriedBand;
@@ -46,8 +51,14 @@ namespace Festival.Presentation
                 renderer.enabled=renderer.name=="HandsSkin_"+look.Shape || renderer.name=="HandsSleeve_"+look.Shirt;
                 renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
             }
+            foreach(var skin in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if(skin.name=="HandsSkin_"+look.Shape)hands.gripSkin=skin;
+            if(hands.gripSkin!=null)
+                for(int shape=0;shape<hands.gripSkin.sharedMesh.blendShapeCount;shape++)
+                    for(int grip=0;grip<GripNames.Length;grip++)
+                        if(hands.gripSkin.sharedMesh.GetBlendShapeName(shape).EndsWith(GripNames[grip]))hands.gripIndices[grip]=shape;
             hands.rest=go.transform.localPosition;
-            // The Blender palm centers are x=+/-.32, y=-.26, forward=.84;
+            // Authored finger grips target source x=+/-.32, z=-.268, forward=.84;
             // the .56 hand scale and camera offset put them here in camera space.
             hands.attachments=new GameObject("First-person hand attachments").transform;
             hands.attachments.SetParent(camera.transform,false);
@@ -111,10 +122,35 @@ namespace Festival.Presentation
             if(unpaidProp!=null)unpaidProp.SetActive(player!=null&&player.Life=="Alive"&&!poi);
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&player.Life=="Alive");
             if(equippedPoi!=null)equippedPoi.gameObject.SetActive(held==""&&!poi&&player.Life=="Alive");
+            SetGrip(poi?"poi":held!=""?held:equipped,player!=null&&player.Life=="Alive");
             previousCash=player?.Cash??-1;
+        }
+        void SetGrip(string item,bool alive)
+        {
+            if(!alive)item="";
+            if(item==gripState)return;
+            gripState=item;
+            for(int i=0;i<gripTargets.Length;i++)gripTargets[i]=0;
+            switch(item)
+            {
+                case "poi":gripTargets[0]=gripTargets[1]=100;break;
+                case "poi_led":case "poi_practice":case "confetti":gripTargets[1]=100;break;
+                case "merch_bag":gripTargets[2]=100;break;
+                case "stock_lsd":case "stock_mushrooms":gripTargets[3]=100;break;
+                case "map":case "stage_pass":case "medical_voucher":gripTargets[4]=100;break;
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","finger_grip","item="+(item==""?"rest":item)+" articulated="+(gripSkin!=null));
+#endif
         }
         void LateUpdate()
         {
+            if(gripSkin!=null)
+            {
+                float blend=1-Mathf.Exp(-18*Time.deltaTime);
+                for(int i=0;i<gripIndices.Length;i++)if(gripIndices[i]>=0)
+                    gripSkin.SetBlendShapeWeight(gripIndices[i],Mathf.Lerp(gripSkin.GetBlendShapeWeight(gripIndices[i]),gripTargets[i],blend));
+            }
             // Small, non-authoritative breathing motion. Hands never move gameplay targets.
             float handoff=Mathf.Clamp01(1-(Time.time-handoffAt)/.38f);
             transform.localPosition=rest+new Vector3(Mathf.Sin(Time.time*1.7f)*.006f,Mathf.Sin(Time.time*2.1f)*.008f,.16f*Mathf.Sin((1-handoff)*Mathf.PI)*handoff);

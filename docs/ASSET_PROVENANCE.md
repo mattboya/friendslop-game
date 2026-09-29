@@ -86,3 +86,7 @@ The [stage contact checkpoint](GRAPHICS_STAGE_CONTACT_PASS_2026-09-28.md) adds o
 ## Close-up gear construction — September 28, 2026
 
 The tote, tin, folded map, pass and voucher details are original geometry and printing authored in `scripts/generate_festival_world_assets.py`. The gear-only staging group publishes `ArtSource/Generated/FestivalGear.blend` and `ArtSource/gear-manifest.json` with the seven gear FBXs, preserving the campsite source. Text is converted to geometry using Blender’s bundled font; no downloaded artwork or commercial asset pack was introduced. Full world generation also uses the updated gear recipes.
+
+## First-person grip shapes — September 28, 2026
+
+`scripts/generate_festival_hands.py` authors segmented fingers and opposing thumbs with five original grip shape keys. The three hand shape variants and four sleeve variants remain in the existing FBX; staged Blender source and manifest are in `ArtSource/Generated/FestivalHands.blend` and `ArtSource/hands-manifest.json`. No external hand models, animation clips, or motion capture were used.
