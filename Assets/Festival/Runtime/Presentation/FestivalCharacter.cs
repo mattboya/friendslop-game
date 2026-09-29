@@ -185,17 +185,7 @@ namespace Festival.Presentation
                 equippedPoi=FestivalPoiRig.Create(hand,new Vector3(0,-.05f,0),1,itemId=="poi_led");
                 return;
             }
-            var resource=Festival.Network.FestivalSession.DropModel(itemId);
-            if(resource==null)return;
-            equippedProp=FestivalArtView.Create(hand,resource);
-            if(equippedProp==null)return;
-            equippedProp.name="Equipped "+itemId;
-            var handScale=hand.lossyScale;
-            equippedProp.transform.localPosition=new Vector3(0,
-                -.23f/Mathf.Max(.01f,Mathf.Abs(handScale.y)),
-                -.10f/Mathf.Max(.01f,Mathf.Abs(handScale.z)));
-            equippedProp.transform.localRotation=Quaternion.Euler(12,0,-18);
-            equippedProp.transform.localScale=new Vector3(.27f/Mathf.Max(.01f,Mathf.Abs(handScale.x)),.27f/Mathf.Max(.01f,Mathf.Abs(handScale.y)),.27f/Mathf.Max(.01f,Mathf.Abs(handScale.z)));
+            equippedProp=FestivalHeldItem.Create(hand,itemId,new Vector3(0,-.05f,0),false);
         }
         public void SetHighlyIntoxicated(bool value)
         {
@@ -416,6 +406,15 @@ namespace Festival.Presentation
                 {Aim("Spine",new Vector3(-10,0,wave*8));Aim("Head",new Vector3(5,0,-wave*12));Aim("ArmL",new Vector3(-35,0,-35));Aim("ArmR",new Vector3(-35,0,35));}
                 else if(Pose=="Intoxicated")
                 {Aim("Hips",new Vector3(4,0,wave*8));Aim("Spine",new Vector3(-5,0,-wave*11));Aim("Head",new Vector3(Mathf.Sin(t*.7f)*8,0,wave*13));Aim("ArmL",new Vector3(-18+wave*8,0,-12));Aim("ArmR",new Vector3(-18-wave*8,0,12));}
+            }
+            // Carry a prop with a bent elbow instead of swinging it through the
+            // thigh. Keep dedicated interaction and performance poses in charge.
+            if(!dance&&(Pose=="Idle"||Pose=="Walk"||Pose=="")&&(equippedProp!=null||equippedPoi!=null))
+            {
+                bool bag=equippedId=="merch_bag";
+                Aim("ArmR",new Vector3(bag?-12:-28,0,bag?12:8));
+                Aim("ForearmR",new Vector3(bag?-18:-62,0,0));
+                Aim("HandR",new Vector3(0,0,-6));
             }
             if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)
             {

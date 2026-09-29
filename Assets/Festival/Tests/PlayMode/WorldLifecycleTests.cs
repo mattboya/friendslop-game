@@ -350,6 +350,46 @@ namespace Festival.Tests
             }
             finally{Application.targetFrameRate=previousFrameRate;Object.Destroy(root);}
         }
+        [UnityTest]public IEnumerator HeldBagGripTouchesHandleAndIgnoresImportedBoneScale()
+        {
+            var parent=new GameObject("Imported hand scale");parent.transform.localScale=Vector3.one*100;parent.layer=31;
+            try
+            {
+                var bag=FestivalHeldItem.Create(parent.transform,"merch_bag",new Vector3(0,-.05f,0),false);
+                yield return null;
+                Assert.That(Vector3.Distance(bag.transform.position,new Vector3(0,-.05f,0)),Is.LessThan(.001f));
+                foreach(var child in bag.GetComponentsInChildren<Transform>())Assert.That(child.gameObject.layer,Is.EqualTo(31),"Hidden local-world equipment must not leak into first person");
+                var handle=System.Array.Find(bag.GetComponentsInChildren<Renderer>(),r=>r.name.Contains("Gold"));
+                Assert.That(handle,Is.Not.Null);
+                var handleTop=new Vector3(handle.bounds.center.x,handle.bounds.max.y,handle.bounds.center.z);
+                Assert.That(Vector3.Distance(handleTop,bag.transform.position),Is.LessThan(.025f),"The palm must meet the top of the handle");
+                var body=bag.GetComponentsInChildren<Renderer>();
+                var bounds=body[0].bounds;foreach(var renderer in body)bounds.Encapsulate(renderer.bounds);
+                Assert.That(bounds.size.y,Is.InRange(.4f,.65f),"Bag size must be independent of imported bone scale");
+                Assert.That(bounds.center.y,Is.LessThan(bag.transform.position.y-.15f),"Bag body must hang below its handle");
+            }
+            finally{Object.Destroy(parent);}
+        }
+        [UnityTest]public IEnumerator FirstPersonPropTracksHandMotionAndVisibility()
+        {
+            var root=new GameObject("Hand grip motion camera");
+            try
+            {
+                var hands=FestivalHands.Create(root.AddComponent<Camera>(),"grip_motion");
+                hands.SetState(new Festival.Core.PlayerState{EquippedItemId="merch_bag",Life="Alive"});
+                yield return null;
+                var prop=root.transform.Find("First-person hand attachments/Held grip merch_bag");
+                Assert.That(prop,Is.Not.Null);
+                var localContact=hands.transform.InverseTransformPoint(prop.position);
+                yield return new WaitForSeconds(.2f);
+                Assert.That(Vector3.Distance(localContact,hands.transform.InverseTransformPoint(prop.position)),Is.LessThan(.001f));
+                hands.gameObject.SetActive(false);yield return null;
+                Assert.That(prop.gameObject.activeInHierarchy,Is.False);
+                hands.gameObject.SetActive(true);yield return null;
+                Assert.That(prop.gameObject.activeInHierarchy,Is.True);
+            }
+            finally{Object.Destroy(root);}
+        }
         [UnityTest]public IEnumerator FirstPersonHandsSelectTheSameBodyAndSleeveAsPlayer()
         {
             var cameraObject=new GameObject("First-person hand test camera");

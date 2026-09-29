@@ -602,6 +602,24 @@ namespace Festival.Presentation
             ScreenCapture.CaptureScreenshot(qualityPath);yield return new WaitForSeconds(1);
             if(!File.Exists(qualityPath)){Fail("character quality gallery");yield break;}
             Debug.Log("FESTIVAL SMOKE CHARACTER QUALITY PASSED: "+qualityPath);
+            portraits[0].SetEquippedItem("merch_bag");portraits[1].SetEquippedItem("stock_lsd");portraits[2].SetEquippedItem("map");
+            yield return new WaitForSeconds(.5f);
+            var gripPath=Path.Combine(dir,session.IsHost?"host-item-grips.png":"client-item-grips.png");
+            ScreenCapture.CaptureScreenshot(gripPath);yield return new WaitForSeconds(.4f);
+            if(!File.Exists(gripPath)){Fail("held item contact gallery");yield break;}
+            Debug.Log("FESTIVAL SMOKE ITEM GRIPS PASSED: "+gripPath);
+            captureCamera.fieldOfView=75;
+            var gripHands=FestivalHands.Create(captureCamera,"native_grip_preview");
+            foreach(var item in new[]{"merch_bag","stock_lsd","map"})
+            {
+                gripHands.SetState(new PlayerState{EquippedItemId=item,Life="Alive"});
+                yield return new WaitForSeconds(.2f);
+                var firstPersonPath=Path.Combine(dir,(session.IsHost?"host":"client")+"-grip-"+item+".png");
+                ScreenCapture.CaptureScreenshot(firstPersonPath);yield return new WaitForSeconds(.2f);
+                if(!File.Exists(firstPersonPath)){Fail("first-person grip "+item);yield break;}
+            }
+            Destroy(gripHands.gameObject);captureCamera.fieldOfView=46;
+            foreach(var portrait in portraits)portrait.SetEquippedItem("");
             portraits[0].Pose="Dance";portraits[1].Pose="Poi";portraits[2].Pose="Dance";
             yield return new WaitForSeconds(.4f);
             for(int motionFrame=0;motionFrame<5;motionFrame++)

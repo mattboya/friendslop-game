@@ -43,6 +43,7 @@ namespace Festival.Presentation
                 return null;
             }
             var go=Object.Instantiate(prefab,parent);go.name=resource;
+            foreach(var child in go.GetComponentsInChildren<Transform>(true))child.gameObject.layer=parent.gameObject.layer;
             foreach(var renderer in go.GetComponentsInChildren<Renderer>(true))
             {
                 string name=renderer.name;int index=name.LastIndexOf("__",System.StringComparison.Ordinal);

@@ -82,7 +82,7 @@ namespace Festival.Presentation
                     else
                     {
                         var resource=FestivalSession.DropModel(held);
-                        if(resource!=null)unpaidProp=Held(attachments,resource,RightPalm,.30f);
+                        if(resource!=null)unpaidProp=FestivalHeldItem.Create(attachments,held,RightPalm,true);
                     }
                 }
             }
@@ -97,7 +97,7 @@ namespace Festival.Presentation
                 else
                 {
                     var resource=FestivalSession.DropModel(equipped);
-                    if(resource!=null)equippedProp=Held(attachments,resource,RightPalm,.30f);
+                    if(resource!=null)equippedProp=FestivalHeldItem.Create(attachments,equipped,RightPalm,true);
                 }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_equipment","item="+(equipped==""?"none":equipped)+" grip="+(equippedPoi!=null?"poi":equippedProp!=null?"prop":"none")+" palm="+RightPalm);
@@ -118,7 +118,12 @@ namespace Festival.Presentation
             // Small, non-authoritative breathing motion. Hands never move gameplay targets.
             float handoff=Mathf.Clamp01(1-(Time.time-handoffAt)/.38f);
             transform.localPosition=rest+new Vector3(Mathf.Sin(Time.time*1.7f)*.006f,Mathf.Sin(Time.time*2.1f)*.008f,.16f*Mathf.Sin((1-handoff)*Mathf.PI)*handoff);
+            // Both meshes and attachments share the same camera-space motion.
+            // The imported hands remain at their authored scale; props stay in metres.
+            if(attachments!=null)attachments.localPosition=transform.localPosition-rest;
         }
+        void OnDisable(){if(attachments!=null)attachments.gameObject.SetActive(false);}
+        void OnEnable(){if(attachments!=null)attachments.gameObject.SetActive(true);}
         void OnDestroy()
         {
             if(attachments!=null){if(Application.isPlaying)Destroy(attachments.gameObject);else DestroyImmediate(attachments.gameObject);}

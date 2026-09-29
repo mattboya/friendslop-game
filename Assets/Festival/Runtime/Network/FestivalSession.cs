@@ -467,7 +467,8 @@ namespace Festival.Network
                 if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
                 Actor(p.Id,p.Name,togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.VisualPose=="Dj"?0:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
-                    p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,p.EquippedItemId);
+                    p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
+                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId);
                 seen.Add(p.Id);
                 if(p.Id==LocalPlayerId)
                 {

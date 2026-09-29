@@ -21,7 +21,7 @@ namespace Festival.Presentation
 
         public static FestivalPoiRig Create(Transform parent,Vector3 grip,int side,bool led,bool firstPerson=false)
         {
-            var root=new GameObject("Poi grip and tether");root.transform.SetParent(parent,false);
+            var root=new GameObject("Poi grip and tether");root.transform.SetParent(parent,false);root.layer=parent.gameObject.layer;
             // Blender hand bones carry an imported scale. Cancel it so the
             // handle and its offset stay hand sized in both camera and world.
             var inherited=parent.lossyScale;
@@ -37,18 +37,18 @@ namespace Festival.Presentation
             rig.performer=actor!=null?actor.transform:firstPerson?parent:null;
             rig.motionPhase=actor!=null?actor.MotionPhase:0;
             var handle=GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            handle.name="Poi handle held in palm";handle.transform.SetParent(root.transform,false);
-            handle.transform.localPosition=new Vector3(0,-.10f,0);
-            handle.transform.localScale=new Vector3(.045f,.11f,.045f);
+            handle.layer=root.layer;handle.name="Poi handle held in palm";handle.transform.SetParent(root.transform,false);
+            handle.transform.localPosition=Vector3.zero;
+            handle.transform.localScale=new Vector3(.045f,.075f,.045f);
             handle.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Dark");
             Destroy(handle.GetComponent<Collider>());
             var cap=GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            cap.name="Handle pommel";cap.transform.SetParent(root.transform,false);
-            cap.transform.localPosition=new Vector3(0,.015f,0);cap.transform.localScale=Vector3.one*.075f;
+            cap.layer=root.layer;cap.name="Handle pommel";cap.transform.SetParent(root.transform,false);
+            cap.transform.localPosition=new Vector3(0,.085f,0);cap.transform.localScale=Vector3.one*.075f;
             cap.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Metal");
             Destroy(cap.GetComponent<Collider>());
             var ballObject=GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            ballObject.name=led?"LED weighted poi head":"Weighted practice poi head";
+            ballObject.layer=root.layer;ballObject.name=led?"LED weighted poi head":"Weighted practice poi head";
             ballObject.transform.localScale=Vector3.one*.15f;
             ballObject.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor(led?"Mint":"Gold");
             ballObject.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.Off;
@@ -65,7 +65,7 @@ namespace Festival.Presentation
         {
             // Anchor the cord at the palm end of the handle. The weighted head
             // hangs below the grip and lags behind movement like a short flail.
-            Vector3 grip=transform.position+transform.up*(firstPerson ? .055f : -.19f);
+            Vector3 grip=transform.position+transform.up*(firstPerson ? .085f : -.085f);
             float length=firstPerson?FirstPersonRopeLength:RopeLength;
             Vector3 rest=firstPerson
                 ? (transform.forward*.18f-transform.up*.04f+transform.right*(side==0?-.32f:.32f)).normalized*length
@@ -114,6 +114,9 @@ namespace Festival.Presentation
                     velocity=(ball-previousBall)/dt;
                 }
             }
+            // The head lives outside the bone hierarchy so its world-space
+            // tether can swing freely. Follow layer changes on local-player spawn.
+            if(head.gameObject.layer!=gameObject.layer)head.gameObject.layer=gameObject.layer;
             head.position=ball;
             rope.SetPosition(0,grip);rope.SetPosition(1,ball);
             previousGrip=grip;
