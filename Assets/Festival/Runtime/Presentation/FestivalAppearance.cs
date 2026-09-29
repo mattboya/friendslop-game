@@ -66,12 +66,15 @@ namespace Festival.Presentation
         public Color SkinTint => Skin[SkinColor];
         public Color SleeveTint => Role=="Friend"?new Color(.99f,.44f,.22f):Role=="Security"?new Color(.30f,.48f,.72f):Cloth[ShirtColor];
 
-        public Texture2D CreatePalette()
+        public Texture2D CreatePalette(bool garment=false)
         {
             var shirt=SleeveTint;
             var pants=Cloth[PantsColor];
             var colors=new[]{Skin[SkinColor],shirt,pants,Cloth[ShoeColor],new Color(.98f,.95f,.82f),
                 new Color(.035f,.04f,.08f),Hair[HairColor],Role=="Medic"?new Color(.20f,.92f,.71f):Accent[AccentColor]};
+            // Garment seams belong to the fabric. Reserve the vivid palette for
+            // accessories and role markers instead of outlining every panel.
+            if(garment)colors[7]=Color.Lerp(shirt,colors[7],.18f);
             const int width=512,height=128,cell=width/8;
             var texture=new Texture2D(width,height,TextureFormat.RGBA32,true){name="Festival fabric palette",filterMode=FilterMode.Trilinear,wrapMode=TextureWrapMode.Clamp};
             var pixels=new Color32[width*height];

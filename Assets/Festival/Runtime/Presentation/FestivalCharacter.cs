@@ -45,12 +45,12 @@ namespace Festival.Presentation
         public float HeightScale { get; private set; }=1;
         public Vector3 ShapeScale => Appearance.Scale;
         Material ownedMaterial;
-        Material skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
+        Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
         Color baseTint;
         float lastAppliedThreat=-1;
         float lastAnimationTime;
         Material eyeMaterial;
-        Texture2D ownedPalette;
+        Texture2D ownedPalette,garmentPalette;
         Renderer eyeRenderer;
         Renderer spoonRenderer;
         SkinnedMeshRenderer faceRenderer;
@@ -85,6 +85,8 @@ namespace Festival.Presentation
             actor.baseTint=Color.Lerp(Color.white,tint,.04f);
             actor.ownedMaterial.color=actor.baseTint;
             actor.ownedMaterial.SetFloat("_Smoothness",.10f);
+            actor.garmentPalette=actor.Appearance.CreatePalette(true);
+            actor.garmentMaterial=new Material(actor.ownedMaterial){name="Festival tonal fabric",mainTexture=actor.garmentPalette};
             actor.skinMaterial=new Material(actor.ownedMaterial){name="Festival skin"};actor.skinMaterial.SetFloat("_Smoothness",.24f);
             actor.hairMaterial=new Material(actor.ownedMaterial){name="Festival hair"};actor.hairMaterial.SetFloat("_Smoothness",.18f);
             actor.gearMaterial=new Material(actor.ownedMaterial){name="Festival equipment"};actor.gearMaterial.SetFloat("_Smoothness",.30f);
@@ -158,6 +160,7 @@ namespace Festival.Presentation
         }
         Material SurfaceFor(string mesh)
         {
+            if(mesh.StartsWith("Shirt_")||mesh.StartsWith("Pants_"))return garmentMaterial;
             if(mesh.StartsWith("Body_")||mesh.StartsWith("Face_"))return skinMaterial;
             if(mesh.StartsWith("Hair")||mesh.StartsWith("FacialHair_"))return hairMaterial;
             if(mesh.StartsWith("Sunglasses_"))return lensMaterial;
@@ -422,6 +425,7 @@ namespace Festival.Presentation
                 if(eyeMaterial!=null)eyeMaterial.color=Color.Lerp(new Color(1,.72f,.16f),new Color(1,.08f,.32f),alarm);
                 var tint=Color.Lerp(baseTint,new Color(1,.53f,.48f),alarm*.48f);
                 if(ownedMaterial!=null)ownedMaterial.color=tint;
+                if(garmentMaterial!=null)garmentMaterial.color=tint;
                 if(skinMaterial!=null)skinMaterial.color=tint;
                 if(hairMaterial!=null)hairMaterial.color=tint;
                 if(gearMaterial!=null)gearMaterial.color=tint;
@@ -480,8 +484,9 @@ namespace Festival.Presentation
         {
             if(ownedMaterial!=null){if(Application.isPlaying)Destroy(ownedMaterial);else DestroyImmediate(ownedMaterial);}
             if(ownedPalette!=null){if(Application.isPlaying)Destroy(ownedPalette);else DestroyImmediate(ownedPalette);}
+            if(garmentPalette!=null){if(Application.isPlaying)Destroy(garmentPalette);else DestroyImmediate(garmentPalette);}
             if(eyeMaterial!=null){if(Application.isPlaying)Destroy(eyeMaterial);else DestroyImmediate(eyeMaterial);}
-            foreach(var material in new[]{skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial})
+            foreach(var material in new[]{garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial})
                 if(material!=null){if(Application.isPlaying)Destroy(material);else DestroyImmediate(material);}
         }
     }

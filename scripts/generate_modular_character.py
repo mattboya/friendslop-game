@@ -530,18 +530,38 @@ FACE_POINTS = face_points()
 def shirt(v):
     bottom=(.91,.87,.94,.83)[v]
     width=(.35,.375,.35,.38)[v]
-    refine(loft("tailored garment",[(bottom,width*.94,.235,0),(bottom+.035,width,.249,0),
+    garment=refine(loft("tailored garment",[(bottom,width*.94,.235,0),(bottom+.035,width,.249,0),
          (1.08,width*.94,.245,0),(1.25,width,.25,0),(1.39,width*1.05,.239,0),
          (1.46,width*.98,.215,0),(1.51,.25,.177,0),(1.56,.156,.133,0)],1,"Spine"))
+    # Seat stitching on the actual subdivided cloth rather than guessed
+    # front-plane coordinates: a chest seam must not bridge the body like a hoop.
+    garment_bvh=BVHTree.FromPolygons([v.co for v in garment.data.vertices],
+                                  [tuple(p.vertices) for p in garment.data.polygons])
+    def seam(label, points, radius, color, bone):
+        seated_points=[]
+        radius=min(radius*.4,.004)
+        for a,b in zip(points,points[1:]):
+            a,b=Vector(a),Vector(b)
+            steps=max(2,math.ceil((b-a).length/.025))
+            for i in range(steps):
+                point=a.lerp(b,i/steps)
+                hit,normal,_,_=garment_bvh.ray_cast(Vector((point.x,-2,point.z)),Vector((0,1,0)))
+                if hit is None:raise RuntimeError("Garment seam misses fabric: "+label)
+                seated_points.append(tuple(hit+normal*radius*.45))
+        point=Vector(points[-1])
+        hit,normal,_,_=garment_bvh.ray_cast(Vector((point.x,-2,point.z)),Vector((0,1,0)))
+        if hit is None:raise RuntimeError("Garment seam endpoint misses fabric: "+label)
+        seated_points.append(tuple(hit+normal*radius*.45))
+        cord(label,seated_points,radius,color,bone)
     ring("neck binding",1.545,1.575,(.162,.143),(.140,.121),7,"Spine",28)
     ring("garment hem",bottom,bottom+.028,(width,.253),(width-.018,.229),1,"Spine",28)
     # Readable sewn construction at conversational distance, shared by every
     # wardrobe fit rather than painted-on noise.
     for side in (-1,1):
         x=side*(width*.54)
-        cord("front panel stitch",[(x,-.233,bottom+.07),(x*1.03,-.248,1.13),(x*.96,-.231,1.36)],.008,7,"Spine")
-    cord("upper chest yoke",[(-.27,-.18,1.37),(-.14,-.232,1.385),(0,-.24,1.39),(.14,-.232,1.385),(.27,-.18,1.37)],.010,7,"Spine")
-    cord("front hem topstitch",[(-width*.8,-.175,bottom+.055),(-width*.4,-.235,bottom+.045),
+        seam("front panel stitch",[(x,-.233,bottom+.07),(x*1.03,-.248,1.13),(x*.96,-.231,1.36)],.008,7,"Spine")
+    seam("upper chest yoke",[(-.27,-.18,1.37),(-.14,-.232,1.385),(0,-.24,1.39),(.14,-.232,1.385),(.27,-.18,1.37)],.010,7,"Spine")
+    seam("front hem topstitch",[(-width*.8,-.175,bottom+.055),(-width*.4,-.235,bottom+.045),
          (0,-.259,bottom+.042),(width*.4,-.235,bottom+.045),(width*.8,-.175,bottom+.055)],.008,7,"Spine")
     for x in (-.10,.10):
         piece("small woven badge rivet",(x,-.254,bottom+.085),(.013,.009,.013),7,"Spine")
@@ -565,9 +585,9 @@ def shirt(v):
         for x in (-.19,.19):
             piece("jacket pocket",(x,-.241,1.16),(.10,.02,.07),1,"Spine","cube")
             cord("pocket welt",[(x-.08,-.264,1.19),(x+.08,-.264,1.19)],.008,7,"Spine")
-        cord("jacket placket edge",[(-.026,-.261,1.01),(-.026,-.264,1.25),(-.026,-.23,1.45)],.011,7,"Spine")
+        seam("jacket placket edge",[(-.026,-.261,1.01),(-.026,-.264,1.25),(-.026,-.23,1.45)],.011,7,"Spine")
         if v==3:
-            cord("jacket contrast chest band",[(-.29,-.19,1.36),(-.15,-.25,1.34),(0,-.26,1.33),
+            seam("jacket contrast chest band",[(-.29,-.19,1.36),(-.15,-.25,1.34),(0,-.26,1.33),
                  (.15,-.25,1.34),(.29,-.19,1.36)],.023,7,"Spine")
     else:
         piece("sewn chest patch",(-.16,-.238,1.37),(.062,.012,.047),7,"Spine","cube")

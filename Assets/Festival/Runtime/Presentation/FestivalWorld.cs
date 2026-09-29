@@ -284,7 +284,7 @@ namespace Festival.Presentation
                 stageLights.Add(l);
             }
             var sun=new GameObject("Twilight sun");sun.transform.SetParent(owned,false);sun.transform.rotation=Quaternion.Euler(14,-30,0);
-            var directional=sun.AddComponent<Light>();directional.type=LightType.Directional;directional.color=new Color(1,.67f,.48f);directional.intensity=.82f;directional.shadows=LightShadows.Hard;festivalSun=directional;
+            var directional=sun.AddComponent<Light>();directional.type=LightType.Directional;directional.color=new Color(1,.67f,.48f);directional.intensity=.82f;directional.shadows=LightShadows.Soft;festivalSun=directional;
             var skyTemplate=Resources.Load<Material>("FestivalSky");
             if(skyTemplate!=null)
             {
@@ -296,13 +296,18 @@ namespace Festival.Presentation
                 materials.Add(dusk);RenderSettings.skybox=dusk;
             }
             RenderSettings.sun=directional;
-            RenderSettings.ambientMode=AmbientMode.Flat;RenderSettings.ambientLight=new Color(.48f,.51f,.59f);
+            // Cool sky fill and a darker ground hemisphere model form without
+            // flattening upward- and downward-facing surfaces to the same value.
+            RenderSettings.ambientMode=AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor=new Color(.58f,.64f,.76f);
+            RenderSettings.ambientEquatorColor=new Color(.45f,.47f,.54f);
+            RenderSettings.ambientGroundColor=new Color(.29f,.26f,.30f);
             RenderSettings.fog=true;RenderSettings.fogColor=new Color(.36f,.43f,.58f);RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=36;RenderSettings.fogEndDistance=90;
             var grade=gameObject.AddComponent<Volume>();grade.isGlobal=true;grade.priority=20;
             duskProfile=ScriptableObject.CreateInstance<VolumeProfile>();grade.sharedProfile=duskProfile;
             duskProfile.Add<Tonemapping>(true).mode.Override(TonemappingMode.ACES);
             var colorGrade=duskProfile.Add<ColorAdjustments>(true);
-            colorGrade.postExposure.Override(.15f);colorGrade.contrast.Override(8f);colorGrade.saturation.Override(-5f);
+            colorGrade.postExposure.Override(.3f);colorGrade.contrast.Override(5f);colorGrade.saturation.Override(-5f);
             var bloom=duskProfile.Add<Bloom>(true);
             bloom.threshold.Override(1.12f);bloom.intensity.Override(.12f);bloom.scatter.Override(.5f);
             Physics.SyncTransforms();
@@ -325,6 +330,9 @@ namespace Festival.Presentation
             var activePipeline=GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             DevelopmentDiagnostics.GraphicsEvent("Rendering","world_configuration",
                 "pipeline="+(activePipeline==null?"missing":activePipeline.name)
+                +" msaa="+(activePipeline==null?0:activePipeline.msaaSampleCount)
+                +" cascades="+(activePipeline==null?0:activePipeline.shadowCascadeCount)
+                +" ambient="+RenderSettings.ambientMode
                 +" soft_supported="+(activePipeline!=null&&activePipeline.supportsSoftShadows)
                 +" festival_shadow_request="+festivalSun.shadows+" camp_shadow_request="+campSun.shadows
                 +" world_volume_priority=20");
@@ -532,8 +540,8 @@ namespace Festival.Presentation
             seller.transform.localRotation=Quaternion.Euler(0,180,0);
             seller.transform.localScale=Vector3.Scale(Vector3.one*.85f,seller.ShapeScale);
             var campLight=new GameObject("Camp sunset");campLight.transform.SetParent(camp,false);
-            campLight.transform.rotation=Quaternion.Euler(18,-35,0);
-            campSun=campLight.AddComponent<Light>();campSun.type=LightType.Directional;campSun.intensity=1.3f;campSun.color=new Color(1,.82f,.65f);campSun.shadows=LightShadows.Hard;
+            campLight.transform.rotation=Quaternion.Euler(32,-35,0);
+            campSun=campLight.AddComponent<Light>();campSun.type=LightType.Directional;campSun.intensity=1.15f;campSun.color=new Color(1,.82f,.65f);campSun.shadows=LightShadows.Soft;
             Physics.SyncTransforms();
             campSurface=camp.gameObject.AddComponent<NavMeshSurface>();
             campSurface.collectObjects=CollectObjects.Children;

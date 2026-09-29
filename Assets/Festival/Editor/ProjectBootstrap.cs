@@ -14,6 +14,48 @@ namespace Festival.Editor
     {
         public const string ScenePath="Assets/Festival/Generated/Bootstrap.unity";
         public const string PipelinePath="Assets/Festival/Generated/FestivalPipeline.asset";
+        // Persist the renderer contract before building so shader stripping sees
+        // every feature actually used by the runtime-generated world.
+        private static void ConfigurePresentation(UniversalRenderPipelineAsset pipeline)
+        {
+            pipeline.msaaSampleCount=4;
+            var pipelineSettings=new SerializedObject(pipeline);
+            pipelineSettings.FindProperty("m_SoftShadowsSupported").boolValue=true;
+            pipelineSettings.ApplyModifiedPropertiesWithoutUndo();
+            pipeline.shadowCascadeCount=2;
+            pipeline.cascade2Split=.3f;
+            pipeline.shadowDistance=45f;
+            pipeline.shadowDepthBias=.7f;
+            pipeline.shadowNormalBias=.45f;
+            var renderer=AssetDatabase.LoadAssetAtPath<UniversalRendererData>("Assets/Festival/Generated/FestivalRenderer.asset");
+            if(renderer==null)throw new InvalidOperationException("Festival renderer is missing.");
+            renderer.postProcessData=AssetDatabase.LoadAssetAtPath<PostProcessData>(
+                "Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset");
+            if(renderer.postProcessData==null)throw new InvalidOperationException("URP post-processing resources are missing.");
+            var ao=renderer.rendererFeatures.OfType<ScreenSpaceAmbientOcclusion>().FirstOrDefault();
+            if(ao==null)
+            {
+                ao=ScriptableObject.CreateInstance<ScreenSpaceAmbientOcclusion>();
+                ao.name="Festival contact shading";
+                AssetDatabase.AddObjectToAsset(ao,renderer);
+                renderer.rendererFeatures.Add(ao);
+            }
+            var serialized=new SerializedObject(ao);
+            var settings=serialized.FindProperty("m_Settings");
+            settings.FindPropertyRelative("AOMethod").enumValueIndex=1;
+            settings.FindPropertyRelative("Downsample").boolValue=true;
+            settings.FindPropertyRelative("Source").enumValueIndex=0;
+            settings.FindPropertyRelative("NormalSamples").enumValueIndex=1;
+            settings.FindPropertyRelative("Intensity").floatValue=.85f;
+            settings.FindPropertyRelative("Radius").floatValue=.28f;
+            settings.FindPropertyRelative("DirectLightingStrength").floatValue=.18f;
+            settings.FindPropertyRelative("Falloff").floatValue=35f;
+            settings.FindPropertyRelative("Samples").enumValueIndex=1;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            ao.SetActive(true);
+            EditorUtility.SetDirty(ao);EditorUtility.SetDirty(renderer);EditorUtility.SetDirty(pipeline);
+            AssetDatabase.SaveAssets();
+        }
         [MenuItem("Festival/Generate starter content")]
         public static void EnsureGeneratedContent()
         {
@@ -43,6 +85,7 @@ namespace Festival.Editor
                 pipeline=UniversalRenderPipelineAsset.Create(renderer);
                 AssetDatabase.CreateAsset(pipeline,PipelinePath);
             }
+            ConfigurePresentation(pipeline);
             GraphicsSettings.defaultRenderPipeline=pipeline;QualitySettings.renderPipeline=pipeline;
             // Shader.Find at runtime requires an explicit asset reference in a player build.
             if(AssetDatabase.LoadAssetAtPath<Material>("Assets/Festival/Generated/Resources/FestivalLit.mat")==null)

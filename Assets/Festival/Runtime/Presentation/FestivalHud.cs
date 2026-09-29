@@ -162,30 +162,30 @@ namespace Festival.Presentation
             }
             effectWash=Panel(root.transform,"Effect wash",new Color(0,0,0,0),Vector2.zero,Vector2.one).GetComponent<Image>();effectWash.raycastTarget=false;
 
-            objectivePanel=Card(root.transform,"Objective card",new Vector2(.022f,.82f),new Vector2(.405f,.974f),true);
+            objectivePanel=Card(root.transform,"Objective card",new Vector2(.022f,.858f),new Vector2(.355f,.974f),true);
             Accent(objectivePanel.transform,Orange);
-            var missionKicker=Label(objectivePanel.transform,"Mission label",17,TextAnchor.MiddleLeft);missionKicker.text="TONIGHT'S PLAN";missionKicker.fontStyle=FontStyle.Normal;missionKicker.color=Orange;Place(missionKicker.rectTransform,.06f,.69f,.96f,.94f);
-            objectiveTitle=Label(objectivePanel.transform,"Objective title",29,TextAnchor.MiddleLeft);objectiveTitle.fontStyle=FontStyle.Normal;Place(objectiveTitle.rectTransform,.06f,.43f,.96f,.73f);
-            objective=Label(objectivePanel.transform,"Objective detail",20,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.06f,.96f,.44f);
+            var missionKicker=Label(objectivePanel.transform,"Mission label",14,TextAnchor.MiddleLeft);missionKicker.text="TONIGHT'S PLAN";missionKicker.fontStyle=FontStyle.Normal;missionKicker.color=Orange;Place(missionKicker.rectTransform,.06f,.69f,.96f,.94f);
+            objectiveTitle=Label(objectivePanel.transform,"Objective title",23,TextAnchor.MiddleLeft);objectiveTitle.fontStyle=FontStyle.Normal;Place(objectiveTitle.rectTransform,.06f,.43f,.96f,.73f);
+            objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.06f,.96f,.44f);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
             timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);
-            vitalPanel=Card(root.transform,"Player card",new Vector2(.695f,.862f),new Vector2(.978f,.974f),true);
+            vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
             Accent(vitalPanel.transform,Mint);
-            vitals=Label(vitalPanel.transform,"Vitals",21,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.10f,.94f,.92f);
+            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.10f,.94f,.92f);
 
-            rosterPanel=Card(root.transform,"Crew card",new Vector2(.815f,.807f),new Vector2(.978f,.853f),true);
-            roster=Label(rosterPanel.transform,"Roster",18,TextAnchor.MiddleRight);Fill(roster.rectTransform,10);
+            rosterPanel=Card(root.transform,"Crew card",new Vector2(.835f,.846f),new Vector2(.978f,.882f),true);
+            roster=Label(rosterPanel.transform,"Roster",16,TextAnchor.MiddleRight);Fill(roster.rectTransform,3);
             voice=Label(root.transform,"Voice",17,TextAnchor.LowerLeft);voice.color=MutedPaper;SetRect(voice.rectTransform,new Vector2(.023f,.012f),new Vector2(.23f,.052f),Vector2.zero,Vector2.zero);
             // The upper-left information rail keeps both palms, held props and
             // the ground immediately ahead visible during close interactions.
-            promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.715f),new Vector2(.405f,.80f),true);
+            promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.777f),new Vector2(.355f,.844f),true);
             promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
-            prompt=Label(promptPanel.transform,"Prompt",19,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
+            prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
             reviewPanel=Card(root.transform,"Camp round review",new Vector2(.29f,.40f),new Vector2(.71f,.80f),true);
             Accent(reviewPanel.transform,Orange);
             reviewText=Label(reviewPanel.transform,"Review text",23,TextAnchor.MiddleCenter);
             Place(reviewText.rectTransform,.06f,.06f,.94f,.94f);reviewPanel.SetActive(false);
-            noticePanel=Card(root.transform,"Session notice",new Vector2(.326f,.785f),new Vector2(.674f,.849f),true);
+            noticePanel=Card(root.transform,"Session notice",new Vector2(.368f,.785f),new Vector2(.695f,.849f),true);
             Accent(noticePanel.transform,Orange);
             notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);noticePanel.SetActive(false);
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
