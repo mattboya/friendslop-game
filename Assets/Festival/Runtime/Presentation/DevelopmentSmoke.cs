@@ -170,9 +170,47 @@ namespace Festival.Presentation
             {
                 while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="little_spoon"))&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("two camp purchases");yield break;}
+                var site=CampFeatures.Find("tent_1");
+                foreach(var peer in sim.State.Players)
+                {
+                    peer.X=site.X;peer.Z=site.Z;
+                    if(!sim.Execute(peer.Id,new GameCommand{Id="smoke-enter-"+peer.Id,Kind="EnterCamp",TargetId=site.Id}).Accepted){Fail("interior handoff entry");yield break;}
+                }
+                sim.State.Players[0].Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});
+                session.Command("Transfer",sim.State.Players[1].Id,"merch_bag",1);
+            }
+            while(session.LocalPlayer.CampVisitId!="tent_1"||session.State.Transfers.Count==0)
+            {
+                if(Time.realtimeSinceStartup>=deadline){Fail("interior handoff offer");yield break;}
+                yield return null;
+            }
+            yield return new WaitForSeconds(.3f);
+            string handoffAction=session.IsHost?"Action:Cancel handoff":"Action:Accept merch_bag";
+            bool hasAction=false;
+            foreach(var button in transform.Find("Festival HUD").GetComponentsInChildren<Button>(true))
+                if(button.gameObject.activeSelf&&button.name.StartsWith(handoffAction,StringComparison.Ordinal)){hasAction=true;break;}
+            if(!hasAction){Fail("interior handoff action "+handoffAction);yield break;}
+            var transferPath=Path.Combine(shopDir,session.IsHost?"host-interior-handoff.png":"client-interior-handoff.png");
+            if(File.Exists(transferPath))File.Delete(transferPath);
+            ScreenCapture.CaptureScreenshot(transferPath);yield return new WaitForSeconds(.55f);
+            if(!File.Exists(transferPath)){Fail("interior handoff render");yield break;}
+            if(!session.IsHost)session.Command("AcceptTransfer",session.State.Transfers[0].Id);
+            while(session.State.Transfers.Count>0||!(session.IsHost?sim.State.Players[1].Inventory:session.LocalPlayer.Inventory).Exists(item=>item.ItemId=="merch_bag"))
+            {
+                if(Time.realtimeSinceStartup>=deadline){Fail("interior handoff acceptance");yield break;}
+                yield return null;
+            }
+            Debug.Log("FESTIVAL SMOKE INTERIOR HANDOFF PASSED: "+transferPath);
+            if(session.IsHost)
+            {
+                yield return new WaitForSeconds(.8f);
+                foreach(var peer in sim.State.Players)
+                    if(!sim.Execute(peer.Id,new GameCommand{Id="smoke-exit-"+peer.Id,Kind="ExitCamp"}).Accepted){Fail("interior handoff exit");yield break;}
                 sim.State.Players[0].X=-2;sim.State.Players[0].Z=-13;
                 sim.State.Players[1].X=2;sim.State.Players[1].Z=-13;
             }
+            while(session.LocalPlayer.CampVisitId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.LocalPlayer.CampVisitId!=""){Fail("interior handoff exit replication");yield break;}
             float overviewX=session.IsHost?-2:2;
             while(!Near(session.LocalPlayer,overviewX,-13)&&Time.realtimeSinceStartup<deadline)yield return null;
             if(Time.realtimeSinceStartup>=deadline){Fail("camp overview placement");yield break;}
@@ -610,7 +648,7 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE ITEM GRIPS PASSED: "+gripPath);
             captureCamera.fieldOfView=75;
             var gripHands=FestivalHands.Create(captureCamera,"native_grip_preview");
-            foreach(var item in new[]{"merch_bag","stock_lsd","map","poi_practice"})
+            foreach(var item in new[]{"merch_bag","stock_lsd","map","stage_pass","medical_voucher","confetti","poi_practice","poi_led"})
             {
                 gripHands.SetState(new PlayerState{EquippedItemId=item,Life="Alive"});
                 yield return new WaitForSeconds(.35f);

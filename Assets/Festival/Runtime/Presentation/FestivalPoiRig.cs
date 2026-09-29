@@ -56,7 +56,9 @@ namespace Festival.Presentation
             rig.head=ballObject.transform;
             rig.rope=root.AddComponent<LineRenderer>();
             rig.rope.useWorldSpace=true;rig.rope.positionCount=2;
-            rig.rope.startWidth=.018f;rig.rope.endWidth=.016f;
+            // A 16 mm line reads as a rigid stick at character scale. Real
+            // poi cord stays taut in a fast orbit but has a thin silhouette.
+            rig.rope.startWidth=.006f;rig.rope.endWidth=.005f;
             rig.rope.sharedMaterial=FestivalArtView.MaterialFor("Cream");
             rig.rope.shadowCastingMode=ShadowCastingMode.Off;
             return rig;

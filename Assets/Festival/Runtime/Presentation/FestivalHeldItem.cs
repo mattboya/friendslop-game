@@ -14,7 +14,7 @@ namespace Festival.Presentation
             {
                 case "merch_bag":grip=new Vector3(0,.79f,0);size=.65f;break;
                 case "stock_lsd":case "stock_mushrooms":grip=new Vector3(0,.27f,firstPerson?-.245f:0);size=.32f;break;
-                case "confetti":grip=new Vector3(0,.18f,.19f);size=.65f;break;
+                case "confetti":grip=new Vector3(0,.18f,.19f);size=.42f;break;
                 case "map":grip=new Vector3(.20f,.03f,.20f);size=.65f;rotation=Quaternion.Euler(-55,0,0);break;
                 case "stage_pass":grip=new Vector3(.17f,.02f,.20f);size=.50f;rotation=Quaternion.Euler(-70,0,0);break;
                 case "medical_voucher":grip=new Vector3(.24f,.02f,0);size=.50f;rotation=Quaternion.Euler(-70,0,0);break;

@@ -742,6 +742,7 @@ namespace Festival.Presentation
             {
                 var site=CampFeatures.Find(player.CampVisitId);
                 string antic=site?.Kind=="Car"?"HONK / FIDDLE":site?.Kind=="Tent"?"SHADOW PUPPET":"MYSTERY FLUSH";
+                if(state.Phase=="Shopping")AddHandoffActions(state,player,ref y);
                 SetPromptAction("E  EXIT "+(site?.Kind??"CAMP SPACE").ToUpperInvariant()+"   •   F "+antic+"   •   G EXIT",()=>session.Command("ExitCamp"));
                 FinishActions();return;
             }
@@ -755,6 +756,7 @@ namespace Festival.Presentation
             }
             if(state.Phase=="Shopping")
             {
+                AddHandoffActions(state,player,ref y);
                 if(Near(player,CampFeatures.DjX,CampFeatures.DjZ,3f))
                 {
                     int next=(state.CampMusicTrack+1)%CampFeatures.Tracks.Length;
@@ -811,6 +813,7 @@ namespace Festival.Presentation
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
             if(player.InteractionId!="")AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+offer.ItemId+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
+            var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+drop.ItemId,()=>session.Command("Pickup",drop.Id),ref y);
             var stash=Nearest(state.Stashes,player.X,player.Z,2.7f);
             if(stash!=null)
@@ -828,7 +831,7 @@ namespace Festival.Presentation
             }
             foreach(var mate in state.Players)
             {
-                if(mate.Id==player.Id||Distance(player.X,player.Z,mate.X,mate.Z)>2.5f)continue;
+                if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
                 if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
                 if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay $10 release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
                 if(handGear.Count>0){string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;AddAction("Offer "+item+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);}
@@ -874,6 +877,22 @@ namespace Festival.Presentation
             }
             prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
             FinishActions();
+        }
+
+        private void AddHandoffActions(RoundState state,PlayerState player,ref float y)
+        {
+            var incoming=state.Transfers.Find(t=>t.ToId==player.Id);
+            if(incoming!=null)AddAction("Accept "+incoming.ItemId+" ×"+incoming.Amount,()=>session.Command("AcceptTransfer",incoming.Id),ref y);
+            var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);
+            if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
+            if(outgoing!=null||handGear.Count==0)return;
+            string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
+            foreach(var mate in state.Players)
+            {
+                if(mate.Id==player.Id||!mate.Connected||mate.Life!="Alive"||!FestivalSimulation.CanHandoff(player,mate))continue;
+                var recipient=mate;
+                AddAction("Offer "+item+" to "+recipient.Name,()=>session.Command("Transfer",recipient.Id,item,1),ref y);
+            }
         }
 
         private void AddAction(string label,Action action,ref float y)

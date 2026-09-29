@@ -23,6 +23,68 @@ namespace Festival.Tests
             Assert.That(game.Execute(player.Id,new GameCommand{Id="reequip",Kind="Equip",ItemId="little_spoon"}).Accepted,Is.False);
         }
 
+        [Test] public void CampHandoffsRespectSharedInteriorAndConserveGear()
+        {
+            var game=new FestivalSimulation(21);
+            var giver=game.AddPlayer("giver","Giver");var receiver=game.AddPlayer("receiver","Receiver");
+            var tent=CampFeatures.Find("tent_1");
+            giver.X=receiver.X=tent.X;giver.Z=receiver.Z=tent.Z;
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="enter-giver",Kind="EnterCamp",TargetId=tent.Id}).Accepted,Is.True);
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="enter-receiver",Kind="EnterCamp",TargetId=tent.Id}).Accepted,Is.True);
+            Assert.That(Math.Abs(giver.CampInteriorX-receiver.CampInteriorX),Is.GreaterThan(1));
+            giver.Inventory.Add(new ItemStack{ItemId="map",Count=1});
+            int cash=giver.Cash+receiver.Cash;
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="offer-map",Kind="Transfer",TargetId=receiver.Id,ItemId="map",Amount=1}).Accepted,Is.True);
+            var offer=game.State.Transfers[0];
+            receiver.CampInteriorX+=2.6f;
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="too-far",Kind="AcceptTransfer",TargetId=offer.Id}).Accepted,Is.False);
+            receiver.CampInteriorX=giver.CampInteriorX;
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="take-map",Kind="AcceptTransfer",TargetId=offer.Id}).Accepted,Is.True);
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="take-map",Kind="AcceptTransfer",TargetId=offer.Id}).Accepted,Is.True);
+            Assert.That(receiver.Inventory.Find(i=>i.ItemId=="map").Count,Is.EqualTo(1));
+            Assert.That(game.State.Transfers,Is.Empty);
+            Assert.That(giver.Cash+receiver.Cash,Is.EqualTo(cash));
+
+            giver.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="offer-confetti",Kind="Transfer",TargetId=receiver.Id,ItemId="confetti",Amount=1}).Accepted,Is.True);
+            offer=game.State.Transfers[0];
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="cancel-confetti",Kind="CancelTransfer",TargetId=offer.Id}).Accepted,Is.True);
+            Assert.That(giver.Inventory.Find(i=>i.ItemId=="confetti").Count,Is.EqualTo(1));
+            Assert.That(game.State.Transfers,Is.Empty);
+
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="offer-expiring",Kind="Transfer",TargetId=receiver.Id,ItemId="confetti",Amount=1}).Accepted,Is.True);
+            game.Tick(15.1);
+            Assert.That(game.State.Transfers,Is.Empty);
+            Assert.That(giver.Inventory.Find(i=>i.ItemId=="confetti").Count,Is.EqualTo(1));
+
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="offer-disconnect",Kind="Transfer",TargetId=receiver.Id,ItemId="confetti",Amount=1}).Accepted,Is.True);
+            game.Disconnect(receiver.Id);
+            Assert.That(game.State.Transfers,Is.Empty);
+            Assert.That(giver.Inventory.Find(i=>i.ItemId=="confetti").Count,Is.EqualTo(1));
+        }
+
+        [Test] public void CampHandoffRejectsOtherRoomsAndFullInventory()
+        {
+            var game=new FestivalSimulation(21);
+            var giver=game.AddPlayer("giver","Giver");var receiver=game.AddPlayer("receiver","Receiver");
+            var tent=CampFeatures.Find("tent_1");var other=CampFeatures.Find("tent_7");
+            giver.X=tent.X;giver.Z=tent.Z;receiver.X=other.X;receiver.Z=other.Z;
+            giver.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="enter-one",Kind="EnterCamp",TargetId=tent.Id}).Accepted,Is.True);
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="enter-other",Kind="EnterCamp",TargetId=other.Id}).Accepted,Is.True);
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="wrong-room",Kind="Transfer",TargetId=receiver.Id,ItemId="stage_pass",Amount=1}).Accepted,Is.False);
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="exit-other",Kind="ExitCamp"}).Accepted,Is.True);
+            receiver.X=tent.X;receiver.Z=tent.Z;
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="enter-same",Kind="EnterCamp",TargetId=tent.Id}).Accepted,Is.True);
+            foreach(var id in new[]{"map","poi_practice","merch_bag"})receiver.Inventory.Add(new ItemStack{ItemId=id,Count=1});
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="offer-full",Kind="Transfer",TargetId=receiver.Id,ItemId="stage_pass",Amount=1}).Accepted,Is.True);
+            var offer=game.State.Transfers[0];
+            Assert.That(game.Execute(receiver.Id,new GameCommand{Id="reject-full",Kind="AcceptTransfer",TargetId=offer.Id}).Accepted,Is.False);
+            Assert.That(game.State.Transfers.Count,Is.EqualTo(1));
+            Assert.That(game.Execute(giver.Id,new GameCommand{Id="cancel-full",Kind="CancelTransfer",TargetId=offer.Id}).Accepted,Is.True);
+            Assert.That(giver.Inventory.Find(i=>i.ItemId=="stage_pass").Count,Is.EqualTo(1));
+        }
+
         [Test] public void DjTakeoverPlacesThePlayerAtTheStageFrontDeck()
         {
             var game=new FestivalSimulation(23);var player=game.AddPlayer("host","Host");

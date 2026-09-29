@@ -74,6 +74,9 @@ namespace Festival.Core
             if(c.Kind=="BeginRevival"&&p.Life=="Spirit")return Revive(p,c);
             if(p.Life!="Alive")return Reject("Requires a living, free player");
             if(State.Phase!="Playing"&&State.Phase!="Shopping")return Reject("Round is not interactive");
+            if(c.Kind=="Transfer")return Transfer(p,c);
+            if(c.Kind=="AcceptTransfer")return AcceptTransfer(p,c);
+            if(c.Kind=="CancelTransfer")return CancelTransfer(p,c);
             if(p.CampVisitId!="")return Reject("Leave the camp interior first");
             if(c.Kind=="HoldOffer")return HoldOffer(p,c);
             if(c.Kind=="ReturnOffer")return ReturnHeldOffer(p);
@@ -88,8 +91,6 @@ namespace Festival.Core
                 case "Use": return Use(p,c);
                 case "Drop": return Drop(p,c);
                 case "Pickup": return Pickup(p,c);
-                case "Transfer":return Transfer(p,c);
-                case "AcceptTransfer":return AcceptTransfer(p,c);
                 case "Deposit":case "Withdraw":return Stash(p,c);
                 case "StartSale":return BeginChallenge(p,c,"Sale");
                 case "Dance":return BeginChallenge(p,c,"Dance");
@@ -148,6 +149,7 @@ namespace Festival.Core
         static void Take(PlayerState p,string item,int count){var s=p.Inventory.Find(i=>i.ItemId==item);s.Count-=count;if(s.Count==0){p.Inventory.Remove(s);if(p.EquippedItemId==item)p.EquippedItemId=p.Inventory.Find(i=>i.ItemId!="little_spoon")?.ItemId??"";}}
         void StartRound(List<PlayerState> connected)
         {
+            foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             State.LaunchAtSeconds=0;State.Phase="Loading";
         }
@@ -194,8 +196,12 @@ namespace Festival.Core
             {
                 var site=CampFeatures.Find(c.TargetId);
                 if(p.Ready||p.CampVisitId!=""||site==null||!Near(p,site.X,site.Z,3.5))return Reject("Stand beside a camp door to enter");
+                int occupants=0;foreach(var other in State.Players)if(other!=p&&other.CampVisitId==site.Id)occupants++;
                 p.CampVisitId=site.Id;p.CampGag="";p.X=site.X;p.Z=site.Z;
-                p.CampInteriorX=CampFeatures.InteriorSlotX(site);p.CampInteriorZ=CampFeatures.InteriorSlotZ(site)-1.5f;
+                // Give the next arrival a distinct standing spot so friends
+                // do not spawn directly in one another's first-person view.
+                float offset=occupants==0?0:(occupants%2==1?1:-1)*(1.35f+.2f*((occupants-1)/2));
+                p.CampInteriorX=CampFeatures.InteriorSlotX(site)+offset;p.CampInteriorZ=CampFeatures.InteriorSlotZ(site)-1.5f;
                 return Ok("Inside the "+site.Kind.ToLowerInvariant());
             }
             if(p.CampVisitId=="")return Reject("Enter a camp space first");

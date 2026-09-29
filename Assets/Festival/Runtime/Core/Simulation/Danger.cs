@@ -5,6 +5,7 @@ public sealed partial class FestivalSimulation {
     public Func<float,float,float,float,double,WorldPoint> Navigate;
     public void Tick(double deltaSeconds){if(!Finite(deltaSeconds)||deltaSeconds<0||deltaSeconds>60)throw new ArgumentOutOfRangeException(nameof(deltaSeconds));while(deltaSeconds>0){double dt=Math.Min(.1,deltaSeconds);Step(dt);deltaSeconds-=dt;}}
     void Step(double dt){State.SimulationSeconds+=dt;State.Tick++;
+        foreach(var offer in State.Transfers.ToArray())if(offer.ExpiresAt<=State.SimulationSeconds)ReturnOffer(offer);
         if(State.Phase=="Shopping")
         {
             var connected=State.Players.FindAll(p=>p.Connected);
@@ -14,7 +15,6 @@ public sealed partial class FestivalSimulation {
             return;
         }
         if(State.Phase!="Playing")return;State.ElapsedSeconds+=dt;if(State.ElapsedSeconds>=State.DurationSeconds){End("Time expired");return;}
-        foreach(var offer in State.Transfers.ToArray())if(offer.ExpiresAt<=State.SimulationSeconds)ReturnOffer(offer);
         foreach(var p in State.Players){foreach(var e in p.Effects.ToArray()){e.RemainingSeconds-=dt;if(e.RemainingSeconds<=0)p.Effects.Remove(e);}if(p.Life=="Downed"){p.DownedRemaining-=dt;if(p.DownedRemaining<=0)Die(p);}if(p.DragTargetId!=""){var target=Player(p.DragTargetId);if(p.Life!="Alive"||target==null||target.Life!="Downed")p.DragTargetId="";}}
         // Evidence/arrests precede all financial settlement within a simulation tick.
         foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);
