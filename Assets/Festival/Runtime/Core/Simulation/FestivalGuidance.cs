@@ -16,6 +16,9 @@ namespace Festival.Core
             if(player.Life=="Downed")return "DOWNED • CALL FOR HELP";
             if(player.Life=="Detained")return "DETAINED • ESCAPE OR GET RELEASED";
             if(player.Life=="Spirit")return "SPIRIT • REACH THE MEDICAL TENT";
+            // CROWD-2: a big crew's night counts both lost friends.
+            var second=state.SecondFriend;
+            if(second.Active){int found=(state.FriendFound?1:0)+(second.Found?1:0);return found==2?"ESCORT BOTH FRIENDS BACK TO CAMP":"TWO FRIENDS LOST • "+found+" / 2 FOUND";}
             if(state.FriendFound)return "ESCORT FRIEND TO SHUTTLE";
             if(state.GateOpened)return "FIND THE MISSING FRIEND";
             int trail=Festivals.For(state).ChainLength;
@@ -48,7 +51,8 @@ namespace Festival.Core
             if(player.Life=="Downed")return "Press E to distract attackers; a teammate can rescue or drag you.";
             if(player.Life=="Detained")return "Press E to work on escape, or ask a teammate for release.";
             if(player.Life=="Spirit")return "Medical tent "+Route(player,24,-20)+(CrewCount(state)==1?". Press E there for a 15-second self-revival task.":". Ask a teammate with your wristband to revive you.");
-            if(state.FriendFound)
+            var second=state.SecondFriend;
+            if(state.FriendFound&&(!second.Active||second.Found))
             {
                 var leader=state.Players.Find(p=>p.Id==state.FriendLeaderId&&p.Connected&&p.Life=="Alive");
                 if(leader==null)return "Friend needs an escort. Reach them and press E; shuttle "+Route(player,0,-32)+".";
@@ -56,13 +60,15 @@ namespace Festival.Core
                     ?"Lead your friend to the shuttle "+Route(player,0,-32)+". Stay close."
                     :"Follow the escort to the shuttle "+Route(player,0,-32)+".";
             }
-            if(state.GateOpened)
+            // A lost friend at the end of a finished trail (either of a big crew's two): head for one in sight, else search.
+            string search="";
+            foreach(var (trailDone,found,friend) in new[]{(state.GateOpened,state.FriendFound,state.FriendPosition),(second.Active&&second.GateOpened,second.Found,second.Position)})
             {
-                var friend=state.FriendPosition;
-                return friend!=null&&(friend.X!=0||friend.Z!=0)
-                    ?"Friend spotted "+Route(player,friend.X,friend.Z)+". Reach them and press E."
-                    :"Search the north and side paths. The friend appears when nearby.";
+                if(!trailDone||found)continue;
+                if(friend!=null&&(friend.X!=0||friend.Z!=0))return "Friend spotted "+Route(player,friend.X,friend.Z)+". Reach them and press E.";
+                search="Search the north and side paths. The friend appears when nearby.";
             }
+            if(search!="")return search;
             // Only the tripper sees the visions (buyers and narcs by day, the clue trail by night); the game's one hint is theirs.
             bool night=Festivals.For(state).Night;
             if(player.Id==state.TripperId)return (night?"Your visions mark the next clue holder.":"Your visions mark buyers and narcs.")+" Trust, but verify.";

@@ -445,7 +445,9 @@ namespace Festival.Network
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
-                FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=!spirit&&source.FriendFound?source.FriendPosition:new WorldPoint(0,0),
+                FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
+                // CROWD-2: a big crew's second lost friend, shown like the first. Its clue chain stays on the host.
+                SecondFriend=new LostFriendState{Active=source.SecondFriend.Active,GateOpened=source.SecondFriend.GateOpened,CluesRead=source.SecondFriend.CluesRead,Found=!spirit&&source.SecondFriend.Found,LeaderId=spirit?"":source.SecondFriend.LeaderId,Position=Spot(source.SecondFriend.GateOpened,source.SecondFriend.Found,source.SecondFriend.Position)},
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies};
@@ -468,13 +470,13 @@ namespace Festival.Network
                     var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
-                // The undiscovered friend is revealed only at local sight range, never on the full map, except to the tripper:
-                // the clue trail's last link (TRIP-2) shows them where the friend is.
-                if(source.GateOpened && !view.FriendFound && local!=null && (viewer==source.TripperId || Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(source.FriendPosition.X,source.FriendPosition.Z))<12 && simulation.HasLineOfSight(local.X,local.Z,source.FriendPosition.X,source.FriendPosition.Z)))view.FriendPosition=source.FriendPosition;
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
                 view.Drops=source.Drops;view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
             }
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
+            // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
+            // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map.
+            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
         }
         private void UpdateActors()
         {
@@ -511,8 +513,9 @@ namespace Festival.Network
             if(!spirit && (State.Phase=="Playing"||State.Phase=="Results"))
             {
                 foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,n.Mode=="Blending"?n.IdlePose:n.Mode,n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false);seen.Add(n.Id);}
-                var fp=State.FriendPosition;
-                if(fp!=null && (fp.X!=0||fp.Z!=0) && (State.FriendFound||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(fp.X,fp.Z))<12)){Actor("mission_friend","MISSING FRIEND",fp.X,fp.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add("mission_friend");}
+                // A lost friend (a big crew's two, CROWD-2) shows once found, or once the view knows their spot and they are within 12 m.
+                void LostFriend(string id,WorldPoint at,bool found){if(at!=null && (at.X!=0||at.Z!=0) && (found||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12)){Actor(id,"MISSING FRIEND",at.X,at.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add(id);}}
+                LostFriend("mission_friend",State.FriendPosition,State.FriendFound);LostFriend("mission_friend_2",State.SecondFriend.Position,State.SecondFriend.Found);
                 // A drop floats its display name ("Prism tabs", THEME-1); its id still picks the model.
                 foreach(var d in State.Drops){Actor(d.Id,Catalog.FindItem(d.ItemId)?.Name??d.ItemId,d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}
                 // Night 2 bodies lie in the downed pose (and play the dragged motion while carried) until a revival lifts them.

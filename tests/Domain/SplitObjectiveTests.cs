@@ -51,7 +51,7 @@ public static class SplitObjectiveTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{FiveOrMoreGetTwoFriends,EachTrailShowsItsOwnNextLink,FindingTheSecondFriend,SuccessNeedsBoth,
-            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend})
+            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" split objective test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -188,5 +188,31 @@ public static class SplitObjectiveTests
             try{new FestivalSimulation().Restore(JsonSerializer.Deserialize<RoundState>(broken.ToJsonString(),Json));}catch(ArgumentException){refused=true;}
             Check(refused,"a snapshot with a null SecondFriend"+(field==""?"":"."+field)+" is refused");
         }
+    }
+
+    // The objective card (FestivalGuidance, read from a player's view) tells a big crew there are two friends to find.
+    static void GuidanceCountsBothFriends()
+    {
+        var four=Start(4);Check(FestivalGuidance.Headline(four.State,four.Player("p0"))=="FOLLOW THE CLUE TRAIL 0 / 2","four players keep the one-friend trail headline");
+        var s=Start(5);var second=s.State.SecondFriend;var tripper=Tripper(s);var mate=s.State.Players.Find(p=>p!=tripper);
+        foreach(var p in s.State.Players)Place(s,p.Id,Gate);
+        string Headline(PlayerState p)=>FestivalGuidance.Headline(s.State,p);string Hint(PlayerState p)=>FestivalGuidance.Hint(s.State,p);
+        Check(Headline(mate)=="TWO FRIENDS LOST • 0 / 2 FOUND","the headline says two friends are lost: "+Headline(mate));
+        Check(Hint(tripper).StartsWith("Your visions mark the next clue holder")&&Hint(mate).StartsWith("Stick with"),"until a trail ends the crew sticks with the tripper: "+Hint(tripper)+" / "+Hint(mate));
+        FollowTrail(s,1);
+        Check(Hint(mate).StartsWith("Friend spotted")&&Hint(mate).Contains(" m "),"the second trail's end points the crew at the second friend: "+Hint(mate));
+        // A client's view hides a lost friend out of sight at (0, 0): head for a friend in sight before searching for one who is not.
+        var view=JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json);view.GateOpened=true;view.FriendPosition=new WorldPoint(0,0);
+        Check(FestivalGuidance.Hint(view,mate).StartsWith("Friend spotted"),"with both trails done, the friend in sight comes before the one out of sight: "+FestivalGuidance.Hint(view,mate));
+        view.SecondFriend.Position=new WorldPoint(0,0);
+        Check(FestivalGuidance.Hint(view,mate).StartsWith("Search the north"),"with neither in sight, the crew searches: "+FestivalGuidance.Hint(view,mate));
+        Check(Recruit(s,mate.Id,second.Position),"setup: the second friend is recruited");Place(s,mate.Id,Gate);
+        Check(Headline(mate)=="TWO FRIENDS LOST • 1 / 2 FOUND","one found, one to go: "+Headline(mate));
+        Check(Hint(tripper).StartsWith("Your visions mark the next clue holder")&&!Hint(mate).Contains("shuttle"),"with the first friend still lost nobody is sent home yet: "+Hint(tripper)+" / "+Hint(mate));
+        FollowTrail(s,0);Check(Recruit(s,tripper.Id,s.State.FriendPosition),"setup: the first friend is recruited");
+        Check(Headline(mate)=="ESCORT BOTH FRIENDS BACK TO CAMP","both found: take them home: "+Headline(mate));
+        Check(Hint(tripper).StartsWith("Lead your friend"),"and their escort leads the way: "+Hint(tripper));
+        var early=Start(5,seed:5);var guide=Tripper(early);FollowTrail(early,0);Check(Recruit(early,guide.Id,early.State.FriendPosition),"setup: the first friend is found first");
+        Check(FestivalGuidance.Hint(early.State,guide).StartsWith("Your visions mark the next clue holder"),"the first friend's escort is not sent home while the second is lost: "+FestivalGuidance.Hint(early.State,guide));
     }
 }

@@ -869,8 +869,9 @@ namespace Festival.Presentation
             }
             else if(state.Phase=="Playing"&&player.Life=="Alive")
             {
-                if(state.FriendPosition!=null&&(state.FriendPosition.X!=0||state.FriendPosition.Z!=0)&&Near(player,state.FriendPosition.X,state.FriendPosition.Z)&&(!state.FriendFound||state.FriendLeaderId!=player.Id))
-                    AddAction(state.FriendFound?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);
+                // Either lost friend (a big crew has two, CROWD-2); FindFriend goes to the nearer one.
+                foreach(var (at,found,leader) in new[]{(state.FriendPosition,state.FriendFound,state.FriendLeaderId),(state.SecondFriend.Position,state.SecondFriend.Found,state.SecondFriend.LeaderId)})
+                    if(at!=null&&(at.X!=0||at.Z!=0)&&Near(player,at.X,at.Z)&&(!found||leader!=player.Id)){AddAction(found?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);break;}
                 string extract=FestivalHudText.ExtractAction(state);
                 if(extract!=""&&Near(player,Festivals.CampGateX,Festivals.CampGateZ))AddAction(extract,()=>session.Command("Extract"),ref y);
                 if(Near(player,-28,16))
