@@ -32,7 +32,7 @@ namespace Festival.Presentation
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText;
+        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText;
         private Text musicValue,lookValue,motionValue,contrastValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -73,6 +73,7 @@ namespace Festival.Presentation
         private string previousRound="";
         private bool? appliedContrast;
         private bool? expandedGear;
+        private int rosterLines;
         private Image effectWash;
         private float baseFov=75;
         private float nextActionRefresh;
@@ -164,7 +165,7 @@ namespace Festival.Presentation
 
             objectivePanel=Card(root.transform,"Objective card",new Vector2(.022f,.858f),new Vector2(.355f,.974f),true);
             Accent(objectivePanel.transform,Orange);
-            var missionKicker=Label(objectivePanel.transform,"Mission label",14,TextAnchor.MiddleLeft);missionKicker.text="TONIGHT'S PLAN";missionKicker.fontStyle=FontStyle.Normal;missionKicker.color=Orange;Place(missionKicker.rectTransform,.06f,.69f,.96f,.94f);
+            levelBanner=Label(objectivePanel.transform,"Level banner",14,TextAnchor.MiddleLeft);levelBanner.fontStyle=FontStyle.Normal;levelBanner.color=Orange;Place(levelBanner.rectTransform,.06f,.69f,.96f,.94f);
             objectiveTitle=Label(objectivePanel.transform,"Objective title",23,TextAnchor.MiddleLeft);objectiveTitle.fontStyle=FontStyle.Normal;Place(objectiveTitle.rectTransform,.06f,.43f,.96f,.73f);
             objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.06f,.96f,.44f);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
@@ -380,7 +381,7 @@ namespace Festival.Presentation
             MapPin(festivalMap.transform,"MARKET",.27f,.25f,Paper);
             MapPin(festivalMap.transform,"MEDIC",.83f,.28f,Paper);
             MapPin(festivalMap.transform,"HOLDING",.87f,.61f,Paper);
-            MapPin(festivalMap.transform,"SHUTTLE",.50f,.12f,Orange);
+            MapPin(festivalMap.transform,"BACK TO CAMP",.50f,.12f,Orange);
             campMap=Panel(diagram.transform,"Camp landmarks",Color.clear,Vector2.zero,Vector2.one);campMap.GetComponent<Image>().raycastTarget=false;
             MapPath(campMap.transform,.29f,.20f,.50f,.46f);
             MapPath(campMap.transform,.76f,.30f,.50f,.46f);
@@ -440,7 +441,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -456,7 +457,7 @@ namespace Festival.Presentation
                     awards+=(award+1)+"  "+state.ReviewAwards[award].ToUpperInvariant()+"   •   "+(revealed?"WINNER: "+CrewName(state.ReviewWinners[award]):mine==null?"PICK A FRIEND":"YOUR PICK: "+CrewName(mine.TargetId))+"\n";
                 }
                 reviewText.text="THE VERY OFFICIAL ROUND REVIEW\n\n"
-                    +(state.ReviewResult=="Success"?"FRIEND FOUND":"A GLORIOUS DISASTER")+"   •   SALES $"+state.ReviewSales
+                    +FestivalHudText.ReviewOutcome(state)+"   •   SALES $"+state.ReviewSales
                     +"   •   SURVIVORS "+state.ReviewSurvivors+"\n"
                     +"CAMP ANTICS "+state.ReviewAntics+"\n\n"
                     +(state.ReviewAwards.Count==0?"SOLO PRACTICE: NO AWARDS TONIGHT\n\n":"Press 1–3 to pick a friend for each award:\n"+awards+ConnectedReviewVotes(state)+" / "+state.ConnectedCrewCount+" CREW VOTED\n")
@@ -529,20 +530,26 @@ namespace Festival.Presentation
             if(!hasGear)emptyGearLabel.text="0 / 3  •  NO GEAR";
         }
 
+        private void UpdateRosterLayout(int checklistLines)
+        {
+            if(rosterLines==checklistLines)return;
+            rosterLines=checklistLines;
+            // Night 2's everyone-home checklist grows the crew card downward, one row per line.
+            Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.882f-.024f*checklistLines:.846f,.978f,.882f);
+        }
+
         private void UpdateText(RoundState state,PlayerState player)
         {
-            double remaining=Math.Max(0,state.DurationSeconds-state.ElapsedSeconds);
-            string mission=FestivalGuidance.Headline(state,player);
-            string hint=FestivalGuidance.Hint(state,player);
-            objectiveTitle.text=mission;
-            objective.text=state.Phase=="Shopping"?"Browse gear • pay the seller • meet at the trailhead":hint;
-            timerText.text=state.Phase=="Playing"?Math.Floor(remaining/60).ToString("0")+":"+(remaining%60).ToString("00"):state.Phase=="Shopping"?"CAMP":state.Phase=="CampReview"?"REVIEW":state.Phase=="Results"?"DONE":"WAIT";
+            levelBanner.text=FestivalHudText.LevelBanner(state);
+            objectiveTitle.text=FestivalHudText.ObjectiveTitle(state,player);
+            objective.text=FestivalHudText.ObjectiveDetail(state,player);
+            timerText.text=FestivalHudText.Clock(state);
             string effects=Catalog.EffectsLine(player.Effects);
             var threat=state.Npcs.FindAll(n=>n.Kind=="Wook"&&n.Suspicion>0);double suspicion=0;string threatState="clear";
             foreach(var npc in threat)if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;threatState=npc.Mode;}
             var police=state.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==player.Id);
             vitals.text="HP "+player.Health+"  •  $"+player.Cash+"  •  STASH $"+state.StashCash+"\n"
-                +"SALES $"+state.GrossSales+" / $50  •  "+player.Life.ToUpperInvariant()+"  •  "
+                +"SALES $"+state.LevelSales+"  •  "+player.Life.ToUpperInvariant()+"  •  "
                 +(player.Effects.Count>0?effects.ToUpperInvariant():suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+threatState.ToUpperInvariant():police==null?"CROWD CLEAR":"SECURITY "+police.Mode.ToUpperInvariant());
             int equippedIndex=handGear.FindIndex(item=>item.ItemId==player.EquippedItemId);
             if(equippedIndex>=0)selectedSlot=equippedIndex;
@@ -555,7 +562,9 @@ namespace Festival.Presentation
                 slotTexts[i].color=equipped?new Color(1,.79f,.53f):Paper;
             }
             int ready=state.Players.FindAll(p=>p.Ready).Count;
-            roster.text=state.Players.Count+" CREW"+(state.Phase=="Shopping"?"  •  "+ready+" READY":"  •  TAB MAP");
+            string checklist=FestivalHudText.HomeChecklist(state,player.Id);
+            roster.text=checklist!=""?checklist:state.Players.Count+" CREW"+(state.Phase=="Shopping"?"  •  "+ready+" READY":"  •  TAB MAP");
+            UpdateRosterLayout(checklist==""?0:checklist.Split('\n').Length);
             menuRoster.text=state.Players.Count+" / 8 FRIENDS\n"+string.Join("   •   ",state.Players.ConvertAll(p=>(p.Id==player.Id?"YOU":p.Name)+(p.Ready?" READY":"")));
             menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"LAST SHUTTLE":"GATHERING";
         }
@@ -574,6 +583,10 @@ namespace Festival.Presentation
             if(player.CampVisitId!=""&&!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame())
             {
                 session.Command("CampAntic");return;
+            }
+            if(!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame()&&FestivalHudText.FestivalChoice(state,player.Id)!="")
+            {
+                session.Command("ChooseFestival",amount:(state.FestivalIndex+1)%state.UnlockedFestivalCount);return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
             if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
@@ -722,7 +735,7 @@ namespace Festival.Presentation
                 return;
             }
             string team="";foreach(var p in state.Players)team+=(p.Id==player.Id?"YOU":p.Name)+"  /  "+p.Life.ToUpperInvariant()+"\n";
-            string mission=state.FriendFound?"FRIEND FOUND\nEscort them to the shuttle.":"FRIEND MISSING\nSearch the grounds. Their exact location is unknown.";
+            string mission=!Festivals.For(state).Night?FestivalHudText.Quota(state)+"\n"+FestivalHudText.QuotaHint(state):state.FriendFound?"FRIEND FOUND\nEscort them back to camp.":"FRIEND MISSING\nSearch the grounds. Their exact location is unknown.";
             mapText.text=mission+"\n\nCREW\n"+team+"\nYOU ARE THE ORANGE DOT.\n\nMEDIC  /  HOLDING\nHelp a downed or detained friend.";
         }
 
@@ -755,6 +768,11 @@ namespace Festival.Presentation
                 bool revealed=FestivalSimulation.ReviewRevealed(state);
                 if(revealed&&session.IsHost)SetPromptAction("E  OPEN CAMP SHOP",()=>session.Command("FinishReview"));
                 else SetPromptAction(revealed?"WAIT FOR THE HOST":"1–3  PICK A FRIEND FOR EACH AWARD",null);
+                FinishActions();return;
+            }
+            if(state.Phase=="Results")
+            {
+                SetPromptAction(FestivalHudText.ResultsPrompt(state,player.Id),null);
                 FinishActions();return;
             }
             if(state.Phase=="Shopping")
@@ -813,6 +831,11 @@ namespace Festival.Presentation
                     FinishActions();return;
                 }
             }
+            if(state.Phase=="Playing")foreach(var body in state.Bodies)
+            {
+                string label=FestivalHudText.BodyAction(state,player,body),bodyId=body.PlayerId;
+                if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
+            }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
             if(player.InteractionId!="")AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
@@ -850,7 +873,8 @@ namespace Festival.Presentation
                 if(state.CluesRead<2&&Near(player,clue.X,clue.Z)&&FestivalSimulation.CanReadClues(player))AddAction(state.ConnectedCrewCount==1?"Interpret totem alone (6 seconds)":"Interpret totem with sober friend",()=>session.Command("ReadClue"),ref y);
                 if(state.FriendPosition!=null&&(state.FriendPosition.X!=0||state.FriendPosition.Z!=0)&&Near(player,state.FriendPosition.X,state.FriendPosition.Z)&&(!state.FriendFound||state.FriendLeaderId!=player.Id))
                     AddAction(state.FriendFound?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);
-                if(state.FriendFound&&Near(player,0,-32))AddAction("Extract at last shuttle",()=>session.Command("Extract"),ref y);
+                string extract=FestivalHudText.ExtractAction(state);
+                if(extract!=""&&Near(player,Festivals.CampGateX,Festivals.CampGateZ))AddAction(extract,()=>session.Command("Extract"),ref y);
                 if(Near(player,-28,16))
                 {
                     var detained=state.Players.Find(p=>p.Life=="Detained");
