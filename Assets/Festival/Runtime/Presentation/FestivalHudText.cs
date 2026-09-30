@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Festival.Core;
 
 namespace Festival.Presentation
@@ -27,29 +28,29 @@ namespace Festival.Presentation
             return left/60+":"+(left%60).ToString("00");
         }
 
-        /// <summary>Day levels: the level's sales against the whole crew's quota, until it is met. Nights have no quota.</summary>
-        public static string Quota(RoundState s)
+        /// <summary>Day levels: the level's sales against the whole crew's quota in the viewer's money, until it is met. Nights have no quota.</summary>
+        public static string Quota(RoundState s,PlayerState viewer)
         {
             if(Festivals.For(s).Night)return "";
-            return FestivalSimulation.DayQuotaMet(s)?"QUOTA MET — HEAD BACK TO CAMP":"DAY QUOTA  $"+s.LevelSales+" / $"+FestivalSimulation.DayQuota(s);
+            return FestivalSimulation.DayQuotaMet(s)?"QUOTA MET — HEAD BACK TO CAMP":("DAY QUOTA  "+Money(s,viewer,s.LevelSales)+" / "+Money(s,viewer,FestivalSimulation.DayQuota(s))).ToUpperInvariant();
         }
 
         /// <summary>The line under the quota: how much is left to sell, or that anyone may now end the day.</summary>
-        public static string QuotaHint(RoundState s)
+        public static string QuotaHint(RoundState s,PlayerState viewer)
         {
             if(Festivals.For(s).Night)return "";
-            return FestivalSimulation.DayQuotaMet(s)?"Anyone can end the day at the way back to camp, or keep selling until sundown.":"Sell $"+(FestivalSimulation.DayQuota(s)-s.LevelSales)+" more before sundown.";
+            return FestivalSimulation.DayQuotaMet(s)?"Anyone can end the day at the way back to camp, or keep selling until sundown.":"Sell "+Money(s,viewer,FestivalSimulation.DayQuota(s)-s.LevelSales)+" more before sundown.";
         }
 
         /// <summary>Objective card heading: the outcome at results, the quota for a free player on a day, otherwise the guidance headline.</summary>
-        public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s):FestivalGuidance.Headline(s,p);
+        public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s,p):FestivalGuidance.Headline(s,p);
 
         /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line.</summary>
         public static string ObjectiveDetail(RoundState s,PlayerState p)
         {
             if(s.Phase=="Results")return OutcomeDetail(s);
             if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id);return choice!=""?choice:"Browse gear • pay the seller • meet at the trailhead";}
-            return SellingToday(s,p)?QuotaHint(s):FestivalGuidance.Hint(s,p);
+            return SellingToday(s,p)?QuotaHint(s,p):FestivalGuidance.Hint(s,p);
         }
         // Downed, detained and spirit players keep the guidance about getting back on their feet.
         static bool SellingToday(RoundState s,PlayerState p)=>s.Phase=="Playing"&&p.Life=="Alive"&&!Festivals.For(s).Night;
@@ -193,6 +194,10 @@ namespace Festival.Presentation
 
         /// <summary>An amount of money as the viewer reads it (PLAYA-1): "$12" at Palm Mirage, "12 buttons" or their own odd object on Ember Playa.</summary>
         public static string Money(RoundState s,PlayerState viewer,int amount)=>Festivals.CurrencyName(s.FestivalIndex,viewer.Ordinal,amount);
+        /// <summary>A line the host wrote in dollars (a command's reply, an item's description), with every "$5" in it as the viewer reads it.</summary>
+        public static string MoneyText(RoundState s,PlayerState viewer,string text)=>string.IsNullOrEmpty(text)?text:Dollars.Replace(text,m=>Money(s,viewer,int.Parse(m.Groups[1].Value)));
+        // At most nine digits, so an amount always fits an int.
+        static readonly Regex Dollars=new Regex(@"\$(\d{1,9})");
 
         /// <summary>A crew member as the local player reads them in the debrief: "YOU", or their name.</summary>
         internal static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
@@ -267,6 +272,13 @@ namespace Festival.Presentation
             string warning=suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+mode.ToUpperInvariant():police==null?"CROWD CLEAR":"SECURITY "+police.Mode.ToUpperInvariant();
             return p.Effects.Count>0?warning+Dot+Catalog.EffectsLine(p.Effects).ToUpperInvariant():warning;
         }
+
+        /// <summary>
+        /// The player card: health, pocket and the crew's stash, then the level's sales, life and the warning (Condition). The warning
+        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does.
+        /// </summary>
+        public static string Vitals(RoundState s,PlayerState p)=>("HP "+p.Health+Dot+Money(s,p,p.Cash)+Dot+"STASH "+Money(s,p,s.StashCash)+"\n"
+            +"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+Dot+Condition(s,p);
 
         /// <summary>The rhythm lane's title, naming a check dance as the check it is.</summary>
         public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";

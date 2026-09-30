@@ -178,6 +178,8 @@ namespace Festival.Presentation
             Accent(objectivePanel.transform,Orange);
             levelBanner=Label(objectivePanel.transform,"Level banner",14,TextAnchor.MiddleLeft);levelBanner.fontStyle=FontStyle.Normal;levelBanner.color=Orange;Place(levelBanner.rectTransform,.06f,.69f,.96f,.94f);
             objectiveTitle=Label(objectivePanel.transform,"Objective title",23,TextAnchor.MiddleLeft);objectiveTitle.fontStyle=FontStyle.Normal;Place(objectiveTitle.rectTransform,.06f,.43f,.96f,.73f);
+            // Ember Playa's quota names its odd objects twice ("12 FRIENDSHIP BRACELETS / 44 FRIENDSHIP BRACELETS"), so it may shrink.
+            ShrinkToFit(objectiveTitle,14);
             objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.01f,.96f,.46f);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
             timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);
@@ -187,9 +189,9 @@ namespace Festival.Presentation
             tripping=Label(trippingPanel.transform,"Tripping",16,TextAnchor.MiddleCenter);tripping.fontStyle=FontStyle.Normal;Fill(tripping.rectTransform,4);trippingPanel.SetActive(false);
             vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
             Accent(vitalPanel.transform,Mint);
-            // Three lines (85 px at 1080p): the crowd or security warning starts on the second and is never longer than a line,
-            // so it is always drawn whole; only effects after it can run off (TRIP-1).
-            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.03f,.94f,.97f);
+            // Three lines (85 px at 1080p) of health, money, life and the crowd or security warning, then any effects. Ember Playa's
+            // odd objects can push the warning to a fourth line, so the text shrinks to fit rather than cut it (TRIP-1, PLAYA-1).
+            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.03f,.94f,.97f);ShrinkToFit(vitals,14);
 
             rosterPanel=Card(root.transform,"Crew card",new Vector2(.835f,.846f),new Vector2(.978f,.882f),true);
             roster=Label(rosterPanel.transform,"Roster",16,TextAnchor.MiddleRight);Fill(roster.rectTransform,3);
@@ -199,6 +201,8 @@ namespace Festival.Presentation
             promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.777f),new Vector2(.355f,.844f),true);
             promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
             prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
+            // A shelf item's prompt carries its price and description, longer on Ember Playa.
+            ShrinkToFit(prompt,14);
             // The campfire debrief: the verdict on the round, a ballot row per award to click a friend on, who has voted, then
             // the verdict read out award by award where the ballot was.
             reviewPanel=Card(root.transform,"Camp round review",new Vector2(.25f,.20f),new Vector2(.75f,.84f),true);
@@ -216,7 +220,7 @@ namespace Festival.Presentation
                     var button=Button(reviewPanel.transform,"",new Vector2(.05f,top-.185f),new Vector2(.95f,top-.075f),()=>{if(column<ballotCrew.Count)session.Command("ReviewVote",ballotCrew[column],amount:slot);});
                     button.name="Award "+(award+1)+" pick "+(pick+1);ballotPicks[award,pick]=button;
                     // A crew of eight shares the row, so a long name shrinks to fit its button.
-                    var friendName=button.transform.Find("Text").GetComponent<Text>();friendName.resizeTextForBestFit=true;friendName.resizeTextMinSize=12;friendName.resizeTextMaxSize=friendName.fontSize;
+                    ShrinkToFit(button.transform.Find("Text").GetComponent<Text>(),12);
                 }
             }
             reviewPanel.SetActive(false);
@@ -331,10 +335,13 @@ namespace Festival.Presentation
             // the shelves and never covers price tags near the reticle.
             heldDetailPanel=Card(root.transform,"Held item label",new Vector2(.633f,.66f),new Vector2(.978f,.78f),false);
             Accent(heldDetailPanel.transform,Orange);
-            heldTitle=Label(heldDetailPanel.transform,"Held item title",24,TextAnchor.MiddleLeft);heldTitle.fontStyle=FontStyle.Normal;heldTitle.color=Ink;Place(heldTitle.rectTransform,.06f,.59f,.78f,.91f);
-            heldPrice=Label(heldDetailPanel.transform,"Held item price",24,TextAnchor.MiddleRight);heldPrice.fontStyle=FontStyle.Normal;heldPrice.color=new Color(.12f,.43f,.37f);Place(heldPrice.rectTransform,.78f,.59f,.94f,.91f);
+            // The price shares the title's row with room for Ember Playa's "15 FRIENDSHIP BRACELETS" (PLAYA-1).
+            heldTitle=Label(heldDetailPanel.transform,"Held item title",24,TextAnchor.MiddleLeft);heldTitle.fontStyle=FontStyle.Normal;heldTitle.color=Ink;Place(heldTitle.rectTransform,.06f,.59f,.52f,.91f);
+            heldPrice=Label(heldDetailPanel.transform,"Held item price",24,TextAnchor.MiddleRight);heldPrice.fontStyle=FontStyle.Normal;heldPrice.color=new Color(.12f,.43f,.37f);Place(heldPrice.rectTransform,.52f,.59f,.94f,.91f);
             Rule(heldDetailPanel.transform,.55f);
             heldDetailText=Label(heldDetailPanel.transform,"Held item details",22,TextAnchor.MiddleLeft);heldDetailText.color=new Color(.15f,.25f,.22f);Place(heldDetailText.rectTransform,.06f,.11f,.94f,.54f);
+            // A stock item's description runs to three lines, so it shrinks to fit its two.
+            ShrinkToFit(heldDetailText,14);
         }
 
         private void BuildConnection(Transform root)
@@ -465,10 +472,12 @@ namespace Festival.Presentation
         private void Update()
         {
             if(session==null)return;
-            status.text=connectionError==""?session.Message:connectionError;
+            // The host's replies name money in dollars; each player reads their own (PLAYA-1).
+            string message=session.State!=null&&session.LocalPlayer!=null?FestivalHudText.MoneyText(session.State,session.LocalPlayer,session.Message):session.Message;
+            status.text=connectionError==""?message:connectionError;
             status.color=connectionError==""?new Color(.25f,.35f,.32f):new Color(.58f,.16f,.12f);
             if(session.Message!=lastNotice){lastNotice=session.Message;noticeUntil=Time.unscaledTime+5;}
-            notice.text=session.Message;
+            notice.text=message;
             noticePanel.SetActive(session.Connected&&!session.MenuOpen&&!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<noticeUntil&&session.Message!="Accepted");
             connectionPanel.SetActive(!session.Connected);
             bool showMenu=session.Connected&&session.MenuOpen;
@@ -491,7 +500,7 @@ namespace Festival.Presentation
             if(state.Phase=="CampReview")UpdateReview(state,player);
             var heldDefinition=state.Phase=="Shopping"?Catalog.FindItem(player.HeldOfferId):null;
             heldDetailPanel.SetActive(heldDefinition!=null&&!showMenu);
-            if(heldDefinition!=null){heldTitle.text=heldDefinition.Name.ToUpperInvariant();heldPrice.text="$"+heldDefinition.Price;heldDetailText.text=heldDefinition.Description;}
+            if(heldDefinition!=null){heldTitle.text=heldDefinition.Name.ToUpperInvariant();heldPrice.text=FestivalHudText.Money(state,player,heldDefinition.Price).ToUpperInvariant();heldDetailText.text=FestivalHudText.MoneyText(state,player,heldDefinition.Description);}
             ApplyContrast(session.Profile.Data.HighContrast);
             UpdatePurchaseFeedback(state,player);
             nextButton.SetActive(state.Phase=="Results"&&session.IsHost);
@@ -505,7 +514,7 @@ namespace Festival.Presentation
             if(checkoutItem!="" && (Catalog.FindItem(checkoutItem)==null || (state.Phase=="Shopping"?(player.HeldOfferId!=checkoutItem||!Near(player,0,7)):(state.Phase!="Playing"||FocusedOffer(state,player)!=checkoutItem))))checkoutItem="";
             var checkoutDefinition=Catalog.FindItem(checkoutItem);
             checkoutPanel.SetActive(!showMenu&&checkoutDefinition!=null);
-            if(checkoutDefinition!=null)checkoutText.text="E  PAY $"+checkoutDefinition.Price+"  •  "+checkoutDefinition.Name.ToUpperInvariant()+"    G CANCEL";
+            if(checkoutDefinition!=null)checkoutText.text="E  PAY "+FestivalHudText.Money(state,player,checkoutDefinition.Price).ToUpperInvariant()+"  •  "+checkoutDefinition.Name.ToUpperInvariant()+"    G CANCEL";
             musicValue.text=Mathf.RoundToInt(session.Profile.Data.MusicVolume*100)+"%";
             lookValue.text=session.Profile.Data.MouseSensitivity.ToString("0.00");
             motionValue.text=session.Profile.Data.ReducedMotion?"ON":"OFF";
@@ -587,9 +596,7 @@ namespace Festival.Presentation
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             UpdateTrippingLayout(tripping.text==""?0:tripping.text.Split('\n').Length);
             trustLine.text=FestivalHudText.TrustLine(state,player.Id);
-            // The warning leads and the effects trail it, so a long effects list wraps off the card before the warning does.
-            vitals.text="HP "+player.Health+"  •  $"+player.Cash+"  •  STASH $"+state.StashCash+"\n"
-                +"SALES $"+state.LevelSales+"  •  "+player.Life.ToUpperInvariant()+"  •  "+FestivalHudText.Condition(state,player);
+            vitals.text=FestivalHudText.Vitals(state,player);
             int equippedIndex=handGear.FindIndex(item=>item.ItemId==player.EquippedItemId);
             if(equippedIndex>=0)selectedSlot=equippedIndex;
             for(int i=0;i<slotFrames.Length;i++)
@@ -823,7 +830,7 @@ namespace Festival.Presentation
                 return;
             }
             string team="";foreach(var p in state.Players)team+=(p.Id==player.Id?"YOU":p.Name)+"  /  "+p.Life.ToUpperInvariant()+"\n";
-            string mission=!Festivals.For(state).Night?FestivalHudText.Quota(state)+"\n"+FestivalHudText.QuotaHint(state):state.FriendFound?"FRIEND FOUND\nEscort them back to camp.":"FRIEND MISSING\nSearch the grounds. Their exact location is unknown.";
+            string mission=!Festivals.For(state).Night?FestivalHudText.Quota(state,player)+"\n"+FestivalHudText.QuotaHint(state,player):state.FriendFound?"FRIEND FOUND\nEscort them back to camp.":"FRIEND MISSING\nSearch the grounds. Their exact location is unknown.";
             mapText.text=mission+"\n\nCREW\n"+team+"\nYOU ARE THE ORANGE DOT.\n\nMEDIC  /  HOLDING\nHelp a downed or detained friend.";
         }
 
@@ -888,7 +895,7 @@ namespace Festival.Presentation
                 if(player.HeldOfferId!=""&&Near(player,0,7))
                 {
                     var held=Catalog.FindItem(player.HeldOfferId);
-                    if(checkoutItem==held.Id)SetPromptAction("E  PAY $"+held.Price+" FOR "+held.Name.ToUpperInvariant(),()=>{session.Command("Buy",item:held.Id);checkoutItem="";});
+                    if(checkoutItem==held.Id)SetPromptAction("E  PAY "+FestivalHudText.Money(state,player,held.Price).ToUpperInvariant()+" FOR "+held.Name.ToUpperInvariant(),()=>{session.Command("Buy",item:held.Id);checkoutItem="";});
                     else SetPromptAction("E  SHOW "+held.Name.ToUpperInvariant()+" TO SELLER",()=>checkoutItem=held.Id);
                 }
                 else if(Near(player,0,19,3.2f))SetPromptAction(player.Ready?"E  UNREADY AT TRAILHEAD":"E  READY AT TRAILHEAD",()=>session.Command("Ready"));
@@ -899,7 +906,7 @@ namespace Festival.Presentation
                     if(itemId!="")
                     {
                         var item=Catalog.FindItem(itemId);var stock=state.ShopStock.Find(s=>s.ItemId==itemId);
-                        SetPromptAction(stock!=null&&stock.CampAvailable>0?"E  PICK UP "+item.Name.ToUpperInvariant()+"  •  $"+item.Price+"  •  "+item.Description:item.Name.ToUpperInvariant()+"  •  SOLD OUT",stock!=null&&stock.CampAvailable>0?()=>session.Command("HoldOffer",item:itemId):null);
+                        SetPromptAction(stock!=null&&stock.CampAvailable>0?"E  PICK UP "+item.Name.ToUpperInvariant()+"  •  "+FestivalHudText.Money(state,player,item.Price).ToUpperInvariant()+"  •  "+FestivalHudText.MoneyText(state,player,item.Description):item.Name.ToUpperInvariant()+"  •  SOLD OUT",stock!=null&&stock.CampAvailable>0?()=>session.Command("HoldOffer",item:itemId):null);
                     }
                     else SetPromptAction("GEAR SHELVES BESIDE SELLER  •  READY AT LIT TRAILHEAD",null);
                 }
@@ -913,8 +920,8 @@ namespace Festival.Presentation
                     var item=Catalog.FindItem(focused);var stock=state.ShopStock.Find(s=>s.ItemId==focused);
                     if(stock!=null&&stock.MarketAvailable>0)
                     {
-                        if(checkoutItem==focused)SetPromptAction("E  PAY $"+item.Price+" FOR "+item.Name.ToUpperInvariant(),()=>{session.Command("Buy",item:focused);checkoutItem="";});
-                        else SetPromptAction("E  BUY "+item.Name.ToUpperInvariant()+"  •  $"+item.Price+"  •  "+item.Description,()=>checkoutItem=focused);
+                        if(checkoutItem==focused)SetPromptAction("E  PAY "+FestivalHudText.Money(state,player,item.Price).ToUpperInvariant()+" FOR "+item.Name.ToUpperInvariant(),()=>{session.Command("Buy",item:focused);checkoutItem="";});
+                        else SetPromptAction("E  BUY "+item.Name.ToUpperInvariant()+"  •  "+FestivalHudText.Money(state,player,item.Price).ToUpperInvariant()+"  •  "+FestivalHudText.MoneyText(state,player,item.Description),()=>checkoutItem=focused);
                     }
                     else SetPromptAction(item.Name.ToUpperInvariant()+"  •  SOLD OUT",null);
                     FinishActions();return;
@@ -937,8 +944,8 @@ namespace Festival.Presentation
             if(stash!=null)
             {
                 string stashId=stash.Id;
-                if(player.Cash>=5)AddAction("Deposit $5 in shared stash",()=>session.Command("Deposit",stashId,amount:5),ref y);
-                if(state.StashCash>=5)AddAction("Withdraw $5 from shared stash",()=>session.Command("Withdraw",stashId,amount:5),ref y);
+                if(player.Cash>=5)AddAction("Deposit "+FestivalHudText.Money(state,player,5)+" in shared stash",()=>session.Command("Deposit",stashId,amount:5),ref y);
+                if(state.StashCash>=5)AddAction("Withdraw "+FestivalHudText.Money(state,player,5)+" from shared stash",()=>session.Command("Withdraw",stashId,amount:5),ref y);
                 if(handGear.Count>0)
                 {
                     string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
@@ -951,7 +958,7 @@ namespace Festival.Presentation
             {
                 if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
                 if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
-                if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay $10 release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
+                if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay "+FestivalHudText.Money(state,player,10)+" release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
             }
             NpcState check=null;
             if(player.Life=="Spirit")
@@ -968,12 +975,12 @@ namespace Festival.Presentation
                 {
                     var detained=state.Players.Find(p=>p.Life=="Detained");
                     if(detained!=null)AddAction("Free release task for "+detained.Name,()=>session.Command("BeginRelease",detained.Id),ref y);
-                    AddAction("Return lost property for $5",()=>session.Command("LostProperty"),ref y);
+                    AddAction("Return lost property for "+FestivalHudText.Money(state,player,5),()=>session.Command("LostProperty"),ref y);
                 }
                 if(Near(player,24,-20))
                 {
                     var spirit=state.Players.Find(p=>p.Life=="Spirit"&&player.Wristbands.Contains(p.Id));
-                    if(spirit!=null){AddAction("Revive "+spirit.Name+" — free task",()=>session.Command("BeginRevival",spirit.Id),ref y);AddAction("Revive "+spirit.Name+" — pay $10",()=>session.Command("BeginRevival",spirit.Id,amount:1),ref y);}
+                    if(spirit!=null){AddAction("Revive "+spirit.Name+" — free task",()=>session.Command("BeginRevival",spirit.Id),ref y);AddAction("Revive "+spirit.Name+" — pay "+FestivalHudText.Money(state,player,10),()=>session.Command("BeginRevival",spirit.Id,amount:1),ref y);}
                     if(player.Effects.Exists(FestivalSimulation.Treatable)&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher",()=>session.Command("Use",item:"medical_voucher"),ref y);
                 }
                 if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
@@ -1148,6 +1155,8 @@ namespace Festival.Presentation
         {
             var go=new GameObject(name,typeof(RectTransform),typeof(CanvasRenderer),typeof(Text));go.transform.SetParent(parent,false);var text=go.GetComponent<Text>();text.font=font;text.fontSize=size<=25?Mathf.RoundToInt(size*1.18f):size;text.alignment=anchor;text.color=Paper;text.horizontalOverflow=HorizontalWrapMode.Wrap;text.verticalOverflow=VerticalWrapMode.Truncate;text.raycastTarget=false;return text;
         }
+        // Text that would run past its box shrinks, down to min px, instead of being cut.
+        private static void ShrinkToFit(Text text,int min){text.resizeTextForBestFit=true;text.resizeTextMinSize=min;text.resizeTextMaxSize=text.fontSize;}
         private GameObject Button(Transform parent,string label,Vector2 min,Vector2 max,Action action)
         {
             bool primary=label=="RESUME FESTIVAL"||label=="CREATE GAME"||label=="JOIN GAME"||label=="NEXT CAMP";

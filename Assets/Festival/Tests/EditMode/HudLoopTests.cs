@@ -48,14 +48,14 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo(FestivalGuidance.Headline(s,you)),"a downed player still reads how to get help");
             var night=Level(0,1);var rescuer=Crew(night,"you","You");
             Assert.That(FestivalHudText.ObjectiveTitle(night,rescuer),Is.EqualTo(FestivalGuidance.Headline(night,rescuer)),"nights keep the rescue's directions");
-            Assert.That(FestivalHudText.Quota(night),Is.Empty,"a night has no quota");
+            Assert.That(FestivalHudText.Quota(night,rescuer),Is.Empty,"a night has no quota");
         }
 
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
         {
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.
-            var s=Level(0,2);Crew(s,"you","You",life:"Spirit");s.ConnectedCrewCount=3;s.LevelSales=20;
-            Assert.That(FestivalHudText.Quota(s),Is.EqualTo("DAY QUOTA  $20 / $60"));
+            var s=Level(0,2);var spirit=Crew(s,"you","You",life:"Spirit");s.ConnectedCrewCount=3;s.LevelSales=20;
+            Assert.That(FestivalHudText.Quota(s,spirit),Is.EqualTo("DAY QUOTA  $20 / $60"));
         }
 
         [Test] public void TheWayBackToCampOffersTheExtractOnlyWithSomethingToFinish()

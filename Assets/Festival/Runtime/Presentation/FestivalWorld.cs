@@ -632,7 +632,8 @@ namespace Festival.Presentation
         {
             var root=new GameObject(name).transform;root.SetParent(parent,false);return root;
         }
-        public void UpdateShop(RoundState state)
+        /// <summary>Shows the shelves' stock, with each price tag in the viewer's money (PLAYA-1).</summary>
+        public void UpdateShop(RoundState state,PlayerState viewer)
         {
             if(state==null||campShopRoot==null||marketShopRoot==null)return;
             if(displayedRound!=state.RoundId)
@@ -651,8 +652,9 @@ namespace Festival.Presentation
                 int campCount=stock?.CampAvailable??0,marketCount=stock?.MarketAvailable??0;
                 ShowCopies(campProps[i],campCount);
                 ShowCopies(marketProps[i],marketCount);
-                string campText=Catalog.ShopTag(item.Id)+"\n$"+item.Price+"   "+(campCount>0?campCount+" LEFT":"SOLD OUT");
-                string marketText=Catalog.ShopTag(item.Id)+"\n$"+item.Price+"   "+(marketCount>0?marketCount+" LEFT":"SOLD OUT");
+                string price=FestivalHudText.Money(state,viewer,item.Price).ToUpperInvariant();
+                string campText=Catalog.ShopTag(item.Id)+"\n"+price+"   "+(campCount>0?campCount+" LEFT":"SOLD OUT");
+                string marketText=Catalog.ShopTag(item.Id)+"\n"+price+"   "+(marketCount>0?marketCount+" LEFT":"SOLD OUT");
                 if(campTags[i].text!=campText)campTags[i].text=campText;
                 if(marketTags[i].text!=marketText)marketTags[i].text=marketText;
             }

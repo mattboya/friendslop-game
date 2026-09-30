@@ -49,7 +49,8 @@ namespace Festival.Presentation
             var state=new RoundState{RoundId="art-review"};
             state.VendorOffers.AddRange(Catalog.VendorOffers(3));
             foreach(var id in state.VendorOffers)state.ShopStock.Add(new ShopStockState{ItemId=id,CampAvailable=2,MarketAvailable=2});
-            world.UpdateShop(state);
+            // Palm Mirage's shelves, priced in dollars for anyone.
+            world.UpdateShop(state,new PlayerState());
             var target=new RenderTexture(1600,900,24);
             var camera=new GameObject("Art review camera").AddComponent<Camera>();
             var view=GetComponent<FestivalSession>().ViewCamera;
