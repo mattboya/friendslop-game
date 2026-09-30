@@ -575,13 +575,9 @@ namespace Festival.Presentation
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             UpdateTrippingLayout(tripping.text==""?0:tripping.text.Split('\n').Length);
             trustLine.text=FestivalHudText.TrustLine(state,player.Id);
-            string effects=Catalog.EffectsLine(player.Effects);
-            var threat=state.Npcs.FindAll(n=>n.Kind=="Wook"&&n.Suspicion>0);double suspicion=0;string threatState="clear";
-            foreach(var npc in threat)if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;threatState=npc.Mode;}
-            var police=state.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==player.Id);
+            // The warning leads and the effects trail it, so a long effects list wraps off the card before the warning does.
             vitals.text="HP "+player.Health+"  •  $"+player.Cash+"  •  STASH $"+state.StashCash+"\n"
-                +"SALES $"+state.LevelSales+"  •  "+player.Life.ToUpperInvariant()+"  •  "
-                +(player.Effects.Count>0?effects.ToUpperInvariant():suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+threatState.ToUpperInvariant():police==null?"CROWD CLEAR":"SECURITY "+police.Mode.ToUpperInvariant());
+                +"SALES $"+state.LevelSales+"  •  "+player.Life.ToUpperInvariant()+"  •  "+FestivalHudText.Condition(state,player);
             int equippedIndex=handGear.FindIndex(item=>item.ItemId==player.EquippedItemId);
             if(equippedIndex>=0)selectedSlot=equippedIndex;
             for(int i=0;i<slotFrames.Length;i++)

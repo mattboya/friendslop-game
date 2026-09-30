@@ -190,6 +190,19 @@ namespace Festival.Presentation
             return text;
         }
 
+        /// <summary>
+        /// The player card's warning: the crowd's worst suspicion of p, or security's attention, or "CROWD CLEAR"; then p's effects.
+        /// The warning always comes first: the spinner's dose lasts the whole level (everyone's on Night 2) and must never hide it.
+        /// </summary>
+        public static string Condition(RoundState s,PlayerState p)
+        {
+            double suspicion=0;string mode="clear";
+            foreach(var npc in s.Npcs)if(npc.Kind=="Wook"&&npc.Suspicion>suspicion){suspicion=npc.Suspicion;mode=npc.Mode;}
+            var police=s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id);
+            string warning=suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+mode.ToUpperInvariant():police==null?"CROWD CLEAR":"SECURITY "+police.Mode.ToUpperInvariant();
+            return p.Effects.Count>0?warning+Dot+Catalog.EffectsLine(p.Effects).ToUpperInvariant():warning;
+        }
+
         /// <summary>The rhythm lane's title, naming a check dance as the check it is.</summary>
         public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
     }
