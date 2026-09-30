@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Festival.Core;
+using Festival.Network;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
@@ -27,9 +28,18 @@ namespace Festival.Presentation
         private Vector3 lastViewPosition;
         private Quaternion lastViewRotation;
         private bool viewSeen;
+        private FestivalSession session;
+        private Func<string,Transform> actorFor;
 
         /// <summary>How many markers are drawn this frame.</summary>
         public int Shown {get;private set;}
+
+        // After FestivalSession.Update has moved the actors and the first-person camera this frame.
+        private void LateUpdate()
+        {
+            if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
+            Apply(session.State,session.ViewCamera!=null?session.ViewCamera.transform:null,actorFor,Time.time,Time.unscaledDeltaTime);
+        }
 
         /// <summary>Draws state's visions while the festival is shown; actorFor finds a festivalgoer's drawn body (null when not drawn).</summary>
         public void Apply(RoundState state,Transform view,Func<string,Transform> actorFor,float time,float deltaTime)

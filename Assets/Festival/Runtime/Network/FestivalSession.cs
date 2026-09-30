@@ -92,6 +92,7 @@ namespace Festival.Network
 #endif
             actorRoot=new GameObject("Authoritative actor presentation").transform;
             world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
+            gameObject.AddComponent<FestivalVisionMarkers>();
             gameObject.AddComponent<FestivalSpinner>();
         }
         // NGO registers its message types after scene Awake and before Start.
