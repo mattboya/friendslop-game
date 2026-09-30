@@ -21,6 +21,17 @@ namespace Festival.Tests
             }
         }
 
+        [Test] public void ClientsSeeTheDaysSalesAgainstTheWholeCrewsQuota()
+        {
+            var game=new FestivalSimulation(9);game.AddPlayer("host","Host");var friend=game.AddPlayer("friend","Friend");game.State.LevelSales=25;
+            foreach(var life in new[]{"Alive","Spirit"})
+            {
+                friend.Life=life;var view=FestivalSession.ViewFor(game,friend.Id);
+                Assert.That(view.LevelSales,Is.EqualTo(25),life+" players see the day's sales");
+                Assert.That(FestivalSimulation.DayQuota(view),Is.EqualTo(30),life+" players see the quota for the whole crew of two");
+            }
+        }
+
         [Test] public void HostProfileRemembersUnlockedFestivals()
         {
             string id="weekend_test_"+Guid.NewGuid().ToString("N").Substring(0,12);
