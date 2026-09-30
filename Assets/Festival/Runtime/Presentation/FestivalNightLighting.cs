@@ -6,11 +6,16 @@ using UnityEngine.Rendering.Universal;
 namespace Festival.Presentation
 {
     /// <summary>LIGHT-1: night levels dim the sky and light neon on the stage, stalls and paths; the local player's
-    /// dose brightens and saturates only their own view. Driven from the round state, with no network calls.</summary>
+    /// dose brightens and saturates only their own view. TWISTVIS-1: an Ember Playa dust storm closes the fog in. Driven
+    /// from the round state, with no network calls. This is the only writer of the scene's fog, so night and storm never
+    /// fight over it.</summary>
     public sealed class FestivalNightLighting
     {
         // Wave 2026-09-30 L9-L11: night sky and ambient at about a fifth of day; exposure +.15 per dose, capped at +.6.
         private const float NightSkyShare=.2f,ExposurePerDose=.15f,MaxDoseExposure=.6f;
+        // A storm's dusty wall: you see a little beyond the festivalgoers' 5 m (Festivals.DustStormSightRange), no more.
+        private const float StormFogStart=2,StormFogEnd=16;
+        private static readonly Color StormDust=new Color(.66f,.52f,.36f);
         // Saturation rides the exposure boost (+6 per dose), so a dose reads more vivid, not only brighter.
         private const float SaturationPerExposure=40;
         private const float NeonRange=7,NeonIntensity=2.5f;
@@ -29,8 +34,8 @@ namespace Festival.Presentation
         private readonly ColorAdjustments grade;
         private readonly Material sky;
         private readonly Color daySky,dayEquator,dayGround,dayFog;
-        private readonly float daySun,daySkyExposure,dayExposure,daySaturation;
-        private bool night;
+        private readonly float daySun,daySkyExposure,dayExposure,daySaturation,dayFogStart,dayFogEnd;
+        private bool night,storm;
         private float boost;
 
         public static bool IsNight(RoundState state)=>FestivalWorld.ShowsFestival(state.Phase)&&Festivals.For(state).Night;
@@ -47,6 +52,7 @@ namespace Festival.Presentation
         {
             this.sun=sun;this.grade=grade;this.sky=sky;
             daySky=RenderSettings.ambientSkyColor;dayEquator=RenderSettings.ambientEquatorColor;dayGround=RenderSettings.ambientGroundColor;dayFog=RenderSettings.fogColor;
+            dayFogStart=RenderSettings.fogStartDistance;dayFogEnd=RenderSettings.fogEndDistance;
             daySun=sun.intensity;daySkyExposure=sky!=null?sky.GetFloat("_Exposure"):0;
             dayExposure=grade.postExposure.value;daySaturation=grade.saturation.value;
             for(int i=0;i<NeonSpots.Length;i++)
@@ -60,12 +66,13 @@ namespace Festival.Presentation
 
         public void Apply(RoundState state,string localPlayerId)
         {
-            bool night=IsNight(state);float boost=DoseExposure(state,localPlayerId);
-            if(night==this.night&&boost==this.boost)return;
-            this.night=night;this.boost=boost;
+            bool night=IsNight(state),storm=FestivalWorld.ShowsFestival(state.Phase)&&FestivalSimulation.DustStorm(state);float boost=DoseExposure(state,localPlayerId);
+            if(night==this.night&&storm==this.storm&&boost==this.boost)return;
+            this.night=night;this.storm=storm;this.boost=boost;
             float share=night?NightSkyShare:1;
             RenderSettings.ambientSkyColor=Dim(daySky,share);RenderSettings.ambientEquatorColor=Dim(dayEquator,share);
-            RenderSettings.ambientGroundColor=Dim(dayGround,share);RenderSettings.fogColor=Dim(dayFog,share);
+            RenderSettings.ambientGroundColor=Dim(dayGround,share);RenderSettings.fogColor=Dim(storm?StormDust:dayFog,share);
+            RenderSettings.fogStartDistance=storm?StormFogStart:dayFogStart;RenderSettings.fogEndDistance=storm?StormFogEnd:dayFogEnd;
             sun.intensity=daySun*share;
             if(sky!=null)sky.SetFloat("_Exposure",daySkyExposure*share);
             grade.postExposure.Override(dayExposure+boost);grade.saturation.Override(daySaturation+boost*SaturationPerExposure);

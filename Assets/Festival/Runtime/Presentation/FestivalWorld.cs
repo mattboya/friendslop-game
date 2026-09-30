@@ -20,6 +20,7 @@ namespace Festival.Presentation
         private readonly List<Light> stageLights = new List<Light>();
         private VolumeProfile duskProfile;
         private FestivalNightLighting lighting;
+        private FestivalTwistVisuals twists;
         private Font worldFont;
         private Transform owned;
         private Transform camp;
@@ -324,6 +325,8 @@ namespace Festival.Presentation
             // Default humanoid agent is conservative for the player's 0.35m capsule.
             // Keep agent type 0 so ordinary NavMesh.CalculatePath uses this surface.
             surface.BuildNavMesh();
+            // After the navmesh, though they never collide: twist stand-ins don't shape where anyone walks.
+            twists=new FestivalTwistVisuals(owned);
             marketShopRoot=ShopDisplayRoot("Night market goods",owned);
             // Only one of the two overlapping walkable spaces is active at a
             // time. The camp has its own navigation and collision geometry.
@@ -708,6 +711,8 @@ namespace Festival.Presentation
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase=="Results";
         // LIGHT-1: night levels and the local player's dose, straight from the round state.
         public void SetLighting(RoundState state,string localPlayerId){if(lighting!=null)lighting.Apply(state,localPlayerId);}
+        // TWISTVIS-1: the festival's twist stand-ins, straight from the round state.
+        public void SetTwists(RoundState state){if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);}
         private void Update()
         {
             float time=Time.time;
