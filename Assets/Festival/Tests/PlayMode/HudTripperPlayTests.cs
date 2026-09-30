@@ -160,5 +160,84 @@ namespace Festival.Tests
             yield return null;
             Assert.That(failures,Is.Empty,"Tripper HUD a player reads:\n"+string.Join("\n",failures));
         }
+
+        // Every HUD card a player can see at once; none may cover another.
+        private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat check card","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};
+
+        // HUD-2 on Night 2 with a full crew of 8, the busiest the HUD gets: the tripper checks by chat while the everyone-home
+        // checklist lists all 8 (its lowest), the dose card lists everyone's dose (4 lines, pushing the notice down) and a
+        // notice is up. Laid out at 1920x1080, no card may cover another.
+        [UnityTest]public IEnumerator NightTwoChatCheckCoversNoOtherCard()
+        {
+            var world=new GameObject("HUD night 2 world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD night 2");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            try
+            {
+                session.Host("Tester",8591);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var player=sim.Player(session.LocalPlayerId);
+                var mates=new List<PlayerState>();
+                foreach(var name in new[]{"Sam","Kim","Alexandria Longname","Jo","Riya","Kai","Lu"}){var mate=sim.AddPlayer("hud_"+name.Split(' ')[0].ToLowerInvariant(),name);mate.Ready=true;mates.Add(mate);}
+                player.X=0;player.Z=19;session.Command("Ready");
+                deadline=Time.realtimeSinceStartup+90;
+                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
+                {
+                    if(sim.State.Phase=="Loading")foreach(var mate in mates)if(!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="hud_loaded_"+mate.Id,Kind="MapReady"});
+                    yield return null;
+                }
+                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+
+                // Night 2: you trip on four doses, the crew is dosed too and away from home.
+                sim.State.LevelIndex=3;sim.State.DurationSeconds=600;sim.State.ElapsedSeconds=30;
+                foreach(var p in sim.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="hud_night2_dose",Intensity=4,RemainingSeconds=600});
+                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4});
+                for(int i=0;i<mates.Count;i++){sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=i%4+1});mates[i].X=-30+i*2;mates[i].Z=-30;}
+                // Beside a festivalgoer you have a vision about, you check by chat, and a notice comes up meanwhile.
+                var seen=sim.State.Visions.Find(v=>v.NpcId!=""&&!v.Confirmed);Assert.That(seen,Is.Not.Null,"setup: the day deals visions about festivalgoers");
+                var npc=sim.State.Npcs.Find(n=>n.Id==seen.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);
+                npc.X=0;npc.Z=0;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;player.X=.6f;player.Z=0;
+                yield return new WaitForSeconds(.6f);
+                session.Command("ConfirmChat",npc.Id);
+                Assert.That(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.Status=="Active"),"setup: a chat check starts: "+session.Message);
+                session.Command("Talk","nobody_here");
+                yield return new WaitForSeconds(.6f);
+
+                Canvas.ForceUpdateCanvases();
+                var shown=new List<(string name,Rect rect)>();
+                foreach(var image in hud.GetComponentsInChildren<Image>(false))
+                {
+                    if(System.Array.IndexOf(Cards,image.name)<0)continue;
+                    var corners=new Vector3[4];image.rectTransform.GetWorldCorners(corners);
+                    var min=canvas.transform.InverseTransformPoint(corners[0]);var max=canvas.transform.InverseTransformPoint(corners[2]);
+                    shown.Add((image.name,Rect.MinMaxRect(min.x,min.y,max.x,max.y)));
+                }
+                foreach(var card in new[]{"Chat check card","Crew card","Session notice","Tripper card"})if(!shown.Exists(c=>c.name==card))failures.Add("setup: the "+card+" is hidden");
+                string roster="",tripping="";
+                foreach(var text in hud.GetComponentsInChildren<Text>(false)){if(text.name=="Roster")roster=text.text;if(text.name=="Tripping")tripping=text.text;}
+                if(roster.Split('\n').Length!=9||tripping.Split('\n').Length!=4)failures.Add("setup: expected the 9-line checklist and 4-line dose card, got \""+roster.Replace("\n"," | ")+"\" and \""+tripping.Replace("\n"," | ")+"\"");
+                for(int i=0;i<shown.Count;i++)for(int j=i+1;j<shown.Count;j++)
+                {
+                    var a=shown[i].rect;var b=shown[j].rect;if(!a.Overlaps(b))continue;
+                    failures.Add(shown[i].name+" and "+shown[j].name+" overlap by "+(Mathf.Min(a.xMax,b.xMax)-Mathf.Max(a.xMin,b.xMin)).ToString("F0")+"x"+(Mathf.Min(a.yMax,b.yMax)-Mathf.Max(a.yMin,b.yMin)).ToString("F0")+" px");
+                }
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Night 2, 8 crew, a chat check and a notice at 1920x1080:\n"+string.Join("\n",failures));
+        }
     }
 }

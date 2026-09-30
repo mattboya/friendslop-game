@@ -279,7 +279,8 @@ namespace Festival.Presentation
             dialogueLine=Label(dialoguePanel.transform,"Dialogue line",24,TextAnchor.MiddleLeft);dialogueLine.color=Ink;Place(dialogueLine.rectTransform,.045f,.09f,.95f,.62f);
             dialoguePanel.SetActive(false);
             // The tripper's chat check: the festivalgoer's opener and three questions on 1-3, the asked one answered.
-            chatPanel=Card(root.transform,"Chat check card",new Vector2(.60f,.28f),new Vector2(.975f,.74f),false);
+            // Its top stays under Night 2's lowest crew card (.660, a crew of 8) and the notice it pushes down (.714); its foot above the gear bar (.148).
+            chatPanel=Card(root.transform,"Chat check card",new Vector2(.60f,.18f),new Vector2(.975f,.64f),false);
             Accent(chatPanel.transform,Orange);
             chatText=Label(chatPanel.transform,"Chat check",20,TextAnchor.UpperLeft);chatText.color=Ink;Place(chatText.rectTransform,.05f,.04f,.95f,.93f);chatPanel.SetActive(false);
 
