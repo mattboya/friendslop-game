@@ -19,7 +19,7 @@ namespace Festival.Core
         const double BuyerShare=.4;
         // Every sale pays x(1 + PayoutStep per dose above the first) for the tripper's dose; a double buyer pays twice that.
         const double PayoutStep=.25;
-        // A regular or clue holder turns a sale down with this much suspicion of the seller.
+        // A regular or clue holder turns a sale down with this much suspicion of the seller, however many friends stand by them.
         const double RefusedSaleSuspicion=10;
         // A secret stash banks this much in the crew's shared stash, once, for whoever reaches it.
         const int SecretStashCash=15;
@@ -113,7 +113,7 @@ namespace Festival.Core
         CommandResult RefuseSale(PlayerState p,NpcState npc)
         {
             if(npc.Role=="Narc"){Detain(p);return Ok("Busted! That was an undercover narc.");}
-            Adjust(npc,p,RefusedSaleSuspicion);return Reject("Not buying. They give you a funny look.");
+            Adjust(npc,p,RefusedSaleSuspicion,packed:false);return Reject("Not buying. They give you a funny look.");
         }
         int SalePayout(NpcState buyer,int pay)=>(int)Math.Round(pay*PayoutMultiplier(State)*(buyer!=null&&State.Visions.Exists(v=>v.Kind=="DoubleBuyer"&&v.NpcId==buyer.Id)?2:1),MidpointRounding.AwayFromZero);
         // Whoever reaches a secret stash first banks it for the crew, and the tripper sees it confirmed.

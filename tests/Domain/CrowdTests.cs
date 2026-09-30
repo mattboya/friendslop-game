@@ -12,7 +12,7 @@ public static class CrowdTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances})
+        foreach(var scenario in new Action[]{PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -132,6 +132,18 @@ public static class CrowdTests
         var s=Pack(4);var dance=Start(s,"Dance");Hit(dance);Finish(s,dance);
         var gains=new List<double>();for(int k=0;k<4;k++)gains.Add(Heat(s,k)-20);
         Check(gains.TrueForAll(g=>Same(g,34)),"a failed group dance in a pack of four: +34 each (got "+string.Join(", ",gains)+")");
+    }
+    // A regular turning a sale down (+10) is neither a passive gain nor a rhythm result, so a pack does not change it.
+    static void ARefusedSaleIsNotScaled()
+    {
+        double Refused(int crew)
+        {
+            var s=Pack(crew);var regular=s.State.Npcs.Find(n=>n.Id=="partner");regular.Role="Regular";
+            s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            Check(!s.Execute("p0",new GameCommand{Id="crowd"+(sequence++),Kind="StartSale",TargetId="partner",ItemId="stock_lsd"}).Accepted,"the regular turns p0's sale down");
+            return regular.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+        }
+        Check(Refused(1)==10&&Refused(8)==10,"a refused sale: +10 alone and in a pack of eight (got "+Refused(1)+", "+Refused(8)+")");
     }
     // Three of the pack dance perfectly on the same beat beside a fourth who stands idle. Every group fails (+20 x1.7), and the
     // idle friend takes that verdict once, like each dancer, not once per dancer: +34 each (not +102 for the idle one).

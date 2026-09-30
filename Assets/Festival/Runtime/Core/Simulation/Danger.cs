@@ -30,7 +30,8 @@ public sealed partial class FestivalSimulation {
     // Little Spoon has no active use. Its modest social benefit stays in host
     // rules and is intentionally absent from the public item description.
     static double WookTrustFactor(PlayerState p)=>Count(p,"little_spoon")>0 ? .9 : 1;
-    void Adjust(NpcState n,PlayerState p,double delta){var o=Observe(n,p);o.Suspicion=Math.Max(0,Math.Min(100,o.Suspicion+(delta>0?delta*WookTrustFactor(p)*PackFactor(p):delta)));o.LastSeenSeconds=State.SimulationSeconds;}
+    // CROWD-1's pack factor scales a positive rhythm result; a gain that is neither that nor passive (a refused sale) passes packed: false.
+    void Adjust(NpcState n,PlayerState p,double delta,bool packed=true){var o=Observe(n,p);o.Suspicion=Math.Max(0,Math.Min(100,o.Suspicion+(delta>0?delta*WookTrustFactor(p)*(packed?PackFactor(p):1):delta)));o.LastSeenSeconds=State.SimulationSeconds;}
     // ESC-1: passive gains (sprinting in view, standing backstage) scale by the level's suspicion multiplier; cooling off does not.
     // CROWD-1: they also scale by the seen player's pack, the two together capped at MaxCrowdHeat.
     // POLO-1: an influencer's frame is a passive gain too (FestivalTwists.cs).
