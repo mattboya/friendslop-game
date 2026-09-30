@@ -17,8 +17,9 @@ namespace Festival.Core
             return "";
         }
         // Gate for starting and completing Extract at the camp gate; finishing it while this holds ends the level with Success.
-        // Night 2 is all-or-nothing: every connected player must be home, the dead carried inside the gate radius.
-        bool CanExtractNow(PlayerState p)=>DayLevel?CanLeaveDayEarly(p):State.FriendFound&&Distance(State.FriendPosition.X,State.FriendPosition.Z,Festivals.CampGateX,Festivals.CampGateZ)<=3&&Near(p,Festivals.CampGateX,Festivals.CampGateZ)&&(!Finale||EveryoneHome());
+        // A night needs every lost friend back (SplitObjective.cs). Night 2 is all-or-nothing: every connected player must be
+        // home, the dead carried inside the gate radius.
+        bool CanExtractNow(PlayerState p)=>DayLevel?CanLeaveDayEarly(p):FriendsBack()&&Near(p,Festivals.CampGateX,Festivals.CampGateZ)&&(!Finale||EveryoneHome());
         bool EndIfLevelOver(){var result=LevelEndCheck();if(result!="")End(result);return result!="";}
 
         // BeginCampReview has built the next, reseeded round (fresh $20, no gear, no effects, calm crowd).

@@ -20,7 +20,7 @@ public sealed partial class FestivalSimulation {
         // Evidence/arrests precede all financial settlement within a simulation tick.
         foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);
         foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0))FinishInteraction(i,p);}
-        var leader=Player(State.FriendLeaderId);if(State.FriendFound&&leader!=null&&leader.Connected&&leader.Life=="Alive"){if(Distance(State.FriendPosition.X,State.FriendPosition.Z,leader.X,leader.Z)>1.5){var point=Move(State.FriendPosition.X,State.FriendPosition.Z,leader.X,leader.Z,4*dt);State.FriendPosition.X=point.X;State.FriendPosition.Z=point.Z;}}else State.FriendLeaderId="";
+        Escort(State.FriendFound,State.FriendPosition,ref State.FriendLeaderId,dt);Escort(State.SecondFriend.Found,State.SecondFriend.Position,ref State.SecondFriend.LeaderId,dt);
         FindStashes();BodiesTick();if(State.Phase=="Playing")EndIfLevelOver();
     }
     bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>12||p.Life!="Alive")return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return HasLineOfSight==null||HasLineOfSight(n.X,n.Z,p.X,p.Z);}

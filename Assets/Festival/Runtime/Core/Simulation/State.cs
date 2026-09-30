@@ -68,6 +68,8 @@ namespace Festival.Core
         // The debrief's awards (two worst, then one best) and, once every vote is in, each award's winner in the same order.
         public List<string> ReviewAwards=new List<string>(), ReviewWinners=new List<string>();
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";
+        // CROWD-2: a crew of FestivalSimulation.TwoFriendCrew or more at the start of a night also looks for this friend (SplitObjective.cs).
+        public LostFriendState SecondFriend=new LostFriendState();
         // Night 2 dead, in death order (Bodies.cs): the first one moves with one carrier, later ones need two.
         public List<BodyState> Bodies=new List<BodyState>();
         // TRIP-2: what the tripper sees (Visions.cs), and the night's clue holders in trail order; CluesRead is the next link.

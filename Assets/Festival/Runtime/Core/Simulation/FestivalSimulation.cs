@@ -12,8 +12,7 @@ namespace Festival.Core
         static RoundState CreateRound(int seed) {
             var s=new RoundState {Seed=seed,RoundId=Guid.NewGuid().ToString("N"),VendorOffers=Catalog.VendorOffers(seed)};
             foreach(var item in s.VendorOffers)s.ShopStock.Add(new ShopStockState{ItemId=item,CampAvailable=Catalog.ShopCopies(item,2),MarketAvailable=Catalog.ShopCopies(item,2)});
-            var positions=new[]{new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
-            s.FriendPosition=positions[(seed&int.MaxValue)%3];
+            s.FriendPosition=FriendSpot(seed,0);
             for(int i=0;i<FestivalCrowdLayout.Count;i++) { var point=FestivalCrowdLayout.Get(i,seed);bool wide=(i+seed%7)%7==0; s.Npcs.Add(new NpcState {Id="wook_"+i,X=point.X,Z=point.Z,Yaw=point.Yaw,IdlePose=point.Pose,HighlyIntoxicated=wide,RedEyes=(i+seed%5)%5==0||wide&&i<7,CanTalk=(i+seed%3)%4==0}); }
             AddCops(s);
             s.Stashes.Add(new StashState{Id="stash",X=-25,Z=-8});s.DurationSeconds=Festivals.For(s).DurationSeconds;return s;
@@ -40,7 +39,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
@@ -100,8 +99,8 @@ namespace Festival.Core
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
-                case "FindFriend":if(DayLevel)return Reject("Nobody is lost by day: sell the quota, then head back to camp");if(!State.GateOpened)return Reject("Follow the tripper's clue trail to its last link to find your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
-                case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():Finale?FinaleExtractRefusal:"Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
+                case "FindFriend":return FindFriend(p);
+                case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():NightExtractRefusal());return BeginTask(p,"Extract","shuttle",3);
                 case "LostProperty":if(!Near(p,-28,16))return Reject("Find lost property marker");return BeginTask(p,"LostProperty",State.LostPropertyTask.ToString(),5);
                 case "Drag":return Drag(p,c);
                 case "CarryBody":return CarryBody(p,c);

@@ -41,7 +41,7 @@ public sealed partial class FestivalSimulation {
         if(i.Kind=="Dj"&&i.Score>=.75)Distraction(p,120,5,true);
         if(i.Kind=="Dj"&&++i.Phrase<5){i.ChartSeed++;i.Inputs.Clear();i.StartSeconds+=6;i.DurationSeconds=RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds).DurationSeconds;return;}
     }else switch(i.Kind){
-        case "FindFriend":if(!State.FriendFound){State.ObjectiveReward=20;State.StashCash+=20;}State.FriendFound=true;State.FriendLeaderId=p.Id;break;
+        case "FindFriend":Recruited(i,p);break;
         case "Extract":if(CanExtractNow(p))End("Success");break;
         case "LostProperty":if(i.TargetId==State.LostPropertyTask.ToString()){p.Cash+=5;State.LostPropertyTask++;}break;
         case "Medical":int treated=p.Effects.FindLastIndex(Treatable);if(Count(p,"medical_voucher")>0&&treated>=0){Take(p,"medical_voucher",1);p.Effects.RemoveAt(treated);}break;
@@ -50,7 +50,7 @@ public sealed partial class FestivalSimulation {
         case "Revival":var spirit=Player(i.TargetId);bool self=spirit==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(spirit!=null&&spirit.Life=="Spirit"&&spirit.RevivalCount<2&&(self||p.Wristbands.Remove(spirit.Id))){spirit.Life="Alive";spirit.Health=40;spirit.RevivalCount++;spirit.Effects.Clear();spirit.X=24;spirit.Z=-20;spirit.RecoveryUntil=State.SimulationSeconds+5;}break;
     }
     FinishConfirm(i);i.ReservedCash=0;i.Status="Complete";p.InteractionId="";}
-    bool TaskStillValid(InteractionState i,PlayerState p){switch(i.Kind){case "FindFriend":return Near(p,State.FriendPosition.X,State.FriendPosition.Z);case "Extract":return Near(p,Festivals.CampGateX,Festivals.CampGateZ);case "Medical":case "Revival":return Near(p,24,-20);case "LostProperty":return Near(p,-28,16);case "Release":return i.ReservedCash>0?Near(p,27,5):Near(p,-28,16);case "Rescue":var t=Player(i.TargetId);return t!=null&&t.Life=="Downed"&&Near(p,t.X,t.Z)&&!AttackerNear(t,3);case "Dj":return Near(p,Catalog.StageTakeoverX,Catalog.StageTakeoverZ);case "Dance":case "Conversation":case "Sale":case "Police":case "ConfirmChat":case "ConfirmDance":var n=State.Npcs.Find(x=>x.Id==i.TargetId);return n!=null&&Near(p,n.X,n.Z,4);default:return true;}}
+    bool TaskStillValid(InteractionState i,PlayerState p){switch(i.Kind){case "FindFriend":var friend=FriendAt(i.TargetId);return Near(p,friend.X,friend.Z);case "Extract":return Near(p,Festivals.CampGateX,Festivals.CampGateZ);case "Medical":case "Revival":return Near(p,24,-20);case "LostProperty":return Near(p,-28,16);case "Release":return i.ReservedCash>0?Near(p,27,5):Near(p,-28,16);case "Rescue":var t=Player(i.TargetId);return t!=null&&t.Life=="Downed"&&Near(p,t.X,t.Z)&&!AttackerNear(t,3);case "Dj":return Near(p,Catalog.StageTakeoverX,Catalog.StageTakeoverZ);case "Dance":case "Conversation":case "Sale":case "Police":case "ConfirmChat":case "ConfirmDance":var n=State.Npcs.Find(x=>x.Id==i.TargetId);return n!=null&&Near(p,n.X,n.Z,4);default:return true;}}
     void Distraction(PlayerState p,double radius,double duration,bool strong){foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Distance(p.X,p.Z,n.X,n.Z)<=radius&&(strong||n.Mode!="Swarming"&&n.Mode!="Accusing")){n.DistractedUntil=Math.Max(n.DistractedUntil,State.SimulationSeconds+duration);n.AttackAt=0;foreach(var o in n.Observers)o.Suspicion=Math.Max(0,o.Suspicion-10);}}
 }
 }

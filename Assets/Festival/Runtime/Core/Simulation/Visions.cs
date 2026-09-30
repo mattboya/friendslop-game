@@ -5,8 +5,9 @@ namespace Festival.Core
 {
     /// <summary>A sight only the tripper gets: a role over a festivalgoer (Buyer, Narc), the next clue holder (Clue), or a secret:
     /// a cash Stash or a Shortcut at a spot, a DoubleBuyer over a buyer. Tell is presentation-only and true on fakes, so they can
-    /// show their tells; IsTrue reaches the tripper only once the vision is Confirmed (VisibleVisions).</summary>
-    [Serializable] public sealed class VisionState { public string Id="",Kind="",NpcId=""; public float X,Z; public bool IsTrue,Tell,Confirmed; }
+    /// show their tells; IsTrue reaches the tripper only once the vision is Confirmed (VisibleVisions). Trail says which lost
+    /// friend's trail a Clue belongs to (0 the first, 1 the second; SplitObjective.cs) and stays on the host.</summary>
+    [Serializable] public sealed class VisionState { public string Id="",Kind="",NpcId=""; public float X,Z; public bool IsTrue,Tell,Confirmed; public int Trail; }
 
     /// <summary>TRIP-2: each level deals the crowd hidden roles, and the spinner's tripper sees partly false visions of them.</summary>
     public sealed partial class FestivalSimulation
@@ -37,18 +38,18 @@ namespace Festival.Core
         void DealRoles()
         {
             var level=Festivals.For(State);var random=new ContentRandom(unchecked(State.SpinSeed*7+1));
-            var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"),random);
-            int narcs=Math.Min(level.Narcs,crowd.Count),chain=Math.Min(level.ChainLength,crowd.Count-narcs);
-            int buyers=Math.Min((int)Math.Round(BuyerShare*crowd.Count,MidpointRounding.AwayFromZero),crowd.Count-narcs-chain);
-            State.ClueChain.Clear();
+            var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"),random);int trails=LoseFriends();
+            int narcs=Math.Min(level.Narcs,crowd.Count),chain=Math.Min(level.ChainLength,(crowd.Count-narcs)/trails),holders=chain*trails;
+            int buyers=Math.Min((int)Math.Round(BuyerShare*crowd.Count,MidpointRounding.AwayFromZero),crowd.Count-narcs-holders);
+            State.ClueChain.Clear();State.SecondFriend.ClueChain.Clear();
             for(int i=0;i<crowd.Count;i++)
             {
-                var n=crowd[i];n.Role=i<narcs?"Narc":i<narcs+chain?"ClueHolder":i<narcs+chain+buyers?"Buyer":"Regular";
-                if(n.Role=="ClueHolder")State.ClueChain.Add(n.Id);
+                var n=crowd[i];n.Role=i<narcs?"Narc":i<narcs+holders?"ClueHolder":i<narcs+holders+buyers?"Buyer":"Regular";
+                if(n.Role=="ClueHolder")Chain((i-narcs)/chain).Add(n.Id);
             }
-            int dose=TripperDose(State);bool night=level.Night;
-            var seen=night?ClueVisions(random,dose):DayMarks(random,dose);seen.AddRange(SecretSights(random,dose,night));
-            State.Visions.Clear();Show(seen,random);
+            int dose=TripperDose(State);bool night=level.Night;State.Visions.Clear();
+            var seen=night?ClueVisions(random,dose,0,State.Visions):DayMarks(random,dose);if(trails>1)seen.AddRange(ClueVisions(random,dose,1,seen));
+            seen.AddRange(SecretSights(random,dose,night));Show(seen,random);
         }
         // Day: marks on up to MaxDayMarks festivalgoers, one each. The dose's share of them label real buyers and narcs truly; the
         // rest put a wrong label on someone else (a regular or a narc as a buyer, a buyer as a narc). From dose 2 one fake is always
@@ -64,14 +65,16 @@ namespace Festival.Core
             for(int i=0;marks.Count<count&&i<crowd.Count;i++)marks.Add(Sight(crowd[i],crowd[i].Role=="Buyer"?"Narc":"Buyer",false));
             return marks;
         }
-        // Night: the next clue holder, always shown, among round(1/r) - 1 fakes on other festivalgoers (0, 1, 3 or 9 for doses 1-4).
-        List<VisionState> ClueVisions(ContentRandom random,int dose)
+        // Night: a trail's next clue holder, always shown, among round(1/r) - 1 fakes (0, 1, 3 or 9 for doses 1-4) on festivalgoers
+        // who hold neither trail's next clue and carry no clue vision already shown.
+        List<VisionState> ClueVisions(ContentRandom random,int dose,int trail,List<VisionState> shown)
         {
-            var seen=new List<VisionState>();var holder=State.CluesRead<State.ClueChain.Count?State.Npcs.Find(n=>n.Id==State.ClueChain[State.CluesRead]):null;
+            var seen=new List<VisionState>();var holder=State.Npcs.Find(n=>n.Id==NextClue(trail));string otherHolder=NextClue(1-trail);
             if(holder==null)return seen;
             seen.Add(Sight(holder,"Clue",true));
-            var others=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=holder),random);
+            var others=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=holder&&n.Id!=otherHolder&&!shown.Exists(v=>v.Kind=="Clue"&&v.NpcId==n.Id)),random);
             for(int i=0,fakes=(int)Math.Round(1/Reliability[dose-1])-1;i<fakes&&i<others.Count;i++)seen.Add(Sight(others[i],"Clue",false));
+            foreach(var v in seen)v.Trail=trail;
             return seen;
         }
         // Doses 3 and 4 also see real secrets, looking like any true vision until found: one at dose 3, two at dose 4.
@@ -93,16 +96,12 @@ namespace Festival.Core
         void Show(List<VisionState> seen,ContentRandom random){foreach(var v in Shuffled(seen,random)){v.Id=Id("vision");State.Visions.Add(v);}}
         static List<T> Shuffled<T>(List<T> items,ContentRandom random){for(int i=items.Count-1;i>0;i--){int j=random.Next(i+1);var t=items[i];items[i]=items[j];items[j]=t;}return items;}
 
-        // TRIP-3's checks land here. Every vision about npc is confirmed, so its truth reaches the tripper. Finding the real next
-        // clue holder moves the trail on: the next link's visions replace this link's, and after the last link the way to the
-        // lost friend opens (GateOpened; the tripper's view then shows where the friend is).
+        // TRIP-3's checks land here. Every vision about npc is confirmed, so its truth reaches the tripper. Finding a trail's real
+        // next clue holder moves that trail on (FollowTrail): after its last link the way to its lost friend opens.
         internal void ConfirmVisionsOf(NpcState npc)
         {
             foreach(var v in State.Visions)if(v.NpcId==npc.Id)v.Confirmed=true;
-            if(State.CluesRead>=State.ClueChain.Count||State.ClueChain[State.CluesRead]!=npc.Id)return;
-            if(++State.CluesRead==State.ClueChain.Count)State.GateOpened=true;
-            State.Visions.RemoveAll(v=>v.Kind=="Clue");var random=new ContentRandom(unchecked(State.SpinSeed*7+1+State.CluesRead));
-            Show(ClueVisions(random,TripperDose(State)),random);
+            for(int trail=0;trail<2;trail++)if(NextClue(trail)==npc.Id)FollowTrail(trail);
         }
 
         // Selling: a buyer (or a festivalgoer not dealt a role yet) plays the sale out; a regular or a clue holder turns it down
