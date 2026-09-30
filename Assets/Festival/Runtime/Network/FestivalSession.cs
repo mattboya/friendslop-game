@@ -387,6 +387,7 @@ namespace Festival.Network
                 if(Time.realtimeSinceStartupAsDouble-pair.Value.ReceivedAt>.25)continue;
                 var active=simulation.Interaction(player.InteractionId);
                 float speed=(input.Sprint?6:4)*Intoxication.MovementMultiplier(player);if(player.InteractionId!="")speed=1;if(player.DragTargetId!="")speed=2;if(player.Life=="Downed")speed=.8f;
+                speed=Mathf.Min(speed,(float)simulation.CarrySpeed(player));
                 var local=active!=null&&active.Status=="Active"&&FestivalInput.IsRhythmKind(active.Kind)?Vector3.zero:Vector3.ClampMagnitude(new Vector3(input.X,0,input.Z),1);
                 if(local.sqrMagnitude>.0001f)local=Vector3.ClampMagnitude(local+new Vector3(Intoxication.LateralDrift(player,simulation.State.SimulationSeconds)*local.magnitude,0,0),1);
                 var delta=Quaternion.Euler(0,input.Yaw,0)*local*(speed*(float)dt);
@@ -437,11 +438,11 @@ namespace Festival.Network
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=source.ReviewVotes,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=!spirit&&source.FriendFound?source.FriendPosition:new WorldPoint(0,0),
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,PrivateClue=FestivalSimulation.ClueHint(source,local),ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
-                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount};
+                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,Bodies=source.Bodies};
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
-                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")?.Kind??(p.Effects.Count>0?"Intoxicated":"Idle");
+                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")?.Kind??(p.Effects.Count>0?"Intoxicated":"Idle");
                 var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
                 copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
                 copy.WearingLittleSpoon=p.Inventory.Exists(item=>item.ItemId=="little_spoon"&&item.Count>0);
@@ -501,6 +502,8 @@ namespace Festival.Network
                 var fp=State.FriendPosition;
                 if(fp!=null && (fp.X!=0||fp.Z!=0) && (State.FriendFound||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(fp.X,fp.Z))<12)){Actor("mission_friend","MISSING FRIEND",fp.X,fp.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add("mission_friend");}
                 foreach(var d in State.Drops){Actor(d.Id,d.ItemId,d.X,d.Z,0,Color.yellow,.2f);seen.Add(d.Id);}
+                // Night 2 bodies lie in the downed pose (and play the dragged motion while carried) until a revival lifts them.
+                foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed");seen.Add(id);}
             }
             foreach(var pair in actors)pair.Value.gameObject.SetActive(seen.Contains(pair.Key));
             ViewCamera.backgroundColor=spirit?new Color(.08f,.2f,.24f):new Color(.13f,.1f,.22f);
