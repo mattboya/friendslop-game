@@ -344,7 +344,7 @@ namespace Festival.Network
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
             var player=LocalPlayer;if(player==null)return;
-            if(world!=null){world.SetPhase(State.Phase);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State);}
+            if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
             {
                 if(world!=null&&world.IsReady&&world.NavigationReady){loadedRound=State.RoundId;Command("MapReady");}
