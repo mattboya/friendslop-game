@@ -14,6 +14,10 @@ namespace Festival.Core
         public static bool ReviewRevealed(RoundState s)=>s.ReviewWinners.Count==s.ReviewAwards.Count;
         // Before the reveal a viewer sees their own picks and who else has voted, never whom anyone else picked.
         public static List<CampReviewVote> VisibleReviewVotes(RoundState s,string viewer)=>ReviewRevealed(s)?s.ReviewVotes:s.ReviewVotes.ConvertAll(v=>v.PlayerId==viewer?v:new CampReviewVote{PlayerId=v.PlayerId,Award=v.Award});
+        // Whether a player has picked a friend for every award. It reads only who voted on what, which every view carries.
+        public static bool VotedOnEveryAward(RoundState s,string playerId){for(int slot=0;slot<s.ReviewAwards.Count;slot++)if(!s.ReviewVotes.Exists(v=>v.PlayerId==playerId&&v.Award==slot))return false;return true;}
+        // Winning a worst award pours its winner a shot as the next level starts.
+        public static bool TakesShot(string award)=>Array.IndexOf(CampFeatures.WorstAwards,award)>=0;
         void DrawReviewAwards()
         {
             if(State.Players.FindAll(p=>p.Connected).Count<2)return;
@@ -36,8 +40,7 @@ namespace Festival.Core
         void RevealIfAllVoted()
         {
             if(State.Phase!="CampReview"||ReviewRevealed(State))return;
-            var voters=State.Players.FindAll(p=>p.Connected);
-            for(int slot=0;slot<State.ReviewAwards.Count;slot++)foreach(var voter in voters)if(!State.ReviewVotes.Exists(v=>v.PlayerId==voter.Id&&v.Award==slot))return;
+            foreach(var voter in State.Players)if(voter.Connected&&!VotedOnEveryAward(State,voter.Id))return;
             var random=new ContentRandom(State.Seed);
             for(int slot=0;slot<State.ReviewAwards.Count;slot++)
             {
@@ -61,7 +64,7 @@ namespace Festival.Core
             for(int slot=0;slot<State.ReviewWinners.Count;slot++)
             {
                 var winner=Player(State.ReviewWinners[slot]);
-                if(winner!=null&&Array.IndexOf(CampFeatures.WorstAwards,State.ReviewAwards[slot])>=0)winner.Effects.Add(new ActiveEffect{Id="shot",InstanceId=Id("effect"),SourceCommandId="debrief",StartSeconds=State.SimulationSeconds,RemainingSeconds=ShotSeconds});
+                if(winner!=null&&TakesShot(State.ReviewAwards[slot]))winner.Effects.Add(new ActiveEffect{Id="shot",InstanceId=Id("effect"),SourceCommandId="debrief",StartSeconds=State.SimulationSeconds,RemainingSeconds=ShotSeconds});
             }
         }
     }

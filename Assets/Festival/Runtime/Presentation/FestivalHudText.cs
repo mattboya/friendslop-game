@@ -132,6 +132,70 @@ namespace Festival.Presentation
             return s.LevelIndex==0?"WEEKEND CLEARED":Festivals.Level(s.FestivalIndex,s.LevelIndex-1,s.EncoreTier).Name.ToUpperInvariant()+" CLEARED";
         }
 
+        /// <summary>The debrief card's heading: the verdict on the round just played and how it went.</summary>
+        public static string ReviewHeadline(RoundState s,PlayerState viewer)=>"THE VERY OFFICIAL ROUND REVIEW\n"+ReviewOutcome(s)+Dot+"SALES "+Money(s,viewer,s.ReviewSales).ToUpperInvariant()+Dot+"SURVIVORS "+s.ReviewSurvivors+Dot+"CAMP ANTICS "+s.ReviewAntics;
+
+        /// <summary>The debrief vote is open: every award drawn, not every vote in. The pointer is free to click a friend.</summary>
+        public static bool VoteOpen(RoundState s)=>s.Phase=="CampReview"&&!FestivalSimulation.ReviewRevealed(s);
+
+        /// <summary>An award's row on the local player's ballot, with their own pick. A view carries no one else's picks before the reveal.</summary>
+        public static string Ballot(RoundState s,string localId,int award)
+        {
+            var mine=s.ReviewVotes.Find(v=>v.PlayerId==localId&&v.Award==award);
+            return (award+1)+"  "+s.ReviewAwards[award].ToUpperInvariant()+Dot+(mine==null?"PICK A FRIEND":"YOUR PICK: "+CrewName(s,localId,mine.TargetId));
+        }
+
+        /// <summary>
+        /// The debrief card's foot: while the vote is open, how to vote and who has voted on every award (never whom they picked);
+        /// once the verdict has played, the host's key to open the shop.
+        /// </summary>
+        public static string ReviewStatus(RoundState s,string localId,double revealSeconds)
+        {
+            if(VoteOpen(s))
+            {
+                var voted=new List<string>();var waiting=new List<string>();
+                foreach(var p in s.Players)if(p.Connected)(FestivalSimulation.VotedOnEveryAward(s,p.Id)?voted:waiting).Add(CrewName(s,localId,p.Id));
+                return "CLICK A FRIEND FOR EACH AWARD, OR PRESS 1–3\n"+(voted.Count>0?"VOTED  "+string.Join(", ",voted)+Dot:"")+"WAITING ON  "+string.Join(", ",waiting);
+            }
+            if(!RevealDone(s,revealSeconds))return "";
+            return s.HostPlayerId==localId?"E  OPEN THE CAMP SHOP":"WAITING FOR THE HOST TO OPEN THE SHOP";
+        }
+
+        /// <summary>How long each award's winner waits for its drumroll, and then the shots.</summary>
+        public const double RevealStepSeconds=2;
+        /// <summary>
+        /// The verdict, revealSeconds after this client saw every vote in: the awards, a winner every RevealStepSeconds, then who
+        /// takes a shot (FestivalSimulation.TakesShot) as the next level starts. "" while the vote is open.
+        /// </summary>
+        public static string ReviewReveal(RoundState s,string localId,double revealSeconds)
+        {
+            if(s.Phase!="CampReview"||VoteOpen(s))return "";
+            if(s.ReviewAwards.Count==0)return "SOLO PRACTICE: NO AWARDS TONIGHT";
+            string text="AND THE AWARDS GO TO…";
+            // A winner's shots, in the order their awards were read out.
+            var drinkers=new List<string>();var shots=new List<int>();
+            for(int slot=0;slot<s.ReviewAwards.Count;slot++)
+            {
+                string winner=s.ReviewWinners[slot];
+                text+="\n"+s.ReviewAwards[slot].ToUpperInvariant()+Dot+(revealSeconds>=(slot+1)*RevealStepSeconds?CrewName(s,localId,winner):"?");
+                if(!FestivalSimulation.TakesShot(s.ReviewAwards[slot]))continue;
+                int at=drinkers.IndexOf(winner);if(at<0){drinkers.Add(winner);shots.Add(1);}else shots[at]++;
+            }
+            if(!RevealDone(s,revealSeconds))return text;
+            for(int i=0;i<drinkers.Count;i++)text+="\n"+(drinkers[i]==localId?"YOU TAKE":CrewName(s,localId,drinkers[i])+" TAKES")+(shots[i]==1?" A SHOT":" "+shots[i]+" SHOTS");
+            return text;
+        }
+        /// <summary>The verdict has played out to the shots, so the host may open the shop; straight away when solo practice drew no awards.</summary>
+        public static bool RevealDone(RoundState s,double revealSeconds)=>s.ReviewAwards.Count==0||revealSeconds>=(s.ReviewAwards.Count+1)*RevealStepSeconds;
+
+        /// <summary>A player's floating name, with the awards they won at the last debrief until that level's results.</summary>
+        public static string Nameplate(PlayerState p)=>p.Badge==""?p.Name:p.Name+Dot+p.Badge;
+
+        /// <summary>An amount of money as the viewer reads it (PLAYA-1): "$12" at Palm Mirage, "12 buttons" or their own odd object on Ember Playa.</summary>
+        public static string Money(RoundState s,PlayerState viewer,int amount)=>Festivals.CurrencyName(s.FestivalIndex,viewer.Ordinal,amount);
+
+        static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
+
         /// <summary>
         /// Who trips this level and on how many doses, from the public spin result, while the crew is out (the spinner names them
         /// before that, and camp still holds the last level's). Night 2 doses everyone, so the rest of the crew's doses follow,
