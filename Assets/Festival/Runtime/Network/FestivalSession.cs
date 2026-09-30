@@ -303,6 +303,7 @@ namespace Festival.Network
                 preview.Execute(player.Id,new GameCommand{Id="preview_ready",Kind="Ready"});
                 preview.Execute(friend.Id,new GameCommand{Id="preview_friend_ready",Kind="Ready"});
                 preview.Execute(player.Id,new GameCommand{Id="preview_start",Kind="Start"});
+                preview.Tick(FestivalSimulation.SpinSeconds+.1);
                 preview.Execute(player.Id,new GameCommand{Id="preview_loaded",Kind="MapReady"});
                 preview.Execute(friend.Id,new GameCommand{Id="preview_friend_loaded",Kind="MapReady"});
                 if(itemId=="stage_pass"){player.X=Catalog.StageTakeoverX;player.Z=Catalog.StageTakeoverZ;}
@@ -438,7 +439,8 @@ namespace Festival.Network
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=!spirit&&source.FriendFound?source.FriendPosition:new WorldPoint(0,0),
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,PrivateClue=FestivalSimulation.ClueHint(source,local),ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
-                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,Bodies=source.Bodies};
+                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
+                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies};
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
@@ -446,7 +448,7 @@ namespace Festival.Network
                 var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
                 copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
                 copy.WearingLittleSpoon=p.Inventory.Exists(item=>item.ItemId=="little_spoon"&&item.Count>0);
-                copy.VisualWideEyes=p.Effects.Exists(effect=>effect.Id=="lsd"||effect.Id=="mushrooms"||effect.Id=="ecstasy");
+                copy.VisualWideEyes=p.Effects.Exists(effect=>effect.Id=="lsd"||effect.Id=="mushrooms"||effect.Id=="ecstasy"||effect.Id==FestivalSimulation.DoseEffect);
                 copy.VisualRedEyes=p.Effects.Exists(effect=>effect.Id=="weed");
                 if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;}view.Players.Add(copy);
             }
