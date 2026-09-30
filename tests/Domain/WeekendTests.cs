@@ -17,6 +17,7 @@ public static class WeekendTests
         WeekendCarriesCashGearAndStash();
         FailureRestartsTheFestival();
         HostChoosesAnUnlockedFestival();
+        WinningNightTwoUnlocksOnTheResultsScreen();
     }
 
     static int sequence;
@@ -100,6 +101,23 @@ public static class WeekendTests
         Check(!Act(s,"a","ChooseFestival",0).Accepted&&Where(s)=="1/1/0","no switching mid-weekend");
         s.State.LevelIndex=0;s.State.Phase="Playing";
         Check(!Act(s,"a","ChooseFestival",0).Accepted&&s.State.FestivalIndex==1,"no switching once the level is under way");
+    }
+
+    // The host's profile saves unlocks every frame, so the unlock must land the moment Night 2 is won: a host who leaves from
+    // the results screen never presses NEXT CAMP. Reaches Results through a real launch and extract, not the Finish poke.
+    static void WinningNightTwoUnlocksOnTheResultsScreen()
+    {
+        var s=Crew(80);
+        for(int level=0;level<3;level++)Finish(s,"Success");
+        s.State.Phase="Shopping";Check(Where(s)=="0/3/0","setup: debrief over, at camp before Night 2");
+        foreach(var p in s.State.Players){p.X=0;p.Z=19;Act(s,p.Id,"Ready");}
+        s.Tick(5.2);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
+        Check(s.State.Phase=="Playing","setup: Night 2 under way");
+        s.State.FriendFound=true;s.State.FriendPosition=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
+        foreach(var p in s.State.Players){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
+        Check(Act(s,"a","Extract").Accepted,"the whole crew and the friend are at the gate");s.Tick(3.1);
+        Check(s.State.Phase=="Results"&&s.State.Result=="Success","setup: Night 2 is won");
+        Check(s.State.UnlockedFestivalCount==2,"winning Night 2 unlocks the next festival on the results screen, before anyone presses NEXT CAMP");
     }
 
     static void FestivalTable()

@@ -27,11 +27,11 @@ namespace Festival.Core
         void AdvanceWeekend(RoundState old)
         {
             var next=State;bool cleared=old.Result=="Success";bool continuing=cleared&&old.LevelIndex<Festivals.LevelCount-1;
+            if(cleared)UnlockNextFestival(old); // End already did it; keeps FestivalIndex<UnlockedFestivalCount for a round saved at Results before it did
             next.FestivalIndex=old.FestivalIndex;next.EncoreTier=old.EncoreTier;next.UnlockedFestivalCount=old.UnlockedFestivalCount;
             if(continuing)next.LevelIndex=old.LevelIndex+1;
             else if(cleared)
             {
-                next.UnlockedFestivalCount=Math.Min(Festivals.Count,Math.Max(old.UnlockedFestivalCount,old.FestivalIndex+2));
                 if(old.FestivalIndex+1<Festivals.Count)next.FestivalIndex=old.FestivalIndex+1;else{next.FestivalIndex=0;next.EncoreTier++;}
             }
             next.DurationSeconds=Festivals.For(next).DurationSeconds;
@@ -39,6 +39,9 @@ namespace Festival.Core
             next.StashCash=old.StashCash;
             foreach(var before in old.Players){var after=Player(before.Id);after.Cash=before.Cash;after.Inventory=before.Inventory;after.EquippedItemId=before.EquippedItemId;}
         }
+        // Clearing Night 2 of festival k unlocks k+1. End runs this on the win itself, so the host's profile saves the unlock
+        // even when they leave from the results screen instead of pressing NEXT CAMP.
+        static void UnlockNextFestival(RoundState s){if(s.LevelIndex==Festivals.LevelCount-1)s.UnlockedFestivalCount=Math.Min(Festivals.Count,Math.Max(s.UnlockedFestivalCount,s.FestivalIndex+2));}
         CommandResult ChooseFestival(PlayerState p,GameCommand c)
         {
             if(p.Id!=State.HostPlayerId)return Reject("Only the host picks the festival");
