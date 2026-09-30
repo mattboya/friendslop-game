@@ -6,10 +6,11 @@ namespace Festival.Core
     /// Influencers film the crowd, and a player on camera puts the wooks around them on alert. VIP zones are roped off to anyone
     /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.
     /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.
-    /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers see only 5 m.</summary>
+    /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers see only 5 m. Two
+    /// art cars crawl round slow loops, and whoever rides one rolls along with it, out of festivalgoers' sight.</summary>
     public sealed partial class FestivalSimulation
     {
-        public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel";
+        public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel",RideCarKind="RideCar";
 
         // As the crew leaves camp, once DealRoles has dealt the level's roles: on Palm Mirage the regular festivalgoer nearest the
         // guard post takes it up, and a fresh few of the others film.
@@ -46,12 +47,12 @@ namespace Festival.Core
         }
 
         bool InVip(float x,float z)=>Festivals.InVipZone(State.FestivalIndex,x,z);
-        // TryMove's check as p steps to (x,z). A Ferris wheel rider only looks around. At the festival the VIP ropes keep out anyone
+        // TryMove's check as p steps to (x,z). A Ferris wheel or art car rider only looks around. At the festival the VIP ropes keep out anyone
         // without a wristband; stepping out, or about inside, is always fine, so nobody handing theirs over inside is stranded,
         // and spirits float through.
         bool MayStep(PlayerState p,float x,float z)
         {
-            if(OnWheel(State,p.Id))return Distance(p.X,p.Z,x,z)<=.001;
+            if(OnWheel(State,p.Id)||ArtCarOf(State,p.Id)>=0)return Distance(p.X,p.Z,x,z)<=.001;
             return State.Phase!="Playing"||p.Life=="Spirit"||!InVip(x,z)||InVip(p.X,p.Z)||Count(p,VipWristband)>0;
         }
         // A sale made inside a VIP zone, to a buyer inside, pays VipPayoutFactor times: one over the rope pays as usual.
@@ -105,5 +106,25 @@ namespace Festival.Core
         }
         // Festivalgoers see SightRange, down to DustStormSightRange in a storm; cops keep their eyes.
         double SightRange(NpcState n)=>n.Kind=="Wook"&&DustStorm(State)?Festivals.DustStormSightRange:Festivals.SightRange;
+        /// <summary>Which art car playerId is riding (0 to ArtCars-1), or -1. Reads a client's view too, since a view carries its
+        /// own player's interactions; everyone else sees a rider's VisualPose "RideCar".</summary>
+        public static int ArtCarOf(RoundState s,string playerId)=>Car(s.Interactions.Find(i=>i.PlayerId==playerId&&i.Kind==RideCarKind&&i.Status=="Active"));
+        static int Car(InteractionState ride)=>ride!=null&&int.TryParse(ride.TargetId,out int car)&&car>=0&&car<Festivals.ArtCars?car:-1;
+        // Anyone beside a passing car climbs aboard with their hands free, and rides until they hop off (Cancel) or the level
+        // ends. Up there they roll with the car (RideArtCars), can't walk about (MayStep), and festivalgoers can't see them
+        // (Hidden); cops still can.
+        CommandResult RideCar(PlayerState p)
+        {
+            if(State.FestivalIndex!=Festivals.PlayaFestival)return Reject("There are no art cars at this festival");
+            int car=-1;for(int k=0;k<Festivals.ArtCars&&car<0;k++){var at=Festivals.ArtCarAt(k,State.ElapsedSeconds);if(Near(p,at.X,at.Z,Festivals.ArtCarReach))car=k;}
+            if(car<0)return Reject("Catch an art car as it rolls past");
+            if(p.DragTargetId!=""||p.CarryBodyId!="")return Reject("Let go of your friend before you climb aboard");
+            NewInteraction(p,RideCarKind,car.ToString(),State.DurationSeconds);RideArtCar(p,car);
+            return Ok("Aboard the art car: the crowd can't see you up here. Hop off any time");
+        }
+        // Every Playing step, before anyone looks around, each rider is wherever their car has rolled to.
+        void RideArtCars(){foreach(var ride in State.Interactions){var p=ride.Status=="Active"&&ride.Kind==RideCarKind?Player(ride.PlayerId):null;if(p!=null&&Car(ride)>=0)RideArtCar(p,Car(ride));}}
+        void RideArtCar(PlayerState p,int car){var at=Festivals.ArtCarAt(car,State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;}
+        bool Hidden(NpcState n,PlayerState p)=>n.Kind=="Wook"&&p.InteractionId!=""&&ArtCarOf(State,p.Id)>=0;
     }
 }

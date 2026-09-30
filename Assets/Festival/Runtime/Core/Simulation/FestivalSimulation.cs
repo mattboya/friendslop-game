@@ -97,6 +97,7 @@ namespace Festival.Core
                 case "Talk":return Talk(p,c);
                 case "ConfirmChat":case "ConfirmDance":return BeginConfirm(p,c);
                 case RideWheelKind:return RideWheel(p);
+                case RideCarKind:return RideCar(p);
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);

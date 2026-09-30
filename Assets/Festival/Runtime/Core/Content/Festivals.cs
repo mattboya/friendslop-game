@@ -48,6 +48,24 @@ namespace Festival.Core
         // level), on a schedule seeded by the level's spin. Festivalgoers see SightRange, and only DustStormSightRange in a storm.
         public const int StormMinSeconds=20,StormMaxSeconds=40,CalmMinSeconds=60,CalmMaxSeconds=120;
         public const float SightRange=12,DustStormSightRange=5;
+        // Two art cars crawl round their loops at ArtCarSpeed, one on the lawn each side of the main path, between the bunting and
+        // the crowd, clear of trees, totems and the crowd's standing spots. Corners as x, z pairs: car 0 heads north up its
+        // inner side, car 1 south. RideCar boards the one within ArtCarReach.
+        public const int ArtCars=2;
+        public const float ArtCarSpeed=1.2f,ArtCarReach=3;
+        static readonly float[][] ArtCarLoops={new float[]{-8,-10,-8,8,-13,8,-13,-10},new float[]{8,8,8,-10,13,-10,13,8}};
+        /// <summary>Where art car `car` is `seconds` into the level. It depends on the level clock alone, so a client works it out
+        /// from its own view exactly as the host does.</summary>
+        public static WorldPoint ArtCarAt(int car,double seconds)
+        {
+            var loop=ArtCarLoops[car];int corners=loop.Length/2;double lap=0;
+            for(int k=0;k<corners;k++)lap+=Leg(loop,k);
+            double d=ArtCarSpeed*seconds%lap;int at=0;
+            while(at<corners-1&&d>Leg(loop,at)){d-=Leg(loop,at);at++;}
+            int next=(at+1)%corners;float t=(float)Math.Min(1,d/Leg(loop,at));
+            return new WorldPoint(loop[2*at]+(loop[2*next]-loop[2*at])*t,loop[2*at+1]+(loop[2*next+1]-loop[2*at+1])*t);
+        }
+        static double Leg(float[] loop,int k){int next=(k+1)%(loop.Length/2);double dx=loop[2*next]-loop[2*k],dz=loop[2*next+1]-loop[2*k+1];return Math.Sqrt(dx*dx+dz*dz);}
         /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
         public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}

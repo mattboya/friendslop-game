@@ -6,7 +6,7 @@ using Festival.Core;
 
 // PLAYA-1: Ember Playa (festival 1) has four twists, and Palm Mirage has none of them. Money reads as odd objects, a different
 // set for each player, over the same economy. Dust storms of 20-40 s blow on a seeded schedule and cut festivalgoers' sight
-// from 12 m to 5 m.
+// from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight.
 public static class PlayaTwistTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -19,7 +19,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutFestivalgoersSightTo5m})
+            StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" playa twist test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -136,5 +136,83 @@ public static class PlayaTwistTests
         Check(Spotted(Sighting(1,storm,4.9)).wook,"a sprinter 4.9 m away is still spotted in a storm");
         Check(!Spotted(Sighting(1,storm,5.1)).wook,"5.1 m away is not");
         Check(Spotted(Sighting(0,storm,6)).wook,"Palm Mirage has no dust, so the same moment there is clear");
+    }
+
+    static double Dist(WorldPoint a,WorldPoint b)=>Math.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Z-b.Z)*(a.Z-b.Z));
+    static bool At(PlayerState p,WorldPoint at)=>Dist(new WorldPoint(p.X,p.Z),at)<1e-3;
+
+    static void ArtCarsCrawlRoundTheirLoops()
+    {
+        Check(Festivals.ArtCars==2,"two art cars roll round Ember Playa");
+        Check(Festivals.ArtCarSpeed>0&&Festivals.ArtCarSpeed<=1.5,"at a slow crawl, not "+Festivals.ArtCarSpeed+" m/s");
+        var starts=new List<WorldPoint>();
+        for(int car=0;car<Festivals.ArtCars;car++)
+        {
+            var start=Festivals.ArtCarAt(car,0);var last=start;double lap=-1,travelled=0;starts.Add(start);
+            for(int tick=1;tick<=1200&&lap<0;tick++)
+            {
+                var at=Festivals.ArtCarAt(car,tick/10.0);double step=Dist(last,at);travelled+=step;last=at;
+                Check(step<=Festivals.ArtCarSpeed*.1+1e-4,"car "+car+" never jumps: "+step+" m in a tenth of a second at "+tick/10.0+" s");
+                Check(Math.Abs(at.X)<35&&Math.Abs(at.Z)<35,"car "+car+" stays on the festival grounds, at ("+at.X+", "+at.Z+")");
+                if(tick>100&&Dist(at,start)<=Festivals.ArtCarSpeed*.1)lap=tick/10.0;
+            }
+            Check(lap>0,"car "+car+" comes back round to where it started within two minutes");
+            Check(travelled>=lap*Festivals.ArtCarSpeed*.97,"car "+car+" keeps rolling all the way round: "+travelled+" m in "+lap+" s");
+            Check(Dist(Festivals.ArtCarAt(car,lap+7),Festivals.ArtCarAt(car,7))<=Festivals.ArtCarSpeed*.1+1e-3&&Dist(Festivals.ArtCarAt(car,lap+7),Festivals.ArtCarAt(car,lap))>1,"and rolls on round again");
+        }
+        Check(Dist(starts[0],starts[1])>10,"the two cars roll on separate loops");
+    }
+
+    // A hand-built Ember Playa Day 1, ten seconds in and well before any storm: p0, with stock in hand, stands a metre from art
+    // car 0, and p1 stands a metre from art car 1. Nobody from the crowd is around yet.
+    static FestivalSimulation Cars(int festival=1)
+    {
+        var s=new FestivalSimulation(3);s.AddPlayer("p0","P0");s.AddPlayer("p1","P1");
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.Phase="Playing";s.State.SpinSeed=StormSpin;s.State.ElapsedSeconds=10;
+        s.State.Npcs.Clear();
+        for(int k=0;k<2;k++){var car=Festivals.ArtCarAt(k,10);var p=s.Player("p"+k);p.X=car.X+1;p.Z=car.Z;}
+        s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        return s;
+    }
+    // A festivalgoer and a cop turn up 2 m north of p, looking straight at them, while p sprints.
+    static void Watched(FestivalSimulation s,PlayerState p)
+    {
+        s.State.Npcs.Clear();p.SprintUntil=1e9;
+        s.State.Npcs.Add(new NpcState{Id="wook",X=p.X,Z=p.Z+2,Yaw=180});s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="Patrol",X=p.X+.5f,Z=p.Z+2,Yaw=180});
+    }
+    static double Heat(FestivalSimulation s,string npc,string player)=>s.State.Npcs.Find(n=>n.Id==npc).Observers.Find(o=>o.PlayerId==player)?.Suspicion??0;
+
+    static void ArtCarsCarryRidersOutOfSight()
+    {
+        var far=Cars();far.Player("p0").X+=2.2f;
+        Check(!Act(far,"p0","RideCar").Accepted&&FestivalSimulation.ArtCarOf(far.State,"p0")<0,"an art car is boarded from beside it, not 3.2 m off");
+        var reach=Cars();reach.Player("p0").X+=1.9f;
+        Check(Act(reach,"p0","RideCar").Accepted,"2.9 m off is close enough");
+        Check(!Act(Cars(0),"p0","RideCar").Accepted,"Palm Mirage has no art cars");
+        var dragging=Cars();dragging.Player("p1").Life="Downed";dragging.Player("p0").DragTargetId="p1";
+        Check(!Act(dragging,"p0","RideCar").Accepted,"nobody climbs aboard dragging a friend");
+        var carrying=Cars();carrying.Player("p1").Life="Spirit";carrying.State.Bodies.Add(new BodyState{PlayerId="p1",X=carrying.Player("p0").X,Z=carrying.Player("p0").Z});carrying.Player("p0").CarryBodyId="p1";
+        Check(!Act(carrying,"p0","RideCar").Accepted,"or carrying a body");
+
+        var s=Cars();var p=s.Player("p0");var q=s.Player("p1");
+        var boarded=Act(s,"p0","RideCar");
+        Check(boarded.Accepted&&FestivalSimulation.ArtCarOf(s.State,"p0")==0&&At(p,Festivals.ArtCarAt(0,s.State.ElapsedSeconds)),"beside art car 0, p0 climbs aboard: "+boarded.Reason);
+        Check(Act(s,"p1","RideCar").Accepted&&FestivalSimulation.ArtCarOf(s.State,"p1")==1,"beside art car 1, p1 climbs aboard that one");
+        s.Tick(5);
+        Check(At(p,Festivals.ArtCarAt(0,s.State.ElapsedSeconds))&&At(q,Festivals.ArtCarAt(1,s.State.ElapsedSeconds))&&!At(p,Festivals.ArtCarAt(0,10)),"five seconds on, each rider has rolled on with their car");
+        float x=p.X,z=p.Z;
+        Check(!s.TryMove("p0",x+.05f,z,0,.1)&&p.X==x&&p.Z==z,"a rider can't walk about on the moving car");
+        Check(s.TryMove("p0",x,z,90,.1)&&p.Yaw==90,"but can look around");
+        Check(!Act(s,"p0","Extract").Accepted,"and does nothing else up there");
+        Watched(s,p);s.Tick(.1);
+        Check(Heat(s,"wook","p0")==0,"a festivalgoer looking right at a rider sprinting 2 m away doesn't see them");
+        Check(s.State.Npcs.Find(n=>n.Id=="cop").Evidence.Exists(e=>e.PlayerId=="p0"),"a cop does, and spots the stock");
+        s.Tick(20);Check(FestivalSimulation.ArtCarOf(s.State,"p0")==0&&At(p,Festivals.ArtCarAt(0,s.State.ElapsedSeconds)),"the ride goes on until the rider hops off");
+        var off=Act(s,"p0","Cancel");float offX=p.X,offZ=p.Z;
+        Check(off.Accepted&&FestivalSimulation.ArtCarOf(s.State,"p0")<0,"p0 hops off: "+off.Reason);
+        s.Tick(1);Check(p.X==offX&&p.Z==offZ,"and stays where they hopped off as the car rolls on");
+        Check(s.TryMove("p0",p.X+.05f,p.Z,0,.1),"walking again");
+        Watched(s,p);s.Tick(.1);
+        Check(Heat(s,"wook","p0")>0,"back on foot, festivalgoers see them sprint again");
     }
 }
