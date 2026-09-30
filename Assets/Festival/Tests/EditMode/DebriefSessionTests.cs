@@ -33,5 +33,14 @@ namespace Festival.Tests
             Assert.That(revealed.ReviewVotes.Exists(v=>v.PlayerId=="friend"&&v.TargetId=="friend"),Is.True,"after the reveal every pick is public");
             Assert.That(revealed.Players.Find(p=>p.Id=="friend").Badge,Is.EqualTo(string.Join(", ",game.State.ReviewAwards)),"everyone sees the winner's badge");
         }
+
+        // A build from before festival weekends sends ReviewVote with no friend named. The host refuses those votes, and the campfire
+        // waits for every connected player's vote, so one old client would hold the debrief open forever: it must not get in.
+        [Test] public void ABuildFromBeforeWeekendsCannotJoin()
+        {
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":1}"),Is.False,"a pre-weekend client is told its version is incompatible");
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"New\",\"Token\":\"\",\"Protocol\":"+FestivalSession.ProtocolVersion+"}"),Is.True,"this build's own clients join");
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"New\",\"Token\":\""+new string('t',65)+"\",\"Protocol\":"+FestivalSession.ProtocolVersion+"}"),Is.False,"an oversized token is still refused");
+        }
     }
 }

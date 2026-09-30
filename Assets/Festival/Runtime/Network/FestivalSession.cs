@@ -14,7 +14,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace Festival.Network
 {
-    [Serializable] internal sealed class Hello { public string Name="Friend", Token=""; public int Protocol=1; }
+    [Serializable] internal sealed class Hello { public string Name="Friend", Token=""; public int Protocol=FestivalSession.ProtocolVersion; }
     [Serializable] internal sealed class Welcome { public string PlayerId="", Token=""; }
     [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); }
     [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint; public int Sequence; }
@@ -24,6 +24,10 @@ namespace Festival.Network
     /// <summary>Native Unity Transport session. Host owns all rules; clients submit input and render filtered state.</summary>
     public sealed class FestivalSession : MonoBehaviour
     {
+        // The wire contract a client's hello names. Bump it whenever snapshots or commands change meaning, so a mismatched build
+        // is turned away with "Incompatible game version." rather than joining a game it cannot play.
+        // 2: festival weekends (the Spinning phase, the weekend's new commands, and a ReviewVote that names a friend).
+        public const int ProtocolVersion=2;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
@@ -157,14 +161,18 @@ namespace Festival.Network
             value=(value??"Friend").Trim().Replace("<","").Replace(">","").Replace("\n","").Replace("\r","");
             return value.Length==0?"Friend":value.Substring(0,Math.Min(24,value.Length));
         }
+        // A joining client's hello, or null when its build speaks another protocol or its token is malformed.
+        static Hello ReadHello(string json){var hello=JsonUtility.FromJson<Hello>(json);return hello==null||hello.Protocol!=ProtocolVersion||hello.Token==null||hello.Token.Length>64?null:hello;}
+        /// <summary>Whether the host lets in a client whose connection payload is this hello JSON.</summary>
+        public static bool AcceptsHello(string json)=>ReadHello(json)!=null;
         private void Approve(NetworkManager.ConnectionApprovalRequest request,NetworkManager.ConnectionApprovalResponse response)
         {
             response.CreatePlayerObject=false;response.Pending=false;
             try
             {
                 if(request.Payload==null||request.Payload.Length>1024)throw new ArgumentException("Invalid connection request.");
-                var hello=JsonUtility.FromJson<Hello>(Encoding.UTF8.GetString(request.Payload));
-                if(hello==null||hello.Protocol!=1||hello.Token==null||hello.Token.Length>64)throw new ArgumentException("Incompatible game version.");
+                var hello=ReadHello(Encoding.UTF8.GetString(request.Payload));
+                if(hello==null)throw new ArgumentException("Incompatible game version.");
                 bool reconnect=hello.Token!=""&&tokens.TryGetValue(hello.Token,out var unused);
                 if(reconnect && peers.ContainsValue(tokens[hello.Token]))throw new ArgumentException("This session identity is already connected.");
                 if(!reconnect && simulation.State.Phase!="Shopping" && simulation.State.Phase!="Lobby")throw new ArgumentException("Round in progress. Join the next round.");
