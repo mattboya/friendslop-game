@@ -28,7 +28,7 @@ public static class TripperTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseSpinnerWeights,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
-            DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewReadsBothTotems,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
+            DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewReadsBothTotems,DoseLeavesBothConsumableSlots,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" tripper test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -181,6 +181,19 @@ public static class TripperTests
                 s.Tick(3.2);Check(s.State.CluesRead==clue+1,"the read finishes while the dosed friend stays close (totem "+clue+", seed "+seed+")");
             }
         }
+    }
+
+    // The old stock effects keep working as optional consumables: the spinner's dose does not use up one of the two slots.
+    static void DoseLeavesBothConsumableSlots()
+    {
+        var s=Crew(21,1);Spin(s);Play(s);var p=s.Player("p0");
+        p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+        Check(Act(s,"p0","Consume","stock_lsd").Accepted,"the tripper takes a Prism tab on top of the dose");
+        var caps=Act(s,"p0","Consume","stock_mushrooms");
+        Check(caps.Accepted&&Dose(p)>=1&&p.Effects.Exists(e=>e.Id=="mushrooms"),"and Moon caps too, as a sober player could: "+caps.Reason);
+        var shot=Crew(22,1);Spin(shot);Play(shot);var q=shot.Player("p0");q.Effects.Add(new ActiveEffect{Id="shot",InstanceId="debrief-shot",RemainingSeconds=60});
+        q.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});q.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+        Check(Act(shot,"p0","Consume","stock_lsd").Accepted&&!Act(shot,"p0","Consume","stock_mushrooms").Accepted,"two effects besides the dose is still the limit (a debrief shot plus a Prism tab)");
     }
 
     static void MedicalCannotCureTheDose()
