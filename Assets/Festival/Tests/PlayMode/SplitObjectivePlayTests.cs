@@ -10,7 +10,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    public sealed class SplitObjectivePlayTests
+    public sealed class SplitObjectivePlayTests:FestivalPlayModeTest
     {
         GameObject world,hud;FestivalSession session;FestivalHud view;FestivalSimulation sim;PlayerState player;
 
@@ -20,13 +20,13 @@ namespace Festival.Tests
 
         // A real hosted round of five on Night 1: the host plus four friends without clients of their own, who then wait at
         // the way back to camp while the host plays in an empty crowd.
-        IEnumerator HostBigNight(ushort port)
+        IEnumerator HostBigNight()
         {
             world=new GameObject("Split objective world");world.AddComponent<FestivalWorld>();yield return null;
             hud=new GameObject("Split objective HUD");
             session=hud.AddComponent<FestivalSession>();view=hud.AddComponent<FestivalHud>();
             yield return null;
-            session.Host("Tester",port);
+            session.Host("Tester",HostPort);
             float deadline=Time.realtimeSinceStartup+30;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -60,7 +60,7 @@ namespace Festival.Tests
         // both friends, and E recruits them.
         [UnityTest]public IEnumerator ABigCrewSeesAndRecruitsTheSecondFriend()
         {
-            yield return HostBigNight(8575);
+            yield return HostBigNight();
             // The host right beside the second friend before their trail ends.
             var second=sim.State.SecondFriend;
             player.X=second.Position.X+1;player.Z=second.Position.Z;
@@ -89,7 +89,7 @@ namespace Festival.Tests
         // the 2.5 m reach). "Recruit missing friend" is offered and E recruits the first friend, not the second again.
         [UnityTest]public IEnumerator TheEscortOfOneFriendRecruitsTheOther()
         {
-            yield return HostBigNight(8576);
+            yield return HostBigNight();
             BothTrailsFollowed();var second=sim.State.SecondFriend;second.Found=true;second.LeaderId=player.Id;
             var first=sim.State.FriendPosition;player.X=first.X+2.2f;player.Z=first.Z;second.Position.X=first.X+3.6f;second.Position.Z=first.Z;
             yield return new WaitForSeconds(.6f);
@@ -102,7 +102,7 @@ namespace Festival.Tests
         // offers what E does: recruit the lost friend, not take over the mate's escort.
         [UnityTest]public IEnumerator EOffersAndRecruitsTheLostFriendBesideAnEscort()
         {
-            yield return HostBigNight(8577);
+            yield return HostBigNight();
             BothTrailsFollowed();var second=sim.State.SecondFriend;var mate=sim.State.Players.Find(p=>p!=player);
             sim.State.FriendFound=true;sim.State.FriendLeaderId=mate.Id;
             var spot=second.Position;player.X=spot.X+2.2f;player.Z=spot.Z;sim.State.FriendPosition.X=spot.X+3.2f;sim.State.FriendPosition.Z=spot.Z;mate.X=spot.X+4.6f;mate.Z=spot.Z;

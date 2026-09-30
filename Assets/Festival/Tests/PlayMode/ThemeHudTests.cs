@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    public sealed class ThemeHudTests
+    public sealed class ThemeHudTests:FestivalPlayModeTest
     {
         // THEME-1's real-drug words (the same list as tests/Domain/ThemeTests.cs), matched in any case.
         private static readonly string[] Banned={"lsd","acid","mushroom","shroom","ecstasy","molly","mdma","ketamine","weed","marijuana","cannabis","cocaine","drug"};
@@ -27,7 +27,7 @@ namespace Festival.Tests
             var failures=new List<string>();
             try
             {
-                session.Host("Tester",17937);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -89,7 +89,7 @@ namespace Festival.Tests
             var failures=new List<string>();
             try
             {
-                session.Host("Tester",17939);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -136,7 +136,7 @@ namespace Festival.Tests
             var failures=new List<string>();
             try
             {
-                session.Host("Tester",17938);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

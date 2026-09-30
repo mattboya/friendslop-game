@@ -11,7 +11,7 @@ using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
-    public sealed class NightLightingSessionTests
+    public sealed class NightLightingSessionTests:FestivalPlayModeTest
     {
         // LIGHT-1: a hosted game switches the world to night lighting when Night 1 starts, brightened by the host's own dose.
         [UnityTest]public IEnumerator NightLevelLightsNeonAndTheHostsDoseInTheRunningGame()
@@ -23,7 +23,7 @@ namespace Festival.Tests
             {
                 // The session drives the first world it finds, so a world leaked by an earlier test would take the lighting.
                 Assert.That(Object.FindObjectsByType<FestivalWorld>(FindObjectsSortMode.None),Has.Length.EqualTo(1),"setup: a world leaked from an earlier test");
-                session.Host("Tester",8583);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

@@ -11,7 +11,7 @@ using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
-    public sealed class PatrolNavigationTests
+    public sealed class PatrolNavigationTests:FestivalPlayModeTest
     {
         const double HostTick=1.0/30;
         // ESC-1: the host moves cops over the festival's navigation mesh. A patrol waypoint off the walkable ground, or a leg

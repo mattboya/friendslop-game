@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    public sealed class HudVitalsPlayTests
+    public sealed class HudVitalsPlayTests:FestivalPlayModeTest
     {
         // TRIP-1: the player card draws its crowd or security warning whole at 1920x1080, after the cash, stash, sales and life,
         // for a dosed tripper mid-day with a cop about to detain them and on Night 2 with a debrief shot on top. The effects after
@@ -34,7 +34,7 @@ namespace Festival.Tests
             }
             try
             {
-                session.Host("Tester",8653);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

@@ -10,7 +10,7 @@ using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
-    public sealed class TwistVisualsSessionTests
+    public sealed class TwistVisualsSessionTests:FestivalPlayModeTest
     {
         // TWISTVIS-1: in a hosted Palm Mirage level the running game raises the festival's twists and films through every
         // influencer's frame.
@@ -23,7 +23,7 @@ namespace Festival.Tests
             {
                 // The session drives the first world it finds, so a world leaked by an earlier test would take the twists.
                 Assert.That(Object.FindObjectsByType<FestivalWorld>(FindObjectsSortMode.None),Has.Length.EqualTo(1),"setup: a world leaked from an earlier test");
-                session.Host("Tester",8606);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

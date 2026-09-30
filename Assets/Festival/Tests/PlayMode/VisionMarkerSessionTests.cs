@@ -10,7 +10,7 @@ using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
-    public sealed class VisionMarkerSessionTests
+    public sealed class VisionMarkerSessionTests:FestivalPlayModeTest
     {
         // VISION-1: in a hosted game the solo host is the tripper, so their client draws every vision, over the festivalgoers'
         // drawn bodies; leaving the game clears them.
@@ -21,7 +21,7 @@ namespace Festival.Tests
             yield return null;
             try
             {
-                session.Host("Tester",8605);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -61,10 +61,10 @@ namespace Festival.Tests
 
         // VISION-1: a truth's shadow is one of the tells. The festival sun sits only 14 degrees up (and is dimmed at night), so a
         // marker's real shadow lands about 10 m away; the shadow the tripper learns from has to lie at the festivalgoer's feet.
-        [UnityTest]public IEnumerator ByDayTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(0,8627);
-        [UnityTest]public IEnumerator ByNightTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(1,8628);
+        [UnityTest]public IEnumerator ByDayTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(0);
+        [UnityTest]public IEnumerator ByNightTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(1);
 
-        private static IEnumerator ShadowAtTheFeet(int level,ushort port)
+        private static IEnumerator ShadowAtTheFeet(int level)
         {
             string when=level==0?"Day 1":"Night 1";
             var world=new GameObject("Vision shadow world");world.AddComponent<FestivalWorld>();yield return null;
@@ -72,7 +72,7 @@ namespace Festival.Tests
             yield return null;
             try
             {
-                session.Host("Tester",port);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

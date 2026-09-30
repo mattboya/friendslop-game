@@ -12,7 +12,7 @@ using UnityEngine.UI;
 namespace Festival.Tests
 {
     // SPIN-1 in a running scene: the wheels cover the screen, then the camera cuts to the tripper taking the dose and reacting.
-    public sealed class SpinnerTakeTests
+    public sealed class SpinnerTakeTests:FestivalPlayModeTest
     {
         static Transform Bone(FestivalCharacter actor,string name)=>actor.GetComponentsInChildren<Transform>().First(t=>t.name==name);
         static float Height(FestivalCharacter actor,string bone)=>actor.transform.InverseTransformPoint(Bone(actor,bone).position).y;
@@ -52,7 +52,7 @@ namespace Festival.Tests
             yield return null;
             try
             {
-                session.Host("Tester",8607);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -127,7 +127,7 @@ namespace Festival.Tests
             yield return null;
             try
             {
-                session.Host("Tester",8609);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -176,7 +176,7 @@ namespace Festival.Tests
             yield return null;
             try
             {
-                session.Host("Tester",8611);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

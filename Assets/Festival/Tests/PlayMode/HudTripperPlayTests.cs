@@ -13,7 +13,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    public sealed class HudTripperPlayTests
+    public sealed class HudTripperPlayTests:FestivalPlayModeTest
     {
         // HUD-2: the running HUD puts FestivalHudText's tripper lines on screen. Hosts a real two-player Day 1, pins the spin,
         // and reads what a player sees: who trips and on how many doses, the tripper's one hint, the checks beside a festivalgoer
@@ -57,7 +57,7 @@ namespace Festival.Tests
             const string GearKeys="GEAR   /   1–3 EQUIP     Q USE     G DROP",GearKeysInChat="GEAR   /   Q USE     G DROP";
             try
             {
-                session.Host("Tester",8581);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
@@ -201,7 +201,7 @@ namespace Festival.Tests
             var failures=new List<string>();
             try
             {
-                session.Host("Tester",8591);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

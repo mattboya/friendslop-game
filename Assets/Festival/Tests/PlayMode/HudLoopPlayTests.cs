@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    public sealed class HudLoopPlayTests
+    public sealed class HudLoopPlayTests:FestivalPlayModeTest
     {
         // HUD-1: the running HUD puts FestivalHudText's lines on screen. Hosts a real two-player round and
         // reads the labels a player sees on Day 1, on Night 2 with a body out in the field, and at results.
@@ -38,7 +38,7 @@ namespace Festival.Tests
             void PressE()=>((System.Action)primary.GetValue(view))?.Invoke();
             try
             {
-                session.Host("Tester",8580);
+                session.Host("Tester",HostPort);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);

@@ -7,7 +7,7 @@ using UnityEngine.AI;
 
 namespace Festival.Tests
 {
-    public sealed class WorldLifecycleTests
+    public sealed class WorldLifecycleTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator BodyAnimationPreservesAuthoritativeFacing()
         {
