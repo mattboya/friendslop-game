@@ -17,8 +17,9 @@ namespace Festival.Core
         BodyState Carried(PlayerState p)=>p.Connected&&p.Life=="Alive"&&p.CarryBodyId!=""?Body(p.CarryBodyId):null;
         List<PlayerState> Carriers(BodyState b)=>State.Players.FindAll(p=>Carried(p)==b);
         // Bodies are kept in death order, so the first one is the earliest death still lying out there.
-        // It moves with one carrier; every later body needs two.
-        bool BodyMoves(BodyState b,int carriers)=>carriers>=2||carriers==1&&State.Bodies.IndexOf(b)==0;
+        // It moves with one carrier; every later body needs two. Public and static so the HUD's carry prompts read the same rule from a view.
+        public static int CarrierCount(RoundState s,BodyState b)=>s.Players.FindAll(p=>p.Connected&&p.Life=="Alive"&&p.CarryBodyId==b.PlayerId).Count;
+        public static bool BodyMoves(RoundState s,BodyState b){int carriers=CarrierCount(s,b);return carriers>=2||carriers==1&&s.Bodies.IndexOf(b)==0;}
         /// <summary>Top speed for p in m/s while carrying a body; infinite with empty hands. The session moves players at this cap too.</summary>
         public double CarrySpeed(PlayerState p){var b=Carried(p);return b==null?double.PositiveInfinity:Carriers(b).Count>1?PairCarrySpeed:SoloCarrySpeed;}
         /// <summary>Home: inside the camp gate alive or downed, or dead with the body carried inside. Detained is never home.</summary>
@@ -38,7 +39,7 @@ namespace Festival.Core
         {
             var b=Carried(p);if(b==null)return true;
             var carriers=Carriers(b);float bx=b.X,bz=b.Z;
-            if(BodyMoves(b,carriers.Count)){bx=bz=0;foreach(var c in carriers){bx+=c==p?x:c.X;bz+=c==p?z:c.Z;}bx/=carriers.Count;bz/=carriers.Count;}
+            if(BodyMoves(State,b)){bx=bz=0;foreach(var c in carriers){bx+=c==p?x:c.X;bz+=c==p?z:c.Z;}bx/=carriers.Count;bz/=carriers.Count;}
             if(Distance(x,z,bx,bz)>CarryReach)return false;
             b.X=bx;b.Z=bz;return true;
         }
@@ -47,7 +48,7 @@ namespace Festival.Core
             var b=Body(c.TargetId);
             if(b!=null&&p.CarryBodyId==b.PlayerId){p.CarryBodyId="";return Ok("Put the body down");}
             if(b==null||p.DragTargetId!=""||Distance(p.X,p.Z,b.X,b.Z)>CarryReach||Carriers(b).Count>=2)return Reject("Reach a body with free hands; two can carry one");
-            p.CarryBodyId=b.PlayerId;return Ok(BodyMoves(b,Carriers(b).Count)?"Carrying them home":"Too heavy alone: someone has to take the other end");
+            p.CarryBodyId=b.PlayerId;return Ok(BodyMoves(State,b)?"Carrying them home":"Too heavy alone: someone has to take the other end");
         }
         CommandResult DropBody(PlayerState p){if(p.CarryBodyId=="")return Reject("You are not carrying anyone");p.CarryBodyId="";return Ok("Put the body down");}
     }
