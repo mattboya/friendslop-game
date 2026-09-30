@@ -861,9 +861,10 @@ namespace Festival.Presentation
             }
             if(state.Phase=="CampReview")
             {
-                // The debrief card says how to vote and who has; E opens the shop for the host once the verdict has played out.
+                // The debrief card says how to vote and who has; E opens the shop for the host once the verdict has played out. The
+                // card's foot already reads "E  OPEN THE CAMP SHOP" (ReviewStatus), so the prompt panel stays empty and E stays bound.
                 bool done=!FestivalHudText.VoteOpen(state)&&FestivalHudText.RevealDone(state,RevealSeconds(state));
-                if(done&&session.IsHost)SetPromptAction("E  OPEN CAMP SHOP",()=>session.Command("FinishReview"));
+                if(done&&session.IsHost)SetPromptAction("",()=>session.Command("FinishReview"));
                 else SetPromptAction("",null);
                 FinishActions();return;
             }

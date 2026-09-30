@@ -119,5 +119,25 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.Nameplate(view,view.Players.Find(p=>p.Id=="ash")),Is.EqualTo("Ash  •  "+awards[2]),"the best award is worn too");
             Assert.That(FestivalHudText.Nameplate(view,new PlayerState{Name="Kim"}),Is.EqualTo("Kim"),"no award, just the name");
         }
+
+        [Test] public void TheObjectiveCardStopsAskingForVotesOnceTheyAreIn()
+        {
+            var game=Game(("ash","Ash"),("sam","Sam"));
+            var sam=FestivalSession.ViewFor(game,"sam");var you=sam.Players.Find(p=>p.Id=="sam");
+            Assert.That(FestivalHudText.ObjectiveTitle(sam,you),Is.EqualTo("CAMP DEBRIEF • VOTE BEFORE SHOPPING"));
+            Assert.That(FestivalHudText.ObjectiveDetail(sam,you),Is.EqualTo("Click a friend for each award, or press 1, 2 or 3. Then the host opens the camp shop."));
+            Ballot(game,"ash","sam",0,1);Ballot(game,"ash","ash",2);Ballot(game,"sam","sam",0,1);Ballot(game,"sam","ash",2);
+            // The ballot is gone and the verdict is playing: nothing left to click.
+            sam=FestivalSession.ViewFor(game,"sam");you=sam.Players.Find(p=>p.Id=="sam");
+            var ash=FestivalSession.ViewFor(game,"ash");var host=ash.Players.Find(p=>p.Id=="ash");
+            Assert.That(FestivalHudText.ObjectiveTitle(sam,you),Is.EqualTo("CAMP DEBRIEF • THE VERDICT"));
+            Assert.That(FestivalHudText.ObjectiveDetail(sam,you),Is.EqualTo("Waiting for the host to open the camp shop."));
+            Assert.That(FestivalHudText.ObjectiveTitle(ash,host),Is.EqualTo("CAMP DEBRIEF • THE VERDICT"));
+            Assert.That(FestivalHudText.ObjectiveDetail(ash,host),Is.EqualTo("Once the verdict has played, press E to open the camp shop."));
+            // Solo practice has no vote at all.
+            var solo=new RoundState{Phase="CampReview",HostPlayerId="kim"};var kim=Crew(solo,"kim","Kim");
+            Assert.That(FestivalHudText.ObjectiveTitle(solo,kim),Is.EqualTo("CAMP DEBRIEF • THE VERDICT"));
+            Assert.That(FestivalHudText.ObjectiveDetail(solo,kim),Is.EqualTo("Once the verdict has played, press E to open the camp shop."));
+        }
     }
 }

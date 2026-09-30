@@ -115,6 +115,7 @@ namespace Festival.Tests
                 yield return new WaitForSeconds((float)(3*FestivalHudText.RevealStepSeconds));
                 Expect("the verdict","Review reveal","AND THE AWARDS GO TO…\n"+awards[0].ToUpperInvariant()+"  •  SAM\n"+awards[1].ToUpperInvariant()+"  •  SAM\n"+awards[2].ToUpperInvariant()+"  •  YOU\nSAM TAKES 2 SHOTS");
                 Expect("the verdict","Review status","E  OPEN THE CAMP SHOP");
+                Expect("the verdict","Prompt","(hidden)");
                 Fits("the verdict","Review reveal");
 
                 // E opens the shop, where the next level starts: Sam wears both awards over their head.

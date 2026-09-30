@@ -10,7 +10,7 @@ namespace Festival.Core
         {
             if(state==null||player==null)return "";
             if(state.Phase=="Shopping")return "GATHER AT CAMP • BUY GEAR • READY UP";
-            if(state.Phase=="CampReview")return "CAMP DEBRIEF • VOTE BEFORE SHOPPING";
+            if(state.Phase=="CampReview")return FestivalSimulation.ReviewRevealed(state)?"CAMP DEBRIEF • THE VERDICT":"CAMP DEBRIEF • VOTE BEFORE SHOPPING";
             if(state.Phase=="Spinning")return "SPINNING FOR THE TRIPPER";
             if(state.Phase=="Loading")return "HEADING TO THE FESTIVAL";
             if(state.Phase=="Results")return state.Result=="Success"?"FRIEND RESCUED • BACK TO CAMP":"ROUND OVER • BACK TO CAMP";
@@ -45,7 +45,9 @@ namespace Festival.Core
             }
             if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
-            if(state.Phase=="CampReview")return "Click a friend for each award, or press 1, 2 or 3. Then the host opens the camp shop.";
+            // HUD-3: once every vote is in (or solo practice drew none) the ballot is gone and the verdict plays; only the host acts.
+            if(state.Phase=="CampReview")return !FestivalSimulation.ReviewRevealed(state)?"Click a friend for each award, or press 1, 2 or 3. Then the host opens the camp shop."
+                :player.Id==state.HostPlayerId?"Once the verdict has played, press E to open the camp shop.":"Waiting for the host to open the camp shop.";
             if(state.Phase=="Results")return player.Id==state.HostPlayerId
                 ?"Open Escape menu and choose NEXT ROUND to return to camp."
                 :"Waiting for the host to start the next camp round.";
