@@ -12,7 +12,7 @@ public static class CrowdTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales})
+        foreach(var scenario in new Action[]{PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -132,5 +132,20 @@ public static class CrowdTests
         var s=Pack(4);var dance=Start(s,"Dance");Hit(dance);Finish(s,dance);
         var gains=new List<double>();for(int k=0;k<4;k++)gains.Add(Heat(s,k)-20);
         Check(gains.TrueForAll(g=>Same(g,34)),"a failed group dance in a pack of four: +34 each (got "+string.Join(", ",gains)+")");
+    }
+    // Three of the pack dance perfectly on the same beat beside a fourth who stands idle. Every group fails (+20 x1.7), and the
+    // idle friend takes that verdict once, like each dancer, not once per dancer: +34 each (not +102 for the idle one).
+    static void AnIdleFriendIsJudgedOnceForOverlappingDances()
+    {
+        var s=Pack(4);var dances=new List<InteractionState>{Start(s,"Dance")};
+        // p1 and p2 each get a partner 1 m to their outer side, facing away from the crew.
+        for(int k=1;k<3;k++)
+        {
+            var p=s.Player("p"+k);float side=p.X>0?1:-1;s.State.Npcs.Add(new NpcState{Id="partner"+k,X=p.X+side,Z=p.Z,Yaw=side*90,CanTalk=true});
+            Check(s.Execute(p.Id,new GameCommand{Id="crowd"+(sequence++),Kind="Dance",TargetId="partner"+k}).Accepted,p.Id+" starts Dance");dances.Add(s.Interaction(p.InteractionId));
+        }
+        foreach(var d in dances)Hit(d);foreach(var d in dances)Finish(s,d);
+        var gains=new List<double>();for(int k=0;k<4;k++)gains.Add(Heat(s,k)-20);
+        Check(gains.TrueForAll(g=>Same(g,34)),"three perfect dancers beside an idle friend in a pack of four: +34 each, the idle friend last (got "+string.Join(", ",gains)+")");
     }
 }

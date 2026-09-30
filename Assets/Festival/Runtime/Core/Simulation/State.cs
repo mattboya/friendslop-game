@@ -26,7 +26,7 @@ namespace Festival.Core
         public List<ItemStack> Inventory=new List<ItemStack>(); public List<ActiveEffect> Effects=new List<ActiveEffect>();
         public List<string> Wristbands=new List<string>(); public DialogueHistory Dialogue=new DialogueHistory();
     }
-    [Serializable] public sealed class ObserverState { public string PlayerId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }
+    [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }
     [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt; }
     [Serializable] public sealed class NpcState {
         public string Id="",Kind="Wook",Mode="Blending",TargetId="",IdlePose="Idle"; public float X,Z,Yaw;
