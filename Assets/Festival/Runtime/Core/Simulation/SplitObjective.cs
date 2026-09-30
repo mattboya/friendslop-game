@@ -42,14 +42,26 @@ namespace Festival.Core
             Show(ClueVisions(random,TripperDose(State),trail,State.Visions),random);
         }
 
-        // FindFriend goes to the nearer lost friend: once their trail is finished, anyone beside them recruits them or takes over the escort.
+        // FindFriend goes to FriendToFind's friend: once their trail is finished, anyone beside them recruits them or takes over the escort.
         CommandResult FindFriend(PlayerState p)
         {
             if(DayLevel)return Reject("Nobody is lost by day: sell the quota, then head back to camp");
+            string target=FriendToFind(State,p);if(target!="")return BeginTask(p,"FindFriend",target,2);
+            // Nobody to recruit or take over in reach: the nearer friend says why.
             var second=State.SecondFriend;bool other=second.Active&&Distance(p.X,p.Z,second.Position.X,second.Position.Z)<Distance(p.X,p.Z,State.FriendPosition.X,State.FriendPosition.Z);
             if(!(other?second.GateOpened:State.GateOpened))return Reject("Follow the tripper's clue trail to its last link to find your friend");
-            var at=other?second.Position:State.FriendPosition;if(!Near(p,at.X,at.Z))return Reject("Move closer to the missing friend");
-            return BeginTask(p,"FindFriend",other?SecondFriendTarget:"friend",2);
+            var at=other?second.Position:State.FriendPosition;return Reject(Near(p,at.X,at.Z)?"You are already escorting this friend":"Move closer to the missing friend");
+        }
+        /// <summary>The lost friend p's FindFriend goes to, "friend" or "friend_2", or "" with none in reach: within 2.5 m, trail
+        /// finished and not already following p; one still lost before one already escorted, then the nearer. The HUD asks with
+        /// the client's view, so it offers the same friend; there a friend out of the viewer's sight sits at the origin.</summary>
+        public static string FriendToFind(RoundState s,PlayerState p)
+        {
+            var second=s.SecondFriend;
+            bool first=InReach(s.GateOpened,s.FriendFound,s.FriendLeaderId,s.FriendPosition),other=second.Active&&InReach(second.GateOpened,second.Found,second.LeaderId,second.Position);
+            if(first&&other)other=s.FriendFound!=second.Found?!second.Found:Distance(p.X,p.Z,second.Position.X,second.Position.Z)<Distance(p.X,p.Z,s.FriendPosition.X,s.FriendPosition.Z);
+            return other?SecondFriendTarget:first?"friend":"";
+            bool InReach(bool trailDone,bool found,string leader,WorldPoint at)=>trailDone&&!(found&&leader==p.Id)&&(at.X!=0||at.Z!=0)&&Near(p,at.X,at.Z);
         }
         WorldPoint FriendAt(string target)=>target==SecondFriendTarget?State.SecondFriend.Position:State.FriendPosition;
         // A recruit lands: each friend's first rescue banks FriendReward, and the friend follows whoever recruited them last.

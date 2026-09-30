@@ -873,9 +873,9 @@ namespace Festival.Presentation
             }
             else if(state.Phase=="Playing"&&player.Life=="Alive")
             {
-                // Either lost friend (a big crew has two, CROWD-2); FindFriend goes to the nearer one.
-                foreach(var (at,found,leader) in new[]{(state.FriendPosition,state.FriendFound,state.FriendLeaderId),(state.SecondFriend.Position,state.SecondFriend.Found,state.SecondFriend.LeaderId)})
-                    if(at!=null&&(at.X!=0||at.Z!=0)&&Near(player,at.X,at.Z)&&(!found||leader!=player.Id)){AddAction(found?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);break;}
+                // Either lost friend (a big crew has two, CROWD-2): the one FindFriend goes to, from the same pick.
+                string lost=FestivalSimulation.FriendToFind(state,player);
+                if(lost!="")AddAction((lost=="friend"?state.FriendFound:state.SecondFriend.Found)?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);
                 if(Near(player,-28,16))
                 {
                     var detained=state.Players.Find(p=>p.Life=="Detained");

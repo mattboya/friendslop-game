@@ -51,7 +51,7 @@ public static class SplitObjectiveTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{FiveOrMoreGetTwoFriends,EachTrailShowsItsOwnNextLink,FindingTheSecondFriend,SuccessNeedsBoth,
-            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends})
+            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends,ERecruitsTheFriendInReach})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" split objective test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -132,6 +132,31 @@ public static class SplitObjectiveTests
         FollowTrail(s,0);
         Check(Recruit(s,"p3",s.State.FriendPosition)&&s.State.FriendFound&&s.State.FriendLeaderId=="p3","p3 recruits the first friend once their trail ends");
         Check(s.State.StashCash==40&&s.State.ObjectiveReward==40,"each friend banks $20: $40 for both");
+    }
+
+    // E recruits the lost friend in reach even with a found friend nearer: p0 escorts the second friend to 2 m short of the
+    // first, their friend trailing 1.5 m behind, inside the 2.5 m reach. A crewmate beside the first friend recruits them
+    // rather than take over the escort passing by, and an escort with nobody else in reach is told so.
+    static void ERecruitsTheFriendInReach()
+    {
+        var s=Start(5);var second=s.State.SecondFriend;var first=s.State.FriendPosition;FollowTrail(s,0);FollowTrail(s,1);
+        Check(Recruit(s,"p0",second.Position),"setup: p0 recruits the second friend");
+        double length=Distance(second.Position,first);
+        var p0=Place(s,"p0",new WorldPoint(first.X+(float)((second.Position.X-first.X)*2/length),first.Z+(float)((second.Position.Z-first.Z)*2/length)));s.Tick(14);
+        var at=new WorldPoint(p0.X,p0.Z);
+        Check(Math.Abs(Distance(first,at)-2)<.01&&Distance(second.Position,at)<1.51&&second.LeaderId=="p0","setup: p0 stops 2 m short of the first friend, the second trailing "+Distance(second.Position,at)+" m behind");
+        Check(Act(s,"p0","FindFriend").Accepted,"p0 can recruit the first friend");s.Tick(2.1);
+        Check(s.State.FriendFound&&s.State.FriendLeaderId=="p0"&&second.LeaderId=="p0","E recruits the first friend, not the second again: now both follow p0");
+        var refused=Act(s,"p0","FindFriend");
+        Check(!refused.Accepted&&refused.Reason.Contains("already escorting"),"with both friends following p0 there is nobody to recruit: "+refused.Reason);
+        var t=Start(5);second=t.State.SecondFriend;first=t.State.FriendPosition;FollowTrail(t,0);FollowTrail(t,1);
+        Check(Recruit(t,"p0",second.Position),"setup: p0 recruits the second friend");
+        second.Position.X=first.X+3.2f;second.Position.Z=first.Z;Place(t,"p0",new WorldPoint(first.X+4.6f,first.Z));Place(t,"p1",new WorldPoint(first.X+2.2f,first.Z));
+        Check(Act(t,"p1","FindFriend").Accepted,"p1, 2.2 m from the first friend and 1 m from the escorted second, can recruit");t.Tick(2.1);
+        Check(t.State.FriendFound&&t.State.FriendLeaderId=="p1"&&second.LeaderId=="p0","p1 recruits the lost first friend instead of taking over p0's escort");
+        // The HUD offers FriendToFind's pick from the client's view, where a lost friend out of sight sits at the origin.
+        var view=JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(t.State,Json),Json);view.SecondFriend.Found=false;view.SecondFriend.Position=new WorldPoint(0,0);
+        Check(FestivalSimulation.FriendToFind(view,Place(t,"p2",new WorldPoint(0,.5f)))=="","a friend out of the viewer's sight is not offered to someone standing at the origin");
     }
 
     static void SuccessNeedsBoth()
