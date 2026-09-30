@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -56,6 +57,103 @@ namespace Festival.Tests
                 Object.Destroy(host);Object.Destroy(world);
             }
             yield return null;
+        }
+
+        // VISION-1: a truth's shadow is one of the tells. The festival sun sits only 14 degrees up (and is dimmed at night), so a
+        // marker's real shadow lands about 10 m away; the shadow the tripper learns from has to lie at the festivalgoer's feet.
+        [UnityTest]public IEnumerator ByDayTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(0,8627);
+        [UnityTest]public IEnumerator ByNightTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(1,8628);
+
+        private static IEnumerator ShadowAtTheFeet(int level,ushort port)
+        {
+            string when=level==0?"Day 1":"Night 1";
+            var world=new GameObject("Vision shadow world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Vision shadow session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            try
+            {
+                session.Host("Tester",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                sim.State.LevelIndex=level;
+                var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
+                deadline=Time.realtimeSinceStartup+90;
+                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.State.Phase,Is.EqualTo("Playing"),when+" starts: "+session.Message);
+                Assert.That(FestivalNightLighting.IsNight(session.State),Is.EqualTo(level==1),"setup: "+when+" is lit as "+when);
+
+                // The darkest a tripper's view gets: one dose brightens it least (LIGHT-1).
+                var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);Assert.That(dose,Is.Not.Null,"setup: the solo host trips");dose.Intensity=1;
+                // One truth-marked festivalgoer 6 m ahead of the tripper on the open main path; the rest of the crowd is sent away.
+                var truth=sim.State.Visions.Find(v=>v.NpcId!=""&&v.IsTrue);Assert.That(truth,Is.Not.Null,"setup: a truth over a festivalgoer");
+                var npc=sim.State.Npcs.Find(n=>n.Id==truth.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);
+                IEnumerator Hold(float seconds)
+                {
+                    for(float start=Time.realtimeSinceStartup;Time.realtimeSinceStartup-start<seconds;)
+                    {player.X=0;player.Z=0;npc.X=0;npc.Z=6;npc.Yaw=180;npc.Mode="Blending";yield return null;}
+                }
+                yield return Hold(.6f);yield return null;
+                var marker=host.transform.Find("Vision "+truth.Id);var body=GameObject.Find("Authoritative actor presentation").transform.Find(npc.Id);
+                Assert.That(marker!=null&&marker.gameObject.activeSelf,Is.True,"setup: the truth's marker is drawn");
+                float solid=marker.Find("Glyph").localScale.x;int truthCue=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
+
+                // The host's Tell flag is all the tripper's client goes by: the same festivalgoer, now marked by a fake.
+                truth.Tell=true;
+                yield return Hold(.4f);yield return null;
+                int fakeCue=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
+
+                // Walking at 4 m/s moves the first-person camera, which sets the fake shimmering.
+                var from=session.ViewCamera.transform.position;float peak=0;
+                for(float start=Time.realtimeSinceStartup;Time.realtimeSinceStartup-start<1;)
+                {
+                    player.X=4*(Time.realtimeSinceStartup-start);npc.X=0;npc.Z=6;yield return null;
+                    peak=Mathf.Max(peak,Mathf.Abs(marker.Find("Glyph").localScale.x/solid-1));
+                }
+                float walked=Vector3.Distance(from,session.ViewCamera.transform.position);
+                Debug.Log("VISION-1 "+when+": pixels a truth's marker changes at its festivalgoer's feet "+truthCue+", a fake's "+fakeCue+"; fake's shimmer while walking "+walked.ToString("0.0")+" m: "+peak.ToString("0.00"));
+                var failures=new List<string>();
+                if(truthCue<=300)failures.Add("the tripper cannot see a truth's shadow at its festivalgoer's feet ("+truthCue+" pixels change, want over 300)");
+                if(fakeCue>=10)failures.Add("a fake shows a shadow at its festivalgoer's feet ("+fakeCue+" pixels change)");
+                if(walked<=2)failures.Add("setup: the tripper's camera walked only "+walked+" m");
+                if(peak<=.05f)failures.Add("the running game's camera leaves a fake still as the tripper walks (shimmer "+peak+")");
+                Assert.That(failures,Is.Empty,when);
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+        }
+
+        // Pixels on the ground within 1.5 m of the feet, in the tripper's 640x360 view from 6 m back, that change by more than 12
+        // of 255 when the vision's marker is hidden: what the marker puts at its festivalgoer's feet.
+        private static int AtTheFeet(Camera eye,GameObject marker,Vector3 feet)
+        {
+            const int width=640,height=360;
+            eye.transform.SetPositionAndRotation(new Vector3(feet.x,1.65f,feet.z-6),Quaternion.identity);
+            var target=RenderTexture.GetTemporary(width,height,24);var picture=new Texture2D(width,height,TextureFormat.RGBA32,false);
+            eye.targetTexture=target;
+            try
+            {
+                Color32[] Shot(){eye.Render();var was=RenderTexture.active;RenderTexture.active=target;picture.ReadPixels(new Rect(0,0,width,height),0,0);RenderTexture.active=was;return picture.GetPixels32();}
+                var shown=Shot();marker.SetActive(false);var hidden=Shot();marker.SetActive(true);
+                float left=1,right=0,low=1,high=0;
+                foreach(float x in new[]{-1.5f,1.5f})foreach(float z in new[]{-1.5f,1.5f})
+                {var at=eye.WorldToViewportPoint(feet+new Vector3(x,0,z));left=Mathf.Min(left,at.x);right=Mathf.Max(right,at.x);low=Mathf.Min(low,at.y);high=Mathf.Max(high,at.y);}
+                int changed=0;
+                for(int y=Mathf.Max(0,(int)(low*height));y<Mathf.Min(height,(int)(high*height));y++)
+                    for(int x=Mathf.Max(0,(int)(left*width));x<Mathf.Min(width,(int)(right*width));x++)
+                    {
+                        Color32 a=shown[y*width+x],b=hidden[y*width+x];
+                        if(Mathf.Max(Mathf.Abs(a.r-b.r),Mathf.Max(Mathf.Abs(a.g-b.g),Mathf.Abs(a.b-b.b)))>12)changed++;
+                    }
+                return changed;
+            }
+            finally{eye.targetTexture=null;RenderTexture.ReleaseTemporary(target);Object.Destroy(picture);}
         }
     }
 }

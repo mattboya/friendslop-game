@@ -5,7 +5,6 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
 namespace Festival.Tests
@@ -56,7 +55,14 @@ namespace Festival.Tests
             Assert.That(game.State.Visions.Exists(v=>v.IsTrue)&&game.State.Visions.Exists(v=>!v.IsTrue),Is.True,"setup: the deal has truths and fakes");
             markers.Apply(view,View(),actors,0,.02f);
             foreach(var vision in game.State.Visions)
-                Assert.That(Glyph(markers,vision).shadowCastingMode,Is.EqualTo(vision.IsTrue?ShadowCastingMode.On:ShadowCastingMode.Off),vision.Kind+" "+(vision.IsTrue?"truth casts a shadow":"fake casts none"));
+            {
+                var shadow=Shadow(markers,vision);
+                Assert.That(shadow.gameObject.activeSelf,Is.EqualTo(vision.IsTrue),vision.Kind+" "+(vision.IsTrue?"truth casts a shadow":"fake casts none"));
+                // On the ground right under the marker, so it reads at the festivalgoer's feet whatever the sun is doing.
+                var ground=vision.NpcId==""?new Vector3(vision.X,0,vision.Z):actors(vision.NpcId).position;
+                Assert.That(Vector2.Distance(Flat(shadow.position),Flat(ground)),Is.LessThan(1e-3f),vision.Kind+"'s shadow lies right under it");
+                Assert.That(shadow.position.y-ground.y,Is.InRange(0f,.1f),vision.Kind+"'s shadow lies on the ground");
+            }
 
             // Crafted: a truth and a fake of every kind, side by side.
             var state=Round();var eye=View();var crafted=Markers();var bodies=new Dictionary<string,Transform>();
@@ -112,7 +118,7 @@ namespace Festival.Tests
             Assert.That(Glyph(markers,"true").sharedMaterial.color,Is.EqualTo(Glyph(plain,"true").sharedMaterial.color),"a checked truth keeps its kind's colour");
             Color.RGBToHSV(Glyph(markers,"false").sharedMaterial.color,out _,out float saturation,out _);
             Assert.That(saturation,Is.LessThan(.15f),"a checked fake goes grey");
-            Assert.That(Glyph(markers,"false").shadowCastingMode,Is.EqualTo(ShadowCastingMode.On),"a checked fake is plainly marked, so it drops its tells");
+            Assert.That(Shadow(markers,"false").gameObject.activeSelf,Is.True,"a checked fake is plainly marked, so it drops its tells");
             float still=Glyph(markers,"true").transform.localScale.x;
             for(int frame=1;frame<=20;frame++){view.Rotate(0,4,0);markers.Apply(state,view,actorFor,frame*.02f,.02f);Assert.That(Glyph(markers,"false").transform.localScale.x,Is.EqualTo(still).Within(1e-5f),"a checked fake no longer shimmers");}
             Assert.That(Label(markers,"true").Length>0&&Marker(markers,"true").Find("Label").rotation==view.rotation,Is.True,"the verdict faces the camera");
@@ -179,6 +185,11 @@ namespace Festival.Tests
         }
         private static MeshRenderer Glyph(FestivalVisionMarkers markers,VisionState vision)=>Glyph(markers,vision.Id);
         private static MeshRenderer Glyph(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Glyph").GetComponent<MeshRenderer>();
+        private static Transform Shadow(FestivalVisionMarkers markers,VisionState vision)=>Shadow(markers,vision.Id);
+        private static Transform Shadow(FestivalVisionMarkers markers,string id)
+        {
+            var shadow=Marker(markers,id).Find("Shadow");Assert.That(shadow,Is.Not.Null,"vision "+id+" has a shadow to show");return shadow;
+        }
         private static string Label(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMesh>().text;
     }
 }
