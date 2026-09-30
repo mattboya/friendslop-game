@@ -102,6 +102,22 @@ namespace Festival.Tests
             }
         }
 
+        // A 125 Hz mouse on a 240 Hz screen turns the camera on every other frame only; a fake keeps shimmering in between
+        // instead of snapping back to solid each frame, which would read as flicker.
+        [Test]public void AFakesShimmerHoldsBetweenTheMousesReports()
+        {
+            var state=Round();state.Visions.Add(new VisionState{Id="fake",Kind="Stash",X=0,Z=4,Tell=true});
+            var markers=Markers();var view=View();markers.Apply(state,view,_=>null,.013f,1/240f);
+            float still=Glyph(markers,"fake").transform.localScale.x;int snaps=0;
+            for(int frame=1;frame<=60;frame++)
+            {
+                if(frame%2==1)view.Rotate(0,1.5f,0);
+                markers.Apply(state,view,_=>null,.013f+frame/240f,1/240f);
+                if(frame>10&&Mathf.Abs(Glyph(markers,"fake").transform.localScale.x/still-1)<1e-6f)snaps++;
+            }
+            Assert.That(snaps,Is.Zero,"frames where a turning camera's fake snapped back to solid");
+        }
+
         [Test]public void CheckedVisionsPlainlyShowTrueOrFalse()
         {
             var state=Round();var bodies=new Dictionary<string,Transform>{{"a",Made("a").transform},{"b",Made("b").transform},{"c",Made("c").transform}};

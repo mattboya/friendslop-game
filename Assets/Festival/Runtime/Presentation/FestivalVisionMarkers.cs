@@ -18,8 +18,9 @@ namespace Festival.Presentation
     {
         // Over a festivalgoer's head (stacked when two visions share one), or over a spot on the grounds.
         private const float OverHead=2.45f,StackStep=.5f,OverPlace=1.4f,Size=.32f,LabelRise=.4f;
-        // Fakes: hue a little off, and a scale shimmer that grows with how fast the camera turns or moves.
-        private const float FakeHueShift=.06f,ShimmerDepth=.18f,ShimmerHz=9,FullShimmerTurn=90,FullShimmerMove=4;
+        // Fakes: hue a little off, and a scale shimmer that grows with how fast the camera turns or moves, eased over ShimmerEase
+        // seconds so a mouse that reports slower than the screen refreshes cannot make it flicker.
+        private const float FakeHueShift=.06f,ShimmerDepth=.18f,ShimmerHz=9,FullShimmerTurn=90,FullShimmerMove=4,ShimmerEase=.15f;
         // Truths: a pool wider than the festivalgoer, so it shows around their feet; just clear of the footpaths (their tops sit
         // under .03 m). Night ground is about 15 of 255 at one dose, so the night pool glows instead of darkening.
         private const float ShadowWidth=1.4f,ShadowThickness=.01f,ShadowLift=.05f;
@@ -34,6 +35,7 @@ namespace Festival.Presentation
         private Vector3 lastViewPosition;
         private Quaternion lastViewRotation;
         private bool viewSeen;
+        private float eased;
         private Material shade,glow;
         private FestivalSession session;
         private Func<string,Transform> actorFor;
@@ -79,13 +81,13 @@ namespace Festival.Presentation
             }
         }
 
-        // 0 while the camera is still, 1 at a quick turn or a run; one frame's motion, so it settles as soon as the camera does.
+        // 0 while the camera is still, 1 at a quick turn or a run; eased, so it settles within a few tenths of a second of the camera.
         private float CameraMotion(Transform view,float deltaTime)
         {
-            if(view==null){viewSeen=false;return 0;}
+            if(view==null){viewSeen=false;return eased=0;}
             float motion=viewSeen&&deltaTime>0?Quaternion.Angle(lastViewRotation,view.rotation)/deltaTime/FullShimmerTurn+Vector3.Distance(lastViewPosition,view.position)/deltaTime/FullShimmerMove:0;
             viewSeen=true;lastViewPosition=view.position;lastViewRotation=view.rotation;
-            return Mathf.Clamp01(motion);
+            return eased=Mathf.Lerp(eased,Mathf.Clamp01(motion),1-Mathf.Exp(-deltaTime/ShimmerEase));
         }
 
         // Each kind has its own shape and colour, so colour is never the only cue. The secrets (a cash stash, a buyer who
