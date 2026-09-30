@@ -179,7 +179,9 @@ namespace Festival.Presentation
             tripping=Label(trippingPanel.transform,"Tripping",16,TextAnchor.MiddleCenter);tripping.fontStyle=FontStyle.Normal;Fill(tripping.rectTransform,4);trippingPanel.SetActive(false);
             vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
             Accent(vitalPanel.transform,Mint);
-            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.10f,.94f,.92f);
+            // Three lines (85 px at 1080p): the crowd or security warning starts on the second and is never longer than a line,
+            // so it is always drawn whole; only effects after it can run off (TRIP-1).
+            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.03f,.94f,.97f);
 
             rosterPanel=Card(root.transform,"Crew card",new Vector2(.835f,.846f),new Vector2(.978f,.882f),true);
             roster=Label(rosterPanel.transform,"Roster",16,TextAnchor.MiddleRight);Fill(roster.rectTransform,3);
