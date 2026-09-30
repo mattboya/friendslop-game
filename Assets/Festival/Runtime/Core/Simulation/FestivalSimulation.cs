@@ -66,6 +66,7 @@ namespace Festival.Core
             if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can bring the crew back after results");BeginCampReview();return Ok("Back at camp: review the round before shopping");}
             if(c.Kind=="ReviewVote")return VoteForReview(p,c);
             if(c.Kind=="FinishReview")return FinishCampReview(p);
+            if(c.Kind=="ChooseFestival")return ChooseFestival(p,c);
             if(c.Kind=="EnterCamp"||c.Kind=="ExitCamp"||c.Kind=="CampAntic"||c.Kind=="ChooseCampTrack")return CampAction(p,c);
             if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");p.Dialogue.Acknowledge(c.TargetId,current.Id);return Ok();}
             if(c.Kind=="Cancel") {Cancel(p,"Cancelled");return Ok();}
@@ -169,6 +170,7 @@ namespace Festival.Core
                 fresh.HasCosmetic=player.HasCosmetic;fresh.Dialogue=player.Dialogue;
             }
             State.HostPlayerId=old.HostPlayerId;
+            AdvanceWeekend(old);
             State.Phase="CampReview";
         }
         CommandResult VoteForReview(PlayerState p,GameCommand c)
