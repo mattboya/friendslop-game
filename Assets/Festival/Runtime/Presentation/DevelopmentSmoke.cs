@@ -1099,7 +1099,24 @@ namespace Festival.Presentation
             foreach(var light in FindFirstObjectByType<FestivalWorld>().GetComponentsInChildren<Light>())if(light.enabled&&light.name.StartsWith("Neon ",StringComparison.Ordinal))neon++;
             if(!FestivalNightLighting.IsNight(session.State)||neon<12){failed="night lighting: "+neon+" neon lights on";yield break;}
             yield return Capture(file,"NIGHT RENDER");
+            yield return CheckFogDraws();
             captureCamera=null;
+        }
+        // TWISTVIS-1: the evening haze and Ember Playa's dust storms are fog, which the editor always draws but a player only draws
+        // when its build kept the fog shaders (ProjectBootstrap). Closes a magenta fog in a metre out and checks the screen turns
+        // magenta, then puts the fog back.
+        IEnumerator CheckFogDraws()
+        {
+            bool fog=RenderSettings.fog;var mode=RenderSettings.fogMode;var color=RenderSettings.fogColor;float start=RenderSettings.fogStartDistance,end=RenderSettings.fogEndDistance;
+            RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=Color.magenta;RenderSettings.fogStartDistance=0;RenderSettings.fogEndDistance=1;
+            yield return new WaitForEndOfFrame();
+            var shot=ScreenCapture.CaptureScreenshotAsTexture();
+            RenderSettings.fog=fog;RenderSettings.fogMode=mode;RenderSettings.fogColor=color;RenderSettings.fogStartDistance=start;RenderSettings.fogEndDistance=end;
+            var pixels=shot.GetPixels32();Destroy(shot);
+            int fogged=0;foreach(var p in pixels)if(p.r>p.g+64&&p.b>p.g+64)fogged++;
+            int percent=100*fogged/pixels.Length;
+            if(percent<33){failed="fog render: only "+percent+"% of the screen took the probe's magenta fog";yield break;}
+            Debug.Log("FESTIVAL SMOKE FOG RENDER PASSED: "+percent+"% of the screen fogged");
         }
         // Writes a screenshot to the smoke folder and logs its marker once the file lands.
         IEnumerator Capture(string file,string marker)

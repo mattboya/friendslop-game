@@ -53,6 +53,12 @@ namespace Festival.Editor
             settings.FindPropertyRelative("Samples").enumValueIndex=1;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             ao.SetActive(true);
+            // TWISTVIS-1: the build scene has no fog and the world turns linear fog on at runtime (the evening haze, Ember Playa's dust
+            // storms), so Automatic fog stripping left the player without fog shaders. Keep linear fog, the only mode the game uses.
+            var graphics=new SerializedObject(GraphicsSettings.GetGraphicsSettings());
+            graphics.FindProperty("m_FogStripping").intValue=1; // Custom
+            graphics.FindProperty("m_FogKeepLinear").boolValue=true;graphics.FindProperty("m_FogKeepExp").boolValue=false;graphics.FindProperty("m_FogKeepExp2").boolValue=false;
+            graphics.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(ao);EditorUtility.SetDirty(renderer);EditorUtility.SetDirty(pipeline);
             AssetDatabase.SaveAssets();
         }
