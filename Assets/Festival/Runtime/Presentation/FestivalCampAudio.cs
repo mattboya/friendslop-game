@@ -64,7 +64,7 @@ namespace Festival.Presentation
         void Update()
         {
             var state=session.State;
-            int selected=state!=null&&(state.Phase=="Shopping"||state.Phase=="CampReview")?state.CampMusicTrack:0;
+            int selected=state!=null&&(state.Phase=="Shopping"||state.Phase=="Spinning"||state.Phase=="CampReview")?state.CampMusicTrack:0;
             if(selected!=playing)
             {
                 playing=selected;source.Stop();

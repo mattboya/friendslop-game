@@ -65,7 +65,7 @@ namespace Festival.Presentation
                 Application.Quit(0);
                 yield break;
             }
-            float deadline=Time.realtimeSinceStartup+85;
+            float deadline=Time.realtimeSinceStartup+85+(float)FestivalSimulation.SpinSeconds;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer==null){Debug.LogError("FESTIVAL SMOKE FAILED: no local identity");Application.Quit(2);yield break;}
             var festivalFont=Resources.Load<Font>("FestivalDisplay");
@@ -305,6 +305,11 @@ namespace Festival.Presentation
                 sim.State.Npcs.RemoveAll(n=>n.Id!="wook_0");
                 PlaceBoth(sim,-15.75f,-22);
                 sim.Player(sim.State.HostPlayerId).X=-15;
+                // The spinner picks the tripper; the smoke makes the client the dose-1 tripper so the host stays the sober helper.
+                var reader=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
+                foreach(var p in sim.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                reader.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="smoke_dose",Intensity=1,RemainingSeconds=sim.State.DurationSeconds});
+                sim.State.TripperId=reader.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=reader.Id,Dose=1});
             }
             else
             {
@@ -349,10 +354,9 @@ namespace Festival.Presentation
                 yield return new WaitForSeconds(.7f);
                 if(!File.Exists(marketApproachPath)){Fail("night market approach render");yield break;}
                 Debug.Log("FESTIVAL SMOKE MARKET APPROACH PASSED: "+marketApproachPath);
-                session.Command("ClueSupply");
             }
             while((session.IsHost?sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Effects.Count:session.LocalPlayer.Effects.Count)==0&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("client clue tasting");yield break;}
+            if(Time.realtimeSinceStartup>=deadline){Fail("client tripper dose");yield break;}
             if(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes){Fail("teammate intoxication face state");yield break;}
             var clueVisuals=GetComponent<FestivalClueVisuals>();
             bool shouldSeeClue=!session.IsHost;
@@ -781,7 +785,7 @@ namespace Festival.Presentation
         }
         IEnumerator SoloSmoke(FestivalSession session)
         {
-            float deadline=Time.realtimeSinceStartup+160;
+            float deadline=Time.realtimeSinceStartup+160+(float)FestivalSimulation.SpinSeconds;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
             var sim=session.DevelopmentSimulation;

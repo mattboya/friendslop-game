@@ -193,8 +193,10 @@ namespace Festival.Tests
             host.X=guest.X=0;host.Z=guest.Z=19;
             game.Execute("host",Command("ready-host","Ready"));game.Execute("guest",Command("ready-guest","Ready"));
             game.Tick(5.2);
-            Assert.That(game.State.Phase,Is.EqualTo("Loading"));
+            Assert.That(game.State.Phase,Is.EqualTo("Spinning"));
             Assert.That(host.Ready||guest.Ready,Is.False);
+            game.Tick(FestivalSimulation.SpinSeconds+.1);
+            Assert.That(game.State.Phase,Is.EqualTo("Loading"));
             game.Execute("host",Command("loaded-host","MapReady"));
             Assert.That(game.State.Phase,Is.EqualTo("Loading"));
             game.Execute("guest",Command("loaded-guest","MapReady"));
@@ -248,7 +250,7 @@ namespace Festival.Tests
             Assert.That(host.Inventory.Exists(item=>item.ItemId=="little_spoon"),Is.True);
             host.Z=guest.Z=19;guest.X=host.X=0;
             game.Execute(host.Id,Command("ready-host","Ready"));game.Execute(guest.Id,Command("ready-guest","Ready"));
-            game.Tick(5.2);
+            game.Tick(5.2+FestivalSimulation.SpinSeconds+.1);
             Assert.That(game.Execute(host.Id,Command("loaded-host","MapReady")).Accepted,Is.True);
             Assert.That(game.Execute(guest.Id,Command("loaded-guest","MapReady")).Accepted,Is.True);
             Assert.That(game.State.Phase,Is.EqualTo("Playing"));
@@ -289,7 +291,7 @@ namespace Festival.Tests
             Assert.That(game.Execute(first.Id,Command("ready-first","Ready")).Accepted,Is.True);
             Assert.That(game.Execute(second.Id,Command("ready-second","Ready")).Accepted,Is.True);
             game.Tick(5.2);
-            Assert.That(game.State.Phase,Is.EqualTo("Loading"));
+            Assert.That(game.State.Phase,Is.EqualTo("Spinning"));
             Assert.That(second.HeldOfferId,Is.Empty);
             Assert.That(game.State.ShopStock.Find(s=>s.ItemId==rare).CampAvailable,Is.EqualTo(1));
             Assert.That(second.Inventory.Exists(i=>i.ItemId==rare),Is.False);
@@ -306,14 +308,14 @@ namespace Festival.Tests
             host.Ready=true;guest.Ready=true;
             Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("dancing"));
 
-            game.State.Phase="Playing";
+            game.State.Phase="Playing";game.State.TripperId=guest.Id;
             host.X=0;host.Z=-29;
             var soberHint=FestivalGuidance.Hint(game.State,host);
-            Assert.That(soberHint,Does.Contain("Night Market"));
+            Assert.That(soberHint,Does.Contain("Stick with Guest"));
             Assert.That(soberHint,Does.Not.Contain("Sun totem"));
             Assert.That(soberHint,Does.Not.Contain("Moon totem"));
             host.X=-18;host.Z=-22;
-            Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("FREE CLUE TASTING"));
+            Assert.That(FestivalGuidance.Hint(game.State,host),Does.Not.Contain("TASTING"));
             host.X=0;host.Z=-29;
             guest.Effects.Add(new ActiveEffect{Id="mushrooms",RemainingSeconds=90});
             var affectedHint=FestivalGuidance.Hint(game.State,guest);

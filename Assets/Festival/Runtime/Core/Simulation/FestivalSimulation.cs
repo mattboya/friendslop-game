@@ -25,7 +25,7 @@ namespace Festival.Core
             if(State.Phase!="Lobby"&&State.Phase!="Shopping") throw new InvalidOperationException("Round already started; reconnect with your session token.");
             int campIndex=State.Players.Count;
             var p=new PlayerState{Id=id,Name=string.IsNullOrWhiteSpace(name)?"Friend":name.Substring(0,Math.Min(24,name.Length)),X=campIndex%2==0?-1:1,Z=-9-2*(campIndex/2)};
-            State.Players.Add(p); if(State.HostPlayerId=="") State.HostPlayerId=id;
+            State.Players.Add(p); State.TripperBag.Add(id); if(State.HostPlayerId=="") State.HostPlayerId=id;
             foreach(var stock in State.ShopStock)
             {
                 if(Catalog.RareShopItem(stock.ItemId))continue;
@@ -40,7 +40,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
@@ -88,7 +88,6 @@ namespace Festival.Core
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
             switch(c.Kind) {
                 case "ReadClue":return ReadClue(p);
-                case "ClueSupply":if(!Near(p,-18,-22)||State.GateOpened||p.Effects.Count>0)return Reject("Visit the night market with no active effect for a free clue tasting");p.Effects.Add(new ActiveEffect{Id="mushrooms",InstanceId=Id("effect"),SourceCommandId=c.Id,StartSeconds=State.SimulationSeconds,RemainingSeconds=90});return Ok("You can read the totems for 90 seconds. Bring a sober friend.");
                 case "Consume": return Consume(p,c);
                 case "Use": return Use(p,c);
                 case "Drop": return Drop(p,c);
@@ -157,7 +156,7 @@ namespace Festival.Core
         {
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
-            State.LaunchAtSeconds=0;State.Phase="Loading";
+            State.LaunchAtSeconds=0;Spin(connected);
         }
         void BeginCampReview()
         {

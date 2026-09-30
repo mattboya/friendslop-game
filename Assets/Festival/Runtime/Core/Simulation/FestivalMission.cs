@@ -10,7 +10,7 @@ namespace Festival.Core
             bool east=((seed & int.MaxValue)%2==0)==(index==0);
             return east?new WorldPoint(16,-4):new WorldPoint(-16,5);
         }
-        public static bool CanReadClues(PlayerState p) => p!=null && p.Life=="Alive" && p.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms");
+        public static bool CanReadClues(PlayerState p) => p!=null && p.Life=="Alive" && p.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms"||e.Id==DoseEffect);
         public static string ClueHint(RoundState s,PlayerState p)
         {
             if(!CanReadClues(p)||s.CluesRead>=2)return "";

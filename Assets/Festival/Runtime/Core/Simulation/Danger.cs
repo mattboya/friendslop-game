@@ -14,7 +14,8 @@ public sealed partial class FestivalSimulation {
             else if(State.SimulationSeconds>=State.LaunchAtSeconds)StartRound(connected);
             return;
         }
-        if(State.Phase!="Playing")return;State.ElapsedSeconds+=dt;if(EndIfLevelOver())return;
+        if(State.Phase=="Spinning"&&State.SimulationSeconds>=State.SpinEndsAt)State.Phase="Loading";
+        if(State.Phase!="Playing")return;State.ElapsedSeconds+=dt;if(EndIfLevelOver())return;KeepTripper();
         foreach(var p in State.Players){foreach(var e in p.Effects.ToArray()){e.RemainingSeconds-=dt;if(e.RemainingSeconds<=0)p.Effects.Remove(e);}if(p.Life=="Downed"){p.DownedRemaining-=dt;if(p.DownedRemaining<=0)Die(p);}if(p.DragTargetId!=""){var target=Player(p.DragTargetId);if(p.Life!="Alive"||target==null||target.Life!="Downed")p.DragTargetId="";}}
         // Evidence/arrests precede all financial settlement within a simulation tick.
         foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);

@@ -13,8 +13,9 @@ public static class MissionTests
         // The lost friend is a night rescue; days are the sales quota (DayQuotaTests).
         s.State.LevelIndex=1;
         Check(!Act(s,"a","FindFriend").Accepted,"cannot skip clues");
-        a.X=-18;a.Z=-22;Check(Act(s,"a","ClueSupply").Accepted,"free voluntary perception");
-        Check(a.Inventory.Count==0,"free tasting cannot be resold");
+        a.X=-18;a.Z=-22;Check(!Act(s,"a","ClueSupply").Accepted,"the free clue tasting is gone: the spinner picks the tripper");
+        // Setup: a is this level's tripper (TripperTests covers the spinners).
+        a.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=480});s.State.TripperId=a.Id;
         Check(FestivalSimulation.ClueHint(s.State,a)!=""&&FestivalSimulation.ClueHint(s.State,b)=="","clue is private");
         for(int n=0;n<2;n++)
         {
@@ -70,11 +71,14 @@ public static class MissionTests
         solo.X=0;solo.Z=7;
         Check(game.Execute(solo.Id,new GameCommand{Id="solo-buy",Kind="Buy",ItemId="stock_mushrooms",Amount=1}).Accepted,"solo pays seller");
         solo.Z=19;Check(Act(game,solo.Id,"Ready").Accepted,"solo readies");game.Tick(5.2);
-        Check(game.State.Phase=="Loading","solo countdown launches");
+        Check(game.State.Phase=="Spinning"&&game.State.TripperId==solo.Id,"solo countdown spins, and solo is always the tripper");
+        game.Tick(FestivalSimulation.SpinSeconds+.1);Check(game.State.Phase=="Loading","the wheels land and the crew loads");
         Check(Act(game,solo.Id,"MapReady").Accepted&&game.State.Phase=="Playing","solo enters festival");
         game.State.Npcs.Clear();game.State.LevelIndex=1;solo.X=-18;solo.Z=-22;
-        Check(Act(game,solo.Id,"ClueSupply").Accepted,"solo can take clue tasting");
-        Check(Intoxication.MovementMultiplier(solo)<1&&Math.Abs(Intoxication.LateralDrift(solo,1))>.01,"intoxication changes walking");
+        Check(FestivalSimulation.CanReadClues(solo),"the solo tripper's dose reads the totems");
+        Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Moon caps bought at camp");
+        // Two samples a second apart: the drift is a slow sine, so one sample can land on a zero crossing.
+        Check(Intoxication.MovementMultiplier(solo)<1&&Math.Abs(Intoxication.LateralDrift(solo,1))+Math.Abs(Intoxication.LateralDrift(solo,2))>.01,"intoxication changes walking");
         for(int index=0;index<2;index++)
         {
             var point=FestivalSimulation.CluePoint(game.State.Seed,index);solo.X=point.X;solo.Z=point.Z;

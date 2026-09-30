@@ -46,7 +46,7 @@ public sealed partial class FestivalSimulation {
         case "FindFriend":if(!State.FriendFound){State.ObjectiveReward=20;State.StashCash+=20;}State.FriendFound=true;State.FriendLeaderId=p.Id;break;
         case "Extract":if(CanExtractNow(p))End("Success");break;
         case "LostProperty":if(i.TargetId==State.LostPropertyTask.ToString()){p.Cash+=5;State.LostPropertyTask++;}break;
-        case "Medical":if(Count(p,"medical_voucher")>0&&p.Effects.Count>0){Take(p,"medical_voucher",1);p.Effects.RemoveAt(p.Effects.Count-1);}break;
+        case "Medical":int treated=p.Effects.FindLastIndex(Treatable);if(Count(p,"medical_voucher")>0&&treated>=0){Take(p,"medical_voucher",1);p.Effects.RemoveAt(treated);}break;
         case "Rescue":var down=Player(i.TargetId);if(down!=null&&down.Life=="Downed"&&!AttackerNear(down,3)){down.Life="Alive";down.Health=40;down.RecoveryUntil=State.SimulationSeconds+5;down.DownedRemaining=0;}break;
         case "Release":var prisoner=Player(i.TargetId);if(prisoner!=null&&prisoner.Life=="Detained"){prisoner.Life="Alive";prisoner.X=24;prisoner.Z=2;prisoner.RecoveryUntil=State.SimulationSeconds+5;ClearEvidence(prisoner.Id);}break;
         case "Revival":var spirit=Player(i.TargetId);bool self=spirit==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(spirit!=null&&spirit.Life=="Spirit"&&spirit.RevivalCount<2&&(self||p.Wristbands.Remove(spirit.Id))){spirit.Life="Alive";spirit.Health=40;spirit.RevivalCount++;spirit.Effects.Clear();spirit.X=24;spirit.Z=-20;spirit.RecoveryUntil=State.SimulationSeconds+5;}break;

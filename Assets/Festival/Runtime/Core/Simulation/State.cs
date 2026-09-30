@@ -7,7 +7,7 @@ namespace Festival.Core
     [Serializable] public sealed class CommandResult { public bool Accepted; public string Reason="", Id=""; public long Sequence; }
     [Serializable] public sealed class CommittedCommand { public string PlayerId="", Id=""; public CommandResult Result=new CommandResult(); }
     [Serializable] public sealed class ItemStack { public string ItemId=""; public int Count; }
-    [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId=""; public double RemainingSeconds, StartSeconds; }
+    [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId=""; public double RemainingSeconds, StartSeconds; public int Intensity; }
     [Serializable] public sealed class PlayerState {
         public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", CarryBodyId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
         // DEBRIEF-1: the award names this player won at the last debrief, worn until the next level's Results.
@@ -44,10 +44,13 @@ namespace Festival.Core
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }
     // One debrief vote: PlayerId picked TargetId for award slot Award (an index into RoundState.ReviewAwards).
     [Serializable] public sealed class CampReviewVote { public string PlayerId="", TargetId=""; public int Award; }
+    [Serializable] public sealed class PlayerDose { public string PlayerId=""; public int Dose; }
     [Serializable] public sealed class RoundState {
         public int SchemaVersion=1, Seed; public string RoundId="",Phase="Shopping",Result="",HostPlayerId="",MissionId="rescue_compact";
         // Weekend position: a row of Festivals.cs. Clearing festival k unlocks k+1.
         public int FestivalIndex,LevelIndex,EncoreTier,UnlockedFestivalCount=1;
+        // TRIP-1 spin result, public so every client animates the same spin. TripperBag: players still due a turn this weekend.
+        public int SpinSeed; public double SpinEndsAt; public string TripperId=""; public List<PlayerDose> Doses=new List<PlayerDose>(); public List<string> TripperBag=new List<string>();
         public double ElapsedSeconds,DurationSeconds=600,SimulationSeconds,LaunchAtSeconds; public long Tick,TransactionSequence,EntitySequence;
         public int CluesRead, ObjectiveReward, SurvivorBonus, Survivors, ConnectedCrewCount;
         public bool GateOpened;

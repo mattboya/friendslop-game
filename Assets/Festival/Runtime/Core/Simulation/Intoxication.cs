@@ -14,6 +14,7 @@ namespace Festival.Core
                 if(effect.Id=="weed")multiplier*=.8f;
                 else if(effect.Id=="lsd")multiplier*=.9f;
                 else if(effect.Id=="mushrooms")multiplier*=.88f;
+                else if(effect.Id==FestivalSimulation.DoseEffect)multiplier*=FestivalSimulation.DoseMovementMultiplier(effect.Intensity);
                 else if(effect.Id=="shot")multiplier*=.9f;
             }
             return Math.Max(.65f,multiplier);

@@ -711,7 +711,7 @@ namespace Festival.Presentation
 #endif
             mapShade.SetActive(shown);mapPanel.SetActive(shown);if(!shown)return;
             objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);
-            bool camp=state.Phase=="Shopping";campMap.SetActive(camp);festivalMap.SetActive(!camp);
+            bool camp=state.Phase=="Shopping"||state.Phase=="Spinning";campMap.SetActive(camp);festivalMap.SetActive(!camp);
             mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";
             float x=camp?Mathf.InverseLerp(-30,30,player.X):Mathf.InverseLerp(-35,35,player.X);
             float y=camp?Mathf.InverseLerp(-20,25,player.Z):Mathf.InverseLerp(-35,35,player.Z);
@@ -846,7 +846,6 @@ namespace Festival.Presentation
             }
             else if(state.Phase=="Playing"&&player.Life=="Alive")
             {
-                if(!state.GateOpened&&Near(player,-18,-22))AddAction("Volunteer for free clue tasting",()=>session.Command("ClueSupply"),ref y);
                 var clue=FestivalSimulation.CluePoint(state.Seed,state.CluesRead);
                 if(state.CluesRead<2&&Near(player,clue.X,clue.Z)&&FestivalSimulation.CanReadClues(player))AddAction(state.ConnectedCrewCount==1?"Interpret totem alone (6 seconds)":"Interpret totem with sober friend",()=>session.Command("ReadClue"),ref y);
                 if(state.FriendPosition!=null&&(state.FriendPosition.X!=0||state.FriendPosition.Z!=0)&&Near(player,state.FriendPosition.X,state.FriendPosition.Z)&&(!state.FriendFound||state.FriendLeaderId!=player.Id))
@@ -862,7 +861,7 @@ namespace Festival.Presentation
                 {
                     var spirit=state.Players.Find(p=>p.Life=="Spirit"&&player.Wristbands.Contains(p.Id));
                     if(spirit!=null){AddAction("Revive "+spirit.Name+" — free task",()=>session.Command("BeginRevival",spirit.Id),ref y);AddAction("Revive "+spirit.Name+" — pay $10",()=>session.Command("BeginRevival",spirit.Id,amount:1),ref y);}
-                    if(player.Effects.Count>0&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher",()=>session.Command("Use",item:"medical_voucher"),ref y);
+                    if(player.Effects.Exists(FestivalSimulation.Treatable)&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher",()=>session.Command("Use",item:"medical_voucher"),ref y);
                 }
                 if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
                 var npc=Nearest(state.Npcs,player.X,player.Z,2.5f);

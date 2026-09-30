@@ -111,7 +111,7 @@ public static class WeekendTests
         for(int level=0;level<3;level++)Finish(s,"Success");
         s.State.Phase="Shopping";Check(Where(s)=="0/3/0","setup: debrief over, at camp before Night 2");
         foreach(var p in s.State.Players){p.X=0;p.Z=19;Act(s,p.Id,"Ready");}
-        s.Tick(5.2);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
+        s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
         Check(s.State.Phase=="Playing","setup: Night 2 under way");
         s.State.FriendFound=true;s.State.FriendPosition=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
         foreach(var p in s.State.Players){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}

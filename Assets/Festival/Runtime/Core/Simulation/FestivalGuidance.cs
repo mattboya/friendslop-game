@@ -10,6 +10,7 @@ namespace Festival.Core
             if(state==null||player==null)return "";
             if(state.Phase=="Shopping")return "GATHER AT CAMP • BUY GEAR • READY UP";
             if(state.Phase=="CampReview")return "CAMP DEBRIEF • VOTE BEFORE SHOPPING";
+            if(state.Phase=="Spinning")return "SPINNING FOR THE TRIPPER";
             if(state.Phase=="Loading")return "HEADING TO THE FESTIVAL";
             if(state.Phase=="Results")return state.Result=="Success"?"FRIEND RESCUED • BACK TO CAMP":"ROUND OVER • BACK TO CAMP";
             if(player.Life=="Downed")return "DOWNED • CALL FOR HELP";
@@ -38,6 +39,7 @@ namespace Festival.Core
                     ?"Press E at the lit trailhead to ready up and dance."
                     :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E. Ready at lit trailhead "+Route(player,0,19)+".";
             }
+            if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
             if(state.Phase=="CampReview")return "Press 1, 2 or 3 to pick a friend for each award. Then the host opens the camp shop.";
             if(state.Phase=="Results")return player.Id==state.HostPlayerId
@@ -67,9 +69,8 @@ namespace Festival.Core
                 var clue=FestivalSimulation.CluePoint(state.Seed,state.CluesRead);
                 return (clue.X>0?"Sun":"Moon")+" totem "+Route(player,clue.X,clue.Z)+(CrewCount(state)==1?". Hold the clue alone for six seconds.":". Bring a sober teammate within 4 m.");
             }
-            return Distance(player,-18,-22)<=2.7
-                ?"Market here: E, then FREE CLUE TASTING in Nearby/Crew."
-                :"Free clue tasting at Night Market "+Route(player,-18,-22)+". A sober friend makes interpretation faster.";
+            var tripper=state.Players.Find(p=>p.Id==state.TripperId);
+            return "Stick with "+(tripper?.Name??"the tripper")+": only the tripper can read the totems. Stay within 4 m while they do.";
         }
 
         private static double Distance(PlayerState player,float x,float z)
