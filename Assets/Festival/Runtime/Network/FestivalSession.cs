@@ -41,6 +41,8 @@ namespace Festival.Network
         public LocalProfile Profile {get;private set;}
         public IVoiceSession Voice {get;}=new UnavailableVoiceSession();
         public bool MenuOpen=true;
+        /// <summary>The pointer is free, and the view holds still, for the menu and for clicking a friend at the debrief (HUD-3).</summary>
+        public bool PointerFree=>MenuOpen||State!=null&&FestivalHudText.VoteOpen(State);
         public Camera ViewCamera {get;private set;}
         public double EstimatedSimulationSeconds => State==null?0:State.SimulationSeconds
             +(State.Phase=="Results"||manager==null?0:Math.Max(0,Math.Min(.4,manager.ServerTime.Time-serverClockAtSnapshot)));
@@ -362,8 +364,8 @@ namespace Festival.Network
             if((State.Phase=="Playing"||State.Phase=="CampReview") && MenuOpen && lastPhase!=State.Phase)MenuOpen=false;
             lastPhase=State.Phase;
             if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)MenuOpen=!MenuOpen;
-            Cursor.lockState=MenuOpen?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=MenuOpen;
-            if(!MenuOpen && Application.isFocused)
+            Cursor.lockState=PointerFree?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=PointerFree;
+            if(!PointerFree && Application.isFocused)
             {
                 var look=Controls.Look.ReadValue<Vector2>();yaw+=look.x*Profile.Data.MouseSensitivity;pitch=Mathf.Clamp(pitch-look.y*Profile.Data.MouseSensitivity,-80,80);
             }
@@ -496,7 +498,8 @@ namespace Festival.Network
                 if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
                 bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
                 if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
-                Actor(p.Id,p.Name,togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.VisualPose=="Dj"?0:p.Yaw,
+                // A debrief winner wears their awards over their head until the next level's results (HUD-3).
+                Actor(p.Id,FestivalHudText.Nameplate(p),togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.VisualPose=="Dj"?0:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
                     string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId);

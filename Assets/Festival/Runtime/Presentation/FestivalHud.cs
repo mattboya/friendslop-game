@@ -32,7 +32,7 @@ namespace Festival.Presentation
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,tripping,trustLine,chatText;
+        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping,trustLine,chatText;
         private Text musicValue,lookValue,motionValue,contrastValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -74,6 +74,14 @@ namespace Festival.Presentation
         private bool? appliedContrast;
         private bool? expandedGear;
         private int rosterLines,trippingLines;
+        // The debrief ballot: a row per award (up to three) of buttons, one per connected crew member (up to eight).
+        private readonly Text[] ballotLabels=new Text[3];
+        private readonly GameObject[,] ballotPicks=new GameObject[3,8];
+        private readonly List<string> ballotCrew=new List<string>(8);
+        private int ballotColumns;
+        // The verdict plays from when this client first sees every vote in (FestivalHudText.ReviewReveal).
+        private string revealRound="";
+        private float revealAt;
         // The chat check under way and the question 1-3 asked in it (-1 until one is).
         private string chatInteractionId="";
         private int chatQuestion=-1;
@@ -191,10 +199,27 @@ namespace Festival.Presentation
             promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.777f),new Vector2(.355f,.844f),true);
             promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
             prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
-            reviewPanel=Card(root.transform,"Camp round review",new Vector2(.29f,.40f),new Vector2(.71f,.80f),true);
+            // The campfire debrief: the verdict on the round, a ballot row per award to click a friend on, who has voted, then
+            // the verdict read out award by award where the ballot was.
+            reviewPanel=Card(root.transform,"Camp round review",new Vector2(.25f,.20f),new Vector2(.75f,.84f),true);
             Accent(reviewPanel.transform,Orange);
-            reviewText=Label(reviewPanel.transform,"Review text",23,TextAnchor.MiddleCenter);
-            Place(reviewText.rectTransform,.06f,.06f,.94f,.94f);reviewPanel.SetActive(false);
+            reviewText=Label(reviewPanel.transform,"Review text",21,TextAnchor.MiddleCenter);Place(reviewText.rectTransform,.05f,.82f,.95f,.96f);
+            reviewReveal=Label(reviewPanel.transform,"Review reveal",25,TextAnchor.MiddleCenter);reviewReveal.fontStyle=FontStyle.Normal;Place(reviewReveal.rectTransform,.05f,.20f,.95f,.80f);
+            reviewStatus=Label(reviewPanel.transform,"Review status",18,TextAnchor.MiddleCenter);reviewStatus.color=MutedPaper;Place(reviewStatus.rectTransform,.05f,.03f,.95f,.18f);
+            for(int award=0;award<3;award++)
+            {
+                float top=.79f-award*.195f;
+                ballotLabels[award]=Label(reviewPanel.transform,"Award "+(award+1),19,TextAnchor.MiddleLeft);ballotLabels[award].fontStyle=FontStyle.Normal;ballotLabels[award].color=Orange;Place(ballotLabels[award].rectTransform,.05f,top-.07f,.95f,top);
+                for(int pick=0;pick<ballotPicks.GetLength(1);pick++)
+                {
+                    int slot=award,column=pick;
+                    var button=Button(reviewPanel.transform,"",new Vector2(.05f,top-.185f),new Vector2(.95f,top-.075f),()=>{if(column<ballotCrew.Count)session.Command("ReviewVote",ballotCrew[column],amount:slot);});
+                    button.name="Award "+(award+1)+" pick "+(pick+1);ballotPicks[award,pick]=button;
+                    // A crew of eight shares the row, so a long name shrinks to fit its button.
+                    var friendName=button.transform.Find("Text").GetComponent<Text>();friendName.resizeTextForBestFit=true;friendName.resizeTextMinSize=12;friendName.resizeTextMaxSize=friendName.fontSize;
+                }
+            }
+            reviewPanel.SetActive(false);
             noticePanel=Card(root.transform,"Session notice",new Vector2(.368f,.785f),new Vector2(.695f,.849f),true);
             Accent(noticePanel.transform,Orange);
             notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);noticePanel.SetActive(false);
@@ -463,23 +488,7 @@ namespace Festival.Presentation
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
             reviewPanel.SetActive(state.Phase=="CampReview"&&!showMenu);
-            if(state.Phase=="CampReview")
-            {
-                // ponytail: a plain text stand-in for the debrief vote; HUD-3 builds the real reveal UI.
-                bool revealed=FestivalSimulation.ReviewRevealed(state);string awards="";
-                string CrewName(string id)=>id==player.Id?"YOU":state.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
-                for(int award=0;award<state.ReviewAwards.Count;award++)
-                {
-                    var mine=state.ReviewVotes.Find(v=>v.PlayerId==player.Id&&v.Award==award);
-                    awards+=(award+1)+"  "+state.ReviewAwards[award].ToUpperInvariant()+"   •   "+(revealed?"WINNER: "+CrewName(state.ReviewWinners[award]):mine==null?"PICK A FRIEND":"YOUR PICK: "+CrewName(mine.TargetId))+"\n";
-                }
-                reviewText.text="THE VERY OFFICIAL ROUND REVIEW\n\n"
-                    +FestivalHudText.ReviewOutcome(state)+"   •   SALES $"+state.ReviewSales
-                    +"   •   SURVIVORS "+state.ReviewSurvivors+"\n"
-                    +"CAMP ANTICS "+state.ReviewAntics+"\n\n"
-                    +(state.ReviewAwards.Count==0?"SOLO PRACTICE: NO AWARDS TONIGHT\n\n":"Press 1–3 to pick a friend for each award:\n"+awards+ConnectedReviewVotes(state)+" / "+state.ConnectedCrewCount+" CREW VOTED\n")
-                    +(revealed?(session.IsHost?"E  OPEN THE SHOP":"Waiting for the host to open the shop."):"The verdict is revealed when the whole crew has voted.");
-            }
+            if(state.Phase=="CampReview")UpdateReview(state,player);
             var heldDefinition=state.Phase=="Shopping"?Catalog.FindItem(player.HeldOfferId):null;
             heldDetailPanel.SetActive(heldDefinition!=null&&!showMenu);
             if(heldDefinition!=null){heldTitle.text=heldDefinition.Name.ToUpperInvariant();heldPrice.text="$"+heldDefinition.Price;heldDetailText.text=heldDefinition.Description;}
@@ -643,6 +652,36 @@ namespace Festival.Presentation
             var speaker=NearestTalker(state.Npcs,player.X,player.Z,2.7f);
             if(speaker!=null)session.Command("Talk",speaker.Id);
         }
+
+        // The campfire debrief: click a friend for each award while the vote is open (the session frees the pointer for it),
+        // then the verdict plays out where the ballot was, from when this client first saw every vote in.
+        private void UpdateReview(RoundState state,PlayerState player)
+        {
+            bool open=FestivalHudText.VoteOpen(state);
+            if(!open&&revealRound!=state.RoundId){revealRound=state.RoundId;revealAt=Time.unscaledTime;}
+            double revealSeconds=RevealSeconds(state);
+            reviewText.text=FestivalHudText.ReviewHeadline(state,player);
+            reviewReveal.text=FestivalHudText.ReviewReveal(state,player.Id,revealSeconds);
+            reviewStatus.text=FestivalHudText.ReviewStatus(state,player.Id,revealSeconds);
+            ballotCrew.Clear();if(open)foreach(var p in state.Players)if(p.Connected&&ballotCrew.Count<ballotPicks.GetLength(1))ballotCrew.Add(p.Id);
+            bool relayout=ballotColumns!=ballotCrew.Count;ballotColumns=ballotCrew.Count;
+            for(int award=0;award<ballotLabels.Length;award++)
+            {
+                bool row=open&&award<state.ReviewAwards.Count;
+                ballotLabels[award].gameObject.SetActive(row);if(row)ballotLabels[award].text=FestivalHudText.Ballot(state,player.Id,award);
+                string pick=state.ReviewVotes.Find(v=>v.PlayerId==player.Id&&v.Award==award)?.TargetId;
+                for(int column=0;column<ballotPicks.GetLength(1);column++)
+                {
+                    var button=ballotPicks[award,column];bool shown=row&&column<ballotCrew.Count;button.SetActive(shown);if(!shown)continue;
+                    string friend=ballotCrew[column];
+                    button.transform.Find("Text").GetComponent<Text>().text=FestivalHudText.CrewName(state,player.Id,friend);
+                    button.GetComponent<Image>().color=friend==pick?Orange:new Color(.84f,.85f,.76f,1);
+                    if(relayout){var cell=Rect(button);float width=.9f/ballotCrew.Count;cell.anchorMin=new Vector2(.05f+column*width+.004f,cell.anchorMin.y);cell.anchorMax=new Vector2(.05f+(column+1)*width-.004f,cell.anchorMax.y);}
+                }
+            }
+        }
+        // Seconds since this client saw the verdict come in; 0 while the vote is open.
+        private double RevealSeconds(RoundState state)=>FestivalHudText.VoteOpen(state)||revealRound!=state.RoundId?0:Time.unscaledTime-revealAt;
 
         // The chat picker shows while the local player's chat check runs; a new chat starts with no question asked.
         private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
@@ -814,9 +853,10 @@ namespace Festival.Presentation
             }
             if(state.Phase=="CampReview")
             {
-                bool revealed=FestivalSimulation.ReviewRevealed(state);
-                if(revealed&&session.IsHost)SetPromptAction("E  OPEN CAMP SHOP",()=>session.Command("FinishReview"));
-                else SetPromptAction(revealed?"WAIT FOR THE HOST":"1–3  PICK A FRIEND FOR EACH AWARD",null);
+                // The debrief card says how to vote and who has; E opens the shop for the host once the verdict has played out.
+                bool done=!FestivalHudText.VoteOpen(state)&&FestivalHudText.RevealDone(state,RevealSeconds(state));
+                if(done&&session.IsHost)SetPromptAction("E  OPEN CAMP SHOP",()=>session.Command("FinishReview"));
+                else SetPromptAction("",null);
                 FinishActions();return;
             }
             if(state.Phase=="Results")
@@ -1054,16 +1094,8 @@ namespace Festival.Presentation
 
         private void StartHost(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";session.Host(nameField.text,port);}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";session.Join(nameField.text,addressField.text,port);}
-        // Crew members who have picked a friend for every award.
-        private static int ConnectedReviewVotes(RoundState state)
-        {
-            int votes=0;
-            foreach(var crew in state.Players)
-                if(crew.Connected&&state.ReviewVotes.FindAll(v=>v.PlayerId==crew.Id).Count>=state.ReviewAwards.Count)votes++;
-            return votes;
-        }
-        // ponytail: each press of an award's key moves your pick to the next connected friend (starting after you).
-        // A stand-in until HUD-3's picker; the vote that completes the crew's ballot is final.
+        // The ballot's keyboard path beside clicking: each press of an award's key moves your pick to the next connected friend
+        // (starting after you). The vote that completes the crew's ballot is final.
         private static string NextReviewPick(RoundState state,PlayerState player,int award)
         {
             var crew=state.Players.FindAll(p=>p.Connected);

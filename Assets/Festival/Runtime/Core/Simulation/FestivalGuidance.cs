@@ -44,7 +44,7 @@ namespace Festival.Core
             }
             if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
-            if(state.Phase=="CampReview")return "Press 1, 2 or 3 to pick a friend for each award. Then the host opens the camp shop.";
+            if(state.Phase=="CampReview")return "Click a friend for each award, or press 1, 2 or 3. Then the host opens the camp shop.";
             if(state.Phase=="Results")return player.Id==state.HostPlayerId
                 ?"Open Escape menu and choose NEXT ROUND to return to camp."
                 :"Waiting for the host to start the next camp round.";

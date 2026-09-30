@@ -194,7 +194,8 @@ namespace Festival.Presentation
         /// <summary>An amount of money as the viewer reads it (PLAYA-1): "$12" at Palm Mirage, "12 buttons" or their own odd object on Ember Playa.</summary>
         public static string Money(RoundState s,PlayerState viewer,int amount)=>Festivals.CurrencyName(s.FestivalIndex,viewer.Ordinal,amount);
 
-        static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
+        /// <summary>A crew member as the local player reads them in the debrief: "YOU", or their name.</summary>
+        internal static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
 
         /// <summary>
         /// Who trips this level and on how many doses, from the public spin result, while the crew is out (the spinner names them
