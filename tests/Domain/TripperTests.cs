@@ -27,7 +27,7 @@ public static class TripperTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,DoseSpinnerWeights,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
+        foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseSpinnerWeights,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
             DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewReadsBothTotems,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" tripper test(s) failed:\n"+string.Join("\n",failures));
@@ -67,6 +67,17 @@ public static class TripperTests
         s.AddPlayer("p4","P4");var leaver=s.State.Players.Find(p=>p.Id!=picked[0]&&p.Id!="p4"&&p.Id!=s.State.HostPlayerId);s.Disconnect(leaver.Id);
         for(int level=1;level<4;level++){Spin(s);picked.Add(s.State.TripperId);Win(s);}
         Check(picked.Contains("p4")&&!picked.Contains(leaver.Id)&&picked.Distinct().Count()==4,"a newcomer gets a turn, a leaver is skipped, nobody repeats: "+string.Join(",",picked));
+    }
+
+    // Two friends over four levels: the bag refills once empty, so nobody trips twice before the other has.
+    static void SmallCrewsAlternate()
+    {
+        for(int seed=0;seed<20;seed++)
+        {
+            var s=Crew(seed,2);var turns=new List<string>();
+            for(int level=0;level<4;level++){Spin(s);turns.Add(s.State.TripperId);Win(s);}
+            Check(turns[0]!=turns[1]&&turns[2]!=turns[3],"two friends take turns about, got "+string.Join(",",turns)+" (seed "+seed+")");
+        }
     }
 
     static void DoseSpinnerWeights()
@@ -180,6 +191,13 @@ public static class TripperTests
         p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});Check(Act(s,"p0","Consume","stock_lsd").Accepted,"setup: a Prism tab on top of the dose");
         Check(Act(s,"p0","Use","medical_voucher").Accepted,"the tent treats the extra effect");s.Tick(3.1);
         Check(Dose(p)==dose&&!p.Effects.Exists(e=>e.Id=="lsd")&&p.Inventory.Count==0,"the voucher removes the Prism tab and leaves the dose");
+        // A stand-in who took a Prism tab before inheriting the dose carries the tab first; the tent still treats only the tab.
+        var crew=Crew(51,3);Spin(crew);Play(crew);var first=Tripper(crew);
+        foreach(var friend in crew.State.Players)if(friend!=first){friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});Check(Act(crew,friend.Id,"Consume","stock_lsd").Accepted,"setup: "+friend.Id+" takes a Prism tab");}
+        Die(crew,first);var heir=Tripper(crew);Check(heir.Effects[0].Id=="lsd"&&Dose(heir)==1,"setup: the stand-in took the tab before the dose");
+        heir.X=24;heir.Z=-20;heir.Inventory.Add(new ItemStack{ItemId="medical_voucher",Count=1});
+        Check(Act(crew,heir.Id,"Use","medical_voucher").Accepted,"the tent treats the stand-in's tab");crew.Tick(3.1);
+        Check(Dose(heir)==1&&!heir.Effects.Exists(e=>e.Id=="lsd"),"the stand-in keeps the dose and loses the earlier tab");
     }
 
     static void GuidanceFollowsTheSpin()
