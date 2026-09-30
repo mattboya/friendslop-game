@@ -50,6 +50,8 @@ namespace Festival.Core
         public bool GateOpened;
         public string PrivateClue="";
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
+        // Sale cash paid out this level, after any payout multiplier; a day's quota counts it (DayQuota.cs).
+        public int LevelSales;
         public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
         public List<CampReviewVote> ReviewVotes=new List<CampReviewVote>();
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";

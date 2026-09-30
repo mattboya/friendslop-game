@@ -40,7 +40,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.StashCash<0||state.GrossSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
@@ -101,8 +101,8 @@ namespace Festival.Core
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
-                case "FindFriend":if(!State.GateOpened)return Reject("Interpret both totems and complete a dance to locate your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
-                case "Extract":if(!CanExtractNow(p))return Reject("Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
+                case "FindFriend":if(DayLevel)return Reject("Nobody is lost by day: sell the quota, then head back to camp");if(!State.GateOpened)return Reject("Interpret both totems and complete a dance to locate your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
+                case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():"Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
                 case "LostProperty":if(!Near(p,-28,16))return Reject("Find lost property marker");return BeginTask(p,"LostProperty",State.LostPropertyTask.ToString(),5);
                 case "Drag":return Drag(p,c);
                 case "Rescue":return Rescue(p,c);

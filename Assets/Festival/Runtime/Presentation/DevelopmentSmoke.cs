@@ -478,7 +478,8 @@ namespace Festival.Presentation
             if(!session.State.GateOpened){Fail("networked rhythm unlock");yield break;}
             if(session.IsHost)
             {
-                sim.State.FriendPosition=new WorldPoint(10,10);PlaceBoth(sim,10,10);
+                // Nobody is lost by day (LOOP-2), so the rescue runs as Night 1 until SMOKE-1 scripts a real weekend.
+                sim.State.LevelIndex=1;sim.State.FriendPosition=new WorldPoint(10,10);PlaceBoth(sim,10,10);
             }
             else
             {
@@ -893,7 +894,8 @@ namespace Festival.Presentation
             player.X=24;player.Z=-20;session.Command("BeginRevival",player.Id);
             while(player.Life!="Alive"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(player.Life!="Alive"||player.RevivalCount!=1){Fail("solo medical revival");yield break;}
-            player.X=sim.State.FriendPosition.X;player.Z=sim.State.FriendPosition.Z;session.Command("FindFriend");
+            // Nobody is lost by day (LOOP-2), so the rescue runs as Night 1 until SMOKE-1 scripts a real weekend.
+            sim.State.LevelIndex=1;player.X=sim.State.FriendPosition.X;player.Z=sim.State.FriendPosition.Z;session.Command("FindFriend");
             while(!sim.State.FriendFound&&Time.realtimeSinceStartup<deadline)yield return null;
             if(!sim.State.FriendFound){Fail("solo friend recruitment");yield break;}
             player.X=0;player.Z=-32;sim.State.FriendPosition=new WorldPoint(0,-32);session.Command("Extract");

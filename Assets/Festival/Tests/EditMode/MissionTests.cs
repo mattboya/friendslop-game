@@ -10,6 +10,8 @@ public static class MissionTests
         var s=new FestivalSimulation(3);var a=s.AddPlayer("a","A");var b=s.AddPlayer("b","B");
         s.State.Phase="Playing";s.State.Npcs.Clear();
         Check(s.State.DurationSeconds==480&&Festivals.For(s.State).Name=="Day 1","a new crew plays the eight minute Day 1");
+        // The lost friend is a night rescue; days are the sales quota (DayQuotaTests).
+        s.State.LevelIndex=1;
         Check(!Act(s,"a","FindFriend").Accepted,"cannot skip clues");
         a.X=-18;a.Z=-22;Check(Act(s,"a","ClueSupply").Accepted,"free voluntary perception");
         Check(a.Inventory.Count==0,"free tasting cannot be resold");
@@ -46,7 +48,7 @@ public static class MissionTests
         Check(RhythmChart.Create(1,12,.4).DurationSeconds<RhythmChart.Create(1,12,.5).DurationSeconds,"optional faster rhythm");
 
         s=new FestivalSimulation(8);a=s.AddPlayer("a","A");b=s.AddPlayer("b","B");
-        s.State.Phase="Playing";s.State.Npcs.Clear();s.State.GateOpened=true;s.State.FriendFound=true;
+        s.State.Phase="Playing";s.State.LevelIndex=1;s.State.Npcs.Clear();s.State.GateOpened=true;s.State.FriendFound=true;
         s.State.FriendLeaderId=a.Id;s.State.FriendPosition=new WorldPoint(10,10);
         s.State.ObjectiveReward=20;s.State.StashCash=20;
         s.Disconnect(a.Id);b.X=10;b.Z=10;
@@ -70,7 +72,7 @@ public static class MissionTests
         solo.Z=19;Check(Act(game,solo.Id,"Ready").Accepted,"solo readies");game.Tick(5.2);
         Check(game.State.Phase=="Loading","solo countdown launches");
         Check(Act(game,solo.Id,"MapReady").Accepted&&game.State.Phase=="Playing","solo enters festival");
-        game.State.Npcs.Clear();solo.X=-18;solo.Z=-22;
+        game.State.Npcs.Clear();game.State.LevelIndex=1;solo.X=-18;solo.Z=-22;
         Check(Act(game,solo.Id,"ClueSupply").Accepted,"solo can take clue tasting");
         Check(Intoxication.MovementMultiplier(solo)<1&&Math.Abs(Intoxication.LateralDrift(solo,1))>.01,"intoxication changes walking");
         for(int index=0;index<2;index++)
@@ -92,6 +94,6 @@ public static class MissionTests
         Check(Act(game,solo.Id,"FindFriend").Accepted,"solo recruits friend");game.Tick(2.1);
         solo.X=0;solo.Z=-32;game.State.FriendPosition=new WorldPoint(0,-32);
         Check(Act(game,solo.Id,"Extract").Accepted,"solo starts shuttle extraction");game.Tick(3.1);
-        Check(game.State.Phase=="Results"&&game.State.Result=="Success","solo wins timed first level");
+        Check(game.State.Phase=="Results"&&game.State.Result=="Success","solo wins the timed night rescue");
     }
 }
