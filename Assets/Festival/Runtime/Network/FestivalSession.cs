@@ -127,14 +127,14 @@ namespace Festival.Network
             try
             {
                 token="";endpoint="127.0.0.1:"+port;peers.Clear();tokens.Clear();inputs.Clear();pending.Clear();
-                simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);
+                simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);Profile.ApplyUnlocks(simulation.State);
                 simulation.HasLineOfSight=(x,z,xx,zz)=>!Physics.Linecast(new Vector3(x,1.2f,z),new Vector3(xx,1.2f,zz),~0,QueryTriggerInteraction.Ignore);
                 simulation.Navigate=Navigate;
                 Configure(port,"127.0.0.1",true);
                 manager.NetworkConfig.ConnectionData=Encoding.UTF8.GetBytes(JsonUtility.ToJson(new Hello{Name=CleanName(name)}));
                 if(!manager.StartHost())throw new InvalidOperationException("Could not listen on that port.");
                 RegisterMessages();Message="Lobby open on port "+port+". Friends can join by LAN address.";
-                State=ViewFor(LocalPlayerId);MenuOpen=false;
+                State=ViewFor(simulation,LocalPlayerId);MenuOpen=false;
             }
             catch(Exception e){Fail("Host failed: "+e.Message);}
         }
@@ -338,7 +338,8 @@ namespace Festival.Network
             {
                 accumulator+=Math.Min(Time.unscaledDeltaTime,.2f);int steps=0;
                 while(accumulator>=1.0/30 && steps++<6){ApplyMovement(1.0/30);simulation.Tick(1.0/30);accumulator-=1.0/30;}
-                State=ViewFor(LocalPlayerId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=manager.ServerTime.Time;
+                State=ViewFor(simulation,LocalPlayerId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=manager.ServerTime.Time;
+                Profile.RememberUnlocks(simulation.State);
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
             var player=LocalPlayer;if(player==null)return;
@@ -423,10 +424,11 @@ namespace Festival.Network
             foreach(var peer in peers)
             {
                 if(peer.Key==manager.LocalClientId)continue;
-                SendJson("festival.snapshot",peer.Key,new SnapshotPacket{State=ViewFor(peer.Value),ServerSeconds=manager.ServerTime.Time});
+                SendJson("festival.snapshot",peer.Key,new SnapshotPacket{State=ViewFor(simulation,peer.Value),ServerSeconds=manager.ServerTime.Time});
             }
         }
-        private RoundState ViewFor(string viewer)
+        // Static so EditMode tests can check the whitelist without a network session.
+        public static RoundState ViewFor(FestivalSimulation simulation,string viewer)
         {
             // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials.
             var source=simulation.State;var local=simulation.Player(viewer);bool spirit=local?.Life=="Spirit";
@@ -434,7 +436,8 @@ namespace Festival.Network
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=source.ReviewVotes,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=!spirit&&source.FriendFound?source.FriendPosition:new WorldPoint(0,0),
-                VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,PrivateClue=FestivalSimulation.ClueHint(source,local),ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count};
+                VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,PrivateClue=FestivalSimulation.ClueHint(source,local),ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
+                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount};
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
