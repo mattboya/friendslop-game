@@ -99,5 +99,15 @@ public static class GroupDanceTests
         s=Crew();s.State.TripperId="a";s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="partner_a",IsTrue=true});
         second=Start(s,"b");var check=Start(s,"a","ConfirmDance");Live(s,()=>check.Status!="Active"&&second.Status!="Active",check,second);
         Check(check.Score==1&&second.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,"a perfect check dance beside a friend's perfect Dance: both lose, each exactly once (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+        // The check dance is the tripper's own: its score moves only the tripper, either way round. A missed check (+20) leaves a
+        // friend's perfect Dance at solo, and a friend's missed Dance leaves a perfect check at solo.
+        foreach(bool checkHits in new[]{false,true})
+        {
+            s=Crew();s.State.TripperId="a";s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="partner_a",IsTrue=true});
+            second=Start(s,"b");check=Start(s,"a","ConfirmDance");var hit=checkHits?check:second;
+            Live(s,()=>check.Status!="Active"&&second.Status!="Active",hit);
+            double hitHeat=Heat(s,hit.PlayerId),missHeat=Heat(s,checkHits?"b":"a");
+            Check(hit.Score==1&&(checkHits?second:check).Score==0&&hitHeat==solo&&missHeat==40,(checkHits?"a perfect check dance beside a friend's missed Dance":"a missed check dance beside a friend's perfect Dance")+": the perfect one loses as if alone, the missed one gains 20 (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+        }
     }
 }
