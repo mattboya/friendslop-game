@@ -159,7 +159,8 @@ namespace Festival.Core
         {
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
-            State.LaunchAtSeconds=0;Spin(connected);DealRoles();DealTwists();
+            // The level runs the table's length whatever the round was saved with (a snapshot from before weekends held 600 s).
+            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;Spin(connected);DealRoles();DealTwists();
         }
         void BeginCampReview()
         {

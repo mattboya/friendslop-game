@@ -17,6 +17,7 @@ public static class WeekendTests
         WeekendCarriesCashGearAndStash();
         StashesCarryThroughTheWeekend();
         DyingKeepsTheWeekendsCash();
+        OldCampSnapshotsLaunchTheTablesLength();
         FailureRestartsTheFestival();
         HostChoosesAnUnlockedFestival();
         WinningNightTwoUnlocksOnTheResultsScreen();
@@ -97,6 +98,21 @@ public static class WeekendTests
         Check(a.Life=="Spirit"&&s.State.Drops.Exists(d=>d.ItemId=="confetti"),"setup: a dies and drops their gear");
         Check(a.Cash==87,"a spirit keeps the $87 carried this weekend");
         Finish(s,"Success");Check(s.Player("a").Cash==87,"and starts Night 1 with it");
+    }
+
+    // A camp snapshot saved before weekends holds the old 600 s round length; the level it launches still runs the table's length.
+    static void OldCampSnapshotsLaunchTheTablesLength()
+    {
+        var s=Crew(44);var old=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
+        foreach(var field in new[]{"FestivalIndex","LevelIndex","EncoreTier","UnlockedFestivalCount","Doses","TripperBag","Bodies","ReviewAwards","ReviewWinners","Visions","ClueChain","LevelSales"})old.Remove(field);
+        old["DurationSeconds"]=600;
+        var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(old.ToJsonString(),Json));
+        Check(restored.State.Phase=="Shopping"&&Festivals.For(restored.State).Name=="Day 1","setup: the old camp restores at Day 1");
+        foreach(var p in restored.State.Players){p.X=0;p.Z=19;Check(Act(restored,p.Id,"Ready").Accepted,p.Id+" readies");}
+        restored.Tick(5.2);var tripper=restored.Player(restored.State.TripperId);
+        Check(restored.State.Phase=="Spinning"&&tripper!=null,"setup: the crew leaves camp");
+        Check(restored.State.DurationSeconds==480,"the day runs eight minutes, not the old snapshot's ten");
+        Check(tripper.Effects.Exists(e=>e.Id==FestivalSimulation.DoseEffect&&e.RemainingSeconds==480),"and the tripper's dose lasts that day");
     }
 
     static void FailureRestartsTheFestival()
