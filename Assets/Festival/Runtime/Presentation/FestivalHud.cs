@@ -838,11 +838,21 @@ namespace Festival.Presentation
         private void ApplyEffects(PlayerState player)
         {
             if(player==null||player.Effects.Count==0){effectWash.color=Color.clear;if(session?.ViewCamera!=null)session.ViewCamera.fieldOfView=baseFov;return;}
-            bool lsd=player.Effects.Exists(e=>e.Id=="lsd"), mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms");
-            float amount=session.Profile.Data.ReducedMotion?.025f:.055f;
-            var color=lsd?Color.HSVToRGB(Mathf.Repeat(Time.unscaledTime*.035f,1),.7f,1):new Color(.25f,.6f,.3f);
-            effectWash.color=new Color(color.r,color.g,color.b,amount);
+            bool mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms");
+            effectWash.color=EffectWash(player.Effects,session.Profile.Data.ReducedMotion,Time.unscaledTime);
             if(session.ViewCamera!=null)session.ViewCamera.fieldOfView=mushrooms&&!session.Profile.Data.ReducedMotion?baseFov+Mathf.Sin(Time.unscaledTime*.8f)*1.2f:baseFov;
+        }
+
+        /// <summary>
+        /// The screen wash for what the player took from the shop (the catalog's effects). The spinner's dose lasts the whole level
+        /// (everyone's, on Night 2) and the debrief's shot 90 s: a constant wash under either swamped LIGHT-1's neon night, and the
+        /// dose already shows as exposure (FestivalNightLighting).
+        /// </summary>
+        public static Color EffectWash(List<ActiveEffect> effects,bool reducedMotion,float time)
+        {
+            if(!effects.Exists(e=>Catalog.FindEffect(e.Id)!=null))return Color.clear;
+            var color=effects.Exists(e=>e.Id=="lsd")?Color.HSVToRGB(Mathf.Repeat(time*.035f,1),.7f,1):new Color(.25f,.6f,.3f);
+            return new Color(color.r,color.g,color.b,reducedMotion?.025f:.055f);
         }
 
         private void UpdateActions(RoundState state,PlayerState player)

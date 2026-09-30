@@ -95,6 +95,16 @@ namespace Festival.Tests
             Assert.That(grade.saturation.value,Is.EqualTo(saturation).Within(1e-5f),"camp saturation");
         }
 
+        // J3: the HUD's effect wash is for what you took. The spinner's dose lasts the whole level (everyone's, on Night 2) and the
+        // debrief's shot 90 s; a constant green wash under either swamped the neon night, and the dose already shows as exposure.
+        [Test]public void OnlyWhatYouTookWashesTheScreen()
+        {
+            var effects=new List<ActiveEffect>{new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4},new ActiveEffect{Id="shot"}};
+            Assert.That(FestivalHud.EffectWash(effects,false,0).a,Is.Zero,"a dose and a debrief shot leave the night unwashed");
+            foreach(var taken in Catalog.Effects)
+                Assert.That(FestivalHud.EffectWash(new List<ActiveEffect>{new ActiveEffect{Id=taken.Id}},false,0).a,Is.GreaterThan(0),taken.Name+" still washes the screen");
+        }
+
         // A round at the given level and phase. "me" carries the spinner's dose when it is above 0; a friend is always on dose 4.
         private static RoundState Round(int level,string phase,int dose=0)
         {
