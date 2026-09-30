@@ -26,13 +26,13 @@ namespace Festival.Presentation
         private Canvas canvas;
         private Font font;
         private Font displayFont;
-        private GameObject connectionPanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
+        private GameObject connectionPanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, chatPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText;
+        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,tripping,trustLine,chatText;
         private Text musicValue,lookValue,motionValue,contrastValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -73,7 +73,10 @@ namespace Festival.Presentation
         private string previousRound="";
         private bool? appliedContrast;
         private bool? expandedGear;
-        private int rosterLines;
+        private int rosterLines,trippingLines;
+        // The chat check under way and the question 1-3 asked in it (-1 until one is).
+        private string chatInteractionId="";
+        private int chatQuestion=-1;
         private Image effectWash;
         private float baseFov=75;
         private float nextActionRefresh;
@@ -170,6 +173,10 @@ namespace Festival.Presentation
             objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.01f,.96f,.46f);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
             timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);
+            // Who trips this level and on how many doses, under the clock for the whole crew (UpdateTrippingLayout sizes it).
+            trippingPanel=Card(root.transform,"Tripper card",new Vector2(.36f,.864f),new Vector2(.64f,.906f),true);
+            Accent(trippingPanel.transform,Orange);
+            tripping=Label(trippingPanel.transform,"Tripping",16,TextAnchor.MiddleCenter);tripping.fontStyle=FontStyle.Normal;Fill(tripping.rectTransform,4);trippingPanel.SetActive(false);
             vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
             Accent(vitalPanel.transform,Mint);
             vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.10f,.94f,.92f);
@@ -203,6 +210,9 @@ namespace Festival.Presentation
             }
             reticle=Panel(root.transform,"Aim dot",Paper,new Vector2(.499f,.498f),new Vector2(.501f,.502f));
             reticle.GetComponent<Image>().raycastTarget=false;
+            // The tripper's one hint, quiet and brief, just under the aim dot as each level starts.
+            trustLine=Label(root.transform,"Trust line",20,TextAnchor.MiddleCenter);trustLine.color=MutedPaper;Place(trustLine.rectTransform,.30f,.405f,.70f,.455f);
+            trustLine.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.8f);trustLine.gameObject.SetActive(false);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             diagnostics=Label(root.transform,"Development diagnostics",14,TextAnchor.UpperLeft);
             SetRect(diagnostics.rectTransform,new Vector2(0,.48f),new Vector2(.38f,.9f),new Vector2(18,0),Vector2.zero);
@@ -268,6 +278,10 @@ namespace Festival.Presentation
             dialogueSpeaker=Label(dialoguePanel.transform,"Speaker",17,TextAnchor.MiddleLeft);dialogueSpeaker.fontStyle=FontStyle.Normal;dialogueSpeaker.color=new Color(.17f,.47f,.40f);Place(dialogueSpeaker.rectTransform,.045f,.56f,.95f,.90f);
             dialogueLine=Label(dialoguePanel.transform,"Dialogue line",24,TextAnchor.MiddleLeft);dialogueLine.color=Ink;Place(dialogueLine.rectTransform,.045f,.09f,.95f,.62f);
             dialoguePanel.SetActive(false);
+            // The tripper's chat check: the festivalgoer's opener and three questions on 1-3, the asked one answered.
+            chatPanel=Card(root.transform,"Chat check card",new Vector2(.60f,.28f),new Vector2(.975f,.74f),false);
+            Accent(chatPanel.transform,Orange);
+            chatText=Label(chatPanel.transform,"Chat check",20,TextAnchor.UpperLeft);chatText.color=Ink;Place(chatText.rectTransform,.05f,.04f,.95f,.93f);chatPanel.SetActive(false);
 
             BuildConnection(root.transform);
             BuildPass(root.transform);
@@ -441,7 +455,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatPanel.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -472,6 +486,8 @@ namespace Festival.Presentation
             cancelButton.SetActive(state.Phase=="Playing"&&player.InteractionId!="");
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             UpdateText(state,player);
+            trippingPanel.SetActive(!showMenu&&tripping.text!="");
+            trustLine.gameObject.SetActive(!showMenu&&trustLine.text!="");
             UpdateGearLayout(handGear.Count>0);
             UpdateActions(state,player);
             if(checkoutItem!="" && (Catalog.FindItem(checkoutItem)==null || (state.Phase=="Shopping"?(player.HeldOfferId!=checkoutItem||!Near(player,0,7)):(state.Phase!="Playing"||FocusedOffer(state,player)!=checkoutItem))))checkoutItem="";
@@ -486,11 +502,12 @@ namespace Festival.Presentation
             promptKeycap.SetActive(primaryAction!=null);
             UpdateKeyboard(state,player);
             UpdateRhythm(state,player);
+            UpdateChat(state,player,showMenu);
             UpdateMap(state,player);
             if(mapPanel.activeSelf){rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();}
             if(rhythmPanel.activeSelf&&!showMenu&&!mapPanel.activeSelf)
             {
-                objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);
+                objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);
             }
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
@@ -539,12 +556,25 @@ namespace Festival.Presentation
             Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.876f-.024f*checklistLines:.846f,.978f,.882f);
         }
 
+        private void UpdateTrippingLayout(int lines)
+        {
+            if(trippingLines==lines)return;
+            trippingLines=lines;
+            // Night 2's dose list grows the tripper card down from under the clock; the session notice moves down with it.
+            float bottom=.906f-.026f*Mathf.Max(1,lines)-.016f,noticeTop=Mathf.Min(.849f,bottom-.008f);
+            Place(Rect(trippingPanel),.36f,bottom,.64f,.906f);
+            Place(Rect(noticePanel),.368f,noticeTop-.064f,.695f,noticeTop);
+        }
+
         private void UpdateText(RoundState state,PlayerState player)
         {
             levelBanner.text=FestivalHudText.LevelBanner(state);
             objectiveTitle.text=FestivalHudText.ObjectiveTitle(state,player);
             objective.text=FestivalHudText.ObjectiveDetail(state,player);
             timerText.text=FestivalHudText.Clock(state);
+            tripping.text=FestivalHudText.Tripping(state,player.Id);
+            UpdateTrippingLayout(tripping.text==""?0:tripping.text.Split('\n').Length);
+            trustLine.text=FestivalHudText.TrustLine(state,player.Id);
             string effects=Catalog.EffectsLine(player.Effects);
             var threat=state.Npcs.FindAll(n=>n.Kind=="Wook"&&n.Suspicion>0);double suspicion=0;string threatState="clear";
             foreach(var npc in threat)if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;threatState=npc.Mode;}
@@ -590,12 +620,10 @@ namespace Festival.Presentation
                 session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state));return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
+            // While a chat check runs, 1-3 ask its questions instead of equipping.
+            if(equipSlot>=0&&!session.MenuOpen&&chatText.text!=""){chatQuestion=equipSlot;equipSlot=-1;}
             if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
-            if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId=="")
-            {
-                var speaker=NearestTalker(state.Npcs,player.X,player.Z,2.7f);
-                if(speaker!=null)session.Command("Talk",speaker.Id);
-            }
+            if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen)primaryAction?.Invoke();
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
@@ -605,6 +633,25 @@ namespace Festival.Presentation
                 if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Use",item:item);
                 if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Drop",item:item);
             }
+        }
+
+        // F while playing: the tripper checks a vision by chatting when they have one to check within reach; otherwise F talks.
+        private void ChatKey(RoundState state,PlayerState player)
+        {
+            if(state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return;
+            var check=FestivalHudText.CheckTarget(state,player);
+            if(check!=null){session.Command("ConfirmChat",check.Id);return;}
+            var speaker=NearestTalker(state.Npcs,player.X,player.Z,2.7f);
+            if(speaker!=null)session.Command("Talk",speaker.Id);
+        }
+
+        // The chat picker shows while the local player's chat check runs; a new chat starts with no question asked.
+        private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
+        {
+            if(player.InteractionId!=chatInteractionId){chatInteractionId=player.InteractionId;chatQuestion=-1;}
+            chatText.text=FestivalHudText.ChatPicker(state,player,chatQuestion);
+            chatPanel.SetActive(!showMenu&&chatText.text!="");
+            if(chatPanel.activeSelf)dialoguePanel.SetActive(false);
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)
@@ -636,7 +683,7 @@ namespace Festival.Presentation
                 displayedInteractionId=interaction.Id;displayedSeed=interaction.ChartSeed;displayedNoteCount=interaction.NoteCount;displayedPhrase=interaction.Phrase;displayedBeatSeconds=interaction.BeatSeconds;
                 Array.Clear(rhythmConsumed,0,rhythmConsumed.Length);processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
                 shownRhythmHits=shownRhythmBpm=shownRhythmCount=shownRhythmCombo=-1;
-                rhythmDialogue.text=interaction.Kind.ToUpperInvariant()+"  /  FOUR-LANE";
+                rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
             string effect=player.Effects.Count==0?"":player.Effects[0].Id;
@@ -724,7 +771,7 @@ namespace Festival.Presentation
             shown|=DevelopmentMapVisible&&!session.MenuOpen;
 #endif
             mapShade.SetActive(shown);mapPanel.SetActive(shown);if(!shown)return;
-            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);
+            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatPanel.SetActive(false);
             bool camp=state.Phase=="Shopping"||state.Phase=="Spinning";campMap.SetActive(camp);festivalMap.SetActive(!camp);
             mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";
             float x=camp?Mathf.InverseLerp(-30,30,player.X):Mathf.InverseLerp(-35,35,player.X);
@@ -889,13 +936,21 @@ namespace Festival.Presentation
                     if(player.Effects.Exists(FestivalSimulation.Treatable)&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher",()=>session.Command("Use",item:"medical_voucher"),ref y);
                 }
                 if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
+                // The tripper beside someone they have an unchecked vision about: E checks by dancing, F (ChatKey) by chatting.
+                var check=FestivalHudText.CheckTarget(state,player);
+                if(check!=null)
+                {
+                    string checkId=check.Id;
+                    AddAction(FestivalHudText.CheckDanceAction,()=>session.Command("ConfirmDance",checkId),ref y);
+                    AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
+                }
                 var npc=Nearest(state.Npcs,player.X,player.Z,2.5f);
                 if(npc!=null)
                 {
                     if(npc.Kind=="Cop")AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);
                     else
                     {
-                        AddAction(npc.CanTalk?"Dance with festivalgoer  •  F CHAT":"Dance with festivalgoer",()=>session.Command("Dance",npc.Id),ref y);
+                        AddAction(npc.CanTalk&&check==null?"Dance with festivalgoer  •  F CHAT":"Dance with festivalgoer",()=>session.Command("Dance",npc.Id),ref y);
                         if(npc.CanTalk){AddAction("Chat with festivalgoer",()=>session.Command("Talk",npc.Id),ref y);AddAction("Talk and keep the beat",()=>session.Command("Conversation",npc.Id),ref y);}
                         var stock=player.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");
                         if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
