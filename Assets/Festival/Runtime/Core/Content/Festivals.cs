@@ -28,6 +28,21 @@ namespace Festival.Core
         public const int PoloFestival=0,Influencers=3;
         public const float FilmRange=8,FilmConeDegrees=40,FilmWitnessRadius=10;
         public const double FilmSuspicionPerSecond=3;
+        // Two VIP zones flank the main stage's aisle, roped off to anyone without a vip_wristband; a sale made inside one to a
+        // buyer inside pays VipPayoutFactor times. The guard who talks people in stands at the west rope's aisle corner, facing
+        // the path up from camp, and the night market sells wristbands at its east stall.
+        public static readonly Area[] VipZones={new Area(-14,19.6f,-8,26),new Area(8,19.6f,14,26)};
+        public const int VipPayoutFactor=2;
+        public const float VipGuardPostX=-7.2f,VipGuardPostZ=19,VipGuardPostYaw=180;
+        public const float VipStallX=-12,VipStallZ=-20.2f,VipStallRange=2.8f;
+        public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}
+        /// <summary>An axis-aligned rectangle of festival ground, edges included.</summary>
+        public readonly struct Area
+        {
+            public readonly float MinX,MinZ,MaxX,MaxZ;
+            public Area(float minX,float minZ,float maxX,float maxZ){MinX=minX;MinZ=minZ;MaxX=maxX;MaxZ=maxZ;}
+            public bool Contains(float x,float z)=>x>=MinX&&x<=MaxX&&z>=MinZ&&z<=MaxZ;
+        }
         public static int Count=>Table.Length;
         public static string Name(int festival)=>Table[festival].Name;
         public static LevelTuning For(RoundState s)=>Level(s.FestivalIndex,s.LevelIndex,s.EncoreTier);

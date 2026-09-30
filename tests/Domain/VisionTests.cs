@@ -134,7 +134,8 @@ public static class VisionTests
         {
             int seed=0;var s=Dosed(dose,0,ref seed);s.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
             Check(FestivalSimulation.PayoutMultiplier(s.State)==multiplier[dose],"dose "+dose+" pays x"+multiplier[dose]+", got x"+FestivalSimulation.PayoutMultiplier(s.State));
-            var buyer=Wooks(s).Find(n=>n.Role=="Buyer"&&!DoubleBuyer(s,n));int sales=s.State.LevelSales;
+            // POLO-1: a buyer out on open ground, since a sale inside Palm Mirage's VIP zones pays double.
+            var buyer=Wooks(s).Find(n=>n.Role=="Buyer"&&!DoubleBuyer(s,n)&&!Festivals.InVipZone(s.State.FestivalIndex,n.X,n.Z));int sales=s.State.LevelSales;
             Check(buyer!=null,"dose "+dose+": the crowd has buyers");
             int got=Sell(s,"p0",buyer);
             Check(got==paid[dose]&&s.State.LevelSales==sales+got,"a perfect sale to a buyer pays $10 x the dose's multiplier: $"+paid[dose]+" at dose "+dose+", got $"+got);

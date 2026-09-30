@@ -35,7 +35,9 @@ namespace Festival.Core
             Item("map", "Festival map", "Free known-landmark navigation; never reveals concealed NPC intent.",0,1,"Navigation","HUD","Self",0,0,0,false,null,false),
             Item("wristband", "Recovery wristband", "Earned rescue token: carry a fallen friend's identity to the medical tent.",0,1,"RescueToken","Medical","Teammate",10,0,3,true,null,false),
             Item("poi_practice", "Practice poi", "Reusable dance tool: 15% wider good window, capped at 175 ms. Pair with a friend for rescue.",5,1,"Performance","Dance","NearbyWooks",0,0,8,false),
-            Item("poi_led", "LED poi", "Reusable dance tool: successful performances reduce suspicion 25% more.",10,1,"Performance","Dance","NearbyWooks",0,0,8,false)
+            Item("poi_led", "LED poi", "Reusable dance tool: successful performances reduce suspicion 25% more.",10,1,"Performance","Dance","NearbyWooks",0,0,8,false),
+            // POLO-1: sold only at Palm Mirage's night-market VIP stall, or given by the VIP guard; never on a shelf.
+            Item("vip_wristband", "VIP wristband", "Gets you past Palm Mirage's VIP ropes, where buyers pay double.",15,1,"Access","Passive","Self",0,0,0,false)
         };
         public static readonly EffectDefinition[] Effects = {
             Effect("lsd","Prism",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),

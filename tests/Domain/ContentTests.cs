@@ -7,7 +7,7 @@ public static class ContentTests
     private static void Check(bool condition,string message) { if(!condition) throw new Exception("Content: "+message); }
     public static void Run()
     {
-        Check(Catalog.Items.Length==12,"twelve item definitions");
+        Check(Catalog.Items.Length==13,"thirteen item definitions (POLO-1 added the VIP wristband)");
         Check(Catalog.Effects.Length==6,"six effects");
         var ids=new HashSet<string>();
         foreach(var item in Catalog.Items) { Check(ids.Add(item.Id),"unique item IDs"); Check(item.Price>=0&&item.StackLimit>0,"valid economics"); Check(!string.IsNullOrEmpty(item.CancellationRule),"use contract"); }

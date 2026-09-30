@@ -6,7 +6,8 @@ using System.Text.Json.Nodes;
 using Festival.Core;
 
 // POLO-1: Palm Mirage (festival 0) has three twists, and Ember Playa has none of them. Influencers film along their phone's
-// 8 m, 40 degree cone, and a player in frame puts every wook within 10 m of them on alert.
+// 8 m, 40 degree cone, and a player in frame puts every wook within 10 m of them on alert. Two VIP zones are roped off to
+// anyone without a vip_wristband ($15 at the night market, or talked into by the VIP guard), and inside, buyers pay double.
 public static class PoloTwistTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -20,7 +21,8 @@ public static class PoloTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{ThreeInfluencersFilmOnPalmMirageOnly,APlayerInFrameAlertsEveryWookNearby,OnlyTheFrameCounts,
-            FramesAreAPassiveGain,TwistTagsSurviveASnapshot})
+            FramesAreAPassiveGain,TwistTagsSurviveASnapshot,VipZonesKeepOutAnyoneWithoutAWristband,VipSalesPayDouble,
+            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" polo twist test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -62,17 +64,17 @@ public static class PoloTwistTests
 
     static void ThreeInfluencersFilmOnPalmMirageOnly()
     {
-        var casts=new HashSet<string>();
+        var casts=new HashSet<string>();var filmers=new HashSet<string>();
         for(int seed=1;seed<=12;seed++)
         {
             var palm=Start(seed,seed%Festivals.LevelCount,0);var cast=Tagged(palm,FestivalSimulation.Influencer);
             Check(cast.Count==Festivals.Influencers&&Festivals.Influencers==3,"seed "+seed+": three festivalgoers film on Palm Mirage, got "+cast.Count);
             Check(cast.TrueForAll(n=>n.Kind=="Wook"),"seed "+seed+": influencers are festivalgoers, never cops");
-            casts.Add(string.Join(",",cast.ConvertAll(n=>n.Id)));
+            casts.Add(string.Join(",",cast.ConvertAll(n=>n.Id)));foreach(var n in cast)filmers.Add(n.Id);
             var playa=Start(seed,seed%Festivals.LevelCount,1);
             Check(playa.State.Npcs.TrueForAll(n=>n.Twist==""),"seed "+seed+": nobody films on Ember Playa");
         }
-        Check(casts.Count>1,"different levels cast different influencers");
+        Check(casts.Count==12&&filmers.Count>=FestivalCrowdLayout.Count/2,"every level casts its own influencers, and over a dozen levels the cameras move around the crowd: "+casts.Count+" casts, "+filmers.Count+" filmers");
     }
 
     static void APlayerInFrameAlertsEveryWookNearby()
@@ -129,5 +131,126 @@ public static class PoloTwistTests
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));
         Check(old.State.Npcs.TrueForAll(n=>n.Twist==""),"a snapshot from before twists restores with nobody filming");
         old.Tick(1);Check(old.State.Phase=="Playing","and plays on");
+    }
+
+    static int Bands(PlayerState p)=>p.Inventory.Find(i=>i.ItemId==FestivalSimulation.VipWristband)?.Count??0;
+    static void Band(PlayerState p)=>p.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.VipWristband,Count=1});
+    // A hand-built Day 1 with nobody tripping (so sales pay x1): p0 stands inside the west VIP zone beside a buyer, and
+    // nobody else is around to see a deal.
+    static FestivalSimulation Vip(int festival=0)
+    {
+        var s=new FestivalSimulation(3);s.AddPlayer("p0","P0");
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.Phase="Playing";
+        s.State.Npcs.Clear();s.State.Npcs.Add(new NpcState{Id="buyer",Role="Buyer",X=-11,Z=22});Place(s,0,-11,23);
+        return s;
+    }
+    // p0 steps from (x,22) to (to,22) in a tenth of a second.
+    static bool Step(FestivalSimulation s,float x,float to){Place(s,0,x,22);return s.TryMove("p0",to,22,0,.1);}
+    // p sells a Prism tab to n, hitting every note on the beat; returns the cash it made.
+    static int Sell(FestivalSimulation s,PlayerState p,NpcState n)
+    {
+        p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int before=p.Cash;
+        var started=Act(s,p.Id,"StartSale",n.Id,"stock_lsd");Check(started.Accepted,"setup: the sale starts: "+started.Reason);
+        var sale=s.Interaction(p.InteractionId);var notes=RhythmChart.Create(sale.ChartSeed,sale.NoteCount,sale.BeatSeconds).Notes;int next=0;
+        for(int guard=0;sale.Status=="Active"&&guard<400;guard++)
+        {
+            double now=s.State.SimulationSeconds-sale.StartSeconds;
+            for(;next<notes.Count&&notes[next].TimeSeconds<=now;next++)
+                Check(s.Execute(p.Id,new GameCommand{Id="polo"+(sequence++),Kind="Rhythm",Direction=notes[next].Direction,TimeSeconds=notes[next].TimeSeconds}).Accepted,"setup: note "+next+" lands");
+            s.Tick(.1);
+        }
+        Check(sale.Status=="Complete"&&sale.Score>=.75,"setup: a perfect sale");
+        return p.Cash-before;
+    }
+    // Stand p a metre in front of n, in n's view.
+    static void Beside(PlayerState p,NpcState n){double yaw=n.Yaw*Math.PI/180;p.X=n.X+(float)Math.Sin(yaw);p.Z=n.Z+(float)Math.Cos(yaw);}
+
+    static void VipZonesKeepOutAnyoneWithoutAWristband()
+    {
+        Check(Festivals.VipZones.Length==2,"two VIP zones");
+        var s=Vip();var p=s.Player("p0");
+        // The west zone's aisle rope runs along x = -8, the east zone's along x = 8.
+        foreach(var side in new[]{-1f,1f})
+        {
+            string zone=side<0?"west":"east";
+            Check(!Step(s,7.9f*side,8.2f*side)&&p.X==7.9f*side,"without a wristband the "+zone+" rope stops p0");
+            Band(p);Check(Step(s,7.9f*side,8.2f*side)&&p.X==8.2f*side,"with one they step past the "+zone+" rope");
+            p.Inventory.Clear();
+            Check(Step(s,8.2f*side,8.5f*side)&&Step(s,8.2f*side,7.9f*side),"someone already inside the "+zone+" zone without one moves about and steps out freely");
+        }
+        var playa=Vip(1);Check(Step(playa,-7.9f,-8.2f),"Ember Playa has no ropes");
+        var camp=Vip();camp.State.Phase="Shopping";Check(Step(camp,-7.9f,-8.2f),"camp has no ropes either");
+        var spirit=Vip();spirit.Player("p0").Life="Spirit";Check(Step(spirit,-7.9f,-8.2f),"and a spirit floats through them");
+    }
+
+    static void VipSalesPayDouble()
+    {
+        int Sale(int festival,float sellerX,float buyerX){var s=Vip(festival);var buyer=Npc(s,"buyer");buyer.X=buyerX;Place(s,0,sellerX,22.5);return Sell(s,s.Player("p0"),buyer);}
+        int plain=Sale(0,0,0);
+        Check(plain>0&&Festivals.VipPayoutFactor==2,"setup: a perfect sale on open ground pays "+plain);
+        Check(Sale(0,-11,-11)==2*plain,"inside the west zone the buyer pays double, got "+Sale(0,-11,-11));
+        Check(Sale(0,11,11)==2*plain,"inside the east zone too, got "+Sale(0,11,11));
+        Check(Sale(0,-7.5f,-8.5f)==plain,"selling over the rope from outside pays the usual, got "+Sale(0,-7.5f,-8.5f));
+        Check(Sale(0,-8.5f,-7.5f)==plain,"so does selling out over the rope to a buyer outside, got "+Sale(0,-8.5f,-7.5f));
+        Check(Sale(1,-11,-11)==plain,"Ember Playa has no VIP zones, got "+Sale(1,-11,-11));
+        var s=Vip();int doubled=Sell(s,s.Player("p0"),Npc(s,"buyer"));
+        Check(s.State.LevelSales==doubled&&s.State.GrossSales==doubled,"the double pay counts toward the day's quota");
+    }
+
+    static void TheNightMarketSellsWristbands()
+    {
+        var band=Catalog.FindItem(FestivalSimulation.VipWristband);
+        Check(band!=null&&band.Price==15&&band.StackLimit==1,"a VIP wristband costs $15, one to a player");
+        FestivalSimulation AtStall(int festival=0,string phase="Playing"){var s=Vip(festival);s.State.Phase=phase;Place(s,0,Festivals.VipStallX,Festivals.VipStallZ+2);return s;}
+        var s=AtStall();var p=s.Player("p0");
+        var bought=Act(s,"p0","Buy",item:band.Id);
+        Check(bought.Accepted&&p.Cash==5&&Bands(p)==1,"at the night market's VIP stall $20 buys one with $5 left: "+bought.Reason);
+        Check(!Act(s,"p0","Buy",item:band.Id).Accepted&&p.Cash==5&&Bands(p)==1,"one is enough");
+        var far=AtStall();Place(far,0,Festivals.VipStallX,Festivals.VipStallZ+Festivals.VipStallRange+.2);
+        Check(!Act(far,"p0","Buy",item:band.Id).Accepted&&Bands(far.Player("p0"))==0,"only at the stall");
+        var broke=AtStall();broke.Player("p0").Cash=14;
+        Check(!Act(broke,"p0","Buy",item:band.Id).Accepted&&broke.Player("p0").Cash==14,"not for $14");
+        var full=AtStall();foreach(var item in new[]{"confetti","merch_bag","map"})full.Player("p0").Inventory.Add(new ItemStack{ItemId=item,Count=1});
+        Check(!Act(full,"p0","Buy",item:band.Id).Accepted&&full.Player("p0").Cash==20,"not with three things in hand");
+        var camp=AtStall(phase:"Shopping");
+        Check(!Act(camp,"p0","Buy",item:band.Id).Accepted&&camp.Player("p0").Cash==20,"the camp shop doesn't sell them");
+        var playa=AtStall(1);
+        Check(!Act(playa,"p0","Buy",item:band.Id).Accepted&&playa.Player("p0").Cash==20,"and Ember Playa has no VIP stall");
+    }
+
+    static void TheVipGuardTalksAnyoneIn()
+    {
+        for(int seed=1;seed<=8;seed++)
+        {
+            var guards=Tagged(Start(seed,seed%Festivals.LevelCount,0),FestivalSimulation.VipGuard);
+            Check(guards.Count==1&&guards[0].Role=="Regular","seed "+seed+": one regular festivalgoer guards the VIP ropes");
+            Check(guards[0].X==Festivals.VipGuardPostX&&guards[0].Z==Festivals.VipGuardPostZ&&!Festivals.InVipZone(0,guards[0].X,guards[0].Z),"seed "+seed+": at the post outside the west rope");
+        }
+        var s=Start(2,0,0);var guard=Tagged(s,FestivalSimulation.VipGuard)[0];
+        var tripper=s.Player(s.State.TripperId);var friend=s.State.Players.Find(p=>p!=tripper);
+        var planted=new VisionState{Id="planted",Kind="Buyer",NpcId=guard.Id,Tell=true};s.State.Visions.Add(planted);
+        Beside(friend,guard);
+        Check(!Act(s,friend.Id,"ConfirmDance",guard.Id).Accepted&&friend.InteractionId=="","the guard doesn't dance anyone in");
+        var chat=Act(s,friend.Id,"ConfirmChat",guard.Id);
+        Check(chat.Accepted&&friend.InteractionId!="","a sober friend can talk to the VIP guard: "+chat.Reason);
+        s.Tick(4.9);Check(Bands(friend)==0,"not in yet after 4.9 s");
+        s.Tick(.2);Check(Bands(friend)==1,"after the 5 s chat they wear a VIP wristband");
+        Check(!planted.Confirmed,"the friend's chat checks none of the tripper's visions");
+        var again=Act(s,friend.Id,"ConfirmChat",guard.Id);
+        Check(!again.Accepted&&again.Reason.Contains("already"),"one wristband is enough: "+again.Reason);
+        friend.X=-7.9f;friend.Z=22;Check(s.TryMove(friend.Id,-8.2f,22,0,.1),"the wristband gets them past the rope");
+
+        Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper talks to the guard too");
+        s.Tick(2);tripper.X=guard.X+5;s.Tick(.1);Check(tripper.InteractionId==""&&Bands(tripper)==0,"walking off mid-chat gets nothing");
+        Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper tries again");s.Tick(5.1);
+        Check(Bands(tripper)==1&&planted.Confirmed,"the tripper talks their way in, and their chat checks their vision of the guard");
+
+        var crowded=Start(3,0,0);var full=crowded.State.Players.Find(p=>p.Id!=crowded.State.TripperId);var doorman=Tagged(crowded,FestivalSimulation.VipGuard)[0];
+        foreach(var item in new[]{"confetti","merch_bag","map"})full.Inventory.Add(new ItemStack{ItemId=item,Count=1});Beside(full,doorman);
+        var refused=Act(crowded,full.Id,"ConfirmChat",doorman.Id);
+        Check(!refused.Accepted&&refused.Reason.Contains("hand"),"with three things in hand there's no hand for a wristband: "+refused.Reason);
+        var dancer=crowded.Player(crowded.State.TripperId);crowded.State.Visions.Add(new VisionState{Id="planted",Kind="Narc",NpcId=doorman.Id,Tell=true});
+        Beside(dancer,doorman);Check(Act(crowded,dancer.Id,"ConfirmDance",doorman.Id).Accepted,"setup: the tripper checks a vision of the guard by dancing");
+        crowded.Tick(6);Check(dancer.InteractionId==""&&Bands(dancer)==0,"a dance with the guard checks the vision but gets nobody in");
     }
 }

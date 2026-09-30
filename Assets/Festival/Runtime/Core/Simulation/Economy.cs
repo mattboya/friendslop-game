@@ -23,6 +23,7 @@ public sealed partial class FestivalSimulation {
     }
     CommandResult Buy(PlayerState p,GameCommand c)
     {
+        if(c.ItemId==VipWristband)return BuyVipWristband(p);
         int index=State.VendorOffers.IndexOf(c.ItemId);
         var item=Catalog.FindItem(c.ItemId);
         if(index<0||item==null||c.Amount>1||c.Amount<0)return Reject("Invalid offer or amount");
