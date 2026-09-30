@@ -22,6 +22,12 @@ namespace Festival.Core
         public const int MaxNarcs=8,MaxChainLength=5;
         // The old shuttle stop is the way back to camp.
         public const float CampGateX=0,CampGateZ=-32,CampGateRadius=5;
+        // POLO-1: Palm Mirage's twists (FestivalTwists.cs). Influencers film along their facing: a live player within FilmRange,
+        // inside the FilmConeDegrees cone and in line of sight, puts every wook within FilmWitnessRadius of them on alert at
+        // FilmSuspicionPerSecond, a passive gain like sprinting in view.
+        public const int PoloFestival=0,Influencers=3;
+        public const float FilmRange=8,FilmConeDegrees=40,FilmWitnessRadius=10;
+        public const double FilmSuspicionPerSecond=3;
         public static int Count=>Table.Length;
         public static string Name(int festival)=>Table[festival].Name;
         public static LevelTuning For(RoundState s)=>Level(s.FestivalIndex,s.LevelIndex,s.EncoreTier);

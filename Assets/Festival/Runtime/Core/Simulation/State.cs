@@ -31,6 +31,8 @@ namespace Festival.Core
         // TRIP-2: Buyer, Narc, Regular or (at night) ClueHolder, dealt as the crew leaves camp; never sent to clients. "" is not
         // dealt yet (a snapshot from before roles), and buys like every festivalgoer did then.
         public string Role="";
+        // POLO-1: a festival twist this festivalgoer plays (FestivalTwists.cs), public so every client can show it: Influencer, VipGuard or "".
+        public string Twist="";
         public bool HighlyIntoxicated,RedEyes,CanTalk;
         public double Suspicion, DistractedUntil, AttackAt, AttackCooldownUntil, LastTalkSeconds=-100; public int Sales,TalkCount;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();

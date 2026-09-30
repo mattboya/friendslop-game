@@ -33,6 +33,8 @@ public static class ConfirmTests
         foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,"setup: "+p.Id+" readies");}
         s.Tick(5.2);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
         Check(s.State.Phase=="Playing"&&s.State.Visions.Exists(v=>v.NpcId!=""),"setup: the crew is at the festival and the tripper has visions of people");
+        // POLO-1: nobody here plays a Palm Mirage twist (no camera, no VIP guard), so only the check itself moves suspicion.
+        foreach(var n in s.State.Npcs)n.Twist="";
         return s;
     }
     // The first level from `seed` on whose spin the tripper takes exactly `dose`; `seed` moves past it.

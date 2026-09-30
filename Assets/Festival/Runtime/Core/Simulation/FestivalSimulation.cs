@@ -155,7 +155,7 @@ namespace Festival.Core
         {
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
-            State.LaunchAtSeconds=0;Spin(connected);DealRoles();
+            State.LaunchAtSeconds=0;Spin(connected);DealRoles();DealTwists();
         }
         void BeginCampReview()
         {
