@@ -54,9 +54,10 @@ namespace Festival.Core
             var second=state.SecondFriend;
             if(state.FriendFound&&(!second.Active||second.Found))
             {
-                var leader=state.Players.Find(p=>p.Id==state.FriendLeaderId&&p.Connected&&p.Life=="Alive");
-                if(leader==null)return "Friend needs an escort. Reach them and press E; shuttle "+Route(player,0,-32)+".";
-                return leader.Id==player.Id
+                // CROWD-2: a big crew's two friends may follow different escorts, and each needs one.
+                var leader=Escort(state,state.FriendLeaderId);var other=second.Active?Escort(state,second.LeaderId):leader;
+                if(leader==null||other==null)return "Friend needs an escort. Reach them and press E; shuttle "+Route(player,0,-32)+".";
+                return leader.Id==player.Id||other.Id==player.Id
                     ?"Lead your friend to the shuttle "+Route(player,0,-32)+". Stay close."
                     :"Follow the escort to the shuttle "+Route(player,0,-32)+".";
             }
@@ -82,6 +83,8 @@ namespace Festival.Core
             double dx=x-player.X,dz=z-player.Z;
             return Math.Sqrt(dx*dx+dz*dz);
         }
+
+        private static PlayerState Escort(RoundState state,string id) => state.Players.Find(p=>p.Id==id&&p.Connected&&p.Life=="Alive");
 
         private static int CrewCount(RoundState state) => state.ConnectedCrewCount>0?state.ConnectedCrewCount:state.Players.FindAll(p=>p.Connected).Count;
 

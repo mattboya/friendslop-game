@@ -53,7 +53,7 @@ public static class SplitObjectiveTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{FiveOrMoreGetTwoFriends,EachTrailShowsItsOwnNextLink,FindingTheSecondFriend,SuccessNeedsBoth,
-            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends,ERecruitsTheFriendInReach,TrailsNeverShareAHolder})
+            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends,ERecruitsTheFriendInReach,TrailsNeverShareAHolder,EveryFoundFriendNeedsAnEscort})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" split objective test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -182,6 +182,18 @@ public static class SplitObjectiveTests
         // The HUD offers FriendToFind's pick from the client's view, where a lost friend out of sight sits at the origin.
         var view=JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(t.State,Json),Json);view.SecondFriend.Found=false;view.SecondFriend.Position=new WorldPoint(0,0);
         Check(FestivalSimulation.FriendToFind(view,Place(t,"p2",new WorldPoint(0,.5f)))=="","a friend out of the viewer's sight is not offered to someone standing at the origin");
+    }
+
+    // With both friends found, the crew heads home only while each friend has a living escort. When the second friend's escort
+    // leaves, everyone hears that a friend needs one, not "follow the escort".
+    static void EveryFoundFriendNeedsAnEscort()
+    {
+        var s=Start(5);var second=s.State.SecondFriend;FollowTrail(s,0);FollowTrail(s,1);
+        Check(Recruit(s,"p0",s.State.FriendPosition)&&Recruit(s,"p1",second.Position),"setup: p0 escorts the first friend, p1 the second");
+        string Hint(string id)=>FestivalGuidance.Hint(s.State,s.Player(id));
+        Check(Hint("p0").StartsWith("Lead your friend")&&Hint("p1").StartsWith("Lead your friend")&&Hint("p2").StartsWith("Follow the escort"),"each escort leads, the rest follow: "+Hint("p0")+" / "+Hint("p1")+" / "+Hint("p2"));
+        s.Disconnect("p1");s.Tick(.2);Check(second.Found&&second.LeaderId=="","setup: the second friend's escort left");
+        Check(Hint("p2").StartsWith("Friend needs an escort")&&Hint("p0").StartsWith("Friend needs an escort"),"a friend without an escort needs someone to pick them up: "+Hint("p2")+" / "+Hint("p0"));
     }
 
     static void SuccessNeedsBoth()

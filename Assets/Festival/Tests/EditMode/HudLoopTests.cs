@@ -146,6 +146,8 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.ObjectiveDetail(day,day.Players[0]),Is.EqualTo("Next up: Night 1. Cash and gear carry over."));
             var night=Level(0,1,"Results");night.Result="Success";
             Assert.That(FestivalHudText.OutcomeTitle(night),Is.EqualTo("FRIEND RESCUED  •  NIGHT 1 CLEARED"));
+            night.SecondFriend.Active=true;
+            Assert.That(FestivalHudText.OutcomeTitle(night),Is.EqualTo("FRIENDS RESCUED  •  NIGHT 1 CLEARED"),"a big crew's night rescues two friends");
             var finale=Level(0,3,"Results");finale.Result="Success";
             Assert.That(FestivalHudText.OutcomeTitle(finale),Is.EqualTo("EVERYONE HOME  •  PALM MIRAGE CLEARED"));
             Assert.That(FestivalHudText.OutcomeDetail(finale),Is.EqualTo("Next up: Ember Playa. A new weekend starts with fresh cash."));

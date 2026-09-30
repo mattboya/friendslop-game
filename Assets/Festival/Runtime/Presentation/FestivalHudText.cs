@@ -111,7 +111,7 @@ namespace Festival.Presentation
         {
             if(s.Result!="Success")return "WEEKEND OVER"+Dot+"BACK TO DAY 1";
             var level=Festivals.For(s);bool finale=s.LevelIndex==Festivals.LevelCount-1;
-            return (!level.Night?"QUOTA MET":finale?"EVERYONE HOME":"FRIEND RESCUED")+Dot+(finale?Festivals.Name(s.FestivalIndex):level.Name).ToUpperInvariant()+" CLEARED";
+            return (!level.Night?"QUOTA MET":finale?"EVERYONE HOME":s.SecondFriend.Active?"FRIENDS RESCUED":"FRIEND RESCUED")+Dot+(finale?Festivals.Name(s.FestivalIndex):level.Name).ToUpperInvariant()+" CLEARED";
         }
 
         /// <summary>Results detail: why the weekend ended, or what comes next and what the crew keeps.</summary>
