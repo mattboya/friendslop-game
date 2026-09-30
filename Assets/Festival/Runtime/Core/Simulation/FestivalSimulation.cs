@@ -15,7 +15,7 @@ namespace Festival.Core
             var positions=new[]{new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
             s.FriendPosition=positions[(seed&int.MaxValue)%3];
             for(int i=0;i<FestivalCrowdLayout.Count;i++) { var point=FestivalCrowdLayout.Get(i,seed);bool wide=(i+seed%7)%7==0; s.Npcs.Add(new NpcState {Id="wook_"+i,X=point.X,Z=point.Z,Yaw=point.Yaw,IdlePose=point.Pose,HighlyIntoxicated=wide,RedEyes=(i+seed%5)%5==0||wide&&i<7,CanTalk=(i+seed%3)%4==0}); }
-            s.Npcs.Add(new NpcState{Id="cop_0",Kind="Cop",X=20,Z=-4,Yaw=180}); s.Npcs.Add(new NpcState{Id="cop_1",Kind="Cop",X=-12,Z=-12,Yaw=180});
+            AddCops(s);
             s.Stashes.Add(new StashState{Id="stash",X=-25,Z=-8});s.DurationSeconds=Festivals.For(s).DurationSeconds;return s;
         }
         public PlayerState AddPlayer(string id,string name) {

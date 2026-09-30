@@ -27,6 +27,13 @@ namespace Festival.Core
             new Start(-6.2f,-5.8f,95,"Idle"),new Start(6.5f,4.5f,-80,"Idle")
         };
         public static int Count=>starts.Length;
+        // The crowd's centre, before jitter. Security patrols a ring around it.
+        public static WorldPoint Centroid()
+        {
+            float x=0,z=0;
+            foreach(var point in starts){x+=point.X;z+=point.Z;}
+            return new WorldPoint(x/starts.Length,z/starts.Length);
+        }
         public static Start Get(int index,int seed)
         {
             var point=starts[index];
