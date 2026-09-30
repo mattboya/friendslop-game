@@ -51,6 +51,12 @@ namespace Festival.Tests
                 else failures.Add(where+": award "+(award+1)+" has no "+friend+" button among ["+string.Join(" / ",picks.Keys)+"]");
             }
             var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
+            // A player's floating name tag, as the actor presentation draws it.
+            string Tag(string id)
+            {
+                foreach(Transform actor in GameObject.Find("Authoritative actor presentation").transform)if(actor.name.Contains(id))return actor.Find("Label/Text")?.GetComponent<TextMesh>()?.text??"(no tag)";
+                return "(no tag)";
+            }
             try
             {
                 session.Host("Tester",HostPort);
@@ -103,6 +109,7 @@ namespace Festival.Tests
                 if(Picks(0).Count>0||Find("Award 1")!=null)failures.Add("every vote in: the ballot is still up");
                 if(session.PointerFree)failures.Add("every vote in: the pointer stays free and the view stays still");
                 if(primary.GetValue(view)!=null)failures.Add("every vote in: E opens the shop before the verdict has played");
+                if(Tag(mate.Id)!="Sam")failures.Add("every vote in: Sam's tag reads \""+Tag(mate.Id)+"\" before the drumroll has read out a single award");
                 yield return new WaitForSeconds((float)FestivalHudText.RevealStepSeconds);
                 Expect("the first award","Review reveal","AND THE AWARDS GO TO…\n"+awards[0].ToUpperInvariant()+"  •  SAM\n"+awards[1].ToUpperInvariant()+"  •  ?\n"+awards[2].ToUpperInvariant()+"  •  ?");
                 yield return new WaitForSeconds((float)(3*FestivalHudText.RevealStepSeconds));
@@ -110,16 +117,11 @@ namespace Festival.Tests
                 Expect("the verdict","Review status","E  OPEN THE CAMP SHOP");
                 Fits("the verdict","Review reveal");
 
-                // Sam wears both awards over their head.
-                TextMesh tag=null;
-                foreach(Transform actor in GameObject.Find("Authoritative actor presentation").transform)if(actor.name.Contains(mate.Id))tag=actor.Find("Label/Text")?.GetComponent<TextMesh>();
-                if(tag==null)failures.Add("the verdict: Sam has no name tag");
-                else if(tag.text!="Sam  •  "+awards[0]+", "+awards[1])failures.Add("the verdict: Sam's tag reads \""+tag.text+"\", expected their awards");
-
-                // E opens the shop.
+                // E opens the shop, where the next level starts: Sam wears both awards over their head.
                 ((System.Action)primary.GetValue(view))?.Invoke();
                 yield return new WaitForSeconds(.4f);
                 if(sim.State.Phase!="Shopping")failures.Add("the verdict: E does not open the shop ("+session.Message+")");
+                if(Tag(mate.Id)!="Sam  •  "+awards[0]+", "+awards[1])failures.Add("the shop: Sam's tag reads \""+Tag(mate.Id)+"\", expected their awards");
             }
             finally
             {

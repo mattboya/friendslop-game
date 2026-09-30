@@ -107,10 +107,17 @@ namespace Festival.Tests
         {
             var game=Game(("ash","Ash"),("sam","Sam"));
             Ballot(game,"ash","sam",0,1);Ballot(game,"ash","ash",2);Ballot(game,"sam","sam",0,1);Ballot(game,"sam","ash",2);
-            var view=FestivalSession.ViewFor(game,"ash");var awards=game.State.ReviewAwards;
-            Assert.That(FestivalHudText.Nameplate(view.Players.Find(p=>p.Id=="sam")),Is.EqualTo("Sam  •  "+awards[0]+", "+awards[1]),"a double winner wears both awards");
-            Assert.That(FestivalHudText.Nameplate(view.Players.Find(p=>p.Id=="ash")),Is.EqualTo("Ash  •  "+awards[2]),"the best award is worn too");
-            Assert.That(FestivalHudText.Nameplate(new PlayerState{Name="Kim"}),Is.EqualTo("Kim"),"no award, just the name");
+            var awards=game.State.ReviewAwards;
+            // The verdict is in but still being read out at the campfire: a tag must not give a winner away before the drumroll does.
+            var campfire=FestivalSession.ViewFor(game,"ash");
+            Assert.That(FestivalHudText.Nameplate(campfire,campfire.Players.Find(p=>p.Id=="sam")),Is.EqualTo("Sam"),"no award over anyone's head during the reveal");
+            Assert.That(FestivalHudText.Nameplate(campfire,campfire.Players.Find(p=>p.Id=="ash")),Is.EqualTo("Ash"));
+            // The next level starts at the camp shop, and the winners wear their awards from there.
+            Assert.That(game.Execute("ash",new GameCommand{Id="open_shop",Kind="FinishReview"}).Accepted,Is.True,"setup: the host opens the shop");
+            var view=FestivalSession.ViewFor(game,"ash");
+            Assert.That(FestivalHudText.Nameplate(view,view.Players.Find(p=>p.Id=="sam")),Is.EqualTo("Sam  •  "+awards[0]+", "+awards[1]),"a double winner wears both awards");
+            Assert.That(FestivalHudText.Nameplate(view,view.Players.Find(p=>p.Id=="ash")),Is.EqualTo("Ash  •  "+awards[2]),"the best award is worn too");
+            Assert.That(FestivalHudText.Nameplate(view,new PlayerState{Name="Kim"}),Is.EqualTo("Kim"),"no award, just the name");
         }
     }
 }

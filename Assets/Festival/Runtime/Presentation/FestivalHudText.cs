@@ -190,8 +190,11 @@ namespace Festival.Presentation
         /// <summary>The verdict has played out to the shots, so the host may open the shop; straight away when solo practice drew no awards.</summary>
         public static bool RevealDone(RoundState s,double revealSeconds)=>s.ReviewAwards.Count==0||revealSeconds>=(s.ReviewAwards.Count+1)*RevealStepSeconds;
 
-        /// <summary>A player's floating name, with the awards they won at the last debrief until that level's results.</summary>
-        public static string Nameplate(PlayerState p)=>p.Badge==""?p.Name:p.Name+Dot+p.Badge;
+        /// <summary>
+        /// A player's floating name, with the awards they won at the last debrief through the next level, until its results. Never at
+        /// the campfire itself: the badges land with the last vote, and a tag must not give a winner away before the reveal reads it out.
+        /// </summary>
+        public static string Nameplate(RoundState s,PlayerState p)=>p.Badge==""||s.Phase=="CampReview"?p.Name:p.Name+Dot+p.Badge;
 
         /// <summary>An amount of money as the viewer reads it (PLAYA-1): "$12" at Palm Mirage, "12 buttons" or their own odd object on Ember Playa.</summary>
         public static string Money(RoundState s,PlayerState viewer,int amount)=>Festivals.CurrencyName(s.FestivalIndex,viewer.Ordinal,amount);
