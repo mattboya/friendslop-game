@@ -54,7 +54,8 @@ namespace Festival.Presentation
         public void Apply(RoundState state,Transform view,Func<string,Transform> actorFor,float time,float deltaTime)
         {
             var visions=state!=null&&FestivalWorld.ShowsFestival(state.Phase)?state.Visions:None;
-            gone.Clear();foreach(var id in markers.Keys)if(!visions.Exists(v=>v.Id==id))gone.Add(id);
+            gone.Clear();
+            foreach(var id in markers.Keys){bool kept=false;foreach(var v in visions)if(v.Id==id){kept=true;break;}if(!kept)gone.Add(id);}
             foreach(var id in gone){Dispose(markers[id].Root.gameObject);Dispose(markers[id].Material);markers.Remove(id);}
             float shimmer=CameraMotion(view,deltaTime);Shown=0;
             for(int i=0;i<visions.Count;i++)

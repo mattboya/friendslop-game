@@ -5,6 +5,8 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 using Object = UnityEngine.Object;
 
 namespace Festival.Tests
@@ -152,8 +154,9 @@ namespace Festival.Tests
             // A buyer who pays double can also carry a buyer mark: one festivalgoer, two visions.
             state.Visions.Add(new VisionState{Id="DoubleBuyer",Kind="DoubleBuyer",NpcId="Buyer"});
             foreach(var kind in new[]{"Stash","Shortcut"})state.Visions.Add(new VisionState{Id=kind,Kind=kind,X=3,Z=3});
-            var markers=Markers();markers.Apply(state,View(),id=>bodies.TryGetValue(id,out var t)?t:null,0,.02f);
+            var markers=Markers();Func<string,Transform> actorFor=id=>bodies.TryGetValue(id,out var t)?t:null;var view=View();markers.Apply(state,view,actorFor,0,.02f);
             Assert.That(markers.Shown,Is.EqualTo(state.Visions.Count),"every vision is drawn");
+            Assert.That(()=>markers.Apply(state,view,actorFor,.02f,.02f),Is.Not.AllocatingGCMemory(),"drawing a frame makes no garbage");
             Assert.That(Mathf.Abs(Marker(markers,"DoubleBuyer").position.y-Marker(markers,"Buyer").position.y),Is.GreaterThan(Glyph(markers,"Buyer").bounds.size.y),"two visions over one festivalgoer stack instead of overlapping");
             var looks=new HashSet<string>();
             foreach(var kind in new[]{"Buyer","Narc","Clue","Stash"})
