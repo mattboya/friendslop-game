@@ -45,12 +45,13 @@ namespace Festival.Presentation
         /// <summary>Objective card heading: the outcome at results, the quota for a free player on a day, otherwise the guidance headline.</summary>
         public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s,p):FestivalGuidance.Headline(s,p);
 
-        /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line.</summary>
+        /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line.
+        /// A Ferris wheel rider reads what they spot from up there instead of the quota's line (FestivalGuidance.Hint, POLO-1).</summary>
         public static string ObjectiveDetail(RoundState s,PlayerState p)
         {
             if(s.Phase=="Results")return OutcomeDetail(s);
             if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id);return choice!=""?choice:"Browse gear • pay the seller • meet at the trailhead";}
-            return SellingToday(s,p)?QuotaHint(s,p):FestivalGuidance.Hint(s,p);
+            return SellingToday(s,p)&&!FestivalSimulation.OnWheel(s,p.Id)?QuotaHint(s,p):FestivalGuidance.Hint(s,p);
         }
         // Downed, detained and spirit players keep the guidance about getting back on their feet.
         static bool SellingToday(RoundState s,PlayerState p)=>s.Phase=="Playing"&&p.Life=="Alive"&&!Festivals.For(s).Night;
@@ -229,8 +230,9 @@ namespace Festival.Presentation
         public static string TrustLine(RoundState s,string localId)=>s.Phase=="Playing"&&s.TripperId==localId&&s.ElapsedSeconds<TrustSeconds?"Trust, but verify.":"";
 
         /// <summary>
-        /// The festivalgoer p can check a vision about right now: the nearest within FestivalSimulation.ConfirmReach that
-        /// FestivalSimulation.CanCheckVision allows, so only for the tripper and only while that vision is unchecked; null otherwise.
+        /// The festivalgoer F chats with right now (FestivalHud.ChatKey): the nearest within FestivalSimulation.ConfirmReach that
+        /// FestivalSimulation.MayConfirm lets p chat-check. That is the tripper beside someone they still have an unchecked vision
+        /// about, or anyone with a free hand beside Palm Mirage's VIP guard, who talks them past the rope (POLO-1); null otherwise.
         /// </summary>
         public static NpcState CheckTarget(RoundState s,PlayerState p)
         {
@@ -239,13 +241,15 @@ namespace Festival.Presentation
             foreach(var n in s.Npcs)
             {
                 double dx=p.X-n.X,dz=p.Z-n.Z,distance=Math.Sqrt(dx*dx+dz*dz);
-                if(distance<=reach&&FestivalSimulation.CanCheckVision(s,p,n)){best=n;reach=distance;}
+                if(distance<=reach&&FestivalSimulation.MayConfirm(s,p,n,"ConfirmChat")){best=n;reach=distance;}
             }
             return best;
         }
         /// <summary>The checks, as beside anyone else: E dances (quick, but a miss draws the crowd's eye), F chats (safe).</summary>
         public static readonly string CheckDanceAction="Check by dancing"+Dot+"F CHECK BY CHAT ("+FestivalSimulation.ConfirmChatSeconds+" s)";
         public static readonly string CheckChatAction="Check by chatting ("+FestivalSimulation.ConfirmChatSeconds+" s, safe)";
+        /// <summary>Beside the VIP guard with no vision about them to check, E or F chats them into handing over a VIP wristband.</summary>
+        public static readonly string RopeChatAction="Talk your way past the VIP rope ("+FestivalSimulation.ConfirmChatSeconds+" s)";
 
         /// <summary>
         /// The chat check under way: the festivalgoer's opener, then the tripper's three questions on 1-3, the picked one followed by

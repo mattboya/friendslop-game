@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Festival.Core
 {
@@ -51,6 +52,7 @@ namespace Festival.Core
             if(player.Life=="Downed")return "Press E to distract attackers; a teammate can rescue or drag you.";
             if(player.Life=="Detained")return "Press E to work on escape, or ask a teammate for release.";
             if(player.Life=="Spirit")return "Medical tent "+Route(player,24,-20)+(CrewCount(state)==1?". Press E there for a 15-second self-revival task.":". Ask a teammate with your wristband to revive you.");
+            if(FestivalSimulation.OnWheel(state,player.Id))return Lookout(state,player);
             var second=state.SecondFriend;
             if(state.FriendFound&&(!second.Active||second.Found))
             {
@@ -76,6 +78,38 @@ namespace Festival.Core
             if(player.Id==state.TripperId)return night?"Your visions mark the next clue holder.":"Your visions mark buyers and narcs.";
             var tripper=state.Players.Find(p=>p.Id==state.TripperId);
             return "Stick with "+(tripper?.Name??"the tripper")+": only the tripper can see "+(night?"the clue trail.":"who is buying.");
+        }
+
+        /// <summary>
+        /// The festival twists player can use where they stand, as the HUD lists them: on Palm Mirage the Ferris wheel at its base
+        /// and a VIP wristband at the night market's VIP stall (POLO-1), on Ember Playa an art car rolling past (PLAYA-1). Each is
+        /// offered exactly where the rules take it (FestivalSimulation.AtWheel, AtVipStall, ArtCarBeside). The VIP guard's chat is
+        /// offered like a check (FestivalHudText.CheckTarget), since F starts it too.
+        /// </summary>
+        public static List<(string Label,GameCommand Command)> TwistActions(RoundState state,PlayerState player)
+        {
+            var actions=new List<(string Label,GameCommand Command)>();
+            if(state==null||player==null||state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return actions;
+            if(FestivalSimulation.AtWheel(state,player))actions.Add(("Ride the Ferris wheel ("+Festivals.WheelRideSeconds+" s)",new GameCommand{Kind=FestivalSimulation.RideWheelKind}));
+            if(FestivalSimulation.ArtCarBeside(state,player)>=0)actions.Add(("Climb aboard the art car",new GameCommand{Kind=FestivalSimulation.RideCarKind}));
+            var band=Catalog.FindItem(FestivalSimulation.VipWristband);
+            if(FestivalSimulation.AtVipStall(state,player)&&!player.Inventory.Exists(i=>i.ItemId==band.Id))actions.Add(("Buy "+band.Name+"  •  $"+band.Price,new GameCommand{Kind="Buy",ItemId=band.Id}));
+            return actions;
+        }
+
+        // POLO-1: one turn up the Ferris wheel looks out over the grounds. The rider spots every cop (every view has them) and each
+        // lost friend whose spot their view holds, which at night FestivalSession.ViewFor sends to the rider alone.
+        // ponytail: every level has its two patrol cops, so there is no "nobody in sight" wording.
+        private static string Lookout(RoundState state,PlayerState player)
+        {
+            var friends=new List<string>();var cops=new List<string>();
+            foreach(var (lost,at) in new[]{(!state.FriendFound,state.FriendPosition),(state.SecondFriend.Active&&!state.SecondFriend.Found,state.SecondFriend.Position)})
+                if(lost&&at!=null&&(at.X!=0||at.Z!=0))friends.Add(Route(player,at.X,at.Z));
+            foreach(var n in state.Npcs)if(n.Kind=="Cop")cops.Add(Route(player,n.X,n.Z));
+            var seen=new List<string>();
+            if(friends.Count>0)seen.Add((friends.Count==1?"your friend ":"your friends ")+string.Join(", ",friends));
+            if(cops.Count>0)seen.Add("security "+string.Join(", ",cops));
+            return "From the wheel you spot "+string.Join(" and ",seen)+".";
         }
 
         private static double Distance(PlayerState player,float x,float z)

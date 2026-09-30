@@ -65,13 +65,16 @@ namespace Festival.Core
         CommandResult BuyVipWristband(PlayerState p)
         {
             var band=Catalog.FindItem(VipWristband);
-            if(State.Phase!="Playing"||State.FestivalIndex!=Festivals.PoloFestival||!Near(p,Festivals.VipStallX,Festivals.VipStallZ,Festivals.VipStallRange))return Reject("VIP wristbands are sold at the Palm Mirage night market's VIP stall");
+            if(State.Phase!="Playing"||!AtVipStall(State,p))return Reject("VIP wristbands are sold at the Palm Mirage night market's VIP stall");
             if(p.Cash<band.Price)return Reject("Insufficient cash");
             if(!CanAdd(p,VipWristband,1))return Reject(RopeRefusal(p));
             p.Cash-=band.Price;Add(p,VipWristband,1);return Ok(band.Name+" bought for $"+band.Price);
         }
-        // TRIP-3's MayConfirm lets anyone chat with the VIP guard who has a hand free for the wristband; the chat finishing hands it over.
-        bool TalksPastTheRope(PlayerState p,NpcState n)=>n.Twist==VipGuard&&CanAdd(p,VipWristband,1);
+        /// <summary>Whether p stands at Palm Mirage's night-market VIP stall, where BuyVipWristband sells (the HUD offers it there).</summary>
+        public static bool AtVipStall(RoundState s,PlayerState p)=>s.FestivalIndex==Festivals.PoloFestival&&Near(p,Festivals.VipStallX,Festivals.VipStallZ,Festivals.VipStallRange);
+        /// <summary>TRIP-3's MayConfirm lets anyone chat with the VIP guard who has a hand free for the wristband; the chat finishing
+        /// hands it over. It reads only what a client's view has of its own player and the guard, so the HUD offers the chat by it.</summary>
+        public static bool TalksPastTheRope(PlayerState p,NpcState n)=>n.Twist==VipGuard&&CanAdd(p,VipWristband,1);
         string RopeRefusal(PlayerState p)=>Count(p,VipWristband)>0?"You already have a VIP wristband":"Free a hand for the VIP wristband";
         // ponytail: hands filled during the chat (a handoff accepted mid-chat) get nothing; the guard can be asked again.
         void PassTheRope(InteractionState i,NpcState n){var p=Player(i.PlayerId);if(i.Kind=="ConfirmChat"&&n.Twist==VipGuard&&p!=null&&CanAdd(p,VipWristband,1))Add(p,VipWristband,1);}
@@ -81,12 +84,14 @@ namespace Festival.Core
         public static bool OnWheel(RoundState s,string playerId)=>s.Interactions.Exists(i=>i.PlayerId==playerId&&i.Kind==RideWheelKind&&i.Status=="Active");
         /// <summary>At night a Ferris wheel rider sees where the lost friend is; FestivalSession.ViewFor sends it to them alone.</summary>
         public static bool WheelShowsFriend(RoundState s,string viewer)=>OnWheel(s,viewer)&&Festivals.For(s).Night;
+        /// <summary>Whether p stands at the Ferris wheel's base on Palm Mirage, where RideWheel boards (the HUD offers the ride there).</summary>
+        public static bool AtWheel(RoundState s,PlayerState p)=>s.FestivalIndex==Festivals.PoloFestival&&Near(p,Festivals.WheelX,Festivals.WheelZ,Festivals.WheelReach);
         // Anyone at the base boards for one turn, any number at once. In the rules the rider stays at the base, where anything
         // that could reach them still can, and cannot step off or cancel until the turn ends (MayStep, Apply's Cancel).
         CommandResult RideWheel(PlayerState p)
         {
             if(State.FestivalIndex!=Festivals.PoloFestival)return Reject("There's no Ferris wheel at this festival");
-            if(!Near(p,Festivals.WheelX,Festivals.WheelZ,Festivals.WheelReach))return Reject("Board the Ferris wheel at its base");
+            if(!AtWheel(State,p))return Reject("Board the Ferris wheel at its base");
             NewInteraction(p,RideWheelKind,"wheel",Festivals.WheelRideSeconds);return Ok("One full turn: you're up there until it comes round");
         }
 
@@ -112,6 +117,14 @@ namespace Festival.Core
         /// <summary>Which art car playerId is riding (0 to ArtCars-1), or -1. Reads a client's view too, since a view carries its
         /// own player's interactions; everyone else sees a rider's VisualPose "RideCar".</summary>
         public static int ArtCarOf(RoundState s,string playerId)=>Car(s.Interactions.Find(i=>i.PlayerId==playerId&&i.Kind==RideCarKind&&i.Status=="Active"));
+        /// <summary>The Ember Playa art car rolling past within ArtCarReach of p, which RideCar boards (0 to ArtCars-1), or -1. Like
+        /// the storms it reads only the view's festival and clock, so the HUD offers the ride by it.</summary>
+        public static int ArtCarBeside(RoundState s,PlayerState p)
+        {
+            if(s.FestivalIndex!=Festivals.PlayaFestival)return -1;
+            for(int k=0;k<Festivals.ArtCars;k++){var at=Festivals.ArtCarAt(k,s.ElapsedSeconds);if(Near(p,at.X,at.Z,Festivals.ArtCarReach))return k;}
+            return -1;
+        }
         static int Car(InteractionState ride)=>ride!=null&&int.TryParse(ride.TargetId,out int car)&&car>=0&&car<Festivals.ArtCars?car:-1;
         // Anyone beside a passing car climbs aboard with their hands free, and rides until they hop off (Cancel) or the level
         // ends. Up there they roll with the car (RideArtCars), can't walk about (MayStep), and festivalgoers can't see them
@@ -119,7 +132,7 @@ namespace Festival.Core
         CommandResult RideCar(PlayerState p)
         {
             if(State.FestivalIndex!=Festivals.PlayaFestival)return Reject("There are no art cars at this festival");
-            int car=-1;for(int k=0;k<Festivals.ArtCars&&car<0;k++){var at=Festivals.ArtCarAt(k,State.ElapsedSeconds);if(Near(p,at.X,at.Z,Festivals.ArtCarReach))car=k;}
+            int car=ArtCarBeside(State,p);
             if(car<0)return Reject("Catch an art car as it rolls past");
             if(p.DragTargetId!=""||p.CarryBodyId!="")return Reject("Let go of your friend before you climb aboard");
             NewInteraction(p,RideCarKind,car.ToString(),State.DurationSeconds);RideArtCar(p,car);

@@ -650,7 +650,8 @@ namespace Festival.Presentation
             }
         }
 
-        // F while playing: the tripper checks a vision by chatting when they have one to check within reach; otherwise F talks.
+        // F while playing: the tripper checks a vision by chatting when they have one to check within reach, and anyone beside the
+        // VIP guard talks their way past the rope (FestivalHudText.CheckTarget); otherwise F talks.
         private void ChatKey(RoundState state,PlayerState player)
         {
             if(state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return;
@@ -985,13 +986,20 @@ namespace Festival.Presentation
                 }
                 if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
                 // The tripper beside someone they have an unchecked vision about: E checks by dancing, F (ChatKey) by chatting.
+                // Anyone else beside Palm Mirage's VIP guard: E or F talks them past the rope (POLO-1).
                 check=FestivalHudText.CheckTarget(state,player);
                 if(check!=null)
                 {
                     string checkId=check.Id;
-                    AddAction(FestivalHudText.CheckDanceAction,()=>session.Command("ConfirmDance",checkId),ref y);
-                    AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
+                    if(FestivalSimulation.CanCheckVision(state,player,check))
+                    {
+                        AddAction(FestivalHudText.CheckDanceAction,()=>session.Command("ConfirmDance",checkId),ref y);
+                        AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
+                    }
+                    else AddAction(FestivalHudText.RopeChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
                 }
+                // The festival's twists where they stand: the Ferris wheel, the VIP stall, a passing art car.
+                foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
             }
             // Offering your gear to a friend in reach follows the errands above and the checks: the sober crew sticks by the
             // tripper, so a friend is often in reach, and E must not hand them your gear instead of checking.
