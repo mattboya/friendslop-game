@@ -37,10 +37,15 @@ namespace Festival.Core
         public PlayerState Player(string id) {return State.Players.Find(p=>p.Id==id);}
         public InteractionState Interaction(string id) {return State.Interactions.Find(i=>i.Id==id);}
         public void Restore(RoundState state) {
-            if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
+            if(state==null||state.SchemaVersion<1||state.SchemaVersion>RoundState.CurrentSchemaVersion||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
             if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
+            // A round saved before weekends restores at Day 1 of the first festival. One that had left camp was a rescue: it resumes
+            // as Night 1, the night it was, with the way to its friend open, as it holds no tripper's clue trail. Either way it is
+            // a current round from here on, so saving it again does not re-read a weekend Day 1 as an old rescue.
+            if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
+            state.SchemaVersion=RoundState.CurrentSchemaVersion;
             State=state;
         }
         public CommandResult Execute(string playerId,GameCommand command) {

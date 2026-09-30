@@ -19,6 +19,7 @@ public static class WeekendTests
         DyingKeepsTheWeekendsCash();
         FullHandsCanLeaveGearAtCamp();
         OldCampSnapshotsLaunchTheTablesLength();
+        OldRescueSnapshotsResumeAsANight();
         FailureRestartsTheFestival();
         HostChoosesAnUnlockedFestival();
         WinningNightTwoUnlocksOnTheResultsScreen();
@@ -123,8 +124,8 @@ public static class WeekendTests
     static void OldCampSnapshotsLaunchTheTablesLength()
     {
         var s=Crew(44);var old=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
-        foreach(var field in new[]{"FestivalIndex","LevelIndex","EncoreTier","UnlockedFestivalCount","Doses","TripperBag","Bodies","ReviewAwards","ReviewWinners","Visions","ClueChain","LevelSales"})old.Remove(field);
-        old["DurationSeconds"]=600;
+        foreach(var field in PreWeekendFields)old.Remove(field);
+        old["SchemaVersion"]=1;old["DurationSeconds"]=600;
         var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(old.ToJsonString(),Json));
         Check(restored.State.Phase=="Shopping"&&Festivals.For(restored.State).Name=="Day 1","setup: the old camp restores at Day 1");
         foreach(var p in restored.State.Players){p.X=0;p.Z=19;Check(Act(restored,p.Id,"Ready").Accepted,p.Id+" readies");}
@@ -132,6 +133,29 @@ public static class WeekendTests
         Check(restored.State.Phase=="Spinning"&&tripper!=null,"setup: the crew leaves camp");
         Check(restored.State.DurationSeconds==480,"the day runs eight minutes, not the old snapshot's ten");
         Check(tripper.Effects.Exists(e=>e.Id==FestivalSimulation.DoseEffect&&e.RemainingSeconds==480),"and the tripper's dose lasts that day");
+        restored.Tick(FestivalSimulation.SpinSeconds+.1);foreach(var p in restored.State.Players)Act(restored,p.Id,"MapReady");
+        var again=new FestivalSimulation();again.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(restored.State,Json),Json));
+        Check(again.State.Phase=="Playing"&&Festivals.For(again.State).Name=="Day 1","once launched, it saves as a current round: its Day 1 stays a day");
+    }
+
+    // The fields festival weekends added; a snapshot saved before them has none, and says SchemaVersion 1.
+    static readonly string[] PreWeekendFields={"FestivalIndex","LevelIndex","EncoreTier","UnlockedFestivalCount","Doses","TripperBag","Bodies","ReviewAwards","ReviewWinners","Visions","ClueChain","LevelSales","SecondFriend"};
+
+    // A round saved mid-level before weekends was a rescue. It resumes as Night 1, the night it was, not as a quota day, and
+    // the crew can still find the friend and win it.
+    static void OldRescueSnapshotsResumeAsANight()
+    {
+        var s=Crew(46);s.State.Phase="Playing";var old=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
+        foreach(var field in PreWeekendFields)old.Remove(field);
+        old["SchemaVersion"]=1;old["DurationSeconds"]=600;old["GateOpened"]=false;
+        var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(old.ToJsonString(),Json));
+        Check(Festivals.For(restored.State).Name=="Night 1","an old rescue in progress resumes as Night 1, not a quota day");
+        var a=restored.Player("a");var friend=restored.State.FriendPosition;a.X=friend.X;a.Z=friend.Z;
+        var found=Act(restored,"a","FindFriend");Check(found.Accepted,"its lost friend can be found: an old save holds no tripper's trail to follow (got \""+found.Reason+"\")");
+        restored.Tick(2.1);Check(restored.State.FriendFound,"the friend joins the crew");
+        friend.X=Festivals.CampGateX;friend.Z=Festivals.CampGateZ;a.X=friend.X;a.Z=friend.Z;
+        Check(Act(restored,"a","Extract").Accepted,"with the friend at the way back to camp, the night can end");
+        restored.Tick(3.1);Check(restored.State.Phase=="Results"&&restored.State.Result=="Success","and it is won");
     }
 
     static void FailureRestartsTheFestival()

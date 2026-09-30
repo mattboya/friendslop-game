@@ -55,7 +55,9 @@ namespace Festival.Core
     [Serializable] public sealed class CampReviewVote { public string PlayerId="", TargetId=""; public int Award; }
     [Serializable] public sealed class PlayerDose { public string PlayerId=""; public int Dose; }
     [Serializable] public sealed class RoundState {
-        public int SchemaVersion=1, Seed; public string RoundId="",Phase="Shopping",Result="",HostPlayerId="",MissionId="rescue_compact";
+        // Schema 2 is festival weekends. A schema 1 round, saved before them, is still restored (FestivalSimulation.Restore).
+        public const int CurrentSchemaVersion=2;
+        public int SchemaVersion=CurrentSchemaVersion, Seed; public string RoundId="",Phase="Shopping",Result="",HostPlayerId="",MissionId="rescue_compact";
         // Weekend position: a row of Festivals.cs. Clearing festival k unlocks k+1.
         public int FestivalIndex,LevelIndex,EncoreTier,UnlockedFestivalCount=1;
         // TRIP-1 spin result, public so every client animates the same spin. TripperBag: players still due a turn this weekend.
