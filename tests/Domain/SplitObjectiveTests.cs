@@ -19,6 +19,8 @@ public static class SplitObjectiveTests
     static int Dose(PlayerState p)=>p.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect)?.Intensity??0;
     static NpcState Npc(FestivalSimulation s,string id)=>s.State.Npcs.Find(n=>n.Id==id);
     static List<string> Chain(FestivalSimulation s,int trail)=>trail==0?s.State.ClueChain:s.State.SecondFriend.ClueChain;
+    // The id of the trail's next clue holder, or "" once it is followed to the end.
+    static string Next(FestivalSimulation s,int trail){int read=trail==0?s.State.CluesRead:s.State.SecondFriend.CluesRead;return read<Chain(s,trail).Count?Chain(s,trail)[read]:"";}
     static List<VisionState> Clues(FestivalSimulation s,int trail)=>s.State.Visions.FindAll(v=>v.Kind=="Clue"&&v.Trail==trail);
     static double Distance(WorldPoint a,WorldPoint b)=>Math.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Z-b.Z)*(a.Z-b.Z));
     static PlayerState Place(FestivalSimulation s,string id,WorldPoint at){var p=s.Player(id);p.X=at.X;p.Z=at.Z;return p;}
@@ -51,7 +53,7 @@ public static class SplitObjectiveTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{FiveOrMoreGetTwoFriends,EachTrailShowsItsOwnNextLink,FindingTheSecondFriend,SuccessNeedsBoth,
-            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends,ERecruitsTheFriendInReach})
+            NightTwoStillBringsEveryoneHome,TheSecondFriendFollowsTheEscort,SnapshotsKeepTheSecondFriend,GuidanceCountsBothFriends,ERecruitsTheFriendInReach,TrailsNeverShareAHolder})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" split objective test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -115,6 +117,29 @@ public static class SplitObjectiveTests
         double yaw=holder.Yaw*Math.PI/180;tripper.X=holder.X+(float)Math.Sin(yaw);tripper.Z=holder.Z+(float)Math.Cos(yaw);
         Check(Act(chat,tripper.Id,"ConfirmChat",holder.Id).Accepted,"the tripper can check the second trail's clue holder");
         chat.Tick(5.2);Check(chat.State.SecondFriend.CluesRead==1&&chat.State.CluesRead==0,"and the chat moves the second trail on");
+    }
+
+    // Followed in any order, the two trails' clue visions never collide: no festivalgoer carries two, and no fake, checked or
+    // not, sits on either trail's real next holder. The trails take turns a link at a time; on even seeds the tripper checks
+    // one of the other trail's fakes first.
+    static void TrailsNeverShareAHolder()
+    {
+        int nights=0;
+        for(int seed=0;seed<=200;seed++)foreach(var crew in new[]{5,8})
+        {
+            var s=Start(crew,seed:seed);int dose=Dose(Tripper(s));if(dose<2)continue;nights++;
+            for(int step=0;;step++)
+            {
+                var clues=s.State.Visions.FindAll(v=>v.Kind=="Clue");string where=crew+" players, seed "+seed+", dose "+dose+", step "+step+": ";
+                var twice=clues.GroupBy(v=>v.NpcId).FirstOrDefault(g=>g.Count()>1);
+                Check(twice==null,where+"no festivalgoer carries two clue visions, but "+twice?.Key+" carries "+string.Join(" | ",twice?.Select(v=>"trail "+v.Trail+(v.IsTrue?" true":" fake")+(v.Confirmed?" checked":""))??new string[0]));
+                Check(!clues.Exists(v=>!v.IsTrue&&(v.NpcId==Next(s,0)||v.NpcId==Next(s,1))),where+"no fake sits on either trail's real next holder");
+                int trail=step%2==0?1:0;if(Next(s,trail)=="")trail=1-trail;if(Next(s,trail)=="")break;
+                var fake=clues.Find(v=>!v.IsTrue&&v.Trail!=trail);if(fake!=null&&seed%2==0)s.ConfirmVisionsOf(Npc(s,fake.NpcId));
+                s.ConfirmVisionsOf(Npc(s,Next(s,trail)));
+            }
+        }
+        Check(nights>100,"setup: plenty of dose 2+ nights, got "+nights);
     }
 
     static void FindingTheSecondFriend()

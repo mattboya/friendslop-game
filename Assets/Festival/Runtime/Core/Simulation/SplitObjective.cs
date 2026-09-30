@@ -29,8 +29,11 @@ namespace Festival.Core
             return second.Active?2:1;
         }
         List<string> Chain(int trail)=>trail==0?State.ClueChain:State.SecondFriend.ClueChain;
+        int CluesRead(int trail)=>trail==0?State.CluesRead:State.SecondFriend.CluesRead;
         // The id of the trail's next clue holder, or "" once it is followed to the end (or was never laid).
-        string NextClue(int trail){var chain=Chain(trail);int read=trail==0?State.CluesRead:State.SecondFriend.CluesRead;return read<chain.Count?chain[read]:"";}
+        string NextClue(int trail){var chain=Chain(trail);int read=CluesRead(trail);return read<chain.Count?chain[read]:"";}
+        // Whether npc holds one of the trail's links still to find, its next one included.
+        bool StillOnTrail(int trail,string npc)=>Chain(trail).IndexOf(npc)>=CluesRead(trail);
         // The tripper found trail's real next clue holder: that trail moves on and its next link's visions replace this link's.
         // After the last link the way to its friend opens (the tripper's view then shows where that friend is).
         void FollowTrail(int trail)
