@@ -19,6 +19,7 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Material> artMaterials = new Dictionary<string,Material>();
         private readonly List<Light> stageLights = new List<Light>();
         private VolumeProfile duskProfile;
+        private FestivalNightLighting lighting;
         private Font worldFont;
         private Transform owned;
         private Transform camp;
@@ -284,10 +285,10 @@ namespace Festival.Presentation
             }
             var sun=new GameObject("Twilight sun");sun.transform.SetParent(owned,false);sun.transform.rotation=Quaternion.Euler(14,-30,0);
             var directional=sun.AddComponent<Light>();directional.type=LightType.Directional;directional.color=new Color(1,.67f,.48f);directional.intensity=.82f;directional.shadows=LightShadows.Soft;festivalSun=directional;
-            var skyTemplate=Resources.Load<Material>("FestivalSky");
+            var skyTemplate=Resources.Load<Material>("FestivalSky");Material dusk=null;
             if(skyTemplate!=null)
             {
-                var dusk=new Material(skyTemplate);
+                dusk=new Material(skyTemplate);
                 dusk.SetColor("_SkyTint",new Color(.23f,.19f,.39f));
                 dusk.SetColor("_GroundColor",new Color(.17f,.10f,.21f));
                 dusk.SetFloat("_AtmosphereThickness",.8f);
@@ -309,6 +310,7 @@ namespace Festival.Presentation
             colorGrade.postExposure.Override(.3f);colorGrade.contrast.Override(5f);colorGrade.saturation.Override(-5f);
             var bloom=duskProfile.Add<Bloom>(true);
             bloom.threshold.Override(1.12f);bloom.intensity.Override(.12f);bloom.scatter.Override(.5f);
+            lighting=new FestivalNightLighting(owned,directional,colorGrade,dusk);
             Physics.SyncTransforms();
             surface=owned.gameObject.AddComponent<NavMeshSurface>();
             surface.collectObjects=CollectObjects.Children;
@@ -688,7 +690,7 @@ namespace Festival.Presentation
         {
             if(camp==null||owned==null||visiblePhase==phase)return;
             visiblePhase=phase;
-            bool festival=phase=="Playing"||phase=="Results";
+            bool festival=ShowsFestival(phase);
             camp.gameObject.SetActive(!festival);
             owned.gameObject.SetActive(festival);
             RenderSettings.sun=festival?festivalSun:campSun;
@@ -697,6 +699,9 @@ namespace Festival.Presentation
             DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","phase","space="+(festival?"festival":"campsite")+" camp_navigation="+CampNavigationReady+" festival_navigation="+NavigationReady);
 #endif
         }
+        public static bool ShowsFestival(string phase)=>phase=="Playing"||phase=="Results";
+        // LIGHT-1: night levels and the local player's dose, straight from the round state.
+        public void SetLighting(RoundState state,string localPlayerId){if(lighting!=null)lighting.Apply(state,localPlayerId);}
         private void Update()
         {
             float time=Time.time;
