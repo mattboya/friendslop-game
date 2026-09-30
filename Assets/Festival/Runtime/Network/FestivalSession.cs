@@ -62,14 +62,13 @@ namespace Festival.Network
         private double accumulator,nextSnapshot,nextInput,snapshotReceivedAt,serverClockAtSnapshot,connectAt;
         private int movementSequence;
         private string token="", endpoint="", loadedRound="", acknowledgedDialogue="", profileId="default";
-        private NavMeshPath navigationPath;
+        private static NavMeshPath navigationPath;
         private Transform actorRoot;
         private FestivalWorld world;
         private FestivalHands firstPersonHands;
         private bool closing;
         private void Awake()
         {
-            navigationPath=new NavMeshPath();
             Application.runInBackground=true;
             Application.targetFrameRate=60;
             var args=Environment.GetCommandLineArgs();
@@ -127,7 +126,7 @@ namespace Festival.Network
             {
                 token="";endpoint="127.0.0.1:"+port;peers.Clear();tokens.Clear();inputs.Clear();pending.Clear();
                 simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);Profile.ApplyUnlocks(simulation.State);
-                simulation.HasLineOfSight=(x,z,xx,zz)=>!Physics.Linecast(new Vector3(x,1.2f,z),new Vector3(xx,1.2f,zz),~0,QueryTriggerInteraction.Ignore);
+                simulation.HasLineOfSight=LineOfSight;
                 simulation.Navigate=Navigate;
                 Configure(port,"127.0.0.1",true);
                 manager.NetworkConfig.ConnectionData=Encoding.UTF8.GetBytes(JsonUtility.ToJson(new Hello{Name=CleanName(name)}));
@@ -413,11 +412,19 @@ namespace Festival.Network
             }
             return origin+delta;
         }
-        private WorldPoint Navigate(float x,float z,float tx,float tz,double maxDistance)
+        // How the host sees and moves NPCs. Public so play tests drive a simulation exactly as a hosted game does.
+        public static bool LineOfSight(float x,float z,float xx,float zz)=>!Physics.Linecast(new Vector3(x,1.2f,z),new Vector3(xx,1.2f,zz),~0,QueryTriggerInteraction.Ignore);
+        public static WorldPoint Navigate(float x,float z,float tx,float tz,double maxDistance)
         {
-            var from=new Vector3(x,0,z);var target=new Vector3(tx,0,tz);
-            if(NavMesh.SamplePosition(from,out var a,2,NavMesh.AllAreas)&&NavMesh.SamplePosition(target,out var b,3,NavMesh.AllAreas)&&NavMesh.CalculatePath(a.position,b.position,NavMesh.AllAreas,navigationPath)&&navigationPath.corners.Length>1)
-                target=navigationPath.corners[1];
+            var from=new Vector3(x,0,z);var target=new Vector3(tx,0,tz);navigationPath??=new NavMeshPath();
+            // ESC-1: head for the first corner that is not where the walker already stands. One that stops exactly on a corner,
+            // or at the end of a partial path, would otherwise get a 0 m step every tick and never move again. With no such
+            // corner it heads straight for the target.
+            if(NavMesh.SamplePosition(from,out var a,2,NavMesh.AllAreas)&&NavMesh.SamplePosition(target,out var b,3,NavMesh.AllAreas)&&NavMesh.CalculatePath(a.position,b.position,NavMesh.AllAreas,navigationPath))
+            {
+                var corners=navigationPath.corners;
+                for(int i=1;i<corners.Length;i++)if(new Vector2(corners[i].x-x,corners[i].z-z).sqrMagnitude>.0025f){target=corners[i];break;}
+            }
             var delta=Vector3.ClampMagnitude(target-from,(float)maxDistance);delta.y=0;var next=Slide(from,delta);return new WorldPoint(next.x,next.z);
         }
         private void Broadcast()

@@ -81,7 +81,7 @@ namespace Festival.Presentation
             var farRise=Material(distantFestivalEarth.color);
             farRise.mainTexture=Resources.Load<Texture2D>("FestivalGround");
             DistantRise("Festival distant woodland rise",62,79,100,farRise);
-            Box("Ground", new Vector3(0,-.3f,0),new Vector3(80,.6f,80),earth);
+            var ground=Box("Ground", new Vector3(0,-.3f,0),new Vector3(80,.6f,80),earth);
             var path=Material(new Color(.57f,.39f,.30f));
             path.mainTexture=Resources.Load<Texture2D>("FestivalDirt");
             path.mainTextureScale=new Vector2(2,6);
@@ -315,6 +315,11 @@ namespace Festival.Presentation
             surface=owned.gameObject.AddComponent<NavMeshSurface>();
             surface.collectObjects=CollectObjects.Children;
             surface.useGeometry=NavMeshCollectGeometry.PhysicsColliders;
+            // ESC-1: NPCs walk only on the ground. The host slides them with a capsule that cannot step up onto anything, so a
+            // path the agent's 0.75 m step would take over a picnic bench, a plinth or a booth floor ends with the NPC stuck
+            // against it for good.
+            surface.defaultArea=NavMesh.GetAreaFromName("Not Walkable");
+            var walkable=ground.AddComponent<NavMeshModifier>();walkable.overrideArea=true;walkable.area=NavMesh.GetAreaFromName("Walkable");
             surface.overrideVoxelSize=true;surface.voxelSize=.12f;
             // Default humanoid agent is conservative for the player's 0.35m capsule.
             // Keep agent type 0 so ordinary NavMesh.CalculatePath uses this surface.
