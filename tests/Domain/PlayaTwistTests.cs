@@ -6,7 +6,9 @@ using Festival.Core;
 
 // PLAYA-1: Ember Playa (festival 1) has four twists, and Palm Mirage has none of them. Money reads as odd objects, a different
 // set for each player, over the same economy. Dust storms of 20-40 s blow on a seeded schedule and cut festivalgoers' sight
-// from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight.
+// from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight. For the
+// last three minutes of Night 2 the effigy burns: the crowd gathers round it (a festivalgoer busy with someone first finishes
+// with them), and within 12 m of it every step is x.7 and suspicion of anyone there cools twice as fast.
 public static class PlayaTwistTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -19,7 +21,9 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight})
+            StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,
+            TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AFestivalgoerFinishesAChatBeforeHeadingOver,
+            TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" playa twist test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -28,7 +32,7 @@ public static class PlayaTwistTests
     static FestivalSimulation Start(int seed,int level,int festival,int crew=2)
     {
         var s=new FestivalSimulation(seed);for(int k=0;k<crew;k++)s.AddPlayer("p"+k,"P"+k);
-        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;s.State.DurationSeconds=Festivals.For(s.State).DurationSeconds;
         foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,"setup: "+p.Id+" readies");}
         s.Tick(5.2);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
         Check(s.State.Phase=="Playing","setup: the crew is at "+Festivals.Name(festival));
@@ -214,5 +218,149 @@ public static class PlayaTwistTests
         Check(s.TryMove("p0",p.X+.05f,p.Z,0,.1),"walking again");
         Watched(s,p);s.Tick(.1);
         Check(Heat(s,"wook","p0")>0,"back on foot, festivalgoers see them sprint again");
+    }
+
+    static double FromEffigy(float x,float z)=>Math.Sqrt((x-Festivals.EffigyX)*(x-Festivals.EffigyX)+(z-Festivals.EffigyZ)*(z-Festivals.EffigyZ));
+    // How far (degrees) n's facing is from looking straight at the effigy.
+    static double OffEffigy(NpcState n){double to=Math.Atan2(Festivals.EffigyX-n.X,Festivals.EffigyZ-n.Z)*180/Math.PI;return Math.Abs(((n.Yaw-to)%360+540)%360-180);}
+
+    static void TheEffigyBurnsForTheLastThreeMinutesOfNightTwo()
+    {
+        var st=Start(6,3,1).State;
+        st.ElapsedSeconds=st.DurationSeconds-180.1;Check(!FestivalSimulation.Burning(st),"3:00.1 before the end of Night 2 the effigy still stands");
+        st.ElapsedSeconds=st.DurationSeconds-180;Check(FestivalSimulation.Burning(st),"from three minutes before the end it burns");
+        st.ElapsedSeconds=st.DurationSeconds-.1;Check(FestivalSimulation.Burning(st),"until the end");
+        Check(FestivalSimulation.InBurnCrowd(st,Festivals.EffigyX+11.9f,Festivals.EffigyZ)&&FestivalSimulation.InBurnCrowd(st,Festivals.EffigyX,Festivals.EffigyZ-11.9f),"11.9 m from the burning effigy is in the crush");
+        Check(!FestivalSimulation.InBurnCrowd(st,Festivals.EffigyX+12.1f,Festivals.EffigyZ),"12.1 m is not");
+        st.ElapsedSeconds=st.DurationSeconds-181;Check(!FestivalSimulation.InBurnCrowd(st,Festivals.EffigyX,Festivals.EffigyZ),"and before the burn there is no crush");
+        for(int level=0;level<Festivals.LevelCount-1;level++)
+        {
+            var other=Start(6,level,1).State;other.ElapsedSeconds=other.DurationSeconds-1;
+            Check(!FestivalSimulation.Burning(other),"no burn at the end of "+Festivals.Level(1,level,0).Name);
+        }
+        var palm=Start(6,3,0).State;palm.ElapsedSeconds=palm.DurationSeconds-1;
+        Check(!FestivalSimulation.Burning(palm)&&!FestivalSimulation.InBurnCrowd(palm,Festivals.EffigyX,Festivals.EffigyZ),"Palm Mirage has no effigy");
+    }
+
+    static void TheCrowdGathersAtTheBurn()
+    {
+        var s=Start(6,3,1);var st=s.State;var crowd=st.Npcs.FindAll(n=>n.Kind=="Wook");
+        st.ElapsedSeconds=st.DurationSeconds-Festivals.BurnSeconds-2;
+        var before=crowd.ConvertAll(n=>(n.X,n.Z));s.Tick(1);
+        Check(crowd.TrueForAll(n=>(n.X,n.Z)==before[crowd.IndexOf(n)]),"before the burn the crowd stays where it is");
+        // The festivalgoer farthest from the effigy has someone in its sights: p0, 3 m in front of it.
+        NpcState busy=crowd[0];foreach(var n in crowd)if(FromEffigy(n.X,n.Z)>FromEffigy(busy.X,busy.Z))busy=n;
+        var p=s.Player("p0");double yaw=busy.Yaw*Math.PI/180;p.X=busy.X+(float)(3*Math.Sin(yaw));p.Z=busy.Z+(float)(3*Math.Cos(yaw));
+        busy.Observers.Clear();busy.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=50,LastSeenSeconds=st.SimulationSeconds});
+        s.Tick(1.5);var walking=crowd.ConvertAll(n=>(n.X,n.Z));s.Tick(.1);
+        Check(Festivals.BurnWalkSpeed>0&&Festivals.BurnWalkSpeed<=1.7,"the crowd strolls over, no faster than a festivalgoer going after someone, not "+Festivals.BurnWalkSpeed+" m/s");
+        foreach(var n in crowd)
+        {
+            double step=Math.Sqrt((n.X-walking[crowd.IndexOf(n)].X)*(n.X-walking[crowd.IndexOf(n)].X)+(n.Z-walking[crowd.IndexOf(n)].Z)*(n.Z-walking[crowd.IndexOf(n)].Z));
+            Check(n==busy||step>0&&step<=Festivals.BurnWalkSpeed*.1+1e-4,n.Id+" strolls toward the effigy: "+step+" m in a tenth of a second");
+        }
+        s.Tick(59.4);
+        Check(FestivalSimulation.Burning(st),"setup: the effigy has been burning a minute");
+        foreach(var n in crowd)
+        {
+            if(n==busy)continue;
+            Check(Math.Abs(FromEffigy(n.X,n.Z)-Festivals.BurnRingRadius)<.05,n.Id+" has gathered in the ring "+Festivals.BurnRingRadius+" m round the effigy, got "+FromEffigy(n.X,n.Z)+" m");
+            Check(OffEffigy(n)<1,n.Id+" watches the effigy burn, "+OffEffigy(n)+" degrees off");
+            foreach(var m in crowd)if(m!=n&&m!=busy)Check(Math.Sqrt((m.X-n.X)*(m.X-n.X)+(m.Z-n.Z)*(m.Z-n.Z))>1,n.Id+" and "+m.Id+" each have their own place in the ring");
+        }
+        Check(busy.Mode=="Questioning"&&Math.Sqrt((busy.X-p.X)*(busy.X-p.X)+(busy.Z-p.Z)*(busy.Z-p.Z))<2&&FromEffigy(busy.X,busy.Z)>10,"a festivalgoer questioning someone stays on them");
+        Check(st.Npcs.FindAll(n=>n.Kind=="Cop").TrueForAll(n=>FromEffigy(n.X,n.Z)>15),"cops keep to their patrol");
+        var palm=Start(6,3,0);var palmCrowd=palm.State.Npcs.FindAll(n=>n.Kind=="Wook");palm.State.ElapsedSeconds=palm.State.DurationSeconds-Festivals.BurnSeconds+1;
+        var still=palmCrowd.ConvertAll(n=>(n.X,n.Z));palm.Tick(30);
+        Check(palmCrowd.TrueForAll(n=>(n.X,n.Z)==still[palmCrowd.IndexOf(n)]),"Palm Mirage's crowd has no effigy to gather at");
+        var eyeing=Burn(60);var w=new NpcState{Id="wook",X=20,Z=-20};eyeing.State.Npcs.Add(w);
+        w.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40,LastSeenSeconds=eyeing.State.SimulationSeconds});eyeing.Tick(.1);
+        Check(w.Mode=="Watching"&&FromEffigy(w.X,w.Z)<FromEffigy(20,-20)-.1,"a festivalgoer only keeping an eye on someone heads over too");
+    }
+
+    // p0, the tripper, stops to check a festivalgoer out on the lawn just as the effigy catches.
+    static void AFestivalgoerFinishesAChatBeforeHeadingOver()
+    {
+        var s=Burn(Festivals.BurnSeconds);var p=s.Player("p0");p.X=20;p.Z=-20;var n=new NpcState{Id="wook",Role="Buyer",X=21,Z=-20};s.State.Npcs.Add(n);
+        s.State.TripperId="p0";s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="wook"});
+        Check(Act(s,"p0","ConfirmChat","wook").Accepted,"setup: p0 starts a chat");
+        s.Tick(4.5);
+        Check(FestivalSimulation.Burning(s.State)&&n.X==21&&n.Z==-20&&p.InteractionId!="","a festivalgoer mid-chat stays to finish it, at ("+n.X+", "+n.Z+")");
+        s.Tick(1);
+        Check(p.InteractionId==""&&s.State.Visions[0].Confirmed,"setup: the chat is done");
+        Check(FromEffigy(n.X,n.Z)<FromEffigy(21,-20)-.1,"then it heads for the burn");
+    }
+
+    // A hand-built Night 2, `left` seconds before the end, with nobody from the crowd around.
+    static FestivalSimulation Burn(double left,int festival=1)
+    {
+        var s=new FestivalSimulation(3);s.AddPlayer("p0","P0");
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=3;s.State.Phase="Playing";
+        s.State.DurationSeconds=Festivals.NightSeconds;s.State.ElapsedSeconds=s.State.DurationSeconds-left;s.State.Npcs.Clear();
+        return s;
+    }
+    // p0, `metres` north of the effigy, tries to go `step` metres further north in a tenth of a second: how far they get, -1 if refused.
+    static double Walk(FestivalSimulation s,double metres,double step,string life="Alive")
+    {
+        var p=s.Player("p0");p.Life=life;p.X=Festivals.EffigyX;p.Z=Festivals.EffigyZ+(float)metres;float z=p.Z;
+        return s.TryMove("p0",p.X,z+(float)step,0,.1)?p.Z-z:-1;
+    }
+    static bool Near(double a,double b)=>Math.Abs(a-b)<1e-4;
+
+    static void TheCrushSlowsEveryStep()
+    {
+        double crushed=Walk(Burn(60),11.5,.3);
+        Check(Near(crushed,.21),"in the burn's crush a 0.3 m step covers 0.21 m, got "+crushed);
+        Check(Near(Walk(Burn(60),11.5,.6),.42),"a sprint too, got "+Walk(Burn(60),11.5,.6));
+        Check(Walk(Burn(60),11.5,.65)<0,"and the usual speed limit still holds");
+        Check(Near(Walk(Burn(60),12.5,.3),.3),"outside the crush a step is a step, got "+Walk(Burn(60),12.5,.3));
+        Check(Near(Walk(Burn(181),11.5,.3),.3),"so it is before the burn, got "+Walk(Burn(181),11.5,.3));
+        Check(Near(Walk(Burn(60,0),11.5,.3),.3),"and at Palm Mirage, got "+Walk(Burn(60,0),11.5,.3));
+        Check(Near(Walk(Burn(60),11.5,.3,"Spirit"),.3),"spirits float through the crush, got "+Walk(Burn(60),11.5,.3,"Spirit"));
+    }
+
+    // A festivalgoer 5 m from the effigy looks straight at it, with its back to p0, who stands `metres` from the effigy right
+    // behind it. It has had 20 suspicion of p0 since last seeing them 10 s ago: how much does that cool in a second?
+    static double Cooled(FestivalSimulation s,double metres)
+    {
+        var n=s.State.Npcs.Find(x=>x.Kind=="Wook");var p=s.Player("p0");
+        double d=FromEffigy(n.X,n.Z);Check(Math.Abs(d-5)<.05&&OffEffigy(n)<1,"setup: "+n.Id+" is 5 m from the effigy, looking at it");
+        p.X=Festivals.EffigyX+(float)((n.X-Festivals.EffigyX)/d*metres);p.Z=Festivals.EffigyZ+(float)((n.Z-Festivals.EffigyZ)/d*metres);
+        n.Observers.Clear();var o=new ObserverState{PlayerId="p0",Suspicion=20,LastSeenSeconds=s.State.SimulationSeconds-10};n.Observers.Add(o);
+        s.Tick(1);return 20-o.Suspicion;
+    }
+    // At the burn the festivalgoer walks there itself; anywhere else it is put there.
+    static FestivalSimulation Gathered(double left)
+    {
+        var s=Burn(left+40);s.State.Npcs.Add(new NpcState{Id="wook",X=10,Z=-20});var p=s.Player("p0");p.X=-30;p.Z=-30;
+        s.Tick(40);return s;
+    }
+    static FestivalSimulation Placed(double left,int festival=1)
+    {
+        var s=Burn(left,festival);s.State.Npcs.Add(new NpcState{Id="wook",X=Festivals.EffigyX,Z=Festivals.EffigyZ+5,Yaw=180});return s;
+    }
+
+    // A festivalgoer questioning p0, who stands `metres` north of the effigy, is 32 m behind them and last saw them 10 s ago:
+    // how much suspicion a second does it lose, out of sight and falling behind?
+    static double Chased(double metres,int festival=1)
+    {
+        var s=Burn(60,festival);var p=s.Player("p0");p.X=Festivals.EffigyX;p.Z=Festivals.EffigyZ+(float)metres;
+        var n=new NpcState{Id="wook",X=p.X,Z=p.Z-32};s.State.Npcs.Add(n);
+        var o=new ObserverState{PlayerId="p0",Suspicion=65,LastSeenSeconds=s.State.SimulationSeconds-10};n.Observers.Add(o);
+        s.Tick(.5);Check(n.Mode=="Questioning","setup: "+n.Id+" is still after p0");return (65-o.Suspicion)*2;
+    }
+
+    static void SuspicionCoolsFasterInTheCrush()
+    {
+        double plain=Cooled(Placed(60),13);
+        Check(Near(plain,2),"outside the crush, suspicion of someone out of sight cools 2 a second, got "+plain);
+        Check(Near(Cooled(Gathered(60),8),2*plain),"in the burn's crush it cools twice as fast, got "+Cooled(Gathered(60),8));
+        Check(Near(Cooled(Gathered(60),13),plain),"just outside it, as usual, got "+Cooled(Gathered(60),13));
+        Check(Near(Cooled(Placed(200),8),plain),"before the burn, as usual, got "+Cooled(Placed(200),8));
+        Check(Near(Cooled(Placed(60,0),8),plain),"and at Palm Mirage, got "+Cooled(Placed(60,0),8));
+        double chase=Chased(13);
+        Check(Near(chase,10),"outside the crush, a festivalgoer falling 30 m behind loses 10 a second, got "+chase);
+        Check(Near(Chased(8),2*chase),"it loses someone in the crush twice as fast, got "+Chased(8));
+        Check(Near(Chased(8,0),chase),"but not at Palm Mirage, got "+Chased(8,0));
     }
 }

@@ -7,7 +7,9 @@ namespace Festival.Core
     /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.
     /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.
     /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers see only 5 m. Two
-    /// art cars crawl round slow loops, and whoever rides one rolls along with it, out of festivalgoers' sight.</summary>
+    /// art cars crawl round slow loops, and whoever rides one rolls along with it, out of festivalgoers' sight. For the last three
+    /// minutes of Night 2 the effigy burns: the crowd gathers round it, and in the crush there every step is shorter and
+    /// suspicion cools faster.</summary>
     public sealed partial class FestivalSimulation
     {
         public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel",RideCarKind="RideCar";
@@ -126,5 +128,29 @@ namespace Festival.Core
         void RideArtCars(){foreach(var ride in State.Interactions){var p=ride.Status=="Active"&&ride.Kind==RideCarKind?Player(ride.PlayerId):null;if(p!=null&&Car(ride)>=0)RideArtCar(p,Car(ride));}}
         void RideArtCar(PlayerState p,int car){var at=Festivals.ArtCarAt(car,State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;}
         bool Hidden(NpcState n,PlayerState p)=>n.Kind=="Wook"&&p.InteractionId!=""&&ArtCarOf(State,p.Id)>=0;
+        /// <summary>Whether Ember Playa's effigy is burning: the last BurnSeconds of Night 2. Like the storms it reads only the view's
+        /// festival, level and clock, so every client knows it.</summary>
+        public static bool Burning(RoundState s)=>s.FestivalIndex==Festivals.PlayaFestival&&s.LevelIndex==Festivals.LevelCount-1&&s.ElapsedSeconds>=s.DurationSeconds-Festivals.BurnSeconds;
+        /// <summary>Whether (x, z) is in the crush round the burning effigy, within BurnRadius of it.</summary>
+        public static bool InBurnCrowd(RoundState s,float x,float z)=>Burning(s)&&Distance(x,z,Festivals.EffigyX,Festivals.EffigyZ)<=Festivals.BurnRadius;
+        // Every Playing step of the burn, after the crowd has looked around: each festivalgoer with nobody to go after walks to its
+        // own place in a ring BurnRingRadius round the effigy and watches it. One someone is talking to stays until the chat ends.
+        // ponytail: places go round the ring in crowd order, so walkers may cross paths on the way.
+        void GatherAtBurn(double dt)
+        {
+            if(!Burning(State))return;
+            var crowd=State.Npcs.FindAll(n=>n.Kind=="Wook");
+            for(int k=0;k<crowd.Count;k++)
+            {
+                var n=crowd[k];if((n.Mode!="Blending"&&n.Mode!="Watching")||State.Interactions.Exists(i=>i.Status=="Active"&&i.TargetId==n.Id))continue;
+                double a=2*Math.PI*k/crowd.Count;
+                var at=Move(n.X,n.Z,Festivals.EffigyX+(float)(Festivals.BurnRingRadius*Math.Sin(a)),Festivals.EffigyZ+(float)(Festivals.BurnRingRadius*Math.Cos(a)),Festivals.BurnWalkSpeed*dt);
+                n.X=at.X;n.Z=at.Z;n.Yaw=Bearing(n.X,n.Z,Festivals.EffigyX,Festivals.EffigyZ);
+            }
+        }
+        // In the crush every step but a spirit's covers only BurnCrushFactor of the way (TryMove), and suspicion of anyone there
+        // cools BurnCalmFactor times as fast (WookTick).
+        void Crush(PlayerState p,ref float x,ref float z){if(p.Life!="Spirit"&&InBurnCrowd(State,p.X,p.Z)){x=p.X+(float)((x-p.X)*Festivals.BurnCrushFactor);z=p.Z+(float)((z-p.Z)*Festivals.BurnCrushFactor);}}
+        double Calm(PlayerState p)=>InBurnCrowd(State,p.X,p.Z)?Festivals.BurnCalmFactor:1;
     }
 }

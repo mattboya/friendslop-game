@@ -137,6 +137,7 @@ namespace Festival.Core
             if(p.Life=="Downed")speed=.8;
             speed=Math.Min(speed,CarrySpeed(p));
             double distance=Distance(p.X,p.Z,x,z);if(distance>speed*deltaSeconds+.03)return false;
+            Crush(p,ref x,ref z);
             if(p.Life=="Detained"&&Distance(x,z,27,5)>3)return false;
             if(!MayStep(p,x,z))return false;
             if(!CarryTo(p,x,z))return false;
