@@ -118,5 +118,53 @@ namespace Festival.Tests
             }
             yield return null;
         }
+
+        // Everyone readies within a few metres of the gate, so a friend often stands between the tripper's face and a head-on camera.
+        [UnityTest]public IEnumerator FriendsAtTheGateNeverBlockTheTake()
+        {
+            var world=new GameObject("Spinner world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Spinner session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            try
+            {
+                session.Host("Tester",8609);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                // The host and the mate face each other 1.5 m apart and the mate is picked; a third friend stands on the first swing's line.
+                var me=sim.Player(session.LocalPlayerId);me.X=0;me.Z=19;
+                var mate=sim.AddPlayer("spin_mate","Mate");mate.X=0;mate.Z=20.5f;mate.Yaw=180;
+                var third=sim.AddPlayer("spin_third","Third");third.X=-.65f;third.Z=19.4f;
+                yield return new WaitForSeconds(1f);
+                var state=sim.State;state.Phase="Spinning";state.SpinSeed=4242;state.TripperId=mate.Id;
+                state.Doses.Clear();state.Doses.Add(new PlayerDose{PlayerId=mate.Id,Dose=3});
+                var cut=host.GetComponentsInChildren<Camera>(true).First(c=>c.name=="Spinner take camera");
+                foreach(var at in new[]{FestivalSpinner.TakeStarts+.3,FestivalSpinner.ReactStarts+.5})
+                {
+                    state.SpinEndsAt=state.SimulationSeconds+FestivalSimulation.SpinSeconds-at;
+                    yield return new WaitForSeconds(.3f);
+                    Assert.That(cut.enabled,"setup: the camera cuts to the mate at "+at+" s");
+                    var eye=cut.transform.position;var tripper=session.WorldCharacter(mate.Id).transform;var face=tripper.position+Vector3.up*1.4f;
+                    Assert.That(Vector3.Angle(cut.transform.forward,face-eye),Is.LessThan(12f),"the shot frames the mate at "+at+" s");
+                    Assert.That(Vector3.Dot(tripper.forward,eye-tripper.position),Is.GreaterThan(0),"from the front, so it shows their face");
+                    foreach(var friend in new[]{me.Id,third.Id})
+                    {
+                        var body=session.WorldCharacter(friend).transform;var head=body.position+Vector3.up*1.4f;var line=face-eye;
+                        var nearest=eye+line*Mathf.Clamp01(Vector3.Dot(head-eye,line)/line.sqrMagnitude);
+                        Debug.Log($"[Festival.Test] take at {at} s: camera={eye} {friend} head off the line={Vector3.Distance(head,nearest):F2} m");
+                        Assert.That(Vector3.Distance(head,nearest),Is.GreaterThan(.35f),friend+"'s head stays out of the shot at "+at+" s");
+                        Assert.That(Vector2.Distance(new Vector2(eye.x,eye.z),new Vector2(body.position.x,body.position.z)),Is.GreaterThan(.35f),"the camera is not inside "+friend);
+                    }
+                }
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var leftover in new[]{"First-person camera","Authoritative actor presentation"}){var found=GameObject.Find(leftover);if(found!=null)Object.Destroy(found);}
+                Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+        }
     }
 }

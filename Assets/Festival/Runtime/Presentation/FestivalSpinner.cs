@@ -72,6 +72,10 @@ namespace Festival.Presentation
         static readonly Color[] DoseColors={new Color(.385f,.86f,.725f),new Color(1,.76f,.29f),new Color(.99f,.465f,.255f),new Color(1,.25f,.55f)};
         static readonly string[] Reactions={"","Feels fine. Probably.","Whoa.","The colors are talking.","Oh no. Oh yes. Oh no."};
         const float WheelSize=520;
+        // The take camera pushes in from TakeFar to TakeNear. It swings to the first of TakeAngles (degrees from the tripper's
+        // facing) whose line to their face passes TakeClearance from every other friend at camp; past 90 it would see the back of the head.
+        const float TakeFar=2.5f,TakeNear=1.8f,TakeClearance=.45f;
+        static readonly float[] TakeAngles={0,30,-30,60,-60,90,-90};
         sealed class Wheel{public RectTransform Disc;public RawImage Image;public Text Result;public CanvasGroup Group;public Texture2D Texture;}
         FestivalSession session;
         Font font;
@@ -82,7 +86,7 @@ namespace Festival.Presentation
         RenderTexture shotTexture;
         Camera takeCamera;
         FestivalCharacter acting;
-        float focusHeight;
+        float focusHeight,takeYaw;
         List<string> crew=new List<string>();
         string spinKey="";
 
@@ -131,7 +135,7 @@ namespace Festival.Presentation
                 caption.text=name+" TAKES "+doses+(beat.Stage==Stage.React?"\n"+Reactions[beat.Dose]:"");
                 if(!spinning)tripper=session.WorldCharacter(state.TripperId);
             }
-            Cut(tripper!=null&&tripper.gameObject.activeInHierarchy?tripper:null,beat);
+            Cut(tripper!=null&&tripper.gameObject.activeInHierarchy?tripper:null,beat,state);
         }
         // Freeze the wheels for this spin, so a friend dropping mid-spin cannot reshuffle the slices.
         void Prepare(RoundState state)
@@ -146,7 +150,7 @@ namespace Festival.Presentation
         }
         // The camera cuts to the tripper at camp: a slow push-in while they take the dose (the existing Consume clip)
         // and react (the Panic clip, sized by the dose). A tripper out of view (inside a tent) keeps just the caption.
-        void Cut(FestivalCharacter character,Beat beat)
+        void Cut(FestivalCharacter character,Beat beat,RoundState state)
         {
             if(character!=acting)
             {
@@ -154,7 +158,7 @@ namespace Festival.Presentation
                 acting=character;
                 if(acting!=null)
                 {
-                    acting.AlwaysHighDetail=true;focusHeight=1.35f;
+                    acting.AlwaysHighDetail=true;focusHeight=1.35f;takeYaw=TakeYaw(state);
                     foreach(var bone in acting.GetComponentsInChildren<Transform>())if(bone.name=="Head"){focusHeight=bone.position.y-acting.transform.position.y;break;}
                 }
             }
@@ -169,9 +173,30 @@ namespace Festival.Presentation
             acting.Beat=beat.Stage==Stage.Take?"TakeDose":"DoseReaction";acting.BeatStrength=beat.Reaction;
             var body=acting.transform;var focus=body.position+Vector3.up*focusHeight;
             float push=Mathf.InverseLerp(TakeStarts,(float)FestivalSimulation.SpinSeconds,beat.Elapsed);
-            takeCamera.transform.position=focus+body.forward*Mathf.Lerp(2.5f,1.8f,push)+Vector3.up*.1f;
+            takeCamera.transform.position=focus+Quaternion.Euler(0,takeYaw,0)*Vector3.forward*Mathf.Lerp(TakeFar,TakeNear,push)+Vector3.up*.1f;
             takeCamera.transform.LookAt(focus);
             // ponytail: the first-person camera keeps rendering underneath for these 3 s; disable it if camp frame time matters.
+        }
+        // Nobody can move while Spinning, so every client picks the same angle from the public positions. If no angle clears
+        // everyone (none of 10,000 random 8-friend crowds inside the gate's 3.2 m), the clearest one wins.
+        // ponytail: friends only; scenery (tents, the shop) is not checked, add a line-of-sight test if a camp puts one by the gate.
+        static float TakeYaw(RoundState state)
+        {
+            var tripper=state.Players.Find(p=>p.Id==state.TripperId);if(tripper==null)return 0;
+            var face=new Vector2(tripper.X,tripper.Z);float best=tripper.Yaw,widest=-1;
+            foreach(var angle in TakeAngles)
+            {
+                float yaw=tripper.Yaw+angle,clearance=float.MaxValue;
+                var camera=face+new Vector2(Mathf.Sin(yaw*Mathf.Deg2Rad),Mathf.Cos(yaw*Mathf.Deg2Rad))*TakeFar;
+                foreach(var p in state.Players)if(p!=tripper&&p.Connected&&p.CampVisitId=="")clearance=Mathf.Min(clearance,Distance(new Vector2(p.X,p.Z),camera,face));
+                if(clearance>TakeClearance)return yaw;
+                if(clearance>widest){best=yaw;widest=clearance;}
+            }
+            return best;
+        }
+        static float Distance(Vector2 point,Vector2 from,Vector2 to)
+        {
+            var line=to-from;return Vector2.Distance(point,from+line*Mathf.Clamp01(Vector2.Dot(point-from,line)/line.sqrMagnitude));
         }
         void Paint(Wheel wheel,IReadOnlyList<int> weights,Color[] colors,List<string> labels)
         {
