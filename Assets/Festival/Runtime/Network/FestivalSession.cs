@@ -92,7 +92,6 @@ namespace Festival.Network
 #endif
             actorRoot=new GameObject("Authoritative actor presentation").transform;
             world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
-            gameObject.AddComponent<FestivalClueVisuals>();
         }
         // NGO registers its message types after scene Awake and before Start.
         private void Start()
@@ -438,7 +437,7 @@ namespace Festival.Network
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=!spirit&&source.FriendFound?source.FriendPosition:new WorldPoint(0,0),
-                VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,PrivateClue=FestivalSimulation.ClueHint(source,local),ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
+                VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies};
             foreach(var p in source.Players)
@@ -460,8 +459,9 @@ namespace Festival.Network
                     var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
-                // The undiscovered friend is revealed only at local sight range, never on the full map.
-                if(source.GateOpened && !view.FriendFound && local!=null && Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(source.FriendPosition.X,source.FriendPosition.Z))<12 && simulation.HasLineOfSight(local.X,local.Z,source.FriendPosition.X,source.FriendPosition.Z))view.FriendPosition=source.FriendPosition;
+                // The undiscovered friend is revealed only at local sight range, never on the full map, except to the tripper:
+                // the clue trail's last link (TRIP-2) shows them where the friend is.
+                if(source.GateOpened && !view.FriendFound && local!=null && (viewer==source.TripperId || Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(source.FriendPosition.X,source.FriendPosition.Z))<12 && simulation.HasLineOfSight(local.X,local.Z,source.FriendPosition.X,source.FriendPosition.Z)))view.FriendPosition=source.FriendPosition;
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
                 view.Drops=source.Drops;view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
             }

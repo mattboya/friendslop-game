@@ -4,31 +4,6 @@ namespace Festival.Core
 {
     public sealed partial class FestivalSimulation
     {
-        // Fixed landmarks let friends learn the grounds; the seed selects the clue order.
-        public static WorldPoint CluePoint(int seed,int index)
-        {
-            bool east=((seed & int.MaxValue)%2==0)==(index==0);
-            return east?new WorldPoint(16,-4):new WorldPoint(-16,5);
-        }
-        public static bool CanReadClues(PlayerState p) => p!=null && p.Life=="Alive" && p.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms"||e.Id==DoseEffect);
-        public static string ClueHint(RoundState s,PlayerState p)
-        {
-            if(!CanReadClues(p)||s.CluesRead>=2)return "";
-            var point=CluePoint(s.Seed,s.CluesRead);
-            return point.X>0?"The SUN remembers. Find the yellow totem east of the dance path.":"The MOON remembers. Find the blue totem west of the dance path.";
-        }
-        CommandResult ReadClue(PlayerState p)
-        {
-            if(State.CluesRead>=2)return Reject("Both clues are already shared");
-            if(!CanReadClues(p))return Reject("An affected volunteer must interpret the totem");
-            var point=CluePoint(State.Seed,State.CluesRead);
-            if(!Near(p,point.X,point.Z))return Reject("Follow the private clue to the correct totem");
-            bool solo=State.Players.FindAll(x=>x.Connected).Count==1;
-            if(!solo&&!GroundingFriendNear(p,point))return Reject("Bring a sober friend within four metres to ground the clue");
-            return BeginTask(p,"ReadClue",State.CluesRead.ToString(),solo?6:3);
-        }
-        // The spinner's dose is not a consumable: a dosed friend still grounds the totem (Night 2 doses everyone); a friend on a Prism tab or caps does not.
-        bool GroundingFriendNear(PlayerState reader,WorldPoint point)=>State.Players.Exists(x=>x!=reader&&x.Connected&&x.Life=="Alive"&&!x.Effects.Exists(Treatable)&&Near(x,point.X,point.Z,4));
         CommandResult HelpSelf(PlayerState p)
         {
             if(State.Phase!="Playing"||(p.Life!="Downed"&&p.Life!="Detained"))return Reject("Help is available while downed or detained");

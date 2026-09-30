@@ -87,7 +87,6 @@ namespace Festival.Core
             if(State.Phase!="Playing")return Reject("Start the round first");
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
             switch(c.Kind) {
-                case "ReadClue":return ReadClue(p);
                 case "Consume": return Consume(p,c);
                 case "Use": return Use(p,c);
                 case "Drop": return Drop(p,c);
@@ -100,7 +99,7 @@ namespace Festival.Core
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
-                case "FindFriend":if(DayLevel)return Reject("Nobody is lost by day: sell the quota, then head back to camp");if(!State.GateOpened)return Reject("Interpret both totems and complete a dance to locate your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
+                case "FindFriend":if(DayLevel)return Reject("Nobody is lost by day: sell the quota, then head back to camp");if(!State.GateOpened)return Reject("Follow the tripper's clue trail to its last link to find your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
                 case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():Finale?FinaleExtractRefusal:"Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
                 case "LostProperty":if(!Near(p,-28,16))return Reject("Find lost property marker");return BeginTask(p,"LostProperty",State.LostPropertyTask.ToString(),5);
                 case "Drag":return Drag(p,c);

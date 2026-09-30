@@ -18,8 +18,8 @@ namespace Festival.Core
             if(player.Life=="Spirit")return "SPIRIT • REACH THE MEDICAL TENT";
             if(state.FriendFound)return "ESCORT FRIEND TO SHUTTLE";
             if(state.GateOpened)return "FIND THE MISSING FRIEND";
-            if(state.CluesRead>=2)return "DANCE TO LOCATE YOUR FRIEND";
-            return "INTERPRET TOTEMS "+state.CluesRead+" / 2";
+            int trail=Festivals.For(state).ChainLength;
+            return trail>0?"FOLLOW THE CLUE TRAIL "+state.CluesRead+" / "+trail:"SELL THE DAY'S QUOTA";
         }
 
         public static string Hint(RoundState state, PlayerState player)
@@ -63,14 +63,11 @@ namespace Festival.Core
                     ?"Friend spotted "+Route(player,friend.X,friend.Z)+". Reach them and press E."
                     :"Search the north and side paths. The friend appears when nearby.";
             }
-            if(state.CluesRead>=2)return "Dance with a festivalgoer near the stage. Press E, then hit the arrow beats.";
-            if(FestivalSimulation.CanReadClues(player))
-            {
-                var clue=FestivalSimulation.CluePoint(state.Seed,state.CluesRead);
-                return (clue.X>0?"Sun":"Moon")+" totem "+Route(player,clue.X,clue.Z)+(CrewCount(state)==1?". Hold the clue alone for six seconds.":". Bring a sober teammate within 4 m.");
-            }
+            // Only the tripper sees the visions (buyers and narcs by day, the clue trail by night); the game's one hint is theirs.
+            bool night=Festivals.For(state).Night;
+            if(player.Id==state.TripperId)return (night?"Your visions mark the next clue holder.":"Your visions mark buyers and narcs.")+" Trust, but verify.";
             var tripper=state.Players.Find(p=>p.Id==state.TripperId);
-            return "Stick with "+(tripper?.Name??"the tripper")+": only the tripper can read the totems. Stay within 4 m while they do.";
+            return "Stick with "+(tripper?.Name??"the tripper")+": only the tripper can see "+(night?"the clue trail.":"who is buying.");
         }
 
         private static double Distance(PlayerState player,float x,float z)

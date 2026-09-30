@@ -297,7 +297,7 @@ namespace Festival.Tests
             Assert.That(second.Inventory.Exists(i=>i.ItemId==rare),Is.False);
         }
 
-        [Test] public void GuidanceFollowsTheLoopWithoutLeakingThePrivateTotemOrder()
+        [Test] public void GuidanceFollowsTheLoopWithoutLeakingTheTrippersVisions()
         {
             var game=new FestivalSimulation(21);
             var host=game.AddPlayer("host","Host");
@@ -308,24 +308,21 @@ namespace Festival.Tests
             host.Ready=true;guest.Ready=true;
             Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("dancing"));
 
-            game.State.Phase="Playing";game.State.TripperId=guest.Id;
+            // Night 1: only the tripper sees the clue trail.
+            game.State.Phase="Playing";game.State.LevelIndex=1;game.State.TripperId=guest.Id;
             host.X=0;host.Z=-29;
             var soberHint=FestivalGuidance.Hint(game.State,host);
             Assert.That(soberHint,Does.Contain("Stick with Guest"));
-            Assert.That(soberHint,Does.Not.Contain("Sun totem"));
-            Assert.That(soberHint,Does.Not.Contain("Moon totem"));
+            Assert.That(soberHint,Does.Not.Contain("Trust"),"the tripper's hint stays theirs");
             host.X=-18;host.Z=-22;
             Assert.That(FestivalGuidance.Hint(game.State,host),Does.Not.Contain("TASTING"));
             host.X=0;host.Z=-29;
             guest.Effects.Add(new ActiveEffect{Id="mushrooms",RemainingSeconds=90});
-            var affectedHint=FestivalGuidance.Hint(game.State,guest);
-            Assert.That(affectedHint,Does.Contain("totem"));
-            Assert.That(affectedHint,Does.Contain("sober teammate"));
+            Assert.That(FestivalGuidance.Hint(game.State,guest),Does.Contain("Trust, but verify."));
             Assert.That(FestivalGuidance.Hint(game.State,host),Is.EqualTo(soberHint));
+            Assert.That(FestivalGuidance.Headline(game.State,host),Does.Contain("CLUE TRAIL 0 / 2"));
 
-            game.State.CluesRead=2;
-            Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("Dance"));
-            game.State.GateOpened=true;
+            game.State.CluesRead=2;game.State.GateOpened=true;
             // A viewer snapshot redacts the undiscovered friend's position.
             game.State.FriendPosition=new WorldPoint(0,0);
             Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("Search"));

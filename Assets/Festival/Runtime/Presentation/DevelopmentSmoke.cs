@@ -354,52 +354,31 @@ namespace Festival.Presentation
             while((session.IsHost?sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Effects.Count:session.LocalPlayer.Effects.Count)==0&&Time.realtimeSinceStartup<deadline)yield return null;
             if(Time.realtimeSinceStartup>=deadline){Fail("client tripper dose");yield break;}
             if(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes){Fail("teammate intoxication face state");yield break;}
-            var clueVisuals=GetComponent<FestivalClueVisuals>();
-            bool shouldSeeClue=!session.IsHost;
-            while(clueVisuals.Visible!=shouldSeeClue&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(clueVisuals.Visible!=shouldSeeClue){Fail("private clue visibility");yield break;}
-            Debug.Log("FESTIVAL SMOKE CLUE VISIBILITY PASSED: visible="+clueVisuals.Visible+" host="+session.IsHost);
-            for(int clue=0;clue<2;clue++)
+            // TRIP-2: the totems are gone. Only the tripper's client (here the client) gets visions; VISION-1 draws them and
+            // SMOKE-1 drives the tripper's checks along the clue trail.
+            bool shouldSeeVisions=!session.IsHost;
+            while(session.State.Visions.Count>0!=shouldSeeVisions&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.State.Visions.Count>0!=shouldSeeVisions){Fail("private vision visibility");yield break;}
+            Debug.Log("FESTIVAL SMOKE CLUE VISIBILITY PASSED: visible="+(session.State.Visions.Count>0)+" host="+session.IsHost);
+            if(!session.IsHost)
             {
-                var point=FestivalSimulation.CluePoint(session.State.Seed,clue);
-                if(session.IsHost)
-                {
-                    PlaceBoth(sim,point.X,point.Z);
-                    // A real helper stands alongside the reader, not inside
-                    // their first-person camera. Three metres still qualifies.
-                    sim.Player(sim.State.HostPlayerId).X=point.X+3;
-                }
-                else
-                {
-                    while(!Near(session.LocalPlayer,point.X,point.Z)&&Time.realtimeSinceStartup<deadline)yield return null;
-                    if(Time.realtimeSinceStartup>=deadline){Fail("totem placement");yield break;}
-                    if(clue==0)
-                    {
-                        yield return new WaitForSeconds(.35f);
-                        string clueDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(clueDir);
-                        string cluePath=Path.Combine(clueDir,"client-clue.png");if(File.Exists(cluePath))File.Delete(cluePath);
-                        ScreenCapture.CaptureScreenshot(cluePath);
-                        yield return new WaitForSeconds(.7f);
-                        if(!File.Exists(cluePath)){Fail("private clue render");yield break;}
-                        Debug.Log("FESTIVAL SMOKE CLUE RENDER PASSED: "+cluePath);
-                    }
-                    session.Command("ReadClue");
-                }
-                while(session.State.CluesRead<=clue&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(session.State.CluesRead<=clue)
-                {
-                    var reader=session.State.Players.Find(p=>p.Id!=session.State.HostPlayerId);
-                    var helper=session.State.Players.Find(p=>p.Id==session.State.HostPlayerId);
-                    var task=session.State.Interactions.Find(i=>i.PlayerId==reader?.Id&&i.Kind=="ReadClue"&&i.TargetId==clue.ToString());
-                    Fail("cooperative clue "+clue+" host="+session.IsHost+" t="+Time.realtimeSinceStartup.ToString("F1")+" sim="+session.State.SimulationSeconds.ToString("F1")+" reader="+(reader==null?"missing":reader.X.ToString("F1")+","+reader.Z.ToString("F1")+" effects="+reader.Effects.Count)+" helper="+(helper==null?"missing":helper.X.ToString("F1")+","+helper.Z.ToString("F1"))+" task="+(task==null?"none":task.Status)+" message="+session.Message);
-                    yield break;
-                }
+                string clueDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(clueDir);
+                string cluePath=Path.Combine(clueDir,"client-clue.png");if(File.Exists(cluePath))File.Delete(cluePath);
+                ScreenCapture.CaptureScreenshot(cluePath);
+                yield return new WaitForSeconds(.7f);
+                if(!File.Exists(cluePath)){Fail("tripper vision render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CLUE RENDER PASSED: "+cluePath);
             }
             if(session.IsHost)
             {
                 PlaceBoth(sim,0,0);
                 sim.Player(sim.State.HostPlayerId).X=-2.5f;
                 var dancer=sim.State.Npcs[0];dancer.X=0;dancer.Z=1;dancer.Yaw=180;
+                // A dance no longer opens the way to the friend: the clue trail's last link does. Until SMOKE-1 drives the
+                // tripper's checks, the host sets the finished trail directly once the client's dance is judged.
+                var tripper=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
+                while(!sim.State.Interactions.Exists(i=>i.PlayerId==tripper.Id&&i.Kind=="Dance"&&i.Status=="Complete")&&Time.realtimeSinceStartup<deadline)yield return null;
+                sim.State.GateOpened=true;
             }
             else
             {
@@ -475,7 +454,7 @@ namespace Festival.Presentation
                 }
             }
             while(!session.State.GateOpened&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(!session.State.GateOpened){Fail("networked rhythm unlock");yield break;}
+            if(!session.State.GateOpened){Fail("networked clue trail setup");yield break;}
             if(session.IsHost)
             {
                 // Nobody is lost by day (LOOP-2), so the rescue runs as Night 1 until SMOKE-1 scripts a real weekend.
@@ -501,14 +480,14 @@ namespace Festival.Presentation
             }
             while(session.State!=null&&session.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.State==null){Fail("networked mission settlement: session closed, "+session.Message);yield break;}
-            if(session.State.Result!="Success"||session.State.CluesRead!=2||session.State.Survivors!=2||session.State.SurvivorBonus!=10)
+            if(session.State.Result!="Success"||!session.State.GateOpened||session.State.Survivors!=2||session.State.SurvivorBonus!=10)
             {
                 var s=session.State;
                 var active=s.Interactions.Find(i=>i.Kind=="Extract");
-                Fail("networked mission settlement: phase="+s.Phase+" result="+s.Result+" clues="+s.CluesRead+" survivors="+s.Survivors+" bonus="+s.SurvivorBonus+" elapsed="+s.ElapsedSeconds.ToString("F1")+" extract="+(active==null?"none":active.Status)+" message="+session.Message);
+                Fail("networked mission settlement: phase="+s.Phase+" result="+s.Result+" trail="+s.GateOpened+" survivors="+s.Survivors+" bonus="+s.SurvivorBonus+" elapsed="+s.ElapsedSeconds.ToString("F1")+" extract="+(active==null?"none":active.Status)+" message="+session.Message);
                 yield break;
             }
-            Debug.Log("FESTIVAL SMOKE MISSION PASSED: two clues, dance, friend, extraction, two survivors; host="+session.IsHost);
+            Debug.Log("FESTIVAL SMOKE MISSION PASSED: clue trail (set directly until SMOKE-1), dance, friend, extraction, two survivors; host="+session.IsHost);
             session.MenuOpen=true;
             // Move the view only, leaving the authority/player positions untouched.
             captureCamera=session.ViewCamera;
@@ -850,13 +829,6 @@ namespace Festival.Presentation
             yield return new WaitForSeconds(.25f);
             var effectWash=transform.Find("Festival HUD/Effect wash")?.GetComponent<Image>();
             if(effectWash==null||effectWash.color.a<=0||!session.LocalPlayer.VisualWideEyes){Fail("solo intoxication first-person and face cues: wash="+(effectWash==null?"missing":effectWash.color.a.ToString("F3"))+" eyes="+session.LocalPlayer.VisualWideEyes);yield break;}
-            for(int clue=0;clue<2;clue++)
-            {
-                var point=FestivalSimulation.CluePoint(sim.State.Seed,clue);player.X=point.X;player.Z=point.Z;
-                session.Command("ReadClue");
-                while(sim.State.CluesRead<=clue&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(sim.State.CluesRead<=clue){Fail("solo clue "+clue);yield break;}
-            }
             player.X=0;player.Z=0;
             var npc=new NpcState{Id="solo_wook",X=0,Z=1,Yaw=180,CanTalk=true};sim.State.Npcs.Add(npc);
             session.Command("Talk",npc.Id);
@@ -886,8 +858,10 @@ namespace Festival.Presentation
                 while(sim.State.SimulationSeconds-dance.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
                 session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
             }
-            while(!sim.State.GateOpened&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(!sim.State.GateOpened){Fail("solo dance unlock");yield break;}
+            while(dance.Status=="Active"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(dance.Status!="Complete"){Fail("solo dance");yield break;}
+            // TRIP-2: the clue trail's last link opens the way, not a dance. SMOKE-1 drives the solo tripper's checks; set it directly.
+            sim.State.GateOpened=true;
             player.Life="Downed";player.DownedRemaining=.1;
             while(player.Life!="Spirit"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(sim.State.Phase!="Playing"){Fail("solo death recovery window");yield break;}

@@ -869,8 +869,6 @@ namespace Festival.Presentation
             }
             else if(state.Phase=="Playing"&&player.Life=="Alive")
             {
-                var clue=FestivalSimulation.CluePoint(state.Seed,state.CluesRead);
-                if(state.CluesRead<2&&Near(player,clue.X,clue.Z)&&FestivalSimulation.CanReadClues(player))AddAction(state.ConnectedCrewCount==1?"Interpret totem alone (6 seconds)":"Interpret totem with sober friend",()=>session.Command("ReadClue"),ref y);
                 if(state.FriendPosition!=null&&(state.FriendPosition.X!=0||state.FriendPosition.Z!=0)&&Near(player,state.FriendPosition.X,state.FriendPosition.Z)&&(!state.FriendFound||state.FriendLeaderId!=player.Id))
                     AddAction(state.FriendFound?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);
                 string extract=FestivalHudText.ExtractAction(state);

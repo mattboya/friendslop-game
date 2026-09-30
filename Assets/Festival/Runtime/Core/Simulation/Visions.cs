@@ -93,6 +93,18 @@ namespace Festival.Core
         void Show(List<VisionState> seen,ContentRandom random){foreach(var v in Shuffled(seen,random)){v.Id=Id("vision");State.Visions.Add(v);}}
         static List<T> Shuffled<T>(List<T> items,ContentRandom random){for(int i=items.Count-1;i>0;i--){int j=random.Next(i+1);var t=items[i];items[i]=items[j];items[j]=t;}return items;}
 
+        // TRIP-3's checks land here. Every vision about npc is confirmed, so its truth reaches the tripper. Finding the real next
+        // clue holder moves the trail on: the next link's visions replace this link's, and after the last link the way to the
+        // lost friend opens (GateOpened; the tripper's view then shows where the friend is).
+        internal void ConfirmVisionsOf(NpcState npc)
+        {
+            foreach(var v in State.Visions)if(v.NpcId==npc.Id)v.Confirmed=true;
+            if(State.CluesRead>=State.ClueChain.Count||State.ClueChain[State.CluesRead]!=npc.Id)return;
+            if(++State.CluesRead==State.ClueChain.Count)State.GateOpened=true;
+            State.Visions.RemoveAll(v=>v.Kind=="Clue");var random=new ContentRandom(unchecked(State.SpinSeed*7+1+State.CluesRead));
+            Show(ClueVisions(random,TripperDose(State)),random);
+        }
+
         // Selling: a buyer (or a festivalgoer not dealt a role yet) plays the sale out; a regular or a clue holder turns it down
         // with a little suspicion; a narc busts the seller on the spot: detained, stock confiscated.
         static bool Buys(NpcState n)=>n.Role==""||n.Role=="Buyer";

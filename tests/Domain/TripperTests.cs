@@ -28,7 +28,7 @@ public static class TripperTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseSpinnerWeights,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
-            DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewReadsBothTotems,DoseLeavesBothConsumableSlots,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
+            DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewFollowsTheTrail,DoseLeavesBothConsumableSlots,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" tripper test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -162,24 +162,21 @@ public static class TripperTests
     {
         var s=Crew(71,2);s.State.LevelIndex=1;Spin(s);Play(s);var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
         friend.X=-18;friend.Z=-22;
-        Check(!Act(s,friend.Id,"ClueSupply").Accepted&&friend.Effects.Count==0,"the free clue tasting is gone: the spin decides who reads the totems");
-        Check(FestivalSimulation.CanReadClues(tripper)&&!FestivalSimulation.CanReadClues(friend),"the tripper's dose reads the totems");
-        Check(FestivalSimulation.ClueHint(s.State,tripper)!=""&&FestivalSimulation.ClueHint(s.State,friend)=="","only the tripper gets the private clue");
+        Check(!Act(s,friend.Id,"ClueSupply").Accepted&&friend.Effects.Count==0,"the free clue tasting is gone: the spin decides who sees the clue trail");
+        Check(FestivalSimulation.VisibleVisions(s.State,tripper.Id).Count>0&&FestivalSimulation.VisibleVisions(s.State,friend.Id).Count==0,"only the tripper sees the visions");
     }
 
-    // Night 2 doses everyone, so nobody is sober; the spinner's dose alone must not stop a friend grounding the totem.
-    static void NightTwoCrewReadsBothTotems()
+    // Night 2 doses everyone, so nobody is sober. The old totems needed a sober friend; the tripper's clue trail does not.
+    static void NightTwoCrewFollowsTheTrail()
     {
         for(int seed=0;seed<20;seed++)
         {
-            var s=Crew(seed,2);s.State.LevelIndex=3;Spin(s);Play(s);var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
-            Check(Dose(friend)>=1,"setup: Night 2 doses the friend too (seed "+seed+")");
-            for(int clue=0;clue<2;clue++)
-            {
-                var point=FestivalSimulation.CluePoint(s.State.Seed,clue);tripper.X=point.X;tripper.Z=point.Z;friend.X=point.X+1;friend.Z=point.Z;
-                var read=Act(s,tripper.Id,"ReadClue");Check(read.Accepted,"Night 2 totem "+clue+" reads with a dosed friend 1 m away (seed "+seed+"): "+read.Reason);
-                s.Tick(3.2);Check(s.State.CluesRead==clue+1,"the read finishes while the dosed friend stays close (totem "+clue+", seed "+seed+")");
-            }
+            var s=Crew(seed,2);s.State.LevelIndex=3;Spin(s);var holders=s.State.ClueChain.ConvertAll(id=>s.State.Npcs.Find(n=>n.Id==id));
+            Play(s);var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
+            Check(Dose(friend)>=1&&holders.Count>0,"setup: Night 2 doses the friend too and lays a clue trail (seed "+seed+")");
+            foreach(var holder in holders)s.ConfirmVisionsOf(holder);
+            friend.X=s.State.FriendPosition.X;friend.Z=s.State.FriendPosition.Z;var find=Act(s,friend.Id,"FindFriend");
+            Check(s.State.GateOpened&&find.Accepted,"with nobody sober, the tripper's checked trail still leads the dosed friend to the lost one (seed "+seed+"): "+find.Reason);
         }
     }
 

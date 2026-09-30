@@ -49,6 +49,19 @@ namespace Festival.Tests
             Assert.That(seen.FindAll(v=>v.IsTrue).Count,Is.EqualTo(1),"and no other vision's");
         }
 
+        [Test] public void TheTrippersViewShowsTheFriendOnceTheTrailEnds()
+        {
+            var game=Night();var tripper=game.Player(game.State.TripperId);var friend=game.State.Players.Find(p=>p!=tripper);
+            game.State.FriendPosition=new WorldPoint(25,24);tripper.X=friend.X=-20;tripper.Z=friend.Z=-20;
+            var hidden=FestivalSession.ViewFor(game,tripper.Id).FriendPosition;
+            Assert.That(hidden.X==0&&hidden.Z==0,Is.True,"the friend stays hidden while the trail is still being followed");
+            game.State.GateOpened=true;
+            var seen=FestivalSession.ViewFor(game,tripper.Id).FriendPosition;
+            Assert.That(seen.X==25&&seen.Z==24,Is.True,"the trail's last link shows the tripper where the lost friend is");
+            var far=FestivalSession.ViewFor(game,friend.Id).FriendPosition;
+            Assert.That(far.X==0&&far.Z==0,Is.True,"a sober friend far away still has to follow the tripper");
+        }
+
         [Test] public void RolesAndTheChainStayOnTheHost()
         {
             var game=Night();

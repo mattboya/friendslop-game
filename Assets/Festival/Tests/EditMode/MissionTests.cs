@@ -12,26 +12,18 @@ public static class MissionTests
         Check(s.State.DurationSeconds==480&&Festivals.For(s.State).Name=="Day 1","a new crew plays the eight minute Day 1");
         // The lost friend is a night rescue; days are the sales quota (DayQuotaTests).
         s.State.LevelIndex=1;
-        Check(!Act(s,"a","FindFriend").Accepted,"cannot skip clues");
+        Check(!Act(s,"a","FindFriend").Accepted,"cannot skip the clue trail");
         a.X=-18;a.Z=-22;Check(!Act(s,"a","ClueSupply").Accepted,"the free clue tasting is gone: the spinner picks the tripper");
         // Setup: a is this level's tripper (TripperTests covers the spinners).
         a.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=480});s.State.TripperId=a.Id;
-        Check(FestivalSimulation.ClueHint(s.State,a)!=""&&FestivalSimulation.ClueHint(s.State,b)=="","clue is private");
-        for(int n=0;n<2;n++)
-        {
-            var point=FestivalSimulation.CluePoint(s.State.Seed,n);a.X=point.X;a.Z=point.Z;
-            Check(!Act(s,"a","ReadClue").Accepted,"sober support required");
-            b.X=a.X;b.Z=a.Z;Check(!Act(s,"b","ReadClue").Accepted,"sober cannot interpret");
-            Check(Act(s,"a","ReadClue").Accepted,"pair reads clue");
-            b.X=38;s.Tick(.1);Check(a.InteractionId==""&&s.State.CluesRead==n,"support must remain");
-            b.X=a.X;Check(Act(s,"a","ReadClue").Accepted,"can retry clue");s.Tick(3.1);
-            Check(s.State.CluesRead==n+1,"clue advances exactly once");b.X=-38;
-        }
-        var npc=new NpcState{Id="dance",X=a.X,Z=a.Z};s.State.Npcs.Add(npc);
-        Check(Act(s,"a","Dance","dance").Accepted,"dance unlock challenge");
+        a.X=16;a.Z=-4;b.X=a.X;b.Z=a.Z;Check(!Act(s,"a","ReadClue").Accepted,"the totems are gone: the tripper's clue trail replaces them (VisionTests)");
+        var npc=new NpcState{Id="dance",X=a.X,Z=a.Z};s.State.Npcs.Add(npc);b.X=-38;
+        Check(Act(s,"a","Dance","dance").Accepted,"the crew still dances");
         var i=s.Interaction(a.InteractionId);var chart=RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds);
         foreach(var note in chart.Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        s.Tick(10);Check(s.State.GateOpened,"successful dance reveals friend");
+        s.Tick(10);Check(i.Score>.99&&!s.State.GateOpened,"a good dance no longer opens the way to the friend");
+        // Setup: the tripper has followed the clue trail to its last link (VisionTests covers the trail).
+        s.State.GateOpened=true;
         a.X=s.State.FriendPosition.X;a.Z=s.State.FriendPosition.Z;Act(s,"a","FindFriend");s.Tick(2.1);
         Check(s.State.ObjectiveReward==20&&s.State.StashCash==20,"objective reward committed once");
         a.X=b.X=0;a.Z=b.Z=-32;s.State.FriendPosition=new WorldPoint(0,-32);
@@ -75,21 +67,17 @@ public static class MissionTests
         game.Tick(FestivalSimulation.SpinSeconds+.1);Check(game.State.Phase=="Loading","the wheels land and the crew loads");
         Check(Act(game,solo.Id,"MapReady").Accepted&&game.State.Phase=="Playing","solo enters festival");
         game.State.Npcs.Clear();game.State.LevelIndex=1;solo.X=-18;solo.Z=-22;
-        Check(FestivalSimulation.CanReadClues(solo),"the solo tripper's dose reads the totems");
+        Check(FestivalSimulation.VisibleVisions(game.State,solo.Id).Count>0,"the solo tripper sees the visions");
         Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Moon caps bought at camp");
         // Two samples a second apart: the drift is a slow sine, so one sample can land on a zero crossing.
         Check(Intoxication.MovementMultiplier(solo)<1&&Math.Abs(Intoxication.LateralDrift(solo,1))+Math.Abs(Intoxication.LateralDrift(solo,2))>.01,"intoxication changes walking");
-        for(int index=0;index<2;index++)
-        {
-            var point=FestivalSimulation.CluePoint(game.State.Seed,index);solo.X=point.X;solo.Z=point.Z;
-            Check(Act(game,solo.Id,"ReadClue").Accepted,"solo can interpret clue");
-            game.Tick(6.1);Check(game.State.CluesRead==index+1,"solo clue completes");
-        }
         game.State.Npcs.Add(new NpcState{Id="dancer",X=solo.X,Z=solo.Z});
         Check(Act(game,solo.Id,"Dance","dancer").Accepted,"solo starts dance");
         var challenge=game.Interaction(solo.InteractionId);
         foreach(var note in RhythmChart.Create(challenge.ChartSeed,challenge.NoteCount,challenge.BeatSeconds).Notes)challenge.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        game.Tick(10);Check(game.State.GateOpened,"dance reveals friend");
+        game.Tick(10);Check(!game.State.GateOpened,"a solo dance does not open the way either");
+        // Setup: the solo tripper has followed the clue trail to its last link (VisionTests covers the trail).
+        game.State.GateOpened=true;
         solo.Life="Downed";solo.DownedRemaining=.1;game.Tick(.2);
         Check(solo.Life=="Spirit"&&game.State.Phase=="Playing","solo death leaves recovery window");
         solo.X=24;solo.Z=-20;Check(Act(game,solo.Id,"BeginRevival","solo").Accepted,"solo starts medical revival");

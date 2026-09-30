@@ -50,7 +50,7 @@ public static class VisionTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{RolesMatchTheTable,DayMarksFollowTheDose,NightShowsTheNextClueHolder,SecretsOnlyAtDoseThreeAndUp,
-            SalesDependOnTheRole,SecretsPay,OnlyTheTripperSeesVisions,VisionsSurviveSnapshots})
+            SalesDependOnTheRole,SecretsPay,OnlyTheTripperSeesVisions,VisionsSurviveSnapshots,TheClueTrailLeadsToTheFriend,TheTotemsAreGone,GuidanceFollowsTheTrail})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" vision test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -180,6 +180,61 @@ public static class VisionTests
         Check(seen.Find(v=>v.Id==truth.Id).IsTrue&&!seen.Find(v=>v.Id==fake.Id).IsTrue&&seen.FindAll(v=>v.Confirmed).Count==2,"once checked, the truth reaches the tripper");
         Check(seen.FindAll(v=>v.IsTrue).Count==1,"and only for the visions they checked");
         seen[0].Kind="tampered";Check(s.State.Visions[0].Kind!="tampered","the view is a copy");
+    }
+
+    static void TheClueTrailLeadsToTheFriend()
+    {
+        var shown=new[]{0,1,2,4,10};
+        for(int dose=1;dose<=4;dose++)
+        {
+            int seed=0;var s=Dosed(dose,1,ref seed);var chain=new List<string>(s.State.ClueChain);var p=s.Player("p0");string where="dose "+dose+": ";
+            Check(chain.Count==2,"setup: Palm Mirage Night 1 has a two-link trail");
+            var secrets=s.State.Visions.FindAll(Secret).ConvertAll(v=>v.Id);
+            p.X=s.State.FriendPosition.X;p.Z=s.State.FriendPosition.Z;
+            Check(!Act(s,p.Id,"FindFriend").Accepted,where+"nobody reaches the friend before the trail ends");
+            for(int link=0;link<chain.Count;link++)
+            {
+                var clues=s.State.Visions.FindAll(v=>v.Kind=="Clue");
+                Check(clues.Count==shown[dose]&&clues.Count(v=>v.IsTrue)==1&&clues.Find(v=>v.IsTrue).NpcId==chain[link],where+"link "+link+" shows its real clue holder among the dose's fakes");
+                Check(clues.TrueForAll(v=>!v.Confirmed&&v.Tell==!v.IsTrue&&v.Id!=""),where+"link "+link+"'s visions are fresh, with their tells");
+                var fake=clues.Find(v=>!v.IsTrue);
+                if(fake!=null){s.ConfirmVisionsOf(Npc(s,fake.NpcId));Check(fake.Confirmed&&s.State.CluesRead==link&&!s.State.GateOpened,where+"checking a fake shows it false and the trail stays put");}
+                if(link+1<chain.Count){s.ConfirmVisionsOf(Npc(s,chain[link+1]));Check(s.State.CluesRead==link,where+"the trail is followed in order");}
+                s.ConfirmVisionsOf(Npc(s,chain[link]));
+                Check(s.State.CluesRead==link+1,where+"finding the real clue holder moves the trail on to link "+(link+1));
+            }
+            Check(s.State.GateOpened&&!s.State.Visions.Exists(v=>v.Kind=="Clue"),where+"the last link reveals the lost friend, and the trail's visions clear");
+            Check(secrets.TrueForAll(id=>s.State.Visions.Exists(v=>v.Id==id)),where+"secret sights stay for the whole night");
+            Check(Act(s,p.Id,"FindFriend").Accepted,where+"then the crew can reach the friend");
+        }
+    }
+
+    static void TheTotemsAreGone()
+    {
+        int seed=0;var s=Dosed(1,1,ref seed);var tripper=Tripper(s);tripper.X=16;tripper.Z=-4;
+        Check(Act(s,tripper.Id,"ReadClue").Reason=="Unknown action","the totem clue read is gone");
+        // The old rule opened the way after two clues and a good dance; now only the trail's last link does.
+        s.State.CluesRead=2;var npc=Wooks(s)[0];tripper.X=npc.X;tripper.Z=npc.Z-1;
+        Check(Act(s,tripper.Id,"Dance",npc.Id).Accepted,"setup: the tripper dances with a festivalgoer");
+        var dance=s.Interaction(tripper.InteractionId);
+        foreach(var note in RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        for(int guard=0;dance.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+        Check(dance.Score>.99&&!s.State.GateOpened,"a perfect dance no longer opens the way to the friend");
+    }
+
+    static void GuidanceFollowsTheTrail()
+    {
+        string Say(RoundState state,PlayerState p)=>FestivalGuidance.Headline(state,p)+" / "+FestivalGuidance.Hint(state,p);
+        int seed=0;var s=Dosed(1,1,ref seed);var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
+        Check(FestivalGuidance.Headline(s.State,tripper).Contains("CLUE TRAIL 0 / 2"),"the night's headline counts the trail: "+Say(s.State,tripper));
+        Check(FestivalGuidance.Hint(s.State,tripper).Contains("Trust, but verify."),"the tripper's one hint: "+Say(s.State,tripper));
+        Check(FestivalGuidance.Hint(s.State,friend).Contains(tripper.Name)&&!Say(s.State,friend).Contains("Trust"),"a sober friend is sent to the tripper: "+Say(s.State,friend));
+        string night=Say(s.State,tripper)+" "+Say(s.State,friend);
+        s.ConfirmVisionsOf(Npc(s,s.State.ClueChain[0]));
+        Check(FestivalGuidance.Headline(s.State,friend).Contains("CLUE TRAIL 1 / 2"),"the headline follows the trail: "+Say(s.State,friend));
+        var day=Dosed(1,0,ref seed);var dayTripper=Tripper(day);string daytime=Say(day.State,dayTripper);
+        Check(FestivalGuidance.Hint(day.State,dayTripper).Contains("Trust, but verify.")&&!FestivalGuidance.Headline(day.State,dayTripper).Contains("TRAIL"),"by day the tripper reads buyers and narcs, not a trail: "+daytime);
+        Check(!(night+daytime).ToLowerInvariant().Contains("totem"),"no totems left in the guidance: "+night+" "+daytime);
     }
 
     static void VisionsSurviveSnapshots()

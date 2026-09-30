@@ -56,8 +56,8 @@ namespace Festival.Core
         public int SpinSeed; public double SpinEndsAt; public string TripperId=""; public List<PlayerDose> Doses=new List<PlayerDose>(); public List<string> TripperBag=new List<string>();
         public double ElapsedSeconds,DurationSeconds=600,SimulationSeconds,LaunchAtSeconds; public long Tick,TransactionSequence,EntitySequence;
         public int CluesRead, ObjectiveReward, SurvivorBonus, Survivors, ConnectedCrewCount;
+        // The night's clue trail is complete (Visions.cs): the lost friend can be found.
         public bool GateOpened;
-        public string PrivateClue="";
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
         // Sale cash paid out this level, after any payout multiplier; a day's quota counts it (DayQuota.cs).
         public int LevelSales;
