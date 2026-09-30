@@ -68,9 +68,10 @@ namespace Festival.Core
         static double Leg(float[] loop,int k){int next=(k+1)%(loop.Length/2);double dx=loop[2*next]-loop[2*k],dz=loop[2*next+1]-loop[2*k+1];return Math.Sqrt(dx*dx+dz*dz);}
         // The effigy stands on the main path between the art-car loops. For the last BurnSeconds of Night 2 it burns: the crowd
         // strolls over at BurnWalkSpeed to a ring BurnRingRadius round it, and within BurnRadius of it (the crush) every step covers
-        // BurnCrushFactor of the way and suspicion cools BurnCalmFactor times as fast.
+        // BurnCrushFactor of the way and suspicion cools BurnCalmFactor times as fast. There the fire's roar carries a festivalgoer's
+        // accusation only BurnShoutRange, not the usual 10 m, so it reaches its neighbours in the ring rather than the whole ring.
         public const float EffigyX=0,EffigyZ=2,BurnRadius=12,BurnRingRadius=5,BurnWalkSpeed=1.5f;
-        public const double BurnSeconds=180,BurnCrushFactor=.7,BurnCalmFactor=2;
+        public const double BurnSeconds=180,BurnCrushFactor=.7,BurnCalmFactor=2,BurnShoutRange=3;
         /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
         public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}

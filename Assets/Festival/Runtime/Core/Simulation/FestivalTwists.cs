@@ -152,5 +152,8 @@ namespace Festival.Core
         // cools BurnCalmFactor times as fast (WookTick).
         void Crush(PlayerState p,ref float x,ref float z){if(p.Life!="Spirit"&&InBurnCrowd(State,p.X,p.Z)){x=p.X+(float)((x-p.X)*Festivals.BurnCrushFactor);z=p.Z+(float)((z-p.Z)*Festivals.BurnCrushFactor);}}
         double Calm(PlayerState p)=>InBurnCrowd(State,p.X,p.Z)?Festivals.BurnCalmFactor:1;
+        // How far a festivalgoer's accusation carries (WookTick): 10 m, or only BurnShoutRange from inside the crush, where the ring
+        // round the effigy is 10 m across and a full-range shout would set off the whole crowd.
+        double ShoutRange(NpcState n)=>InBurnCrowd(State,n.X,n.Z)?Festivals.BurnShoutRange:10;
     }
 }

@@ -22,7 +22,7 @@ public static class PlayaTwistTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
             StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmLosesARiderItCannotSee,
-            TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AFestivalgoerFinishesAChatBeforeHeadingOver,
+            TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" playa twist test(s) failed:\n"+string.Join("\n",failures));
@@ -365,6 +365,20 @@ public static class PlayaTwistTests
         s.Tick(.5);Check(n.Mode=="Questioning","setup: "+n.Id+" is still after p0");return (65-o.Suspicion)*2;
     }
 
+    // The whole crowd stands in one ring round the burning effigy, 10 m across. A festivalgoer who turns on p0 there sets off
+    // its neighbours, but the fire's roar keeps the shout from carrying round the ring: no more festivalgoers join in than the
+    // most one accusation reaches in the day's crowd (the accuser and six), where 24 did.
+    static void AnAccusationInTheCrushReachesOnlyNeighbours()
+    {
+        var s=Start(5,3,1,1);var st=s.State;st.ElapsedSeconds=st.DurationSeconds-Festivals.BurnSeconds+10;s.Tick(60);
+        var crowd=st.Npcs.FindAll(n=>n.Kind=="Wook");var accuser=crowd[0];
+        Check(FestivalSimulation.InBurnCrowd(st,accuser.X,accuser.Z)&&crowd.Count>=20,"setup: "+crowd.Count+" festivalgoers have gathered at the burn");
+        var p=s.Player("p0");p.X=Festivals.EffigyX;p.Z=Festivals.EffigyZ-9;
+        accuser.Observers.RemoveAll(o=>o.PlayerId=="p0");accuser.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=70,LastSeenSeconds=st.SimulationSeconds});
+        s.Tick(.1);
+        int accusing=crowd.FindAll(n=>n.Observers.Exists(o=>o.PlayerId=="p0"&&o.AccusationSeconds>=0)).Count;
+        Check(accusing>=2&&accusing<=7,"one accusation in the crush reaches the accuser's neighbours, 2-7 festivalgoers, got "+accusing+" of "+crowd.Count);
+    }
     static void SuspicionCoolsFasterInTheCrush()
     {
         double plain=Cooled(Placed(60),13);

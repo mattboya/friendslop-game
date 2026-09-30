@@ -24,7 +24,7 @@ public sealed partial class FestivalSimulation {
         FindStashes();BodiesTick();if(State.Phase=="Playing")EndIfLevelOver();
     }
     // PLAYA-1: a dust storm cuts a festivalgoer's sight, and they never see an art car's rider (FestivalTwists.cs). Suspicion of
-    // someone in the burn's crush cools faster (Calm).
+    // someone in the burn's crush cools faster (Calm), and an accusation made there carries only a few metres (ShoutRange).
     bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>SightRange(n)||p.Life!="Alive"||Hidden(n,p))return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return HasLineOfSight==null||HasLineOfSight(n.X,n.Z,p.X,p.Z);}
     ObserverState Observe(NpcState n,PlayerState p){var o=n.Observers.Find(x=>x.PlayerId==p.Id);if(o==null){o=new ObserverState{PlayerId=p.Id};n.Observers.Add(o);}return o;}
     // Little Spoon has no active use. Its modest social benefit stays in host
@@ -37,7 +37,7 @@ public sealed partial class FestivalSimulation {
     double PassiveGain(PlayerState p,double dt,double heat)=>dt*WookTrustFactor(p)*Math.Min(MaxCrowdHeat,heat*PackFactor(p));
     void WookTick(NpcState n,double dt){if(n.DistractedUntil>State.SimulationSeconds){n.Mode="Distracted";n.AttackAt=0;return;}double heat=Festivals.For(State).SuspicionMultiplier;ObserverState highest=null;foreach(var p in State.Players){if(!p.Connected||(p.Life!="Alive"&&p.Life!="Downed"))continue;var o=Observe(n,p);bool seen=Sees(n,p);if(seen){o.LastSeenSeconds=State.SimulationSeconds;double gain=PassiveGain(p,dt,heat);if(p.SprintUntil>State.SimulationSeconds)o.Suspicion=Math.Min(100,o.Suspicion+4*gain);if(p.Z>30)o.Suspicion=Math.Min(100,o.Suspicion+8*gain);}else if(State.SimulationSeconds-o.LastSeenSeconds>5&&o.Suspicion<70)o.Suspicion=Math.Max(0,o.Suspicion-2*dt*Calm(p));if(highest==null||o.Suspicion>highest.Suspicion)highest=o;}
         if(highest==null){n.Mode="Blending";n.TargetId="";n.Suspicion=0;return;}n.Suspicion=highest.Suspicion;n.TargetId=highest.PlayerId;var target=Player(n.TargetId);if(highest.Suspicion<70)highest.AccusationSeconds=-1;
-        if(highest.Suspicion>=70&&highest.AccusationSeconds<0){highest.AccusationSeconds=State.SimulationSeconds;foreach(var other in State.Npcs)if(other!=n&&other.Kind=="Wook"&&Distance(n.X,n.Z,other.X,other.Z)<=10){var heard=Observe(other,target);heard.Suspicion=Math.Max(heard.Suspicion,70);if(heard.AccusationSeconds<0)heard.AccusationSeconds=State.SimulationSeconds;}}
+        if(highest.Suspicion>=70&&highest.AccusationSeconds<0){highest.AccusationSeconds=State.SimulationSeconds;foreach(var other in State.Npcs)if(other!=n&&other.Kind=="Wook"&&Distance(n.X,n.Z,other.X,other.Z)<=ShoutRange(n)){var heard=Observe(other,target);heard.Suspicion=Math.Max(heard.Suspicion,70);if(heard.AccusationSeconds<0)heard.AccusationSeconds=State.SimulationSeconds;}}
         bool swarm=highest.Suspicion>=70&&((highest.Suspicion>=90&&State.SimulationSeconds-highest.AccusationSeconds>=4)||State.SimulationSeconds-highest.AccusationSeconds>=8);
         n.Mode=swarm?"Swarming":highest.Suspicion>=70?"Accusing":highest.Suspicion>=45?"Questioning":highest.Suspicion>=25?"Watching":"Blending";
         // PLAYA-1: an art-car rider is out of every festivalgoer's sight (Hidden), so one already after them loses them: it stays
