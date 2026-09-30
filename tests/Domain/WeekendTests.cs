@@ -15,6 +15,7 @@ public static class WeekendTests
         NewCrewStartsDayOne();
         SnapshotsKeepTheWeekendPosition();
         WeekendCarriesCashGearAndStash();
+        StashesCarryThroughTheWeekend();
         FailureRestartsTheFestival();
         HostChoosesAnUnlockedFestival();
         WinningNightTwoUnlocksOnTheResultsScreen();
@@ -65,6 +66,27 @@ public static class WeekendTests
         for(int level=0;level<4;level++)Finish(s,"Success");
         Check(Where(s)=="1/0/1","the encore continues to the next festival at the same lap");
     }
+
+    // Stock hidden from the cops is gear too: what the crew stashed, and the stash boxes it placed, carry on with the weekend.
+    static void StashesCarryThroughTheWeekend()
+    {
+        CommandResult Do(FestivalSimulation game,string kind,string item,int amount=1,string target="")=>game.Execute("a",new GameCommand{Id="weekend_"+(++sequence),Kind=kind,ItemId=item,Amount=amount,TargetId=target});
+        var s=Crew(42);var a=s.Player("a");s.State.Phase="Playing";
+        a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});a.Inventory.Add(new ItemStack{ItemId="stash_box",Count=2});a.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+        a.X=-25;a.Z=-8;Check(Do(s,"Deposit","stock_lsd",3).Accepted,"a hides three stock in the camp-side stash");
+        a.X=-10;a.Z=0;Check(Do(s,"Use","stash_box").Accepted,"a places a stash box");var box=s.State.Stashes.Find(x=>x.Id!="stash");
+        Check(Do(s,"Deposit","confetti",1,box.Id).Accepted,"a hides confetti in the new box");
+        Finish(s,"Success");
+        var stash=s.State.Stashes.Find(x=>x.Id=="stash");var carried=s.State.Stashes.Find(x=>x.Id==box.Id);
+        Check(s.State.Stashes.Count==2&&stash!=null&&stash.Items.Count==1&&stash.Items[0].ItemId=="stock_lsd"&&stash.Items[0].Count==3,"the stashed stock is still there on Night 1");
+        Check(carried!=null&&carried.X==-10&&carried.Z==0&&carried.Items.Count==1&&carried.Items[0].ItemId=="confetti","the placed box and what is in it stay put");
+        s.State.Phase="Playing";a=s.Player("a");a.X=5;a.Z=0;
+        Check(Do(s,"Use","stash_box").Accepted&&s.State.Stashes.Count==3&&s.State.Stashes.FindAll(x=>x.Id==box.Id).Count==1,"a box placed on Night 1 gets its own id");
+        a.X=-25;a.Z=-8;Check(Do(s,"Withdraw","stock_lsd",2).Accepted&&Count(a,"stock_lsd")==2,"the crew takes its stock back out");
+        Finish(s,"Time expired");
+        Check(s.State.Stashes.Count==1&&s.State.Stashes[0].Id=="stash"&&s.State.Stashes[0].Items.Count==0,"a failed level restarts Day 1 with one empty stash");
+    }
+    static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
 
     static void FailureRestartsTheFestival()
     {
