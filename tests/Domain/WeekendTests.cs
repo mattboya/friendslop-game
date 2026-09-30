@@ -16,6 +16,7 @@ public static class WeekendTests
         SnapshotsKeepTheWeekendPosition();
         WeekendCarriesCashGearAndStash();
         StashesCarryThroughTheWeekend();
+        DyingKeepsTheWeekendsCash();
         FailureRestartsTheFestival();
         HostChoosesAnUnlockedFestival();
         WinningNightTwoUnlocksOnTheResultsScreen();
@@ -87,6 +88,16 @@ public static class WeekendTests
         Check(s.State.Stashes.Count==1&&s.State.Stashes[0].Id=="stash"&&s.State.Stashes[0].Items.Count==0,"a failed level restarts Day 1 with one empty stash");
     }
     static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
+
+    // Dying costs the gear dropped where you fell and your turn as a spirit, not the weekend's savings: the cash stays with you.
+    static void DyingKeepsTheWeekendsCash()
+    {
+        var s=Crew(43);var a=s.Player("a");s.State.Phase="Playing";a.Cash=87;a.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+        a.Life="Downed";a.DownedRemaining=.05;s.Tick(.1);
+        Check(a.Life=="Spirit"&&s.State.Drops.Exists(d=>d.ItemId=="confetti"),"setup: a dies and drops their gear");
+        Check(a.Cash==87,"a spirit keeps the $87 carried this weekend");
+        Finish(s,"Success");Check(s.Player("a").Cash==87,"and starts Night 1 with it");
+    }
 
     static void FailureRestartsTheFestival()
     {
