@@ -467,7 +467,7 @@ namespace Festival.Network
                 foreach(var npc in source.Npcs)
                 {
                     bool targetsViewer=npc.TargetId==viewer;
-                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk};
+                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
@@ -475,8 +475,9 @@ namespace Festival.Network
             }
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
-            // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map.
-            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
+            // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map. POLO-1: a
+            // Ferris wheel rider looks out over the whole festival, so at night their client alone sees it for the ride.
+            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z))||FestivalSimulation.WheelShowsFriend(source,viewer))?at:new WorldPoint(0,0);
         }
         private void UpdateActors()
         {
