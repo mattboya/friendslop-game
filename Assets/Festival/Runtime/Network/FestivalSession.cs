@@ -504,14 +504,15 @@ namespace Festival.Network
                 foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,n.Mode=="Blending"?n.IdlePose:n.Mode,n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false);seen.Add(n.Id);}
                 var fp=State.FriendPosition;
                 if(fp!=null && (fp.X!=0||fp.Z!=0) && (State.FriendFound||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(fp.X,fp.Z))<12)){Actor("mission_friend","MISSING FRIEND",fp.X,fp.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add("mission_friend");}
-                foreach(var d in State.Drops){Actor(d.Id,d.ItemId,d.X,d.Z,0,Color.yellow,.2f);seen.Add(d.Id);}
+                // A drop floats its display name ("Prism tabs", THEME-1); its id still picks the model.
+                foreach(var d in State.Drops){Actor(d.Id,Catalog.FindItem(d.ItemId)?.Name??d.ItemId,d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}
                 // Night 2 bodies lie in the downed pose (and play the dragged motion while carried) until a revival lifts them.
                 foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed");seen.Add(id);}
             }
             foreach(var pair in actors)pair.Value.gameObject.SetActive(seen.Contains(pair.Key));
             ViewCamera.backgroundColor=spirit?new Color(.08f,.2f,.24f):new Color(.13f,.1f,.22f);
         }
-        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true)
+        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null)
         {
             if(!actors.TryGetValue(id,out var tr))
             {
@@ -519,7 +520,7 @@ namespace Festival.Network
                 if(height>.25f)go=FestivalCharacter.Create(actorRoot,id,color,role).gameObject;
                 else
                 {
-                    string resource=DropModel(label);
+                    string resource=DropModel(model??label);
                     go=resource==null?null:FestivalArtView.Create(actorRoot,resource);
                     if(go==null){go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.transform.SetParent(actorRoot);var c=go.GetComponent<Collider>();c.enabled=false;Destroy(c);}
                 }
