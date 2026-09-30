@@ -16,10 +16,11 @@ namespace Festival.Core
         BodyState Body(string playerId)=>State.Bodies.Find(b=>b.PlayerId==playerId);
         BodyState Carried(PlayerState p)=>p.Connected&&p.Life=="Alive"&&p.CarryBodyId!=""?Body(p.CarryBodyId):null;
         List<PlayerState> Carriers(BodyState b)=>State.Players.FindAll(p=>Carried(p)==b);
-        // Bodies are kept in death order, so the first one is the earliest death still lying out there.
+        // Bodies are kept in death order, so the first one is the earliest death still lying out there. Like EveryoneHome, it skips
+        // friends who left the game: their body stays where it fell but never holds the first place.
         // It moves with one carrier; every later body needs two. Public and static so the HUD's carry prompts read the same rule from a view.
         public static int CarrierCount(RoundState s,BodyState b)=>s.Players.FindAll(p=>p.Connected&&p.Life=="Alive"&&p.CarryBodyId==b.PlayerId).Count;
-        public static bool BodyMoves(RoundState s,BodyState b){int carriers=CarrierCount(s,b);return carriers>=2||carriers==1&&s.Bodies.IndexOf(b)==0;}
+        public static bool BodyMoves(RoundState s,BodyState b){int carriers=CarrierCount(s,b);return carriers>=2||carriers==1&&s.Bodies.Find(x=>s.Players.Exists(p=>p.Id==x.PlayerId&&p.Connected))==b;}
         /// <summary>Top speed for p in m/s while carrying a body; infinite with empty hands. The session moves players at this cap too.</summary>
         public double CarrySpeed(PlayerState p){var b=Carried(p);return b==null?double.PositiveInfinity:Carriers(b).Count>1?PairCarrySpeed:SoloCarrySpeed;}
         /// <summary>Home: inside the camp gate alive or downed, or dead with the body carried inside. Detained is never home.</summary>

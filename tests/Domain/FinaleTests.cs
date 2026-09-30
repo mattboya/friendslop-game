@@ -14,7 +14,8 @@ public static class FinaleTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{AnyoneAwayBlocksTheFinale,DetainedBlocksTheFinale,DownedInsideTheGateIsHome,NightTwoDeathsLeaveABody,RevivalLiftsTheBody,
-            OneCarrierDragsTheFirstBody,LaterBodiesNeedTwoCarriers,CarriersStayWithinReach,RevivingTheFirstBodyPromotesTheNext,CarriersLetGo,SnapshotsKeepBodies})
+            OneCarrierDragsTheFirstBody,LaterBodiesNeedTwoCarriers,CarriersStayWithinReach,RevivingTheFirstBodyPromotesTheNext,CarriersLetGo,SnapshotsKeepBodies,
+            AFriendWhoLeftDoesNotHoldTheFirstBody})
             try{test();}catch(Exception e){failures.Add(test.Method.Name+": "+e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -149,6 +150,17 @@ public static class FinaleTests
         Check(Body(s,"b")==null&&s.State.Bodies.Count==1&&s.State.Bodies[0]==body,"b's revival leaves c's body as the first");
         Place(s,"a",1,-22);
         Check(Act(s,"a","CarryBody","c").Accepted&&Stride(s,"a",.7f)&&body.Z==a.Z,"now a alone can drag c's body");
+    }
+
+    // Nobody waits for a friend who left, so their body does not count as the first either: the crew's own earliest death does.
+    static void AFriendWhoLeftDoesNotHoldTheFirstBody()
+    {
+        var s=Finale(3);Kill(s,"a",5,-15);s.Disconnect("a");Kill(s,"b",0,-22);var c=Place(s,"c",1,-22);var body=Body(s,"b");
+        Check(s.State.Bodies.Count==2&&s.State.Bodies[0].PlayerId=="a","setup: a died first, then left the game");
+        Check(Act(s,"c","CarryBody","b").Accepted&&Stride(s,"c",.7f)&&body.Z==c.Z,"c alone drags b's body: with a gone it is the crew's first");
+        while(c.Z>-31)Check(Stride(s,"c",.75f),"c drags b's body home");
+        Check(Act(s,"c","Extract").Accepted,"with b's body home, the lone survivor can finish Night 2");s.Tick(3.1);
+        Check(s.State.Result=="Success","the crew clears Night 2 without waiting for a friend who left");
     }
 
     static void CarriersLetGo()
