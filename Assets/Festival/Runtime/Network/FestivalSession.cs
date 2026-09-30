@@ -27,7 +27,8 @@ namespace Festival.Network
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
-        public FestivalCharacter LocalWorldCharacter => actors.TryGetValue(LocalPlayerId,out var actor)?actor.GetComponent<FestivalCharacter>():null;
+        public FestivalCharacter LocalWorldCharacter => WorldCharacter(LocalPlayerId);
+        public FestivalCharacter WorldCharacter(string playerId) => actors.TryGetValue(playerId,out var actor)?actor.GetComponent<FestivalCharacter>():null;
         public bool IsHost => manager!=null && manager.IsHost;
         public bool Connected => manager!=null && manager.IsConnectedClient;
         public bool Connecting {get;private set;}
@@ -91,6 +92,7 @@ namespace Festival.Network
 #endif
             actorRoot=new GameObject("Authoritative actor presentation").transform;
             world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
+            gameObject.AddComponent<FestivalSpinner>();
         }
         // NGO registers its message types after scene Awake and before Start.
         private void Start()

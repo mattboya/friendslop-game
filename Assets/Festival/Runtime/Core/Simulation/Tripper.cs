@@ -10,6 +10,8 @@ namespace Festival.Core
         public const double SpinSeconds=8;
         // Dose spinner slices in percent for 1-4 doses; the 4-dose slice is a thin sliver.
         static readonly int[] DoseWeights={40,30,22,8};
+        // The dose wheel draws these same slices, so what players see is what the spinner rolls.
+        public static IReadOnlyList<int> DoseSlices=>DoseWeights;
         static readonly float[] DoseSpeeds={.92f,.88f,.84f,.80f};
         public static float DoseMovementMultiplier(int dose)=>dose<1?1:DoseSpeeds[Math.Min(dose,DoseSpeeds.Length)-1];
         // The medical tent treats other effects but cannot talk anyone down from the spinner's dose.

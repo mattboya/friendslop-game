@@ -48,6 +48,10 @@ namespace Festival.Presentation
         public bool Crowd;
         public bool AmbientCrowd;
         public float Threat;
+        /// <summary>SPIN-1 hook: a scripted beat the spinner plays over the session's pose. "TakeDose" acts the
+        /// existing Consume clip; "DoseReaction" blends in the Panic clip and a head shake by BeatStrength (0-1, the dose's size).</summary>
+        public string Beat="";
+        public float BeatStrength;
         public FestivalAppearance Appearance { get; private set; }
         public float HeightScale { get; private set; }=1;
         public Vector3 ShapeScale => Appearance.Scale;
@@ -496,7 +500,7 @@ namespace Festival.Presentation
             }
             // Authored acting clips (package 03/04 people) replace the stiff single-frame
             // poses. Upper-body clips leave the legs to the gait and foot plant.
-            string key=exchanging&&!dance&&Pose!="Downed"&&Pose!="Spirit"?"Exchange":Pose;
+            string key=Beat!=""?Beat:exchanging&&!dance&&Pose!="Downed"&&Pose!="Spirit"?"Exchange":Pose;
             if(key!=motionKey)
             {
                 foreach(var item in bones)transitionFrom[item.Key]=item.Value.localRotation;
@@ -510,7 +514,7 @@ namespace Festival.Presentation
             {
                 float clock=(Time.time-poseStart)*acting.rate+(acting.loop?phase*.53f:0);
                 clip.Sample(clock,acting.loop,clipPose,out clipHips);
-                float weight=key=="Idle"||key==""||key=="Walk"?Mathf.Clamp01(1-speed/1.2f):1;
+                float weight=key=="Idle"||key==""||key=="Walk"?Mathf.Clamp01(1-speed/1.2f):key=="DoseReaction"?BeatStrength:1;
                 for(int i=0;i<clipPose.Length;i++)
                 {
                     string bone=FestivalMotionLibrary.Bones[i];
@@ -519,6 +523,8 @@ namespace Festival.Presentation
                 }
                 fullBodyClip=acting.full;
             }
+            // The dose hits as a head shake that grows with it.
+            if(key=="DoseReaction")Layer("Head",new Vector3(0,Mathf.Sin(Time.time*13f+phase)*16f,Mathf.Sin(Time.time*4.5f+phase)*9f)*BeatStrength);
             // Standing life layers on top of any clip: weight drifts between feet, the
             // chest breathes and the head wanders between glances, each on its own rhythm.
             if(still>.01f)
@@ -570,7 +576,7 @@ namespace Festival.Presentation
             if(faceRenderer!=null&&!UsesDistantMesh)
             {
                 if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),dance?65:Time.time-receiptAt<1.4f?80:0,1-Mathf.Exp(-7*animationDelta)));
-                if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:Threat*65,1-Mathf.Exp(-7*animationDelta)));
+                if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:key=="DoseReaction"?85*BeatStrength:Threat*65,1-Mathf.Exp(-7*animationDelta)));
             }
             if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)
             {
@@ -659,6 +665,8 @@ namespace Festival.Presentation
                 case "Accusing":return ("WookLockedOn",true,false,1);
                 case "Swarming":return ("SwarmLunge",true,false,1);
                 case "Exchange":return ("Handoff",false,false,1);
+                case "TakeDose":return ("Consume",false,false,1);
+                case "DoseReaction":return ("Panic",true,false,.6f+.8f*BeatStrength);
                 case "Idle":case "Walk":case "":
                     if(equippedProp!=null||carriedPoi!="")return (null,false,false,0);
                     return ("Idle",true,false,.8f+phase%.3f);
