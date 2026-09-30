@@ -2,10 +2,11 @@ using System;
 
 namespace Festival.Core
 {
-    /// <summary>POLO-1: Palm Mirage's twists, off on every other festival. Tuning lives in Festivals.cs.
+    /// <summary>Each festival's twists. POLO-1: Palm Mirage's, off on every other festival. Tuning lives in Festivals.cs.
     /// Influencers film the crowd, and a player on camera puts the wooks around them on alert. VIP zones are roped off to anyone
     /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.
-    /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.</summary>
+    /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.
+    /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers see only 5 m.</summary>
     public sealed partial class FestivalSimulation
     {
         public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel";
@@ -84,5 +85,25 @@ namespace Festival.Core
             if(!Near(p,Festivals.WheelX,Festivals.WheelZ,Festivals.WheelReach))return Reject("Board the Ferris wheel at its base");
             NewInteraction(p,RideWheelKind,"wheel",Festivals.WheelRideSeconds);return Ok("One full turn: you're up there until it comes round");
         }
+
+        // PLAYA-1: Ember Playa's twists, off on every other festival. Tuning lives in Festivals.cs; the odd-object money is
+        // Festivals.CurrencyName.
+        /// <summary>Whether a dust storm is blowing on Ember Playa. Each level's spin seeds its schedule: a calm of
+        /// CalmMinSeconds-CalmMaxSeconds, a storm of StormMinSeconds-StormMaxSeconds, and so on. It reads only the spin seed and
+        /// the level clock, so a client works it out from its own view exactly as the host does.</summary>
+        public static bool DustStorm(RoundState s)
+        {
+            if(s.FestivalIndex!=Festivals.PlayaFestival)return false;
+            var random=new ContentRandom(unchecked(s.SpinSeed*13+5));
+            // Bounded by the longest level, so a clock from a bad snapshot or view can't spin this forever.
+            for(double at=0;at<Festivals.NightSeconds;)
+            {
+                at+=Festivals.CalmMinSeconds+random.Next(Festivals.CalmMaxSeconds-Festivals.CalmMinSeconds+1);if(at>s.ElapsedSeconds)return false;
+                at+=Festivals.StormMinSeconds+random.Next(Festivals.StormMaxSeconds-Festivals.StormMinSeconds+1);if(at>s.ElapsedSeconds)return true;
+            }
+            return false;
+        }
+        // Festivalgoers see SightRange, down to DustStormSightRange in a storm; cops keep their eyes.
+        double SightRange(NpcState n)=>n.Kind=="Wook"&&DustStorm(State)?Festivals.DustStormSightRange:Festivals.SightRange;
     }
 }

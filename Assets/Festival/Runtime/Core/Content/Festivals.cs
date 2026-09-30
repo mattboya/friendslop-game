@@ -44,6 +44,10 @@ namespace Festival.Core
         public const int PlayaFestival=1;
         // ponytail: every kind pluralises with an "s"; an irregular one would need its own plural.
         static readonly string[] OddObjects={"button","ramen packet","bottle cap","friendship bracelet","rubber duck","glitter sticker","kazoo","odd sock"};
+        // Dust storms of StormMin-StormMaxSeconds blow through after calms of CalmMin-CalmMaxSeconds (the first calm opens the
+        // level), on a schedule seeded by the level's spin. Festivalgoers see SightRange, and only DustStormSightRange in a storm.
+        public const int StormMinSeconds=20,StormMaxSeconds=40,CalmMinSeconds=60,CalmMaxSeconds=120;
+        public const float SightRange=12,DustStormSightRange=5;
         /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
         public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}

@@ -23,7 +23,8 @@ public sealed partial class FestivalSimulation {
         Escort(State.FriendFound,State.FriendPosition,ref State.FriendLeaderId,dt);Escort(State.SecondFriend.Found,State.SecondFriend.Position,ref State.SecondFriend.LeaderId,dt);
         FindStashes();BodiesTick();if(State.Phase=="Playing")EndIfLevelOver();
     }
-    bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>12||p.Life!="Alive")return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return HasLineOfSight==null||HasLineOfSight(n.X,n.Z,p.X,p.Z);}
+    // PLAYA-1: a dust storm cuts a festivalgoer's sight (FestivalTwists.cs SightRange).
+    bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>SightRange(n)||p.Life!="Alive")return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return HasLineOfSight==null||HasLineOfSight(n.X,n.Z,p.X,p.Z);}
     ObserverState Observe(NpcState n,PlayerState p){var o=n.Observers.Find(x=>x.PlayerId==p.Id);if(o==null){o=new ObserverState{PlayerId=p.Id};n.Observers.Add(o);}return o;}
     // Little Spoon has no active use. Its modest social benefit stays in host
     // rules and is intentionally absent from the public item description.
