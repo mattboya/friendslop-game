@@ -24,9 +24,11 @@ namespace Festival.Core
             var point=CluePoint(State.Seed,State.CluesRead);
             if(!Near(p,point.X,point.Z))return Reject("Follow the private clue to the correct totem");
             bool solo=State.Players.FindAll(x=>x.Connected).Count==1;
-            if(!solo&&!State.Players.Exists(x=>x!=p&&x.Connected&&x.Life=="Alive"&&x.Effects.Count==0&&Near(x,point.X,point.Z,4)))return Reject("Bring a sober friend within four metres to ground the clue");
+            if(!solo&&!GroundingFriendNear(p,point))return Reject("Bring a sober friend within four metres to ground the clue");
             return BeginTask(p,"ReadClue",State.CluesRead.ToString(),solo?6:3);
         }
+        // The spinner's dose is not a consumable: a dosed friend still grounds the totem (Night 2 doses everyone); a friend on a Prism tab or caps does not.
+        bool GroundingFriendNear(PlayerState reader,WorldPoint point)=>State.Players.Exists(x=>x!=reader&&x.Connected&&x.Life=="Alive"&&!x.Effects.Exists(Treatable)&&Near(x,point.X,point.Z,4));
         CommandResult HelpSelf(PlayerState p)
         {
             if(State.Phase!="Playing"||(p.Life!="Downed"&&p.Life!="Detained"))return Reject("Help is available while downed or detained");
