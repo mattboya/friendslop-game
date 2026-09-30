@@ -21,7 +21,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,
+            StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmLosesARiderItCannotSee,
             TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -242,6 +242,21 @@ public static class PlayaTwistTests
         Check(!FestivalSimulation.Burning(palm)&&!FestivalSimulation.InBurnCrowd(palm,Festivals.EffigyX,Festivals.EffigyZ),"Palm Mirage has no effigy");
     }
 
+    // A swarm already on p0 when they climb aboard can't see them up there, so it loses them: it stops closing in, never lands
+    // a blow, and cools off like a festivalgoer left far behind.
+    static void ASwarmLosesARiderItCannotSee()
+    {
+        var s=Cars();var p=s.Player("p0");s.State.SimulationSeconds=30;
+        var n=new NpcState{Id="wook",X=p.X,Z=p.Z-6};s.State.Npcs.Add(n);
+        n.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=s.State.SimulationSeconds,AccusationSeconds=s.State.SimulationSeconds-10});
+        s.Tick(.1);Check(n.Mode=="Swarming"&&n.TargetId=="p0","setup: a festivalgoer is swarming p0, got "+n.Mode);
+        Check(Act(s,"p0","RideCar").Accepted,"setup: p0 climbs aboard art car 0");
+        double closest=double.MaxValue;
+        for(int k=0;k<300;k++){s.Tick(.1);closest=Math.Min(closest,Math.Sqrt((n.X-p.X)*(n.X-p.X)+(n.Z-p.Z)*(n.Z-p.Z)));}
+        Check(p.Life=="Alive"&&p.Health==100,"the swarm never lands a blow on the rider: "+p.Life+", health "+p.Health+", closest "+closest+" m");
+        Check(FestivalSimulation.ArtCarOf(s.State,"p0")==0,"p0 rides on for 30 s");
+        Check(n.Mode!="Swarming"&&Heat(s,"wook","p0")<70,"and it gives up the chase: "+n.Mode+" at "+Heat(s,"wook","p0"));
+    }
     static void TheCrowdGathersAtTheBurn()
     {
         var s=Start(6,3,1);var st=s.State;var crowd=st.Npcs.FindAll(n=>n.Kind=="Wook");
