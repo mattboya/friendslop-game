@@ -535,7 +535,7 @@ namespace Festival.Presentation
             objectiveTitle.text=mission;
             objective.text=state.Phase=="Shopping"?"Browse gear • pay the seller • meet at the trailhead":hint;
             timerText.text=state.Phase=="Playing"?Math.Floor(remaining/60).ToString("0")+":"+(remaining%60).ToString("00"):state.Phase=="Shopping"?"CAMP":state.Phase=="CampReview"?"REVIEW":state.Phase=="Results"?"DONE":"WAIT";
-            string effects=player.Effects.Count==0?"clear":string.Join(", ",player.Effects.ConvertAll(e=>e.Id+" "+e.RemainingSeconds.ToString("0")+"s"));
+            string effects=Catalog.EffectsLine(player.Effects);
             var threat=state.Npcs.FindAll(n=>n.Kind=="Wook"&&n.Suspicion>0);double suspicion=0;string threatState="clear";
             foreach(var npc in threat)if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;threatState=npc.Mode;}
             var police=state.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==player.Id);

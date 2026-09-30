@@ -38,15 +38,17 @@ namespace Festival.Core
             Item("poi_led", "LED poi", "Reusable dance tool: successful performances reduce suspicion 25% more.",10,1,"Performance","Dance","NearbyWooks",0,0,8,false)
         };
         public static readonly EffectDefinition[] Effects = {
-            Effect("lsd","LSD",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),
-            Effect("mushrooms","Mushrooms",2,true,"Gentle curved paths and separate afterimages; fixed receptors."),
-            Effect("ecstasy","Ecstasy",1,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
-            Effect("ketamine","Ketamine",3,false,"Longer visibility lead; unchanged hit times."),
-            Effect("alcohol","Alcohol",2,false,"Spinning notes converge at fixed receptors; optional camera roll off."),
-            Effect("weed","Weed",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8)
+            Effect("lsd","Prism",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),
+            Effect("mushrooms","Moon",2,true,"Gentle curved paths and separate afterimages; fixed receptors."),
+            Effect("ecstasy","Hug Drops",1,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
+            Effect("ketamine","Couch Lock",3,false,"Longer visibility lead; unchanged hit times."),
+            Effect("alcohol","Shot",2,false,"Spinning notes converge at fixed receptors; optional camera roll off."),
+            Effect("weed","Snack Leaf",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8)
         };
         public static ItemDefinition FindItem(string id) { foreach(var x in Items) if(x.Id==id) return x; return null; }
         public static EffectDefinition FindEffect(string id) { foreach(var x in Effects) if(x.Id==id) return x; return null; }
+        // The HUD's effects readout: players read display names, never internal ids.
+        public static string EffectsLine(List<ActiveEffect> effects) => effects==null||effects.Count==0?"clear":string.Join(", ",effects.ConvertAll(e=>(FindEffect(e.Id)?.Name??e.Id)+" "+e.RemainingSeconds.ToString("0")+"s"));
         public static bool RareShopItem(string id) => id=="stage_pass"||id=="poi_led"||id=="stash_box";
         public static string ShopTag(string id)
         {
