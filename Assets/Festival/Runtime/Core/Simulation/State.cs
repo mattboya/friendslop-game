@@ -28,6 +28,9 @@ namespace Festival.Core
     [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt; }
     [Serializable] public sealed class NpcState {
         public string Id="",Kind="Wook",Mode="Blending",TargetId="",IdlePose="Idle"; public float X,Z,Yaw;
+        // TRIP-2: Buyer, Narc, Regular or (at night) ClueHolder, dealt as the crew leaves camp; never sent to clients. "" is not
+        // dealt yet (a snapshot from before roles), and buys like every festivalgoer did then.
+        public string Role="";
         public bool HighlyIntoxicated,RedEyes,CanTalk;
         public double Suspicion, DistractedUntil, AttackAt, AttackCooldownUntil, LastTalkSeconds=-100; public int Sales,TalkCount;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();
@@ -65,6 +68,8 @@ namespace Festival.Core
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";
         // Night 2 dead, in death order (Bodies.cs): the first one moves with one carrier, later ones need two.
         public List<BodyState> Bodies=new List<BodyState>();
+        // TRIP-2: what the tripper sees (Visions.cs), and the night's clue holders in trail order; CluesRead is the next link.
+        public List<VisionState> Visions=new List<VisionState>(); public List<string> ClueChain=new List<string>();
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();
         public List<CommittedCommand> Commands=new List<CommittedCommand>(); public List<DropState> Drops=new List<DropState>();

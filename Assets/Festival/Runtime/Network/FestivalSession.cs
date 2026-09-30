@@ -462,6 +462,7 @@ namespace Festival.Network
                 }
                 // The undiscovered friend is revealed only at local sight range, never on the full map.
                 if(source.GateOpened && !view.FriendFound && local!=null && Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(source.FriendPosition.X,source.FriendPosition.Z))<12 && simulation.HasLineOfSight(local.X,local.Z,source.FriendPosition.X,source.FriendPosition.Z))view.FriendPosition=source.FriendPosition;
+                view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
                 view.Drops=source.Drops;view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
             }
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;

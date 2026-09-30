@@ -40,7 +40,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
@@ -156,7 +156,7 @@ namespace Festival.Core
         {
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
-            State.LaunchAtSeconds=0;Spin(connected);
+            State.LaunchAtSeconds=0;Spin(connected);DealRoles();
         }
         void BeginCampReview()
         {
