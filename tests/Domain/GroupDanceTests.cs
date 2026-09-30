@@ -94,5 +94,10 @@ public static class GroupDanceTests
 
         s=Crew();var chat=Start(s,"a","Conversation");Hit(chat,0,chat.NoteCount);Finish(s,chat);
         Check(Heat(s,"a")==solo&&Heat(s,"b")==20,"only a Dance judges the group; a good chat still helps just the talker");
+
+        // TRIP-3: the tripper's check dance is dancing too. A perfect one beside a friend's perfect Dance counts as dancing.
+        s=Crew();s.State.TripperId="a";s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="partner_a",IsTrue=true});
+        second=Start(s,"b");var check=Start(s,"a","ConfirmDance");Live(s,()=>check.Status!="Active"&&second.Status!="Active",check,second);
+        Check(check.Score==1&&second.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,"a perfect check dance beside a friend's perfect Dance: both lose, each exactly once (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
     }
 }
