@@ -495,7 +495,7 @@ namespace Festival.Presentation
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
-            foreach(var item in handGear)gear.Add(Catalog.FindItem(item.ItemId)?.Name??item.ItemId);
+            foreach(var item in handGear)gear.Add(ItemName(item.ItemId));
             preview.text=(gear.Count==0?"0 / 3   •   NOTHING PACKED":gear.Count+" / 3   •   "+string.Join("  /  ",gear))
                 +(player.Inventory.Exists(i=>i.ItemId=="little_spoon")?"   •   LITTLE SPOON WORN":"");
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -551,7 +551,7 @@ namespace Festival.Presentation
                 var item=i<handGear.Count?handGear[i]:null;
                 bool equipped=item!=null&&item.ItemId==player.EquippedItemId;
                 slotFrames[i].color=equipped?new Color(.13f,.34f,.32f,1):new Color(.07f,.13f,.15f,1);
-                slotTexts[i].text=(i+1)+"  "+(item==null?"EMPTY":(Catalog.FindItem(item.ItemId)?.Name??item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
+                slotTexts[i].text=(i+1)+"  "+(item==null?"EMPTY":ItemName(item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
                 slotTexts[i].color=equipped?new Color(1,.79f,.53f):Paper;
             }
             int ready=state.Players.FindAll(p=>p.Ready).Count;
@@ -815,9 +815,9 @@ namespace Festival.Presentation
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
             if(player.InteractionId!="")AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
-            var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+offer.ItemId+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
+            var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
-            var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+drop.ItemId,()=>session.Command("Pickup",drop.Id),ref y);
+            var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+ItemName(drop.ItemId),()=>session.Command("Pickup",drop.Id),ref y);
             var stash=Nearest(state.Stashes,player.X,player.Z,2.7f);
             if(stash!=null)
             {
@@ -827,17 +827,17 @@ namespace Festival.Presentation
                 if(handGear.Count>0)
                 {
                     string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
-                    AddAction("Deposit "+item,()=>session.Command("Deposit",stashId,item,1),ref y);
+                    AddAction("Deposit "+ItemName(item),()=>session.Command("Deposit",stashId,item,1),ref y);
                 }
                 var stored=stash.Items.Find(i=>i.Count>0);
-                if(stored!=null){string item=stored.ItemId;AddAction("Withdraw "+item,()=>session.Command("Withdraw",stashId,item,1),ref y);}
+                if(stored!=null){string item=stored.ItemId;AddAction("Withdraw "+ItemName(item),()=>session.Command("Withdraw",stashId,item,1),ref y);}
             }
             foreach(var mate in state.Players)
             {
                 if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
                 if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
                 if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay $10 release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
-                if(handGear.Count>0){string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;AddAction("Offer "+item+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);}
+                if(handGear.Count>0){string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;AddAction("Offer "+ItemName(item)+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);}
             }
             if(player.Life=="Spirit")
             {
@@ -873,7 +873,7 @@ namespace Festival.Presentation
                         AddAction(npc.CanTalk?"Dance with festivalgoer  •  F CHAT":"Dance with festivalgoer",()=>session.Command("Dance",npc.Id),ref y);
                         if(npc.CanTalk){AddAction("Chat with festivalgoer",()=>session.Command("Talk",npc.Id),ref y);AddAction("Talk and keep the beat",()=>session.Command("Conversation",npc.Id),ref y);}
                         var stock=player.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");
-                        if(stock!=null)AddAction("Offer "+stock.ItemId,()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
+                        if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
                     }
                 }
             }
@@ -884,7 +884,7 @@ namespace Festival.Presentation
         private void AddHandoffActions(RoundState state,PlayerState player,ref float y)
         {
             var incoming=state.Transfers.Find(t=>t.ToId==player.Id);
-            if(incoming!=null)AddAction("Accept "+incoming.ItemId+" ×"+incoming.Amount,()=>session.Command("AcceptTransfer",incoming.Id),ref y);
+            if(incoming!=null)AddAction("Accept "+ItemName(incoming.ItemId)+" ×"+incoming.Amount,()=>session.Command("AcceptTransfer",incoming.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);
             if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             if(outgoing!=null||handGear.Count==0)return;
@@ -893,7 +893,7 @@ namespace Festival.Presentation
             {
                 if(mate.Id==player.Id||!mate.Connected||mate.Life!="Alive"||!FestivalSimulation.CanHandoff(player,mate))continue;
                 var recipient=mate;
-                AddAction("Offer "+item+" to "+recipient.Name,()=>session.Command("Transfer",recipient.Id,item,1),ref y);
+                AddAction("Offer "+ItemName(item)+" to "+recipient.Name,()=>session.Command("Transfer",recipient.Id,item,1),ref y);
             }
         }
 
@@ -916,6 +916,8 @@ namespace Festival.Presentation
             activeActionCount++;
             if(primaryAction==null)primaryAction=action;y-=.09f;
         }
+        // Players read an item's display name, never its internal id (THEME-1: "Prism tabs", not "stock_lsd").
+        private static string ItemName(string id)=>Catalog.FindItem(id)?.Name??id;
         private void FinishActions(){for(int i=activeActionCount;i<dynamicActions.Count;i++)dynamicActions[i].SetActive(false);}
         private void SetPromptAction(string label,Action action){prompt.text=label.StartsWith("E  ")?label.Substring(3):label;primaryAction=action;}
         private string FocusedOffer(RoundState state,PlayerState player)

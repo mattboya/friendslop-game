@@ -37,6 +37,8 @@ public static class ThemeTests
         foreach(var text in texts) Check(Offence(text)==null,"real-drug word '"+Offence(text)+"' in: "+text);
 
         // Internal ids may stay as they are, so a literal that is exactly a catalog id (e.Id=="lsd") is code, not text.
+        // Ceiling: a label that is exactly an id, or an id joined into a label at runtime, passes this scan. The PlayMode
+        // ThemeHudTests reads the text the HUD actually renders for that.
         var ids=new HashSet<string>(); foreach(var item in Catalog.Items) ids.Add(item.Id); foreach(var effect in Catalog.Effects) ids.Add(effect.Id);
         var sources=HudSources();
         Check(sources.Contains("Assets/Festival/Runtime/Presentation/FestivalHud.cs"),"FestivalHud.cs is scanned");
