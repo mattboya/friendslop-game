@@ -15,21 +15,28 @@ namespace Festival.Presentation
         // Frames and cars glide to each snapshot the way FestivalSession's actors do (snapping past 5 m), so a rider's body
         // stays on its car's deck and an influencer's frame stays at their feet.
         private const float Glide=15,SnapDistance=5;
-        // The phone is held up in the right hand; its light leans down to the middle of the frame. Edges lie on the ground.
+        // The phone is held up in the right hand. Edges lie on the ground and glow; there is no phone light, as URP lights the one
+        // ground mesh with only 4 additional lights, so it showed as a 0.2/255 change.
         private static readonly Vector3 Phone=new Vector3(.28f,1.45f,.32f);
-        private const float EdgeWidth=.07f,PhoneLightIntensity=4;
+        private const float EdgeWidth=.07f;
         private const int ArcSegments=4;
         // VIP ropes: posts no more than this far apart, the rope at waist height.
         private const float PostSpacing=2.2f,RopeHeight=.88f;
         // The wheel turns once a ride (Festivals.WheelRideSeconds), its gondolas hanging level below the rim.
         private const float AxleHeight=7.5f,WheelRadius=6,GondolaDrop=.75f;
         private const int Gondolas=8,RimSegments=16;
-        // A car tows a party deck: the deck's centre is the car's point in the rules, so a rider stands on it with the van
-        // leading, and it turns toward where its loop takes it this far ahead.
-        private const double TurnLookahead=1.5;
-        private const float VanAhead=4.4f,DeckSize=2.8f;
+        // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
+        // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
+        // Kept this short, the car reaches 3.6 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
+        // ahead, it rounds each corner clear of the totems, poles, trees and crowd the rules route the loop past; and the rider
+        // sees over the van's roof.
+        private const double TurnLookahead=2.5;
+        private const float DeckWidth=2.8f,DeckBack=1.4f,DeckFront=.45f,VanScale=.55f,VanAhead=DeckFront+.05f+2.81f*VanScale;
         // The fire's flames stretch and shrink out of step with each other.
         private const float FlickerHz=9,FlickerDepth=.3f,FireGlow=6;
+        // The grounds' middle festoon hangs along z=2 at chest height, through the rules' point, so the figure and its fire stand
+        // this far in front of that point (the figure faces -z) and the lights pass behind its back.
+        private const float FigureAhead=1;
 
         private readonly Transform grounds,polo,playa,rotor,fire;
         private readonly Light fireLight;
@@ -83,7 +90,7 @@ namespace Festival.Presentation
         }
         private static Vector3 Glided(Vector3 from,Vector3 to,float deltaTime)=>Vector3.Distance(from,to)>SnapDistance?to:Vector3.Lerp(from,to,1-Mathf.Exp(-Glide*deltaTime));
 
-        // The phone's view on the ground: two edges FilmRange long, FilmConeDegrees apart, closed by an arc, lit from the phone.
+        // The phone's view on the ground: two edges FilmRange long, FilmConeDegrees apart, closed by an arc.
         private Transform Frame(string npcId,Vector3 at)
         {
             var frame=Group(grounds,FramePrefix+npcId,at);float half=Festivals.FilmConeDegrees/2;
@@ -92,10 +99,6 @@ namespace Festival.Presentation
             Beam(frame,"Frame edge right",Vector3.up*EdgeWidth/2,Reach(half),EdgeWidth,"StageGlowRose");
             for(int s=0;s<ArcSegments;s++)Beam(frame,"Frame arc",Reach(-half+2*half*s/ArcSegments),Reach(-half+2*half*(s+1)/ArcSegments),EdgeWidth,"StageGlowRose");
             Block(frame,"Phone",PrimitiveType.Cube,Phone,new Vector3(.08f,.15f,.02f),"White");
-            var beam=new GameObject("Phone light");beam.transform.SetParent(frame,false);beam.transform.localPosition=Phone;
-            beam.transform.localRotation=Quaternion.Euler(Mathf.Atan2(Phone.y,Festivals.FilmRange/2)*Mathf.Rad2Deg,0,0);
-            var light=beam.AddComponent<Light>();light.type=LightType.Spot;light.spotAngle=Festivals.FilmConeDegrees;light.range=Festivals.FilmRange+1;
-            light.intensity=PhoneLightIntensity;light.color=new Color(1f,.95f,.9f);light.shadows=LightShadows.None;
             return frame;
         }
 
@@ -138,19 +141,18 @@ namespace Festival.Presentation
             for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=rotor.localPosition+rotor.localRotation*anchors[k]-Vector3.up*GondolaDrop;
         }
 
-        // The camp van (existing vehicle art, its front at the model's -z) tows a neon-railed party deck.
+        // The camp van (existing vehicle art, its front at the model's -z) pulls a neon-railed party deck.
         private static Transform ArtCar(Transform car,int k)
         {
-            string glow=k%2==0?"StageGlowMint":"StageGlowRose";float edge=DeckSize/2;
-            Block(car,"Party deck",PrimitiveType.Cube,new Vector3(0,.04f,0),new Vector3(DeckSize,.08f,DeckSize),"Dark");
+            string glow=k%2==0?"StageGlowMint":"StageGlowRose";float edge=DeckWidth/2;
+            Block(car,"Party deck",PrimitiveType.Cube,new Vector3(0,.04f,(DeckFront-DeckBack)/2),new Vector3(DeckWidth,.08f,DeckFront+DeckBack),"Dark");
             foreach(float x in new[]{-edge,edge})
             {
-                Beam(car,"Deck rail",new Vector3(x,.9f,-edge),new Vector3(x,.9f,edge),.07f,glow);
-                foreach(float z in new[]{-edge,edge})Block(car,"Deck post",PrimitiveType.Cube,new Vector3(x,.45f,z),new Vector3(.07f,.9f,.07f),"Metal");
+                Beam(car,"Deck rail",new Vector3(x,.9f,-DeckBack),new Vector3(x,.9f,DeckFront),.07f,glow);
+                foreach(float z in new[]{-DeckBack,DeckFront})Block(car,"Deck post",PrimitiveType.Cube,new Vector3(x,.45f,z),new Vector3(.07f,.9f,.07f),"Metal");
             }
-            Beam(car,"Tow bar",new Vector3(0,.35f,edge),new Vector3(0,.35f,VanAhead-2.6f),.1f,"Metal");
             var van=FestivalArtView.Create(car,"FestivalCampVan");
-            if(van!=null){van.transform.localPosition=new Vector3(0,0,VanAhead);van.transform.localRotation=Quaternion.Euler(0,180,0);}
+            if(van!=null){van.transform.localPosition=new Vector3(0,0,VanAhead);van.transform.localRotation=Quaternion.Euler(0,180,0);van.transform.localScale=Vector3.one*VanScale;}
             var at=Festivals.ArtCarAt(k,0);car.localPosition=new Vector3(at.X,0,at.Z);
             return car;
         }
@@ -159,16 +161,17 @@ namespace Festival.Presentation
         // for the burn.
         private Transform Effigy(Transform effigy)
         {
+            var figure=Group(effigy,"Effigy figure",Vector3.back*FigureAhead);
             foreach(float side in new[]{-1f,1f})
             {
-                Beam(effigy,"Effigy leg",new Vector3(side*1.6f,0,0),new Vector3(side*.55f,4.6f,0),.45f,"Wood");
-                Beam(effigy,"Effigy arm",new Vector3(side*.6f,7.1f,0),new Vector3(side*2.4f,9.3f,0),.32f,"Wood");
+                Beam(figure,"Effigy leg",new Vector3(side*1.6f,0,0),new Vector3(side*.55f,4.6f,0),.45f,"Wood");
+                Beam(figure,"Effigy arm",new Vector3(side*.6f,7.1f,0),new Vector3(side*2.4f,9.3f,0),.32f,"Wood");
             }
-            Block(effigy,"Effigy hips",PrimitiveType.Cube,new Vector3(0,4.7f,0),new Vector3(1.6f,.55f,.6f),"Wood");
-            Block(effigy,"Effigy chest",PrimitiveType.Cube,new Vector3(0,6.1f,0),new Vector3(1.3f,2.4f,.7f),"Wood");
-            Block(effigy,"Effigy heart",PrimitiveType.Cube,new Vector3(0,6.4f,-.37f),new Vector3(.4f,.4f,.05f),"StageGlowGold");
-            Block(effigy,"Effigy head",PrimitiveType.Cube,new Vector3(0,7.95f,0),new Vector3(.9f,1f,.9f),"Wood");
-            var burn=Group(effigy,"Effigy fire",Vector3.zero);
+            Block(figure,"Effigy hips",PrimitiveType.Cube,new Vector3(0,4.7f,0),new Vector3(1.6f,.55f,.6f),"Wood");
+            Block(figure,"Effigy chest",PrimitiveType.Cube,new Vector3(0,6.1f,0),new Vector3(1.3f,2.4f,.7f),"Wood");
+            Block(figure,"Effigy heart",PrimitiveType.Cube,new Vector3(0,6.4f,-.37f),new Vector3(.4f,.4f,.05f),"StageGlowGold");
+            Block(figure,"Effigy head",PrimitiveType.Cube,new Vector3(0,7.95f,0),new Vector3(.9f,1f,.9f),"Wood");
+            var burn=Group(effigy,"Effigy fire",Vector3.back*FigureAhead);
             var spots=new[]{new Vector3(-1.45f,.6f,0),new Vector3(1.45f,.6f,0),new Vector3(-1.05f,2.4f,0),new Vector3(1.05f,2.4f,0),new Vector3(0,4.9f,0),
                 new Vector3(0,6.3f,0),new Vector3(-1.6f,8.3f,0),new Vector3(1.6f,8.3f,0),new Vector3(0,8.6f,0)};
             for(int i=0;i<spots.Length;i++)

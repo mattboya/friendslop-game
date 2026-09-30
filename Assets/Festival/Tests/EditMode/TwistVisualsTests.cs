@@ -8,7 +8,8 @@ using UnityEngine;
 namespace Festival.Tests
 {
     // TWISTVIS-1: each festival's twists get stand-ins built from primitives and existing props. They show only on their own
-    // festival, follow the round (influencers' frames, the wheel, the art cars, the burn, the storms) and never collide.
+    // festival, follow the round (influencers' frames, the wheel, the art cars, the burn, the storms), never collide, and keep
+    // clear of the scenery they stand and drive among.
     public sealed class TwistVisualsTests
     {
         private readonly List<GameObject> made=new List<GameObject>();
@@ -66,11 +67,9 @@ namespace Festival.Tests
                     Assert.That(new Vector2(edge.x,edge.z).magnitude,Is.EqualTo(Festivals.FilmRange).Within(.05f),n.Id+": the frame reaches as far as filming does");
                     Assert.That(Mathf.DeltaAngle(n.Yaw,Mathf.Atan2(edge.x,edge.z)*Mathf.Rad2Deg),Is.EqualTo(side*Festivals.FilmConeDegrees/2).Within(.5f),n.Id+": the frame is as wide as the phone sees");
                 }
-                var light=frame.GetComponentInChildren<Light>();
-                Assert.That(light,Is.Not.Null,n.Id+"'s phone lights its frame");
-                Assert.That(light.type,Is.EqualTo(LightType.Spot),n.Id+"'s phone light is a cone");
-                Assert.That(light.spotAngle,Is.EqualTo(Festivals.FilmConeDegrees).Within(.01f),n.Id+"'s phone light is as wide as the frame");
-                Assert.That(light.range,Is.GreaterThanOrEqualTo(Festivals.FilmRange),n.Id+"'s phone light reaches the end of the frame");
+                // URP lights one ground mesh with only 4 additional lights, so a phone spot light changed 0.5% of pixels by an
+                // invisible 0.2/255: the glowing outline alone carries the frame, without three realtime lights.
+                Assert.That(frame.GetComponentInChildren<Light>(),Is.Null,n.Id+"'s frame reads by its glowing outline, not a light that doesn't show");
             }
 
             // Frames follow the view: an influencer walks off and turns, another stops filming.
@@ -104,8 +103,36 @@ namespace Festival.Tests
 
             var van=Part(glider,"FestivalCampVan");var eye=glider.position+Vector3.up*1.65f;
             foreach(var renderer in van.GetComponentsInChildren<Renderer>())
-                Assert.That(renderer.bounds.Contains(eye),Is.False,"a rider stands on the deck, clear of the camp van towing it ("+renderer.name+")");
+                Assert.That(renderer.bounds.Contains(eye),Is.False,"a rider stands on the deck, clear of the camp van pulling it ("+renderer.name+")");
             Assert.That(Vector3.Dot(van.position-glider.position,glider.forward),Is.GreaterThan(0),"the van leads the deck");
+            Assert.That(Vector3.Dot(Centre(van,"__Cream")-Centre(van,"__Rose"),glider.forward),Is.GreaterThan(0),"the van drives nose first: its headlamps lead its tail lights");
+            Assert.That(Bounds(van).max.y,Is.LessThan(eye.y),"a rider sees over the van's roof, not into its back");
+        }
+
+        [Test]public void ArtCarsKeepClearOfTheSceneryAllTheWayRound()
+        {
+            var (grounds,twists)=OnTheGrounds();var scenery=Scenery(grounds);
+            foreach(var landmark in new[]{"FestivalMoon","FestivalBuntingPole","FestivalTreeB","ambient_PoiPerformer"})
+                Assert.That(scenery.Exists(thing=>thing.Name.StartsWith(landmark)),Is.True,"setup: the grounds have a "+landmark);
+            var playa=Part(twists.Root,FestivalTwistVisuals.PlayaRootName);var state=Round(Festivals.PlayaFestival);var hits=new SortedDictionary<string,double>();
+            // A lap is 46 m at ArtCarSpeed, 38.3 s, so 40 s takes each car all the way round, every corner included.
+            for(double t=0;t<40;t+=.25)
+            {
+                state.ElapsedSeconds=t;twists.Visuals.Apply(state,10);
+                for(int k=0;k<Festivals.ArtCars;k++)Hits(Part(playa,"Art car "+k),scenery,hits,"car "+k,t);
+            }
+            Assert.That(hits.Keys,Is.Empty,"the rules route each loop clear of trees, totems and the crowd, so the car on it must clear them too:"+Listed(hits));
+        }
+
+        [Test]public void TheBurningEffigyKeepsClearOfTheFestoonStrungOverThePath()
+        {
+            var (grounds,twists)=OnTheGrounds();var scenery=Scenery(grounds);
+            Assert.That(scenery.Exists(thing=>thing.Name.StartsWith("Festoon cable")),Is.True,"setup: festoons hang over the grounds");
+            var effigy=Part(Part(twists.Root,FestivalTwistVisuals.PlayaRootName),"Effigy");var hits=new SortedDictionary<string,double>();
+            var burn=Round(Festivals.PlayaFestival,3);burn.ElapsedSeconds=burn.DurationSeconds-10;
+            // The flames stretch as they flicker, so watch a second of it.
+            for(int i=0;i<20;i++){twists.Visuals.Apply(burn,.05f);Hits(effigy,scenery,hits,"the effigy",i*.05);}
+            Assert.That(hits.Keys,Is.Empty,"the lights strung over the path pass the effigy by, burning or not:"+Listed(hits));
         }
 
         [Test]public void TheEffigyStandsOverThePathAndBurnsForNightTwosLastThreeMinutes()
@@ -192,6 +219,81 @@ namespace Festival.Tests
         private static Transform Part(Transform parent,string name){var part=parent.Find(name);Assert.That(part,Is.Not.Null,name+" is built under "+parent.name);return part;}
         private static List<Transform> Frames(Transform grounds){var frames=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith(FestivalTwistVisuals.FramePrefix))frames.Add(child);return frames;}
         private static Bounds Bounds(Transform part){var renderers=part.GetComponentsInChildren<Renderer>();var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);return bounds;}
+        // Where the parts of an art prop in one material sit, e.g. the van's "__Cream" headlamps.
+        private static Vector3 Centre(Transform prop,string material)
+        {
+            var found=new List<Renderer>();foreach(var r in prop.GetComponentsInChildren<Renderer>())if(r.name.Contains(material))found.Add(r);
+            Assert.That(found.Count,Is.GreaterThan(0),prop.name+" has "+material+" parts");
+            var centre=Vector3.zero;foreach(var r in found)centre+=r.bounds.center;return centre/found.Count;
+        }
+
+        // The real festival grounds, with a second set of stand-ins raised on them for the test to drive.
+        private (Transform Grounds,(Transform Root,FestivalTwistVisuals Visuals) Twists) OnTheGrounds()
+        {
+            var world=Made("Playa world").AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");
+            var grounds=world.transform.Find(FestivalWorld.RootName);
+            var root=new GameObject("Stand-ins under test").transform;root.SetParent(grounds,false);
+            return (grounds,(root,new FestivalTwistVisuals(root)));
+        }
+        // Everything standing on the grounds that a stand-in could run into. Left out: the stand-ins themselves, the ground and
+        // the flat paths, the ambient walkers (their lanes cross the loops by design) and the fern-and-rock patches, which the
+        // rules' loops themselves run over (one lies on car 1's loop at (13,-6)).
+        private static List<Box> Scenery(Transform grounds)
+        {
+            var scenery=new List<Box>();
+            foreach(var renderer in grounds.GetComponentsInChildren<Renderer>())
+            {
+                var bounds=renderer.bounds;string name=PathOf(renderer.transform,grounds);
+                if(!renderer.enabled||StandIn(renderer.transform)||bounds.size.x>20||bounds.size.z>20||bounds.max.y<.12f)continue;
+                if(name.StartsWith("ambient_walk_")||name.StartsWith("FestivalGroveDetail"))continue;
+                scenery.Add(Box.Of(renderer,name));
+            }
+            return scenery;
+        }
+        private static bool StandIn(Transform part)
+        {
+            for(;part!=null;part=part.parent)if(part.name==FestivalTwistVisuals.PoloRootName||part.name==FestivalTwistVisuals.PlayaRootName||part.name.StartsWith(FestivalTwistVisuals.FramePrefix))return true;
+            return false;
+        }
+        private static string PathOf(Transform part,Transform top){var path=part.name;for(part=part.parent;part!=null&&part!=top;part=part.parent)path=part.name+"/"+path;return path;}
+        // Records each stand-in part that runs into a piece of scenery, and when it first did.
+        private static void Hits(Transform standIn,List<Box> scenery,SortedDictionary<string,double> hits,string who,double when)
+        {
+            foreach(var renderer in standIn.GetComponentsInChildren<Renderer>())
+            {
+                var box=Box.Of(renderer,PathOf(renderer.transform,standIn));
+                foreach(var thing in scenery)
+                {
+                    if(!box.Aabb.Intersects(thing.Aabb)||box.Overlap(thing)<=.02f)continue;
+                    string hit=who+"'s "+box.Name.Split('/')[0]+" runs through "+thing.Name.Split('/')[0];
+                    if(!hits.ContainsKey(hit))hits[hit]=when;
+                }
+            }
+        }
+        private static string Listed(SortedDictionary<string,double> hits){var list="";foreach(var hit in hits)list+="\n  "+hit.Key+" (first at "+hit.Value+" s)";return list;}
+        // A renderer's oriented box: its mesh's bounds turned and scaled with it (skinned people and text keep their world box).
+        private struct Box
+        {
+            public Vector3 Centre,Extents;public Vector3[] Axes;public Bounds Aabb;public string Name;
+            public static Box Of(Renderer renderer,string name)
+            {
+                var filter=renderer.GetComponent<MeshFilter>();var t=renderer.transform;
+                if(renderer is SkinnedMeshRenderer||filter==null||filter.sharedMesh==null)
+                    return new Box{Centre=renderer.bounds.center,Extents=renderer.bounds.extents,Axes=new[]{Vector3.right,Vector3.up,Vector3.forward},Aabb=renderer.bounds,Name=name};
+                var mesh=filter.sharedMesh.bounds;var scale=t.lossyScale;
+                return new Box{Centre=t.TransformPoint(mesh.center),Extents=Vector3.Scale(mesh.extents,new Vector3(Mathf.Abs(scale.x),Mathf.Abs(scale.y),Mathf.Abs(scale.z))),Axes=new[]{t.right,t.up,t.forward},Aabb=renderer.bounds,Name=name};
+            }
+            // How deep two boxes run into each other along the axis that best separates them; zero or less means they don't.
+            public float Overlap(Box other)
+            {
+                var axes=new List<Vector3>(Axes);axes.AddRange(other.Axes);
+                foreach(var a in Axes)foreach(var b in other.Axes){var c=Vector3.Cross(a,b);if(c.sqrMagnitude>1e-6f)axes.Add(c.normalized);}
+                float least=float.MaxValue;var apart=other.Centre-Centre;
+                foreach(var axis in axes)least=Mathf.Min(least,Reach(axis)+other.Reach(axis)-Mathf.Abs(Vector3.Dot(apart,axis)));
+                return least;
+            }
+            private float Reach(Vector3 axis)=>Extents.x*Mathf.Abs(Vector3.Dot(Axes[0],axis))+Extents.y*Mathf.Abs(Vector3.Dot(Axes[1],axis))+Extents.z*Mathf.Abs(Vector3.Dot(Axes[2],axis));
+        }
         // A frame edge is a cube stretched along its forward axis from the influencer's feet; this is its far end.
         private static Vector3 End(Transform edge)=>edge.position+edge.forward*edge.lossyScale.z*.5f;
         private static Vector2 Flat(Vector3 at)=>new Vector2(at.x,at.z);
