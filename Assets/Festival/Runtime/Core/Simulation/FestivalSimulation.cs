@@ -16,7 +16,7 @@ namespace Festival.Core
             s.FriendPosition=positions[(seed&int.MaxValue)%3];
             for(int i=0;i<FestivalCrowdLayout.Count;i++) { var point=FestivalCrowdLayout.Get(i,seed);bool wide=(i+seed%7)%7==0; s.Npcs.Add(new NpcState {Id="wook_"+i,X=point.X,Z=point.Z,Yaw=point.Yaw,IdlePose=point.Pose,HighlyIntoxicated=wide,RedEyes=(i+seed%5)%5==0||wide&&i<7,CanTalk=(i+seed%3)%4==0}); }
             s.Npcs.Add(new NpcState{Id="cop_0",Kind="Cop",X=20,Z=-4,Yaw=180}); s.Npcs.Add(new NpcState{Id="cop_1",Kind="Cop",X=-12,Z=-12,Yaw=180});
-            s.Stashes.Add(new StashState{Id="stash",X=-25,Z=-8}); return s;
+            s.Stashes.Add(new StashState{Id="stash",X=-25,Z=-8});s.DurationSeconds=Festivals.For(s).DurationSeconds;return s;
         }
         public PlayerState AddPlayer(string id,string name) {
             if(string.IsNullOrWhiteSpace(id)||id.Length>128) throw new ArgumentException("Invalid identity");
@@ -41,6 +41,7 @@ namespace Festival.Core
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
             if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.StashCash<0||state.GrossSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
         public CommandResult Execute(string playerId,GameCommand command) {
@@ -100,7 +101,7 @@ namespace Festival.Core
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
                 case "FindFriend":if(!State.GateOpened)return Reject("Interpret both totems and complete a dance to locate your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
-                case "Extract":if(!State.FriendFound||Distance(State.FriendPosition.X,State.FriendPosition.Z,0,-32)>3||!Near(p,0,-32))return Reject("Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
+                case "Extract":if(!CanExtractNow(p))return Reject("Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
                 case "LostProperty":if(!Near(p,-28,16))return Reject("Find lost property marker");return BeginTask(p,"LostProperty",State.LostPropertyTask.ToString(),5);
                 case "Drag":return Drag(p,c);
                 case "Rescue":return Rescue(p,c);

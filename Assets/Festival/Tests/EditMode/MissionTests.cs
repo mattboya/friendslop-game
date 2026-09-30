@@ -9,7 +9,7 @@ public static class MissionTests
     {
         var s=new FestivalSimulation(3);var a=s.AddPlayer("a","A");var b=s.AddPlayer("b","B");
         s.State.Phase="Playing";s.State.Npcs.Clear();
-        Check(s.State.DurationSeconds==600,"ten minute run");
+        Check(s.State.DurationSeconds==480&&Festivals.For(s.State).Name=="Day 1","a new crew plays the eight minute Day 1");
         Check(!Act(s,"a","FindFriend").Accepted,"cannot skip clues");
         a.X=-18;a.Z=-22;Check(Act(s,"a","ClueSupply").Accepted,"free voluntary perception");
         Check(a.Inventory.Count==0,"free tasting cannot be resold");

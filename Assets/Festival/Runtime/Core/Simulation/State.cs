@@ -43,6 +43,8 @@ namespace Festival.Core
     [Serializable] public sealed class CampReviewVote { public string PlayerId=""; public int Award; }
     [Serializable] public sealed class RoundState {
         public int SchemaVersion=1, Seed; public string RoundId="",Phase="Shopping",Result="",HostPlayerId="",MissionId="rescue_compact";
+        // Weekend position: a row of Festivals.cs. Clearing festival k unlocks k+1.
+        public int FestivalIndex,LevelIndex,EncoreTier,UnlockedFestivalCount=1;
         public double ElapsedSeconds,DurationSeconds=600,SimulationSeconds,LaunchAtSeconds; public long Tick,TransactionSequence,EntitySequence;
         public int CluesRead, ObjectiveReward, SurvivorBonus, Survivors, ConnectedCrewCount;
         public bool GateOpened;
