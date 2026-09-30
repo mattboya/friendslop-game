@@ -39,6 +39,13 @@ namespace Festival.Core
         // WheelRideSeconds turn; up there they see every cop and, at night, where the lost friend is.
         public const float WheelX=20,WheelZ=-28,WheelReach=2.5f;
         public const double WheelRideSeconds=20;
+        // PLAYA-1: Ember Playa's twists (FestivalTwists.cs). Money there reads as odd objects, a different kind for each crew
+        // member by their PlayerState.Ordinal, over the same dollar economy.
+        public const int PlayaFestival=1;
+        // ponytail: every kind pluralises with an "s"; an irregular one would need its own plural.
+        static readonly string[] OddObjects={"button","ramen packet","bottle cap","friendship bracelet","rubber duck","glitter sticker","kazoo","odd sock"};
+        /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
+        public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}
         /// <summary>An axis-aligned rectangle of festival ground, edges included.</summary>
         public readonly struct Area

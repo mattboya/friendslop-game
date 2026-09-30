@@ -23,7 +23,7 @@ namespace Festival.Core
             if(State.Players.Count>=8) throw new InvalidOperationException("Festival is full (8 players including host).");
             if(State.Phase!="Lobby"&&State.Phase!="Shopping") throw new InvalidOperationException("Round already started; reconnect with your session token.");
             int campIndex=State.Players.Count;
-            var p=new PlayerState{Id=id,Name=string.IsNullOrWhiteSpace(name)?"Friend":name.Substring(0,Math.Min(24,name.Length)),X=campIndex%2==0?-1:1,Z=-9-2*(campIndex/2)};
+            var p=new PlayerState{Id=id,Name=string.IsNullOrWhiteSpace(name)?"Friend":name.Substring(0,Math.Min(24,name.Length)),Ordinal=campIndex,X=campIndex%2==0?-1:1,Z=-9-2*(campIndex/2)};
             State.Players.Add(p); State.TripperBag.Add(id); if(State.HostPlayerId=="") State.HostPlayerId=id;
             foreach(var stock in State.ShopStock)
             {

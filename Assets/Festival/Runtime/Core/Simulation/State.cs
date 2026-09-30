@@ -12,6 +12,8 @@ namespace Festival.Core
         public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", CarryBodyId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
         // DEBRIEF-1: the award names this player won at the last debrief, worn until the next level's Results.
         public string Badge="";
+        // PLAYA-1: this player's place in the crew's joining order (0-7), kept all weekend; it picks their odd-object money.
+        public int Ordinal;
         public bool Ready, Connected=true, MapReady, HasCosmetic, WearingLittleSpoon, VisualWideEyes, VisualRedEyes;
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
