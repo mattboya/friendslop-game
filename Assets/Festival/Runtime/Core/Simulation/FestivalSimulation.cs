@@ -68,7 +68,7 @@ namespace Festival.Core
             if(c.Kind=="ChooseFestival")return ChooseFestival(p,c);
             if(c.Kind=="EnterCamp"||c.Kind=="ExitCamp"||c.Kind=="CampAntic"||c.Kind=="ChooseCampTrack")return CampAction(p,c);
             if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");p.Dialogue.Acknowledge(c.TargetId,current.Id);return Ok();}
-            if(c.Kind=="Cancel") {Cancel(p,"Cancelled");return Ok();}
+            if(c.Kind=="Cancel") {if(OnWheel(State,p.Id))return Reject("You're stuck until the wheel comes round");Cancel(p,"Cancelled");return Ok();}
             if(c.Kind=="Rhythm")return Submit(p,c);
             if(c.Kind=="Chime") {if(p.Life!="Spirit"||!Near(p,24,-20)||State.SimulationSeconds<p.ChimeUntil)return Reject("Chime requires medical memorial and cooldown");p.ChimeUntil=State.SimulationSeconds+10;return Ok("Memorial chime");}
             if(c.Kind=="HelpSelf")return HelpSelf(p);
@@ -96,6 +96,7 @@ namespace Festival.Core
                 case "Conversation":return BeginChallenge(p,c,"Conversation");
                 case "Talk":return Talk(p,c);
                 case "ConfirmChat":case "ConfirmDance":return BeginConfirm(p,c);
+                case RideWheelKind:return RideWheel(p);
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);

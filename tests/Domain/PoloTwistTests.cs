@@ -8,6 +8,7 @@ using Festival.Core;
 // POLO-1: Palm Mirage (festival 0) has three twists, and Ember Playa has none of them. Influencers film along their phone's
 // 8 m, 40 degree cone, and a player in frame puts every wook within 10 m of them on alert. Two VIP zones are roped off to
 // anyone without a vip_wristband ($15 at the night market, or talked into by the VIP guard), and inside, buyers pay double.
+// The Ferris wheel locks its rider for one 20 s turn, and at night shows them where the lost friend is.
 public static class PoloTwistTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -22,7 +23,7 @@ public static class PoloTwistTests
         var failures=new List<string>();
         foreach(var test in new Action[]{ThreeInfluencersFilmOnPalmMirageOnly,APlayerInFrameAlertsEveryWookNearby,OnlyTheFrameCounts,
             FramesAreAPassiveGain,TwistTagsSurviveASnapshot,VipZonesKeepOutAnyoneWithoutAWristband,VipSalesPayDouble,
-            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn})
+            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" polo twist test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -252,5 +253,39 @@ public static class PoloTwistTests
         var dancer=crowded.Player(crowded.State.TripperId);crowded.State.Visions.Add(new VisionState{Id="planted",Kind="Narc",NpcId=doorman.Id,Tell=true});
         Beside(dancer,doorman);Check(Act(crowded,dancer.Id,"ConfirmDance",doorman.Id).Accepted,"setup: the tripper checks a vision of the guard by dancing");
         crowded.Tick(6);Check(dancer.InteractionId==""&&Bands(dancer)==0,"a dance with the guard checks the vision but gets nobody in");
+    }
+
+    // Stand p at the Ferris wheel's base and get on.
+    static CommandResult Board(FestivalSimulation s,PlayerState p,float metres=1){p.X=Festivals.WheelX;p.Z=Festivals.WheelZ+metres;return Act(s,p.Id,"RideWheel");}
+
+    static void TheFerrisWheelLocksItsRiderForOneTurn()
+    {
+        var s=Start(4,0,0);var p=s.Player("p0");var friend=s.Player("p1");
+        Check(!Board(s,p,Festivals.WheelReach+.2f).Accepted&&!FestivalSimulation.OnWheel(s.State,p.Id),"the wheel is boarded at its base");
+        var boarded=Board(s,p);
+        Check(boarded.Accepted&&FestivalSimulation.OnWheel(s.State,p.Id),"at the base the rider gets on: "+boarded.Reason);
+        Check(Festivals.WheelRideSeconds==20,"one turn takes 20 s");
+        float x=p.X,z=p.Z;
+        Check(!s.TryMove(p.Id,x+.05f,z,0,.1)&&p.X==x&&p.Z==z,"the rider can't step off");
+        Check(s.TryMove(p.Id,x,z,90,.1)&&p.Yaw==90,"but can look around");
+        var off=Act(s,p.Id,"Cancel");Check(!off.Accepted&&FestivalSimulation.OnWheel(s.State,p.Id),"nor jump off mid-turn: "+off.Reason);
+        Check(Board(s,friend,-1).Accepted,"a friend takes the next gondola");
+        s.Tick(19.9);Check(FestivalSimulation.OnWheel(s.State,p.Id)&&!s.TryMove(p.Id,x+.05f,z,0,.1),"19.9 s in, still up there");
+        s.Tick(.2);Check(!FestivalSimulation.OnWheel(s.State,p.Id)&&p.InteractionId=="","after one turn the rider is back on the ground");
+        Check(s.TryMove(p.Id,x+.05f,z,0,.1),"and walks off");
+        var playa=Start(4,0,1);var refused=Board(playa,playa.Player("p0"));
+        Check(!refused.Accepted&&!FestivalSimulation.OnWheel(playa.State,"p0"),"Ember Playa has no Ferris wheel: "+refused.Reason);
+    }
+
+    static void TheRiderSeesTheFriendAtNight()
+    {
+        var night=Start(5,1,0);var rider=night.Player("p0");var friend=night.Player("p1");
+        Check(!FestivalSimulation.WheelShowsFriend(night.State,rider.Id),"on the ground the rider sees nothing special");
+        Check(Board(night,rider).Accepted,"setup: the rider gets on at night");
+        Check(FestivalSimulation.WheelShowsFriend(night.State,rider.Id),"from the wheel at night the rider sees where the lost friend is");
+        Check(!FestivalSimulation.WheelShowsFriend(night.State,friend.Id),"their friend on the ground doesn't");
+        night.Tick(20.1);Check(!FestivalSimulation.WheelShowsFriend(night.State,rider.Id),"and the view ends with the ride");
+        var day=Start(5,0,0);Check(Board(day,day.Player("p0")).Accepted,"setup: a rider by day");
+        Check(!FestivalSimulation.WheelShowsFriend(day.State,"p0"),"nobody is lost by day, so there is no friend to see");
     }
 }

@@ -35,6 +35,10 @@ namespace Festival.Core
         public const int VipPayoutFactor=2;
         public const float VipGuardPostX=-7.2f,VipGuardPostZ=19,VipGuardPostYaw=180;
         public const float VipStallX=-12,VipStallZ=-20.2f,VipStallRange=2.8f;
+        // The Ferris wheel stands on the open lawn east of the way back to camp. Boarding at its base locks the rider in for one
+        // WheelRideSeconds turn; up there they see every cop and, at night, where the lost friend is.
+        public const float WheelX=20,WheelZ=-28,WheelReach=2.5f;
+        public const double WheelRideSeconds=20;
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}
         /// <summary>An axis-aligned rectangle of festival ground, edges included.</summary>
         public readonly struct Area

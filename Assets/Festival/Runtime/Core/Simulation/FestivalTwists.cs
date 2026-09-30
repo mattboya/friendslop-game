@@ -4,10 +4,11 @@ namespace Festival.Core
 {
     /// <summary>POLO-1: Palm Mirage's twists, off on every other festival. Tuning lives in Festivals.cs.
     /// Influencers film the crowd, and a player on camera puts the wooks around them on alert. VIP zones are roped off to anyone
-    /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.</summary>
+    /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.
+    /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.</summary>
     public sealed partial class FestivalSimulation
     {
-        public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband";
+        public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel";
 
         // As the crew leaves camp, once DealRoles has dealt the level's roles: on Palm Mirage the regular festivalgoer nearest the
         // guard post takes it up, and a fresh few of the others film.
@@ -44,9 +45,14 @@ namespace Festival.Core
         }
 
         bool InVip(float x,float z)=>Festivals.InVipZone(State.FestivalIndex,x,z);
-        // TryMove's check as p steps to (x,z): at the festival the VIP ropes keep out anyone without a wristband. Stepping out, or
-        // about inside, is always fine, so nobody handing their wristband over inside is stranded; spirits float through.
-        bool MayStep(PlayerState p,float x,float z)=>State.Phase!="Playing"||p.Life=="Spirit"||!InVip(x,z)||InVip(p.X,p.Z)||Count(p,VipWristband)>0;
+        // TryMove's check as p steps to (x,z). A Ferris wheel rider only looks around. At the festival the VIP ropes keep out anyone
+        // without a wristband; stepping out, or about inside, is always fine, so nobody handing theirs over inside is stranded,
+        // and spirits float through.
+        bool MayStep(PlayerState p,float x,float z)
+        {
+            if(OnWheel(State,p.Id))return Distance(p.X,p.Z,x,z)<=.001;
+            return State.Phase!="Playing"||p.Life=="Spirit"||!InVip(x,z)||InVip(p.X,p.Z)||Count(p,VipWristband)>0;
+        }
         // A sale made inside a VIP zone, to a buyer inside, pays VipPayoutFactor times: one over the rope pays as usual.
         int VipPayout(PlayerState seller,NpcState buyer)=>buyer!=null&&InVip(seller.X,seller.Z)&&InVip(buyer.X,buyer.Z)?Festivals.VipPayoutFactor:1;
         // Wristbands are sold only at the festival's night-market VIP stall, never at camp. One takes a slot like any gear, but
@@ -64,5 +70,19 @@ namespace Festival.Core
         string RopeRefusal(PlayerState p)=>Count(p,VipWristband)>0?"You already have a VIP wristband":"Free a hand for the VIP wristband";
         // ponytail: hands filled during the chat (a handoff accepted mid-chat) get nothing; the guard can be asked again.
         void PassTheRope(InteractionState i,NpcState n){var p=Player(i.PlayerId);if(i.Kind=="ConfirmChat"&&n.Twist==VipGuard&&p!=null&&CanAdd(p,VipWristband,1))Add(p,VipWristband,1);}
+
+        /// <summary>Whether playerId is riding the Ferris wheel. Reads a client's view too, since a view carries its own player's
+        /// interactions, so the rider's client can mark every cop (every view carries every cop) while this holds.</summary>
+        public static bool OnWheel(RoundState s,string playerId)=>s.Interactions.Exists(i=>i.PlayerId==playerId&&i.Kind==RideWheelKind&&i.Status=="Active");
+        /// <summary>At night a Ferris wheel rider sees where the lost friend is; FestivalSession.ViewFor sends it to them alone.</summary>
+        public static bool WheelShowsFriend(RoundState s,string viewer)=>OnWheel(s,viewer)&&Festivals.For(s).Night;
+        // Anyone at the base boards for one turn, any number at once. In the rules the rider stays at the base, where anything
+        // that could reach them still can, and cannot step off or cancel until the turn ends (MayStep, Apply's Cancel).
+        CommandResult RideWheel(PlayerState p)
+        {
+            if(State.FestivalIndex!=Festivals.PoloFestival)return Reject("There's no Ferris wheel at this festival");
+            if(!Near(p,Festivals.WheelX,Festivals.WheelZ,Festivals.WheelReach))return Reject("Board the Ferris wheel at its base");
+            NewInteraction(p,RideWheelKind,"wheel",Festivals.WheelRideSeconds);return Ok("One full turn: you're up there until it comes round");
+        }
     }
 }
