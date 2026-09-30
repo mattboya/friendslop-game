@@ -672,7 +672,8 @@ namespace Festival.Presentation
             holder.localPosition=new Vector3(point.X,y,atCamp?9.0f:index<4?-21.15f:-20.05f);
             string resource=FestivalSession.DropModel(id);
             var copies=new GameObject("Individual shelf copies");copies.transform.SetParent(holder,false);
-            int count=Catalog.ShopCopies(id,8);
+            // Up to four copies fit side by side on a shelf; the tag says how many are left.
+            int count=Mathf.Min(4,Catalog.ShopCopies(id,8));
             for(int n=0;n<count;n++)
             {
                 var prop=resource==null?null:FestivalArtView.Create(copies.transform,resource);
