@@ -78,6 +78,54 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"HUD text a player reads:\n"+string.Join("\n",failures));
         }
 
+        // The native two-client smoke checks each side's handoff button with DevelopmentSmoke.ShowsHandoffAction. THEME-1 made
+        // the Accept label read the item's display name, so this holds that check to the buttons the HUD really builds.
+        [UnityTest]public IEnumerator SmokeFindsTheHandoffButtonsTheHudShows()
+        {
+            var world=new GameObject("Smoke handoff world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Smoke handoff HUD");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            try
+            {
+                session.Host("Tester",17938);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("smoke_mate","Mate");mate.X=player.X+1;mate.Z=player.Z;
+
+                // The smoke's client receives a merch bag...
+                sim.State.Transfers.Add(new TransferOffer{Id="smoke_in",FromId=mate.Id,ToId=player.Id,ItemId="merch_bag",Amount=1,ExpiresAt=sim.State.SimulationSeconds+600});
+                yield return new WaitForSeconds(.6f);
+                Expect(hud,failures,"client, receiving",false);
+
+                // ...and its host, who offered it, can cancel.
+                sim.State.Transfers.Clear();
+                sim.State.Transfers.Add(new TransferOffer{Id="smoke_out",FromId=player.Id,ToId=mate.Id,ItemId="merch_bag",Amount=1,ExpiresAt=sim.State.SimulationSeconds+600});
+                yield return new WaitForSeconds(.6f);
+                Expect(hud,failures,"host, sending",true);
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"handoff buttons the native smoke looks for:\n"+string.Join("\n",failures));
+        }
+
+        private static void Expect(GameObject hud,List<string> failures,string who,bool isHost)
+        {
+            if(DevelopmentSmoke.ShowsHandoffAction(hud.transform,isHost))return;
+            var names=new List<string>();
+            foreach(var button in hud.GetComponentsInChildren<Button>(true))if(button.gameObject.activeSelf&&button.name.StartsWith("Action:"))names.Add(button.name);
+            failures.Add(who+": the smoke finds no handoff button among ["+string.Join(" / ",names)+"]");
+        }
+
         // Records every expected label the HUD is missing and every real-drug word in any text it shows.
         private static void Check(GameObject hud,List<string> failures,string where,string prompt,string vitals,params string[] actions)
         {

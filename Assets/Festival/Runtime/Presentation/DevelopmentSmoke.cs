@@ -185,11 +185,7 @@ namespace Festival.Presentation
                 yield return null;
             }
             yield return new WaitForSeconds(.3f);
-            string handoffAction=session.IsHost?"Action:Cancel handoff":"Action:Accept merch_bag";
-            bool hasAction=false;
-            foreach(var button in transform.Find("Festival HUD").GetComponentsInChildren<Button>(true))
-                if(button.gameObject.activeSelf&&button.name.StartsWith(handoffAction,StringComparison.Ordinal)){hasAction=true;break;}
-            if(!hasAction){Fail("interior handoff action "+handoffAction);yield break;}
+            if(!ShowsHandoffAction(transform.Find("Festival HUD"),session.IsHost)){Fail("interior handoff action "+HandoffAction(session.IsHost));yield break;}
             var transferPath=Path.Combine(shopDir,session.IsHost?"host-interior-handoff.png":"client-interior-handoff.png");
             if(File.Exists(transferPath))File.Delete(transferPath);
             ScreenCapture.CaptureScreenshot(transferPath);yield return new WaitForSeconds(.55f);
@@ -937,6 +933,15 @@ namespace Festival.Presentation
                 if(look.Gender==gender&&look.Shape==shape&&(shirt<0||look.Shirt==shirt)&&(pants<0||look.Pants==pants))return id;
             }
             throw new InvalidOperationException("Could not find a deterministic fit gallery profile.");
+        }
+        // The handoff button each side of the two-client smoke looks for: the host offered a merch bag, the client receives it.
+        // The HUD labels items by their display name (THEME-1), so the client's button reads "Accept Official merch bag ×1".
+        static string HandoffAction(bool isHost)=>isHost?"Action:Cancel handoff":"Action:Accept "+Catalog.FindItem("merch_bag").Name;
+        public static bool ShowsHandoffAction(Transform hud,bool isHost)
+        {
+            foreach(var button in hud.GetComponentsInChildren<Button>(true))
+                if(button.gameObject.activeSelf&&button.name.StartsWith(HandoffAction(isHost),StringComparison.Ordinal))return true;
+            return false;
         }
         static void Fail(string stage){Debug.LogError("FESTIVAL SMOKE FAILED: "+stage);Application.Quit(5);}
         static bool Near(PlayerState p,float x,float z)=>p!=null&&Mathf.Abs(p.X-x)<.1f&&Mathf.Abs(p.Z-z)<.1f;
