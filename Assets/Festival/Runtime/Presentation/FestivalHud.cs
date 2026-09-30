@@ -447,18 +447,20 @@ namespace Festival.Presentation
             reviewPanel.SetActive(state.Phase=="CampReview"&&!showMenu);
             if(state.Phase=="CampReview")
             {
-                int votes=ConnectedReviewVotes(state);
-                var mine=state.ReviewVotes.Find(v=>v.PlayerId==player.Id);
+                // ponytail: a plain text stand-in for the debrief vote; HUD-3 builds the real reveal UI.
+                bool revealed=FestivalSimulation.ReviewRevealed(state);string awards="";
+                string CrewName(string id)=>id==player.Id?"YOU":state.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
+                for(int award=0;award<state.ReviewAwards.Count;award++)
+                {
+                    var mine=state.ReviewVotes.Find(v=>v.PlayerId==player.Id&&v.Award==award);
+                    awards+=(award+1)+"  "+state.ReviewAwards[award].ToUpperInvariant()+"   •   "+(revealed?"WINNER: "+CrewName(state.ReviewWinners[award]):mine==null?"PICK A FRIEND":"YOUR PICK: "+CrewName(mine.TargetId))+"\n";
+                }
                 reviewText.text="THE VERY OFFICIAL ROUND REVIEW\n\n"
                     +(state.ReviewResult=="Success"?"FRIEND FOUND":"A GLORIOUS DISASTER")+"   •   SALES $"+state.ReviewSales
                     +"   •   SURVIVORS "+state.ReviewSurvivors+"\n"
                     +"CAMP ANTICS "+state.ReviewAntics+"\n\n"
-                    +"Pick the crew's totally serious award:\n"
-                    +"1  CHAOS MAGNET\n2  UNLIKELY HERO\n3  MOST COMMITTED TO THE BIT\n\n"
-                    +(mine==null?"YOUR VOTE IS WAITING":"YOU VOTED: "+CampFeatures.ReviewAwards[mine.Award])
-                    +"   •   "+votes+" / "+state.ConnectedCrewCount+" CREW\n"
-                    +(votes>=state.ConnectedCrewCount?"OFFICIAL VERDICT: "+CampFeatures.ReviewWinner(state.ReviewVotes)+"\n":"")
-                    +(session.IsHost&&votes>=state.ConnectedCrewCount?"E  OPEN THE SHOP":"Shopping opens when the crew has voted.");
+                    +(state.ReviewAwards.Count==0?"SOLO PRACTICE: NO AWARDS TONIGHT\n\n":"Press 1–3 to pick a friend for each award:\n"+awards+ConnectedReviewVotes(state)+" / "+state.ConnectedCrewCount+" CREW VOTED\n")
+                    +(revealed?(session.IsHost?"E  OPEN THE SHOP":"Waiting for the host to open the shop."):"The verdict is revealed when the whole crew has voted.");
             }
             var heldDefinition=state.Phase=="Shopping"?Catalog.FindItem(player.HeldOfferId):null;
             heldDetailPanel.SetActive(heldDefinition!=null&&!showMenu);
@@ -562,8 +564,8 @@ namespace Festival.Presentation
         {
             if(state.Phase=="CampReview"&&!session.MenuOpen)
             {
-                int vote=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
-                if(vote>=0)session.Command("ReviewVote",amount:vote);
+                int award=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
+                if(award>=0&&award<state.ReviewAwards.Count)session.Command("ReviewVote",NextReviewPick(state,player,award),amount:award);
             }
             if(player.CampVisitId!=""&&!session.MenuOpen&&session.Controls.Drop.WasPressedThisFrame())
             {
@@ -750,10 +752,9 @@ namespace Festival.Presentation
             }
             if(state.Phase=="CampReview")
             {
-                var voted=state.ReviewVotes.Find(v=>v.PlayerId==player.Id)!=null;
-                if(voted&&session.IsHost&&ConnectedReviewVotes(state)>=state.ConnectedCrewCount)
-                    SetPromptAction("E  OPEN CAMP SHOP",()=>session.Command("FinishReview"));
-                else SetPromptAction(voted?"WAIT FOR CREW VOTES":"1–3  VOTE FOR A SILLY AWARD",null);
+                bool revealed=FestivalSimulation.ReviewRevealed(state);
+                if(revealed&&session.IsHost)SetPromptAction("E  OPEN CAMP SHOP",()=>session.Command("FinishReview"));
+                else SetPromptAction(revealed?"WAIT FOR THE HOST":"1–3  PICK A FRIEND FOR EACH AWARD",null);
                 FinishActions();return;
             }
             if(state.Phase=="Shopping")
@@ -964,12 +965,22 @@ namespace Festival.Presentation
 
         private void StartHost(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";session.Host(nameField.text,port);}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";session.Join(nameField.text,addressField.text,port);}
+        // Crew members who have picked a friend for every award.
         private static int ConnectedReviewVotes(RoundState state)
         {
             int votes=0;
             foreach(var crew in state.Players)
-                if(crew.Connected&&state.ReviewVotes.Exists(v=>v.PlayerId==crew.Id))votes++;
+                if(crew.Connected&&state.ReviewVotes.FindAll(v=>v.PlayerId==crew.Id).Count>=state.ReviewAwards.Count)votes++;
             return votes;
+        }
+        // ponytail: each press of an award's key moves your pick to the next connected friend (starting after you).
+        // A stand-in until HUD-3's picker; the vote that completes the crew's ballot is final.
+        private static string NextReviewPick(RoundState state,PlayerState player,int award)
+        {
+            var crew=state.Players.FindAll(p=>p.Connected);
+            var mine=state.ReviewVotes.Find(v=>v.PlayerId==player.Id&&v.Award==award);
+            int current=crew.FindIndex(p=>p.Id==(mine?.TargetId??player.Id));
+            return crew[(current+1)%crew.Count].Id;
         }
         private static float Distance(float x,float z,float xx,float zz)=>Vector2.Distance(new Vector2(x,z),new Vector2(xx,zz));
         private static bool Near(PlayerState p,float x,float z,float range=2.7f)=>Distance(p.X,p.Z,x,z)<=range;

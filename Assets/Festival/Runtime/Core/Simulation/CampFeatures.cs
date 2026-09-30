@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace Festival.Core
 {
@@ -44,17 +43,8 @@ namespace Festival.Core
             return choices[Math.Abs(turn-1)%choices.Length];
         }
         public static readonly string[] Tracks={"SILENCE","CAMPFIRE BOUNCE","MOONLIT DISCO","SNEAKY SKA"};
-        public static readonly string[] ReviewAwards={"CHAOS MAGNET","UNLIKELY HERO","MOST COMMITTED TO THE BIT"};
         // DEBRIEF-1 award pools: each debrief draws two worst awards, then one best award.
         public static readonly string[] WorstAwards={"Worst Dancer","Trusted the Narc","Got Lost","Blew Our Cover"};
         public static readonly string[] BestAwards={"MVP Tripper","Carried the Team","Best Moves"};
-        public static string ReviewWinner(List<CampReviewVote> votes)
-        {
-            var counts=new int[ReviewAwards.Length];
-            if(votes!=null)foreach(var vote in votes)if(vote.Award>=0&&vote.Award<counts.Length)counts[vote.Award]++;
-            int winner=0;
-            for(int i=1;i<counts.Length;i++)if(counts[i]>counts[winner])winner=i;
-            return ReviewAwards[winner];
-        }
     }
 }
