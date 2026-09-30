@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 
 namespace Festival.Tests
@@ -83,6 +84,20 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.HomeChecklist(Level(0,1),"you"),Is.Empty,"only Night 2 needs everyone home");
         }
 
+        [Test] public void ASpiritsChecklistNeverCallsTheUnseenLivingHome()
+        {
+            // A spirit's view lists only spirits (FestivalSession.ViewFor), so the living it cannot see are counted, never guessed home.
+            var game=new FestivalSimulation(9);game.AddPlayer("ash","Ash");game.AddPlayer("sam","Sam");game.AddPlayer("kim","Kim");
+            game.State.Phase="Playing";game.State.LevelIndex=3;
+            game.Player("ash").Life="Spirit";game.State.Bodies.Add(new BodyState{PlayerId="ash",X=Festivals.CampGateX,Z=Festivals.CampGateZ});
+            game.Player("sam").X=30;game.Player("sam").Z=0;
+            game.Player("kim").X=Festivals.CampGateX;game.Player("kim").Z=Festivals.CampGateZ;
+            Assert.That(FestivalHudText.HomeChecklist(FestivalSession.ViewFor(game,"ash"),"ash"),Is.EqualTo("HOME  ? / 3\nYOU  •  HOME\n2 LIVING  •  UNSEEN"),
+                "the dead see their own body home and a crew of three, not \"HOME 1 / 1\" while Sam is still out");
+            Assert.That(FestivalHudText.HomeChecklist(FestivalSession.ViewFor(game,"kim"),"kim"),Is.EqualTo("HOME  2 / 3\nASH  •  HOME\nSAM  •  AWAY\nYOU  •  HOME"),
+                "the living see everyone");
+        }
+
         [Test] public void BodyPromptsSayWhoCanCarryWhom()
         {
             var s=Level(0,3);var you=Crew(s,"you","You");var kim=Crew(s,"kim","Kim",5,5);
@@ -112,10 +127,12 @@ namespace Festival.Tests
         [Test] public void OnlyTheHostIsOfferedTheFestivalBeforeDayOne()
         {
             var s=Level(0,0,"Shopping");var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.UnlockedFestivalCount=2;
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch festival: Palm Mirage (1 of 2 unlocked)"));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked)"),"F names the festival it moves to; the banner names this one");
+            Assert.That(FestivalHudText.NextFestival(s),Is.EqualTo(1),"F sends the festival it names");
             Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo("Browse gear • pay the seller • meet at the trailhead"),"only the host picks the festival");
             s.FestivalIndex=1;
-            Assert.That(FestivalHudText.FestivalChoice(s,"you"),Is.EqualTo("F  switch festival: Ember Playa (2 of 2 unlocked)"));
+            Assert.That(FestivalHudText.FestivalChoice(s,"you"),Is.EqualTo("F  switch to Palm Mirage (1 of 2 unlocked)"),"F wraps round to the first festival");
+            Assert.That(FestivalHudText.NextFestival(s),Is.EqualTo(0));
             s.LevelIndex=1;
             Assert.That(FestivalHudText.FestivalChoice(s,"you"),Is.Empty,"mid-weekend the festival is set");
             s.LevelIndex=0;s.FestivalIndex=0;s.UnlockedFestivalCount=1;

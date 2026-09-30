@@ -62,7 +62,8 @@ namespace Festival.Presentation
 
         /// <summary>
         /// Night 2 only: each connected crew member and whether they count as home, the dead by their body.
-        /// Nobody waits for a player who left. A spirit's view lists only spirits, so a spirit sees only them.
+        /// Nobody waits for a player who left. A spirit's view lists only spirits, so the living a spirit cannot see
+        /// are counted from ConnectedCrewCount and never guessed home: "HOME  ? / 3" and "2 LIVING  •  UNSEEN".
         /// </summary>
         public static string HomeChecklist(RoundState s,string localId)
         {
@@ -74,7 +75,8 @@ namespace Festival.Presentation
                 bool isHome=FestivalSimulation.Home(s,p);crew++;if(isHome)home++;
                 lines+="\n"+(p.Id==localId?"YOU":p.Name.ToUpperInvariant())+Dot+(isHome?"HOME":p.Life=="Spirit"?"BODY AWAY":p.Life=="Detained"?"DETAINED":"AWAY");
             }
-            return "HOME  "+home+" / "+crew+lines;
+            int unseen=s.ConnectedCrewCount-crew;
+            return unseen>0?"HOME  ? / "+s.ConnectedCrewCount+lines+"\n"+unseen+" LIVING"+Dot+"UNSEEN":"HOME  "+home+" / "+crew+lines;
         }
 
         /// <summary>
@@ -97,8 +99,11 @@ namespace Festival.Presentation
         public static string FestivalChoice(RoundState s,string localId)
         {
             if(s.Phase!="Shopping"||s.LevelIndex!=0||s.HostPlayerId!=localId||s.UnlockedFestivalCount<2)return "";
-            return "F  switch festival: "+Festivals.Name(s.FestivalIndex)+" ("+(s.FestivalIndex+1)+" of "+s.UnlockedFestivalCount+" unlocked)";
+            int next=NextFestival(s);
+            return "F  switch to "+Festivals.Name(next)+" ("+(next+1)+" of "+s.UnlockedFestivalCount+" unlocked)";
         }
+        /// <summary>The festival F picks: the next unlocked one, wrapping round to the first.</summary>
+        public static int NextFestival(RoundState s)=>(s.FestivalIndex+1)%s.UnlockedFestivalCount;
 
         /// <summary>Results heading: the level the crew cleared, or that the weekend is over.</summary>
         public static string OutcomeTitle(RoundState s)

@@ -29,7 +29,7 @@ namespace Festival.Core
             return (p.Life=="Alive"||p.Life=="Downed")&&AtCampGate(p.X,p.Z);
         }
         static bool AtCampGate(float x,float z)=>Distance(x,z,Festivals.CampGateX,Festivals.CampGateZ)<=Festivals.CampGateRadius;
-        bool EveryoneHome()=>State.Players.TrueForAll(p=>!p.Connected||Home(State,p));
+        static bool EveryoneHome(RoundState s)=>s.Players.TrueForAll(p=>!p.Connected||Home(s,p));
         void LeaveBody(PlayerState p){if(Finale)State.Bodies.Add(new BodyState{PlayerId=p.Id,X=p.X,Z=p.Z});}
         // A body lies only while its owner is a spirit, so a revival lifts it. Carriers who fall, are detained, leave or lose the body let go.
         void BodiesTick(){State.Bodies.RemoveAll(b=>Player(b.PlayerId)?.Life!="Spirit");foreach(var p in State.Players)if(p.CarryBodyId!=""&&Carried(p)==null)p.CarryBodyId="";}

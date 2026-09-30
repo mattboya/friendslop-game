@@ -19,7 +19,9 @@ namespace Festival.Core
         // Gate for starting and completing Extract at the camp gate; finishing it while this holds ends the level with Success.
         // A night needs every lost friend back (SplitObjective.cs). Night 2 is all-or-nothing: every connected player must be
         // home, the dead carried inside the gate radius.
-        bool CanExtractNow(PlayerState p)=>DayLevel?CanLeaveDayEarly(p):FriendsBack()&&Near(p,Festivals.CampGateX,Festivals.CampGateZ)&&(!Finale||EveryoneHome());
+        // Public and static so the HUD offers Extract, first under E, exactly where the sim takes it (HUD-1). Reads a living player's view.
+        public static bool CanExtract(RoundState s,PlayerState p)=>!Festivals.For(s).Night?CanLeaveDayEarly(s,p):FriendsBack(s)&&Near(p,Festivals.CampGateX,Festivals.CampGateZ)&&(s.LevelIndex!=Festivals.LevelCount-1||EveryoneHome(s));
+        bool CanExtractNow(PlayerState p)=>CanExtract(State,p);
         bool EndIfLevelOver(){var result=LevelEndCheck();if(result!="")End(result);return result!="";}
 
         // BeginCampReview has built the next, reseeded round (fresh $20, no gear, no effects, calm crowd).

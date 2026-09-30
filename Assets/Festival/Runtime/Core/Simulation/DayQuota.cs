@@ -13,7 +13,7 @@ namespace Festival.Core
         public static bool DayQuotaMet(RoundState s)=>s.LevelSales>=DayQuota(s);
         bool DayLevel=>!Festivals.For(State).Night;
         string SundownResult()=>DayQuotaMet(State)?"Success":"Missed the quota";
-        bool CanLeaveDayEarly(PlayerState p)=>DayQuotaMet(State)&&Near(p,Festivals.CampGateX,Festivals.CampGateZ);
+        static bool CanLeaveDayEarly(RoundState s,PlayerState p)=>DayQuotaMet(s)&&Near(p,Festivals.CampGateX,Festivals.CampGateZ);
         string DayExtractRefusal()=>DayQuotaMet(State)?"Quota met: head to the way back to camp to end the day":"Sell $"+(DayQuota(State)-State.LevelSales)+" more to meet the day's quota";
     }
 }

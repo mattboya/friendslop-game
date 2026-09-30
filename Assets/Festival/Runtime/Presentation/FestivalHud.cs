@@ -167,7 +167,7 @@ namespace Festival.Presentation
             Accent(objectivePanel.transform,Orange);
             levelBanner=Label(objectivePanel.transform,"Level banner",14,TextAnchor.MiddleLeft);levelBanner.fontStyle=FontStyle.Normal;levelBanner.color=Orange;Place(levelBanner.rectTransform,.06f,.69f,.96f,.94f);
             objectiveTitle=Label(objectivePanel.transform,"Objective title",23,TextAnchor.MiddleLeft);objectiveTitle.fontStyle=FontStyle.Normal;Place(objectiveTitle.rectTransform,.06f,.43f,.96f,.73f);
-            objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.06f,.96f,.44f);
+            objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.01f,.96f,.46f);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
             timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);
             vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
@@ -534,8 +534,9 @@ namespace Festival.Presentation
         {
             if(rosterLines==checklistLines)return;
             rosterLines=checklistLines;
-            // Night 2's everyone-home checklist grows the crew card downward, one row per line.
-            Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.882f-.024f*checklistLines:.846f,.978f,.882f);
+            // Night 2's everyone-home checklist grows the crew card downward, one row per line plus the card's padding,
+            // so a one-row checklist (a solo crew) still shows its row under the header at 1080p.
+            Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.876f-.024f*checklistLines:.846f,.978f,.882f);
         }
 
         private void UpdateText(RoundState state,PlayerState player)
@@ -586,7 +587,7 @@ namespace Festival.Presentation
             }
             if(!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame()&&FestivalHudText.FestivalChoice(state,player.Id)!="")
             {
-                session.Command("ChooseFestival",amount:(state.FestivalIndex+1)%state.UnlockedFestivalCount);return;
+                session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state));return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
             if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
@@ -831,6 +832,9 @@ namespace Festival.Presentation
                     FinishActions();return;
                 }
             }
+            // E runs the first action listed. Ending the level comes before the carry prompts, so the leader standing beside
+            // a body already home at the gate still ends Night 2 with E, and a carrier arriving there does too.
+            if(state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId==""&&FestivalSimulation.CanExtract(state,player))AddAction(FestivalHudText.ExtractAction(state),()=>session.Command("Extract"),ref y);
             if(state.Phase=="Playing")foreach(var body in state.Bodies)
             {
                 string label=FestivalHudText.BodyAction(state,player,body),bodyId=body.PlayerId;
@@ -872,8 +876,6 @@ namespace Festival.Presentation
                 // Either lost friend (a big crew has two, CROWD-2); FindFriend goes to the nearer one.
                 foreach(var (at,found,leader) in new[]{(state.FriendPosition,state.FriendFound,state.FriendLeaderId),(state.SecondFriend.Position,state.SecondFriend.Found,state.SecondFriend.LeaderId)})
                     if(at!=null&&(at.X!=0||at.Z!=0)&&Near(player,at.X,at.Z)&&(!found||leader!=player.Id)){AddAction(found?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);break;}
-                string extract=FestivalHudText.ExtractAction(state);
-                if(extract!=""&&Near(player,Festivals.CampGateX,Festivals.CampGateZ))AddAction(extract,()=>session.Command("Extract"),ref y);
                 if(Near(player,-28,16))
                 {
                     var detained=state.Players.Find(p=>p.Life=="Detained");
