@@ -83,6 +83,7 @@ namespace Festival.Core
             if(c.Kind=="ReturnOffer")return ReturnHeldOffer(p);
             if(c.Kind=="Buy")return Buy(p,c);
             if(c.Kind=="Equip")return Equip(p,c);
+            if(c.Kind=="Drop"&&State.Phase=="Shopping")return LeaveAtCamp(p,c);
             if(State.Phase!="Playing")return Reject("Start the round first");
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
             switch(c.Kind) {
