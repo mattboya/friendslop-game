@@ -96,6 +96,7 @@ namespace Festival.Core
                 case "Dance":return BeginChallenge(p,c,"Dance");
                 case "Conversation":return BeginChallenge(p,c,"Conversation");
                 case "Talk":return Talk(p,c);
+                case "ConfirmChat":case "ConfirmDance":return BeginConfirm(p,c);
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);

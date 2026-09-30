@@ -40,6 +40,8 @@ namespace Festival.Core
         public string Id="",PlayerId="",TargetId="",Kind="",Status="Active",ReservedItemId="",DialogueId="",DialogueText="",PartnerId="";
         public int ChartSeed,NoteCount=8,Phrase,ReservedCash; public double StartSeconds,DurationSeconds,GoodWindowSeconds=.15,Score,BeatSeconds=.5;
         public List<RhythmInput> Inputs=new List<RhythmInput>(); public List<string> WitnessIds=new List<string>();
+        // TRIP-3: a ConfirmChat's conversation (DialogueGrammar). A view carries only its own player's interactions, so only the tripper reads it.
+        public Conversation Chat=new Conversation();
     }
     [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId=""; public int Count; public float X,Z; }
     [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
