@@ -45,6 +45,9 @@ namespace Festival.Core
         }
         public static readonly string[] Tracks={"SILENCE","CAMPFIRE BOUNCE","MOONLIT DISCO","SNEAKY SKA"};
         public static readonly string[] ReviewAwards={"CHAOS MAGNET","UNLIKELY HERO","MOST COMMITTED TO THE BIT"};
+        // DEBRIEF-1 award pools: each debrief draws two worst awards, then one best award.
+        public static readonly string[] WorstAwards={"Worst Dancer","Trusted the Narc","Got Lost","Blew Our Cover"};
+        public static readonly string[] BestAwards={"MVP Tripper","Carried the Team","Best Moves"};
         public static string ReviewWinner(List<CampReviewVote> votes)
         {
             var counts=new int[ReviewAwards.Length];

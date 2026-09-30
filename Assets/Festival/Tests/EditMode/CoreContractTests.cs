@@ -260,8 +260,11 @@ namespace Festival.Tests
             Assert.That(game.Player(host.Id).Z,Is.EqualTo(-9));
             Assert.That(game.Player(host.Id).Inventory,Is.Empty);
             Assert.That(game.Execute(host.Id,Command("early-shop","FinishReview")).Accepted,Is.False);
-            Assert.That(game.Execute(host.Id,new GameCommand{Id="host-award",Kind="ReviewVote",Amount=0}).Accepted,Is.True);
-            Assert.That(game.Execute(guest.Id,new GameCommand{Id="guest-award",Kind="ReviewVote",Amount=2}).Accepted,Is.True);
+            for(int award=0;award<3;award++)
+            {
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="host-award-"+award,Kind="ReviewVote",TargetId=guest.Id,Amount=award}).Accepted,Is.True);
+                Assert.That(game.Execute(guest.Id,new GameCommand{Id="guest-award-"+award,Kind="ReviewVote",TargetId=guest.Id,Amount=award}).Accepted,Is.True);
+            }
             Assert.That(game.Execute(host.Id,Command("open-shop","FinishReview")).Accepted,Is.True);
             Assert.That(game.State.Phase,Is.EqualTo("Shopping"));
         }

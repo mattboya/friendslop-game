@@ -10,6 +10,8 @@ namespace Festival.Core
     [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId=""; public double RemainingSeconds, StartSeconds; }
     [Serializable] public sealed class PlayerState {
         public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
+        // DEBRIEF-1: the award names this player won at the last debrief, worn until the next level's Results.
+        public string Badge="";
         public bool Ready, Connected=true, MapReady, HasCosmetic, WearingLittleSpoon, VisualWideEyes, VisualRedEyes;
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
@@ -40,7 +42,8 @@ namespace Festival.Core
     [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
     [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); }
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }
-    [Serializable] public sealed class CampReviewVote { public string PlayerId=""; public int Award; }
+    // One debrief vote: PlayerId picked TargetId for award slot Award (an index into RoundState.ReviewAwards).
+    [Serializable] public sealed class CampReviewVote { public string PlayerId="", TargetId=""; public int Award; }
     [Serializable] public sealed class RoundState {
         public int SchemaVersion=1, Seed; public string RoundId="",Phase="Shopping",Result="",HostPlayerId="",MissionId="rescue_compact";
         // Weekend position: a row of Festivals.cs. Clearing festival k unlocks k+1.
@@ -54,6 +57,8 @@ namespace Festival.Core
         public int LevelSales;
         public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
         public List<CampReviewVote> ReviewVotes=new List<CampReviewVote>();
+        // The debrief's awards (two worst, then one best) and, once every vote is in, each award's winner in the same order.
+        public List<string> ReviewAwards=new List<string>(), ReviewWinners=new List<string>();
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();

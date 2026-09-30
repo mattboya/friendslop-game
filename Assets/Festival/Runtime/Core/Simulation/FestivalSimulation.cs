@@ -34,13 +34,13 @@ namespace Festival.Core
             }
             return p;
         }
-        public void Disconnect(string id) {var p=Player(id);if(p==null)return; Cancel(p,"Disconnected");ReturnHeldOffer(p);p.Connected=false;p.Ready=false;p.DragTargetId="";State.LaunchAtSeconds=0;if(State.FriendLeaderId==id)State.FriendLeaderId=""; ReturnOffers(id);}
+        public void Disconnect(string id) {var p=Player(id);if(p==null)return; Cancel(p,"Disconnected");ReturnHeldOffer(p);p.Connected=false;p.Ready=false;p.DragTargetId="";State.LaunchAtSeconds=0;if(State.FriendLeaderId==id)State.FriendLeaderId=""; ReturnOffers(id);RevealIfAllVoted();}
         public PlayerState Player(string id) {return State.Players.Find(p=>p.Id==id);}
         public InteractionState Interaction(string id) {return State.Interactions.Find(i=>i.Id==id);}
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
@@ -62,7 +62,7 @@ namespace Festival.Core
                 var connected=State.Players.FindAll(x=>x.Connected);if(connected.Count<required||connected.Exists(x=>!x.Ready))return Reject("Every connected player must be ready at the trailhead");
                 StartRound(connected);return Ok();
             }
-            if(c.Kind=="MapReady") {if(State.Phase!="Loading")return Reject("Map is not loading");p.MapReady=true;if(!State.Players.Exists(x=>x.Connected&&!x.MapReady)){for(int index=0;index<State.Players.Count;index++){var teammate=State.Players[index];teammate.X=-7+2*index;teammate.Z=-29;}State.Phase="Playing";}return Ok();}
+            if(c.Kind=="MapReady") {if(State.Phase!="Loading")return Reject("Map is not loading");p.MapReady=true;if(!State.Players.Exists(x=>x.Connected&&!x.MapReady)){for(int index=0;index<State.Players.Count;index++){var teammate=State.Players[index];teammate.X=-7+2*index;teammate.Z=-29;}State.Phase="Playing";PourShots();}return Ok();}
             if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can bring the crew back after results");BeginCampReview();return Ok("Back at camp: review the round before shopping");}
             if(c.Kind=="ReviewVote")return VoteForReview(p,c);
             if(c.Kind=="FinishReview")return FinishCampReview(p);
@@ -171,21 +171,8 @@ namespace Festival.Core
             }
             State.HostPlayerId=old.HostPlayerId;
             AdvanceWeekend(old);
+            DrawReviewAwards();
             State.Phase="CampReview";
-        }
-        CommandResult VoteForReview(PlayerState p,GameCommand c)
-        {
-            if(State.Phase!="CampReview"||c.Amount<0||c.Amount>=CampFeatures.ReviewAwards.Length)return Reject("Choose a camp review award");
-            var vote=State.ReviewVotes.Find(v=>v.PlayerId==p.Id);
-            if(vote==null)State.ReviewVotes.Add(new CampReviewVote{PlayerId=p.Id,Award=c.Amount});
-            else vote.Award=c.Amount;
-            return Ok("Review vote: "+CampFeatures.ReviewAwards[c.Amount]);
-        }
-        CommandResult FinishCampReview(PlayerState p)
-        {
-            if(State.Phase!="CampReview"||p.Id!=State.HostPlayerId)return Reject("Only the host can close the camp review");
-            if(State.Players.Exists(player=>player.Connected&&!State.ReviewVotes.Exists(v=>v.PlayerId==player.Id)))return Reject("Wait for every connected player to review the round");
-            State.Phase="Shopping";return Ok("Review closed. Camp supplies are open for the next round");
         }
         CommandResult CampAction(PlayerState p,GameCommand c)
         {

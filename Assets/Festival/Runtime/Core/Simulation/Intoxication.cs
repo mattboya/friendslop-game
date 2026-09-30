@@ -14,6 +14,7 @@ namespace Festival.Core
                 if(effect.Id=="weed")multiplier*=.8f;
                 else if(effect.Id=="lsd")multiplier*=.9f;
                 else if(effect.Id=="mushrooms")multiplier*=.88f;
+                else if(effect.Id=="shot")multiplier*=.9f;
             }
             return Math.Max(.65f,multiplier);
         }
@@ -25,7 +26,8 @@ namespace Festival.Core
             foreach(var effect in player.Effects)
             {
                 if(effect.Id=="lsd")drift+=(float)Math.Sin(seconds*2.1+effect.StartSeconds)*.19f;
-                else if(effect.Id=="mushrooms")drift+=(float)Math.Sin(seconds*1.3+effect.StartSeconds+1.1)*.14f;
+                // A debrief shot sways like the mushroom drift.
+                else if(effect.Id=="mushrooms"||effect.Id=="shot")drift+=(float)Math.Sin(seconds*1.3+effect.StartSeconds+1.1)*.14f;
             }
             return Math.Max(-.24f,Math.Min(.24f,drift));
         }

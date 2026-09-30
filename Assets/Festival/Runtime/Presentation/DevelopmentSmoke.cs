@@ -908,7 +908,8 @@ namespace Festival.Presentation
             if(File.Exists(reviewCapture))File.Delete(reviewCapture);
             ScreenCapture.CaptureScreenshot(reviewCapture);yield return new WaitForSeconds(.55f);
             if(!File.Exists(reviewCapture)){Fail("solo review render");yield break;}
-            session.Command("ReviewVote",amount:2);session.Command("FinishReview");
+            // Solo practice skips the debrief vote, so the host can open the shop straight away.
+            session.Command("FinishReview");
             if(sim.State.Phase!="Shopping"){Fail("solo review before shopping");yield break;}
             Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, mission, camp review, next shopping");
             Application.Quit(0);
