@@ -76,6 +76,16 @@ namespace Festival.Tests
                 string name=sim.Player(tripper).Name.ToUpperInvariant();
                 shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
                 Assert.That(shown.Any(t=>t.Contains(name))&&shown.Any(t=>t.StartsWith(dose+" DOSE")),"both results read out once the wheels land: "+string.Join(" | ",shown));
+                // What sits under each pointer on screen is the result's own slice: the wheel's pixels there match the pixels behind its label.
+                void PointerOn(string wheel,string label)
+                {
+                    var holder=overlay.Find("Spinner backdrop/"+wheel);var disc=(RectTransform)holder.Find("Disc");var texture=(Texture2D)disc.GetComponent<RawImage>().texture;
+                    Color Pixel(Vector2 at)=>texture.GetPixelBilinear(at.x/disc.rect.width+.5f,at.y/disc.rect.height+.5f);
+                    var slice=(Vector2)disc.GetComponentsInChildren<Text>().First(t=>t.text==label).rectTransform.localPosition;
+                    var pointer=((Vector2)disc.InverseTransformPoint(holder.Find("Pointer").position)).normalized*slice.magnitude;
+                    Assert.That(Vector4.Distance(Pixel(pointer),Pixel(slice)),Is.LessThan(.05f),"the "+wheel+"'s pointer rests on "+label+"'s slice");
+                }
+                PointerOn("People wheel",name);PointerOn("Dose wheel",dose.ToString());
 
                 while(session.EstimatedSimulationSeconds<start+FestivalSpinner.TakeStarts+.4&&Time.realtimeSinceStartup<deadline)yield return null;
                 var cut=host.GetComponentsInChildren<Camera>(true).First(c=>c.name=="Spinner take camera");
