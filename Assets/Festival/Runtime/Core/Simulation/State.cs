@@ -9,7 +9,7 @@ namespace Festival.Core
     [Serializable] public sealed class ItemStack { public string ItemId=""; public int Count; }
     [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId=""; public double RemainingSeconds, StartSeconds; }
     [Serializable] public sealed class PlayerState {
-        public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
+        public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", CarryBodyId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
         // DEBRIEF-1: the award names this player won at the last debrief, worn until the next level's Results.
         public string Badge="";
         public bool Ready, Connected=true, MapReady, HasCosmetic, WearingLittleSpoon, VisualWideEyes, VisualRedEyes;
@@ -60,6 +60,8 @@ namespace Festival.Core
         // The debrief's awards (two worst, then one best) and, once every vote is in, each award's winner in the same order.
         public List<string> ReviewAwards=new List<string>(), ReviewWinners=new List<string>();
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";
+        // Night 2 dead, in death order (Bodies.cs): the first one moves with one carrier, later ones need two.
+        public List<BodyState> Bodies=new List<BodyState>();
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();
         public List<CommittedCommand> Commands=new List<CommittedCommand>(); public List<DropState> Drops=new List<DropState>();

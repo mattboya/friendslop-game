@@ -40,7 +40,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion!=1||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.ReviewVotes==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             State=state;
         }
@@ -102,9 +102,11 @@ namespace Festival.Core
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
                 case "FindFriend":if(DayLevel)return Reject("Nobody is lost by day: sell the quota, then head back to camp");if(!State.GateOpened)return Reject("Interpret both totems and complete a dance to locate your friend");if(!Near(p,State.FriendPosition.X,State.FriendPosition.Z))return Reject("Move closer to the missing friend");return BeginTask(p,"FindFriend","friend",2);
-                case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():"Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
+                case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():Finale?FinaleExtractRefusal:"Bring the friend and a living survivor to the shuttle");return BeginTask(p,"Extract","shuttle",3);
                 case "LostProperty":if(!Near(p,-28,16))return Reject("Find lost property marker");return BeginTask(p,"LostProperty",State.LostPropertyTask.ToString(),5);
                 case "Drag":return Drag(p,c);
+                case "CarryBody":return CarryBody(p,c);
+                case "DropBody":return DropBody(p);
                 case "Rescue":return Rescue(p,c);
                 case "BeginRelease":return Release(p,c);
                 case "BeginRevival":return Revive(p,c);
@@ -133,8 +135,10 @@ namespace Festival.Core
             if(State.Phase=="Shopping"&&p.Ready&&Distance(p.X,p.Z,x,z)>.001)return false;
             double speed=6*Intoxication.MovementMultiplier(p);if(p.InteractionId!="")speed=1;if(p.DragTargetId!="")speed=2;
             if(p.Life=="Downed")speed=.8;
+            speed=Math.Min(speed,CarrySpeed(p));
             double distance=Distance(p.X,p.Z,x,z);if(distance>speed*deltaSeconds+.03)return false;
             if(p.Life=="Detained"&&Distance(x,z,27,5)>3)return false;
+            if(!CarryTo(p,x,z))return false;
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
             p.X=x;p.Z=z;p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
         }

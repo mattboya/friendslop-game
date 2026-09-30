@@ -7,7 +7,7 @@ namespace Festival.Core
     {
         // Per-level outcome, checked at the start and end of every Playing step: a Result string ends the level, "" keeps
         // playing. Days settle on the sales quota (DayQuota.cs), nights are the rescue, and a wiped crew loses any level.
-        // LOOP-3 adds the Night 2 branch.
+        // Night 2 also brings everyone home: CanExtractNow waits for the whole crew (Bodies.cs).
         string LevelEndCheck()
         {
             if(State.ElapsedSeconds>=State.DurationSeconds)return DayLevel?SundownResult():"Time expired";
@@ -17,7 +17,8 @@ namespace Festival.Core
             return "";
         }
         // Gate for starting and completing Extract at the camp gate; finishing it while this holds ends the level with Success.
-        bool CanExtractNow(PlayerState p)=>DayLevel?CanLeaveDayEarly(p):State.FriendFound&&Distance(State.FriendPosition.X,State.FriendPosition.Z,Festivals.CampGateX,Festivals.CampGateZ)<=3&&Near(p,Festivals.CampGateX,Festivals.CampGateZ);
+        // Night 2 is all-or-nothing: every connected player must be home, the dead carried inside the gate radius.
+        bool CanExtractNow(PlayerState p)=>DayLevel?CanLeaveDayEarly(p):State.FriendFound&&Distance(State.FriendPosition.X,State.FriendPosition.Z,Festivals.CampGateX,Festivals.CampGateZ)<=3&&Near(p,Festivals.CampGateX,Festivals.CampGateZ)&&(!Finale||EveryoneHome());
         bool EndIfLevelOver(){var result=LevelEndCheck();if(result!="")End(result);return result!="";}
 
         // BeginCampReview has built the next, reseeded round (fresh $20, no gear, no effects, calm crowd).
