@@ -42,7 +42,8 @@ public static class DayQuotaTests
         SalesResetEachLevel();
         SnapshotsKeepTheDaysSales();
         APerfectCrewCanMeetEveryQuota();
-        TheTableHoldsForTheCrewItWasTunedFor();
+        EveryDayAsksTheTablesQuota();
+        EncoreLapsPayLikeTheirQuota();
     }
 
     static void QuotaScalesWithCrewAndTable()
@@ -55,7 +56,7 @@ public static class DayQuotaTests
         Check(FestivalSimulation.DayQuota(Crew(2,2).State)==40,"Day 2 raises the table quota to $20 each");
         s=Crew(4);s.State.FestivalIndex=1;s.State.EncoreTier=1;
         Check(FestivalSimulation.DayQuota(s.State)==112,"Ember Playa Day 1 on an encore lap: round(22 x 1.25) = $28 each, times four");
-        s.State.LevelIndex=2;Check(FestivalSimulation.DayQuota(s.State)<152,"Day 2's $38 each on that lap is more than four can sell, so the day asks less");
+        s.State.LevelIndex=2;Check(FestivalSimulation.DayQuota(s.State)==152,"Day 2 on that lap: round(30 x 1.25) = $38 each, times four");
         // A spirit's view lists only spirits, so a client reads the crew count the host sends with it.
         var view=new RoundState{ConnectedCrewCount=3};view.Players.Add(new PlayerState{Id="ghost",Life="Spirit"});
         Check(FestivalSimulation.DayQuota(view)==45,"a client's view counts the crew the host reports");
@@ -146,14 +147,26 @@ public static class DayQuotaTests
         Check(misses.Count==0,"a perfect crew at dose 1 cannot meet "+misses.Count+" day quotas:\n"+string.Join("\n",misses));
     }
 
-    // The festival table was tuned for four and allows up to eight: at the first lap its quota stands as written for crews up to seven.
-    static void TheTableHoldsForTheCrewItWasTunedFor()
+    // The binding rule: a day asks the table's quota per crew member, times the crew, times the encore lap's scale, for every
+    // crew the game allows (one to eight) and every lap. Nothing caps it; the pay scales instead (EncoreLapsPayLikeTheirQuota).
+    static void EveryDayAsksTheTablesQuota()
     {
-        for(int festival=0;festival<Festivals.Count;festival++)for(int level=0;level<Festivals.LevelCount;level+=2)for(int crew=1;crew<=7;crew++)
+        for(int festival=0;festival<Festivals.Count;festival++)for(int level=0;level<Festivals.LevelCount;level+=2)for(int tier=0;tier<=4;tier++)for(int crew=1;crew<=8;crew++)
         {
-            var s=Crew(crew,level);s.State.FestivalIndex=festival;
-            Check(FestivalSimulation.DayQuota(s.State)==Festivals.For(s.State).QuotaPerCrew*crew,Festivals.Name(festival)+" "+Festivals.For(s.State).Name+" asks the table's quota of a crew of "+crew);
+            var s=Crew(crew,level);s.State.FestivalIndex=festival;s.State.EncoreTier=tier;
+            Check(FestivalSimulation.DayQuota(s.State)==Festivals.For(s.State).QuotaPerCrew*crew,Festivals.Name(festival)+" "+Festivals.For(s.State).Name+" on encore "+tier+" asks the table's quota of a crew of "+crew+", got $"+FestivalSimulation.DayQuota(s.State));
         }
+        var eight=Crew(8,2);eight.State.FestivalIndex=1;
+        Check(FestivalSimulation.DayQuota(eight.State)==240,"eight friends on Ember Playa's Day 2 owe $30 each");
+    }
+
+    // An encore lap asks x(1 + .25 t) of each crew member and a sale pays x(1 + .25 t) too, so every lap stays winnable
+    // (APerfectCrewCanMeetEveryQuota) while the lap's narcs, suspicion and trails make it harder.
+    static void EncoreLapsPayLikeTheirQuota()
+    {
+        Check(Sell(Crew(2),"p0","buyer_0")==10,"a perfect sale pays $10 on the first lap");
+        var s=Crew(2);s.State.EncoreTier=1;Check(Sell(s,"p0","buyer_0")==13,"and round(10 x 1.25) = $13 on the first encore lap");
+        s=Crew(2);s.State.EncoreTier=4;Check(Sell(s,"p0","buyer_0")==20,"and $20 on the fourth, twice the first lap's pay");
     }
 
     // A real launch from camp onto a day level, every player having bought what the camp shelf lets them, the tripper at dose 1

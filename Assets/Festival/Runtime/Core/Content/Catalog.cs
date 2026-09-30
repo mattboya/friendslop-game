@@ -62,8 +62,8 @@ namespace Festival.Core
             if(id=="poi_led")return "LED POI";
             return FindItem(id)?.Name.ToUpperInvariant()??id.ToUpperInvariant();
         }
-        // Stock comes one copy a head (at least two) on each shelf, so the day's quota has stock to sell (FestivalSimulation.DaySupply).
-        public static int ShopCopies(string id,int crewSize) => RareShopItem(id)?1:FindItem(id)?.Category=="Stock"?Math.Max(2,crewSize):Math.Max(2,(crewSize+1)/2);
+        // Stock comes as the weekend table sets it (Festivals.StockCopies), so the day's quota has stock to sell.
+        public static int ShopCopies(string id,int crewSize) => RareShopItem(id)?1:FindItem(id)?.Category=="Stock"?Festivals.StockCopies(crewSize):Math.Max(2,(crewSize+1)/2);
         public static WorldPoint ShopPoint(bool camp,int index)
         {
             int column=index%4;

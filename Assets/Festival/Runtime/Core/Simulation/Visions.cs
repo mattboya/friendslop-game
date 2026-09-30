@@ -26,8 +26,9 @@ namespace Festival.Core
         // Secret stashes and shortcuts sit at fixed reachable spots: the old totem nooks and the far corners of the grounds.
         static readonly WorldPoint[] SecretSpots={new WorldPoint(16,-4),new WorldPoint(-16,5),new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
 
-        /// <summary>This level's sale payout multiplier for the tripper's dose: x1, x1.25, x1.5 or x1.75.</summary>
-        public static double PayoutMultiplier(RoundState s)=>1+PayoutStep*(TripperDose(s)-1);
+        /// <summary>This level's sale payout multiplier: x1, x1.25, x1.5 or x1.75 for the tripper's dose, times the encore lap's
+        /// scale, which raises the pay as it raises the day's quota.</summary>
+        public static double PayoutMultiplier(RoundState s)=>(1+PayoutStep*(TripperDose(s)-1))*Festivals.EncoreScale(s.EncoreTier);
         /// <summary>Visions reach only the tripper, as copies. A vision's truth leaves the host only once it is confirmed; its tell always does.</summary>
         public static List<VisionState> VisibleVisions(RoundState s,string viewer)=>s.TripperId==""||viewer!=s.TripperId?new List<VisionState>():
             s.Visions.ConvertAll(v=>new VisionState{Id=v.Id,Kind=v.Kind,NpcId=v.NpcId,X=v.X,Z=v.Z,IsTrue=v.Confirmed&&v.IsTrue,Tell=v.Tell,Confirmed=v.Confirmed});
@@ -40,7 +41,7 @@ namespace Festival.Core
             var level=Festivals.For(State);var random=new ContentRandom(unchecked(State.SpinSeed*7+1));
             var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"),random);int trails=LoseFriends();
             int narcs=Math.Min(level.Narcs,crowd.Count),chain=Math.Min(level.ChainLength,(crowd.Count-narcs)/trails),holders=chain*trails;
-            int buyers=Buyers(crowd.Count,narcs+holders);
+            int buyers=Math.Min((int)Math.Round(BuyerShare*crowd.Count,MidpointRounding.AwayFromZero),crowd.Count-narcs-holders);
             State.ClueChain.Clear();State.SecondFriend.ClueChain.Clear();
             for(int i=0;i<crowd.Count;i++)
             {
@@ -51,8 +52,6 @@ namespace Festival.Core
             var seen=night?ClueVisions(random,dose,0,State.Visions):DayMarks(random,dose);if(trails>1)seen.AddRange(ClueVisions(random,dose,1,seen));
             seen.AddRange(SecretSights(random,dose,night));Show(seen,random);
         }
-        // About BuyerShare of the crowd buys, out of those not dealt as narcs or clue holders. A day's quota counts them (DaySupply).
-        static int Buyers(int crowd,int others)=>Math.Min((int)Math.Round(BuyerShare*crowd,MidpointRounding.AwayFromZero),crowd-others);
         // Day: marks on up to MaxDayMarks festivalgoers, one each. The dose's share of them label real buyers and narcs truly; the
         // rest put a wrong label on someone else (a regular or a narc as a buyer, a buyer as a narc). From dose 2 one fake is always
         // a narc passing as a buyer, so trusting blindly gets someone busted. The marks stay put for the level.

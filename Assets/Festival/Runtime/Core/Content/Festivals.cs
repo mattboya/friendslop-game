@@ -20,6 +20,13 @@ namespace Festival.Core
         // Each encore lap: quota and suspicion x(1 + .25 t), narcs and chain + t, each capped.
         public const double EncoreStep=.25,MaxSuspicionMultiplier=2.5;
         public const int MaxNarcs=8,MaxChainLength=5;
+        public static double EncoreScale(int encoreTier)=>1+EncoreStep*encoreTier;
+        // What a day's quota is paid from, for a crew of `crew`. Each shelf (camp and night market) carries StockCopies of each
+        // stock item, and a buyer takes SalesPerBuyer sales a level, one more from a crew of five, so a crew of up to eight
+        // can sell its quota. A sale pays x EncoreScale like the quota (FestivalSimulation.PayoutMultiplier), so every
+        // encore lap can be won too, with no cap on the quota.
+        public static int StockCopies(int crew)=>Math.Max(2,crew);
+        public static int SalesPerBuyer(int crew)=>2+(crew-1)/4;
         // The old shuttle stop is the way back to camp.
         public const float CampGateX=0,CampGateZ=-32,CampGateRadius=5;
         // POLO-1: Palm Mirage's twists (FestivalTwists.cs). Influencers film along their facing: a live player within FilmRange,
@@ -88,7 +95,7 @@ namespace Festival.Core
         public static LevelTuning Level(int festival,int level,int encoreTier)
         {
             if(festival<0||festival>=Table.Length||level<0||level>=LevelCount||encoreTier<0)throw new ArgumentOutOfRangeException(nameof(level),"No such festival level");
-            var row=Table[festival];bool night=level%2==1;double scale=1+EncoreStep*encoreTier;
+            var row=Table[festival];bool night=level%2==1;double scale=EncoreScale(encoreTier);
             return new LevelTuning{Name=(night?"Night ":"Day ")+(level/2+1),Night=night,DurationSeconds=night?NightSeconds:DaySeconds,
                 QuotaPerCrew=night?0:(int)Math.Round(row.DayQuota[level/2]*scale,MidpointRounding.AwayFromZero),
                 Narcs=Math.Min(MaxNarcs,row.Narcs[level]+encoreTier),
