@@ -69,9 +69,10 @@ namespace Festival.Core
                 search="Search the north and side paths. The friend appears when nearby.";
             }
             if(search!="")return search;
-            // Only the tripper sees the visions (buyers and narcs by day, the clue trail by night); the game's one hint is theirs.
+            // Only the tripper sees the visions (buyers and narcs by day, the clue trail by night). The game's one hint that they lie
+            // is the HUD's, once per level (FestivalHudText.TrustLine), so it is not repeated here.
             bool night=Festivals.For(state).Night;
-            if(player.Id==state.TripperId)return (night?"Your visions mark the next clue holder.":"Your visions mark buyers and narcs.")+" Trust, but verify.";
+            if(player.Id==state.TripperId)return night?"Your visions mark the next clue holder.":"Your visions mark buyers and narcs.";
             var tripper=state.Players.Find(p=>p.Id==state.TripperId);
             return "Stick with "+(tripper?.Name??"the tripper")+": only the tripper can see "+(night?"the clue trail.":"who is buying.");
         }

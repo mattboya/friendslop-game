@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Festival.Core;
 
 namespace Festival.Presentation
@@ -130,5 +131,66 @@ namespace Festival.Presentation
             if(s.ReviewResult!="Success")return "A GLORIOUS DISASTER";
             return s.LevelIndex==0?"WEEKEND CLEARED":Festivals.Level(s.FestivalIndex,s.LevelIndex-1,s.EncoreTier).Name.ToUpperInvariant()+" CLEARED";
         }
+
+        /// <summary>
+        /// Who trips this level and on how many doses, from the public spin result, while the crew is out (the spinner names them
+        /// before that, and camp still holds the last level's). Night 2 doses everyone, so the rest of the crew's doses follow,
+        /// three to a line. A spirit's view lists only spirits: a living tripper is "A FRIEND" and the living's doses go unlisted.
+        /// </summary>
+        public static string Tripping(RoundState s,string localId)
+        {
+            if(s.TripperId==""||s.Phase!="Loading"&&s.Phase!="Playing")return "";
+            int dose=FestivalSimulation.TripperDose(s);
+            string text=(s.TripperId==localId?"YOU TRIP":(s.Players.Find(p=>p.Id==s.TripperId)?.Name.ToUpperInvariant()??"A FRIEND")+" TRIPS")+Dot+dose+(dose==1?" DOSE":" DOSES");
+            if(s.LevelIndex!=Festivals.LevelCount-1)return text;
+            var rest=new List<string>();
+            foreach(var d in s.Doses)
+            {
+                var p=s.Players.Find(x=>x.Id==d.PlayerId);
+                if(p!=null&&p.Connected&&p.Id!=s.TripperId)rest.Add((p.Id==localId?"YOU":p.Name.ToUpperInvariant())+" "+d.Dose);
+            }
+            for(int i=0;i<rest.Count;i+=3)text+="\n"+(i==0?"DOSED  ":"")+string.Join(Dot,rest.GetRange(i,Math.Min(3,rest.Count-i)));
+            return text;
+        }
+
+        /// <summary>How long the tripper's one hint stays up as each level starts.</summary>
+        public const double TrustSeconds=10;
+        /// <summary>The game's only hint that visions lie, "Trust, but verify.": the tripper's alone, once per level, as play starts.</summary>
+        public static string TrustLine(RoundState s,string localId)=>s.Phase=="Playing"&&s.TripperId==localId&&s.ElapsedSeconds<TrustSeconds?"Trust, but verify.":"";
+
+        /// <summary>
+        /// The festivalgoer p can check a vision about right now: the nearest within FestivalSimulation.ConfirmReach that
+        /// FestivalSimulation.CanCheckVision allows, so only for the tripper and only while that vision is unchecked; null otherwise.
+        /// </summary>
+        public static NpcState CheckTarget(RoundState s,PlayerState p)
+        {
+            if(s.Phase!="Playing"||p.Life!="Alive"||p.InteractionId!="")return null;
+            NpcState best=null;double reach=FestivalSimulation.ConfirmReach;
+            foreach(var n in s.Npcs)
+            {
+                double dx=p.X-n.X,dz=p.Z-n.Z,distance=Math.Sqrt(dx*dx+dz*dz);
+                if(distance<=reach&&FestivalSimulation.CanCheckVision(s,p,n)){best=n;reach=distance;}
+            }
+            return best;
+        }
+        /// <summary>The checks, as beside anyone else: E dances (quick, but a miss draws the crowd's eye), F chats (safe).</summary>
+        public static readonly string CheckDanceAction="Check by dancing"+Dot+"F CHECK BY CHAT ("+FestivalSimulation.ConfirmChatSeconds+" s)";
+        public static readonly string CheckChatAction="Check by chatting ("+FestivalSimulation.ConfirmChatSeconds+" s, safe)";
+
+        /// <summary>
+        /// The chat check under way: the festivalgoer's opener, then the tripper's three questions on 1-3, the picked one followed by
+        /// their answer. "" without one; a view carries only its own player's chat, so no other client can read it.
+        /// </summary>
+        public static string ChatPicker(RoundState s,PlayerState p,int picked)
+        {
+            var chat=s.Interactions.Find(i=>i.Id==p.InteractionId&&i.Kind=="ConfirmChat"&&i.Status=="Active")?.Chat;
+            if(chat==null)return "";
+            string text="CHECKING BY CHAT"+Dot+"1–3 ASK\n\""+chat.Opener+"\"";
+            for(int i=0;i<chat.Questions.Length;i++)text+="\n"+(i+1)+"  "+chat.Questions[i]+(i==picked?"\n      \""+chat.Answers[i]+"\"":"");
+            return text;
+        }
+
+        /// <summary>The rhythm lane's title, naming a check dance as the check it is.</summary>
+        public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
     }
 }

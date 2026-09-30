@@ -228,13 +228,14 @@ public static class VisionTests
         string Say(RoundState state,PlayerState p)=>FestivalGuidance.Headline(state,p)+" / "+FestivalGuidance.Hint(state,p);
         int seed=0;var s=Dosed(1,1,ref seed);var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
         Check(FestivalGuidance.Headline(s.State,tripper).Contains("CLUE TRAIL 0 / 2"),"the night's headline counts the trail: "+Say(s.State,tripper));
-        Check(FestivalGuidance.Hint(s.State,tripper).Contains("Trust, but verify."),"the tripper's one hint: "+Say(s.State,tripper));
+        // The one hint, "Trust, but verify.", is the HUD's once per level (HudTripperTests); the guidance points at the visions.
+        Check(FestivalGuidance.Hint(s.State,tripper)=="Your visions mark the next clue holder.","the tripper is pointed at their visions: "+Say(s.State,tripper));
         Check(FestivalGuidance.Hint(s.State,friend).Contains(tripper.Name)&&!Say(s.State,friend).Contains("Trust"),"a sober friend is sent to the tripper: "+Say(s.State,friend));
         string night=Say(s.State,tripper)+" "+Say(s.State,friend);
         s.ConfirmVisionsOf(Npc(s,s.State.ClueChain[0]));
         Check(FestivalGuidance.Headline(s.State,friend).Contains("CLUE TRAIL 1 / 2"),"the headline follows the trail: "+Say(s.State,friend));
         var day=Dosed(1,0,ref seed);var dayTripper=Tripper(day);string daytime=Say(day.State,dayTripper);
-        Check(FestivalGuidance.Hint(day.State,dayTripper).Contains("Trust, but verify.")&&!FestivalGuidance.Headline(day.State,dayTripper).Contains("TRAIL"),"by day the tripper reads buyers and narcs, not a trail: "+daytime);
+        Check(FestivalGuidance.Hint(day.State,dayTripper)=="Your visions mark buyers and narcs."&&!FestivalGuidance.Headline(day.State,dayTripper).Contains("TRAIL"),"by day the tripper reads buyers and narcs, not a trail: "+daytime);
         Check(!(night+daytime).ToLowerInvariant().Contains("totem"),"no totems left in the guidance: "+night+" "+daytime);
     }
 

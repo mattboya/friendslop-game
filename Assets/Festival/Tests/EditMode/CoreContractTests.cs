@@ -318,7 +318,7 @@ namespace Festival.Tests
             Assert.That(FestivalGuidance.Hint(game.State,host),Does.Not.Contain("TASTING"));
             host.X=0;host.Z=-29;
             guest.Effects.Add(new ActiveEffect{Id="mushrooms",RemainingSeconds=90});
-            Assert.That(FestivalGuidance.Hint(game.State,guest),Does.Contain("Trust, but verify."));
+            Assert.That(FestivalGuidance.Hint(game.State,guest),Is.EqualTo("Your visions mark the next clue holder."),"only the tripper is pointed at the visions; the HUD's TrustLine carries the one hint");
             Assert.That(FestivalGuidance.Hint(game.State,host),Is.EqualTo(soberHint));
             Assert.That(FestivalGuidance.Headline(game.State,host),Does.Contain("CLUE TRAIL 0 / 2"));
 

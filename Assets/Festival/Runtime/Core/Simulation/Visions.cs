@@ -32,7 +32,7 @@ namespace Festival.Core
         public static List<VisionState> VisibleVisions(RoundState s,string viewer)=>s.TripperId==""||viewer!=s.TripperId?new List<VisionState>():
             s.Visions.ConvertAll(v=>new VisionState{Id=v.Id,Kind=v.Kind,NpcId=v.NpcId,X=v.X,Z=v.Z,IsTrue=v.Confirmed&&v.IsTrue,Tell=v.Tell,Confirmed=v.Confirmed});
         // The tripper's dose from the public spin result, 1-4; a round with no spin counts as dose 1.
-        static int TripperDose(RoundState s)=>Math.Min(Reliability.Length,Math.Max(1,s.Doses.Find(d=>d.PlayerId==s.TripperId)?.Dose??1));
+        public static int TripperDose(RoundState s)=>Math.Min(Reliability.Length,Math.Max(1,s.Doses.Find(d=>d.PlayerId==s.TripperId)?.Dose??1));
 
         // As the crew leaves camp, once the spinners have picked the tripper: deal this level's roles, then show the visions.
         void DealRoles()

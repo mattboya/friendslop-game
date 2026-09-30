@@ -6,19 +6,23 @@ namespace Festival.Core
     /// reaches the tripper (VisibleVisions), and a true clue holder moves the night's trail on (ConfirmVisionsOf).</summary>
     public sealed partial class FestivalSimulation
     {
-        const double ConfirmChatSeconds=5;
+        // A chat check takes this long; the tripper stands within ConfirmReach of the festivalgoer to start either check.
+        public const double ConfirmChatSeconds=5,ConfirmReach=2.5;
         // Four notes half a second apart: 2 s of steps after the chart's lead-in, with no countdown, so the verdict lands in
         // 4.75 s (the chart's 4 s plus the .75 s every rhythm verdict waits for late input), just ahead of a chat.
         const int ConfirmDanceNotes=4;const double ConfirmDanceBeat=.5;
 
         /// <summary>Whether p may check n: only the tripper, and only someone they still have an unchecked vision about. POLO-1's one
         /// exception: anyone may chat with Palm Mirage's VIP guard to be talked past the ropes (FestivalTwists.cs).</summary>
-        bool MayConfirm(PlayerState p,NpcState n,string kind)=>p.Id==State.TripperId&&State.Visions.Exists(v=>v.NpcId==n.Id&&!v.Confirmed)||kind=="ConfirmChat"&&TalksPastTheRope(p,n);
+        bool MayConfirm(PlayerState p,NpcState n,string kind)=>CanCheckVision(State,p,n)||kind=="ConfirmChat"&&TalksPastTheRope(p,n);
+        /// <summary>Whether p has a vision about n still to check. A client's view carries visions only to its tripper, so the HUD
+        /// asks it of the view to offer the checks.</summary>
+        public static bool CanCheckVision(RoundState s,PlayerState p,NpcState n)=>p.Id==s.TripperId&&s.Visions.Exists(v=>v.NpcId==n.Id&&!v.Confirmed);
 
         CommandResult BeginConfirm(PlayerState p,GameCommand c)
         {
             var npc=State.Npcs.Find(n=>n.Id==c.TargetId);
-            if(npc==null||!Near(p,npc.X,npc.Z))return Reject("Stand next to the festivalgoer you want to check");
+            if(npc==null||!Near(p,npc.X,npc.Z,ConfirmReach))return Reject("Stand next to the festivalgoer you want to check");
             if(!MayConfirm(p,npc,c.Kind))return Reject(npc.Twist==VipGuard&&c.Kind=="ConfirmChat"?RopeRefusal(p):p.Id==State.TripperId?"You have no vision about them to check":"Only the tripper can check a vision");
             if(npc.Mode=="Swarming"||npc.Mode=="Accusing")return Reject("They're too worked up to stop for you");
             if(State.Interactions.Exists(x=>x.TargetId==npc.Id&&x.Status=="Active"))return Reject("NPC is busy");
