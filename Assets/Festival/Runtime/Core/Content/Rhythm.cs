@@ -29,8 +29,8 @@ namespace Festival.Core
         public int ExtraPresses { get; private set; }
         public double LastErrorSeconds { get; private set; }
         public double Score => Math.Max(0,Math.Min(1,earned/chart.Notes.Count-ExtraPresses*0.1));
-        // Like Score, but over only the notes judged so far; 0 before the first one.
-        public double ScoreSoFar => consumed.Count==0?0:Math.Max(0,Math.Min(1,earned/consumed.Count-ExtraPresses*0.1));
+        // Like Score, but over only the notes judged so far; null before the first one (nothing to score yet).
+        public double? ScoreSoFar => consumed.Count==0?(double?)null:Math.Max(0,Math.Min(1,earned/consumed.Count-ExtraPresses*0.1));
         public bool Complete => elapsed>=chart.DurationSeconds;
         public RhythmJudge(RhythmChart chart,double goodWindow=0.15)
         {
