@@ -1,6 +1,7 @@
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using Festival.Core;
 using Festival.Network;
@@ -18,6 +19,10 @@ namespace Festival.Presentation
         readonly float[] rhythmFrameMs=new float[512];
         int rhythmFrameCount;
         bool recordRhythmFrames;
+        // Set by the shared steps below: the interaction Interact last saw through to its end (null when it never started),
+        // and the first failure a step hit, for its caller to report.
+        InteractionState finished;
+        string failed;
         void LateUpdate()
         {
             if(captureCamera!=null){captureCamera.transform.position=capturePosition;captureCamera.transform.rotation=captureRotation;}
@@ -65,7 +70,8 @@ namespace Festival.Presentation
                 Application.Quit(0);
                 yield break;
             }
-            float deadline=Time.realtimeSinceStartup+85+(float)FestivalSimulation.SpinSeconds;
+            // Camp, Day 1, the debrief and Night 1, with a spin before each level.
+            float deadline=Time.realtimeSinceStartup+200+2*(float)FestivalSimulation.SpinSeconds;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer==null){Debug.LogError("FESTIVAL SMOKE FAILED: no local identity");Application.Quit(2);yield break;}
             var festivalFont=Resources.Load<Font>("FestivalDisplay");
@@ -166,10 +172,30 @@ namespace Festival.Presentation
             while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
             if(Time.realtimeSinceStartup>=deadline){Fail("camp spoon purchase");yield break;}
             if(session.LocalPlayer.HeldOfferId!=""){Fail("purchase still held");yield break;}
+            // Days are sold (LOOP-2): each friend also takes a Prism tab off the shelf and pays the seller for it.
+            var tabs=Catalog.ShopPoint(true,session.State.VendorOffers.IndexOf("stock_lsd"));
             if(session.IsHost)
             {
                 while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="little_spoon"))&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("two camp purchases");yield break;}
+                sim.State.Players[0].X=tabs.X-.4f;sim.State.Players[0].Z=tabs.Z-1;sim.State.Players[1].X=tabs.X+.4f;sim.State.Players[1].Z=tabs.Z-1;
+            }
+            while(!Within(session.LocalPlayer,tabs.X,tabs.Z,2.8f)&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command("HoldOffer",item:"stock_lsd");
+            while(session.LocalPlayer.HeldOfferId!="stock_lsd"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.IsHost)
+            {
+                while(!sim.State.Players.TrueForAll(p=>p.HeldOfferId=="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
+                sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
+            }
+            while(!Near(session.LocalPlayer,campX,6)&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command("Buy",item:"stock_lsd");
+            while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(Time.realtimeSinceStartup>=deadline){Fail("camp stock purchase");yield break;}
+            if(session.IsHost)
+            {
+                while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="stock_lsd"))&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("two camp stock purchases");yield break;}
                 var site=CampFeatures.Find("tent_1");
                 foreach(var peer in sim.State.Players)
                 {
@@ -263,6 +289,8 @@ namespace Festival.Presentation
             if(session.IsHost){sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;}
             while(!Within(session.LocalPlayer,0,19,3.2f)&&Time.realtimeSinceStartup<deadline)yield return null;
             session.Command("Ready");
+            yield return CaptureSpinner(session,session.IsHost?"host-spinner.png":"client-spinner.png",deadline);
+            if(failed!=null){Fail(failed);yield break;}
             while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
             {
                 yield return new WaitForSeconds(.2f);
@@ -293,19 +321,20 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE MARKET RANGE PASSED: remote purchase blocked; host="+session.IsHost);
             // Only test actor placement is privileged. The client uses the
             // ordinary command channel for every mission action and note.
+            NpcState[] buyers=null;
             if(session.IsHost)
             {
                 // Give the client time to verify remote browsing at the normal entry
                 // before host-only test placement moves both peers to the market.
                 yield return new WaitForSeconds(1f);
-                sim.State.Npcs.RemoveAll(n=>n.Id!="wook_0");
+                // Day 1: two festivalgoers dealt as buyers stay, the first one in the tripper's visions; the rest of the crowd and
+                // security step away so nothing else interrupts the check and the sales.
+                buyers=DayBuyers(sim);
+                if(buyers==null){Fail("day buyers");yield break;}
+                KeepOnly(sim,buyers);
                 PlaceBoth(sim,-15.75f,-22);
                 sim.Player(sim.State.HostPlayerId).X=-15;
-                // The spinner picks the tripper; the smoke makes the client the dose-1 tripper so the host stays the sober helper.
-                var reader=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
-                foreach(var p in sim.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
-                reader.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="smoke_dose",Intensity=1,RemainingSeconds=sim.State.DurationSeconds});
-                sim.State.TripperId=reader.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=reader.Id,Dose=1});
+                MakeClientTheTripper(sim);
             }
             else
             {
@@ -353,9 +382,10 @@ namespace Festival.Presentation
             }
             while((session.IsHost?sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Effects.Count:session.LocalPlayer.Effects.Count)==0&&Time.realtimeSinceStartup<deadline)yield return null;
             if(Time.realtimeSinceStartup>=deadline){Fail("client tripper dose");yield break;}
+            // The host's view is built before this frame's tripper handoff, so it catches up a frame later.
+            while(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes){Fail("teammate intoxication face state");yield break;}
-            // TRIP-2: the totems are gone. Only the tripper's client (here the client) gets visions; VISION-1 draws them and
-            // SMOKE-1 drives the tripper's checks along the clue trail.
+            // Only the tripper's client (here the client) gets visions; VISION-1 draws them, and the tripper checks them below.
             bool shouldSeeVisions=!session.IsHost;
             while(session.State.Visions.Count>0!=shouldSeeVisions&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.State.Visions.Count>0!=shouldSeeVisions){Fail("private vision visibility");yield break;}
@@ -368,21 +398,29 @@ namespace Festival.Presentation
                 yield return new WaitForSeconds(.7f);
                 if(!File.Exists(cluePath)){Fail("tripper vision render");yield break;}
                 Debug.Log("FESTIVAL SMOKE CLUE RENDER PASSED: "+cluePath);
+                // Tabs out to sell. The host waits for this before moving everyone on from the market views.
+                session.Command("Equip",item:"stock_lsd");
             }
             if(session.IsHost)
             {
+                // The client's market voucher is equipped on purchase, so its tabs come out only after its market views.
+                var seller=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
+                while((!seller.Inventory.Exists(item=>item.ItemId=="medical_voucher")||seller.EquippedItemId!="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
                 PlaceBoth(sim,0,0);
                 sim.Player(sim.State.HostPlayerId).X=-2.5f;
-                var dancer=sim.State.Npcs[0];dancer.X=0;dancer.Z=1;dancer.Yaw=180;
-                // A dance no longer opens the way to the friend: the clue trail's last link does. Until SMOKE-1 drives the
-                // tripper's checks, the host sets the finished trail directly once the client's dance is judged.
-                var tripper=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
-                while(!sim.State.Interactions.Exists(i=>i.PlayerId==tripper.Id&&i.Kind=="Dance"&&i.Status=="Complete")&&Time.realtimeSinceStartup<deadline)yield return null;
-                sim.State.GateOpened=true;
+                // The tripper dances with the buyer in their visions, checks them by chatting, then sells to both buyers until
+                // the crew's quota is met. The smoke hands them enough Prism tabs for every sale the two buyers take.
+                Stand(buyers[0],0,1);Stand(buyers[1],1.6f,.6f);
+                var tabStack=seller.Inventory.Find(item=>item.ItemId=="stock_lsd");
+                if(tabStack==null){Fail("tripper's camp stock");yield break;}
+                tabStack.Count=2*FestivalSimulation.SalesPerBuyer(sim.State);
+                while(!FestivalSimulation.DayQuotaMet(sim.State)&&Time.realtimeSinceStartup<deadline)yield return null;
+                PlaceBoth(sim,Festivals.CampGateX,Festivals.CampGateZ);
             }
             else
             {
-                while((!Near(session.LocalPlayer,0,0)||!Near(session.State.Npcs.Find(n=>n.Id=="wook_0"),0,1))&&Time.realtimeSinceStartup<deadline)yield return null;
+                NpcState dayBuyer=null;
+                while((!Near(session.LocalPlayer,0,0)||(dayBuyer=session.State.Npcs.Find(n=>Near(n,0,1)))==null)&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("performance placement");yield break;}
                 session.MenuOpen=true;
                 campMenu.Find("Pass home/CREW + NEARBY").GetComponent<Button>().onClick.Invoke();
@@ -394,7 +432,7 @@ namespace Festival.Presentation
                 if(!File.Exists(actionPath)){Fail("nearby actions render");yield break;}
                 Debug.Log("FESTIVAL SMOKE ACTIONS RENDER PASSED: "+actionPath);
                 session.MenuOpen=false;
-                session.Command("Dance","wook_0");
+                session.Command("Dance",dayBuyer.Id);
                 InteractionState performance=null;
                 while(performance==null&&Time.realtimeSinceStartup<deadline)
                 {
@@ -452,19 +490,62 @@ namespace Festival.Presentation
                     var measured=new float[rhythmFrameCount];Array.Copy(rhythmFrameMs,measured,rhythmFrameCount);Array.Sort(measured);
                     Debug.Log("FESTIVAL SMOKE RHYTHM FRAME P95 "+measured[Mathf.Clamp(Mathf.CeilToInt(rhythmFrameCount*.95f)-1,0,rhythmFrameCount-1)].ToString("0.0")+" MS; MAX "+measured[rhythmFrameCount-1].ToString("0.0")+" MS; SAMPLES "+rhythmFrameCount);
                 }
+                yield return WorkTheDay(session,dayBuyer.Id,session.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Id!=dayBuyer.Id)?.Id,deadline);
+                if(failed!=null){Fail(failed);yield break;}
+                // Quota met: the tripper heads back to camp early and ends the day.
+                while(!Near(session.LocalPlayer,Festivals.CampGateX,Festivals.CampGateZ)&&Time.realtimeSinceStartup<deadline)yield return null;
+                yield return Interact(session,"Extract","","",deadline);
             }
-            while(!session.State.GateOpened&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(!session.State.GateOpened){Fail("networked clue trail setup");yield break;}
+            while(session.State!=null&&session.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.State==null){Fail("day settlement: session closed, "+session.Message);yield break;}
+            if(session.State.Result!="Success"||session.State.LevelIndex!=0||!FestivalSimulation.DayQuotaMet(session.State)||session.State.Survivors!=2)
+            {Fail("day settlement: result="+session.State.Result+" level="+session.State.LevelIndex+" sales="+session.State.LevelSales+"/"+FestivalSimulation.DayQuota(session.State)+" survivors="+session.State.Survivors+" message="+session.Message);yield break;}
+            Debug.Log("FESTIVAL SMOKE DAY PASSED: buyer checked, $"+session.State.LevelSales+" sold of a $"+FestivalSimulation.DayQuota(session.State)+" quota, back to camp; host="+session.IsHost);
+            // DEBRIEF-1: back at camp everyone votes the host for every award, so the worst awards' shots ride into Night 1 on the
+            // sober helper and the tripper stays clear.
             if(session.IsHost)
             {
-                // Nobody is lost by day (LOOP-2), so the rescue runs as Night 1 until SMOKE-1 scripts a real weekend.
-                sim.State.LevelIndex=1;sim.State.FriendPosition=new WorldPoint(10,10);PlaceBoth(sim,10,10);
+                // A couple of snapshots of the day's results reach the client before the host brings everyone back to camp.
+                yield return new WaitForSeconds(2);
+                session.Command("Reset");
+            }
+            while(session.State.Phase!="CampReview"&&Time.realtimeSinceStartup<deadline)yield return null;
+            for(int award=0;award<session.State.ReviewAwards.Count;award++)session.Command("ReviewVote",session.State.HostPlayerId,amount:award);
+            while(!FestivalSimulation.ReviewRevealed(session.State)&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.State.ReviewAwards.Count!=3||!FestivalSimulation.ReviewRevealed(session.State)||session.State.ReviewWinners.Exists(id=>id!=session.State.HostPlayerId))
+            {Fail("debrief vote: awards="+session.State.ReviewAwards.Count+" winners="+session.State.ReviewWinners.Count);yield break;}
+            if(session.IsHost)
+            {
+                session.Command("FinishReview");
+                if(sim.State.Phase!="Shopping"){Fail("debrief close: "+session.Message);yield break;}
+                sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;
+            }
+            while((session.State.Phase!="Shopping"||!Within(session.LocalPlayer,0,19,3.2f))&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command("Ready");
+            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.State.Phase!="Playing"||session.State.LevelIndex!=1){Fail("night 1 start: phase="+session.State.Phase+" level="+session.State.LevelIndex);yield break;}
+            if(session.IsHost&&!session.LocalPlayer.Effects.Exists(e=>e.Id=="shot")){Fail("debrief shot");yield break;}
+            if(session.IsHost)MakeClientTheTripper(sim);
+            yield return CaptureNight(session,session.IsHost?"host-night.png":"client-night.png");
+            if(failed!=null){Fail(failed);yield break;}
+            // Night 1: the tripper checks each link of the clue trail, then finds the lost friend and brings them home.
+            if(session.IsHost)
+            {
+                PlaceBoth(sim,0,0);
+                sim.Player(sim.State.HostPlayerId).X=-2.5f;
+                yield return LeadTrail(sim,deadline);
+                if(!sim.State.GateOpened){Fail("clue trail");yield break;}
+                PlaceBoth(sim,sim.State.FriendPosition.X,sim.State.FriendPosition.Z);
             }
             else
             {
-                while((!Near(session.LocalPlayer,10,10)||!Near(session.State.FriendPosition,10,10))&&Time.realtimeSinceStartup<deadline)yield return null;
+                while(!Near(session.LocalPlayer,0,0)&&Time.realtimeSinceStartup<deadline)yield return null;
+                yield return FollowTrail(session,deadline);
+                if(failed!=null){Fail(failed);yield break;}
+                // The trail's last link shows the tripper where the friend is.
+                while((session.State.FriendPosition.X==0&&session.State.FriendPosition.Z==0||!Near(session.LocalPlayer,session.State.FriendPosition.X,session.State.FriendPosition.Z))&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("friend reveal");yield break;}
-                session.Command("FindFriend");
+                yield return Interact(session,"FindFriend","","",deadline);
             }
             while(!session.State.FriendFound&&Time.realtimeSinceStartup<deadline)yield return null;
             if(!session.State.FriendFound){Fail("friend recruitment");yield break;}
@@ -487,7 +568,10 @@ namespace Festival.Presentation
                 Fail("networked mission settlement: phase="+s.Phase+" result="+s.Result+" trail="+s.GateOpened+" survivors="+s.Survivors+" bonus="+s.SurvivorBonus+" elapsed="+s.ElapsedSeconds.ToString("F1")+" extract="+(active==null?"none":active.Status)+" message="+session.Message);
                 yield break;
             }
-            Debug.Log("FESTIVAL SMOKE MISSION PASSED: clue trail (set directly until SMOKE-1), dance, friend, extraction, two survivors; host="+session.IsHost);
+            Debug.Log("FESTIVAL SMOKE MISSION PASSED: Day 1 quota, debrief, Night 1 clue trail, friend, extraction, two survivors; host="+session.IsHost);
+            // The galleries below are art-review captures, so they are lit as by day again; the night look has its own capture.
+            if(session.IsHost)sim.State.LevelIndex=0;
+            while(FestivalNightLighting.IsNight(session.State)&&Time.realtimeSinceStartup<deadline)yield return null;
             session.MenuOpen=true;
             // Move the view only, leaving the authority/player positions untouched.
             captureCamera=session.ViewCamera;
@@ -760,7 +844,8 @@ namespace Festival.Presentation
         }
         IEnumerator SoloSmoke(FestivalSession session)
         {
-            float deadline=Time.realtimeSinceStartup+160+(float)FestivalSimulation.SpinSeconds;
+            // Camp, Day 1 and Night 1 with a camp review after each, and a spin before each level.
+            float deadline=Time.realtimeSinceStartup+220+2*(float)FestivalSimulation.SpinSeconds;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
             var sim=session.DevelopmentSimulation;
@@ -814,7 +899,14 @@ namespace Festival.Presentation
             if(File.Exists(equippedCapture))File.Delete(equippedCapture);
             ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
             if(!File.Exists(equippedCapture)){Fail("solo equipped camp render");yield break;}
+            // Days are sold (LOOP-2): a Prism tab from the shelf to sell.
+            var tabs=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_lsd"));
+            player.X=tabs.X;player.Z=tabs.Z;session.Command("HoldOffer",item:"stock_lsd");
+            player.X=0;player.Z=7;session.Command("Buy",item:"stock_lsd");
+            if(!player.Inventory.Exists(item=>item.ItemId=="stock_lsd")){Fail("solo stock purchase");yield break;}
             player.Z=19;session.Command("Ready");
+            yield return CaptureSpinner(session,"solo-spinner.png",deadline);
+            if(failed!=null){Fail(failed);yield break;}
             while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.State.Phase!="Playing"){Fail("solo campsite countdown");yield break;}
             player.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});session.Command("Equip",item:"poi_practice");
@@ -823,7 +915,10 @@ namespace Festival.Presentation
             if(File.Exists(poiCapture))File.Delete(poiCapture);
             ScreenCapture.CaptureScreenshot(poiCapture);yield return new WaitForSeconds(.55f);
             if(!File.Exists(poiCapture)){Fail("solo poi grip render");yield break;}
-            sim.State.Npcs.Clear();
+            // Day 1: two festivalgoers dealt as buyers stay, the first one in the solo tripper's visions; the rest step away.
+            var buyers=DayBuyers(sim);
+            if(buyers==null){Fail("solo day buyers");yield break;}
+            KeepOnly(sim,buyers);
             player.X=-18;player.Z=-22;session.Command("Use",item:"stock_mushrooms");
             if(player.Effects.Count==0){Fail("solo consumable use");yield break;}
             yield return new WaitForSeconds(.25f);
@@ -860,21 +955,21 @@ namespace Festival.Presentation
             }
             while(dance.Status=="Active"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(dance.Status!="Complete"){Fail("solo dance");yield break;}
-            // TRIP-2: the clue trail's last link opens the way, not a dance. SMOKE-1 drives the solo tripper's checks; set it directly.
-            sim.State.GateOpened=true;
+            Stand(buyers[0],-1.6f,.6f);Stand(buyers[1],1.6f,.6f);
+            player.Inventory.Find(item=>item.ItemId=="stock_lsd").Count=2*FestivalSimulation.SalesPerBuyer(sim.State);
+            yield return WorkTheDay(session,buyers[0].Id,buyers[1].Id,deadline);
+            if(failed!=null){Fail(failed);yield break;}
             player.Life="Downed";player.DownedRemaining=.1;
             while(player.Life!="Spirit"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(sim.State.Phase!="Playing"){Fail("solo death recovery window");yield break;}
             player.X=24;player.Z=-20;session.Command("BeginRevival",player.Id);
             while(player.Life!="Alive"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(player.Life!="Alive"||player.RevivalCount!=1){Fail("solo medical revival");yield break;}
-            // Nobody is lost by day (LOOP-2), so the rescue runs as Night 1 until SMOKE-1 scripts a real weekend.
-            sim.State.LevelIndex=1;player.X=sim.State.FriendPosition.X;player.Z=sim.State.FriendPosition.Z;session.Command("FindFriend");
-            while(!sim.State.FriendFound&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(!sim.State.FriendFound){Fail("solo friend recruitment");yield break;}
-            player.X=0;player.Z=-32;sim.State.FriendPosition=new WorldPoint(0,-32);session.Command("Extract");
+            // Quota met: back to camp early to end the day.
+            player.X=Festivals.CampGateX;player.Z=Festivals.CampGateZ;
+            yield return Interact(session,"Extract","","",deadline);
             while(sim.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(sim.State.Result!="Success"||sim.State.Survivors!=1){Fail("solo shuttle result");yield break;}
+            if(sim.State.Result!="Success"||sim.State.LevelIndex!=0||!FestivalSimulation.DayQuotaMet(sim.State)||sim.State.Survivors!=1){Fail("solo day result: "+sim.State.Result+", $"+sim.State.LevelSales+" of $"+FestivalSimulation.DayQuota(sim.State));yield break;}
             session.Command("Reset");
             if(sim.State.Phase!="CampReview"||sim.State.ReviewResult!="Success"){Fail("solo camp review transition");yield break;}
             yield return new WaitForSeconds(.2f);
@@ -885,9 +980,163 @@ namespace Festival.Presentation
             // Solo practice skips the debrief vote, so the host can open the shop straight away.
             session.Command("FinishReview");
             if(sim.State.Phase!="Shopping"){Fail("solo review before shopping");yield break;}
-            Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, mission, camp review, next shopping");
+            // Night 1: follow the clue trail link by link, find the lost friend and bring them home. A new level is a new round.
+            player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
+            while(sim.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(sim.State.Phase!="Playing"||sim.State.LevelIndex!=1){Fail("solo night 1 start");yield break;}
+            yield return CaptureNight(session,"solo-night.png");
+            if(failed!=null){Fail(failed);yield break;}
+            player.X=0;player.Z=0;
+            StartCoroutine(LeadTrail(sim,deadline));
+            yield return FollowTrail(session,deadline);
+            if(failed!=null){Fail(failed);yield break;}
+            player.X=sim.State.FriendPosition.X;player.Z=sim.State.FriendPosition.Z;
+            yield return Interact(session,"FindFriend","","",deadline);
+            if(!sim.State.FriendFound){Fail("solo friend recruitment: "+session.Message);yield break;}
+            player.X=Festivals.CampGateX;player.Z=Festivals.CampGateZ;sim.State.FriendPosition=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
+            yield return Interact(session,"Extract","","",deadline);
+            while(sim.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(sim.State.Result!="Success"||sim.State.LevelIndex!=1||sim.State.Survivors!=1){Fail("solo night result: "+sim.State.Result);yield break;}
+            session.Command("Reset");
+            if(sim.State.Phase!="CampReview"||sim.State.LevelIndex!=2){Fail("solo weekend moves on to Day 2");yield break;}
+            session.Command("FinishReview");
+            if(sim.State.Phase!="Shopping"){Fail("solo second review before shopping");yield break;}
+            Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, Day 1 quota, Night 1 clue trail and rescue, camp reviews, Day 2 shopping");
             Application.Quit(0);
         }
+        // Starts an interaction with a command, plays its rhythm chart perfectly when it has one, and waits for it to end.
+        // Sets finished to it, or leaves it null when the command was refused.
+        IEnumerator Interact(FestivalSession session,string command,string target,string item,float deadline)
+        {
+            finished=null;string kind=command=="StartSale"?"Sale":command;
+            while(session.LocalPlayer.InteractionId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
+            session.Command(command,target,item);
+            InteractionState running=null;float refusedAfter=Time.realtimeSinceStartup+3;
+            while(running==null&&Time.realtimeSinceStartup<refusedAfter)
+            {
+                running=session.State.Interactions.Find(i=>i.PlayerId==session.LocalPlayerId&&i.Kind==kind&&i.Status=="Active");
+                if(running==null)yield return null;
+            }
+            if(running==null)yield break;
+            if(FestivalInput.IsRhythmKind(kind))
+                foreach(var note in RhythmChart.Create(running.ChartSeed,running.NoteCount,running.BeatSeconds).Notes)
+                {
+                    while(session.EstimatedSimulationSeconds-running.StartSeconds<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
+                    session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
+                }
+            while(session.LocalPlayer.InteractionId==running.Id&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(session.LocalPlayer.InteractionId!=running.Id)finished=running;
+        }
+        // Day 1 for the tripper (TRIP-3, LOOP-2): check the buyer in their visions by chatting, then sell to that buyer and then
+        // the other until the crew's quota is met.
+        IEnumerator WorkTheDay(FestivalSession session,string checkedBuyer,string otherBuyer,float deadline)
+        {
+            yield return Interact(session,"ConfirmChat",checkedBuyer,"",deadline);
+            var vision=session.State.Visions.Find(v=>v.NpcId==checkedBuyer);
+            if(finished==null||vision==null||!vision.Confirmed){failed="buyer check: "+session.Message;yield break;}
+            Debug.Log("FESTIVAL SMOKE BUYER CHECK PASSED: the "+vision.Kind+" vision was "+(vision.IsTrue?"true":"false")+"; host="+session.IsHost);
+            foreach(var buyer in new[]{checkedBuyer,otherBuyer})
+                for(int sale=0;buyer!=null&&sale<FestivalSimulation.SalesPerBuyer(session.State)&&!FestivalSimulation.DayQuotaMet(session.State);sale++)
+                {
+                    int before=session.State.LevelSales;
+                    yield return Interact(session,"StartSale",buyer,"stock_lsd",deadline);
+                    if(finished==null||session.State.LevelSales<=before){failed="sale to "+buyer+" paid nothing: life="+session.LocalPlayer.Life+" "+session.Message;yield break;}
+                    Debug.Log("FESTIVAL SMOKE SALE: $"+(session.State.LevelSales-before)+" from "+buyer+" at score "+session.LocalPlayer.LastRhythmScore.ToString("F2")+"; host="+session.IsHost);
+                }
+            if(!FestivalSimulation.DayQuotaMet(session.State))failed="day quota: $"+session.State.LevelSales+" of $"+FestivalSimulation.DayQuota(session.State);
+        }
+        // Night (host): the crowd and security step away but the trail's clue holders; each next holder in turn stands at (0, 1)
+        // in front of the tripper, and steps aside once read.
+        static IEnumerator LeadTrail(FestivalSimulation sim,float deadline)
+        {
+            var chain=new List<string>(sim.State.ClueChain);
+            KeepOnly(sim,sim.State.Npcs.FindAll(n=>chain.Contains(n.Id)).ToArray());
+            while(!sim.State.GateOpened&&Time.realtimeSinceStartup<deadline)
+            {
+                int link=sim.State.CluesRead;var holder=sim.State.Npcs.Find(n=>n.Id==chain[link]);Stand(holder,0,1);
+                while(sim.State.CluesRead==link&&Time.realtimeSinceStartup<deadline)yield return null;
+                Stand(holder,-4,4);
+            }
+        }
+        // Night (tripper, TRIP-3): check each clue holder brought over, chatting and dancing in turn, until the last link shows the
+        // way to the lost friend. A holder already checked can wear a fake of the next link while it steps aside, so it is skipped.
+        IEnumerator FollowTrail(FestivalSession session,float deadline)
+        {
+            string lastChecked="";
+            for(int link=0;!session.State.GateOpened;link++)
+            {
+                NpcState holder=null;
+                while(holder==null&&Time.realtimeSinceStartup<deadline)
+                {
+                    holder=session.State.Npcs.Find(n=>n.Id!=lastChecked&&Near(n,0,1)&&session.State.Visions.Exists(v=>v.NpcId==n.Id&&v.Kind=="Clue"&&!v.Confirmed));
+                    if(holder==null)yield return null;
+                }
+                if(holder==null){failed="clue holder "+link+" never stood in front of the tripper";yield break;}
+                int read=session.State.CluesRead;lastChecked=holder.Id;
+                yield return Interact(session,link%2==0?"ConfirmChat":"ConfirmDance",holder.Id,"",deadline);
+                while(session.State.CluesRead==read&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(finished==null||session.State.CluesRead==read){failed="clue link "+link+": "+session.Message;yield break;}
+            }
+            Debug.Log("FESTIVAL SMOKE CLUE TRAIL PASSED: "+session.State.CluesRead+" links checked; host="+session.IsHost);
+        }
+        // SPIN-1: once both wheels have landed, just before the take, the spinner's own overlay is what the screen shows.
+        IEnumerator CaptureSpinner(FestivalSession session,string file,float deadline)
+        {
+            while(session.State.Phase!="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
+            while(session.State.Phase=="Spinning"&&session.EstimatedSimulationSeconds<session.State.SpinEndsAt-FestivalSimulation.SpinSeconds+FestivalSpinner.DoseStarts+FestivalSpinner.DoseSpin+.2f&&Time.realtimeSinceStartup<deadline)yield return null;
+            var overlay=transform.Find("Festival spinner");
+            if(session.State.Phase!="Spinning"||overlay==null||!overlay.gameObject.activeSelf){failed="spinner overlay at "+session.State.Phase;yield break;}
+            yield return Capture(file,"SPINNER RENDER");
+        }
+        // LIGHT-1: a night level is lit by the neon over the stage, stalls and paths.
+        IEnumerator CaptureNight(FestivalSession session,string file)
+        {
+            captureCamera=session.ViewCamera;
+            capturePosition=new Vector3(0,2.1f,5);
+            captureRotation=Quaternion.LookRotation(new Vector3(0,1.8f,23)-capturePosition);
+            yield return new WaitForSeconds(.3f);
+            int neon=0;
+            foreach(var light in FindFirstObjectByType<FestivalWorld>().GetComponentsInChildren<Light>())if(light.enabled&&light.name.StartsWith("Neon ",StringComparison.Ordinal))neon++;
+            if(!FestivalNightLighting.IsNight(session.State)||neon<12){failed="night lighting: "+neon+" neon lights on";yield break;}
+            yield return Capture(file,"NIGHT RENDER");
+            captureCamera=null;
+        }
+        // Writes a screenshot to the smoke folder and logs its marker once the file lands.
+        IEnumerator Capture(string file,string marker)
+        {
+            string path=Path.Combine(Application.persistentDataPath,"smoke",file);Directory.CreateDirectory(Path.GetDirectoryName(path));
+            if(File.Exists(path))File.Delete(path);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSeconds(.7f);
+            if(!File.Exists(path)){failed=marker.ToLowerInvariant();yield break;}
+            Debug.Log("FESTIVAL SMOKE "+marker+" PASSED: "+path);
+        }
+        // Two festivalgoers dealt as buyers, the first one the tripper has a vision of: a true Buyer mark when there is one.
+        static NpcState[] DayBuyers(FestivalSimulation sim)
+        {
+            var s=sim.State;var buyers=s.Npcs.FindAll(n=>n.Role=="Buyer");
+            var seen=buyers.Find(n=>s.Visions.Exists(v=>v.NpcId==n.Id&&v.Kind=="Buyer"&&v.IsTrue))??buyers.Find(n=>s.Visions.Exists(v=>v.NpcId==n.Id));
+            var other=buyers.Find(n=>n!=seen);
+            return seen==null||other==null?null:new[]{seen,other};
+        }
+        // The spinner picks the tripper; the smoke makes the client the dose-1 tripper so the host stays the sober helper and
+        // the day always takes the same sales.
+        static void MakeClientTheTripper(FestivalSimulation sim)
+        {
+            var tripper=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
+            foreach(var p in sim.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+            tripper.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="smoke_dose",Intensity=1,RemainingSeconds=sim.State.DurationSeconds});
+            sim.State.TripperId=tripper.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=tripper.Id,Dose=1});
+        }
+        // Only these festivalgoers stay, with their phones away: a Palm Mirage influencer (POLO-1, dealt from the whole crowd)
+        // filming the smoke's players while they stand still for a minute would turn the crowd on them.
+        static void KeepOnly(FestivalSimulation sim,NpcState[] kept)
+        {
+            sim.State.Npcs.RemoveAll(n=>Array.IndexOf(kept,n)<0);
+            foreach(var n in kept)n.Twist="";
+        }
+        // Puts a festivalgoer at (x, z), facing the player standing at the origin.
+        static void Stand(NpcState n,float x,float z){n.X=x;n.Z=z;n.Yaw=Mathf.Atan2(-x,-z)*Mathf.Rad2Deg;}
         static string GalleryFaceId(bool deadpan,int ordinal)
         {
             for(int index=0,found=0;index<10000;index++)

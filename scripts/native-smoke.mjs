@@ -34,7 +34,7 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
         copyFileSync(capture,path.join(dir,'client-'+name+'.png'));
       }
     }
-    const captures=[['FESTIVAL SMOKE CAMP PASSED','camp'],['FESTIVAL SMOKE CAMP SHOP PASSED','camp-shop'],['FESTIVAL SMOKE PASS RENDER PASSED','pass'],['FESTIVAL SMOKE SETTINGS RENDER PASSED','settings'],['FESTIVAL SMOKE MAP RENDER PASSED','map'],['FESTIVAL SMOKE HELD RENDER PASSED','held'],['FESTIVAL SMOKE INTERIOR HANDOFF PASSED','interior-handoff'],['FESTIVAL SMOKE CAMP OVERVIEW PASSED','camp-overview'],['FESTIVAL SMOKE CROWD LIVE PASSED','crowd-live'],['FESTIVAL SMOKE CROWD STAGE PASSED','crowd-stage'],['FESTIVAL SMOKE STAGE DETAIL PASSED','stage-detail'],['FESTIVAL SMOKE DJ CONTACT PASSED','dj-contact'],['FESTIVAL SMOKE PLAYER DJ CONTACT PASSED','player-dj-contact'],['FESTIVAL SMOKE CROWD GROVE PASSED','crowd-grove'],['FESTIVAL SMOKE FIT ROLES PASSED','fit-roles'],['FESTIVAL SMOKE FIT OUTFITS PASSED','fit-outfits'],['FESTIVAL SMOKE CHARACTER QUALITY PASSED','character-quality'],['FESTIVAL SMOKE ITEM GRIPS PASSED','item-grips'],...['merch_bag','stock_lsd','map','stage_pass','medical_voucher','confetti','poi_practice','poi_led'].map(item=>['FESTIVAL SMOKE ITEM GRIPS PASSED','grip-'+item]),['FESTIVAL SMOKE FACE STATES PASSED','face-states'],['FESTIVAL SMOKE CHARACTER DISTANCE PASSED','character-distance']];
+    const captures=[['FESTIVAL SMOKE CAMP PASSED','camp'],['FESTIVAL SMOKE CAMP SHOP PASSED','camp-shop'],['FESTIVAL SMOKE PASS RENDER PASSED','pass'],['FESTIVAL SMOKE SETTINGS RENDER PASSED','settings'],['FESTIVAL SMOKE MAP RENDER PASSED','map'],['FESTIVAL SMOKE HELD RENDER PASSED','held'],['FESTIVAL SMOKE INTERIOR HANDOFF PASSED','interior-handoff'],['FESTIVAL SMOKE CAMP OVERVIEW PASSED','camp-overview'],['FESTIVAL SMOKE CROWD LIVE PASSED','crowd-live'],['FESTIVAL SMOKE CROWD STAGE PASSED','crowd-stage'],['FESTIVAL SMOKE STAGE DETAIL PASSED','stage-detail'],['FESTIVAL SMOKE DJ CONTACT PASSED','dj-contact'],['FESTIVAL SMOKE PLAYER DJ CONTACT PASSED','player-dj-contact'],['FESTIVAL SMOKE CROWD GROVE PASSED','crowd-grove'],['FESTIVAL SMOKE FIT ROLES PASSED','fit-roles'],['FESTIVAL SMOKE FIT OUTFITS PASSED','fit-outfits'],['FESTIVAL SMOKE CHARACTER QUALITY PASSED','character-quality'],['FESTIVAL SMOKE ITEM GRIPS PASSED','item-grips'],...['merch_bag','stock_lsd','map','stage_pass','medical_voucher','confetti','poi_practice','poi_led'].map(item=>['FESTIVAL SMOKE ITEM GRIPS PASSED','grip-'+item]),['FESTIVAL SMOKE FACE STATES PASSED','face-states'],['FESTIVAL SMOKE CHARACTER DISTANCE PASSED','character-distance'],['FESTIVAL SMOKE SPINNER RENDER PASSED','spinner'],['FESTIVAL SMOKE NIGHT RENDER PASSED','night']];
     if(role==='host')captures.push(['FESTIVAL SMOKE CAMP CAR PASSED','camp-car'],['FESTIVAL SMOKE CAMP VAN PASSED','camp-van'],['FESTIVAL SMOKE CAMP DOME TENT PASSED','camp-dome-tent']);
     for(const [marker,suffix] of captures){
       const gallery=text.match(new RegExp(marker+': (.+)'))?.[1]?.trim();
@@ -73,7 +73,8 @@ const captureConnection=()=>new Promise((resolve,reject)=>{
     copyFileSync(createdCamp,path.join(dir,'created-camp.png'));resolve();
   });
 });
-const timeout=setTimeout(()=>{for(const child of processes)child.kill();},120000);
+// A full Day 1 and Night 1, with two spins and a debrief between them, before the galleries.
+const timeout=setTimeout(()=>{for(const child of processes)child.kill();},300000);
 try{
   const host=run('host',['--host']);
   const client=run('client',['--join','127.0.0.1']);

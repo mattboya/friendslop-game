@@ -1,5 +1,5 @@
 import {spawn} from 'node:child_process';
-import {existsSync,readFileSync,mkdirSync,unlinkSync} from 'node:fs';
+import {existsSync,readFileSync,mkdirSync,unlinkSync,copyFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -13,8 +13,9 @@ if(existsSync(log))unlinkSync(log);
 
 const child=spawn(binary,['--host','--port','17780','--profile','smoke_solo','--name','Solo','--solo-smoke-test','-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',log],{cwd:root,stdio:'ignore'});
 // The script has its own explicit failure deadline. Leave enough room for
-// player startup and PNG writes on a loaded or screen-locked development Mac.
-const timeout=setTimeout(()=>child.kill(),180000);
+// player startup and PNG writes on a loaded or screen-locked development Mac,
+// across a full Day 1 and Night 1 with two spins.
+const timeout=setTimeout(()=>child.kill(),300000);
 child.on('error',error=>{clearTimeout(timeout);console.error(error);process.exitCode=1;});
 child.on('exit',code=>{
   clearTimeout(timeout);
@@ -23,6 +24,11 @@ child.on('exit',code=>{
     console.error('Solo native smoke failed; inspect '+log);
     process.exitCode=1;
     return;
+  }
+  for(const [marker,name] of [['FESTIVAL SMOKE SPINNER RENDER PASSED','spinner'],['FESTIVAL SMOKE NIGHT RENDER PASSED','night']]){
+    const capture=output.match(new RegExp(marker+': (.+)'))?.[1]?.trim();
+    if(!capture||!existsSync(capture)){console.error('Solo '+name+' screenshot missing; inspect '+log);process.exitCode=1;return;}
+    copyFileSync(capture,path.join(directory,'solo-'+name+'.png'));
   }
   console.log('SOLO NATIVE SMOKE PASSED');
 });
