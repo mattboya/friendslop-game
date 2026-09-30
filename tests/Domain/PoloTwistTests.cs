@@ -23,16 +23,16 @@ public static class PoloTwistTests
         var failures=new List<string>();
         foreach(var test in new Action[]{ThreeInfluencersFilmOnPalmMirageOnly,APlayerInFrameAlertsEveryWookNearby,OnlyTheFrameCounts,
             FramesAreAPassiveGain,TwistTagsSurviveASnapshot,VipZonesKeepOutAnyoneWithoutAWristband,VipSalesPayDouble,
-            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight})
+            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,EveryNightHasAVipGuard,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" polo twist test(s) failed:\n"+string.Join("\n",failures));
     }
 
-    // Two friends ready up at camp, the wheels spin and the crew loads into the crowd.
-    static FestivalSimulation Start(int seed,int level,int festival)
+    // Two friends (or `crew`) ready up at camp, the wheels spin and the crew loads into the crowd.
+    static FestivalSimulation Start(int seed,int level,int festival,int crew=2,int encore=0)
     {
-        var s=new FestivalSimulation(seed);s.AddPlayer("p0","P0");s.AddPlayer("p1","P1");
-        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;
+        var s=new FestivalSimulation(seed);for(int k=0;k<crew;k++)s.AddPlayer("p"+k,"P"+k);
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;s.State.EncoreTier=encore;
         foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,"setup: "+p.Id+" readies");}
         s.Tick(5.2);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
         Check(s.State.Phase=="Playing","setup: the crew is at "+Festivals.Name(festival));
@@ -219,6 +219,18 @@ public static class PoloTwistTests
         Check(!Act(playa,"p0","Buy",item:band.Id).Accepted&&playa.Player("p0").Cash==20,"and Ember Playa has no VIP stall");
     }
 
+    // A big crew on an encore night deals so many narcs and clue holders (two trails) that no regular is left. The guard post is
+    // still manned, by a buyer, never by a narc or a link in a trail.
+    static void EveryNightHasAVipGuard()
+    {
+        foreach(int crew in new[]{5,8})foreach(int level in new[]{1,3})for(int encore=0;encore<=4;encore++)
+        {
+            var s=Start(7,level,0,crew,encore);var guards=Tagged(s,FestivalSimulation.VipGuard);string where="crew "+crew+", level "+level+", encore "+encore;
+            Check(guards.Count==1,where+": one festivalgoer guards the VIP ropes, got "+guards.Count+" ("+s.State.Npcs.FindAll(n=>n.Role=="Regular").Count+" regulars)");
+            Check(guards[0].Role=="Regular"||guards[0].Role=="Buyer"&&!s.State.Npcs.Exists(n=>n.Role=="Regular"),where+": a regular guards, or a buyer when no regular is left, got a "+guards[0].Role);
+            Check(guards[0].X==Festivals.VipGuardPostX&&guards[0].Z==Festivals.VipGuardPostZ,where+": at the post");
+        }
+    }
     static void TheVipGuardTalksAnyoneIn()
     {
         for(int seed=1;seed<=8;seed++)

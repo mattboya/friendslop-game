@@ -15,13 +15,14 @@ namespace Festival.Core
         public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel",RideCarKind="RideCar";
 
         // As the crew leaves camp, once DealRoles has dealt the level's roles: on Palm Mirage the regular festivalgoer nearest the
-        // guard post takes it up, and a fresh few of the others film.
+        // guard post takes it up, and a fresh few of the others film. A big crew's encore night can deal every festivalgoer a role
+        // (narcs and two clue trails), and then the nearest buyer stands guard instead; a narc or a trail's link never does.
         void DealTwists()
         {
             if(State.FestivalIndex!=Festivals.PoloFestival)return;
             NpcState guard=null;
-            foreach(var n in State.Npcs)if(n.Role=="Regular"&&(guard==null||Distance(n.X,n.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)<Distance(guard.X,guard.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)))guard=n;
-            // ponytail: a crowd with no regulars (only in hand-built states) simply has no guard; the night market still sells wristbands.
+            foreach(var role in new[]{"Regular","Buyer"})if(guard==null)foreach(var n in State.Npcs)if(n.Role==role&&(guard==null||Distance(n.X,n.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)<Distance(guard.X,guard.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)))guard=n;
+            // ponytail: a crowd with neither (only in hand-built states) simply has no guard; the night market still sells wristbands.
             if(guard!=null){guard.Twist=VipGuard;guard.X=Festivals.VipGuardPostX;guard.Z=Festivals.VipGuardPostZ;guard.Yaw=Festivals.VipGuardPostYaw;guard.IdlePose="Watching";}
             var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=guard),new ContentRandom(unchecked(State.SpinSeed*11+3)));
             for(int i=0;i<Festivals.Influencers&&i<crowd.Count;i++)crowd[i].Twist=Influencer;
