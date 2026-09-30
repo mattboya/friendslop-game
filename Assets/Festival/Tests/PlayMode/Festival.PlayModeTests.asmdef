@@ -1,1 +1,1 @@
-{"name":"Festival.PlayModeTests","references":["Festival.Core","Festival.Runtime","Unity.RenderPipelines.Core.Runtime","Unity.RenderPipelines.Universal.Runtime"],"optionalUnityReferences":["TestAssemblies"],"defineConstraints":["UNITY_INCLUDE_TESTS"]}
+{"name":"Festival.PlayModeTests","references":["Festival.Core","Festival.Runtime","Unity.InputSystem","Unity.RenderPipelines.Core.Runtime","Unity.RenderPipelines.Universal.Runtime"],"optionalUnityReferences":["TestAssemblies"],"defineConstraints":["UNITY_INCLUDE_TESTS"]}

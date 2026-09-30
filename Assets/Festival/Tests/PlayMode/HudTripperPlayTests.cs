@@ -6,6 +6,8 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -19,6 +21,11 @@ namespace Festival.Tests
         // Labels are laid out on a 1920x1080 canvas, so a line its box cuts off fails.
         [UnityTest]public IEnumerator TheCrewSeesTheSpinAndOnlyTheTripperChecks()
         {
+            // 1-3 are pressed on a virtual keyboard, so they go through the HUD's own input handling (FestivalHud.UpdateKeyboard).
+            var input=InputSystem.settings;var oldBackground=input.backgroundBehavior;var oldEditor=input.editorInputBehaviorInPlayMode;
+            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            var keyboard=InputSystem.AddDevice<Keyboard>("HUD tripper keyboard");
             var world=new GameObject("HUD tripper world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("HUD tripper");
             var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
@@ -37,13 +44,17 @@ namespace Festival.Tests
             // E runs the HUD's primary action and F its chat key (FestivalHud.UpdateKeyboard); 1-3 pick a chat question.
             var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
             var chatKey=typeof(FestivalHud).GetMethod("ChatKey",BindingFlags.NonPublic|BindingFlags.Instance);
-            var question=typeof(FestivalHud).GetField("chatQuestion",BindingFlags.NonPublic|BindingFlags.Instance);
             void PressE()=>((System.Action)primary.GetValue(view))?.Invoke();
             void PressF(){if(chatKey==null)failures.Add("the HUD has no F key handler (ChatKey)");else chatKey.Invoke(view,new object[]{session.State,session.LocalPlayer});}
-            void PressNumber(int n){if(question==null)failures.Add("the HUD keeps no chat question (chatQuestion)");else question.SetValue(view,n-1);}
+            IEnumerator Press(Key key)
+            {
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+            }
             // The actions the HUD lists (NEARBY / CREW), first to last; E runs the first.
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
             const string CheckDance="Check by dancing  •  F CHECK BY CHAT (5 s)",CheckChat="Check by chatting (5 s, safe)",DanceAndChat="Dance with festivalgoer  •  F CHAT";
+            const string GearKeys="GEAR   /   1–3 EQUIP     Q USE     G DROP",GearKeysInChat="GEAR   /   Q USE     G DROP";
             try
             {
                 session.Host("Tester",8581);
@@ -91,8 +102,12 @@ namespace Festival.Tests
                 var seen=sim.State.Visions.Find(v=>v.NpcId!=""&&!v.Confirmed);Assert.That(seen,Is.Not.Null,"setup: the day deals visions about festivalgoers");
                 var npc=sim.State.Npcs.Find(n=>n.Id==seen.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);
                 npc.X=0;npc.Z=0;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;player.X=.6f;player.Z=0;
+                // With gear in hand and Sam in reach (the sober crew sticks by the tripper), the checks still come first.
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");
+                player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});player.Inventory.Add(new ItemStack{ItemId="map",Count=1});player.EquippedItemId="confetti";
+                mate.X=.6f;mate.Z=1.5f;
                 yield return new WaitForSeconds(.6f);
-                Expect("tripper beside a vision","Prompt",CheckDance);
+                Expect("tripper beside a vision, gear in hand, Sam in reach","Prompt",CheckDance);
                 // F checks here, so the ordinary dance no longer offers F as a chat.
                 string listed=Actions();
                 if(!listed.StartsWith(CheckDance+" | "+CheckChat)||listed.Contains(DanceAndChat))failures.Add("tripper beside a vision: the actions read \""+listed+"\"");
@@ -112,18 +127,26 @@ namespace Festival.Tests
                     yield return new WaitForSeconds(.6f);
                     Expect("chat check","Chat check",asking+"\n3  "+said.Questions[2]);
                     Fits("chat check","Chat check");
-                    PressNumber(2);
+                    // 1-3 ask while the chat runs, so the gear bar stops offering them.
+                    Expect("chat check","Equipment heading",GearKeysInChat);
+                    yield return Press(Key.Digit2);
                     yield return new WaitForSeconds(.3f);
                     Expect("chat check, 2 asked","Chat check",asking+"\n      \""+said.Answers[1]+"\"\n3  "+said.Questions[2]);
                     Fits("chat check, 2 asked","Chat check");
+                    if(player.EquippedItemId!="confetti")failures.Add("chat check, 2 asked: 2 equipped slot 2 ("+player.EquippedItemId+")");
                     yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds);
                     Expect("chat check done","Chat check","(hidden)");
+                    Expect("chat check done","Equipment heading",GearKeys);
+                    // With no chat under way, 2 equips slot 2 again (and shows the keyboard reaches the HUD).
+                    yield return Press(Key.Digit2);
+                    yield return new WaitForSeconds(.3f);
+                    if(player.EquippedItemId!="map")failures.Add("chat check done: 2 did not equip slot 2 ("+player.EquippedItemId+")");
                     if(!seen.Confirmed)failures.Add("chat check done: the vision is still unchecked ("+session.Message+")");
                     if(Read("Prompt")==CheckDance)failures.Add("chat check done: a checked vision is offered again");
                 }
 
                 // Sam trips: you are sober beside a festivalgoer Sam has an unchecked vision about, and have nothing to check.
-                Trip(mate,3);sim.State.Visions.Add(new VisionState{Id="hud_vision",Kind="Buyer",NpcId=npc.Id});
+                mate.X=30;mate.Z=0;Trip(mate,3);sim.State.Visions.Add(new VisionState{Id="hud_vision",Kind="Buyer",NpcId=npc.Id});
                 player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
                 listed=Actions();
@@ -156,6 +179,8 @@ namespace Festival.Tests
                 session.Leave();
                 foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
                 Object.Destroy(hud);Object.Destroy(world);
+                InputSystem.RemoveDevice(keyboard);
+                input.backgroundBehavior=oldBackground;input.editorInputBehaviorInPlayMode=oldEditor;
             }
             yield return null;
             Assert.That(failures,Is.Empty,"Tripper HUD a player reads:\n"+string.Join("\n",failures));

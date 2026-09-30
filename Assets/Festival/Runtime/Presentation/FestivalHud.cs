@@ -649,6 +649,8 @@ namespace Festival.Presentation
             chatText.text=FestivalHudText.ChatPicker(state,player,chatQuestion);
             chatPanel.SetActive(!showMenu&&chatText.text!="");
             if(chatPanel.activeSelf)dialoguePanel.SetActive(false);
+            // 1-3 ask the chat's questions while it runs (UpdateKeyboard), so the gear bar stops offering them to equip.
+            inventoryHeading.text="GEAR   /   "+(chatPanel.activeSelf?"":"1–3 EQUIP     ")+"Q USE     G DROP";
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)
@@ -908,8 +910,8 @@ namespace Festival.Presentation
                 if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
                 if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
                 if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay $10 release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
-                if(handGear.Count>0){string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;AddAction("Offer "+ItemName(item)+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);}
             }
+            NpcState check=null;
             if(player.Life=="Spirit")
             {
                 if(Near(player,24,-20)&&state.ConnectedCrewCount==1&&player.RevivalCount<2)AddAction("Self revive at medical (15 seconds)",()=>session.Command("BeginRevival",player.Id),ref y);
@@ -934,24 +936,31 @@ namespace Festival.Presentation
                 }
                 if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
                 // The tripper beside someone they have an unchecked vision about: E checks by dancing, F (ChatKey) by chatting.
-                var check=FestivalHudText.CheckTarget(state,player);
+                check=FestivalHudText.CheckTarget(state,player);
                 if(check!=null)
                 {
                     string checkId=check.Id;
                     AddAction(FestivalHudText.CheckDanceAction,()=>session.Command("ConfirmDance",checkId),ref y);
                     AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
                 }
-                var npc=Nearest(state.Npcs,player.X,player.Z,2.5f);
-                if(npc!=null)
+            }
+            // Offering your gear to a friend in reach follows the errands above and the checks: the sober crew sticks by the
+            // tripper, so a friend is often in reach, and E must not hand them your gear instead of checking.
+            if(handGear.Count>0)
+            {
+                string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
+                foreach(var mate in state.Players)if(mate.Id!=player.Id&&FestivalSimulation.CanHandoff(player,mate))AddAction("Offer "+ItemName(item)+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);
+            }
+            var npc=state.Phase=="Playing"&&player.Life=="Alive"?Nearest(state.Npcs,player.X,player.Z,2.5f):null;
+            if(npc!=null)
+            {
+                if(npc.Kind=="Cop")AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);
+                else
                 {
-                    if(npc.Kind=="Cop")AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);
-                    else
-                    {
-                        AddAction(npc.CanTalk&&check==null?"Dance with festivalgoer  •  F CHAT":"Dance with festivalgoer",()=>session.Command("Dance",npc.Id),ref y);
-                        if(npc.CanTalk){AddAction("Chat with festivalgoer",()=>session.Command("Talk",npc.Id),ref y);AddAction("Talk and keep the beat",()=>session.Command("Conversation",npc.Id),ref y);}
-                        var stock=player.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");
-                        if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
-                    }
+                    AddAction(npc.CanTalk&&check==null?"Dance with festivalgoer  •  F CHAT":"Dance with festivalgoer",()=>session.Command("Dance",npc.Id),ref y);
+                    if(npc.CanTalk){AddAction("Chat with festivalgoer",()=>session.Command("Talk",npc.Id),ref y);AddAction("Talk and keep the beat",()=>session.Command("Conversation",npc.Id),ref y);}
+                    var stock=player.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");
+                    if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
                 }
             }
             prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
