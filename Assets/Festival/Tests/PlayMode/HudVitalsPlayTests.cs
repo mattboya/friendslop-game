@@ -21,7 +21,7 @@ namespace Festival.Tests
             var world=new GameObject("HUD vitals world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("HUD vitals");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
             var failures=new List<string>();
-            // The warning runs from its lead ("SECURITY ", "CROWD ") to the next separator, where the effects start.
+            // The warning runs from its lead ("ARREST ", "CROWD ") to the next separator, where the effects start.
             void WarningDrawn(string where,string lead)
             {
                 Text vitals=null;foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Vitals")vitals=text;
@@ -61,11 +61,11 @@ namespace Festival.Tests
                 // A cop saw the deal and is about to detain you.
                 var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.X=1.5f;cop.Z=0;cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
                 yield return new WaitForSeconds(.4f);
-                WarningDrawn("a dosed tripper mid-day, a cop about to detain them","SECURITY ARRESTWARNING");
+                WarningDrawn("a dosed tripper mid-day, a cop about to detain them","ARREST WARNING");
                 // Night 2's numbers, with the debrief's shot on top of the dose.
                 player.Effects.Add(new ActiveEffect{Id="shot",InstanceId="vitals_shot",RemainingSeconds=90});player.Cash=187;sim.State.StashCash=45;sim.State.LevelSales=225;
                 yield return new WaitForSeconds(.4f);
-                WarningDrawn("dosed with a shot, $187 / $45 / $225","SECURITY ARRESTWARNING");
+                WarningDrawn("dosed with a shot, $187 / $45 / $225","ARREST WARNING");
                 // The crowd turns on you instead: a festivalgoer beside you at 80.
                 cop.Evidence.Clear();cop.X=35;cop.Z=35;cop.TargetId="";
                 var watcher=wooks[0];watcher.X=3;watcher.Z=0;watcher.TargetId=player.Id;watcher.Suspicion=80;

@@ -268,15 +268,19 @@ namespace Festival.Presentation
         }
 
         /// <summary>
-        /// The player card's warning: the crowd's worst suspicion of p, or security's attention, or "CROWD CLEAR"; then p's effects.
+        /// The player card's warning: security stopping or about to detain p, else the crowd's worst suspicion, else "CROWD CLEAR";
+        /// then p's effects.
         /// The warning always comes first: the spinner's dose lasts the whole level (everyone's on Night 2) and must never hide it.
         /// </summary>
         public static string Condition(RoundState s,PlayerState p)
         {
             double suspicion=0;string mode="clear";
             foreach(var npc in s.Npcs)if(npc.Kind=="Wook"&&npc.Suspicion>suspicion){suspicion=npc.Suspicion;mode=npc.Mode;}
-            var police=s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id);
-            string warning=suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+mode.ToUpperInvariant():police==null?"CROWD CLEAR":"SECURITY "+police.Mode.ToUpperInvariant();
+            // Security on you outranks the crowd: an arrest warning detains you in seconds, and after a deal in view some festivalgoer
+            // nearly always holds a little suspicion. The worse of two cops on you shows; a cop on patrol is no warning.
+            bool Security(string copMode)=>s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode==copMode);
+            string warning=Security("ArrestWarning")?"ARREST WARNING":Security("Stop")?"SECURITY STOP"
+                :suspicion>0?"CROWD "+suspicion.ToString("0")+" / "+mode.ToUpperInvariant():"CROWD CLEAR";
             return p.Effects.Count>0?warning+Dot+Catalog.EffectsLine(p.Effects).ToUpperInvariant():warning;
         }
 

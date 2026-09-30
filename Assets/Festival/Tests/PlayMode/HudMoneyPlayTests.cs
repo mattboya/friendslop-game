@@ -106,7 +106,7 @@ namespace Festival.Tests
                 sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
                 var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.X=1.5f;cop.Z=0;cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
                 yield return new WaitForSeconds(.4f);
-                Expect("Day 1","Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  SECURITY ARRESTWARNING");
+                Expect("Day 1","Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  ARREST WARNING");
                 int quota=FestivalSimulation.DayQuota(sim.State);
                 Expect("Day 1","Objective title","DAY QUOTA  12 FRIENDSHIP BRACELETS / "+quota+" FRIENDSHIP BRACELETS");
                 Expect("Day 1","Objective detail","Sell "+(quota-12)+" friendship bracelets more before sundown.");
