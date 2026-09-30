@@ -1,0 +1,233 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalMarketCounter": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 10,
+      "triangles": 2240,
+      "separate": [],
+      "bounds": [
+        [
+          -3.37,
+          0.0,
+          -1.85
+        ],
+        [
+          3.37,
+          2.74,
+          0.43
+        ]
+      ],
+      "origin": [
+        -18,
+        0,
+        -20.05
+      ],
+      "surfaces": {
+        "row0": [
+          1.18,
+          -21.15
+        ],
+        "row1": [
+          2.07,
+          -20.05
+        ]
+      },
+      "collision": {
+        "center": [
+          -18,
+          0.59,
+          -21.35
+        ],
+        "size": [
+          6.7,
+          1.18,
+          0.82
+        ]
+      }
+    },
+    "FestivalPriceTag": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 208,
+      "separate": [],
+      "bounds": [
+        [
+          -0.49,
+          -0.131,
+          -0.06
+        ],
+        [
+          0.49,
+          0.146,
+          0.097
+        ]
+      ],
+      "origin": "board centre",
+      "textOffset": [
+        0,
+        0,
+        -0.038
+      ]
+    },
+    "FestivalBuntingPole": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 7,
+      "triangles": 972,
+      "separate": [],
+      "bounds": [
+        [
+          -0.22,
+          0.0,
+          -0.22
+        ],
+        [
+          2.38,
+          8.122,
+          0.22
+        ]
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "flagCentre": [
+        1.5,
+        6.8,
+        0
+      ],
+      "recolour": {
+        "CanvasRose": "CanvasGold"
+      }
+    },
+    "FestivalLightPole": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 724,
+      "separate": [],
+      "bounds": [
+        [
+          -0.35,
+          0.0,
+          -0.35
+        ],
+        [
+          0.35,
+          7.545,
+          0.35
+        ]
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "light": [
+        0,
+        7,
+        0
+      ],
+      "recolour": {
+        "StageGlowGold": "StageGlowRose"
+      }
+    },
+    "FestivalDJRiser": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 8,
+      "triangles": 1088,
+      "separate": [],
+      "bounds": [
+        [
+          -1.913,
+          0.0,
+          -0.715
+        ],
+        [
+          4.89,
+          0.22,
+          1.116
+        ]
+      ],
+      "origin": [
+        0,
+        1.4,
+        30.15
+      ],
+      "surfaces": {
+        "plinthTop": 1.62,
+        "riserTop": 1.48
+      }
+    },
+    "FestivalStockPrism": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 8,
+      "triangles": 532,
+      "separate": [],
+      "bounds": [
+        [
+          -0.226,
+          0.01,
+          -0.232
+        ],
+        [
+          0.226,
+          0.583,
+          0.232
+        ]
+      ],
+      "origin": "bottom centre",
+      "reference": [
+        [
+          -0.245,
+          0.01,
+          -0.245
+        ],
+        [
+          0.245,
+          0.583,
+          0.245
+        ]
+      ]
+    },
+    "FestivalStockMoon": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 1024,
+      "separate": [],
+      "bounds": [
+        [
+          -0.236,
+          0.01,
+          -0.236
+        ],
+        [
+          0.236,
+          0.583,
+          0.236
+        ]
+      ],
+      "origin": "bottom centre",
+      "reference": [
+        [
+          -0.245,
+          0.01,
+          -0.245
+        ],
+        [
+          0.245,
+          0.583,
+          0.245
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,91 @@
+/Users/mboyajian/Code/friendslop-game/scripts/create_second_production_package.py:17: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m=bpy.data.materials.new(P+n);m.use_nodes=True;m.diffuse_color=(*c,1);bs=m.node_tree.nodes.get('Principled BSDF');bs.inputs['Base Color'].default_value=(*c,1);bs.inputs['Roughness'].default_value=CONFIG['surface']['roughness']
+/Users/mboyajian/Code/friendslop-game/scripts/create_second_production_package.py:221: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world=bpy.data.worlds.new(P+'Dusk');scene.world.use_nodes=True;scene.world.node_tree.nodes['Background'].inputs[0].default_value=(*G['world'],1)
+00:41.651  render           | Saved: '/Users/mboyajian/Code/friendslop-game/ArtSource/ProductionPackage02/package-preview.png'
+01:01.292  render           | Saved: '/Users/mboyajian/Code/friendslop-game/ArtSource/ProductionPackage02/dj-preview.png'
+Warning: No mesh data to join
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample02/AH02_Stage.fbx'
+export finished in 0.0203 sec.
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample02/AH02_SpeakerStack.fbx'
+export finished in 0.0054 sec.
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample02/AH02_DJStation.fbx'
+export finished in 0.0294 sec.
+Warning: No mesh data to join
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample02/AH02_FlightCase.fbx'
+export finished in 0.0046 sec.
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample02/AH02_SunTotem.fbx'
+export finished in 0.0049 sec.
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample02/AH02_MoonTotem.fbx'
+export finished in 0.0054 sec.
+Info: Saved as "SecondProductionPackage.blend"
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:49:19)
+
+Blender quit

@@ -1,0 +1,595 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/ProductionSample04",
+  "models": {
+    "AH04_GlowstickBundle": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 7,
+      "triangles": 899,
+      "separate": [],
+      "grip": "RodR",
+      "handAnchor": [
+        0,
+        0.28,
+        0
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "stands on end; bundle axis +Y, wrap label faces -Z"
+    },
+    "AH04_LandmarkStickers": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 9,
+      "triangles": 851,
+      "separate": [],
+      "grip": "PaperR",
+      "handAnchor": [
+        0.19,
+        0.006,
+        0.18
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "flat paper: face +Y, page top +Z (FestivalMap convention; tilt about X to face the camera)"
+    },
+    "AH04_DisposableCamera": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 7,
+      "triangles": 495,
+      "separate": [],
+      "grip": "TinR",
+      "handAnchor": [
+        0.11,
+        0.1,
+        0
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "lens and flash face -Z (toward the first-person camera)"
+    },
+    "AH04_BuddyTether": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 1140,
+      "separate": [],
+      "grip": "BagR",
+      "handAnchor": [
+        -0.36,
+        0.012,
+        -0.051
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "lies flat; Rose carabiner (-X) is the holder's end, Mint (+X) clips to the buddy"
+    },
+    "AH04_EarDefenders": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 916,
+      "separate": [],
+      "grip": "BagR",
+      "handAnchor": [
+        0,
+        0.401,
+        0
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "cups on +/-X resting on the table, band arch in the XY plane; front -Z"
+    },
+    "AH04_ClaimTicket": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 634,
+      "separate": [],
+      "grip": "PaperR",
+      "handAnchor": [
+        0.14,
+        0.005,
+        0.16
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "flat paper: face +Y, top +Z (FestivalStagePass convention)"
+    },
+    "AH04_ComplaintClipboard": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 8,
+      "triangles": 1076,
+      "separate": [],
+      "grip": "PaperR",
+      "handAnchor": [
+        0.2,
+        0.02,
+        0.18
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "flat board: face +Y, clip/top edge +Z (FestivalMap convention)"
+    },
+    "AH04_WorkOrderClipboard": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 8,
+      "triangles": 1293,
+      "separate": [],
+      "grip": "PaperR",
+      "handAnchor": [
+        0.2,
+        0.02,
+        0.18
+      ],
+      "runtimeSize": 0.5,
+      "orientation": "flat board: face +Y, clip/top edge +Z (FestivalMap convention)"
+    },
+    "AH04_PortableSpeaker": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 10,
+      "triangles": 1415,
+      "separate": [],
+      "carryGrip": "BagR",
+      "handAnchor": [
+        0,
+        0.55,
+        0
+      ],
+      "front": "-Z"
+    },
+    "AH04_BubbleMachine": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 9,
+      "triangles": 1576,
+      "separate": [
+        "BubbleMachine_Wheel__Gold",
+        "BubbleMachine_Wheel__Mint"
+      ],
+      "carryGrip": "BagR",
+      "handAnchor": [
+        0,
+        0.44,
+        0
+      ],
+      "front": "-Z",
+      "wheelAxis": "Z (spin about local Z at the pivot)"
+    },
+    "AH04_VendorTrolley": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 23,
+      "triangles": 2440,
+      "separate": [
+        "VendorTrolley_CasterL__Rubber",
+        "VendorTrolley_CasterR__Rubber",
+        "VendorTrolley_WheelL__Gold",
+        "VendorTrolley_WheelL__Metal",
+        "VendorTrolley_WheelL__Rubber",
+        "VendorTrolley_WheelR__Gold",
+        "VendorTrolley_WheelR__Metal",
+        "VendorTrolley_WheelR__Rubber"
+      ],
+      "pushGrip": "both hands",
+      "handAnchor": [
+        0.85,
+        0.92,
+        0
+      ],
+      "front": "-Z (open shelves face -Z)"
+    },
+    "AH04_MysteryStockBox": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 13,
+      "triangles": 1027,
+      "separate": [
+        "MysteryStockBox_FlapB__Cream",
+        "MysteryStockBox_FlapB__PaintGold",
+        "MysteryStockBox_FlapF__Cream",
+        "MysteryStockBox_FlapF__Dark",
+        "MysteryStockBox_FlapF__PaintGold",
+        "MysteryStockBox_FlapF__Rose",
+        "MysteryStockBox_FlapF__White"
+      ],
+      "carryGrip": "TinR (two-hand carry)",
+      "handAnchor": [
+        0.23,
+        0.24,
+        0
+      ],
+      "front": "-Z",
+      "flaps": "hinge about local X at the pivot; FlapF opens toward -Z, FlapB toward +Z"
+    },
+    "AH04_MascotHead": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 1916,
+      "separate": [],
+      "attach": "origin = FestivalCharacter Head bone head (character source space (0,1.65,0)); parent to the Head bone with no extra offset/scale",
+      "front": "+Z (matches FestivalCharacter facing)",
+      "fits": "source-space head incl. ears/hair (x +/-0.32, z -0.26..0.31, top 0.69 above the bone); hats hidden while worn",
+      "screen": "wearer eye line looks out through the mouth mesh screen at 0.28 above the bone"
+    },
+    "AH04_PoiRibbon": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 18,
+      "triangles": 872,
+      "separate": [
+        "PoiRibbon_CordL__Cream",
+        "PoiRibbon_CordR__Cream",
+        "PoiRibbon_HandleL__CanvasDark",
+        "PoiRibbon_HandleL__Dark",
+        "PoiRibbon_HandleL__Metal",
+        "PoiRibbon_HandleL__Rose",
+        "PoiRibbon_HandleR__CanvasDark",
+        "PoiRibbon_HandleR__Dark",
+        "PoiRibbon_HandleR__Metal",
+        "PoiRibbon_HandleR__Rose",
+        "PoiRibbon_HeadL__CanvasGold",
+        "PoiRibbon_HeadL__CanvasRose",
+        "PoiRibbon_HeadL__Gold",
+        "PoiRibbon_HeadL__Metal",
+        "PoiRibbon_HeadR__CanvasGold",
+        "PoiRibbon_HeadR__CanvasRose",
+        "PoiRibbon_HeadR__Gold",
+        "PoiRibbon_HeadR__Metal"
+      ],
+      "grip": "RodL (Handle L) / RodR (Handle R)",
+      "handAnchor": "Handle pivots (handle centre)",
+      "hierarchy": "Handle > Cord > Head (keep); Cord pivot = cord attach under the handle swivel, Head pivot = cord attach on the head",
+      "pivots": {
+        "HandleL": [
+          -0.15,
+          1.188,
+          0
+        ],
+        "CordL": [
+          -0.15,
+          1.105,
+          0
+        ],
+        "HeadL": [
+          -0.15,
+          0.67,
+          0
+        ],
+        "HandleR": [
+          0.15,
+          1.188,
+          0
+        ],
+        "CordR": [
+          0.15,
+          1.105,
+          0
+        ],
+        "HeadR": [
+          0.15,
+          0.67,
+          0
+        ]
+      },
+      "orientation": "hanging display: finger loop over a peg, cord/heads hang along -Y"
+    },
+    "AH04_PoiGlow": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 14,
+      "triangles": 944,
+      "separate": [
+        "PoiGlow_CordL__Cream",
+        "PoiGlow_CordR__Cream",
+        "PoiGlow_HandleL__CanvasDark",
+        "PoiGlow_HandleL__Dark",
+        "PoiGlow_HandleL__Metal",
+        "PoiGlow_HandleL__Mint",
+        "PoiGlow_HandleR__CanvasDark",
+        "PoiGlow_HandleR__Dark",
+        "PoiGlow_HandleR__Metal",
+        "PoiGlow_HandleR__Mint",
+        "PoiGlow_HeadL__Dark",
+        "PoiGlow_HeadL__StageGlowRose",
+        "PoiGlow_HeadR__Dark",
+        "PoiGlow_HeadR__StageGlowRose"
+      ],
+      "grip": "RodL (Handle L) / RodR (Handle R)",
+      "handAnchor": "Handle pivots (handle centre)",
+      "hierarchy": "Handle > Cord > Head (keep); Cord pivot = cord attach under the handle swivel, Head pivot = cord attach on the head",
+      "pivots": {
+        "HandleL": [
+          -0.15,
+          1.188,
+          0
+        ],
+        "CordL": [
+          -0.15,
+          1.105,
+          0
+        ],
+        "HeadL": [
+          -0.15,
+          0.67,
+          0
+        ],
+        "HandleR": [
+          0.15,
+          1.188,
+          0
+        ],
+        "CordR": [
+          0.15,
+          1.105,
+          0
+        ],
+        "HeadR": [
+          0.15,
+          0.67,
+          0
+        ]
+      },
+      "orientation": "hanging display: finger loop over a peg, cord/heads hang along -Y"
+    },
+    "AH04_PoiPixel": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 20,
+      "triangles": 1240,
+      "separate": [
+        "PoiPixel_CordL__Cream",
+        "PoiPixel_CordR__Cream",
+        "PoiPixel_HandleL__CanvasDark",
+        "PoiPixel_HandleL__Dark",
+        "PoiPixel_HandleL__Gold",
+        "PoiPixel_HandleL__Metal",
+        "PoiPixel_HandleR__CanvasDark",
+        "PoiPixel_HandleR__Dark",
+        "PoiPixel_HandleR__Gold",
+        "PoiPixel_HandleR__Metal",
+        "PoiPixel_HeadL__Dark",
+        "PoiPixel_HeadL__Metal",
+        "PoiPixel_HeadL__StageGlowGold",
+        "PoiPixel_HeadL__StageGlowMint",
+        "PoiPixel_HeadL__StageGlowRose",
+        "PoiPixel_HeadR__Dark",
+        "PoiPixel_HeadR__Metal",
+        "PoiPixel_HeadR__StageGlowGold",
+        "PoiPixel_HeadR__StageGlowMint",
+        "PoiPixel_HeadR__StageGlowRose"
+      ],
+      "grip": "RodL (Handle L) / RodR (Handle R)",
+      "handAnchor": "Handle pivots (handle centre)",
+      "hierarchy": "Handle > Cord > Head (keep); Cord pivot = cord attach under the handle swivel, Head pivot = cord attach on the head",
+      "pivots": {
+        "HandleL": [
+          -0.15,
+          1.188,
+          0
+        ],
+        "CordL": [
+          -0.15,
+          1.105,
+          0
+        ],
+        "HeadL": [
+          -0.15,
+          0.67,
+          0
+        ],
+        "HandleR": [
+          0.15,
+          1.188,
+          0
+        ],
+        "CordR": [
+          0.15,
+          1.105,
+          0
+        ],
+        "HeadR": [
+          0.15,
+          0.67,
+          0
+        ]
+      },
+      "orientation": "hanging display: finger loop over a peg, cord/heads hang along -Y"
+    },
+    "AH04_PoiFire": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 14,
+      "triangles": 1480,
+      "separate": [
+        "PoiFire_CordL__Metal",
+        "PoiFire_CordR__Metal",
+        "PoiFire_HandleL__CanvasDark",
+        "PoiFire_HandleL__Metal",
+        "PoiFire_HandleL__Rubber",
+        "PoiFire_HandleR__CanvasDark",
+        "PoiFire_HandleR__Metal",
+        "PoiFire_HandleR__Rubber",
+        "PoiFire_HeadL__Dark",
+        "PoiFire_HeadL__Gold",
+        "PoiFire_HeadL__Metal",
+        "PoiFire_HeadR__Dark",
+        "PoiFire_HeadR__Gold",
+        "PoiFire_HeadR__Metal"
+      ],
+      "grip": "RodL (Handle L) / RodR (Handle R)",
+      "handAnchor": "Handle pivots (handle centre)",
+      "hierarchy": "Handle > Cord > Head (keep); Cord pivot = cord attach under the handle swivel, Head pivot = cord attach on the head",
+      "pivots": {
+        "HandleL": [
+          -0.15,
+          1.188,
+          0
+        ],
+        "CordL": [
+          -0.15,
+          1.105,
+          0
+        ],
+        "HeadL": [
+          -0.15,
+          0.67,
+          0
+        ],
+        "HandleR": [
+          0.15,
+          1.188,
+          0
+        ],
+        "CordR": [
+          0.15,
+          1.105,
+          0
+        ],
+        "HeadR": [
+          0.15,
+          0.67,
+          0
+        ]
+      },
+      "orientation": "hanging display: finger loop over a peg, cord/heads hang along -Y"
+    },
+    "AH04_PoiDoubleEnded": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 10,
+      "triangles": 508,
+      "separate": [
+        "PoiDoubleEnded_CordA__Cream",
+        "PoiDoubleEnded_CordB__Cream",
+        "PoiDoubleEnded_Handle__CanvasDark",
+        "PoiDoubleEnded_Handle__Dark",
+        "PoiDoubleEnded_Handle__Gold",
+        "PoiDoubleEnded_Handle__Metal",
+        "PoiDoubleEnded_HeadA__Dark",
+        "PoiDoubleEnded_HeadA__StageGlowGold",
+        "PoiDoubleEnded_HeadB__Dark",
+        "PoiDoubleEnded_HeadB__StageGlowMint"
+      ],
+      "grip": "RodR",
+      "handAnchor": "Handle pivots (handle centre)",
+      "hierarchy": "Handle > Cord > Head (keep); Cord pivot = cord attach under the handle swivel, Head pivot = cord attach on the head",
+      "pivots": {
+        "Handle": [
+          0,
+          1.188,
+          0
+        ],
+        "CordA": [
+          -0.045,
+          1.093,
+          0
+        ],
+        "HeadA": [
+          -0.1,
+          0.661,
+          0
+        ],
+        "CordB": [
+          0.045,
+          1.093,
+          0
+        ],
+        "HeadB": [
+          0.1,
+          0.661,
+          0
+        ]
+      },
+      "orientation": "hanging display: finger loop over a peg, cord/heads hang along -Y"
+    },
+    "AH04_SignPlates": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 40,
+      "triangles": 4736,
+      "separate": [
+        "SignPlates_BothWaysMedical__Metal",
+        "SignPlates_BothWaysMedical__Mint",
+        "SignPlates_BothWaysMedical__StageGlowRose",
+        "SignPlates_BothWaysMedical__White",
+        "SignPlates_Camp__Cream",
+        "SignPlates_Camp__Dark",
+        "SignPlates_Camp__Metal",
+        "SignPlates_Camp__Mint",
+        "SignPlates_Camp__Wood",
+        "SignPlates_DroopShuttle__Cream",
+        "SignPlates_DroopShuttle__Dark",
+        "SignPlates_DroopShuttle__Glass",
+        "SignPlates_DroopShuttle__Gold",
+        "SignPlates_DroopShuttle__Metal",
+        "SignPlates_DroopShuttle__StageGlowRose",
+        "SignPlates_Market__Blue",
+        "SignPlates_Market__Cream",
+        "SignPlates_Market__Metal",
+        "SignPlates_Medical__Dark",
+        "SignPlates_Medical__Metal",
+        "SignPlates_Medical__Mint",
+        "SignPlates_Medical__White",
+        "SignPlates_Shuttle__Cream",
+        "SignPlates_Shuttle__Dark",
+        "SignPlates_Shuttle__Glass",
+        "SignPlates_Shuttle__Gold",
+        "SignPlates_Shuttle__Metal",
+        "SignPlates_Stage__Cream",
+        "SignPlates_Stage__Gold",
+        "SignPlates_Stage__Metal",
+        "SignPlates_Stage__Rose",
+        "SignPlates_TwistCamp__Dark",
+        "SignPlates_TwistCamp__Metal",
+        "SignPlates_TwistCamp__Mint",
+        "SignPlates_TwistCamp__StageGlowMint",
+        "SignPlates_TwistCamp__Wood",
+        "SignPlates_WobbleStage__Gold",
+        "SignPlates_WobbleStage__Metal",
+        "SignPlates_WobbleStage__Rose",
+        "SignPlates_WobbleStage__StageGlowGold"
+      ],
+      "mountPivot": "FBX origin (0,0,0) = post axis at plate centre height; every plate object shares it",
+      "fitsPost": "AH03_WayfindingPost: 0.07 m post, plates 1.4 x 0.36 on the +Z face; parent at (0, 2.25 | 1.818 | 1.386, 0) with identity rotation",
+      "front": "+Z (as AH03 plates); arrow tip toward +X or -X per plate",
+      "plates": {
+        "Stage": {
+          "tip": "+X",
+          "hallucination": null
+        },
+        "Medical": {
+          "tip": "-X",
+          "hallucination": null
+        },
+        "Shuttle": {
+          "tip": "+X",
+          "hallucination": null
+        },
+        "Market": {
+          "tip": "-X",
+          "hallucination": null
+        },
+        "Camp": {
+          "tip": "+X",
+          "hallucination": null
+        },
+        "WobbleStage": {
+          "tip": "-X",
+          "hallucination": "wobble"
+        },
+        "BothWaysMedical": {
+          "tip": "+X",
+          "hallucination": "both"
+        },
+        "DroopShuttle": {
+          "tip": "+X",
+          "hallucination": "droop"
+        },
+        "TwistCamp": {
+          "tip": "-X",
+          "hallucination": "twist"
+        }
+      }
+    }
+  }
+}

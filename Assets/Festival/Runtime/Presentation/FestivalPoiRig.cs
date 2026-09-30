@@ -18,6 +18,11 @@ namespace Festival.Presentation
         Transform performer;
         float motionPhase;
         public bool Spinning;
+        /// <summary>Walking spin while poi are equipped: each head wheels beside its hand.</summary>
+        public bool Carrying;
+        /// <summary>Butterfly speed in radians per second; a dance sets its own beat.</summary>
+        public float SpinRate=9f;
+        float carryAngle,spinUp;
 
         public static FestivalPoiRig Create(Transform parent,Vector3 grip,int side,bool led,bool firstPerson=false)
         {
@@ -36,24 +41,14 @@ namespace Festival.Presentation
             // attachment frame still drives the same opposed orbit in first person.
             rig.performer=actor!=null?actor.transform:firstPerson?parent:null;
             rig.motionPhase=actor!=null?actor.MotionPhase:0;
-            var handle=GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            handle.layer=root.layer;handle.name="Poi handle held in palm";handle.transform.SetParent(root.transform,false);
-            handle.transform.localPosition=Vector3.zero;
-            handle.transform.localScale=new Vector3(.045f,.075f,.045f);
-            handle.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Dark");
-            Destroy(handle.GetComponent<Collider>());
-            var cap=GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            cap.layer=root.layer;cap.name="Handle pommel";cap.transform.SetParent(root.transform,false);
-            cap.transform.localPosition=new Vector3(0,.085f,0);cap.transform.localScale=Vector3.one*.075f;
-            cap.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Metal");
-            Destroy(cap.GetComponent<Collider>());
-            var ballObject=GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            ballObject.layer=root.layer;ballObject.name=led?"LED weighted poi head":"Weighted practice poi head";
-            ballObject.transform.localScale=Vector3.one*.15f;
-            ballObject.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor(led?"Mint":"Gold");
-            ballObject.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.Off;
-            Destroy(ballObject.GetComponent<Collider>());
-            rig.head=ballObject.transform;
+            // Handle and heads are Blender models from scripts/generate_poi_parts.py.
+            var handle=FestivalArtView.Create(root.transform,"FestivalPoiHandle");
+            if(handle!=null)handle.name="Poi handle held in palm";
+            var headObject=new GameObject(led?"LED weighted poi head":"Weighted practice poi head");headObject.layer=root.layer;
+            FestivalArtView.Create(headObject.transform,led?"FestivalPoiHeadLED":"FestivalPoiHeadPractice");
+            // First-person props are drawn smaller so a head passing near the camera stays readable.
+            if(firstPerson)headObject.transform.localScale=Vector3.one*.7f;
+            rig.head=headObject.transform;
             rig.rope=root.AddComponent<LineRenderer>();
             rig.rope.useWorldSpace=true;rig.rope.positionCount=2;
             // A 16 mm line reads as a rigid stick at character scale. Real
@@ -69,12 +64,10 @@ namespace Festival.Presentation
             // hangs below the grip and lags behind movement like a short flail.
             Vector3 grip=transform.position+transform.up*(firstPerson ? .085f : -.085f);
             float length=firstPerson?FirstPersonRopeLength:RopeLength;
-            Vector3 rest=firstPerson
-                ? (transform.forward*.18f-transform.up*.04f+transform.right*(side==0?-.32f:.32f)).normalized*length
-                : Vector3.down*length;
+            Vector3 rest=Vector3.down*length;
             if(!initialized||Vector3.Distance(previousGrip,grip)>3)
             {
-                ball=grip+rest;velocity=Vector3.zero;initialized=true;
+                ball=grip+rest;velocity=Vector3.zero;initialized=true;spinUp=0;
             }
             float dt=Mathf.Min(Time.deltaTime,.033f);
             if(dt>0)
@@ -85,7 +78,7 @@ namespace Festival.Presentation
                     // through the same high/low beat, while their lateral
                     // travel mirrors across the performer's center line.
                     // Smooth following supplies lag without stretching the cord.
-                    float angle=Time.time*9f+motionPhase;
+                    float angle=Time.time*SpinRate+motionPhase;spinUp=0;
                     float mirroredSide=side==0?-1f:1f;
                     // A small outward bias keeps the two weighted heads from
                     // occupying the same point at the top of the circle.
@@ -101,11 +94,33 @@ namespace Festival.Presentation
                         1-Mathf.Exp(-23f*dt))*length;
                     velocity=(ball-previousBall)/dt;
                 }
+                else if(Carrying&&performer!=null)
+                {
+                    // Forward wheels in the vertical plane beside each hand, the two
+                    // hands half a turn apart like an arm swing. Gravity shows in the
+                    // pace: the head slows over the top and whips through the bottom.
+                    Vector3 current=(ball-grip).sqrMagnitude>.0001f?(ball-grip).normalized:Vector3.down;
+                    Vector3 forward=Vector3.ProjectOnPlane(performer.forward,Vector3.up);
+                    forward=forward.sqrMagnitude>.0001f?forward.normalized:Vector3.forward;
+                    // Pick the wheel up from wherever the head hangs and swing it up to speed.
+                    if(spinUp==0)carryAngle=Mathf.Atan2(Vector3.Dot(current,forward),Vector3.Dot(current,Vector3.up));
+                    spinUp=Mathf.MoveTowards(spinUp,1,2.5f*dt);
+                    carryAngle+=7.5f*spinUp*(1-.35f*current.y)*dt;
+                    Vector3 outward=Vector3.Cross(Vector3.up,forward)*(side==0?-1f:1f);
+                    // In first person the wheel leans outward and down so heads sweep beside
+                    // and below the hands, topping out just under the eyeline.
+                    Vector3 orbit=Vector3.up*Mathf.Cos(carryAngle)+forward*Mathf.Sin(carryAngle)+
+                        (firstPerson?outward*1.1f-Vector3.up*.35f:outward*.28f);
+                    Vector3 previousBall=ball;
+                    ball=grip+Vector3.Slerp(current,orbit.normalized,1-Mathf.Exp(-30f*dt))*length;
+                    velocity=(ball-previousBall)/dt;
+                }
                 else
                 {
-                    Vector3 acceleration=firstPerson
-                        ? (grip+rest-ball)*18f-velocity*4f+Physics.gravity*.28f
-                        : Physics.gravity*1.35f-velocity*.5f;
+                    // An idle head is a pendulum under full gravity, never sprung toward the hand.
+                    // The damping stands in for the hand stilling the cord after a stop.
+                    spinUp=0;
+                    Vector3 acceleration=Physics.gravity*1.35f-velocity*1.7f;
                     velocity+=acceleration*dt;
                     velocity*=Mathf.Exp(-.8f*dt);
                     Vector3 previousBall=ball;
@@ -118,7 +133,8 @@ namespace Festival.Presentation
             }
             // The head lives outside the bone hierarchy so its world-space
             // tether can swing freely. Follow layer changes on local-player spawn.
-            if(head.gameObject.layer!=gameObject.layer)head.gameObject.layer=gameObject.layer;
+            if(head.gameObject.layer!=gameObject.layer)
+                foreach(var part in head.GetComponentsInChildren<Transform>(true))part.gameObject.layer=gameObject.layer;
             head.position=ball;
             rope.SetPosition(0,grip);rope.SetPosition(1,ball);
             previousGrip=grip;

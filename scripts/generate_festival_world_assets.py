@@ -469,9 +469,10 @@ def camp_shop():
         box("Horizontal checkout timber", (0, 1.0, .24+i*.19), (3.22, .12, .13), "Wood" if i%2 else "Cream")
     disc("Painted counter emblem", (0, 1.09, .68), .32, .08, "Gold", 24)
     disc("Counter emblem inset", (0, 1.15, .68), .19, .09, "Mint", 24)
+    counter_z, counter_thickness = 1.25, .10
     for i in range(7):
         x=-1.43+i*.475
-        box("Countertop plank", (x, .57, 1.25), (.44, 1.05, .10), "Wood")
+        box("Countertop plank", (x, .57, counter_z), (.44, 1.05, counter_thickness), "Wood")
     def awning_z(x,y):
         front=(y+1.65)/2.8
         return 3.33-.38*front+.09*(1-(x/2.05)**2)
@@ -498,9 +499,14 @@ def camp_shop():
                   (x1,y,awning_z(x1,y)-.07),.019,"CanvasCream",6)
     for x in (-1.45, 1.45):
         strut("Warm string light", (x, 1.12, 2.91), (x, -1.42, 2.91), .035, "Gold", 12)
+    # Cylinder z-scale is the full height (depth 1), so stack from the counter top:
+    # each jar stands on the planks and its wider lid sinks 1 cm over the rim.
+    counter_top = counter_z + counter_thickness / 2
+    jar_height, lid_height = .29, .05
     for x, color in ((-.68,"Rose"),(.22,"Glass"),(.83,"Gold")):
-        round_part("Checkout jar", (x, .22, 1.46), (.19, .19, .29), color, "cylinder")
-        round_part("Checkout jar lid", (x, .22, 1.76), (.21, .21, .05), "Metal", "cylinder")
+        round_part("Checkout jar", (x, .22, counter_top + jar_height / 2), (.19, .19, jar_height), color, "cylinder")
+        round_part("Checkout jar lid", (x, .22, counter_top + jar_height + lid_height / 2 - .01),
+                   (.21, .21, lid_height), "Metal", "cylinder")
 
 
 def medical():

@@ -1,0 +1,27 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalPoiHandle": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 356,
+      "separate": []
+    },
+    "FestivalPoiHeadLED": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 312,
+      "separate": []
+    },
+    "FestivalPoiHeadPractice": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 200,
+      "separate": []
+    }
+  }
+}

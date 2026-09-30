@@ -25,7 +25,9 @@ namespace Festival.Presentation
         SkinnedMeshRenderer gripSkin;
         string gripState="";
         Transform attachments;
-        FestivalPoiRig leftPoi,rightPoi,equippedPoi,unpaidPoi;
+        FestivalPoiRig leftPoi,rightPoi;
+        string pairItem="poi_led";
+        bool carryPoi;
         GameObject carriedBand;
         GameObject unpaidProp,equippedProp;
         string unpaidId="",equippedId="";
@@ -95,7 +97,7 @@ namespace Festival.Presentation
         static GameObject Held(Transform parent,string resource,Vector3 position,float scale)
         {
             var prop=FestivalArtView.Create(parent,resource);if(prop==null)return null;
-            prop.transform.localPosition=position;prop.transform.localRotation=resource=="FestivalStock"?Quaternion.Euler(0,180,0):Quaternion.identity;prop.transform.localScale=Vector3.one*scale;
+            prop.transform.localPosition=position;prop.transform.localRotation=resource.StartsWith("FestivalStock",System.StringComparison.Ordinal)?Quaternion.Euler(0,180,0):Quaternion.identity;prop.transform.localScale=Vector3.one*scale;
             return prop;
         }
         public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false)
@@ -112,17 +114,11 @@ namespace Festival.Presentation
             {
                 if(unpaidId!=""&&held==""&&player!=null&&previousCash>=0&&player.Cash<previousCash)handoffAt=Time.time;
                 if(unpaidProp!=null)Destroy(unpaidProp);
-                if(unpaidPoi!=null)Destroy(unpaidPoi.gameObject);
-                unpaidProp=null;unpaidPoi=null;unpaidId=held;
-                if(held!=""&&held!="little_spoon")
+                unpaidProp=null;unpaidId=held;
+                if(held!=""&&held!="little_spoon"&&!IsPoi(held))
                 {
-                    if(held=="poi_led"||held=="poi_practice")
-                        unpaidPoi=FestivalPoiRig.Create(attachments,RightPalm,1,held=="poi_led",true);
-                    else
-                    {
-                        var resource=FestivalSession.DropModel(held);
-                        if(resource!=null)unpaidProp=FestivalHeldItem.Create(attachments,held,RightPalm,true);
-                    }
+                    var resource=FestivalSession.DropModel(held);
+                    if(resource!=null)unpaidProp=FestivalHeldItem.Create(attachments,held,RightPalm,true);
                 }
             }
             string equipped=player?.EquippedItemId??"";
@@ -132,32 +128,44 @@ namespace Festival.Presentation
             if(equipped!=equippedId)
             {
                 if(equippedProp!=null)Destroy(equippedProp);
-                if(equippedPoi!=null)Destroy(equippedPoi.gameObject);
                 equippedProp=null;equippedId=equipped;
-                if(equipped=="poi_led"||equipped=="poi_practice")equippedPoi=FestivalPoiRig.Create(attachments,RightPalm,1,equipped=="poi_led",true);
-                else
+                if(!IsPoi(equipped))
                 {
                     var resource=FestivalSession.DropModel(equipped);
                     if(resource!=null)equippedProp=FestivalHeldItem.Create(attachments,equipped,RightPalm,true);
                 }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_equipment","item="+(equipped==""?"none":equipped)+" grip="+(equippedPoi!=null?"poi":equippedProp!=null?"prop":"none")+" palm="+RightPalm);
+                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_equipment","item="+(equipped==""?"none":equipped)+" grip="+(IsPoi(equipped)?"poi_pair":equippedProp!=null?"prop":"none")+" palm="+RightPalm);
 #endif
             }
+            // Poi are a pair: one per hand. Held or equipped poi hang still, wheel beside
+            // the hands while walking, and a poi performance switches both to the butterfly.
+            bool alive=player!=null&&player.Life=="Alive";
             bool poi=player!=null && player.VisualPose=="Poi";
-            if(leftPoi!=null){leftPoi.gameObject.SetActive(poi);leftPoi.Spinning=poi;}
-            if(rightPoi!=null){rightPoi.gameObject.SetActive(poi);rightPoi.Spinning=poi;}
-            if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !poi && held=="");
-            if(unpaidPoi!=null)unpaidPoi.gameObject.SetActive(player!=null&&player.Life=="Alive"&&!poi);
-            if(unpaidProp!=null)unpaidProp.SetActive(player!=null&&player.Life=="Alive"&&!poi);
-            if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&player.Life=="Alive");
-            if(equippedPoi!=null)equippedPoi.gameObject.SetActive(held==""&&!poi&&player.Life=="Alive");
-            SetGrip(poi?"poi":held!=""?held:equipped,player!=null&&player.Life=="Alive");
+            string carried=IsPoi(held)?held:held==""&&IsPoi(equipped)?equipped:"";
+            string wanted=carried!=""?carried:poi?pairItem:"";
+            if(wanted!=""&&wanted!=pairItem)
+            {
+                if(leftPoi!=null)Destroy(leftPoi.gameObject);
+                if(rightPoi!=null)Destroy(rightPoi.gameObject);
+                pairItem=wanted;
+                leftPoi=FestivalPoiRig.Create(attachments,new Vector3(-RightPalm.x,RightPalm.y,RightPalm.z),0,wanted=="poi_led",true);
+                rightPoi=FestivalPoiRig.Create(attachments,RightPalm,1,wanted=="poi_led",true);
+            }
+            bool showPoi=wanted!=""&&(alive||poi);
+            foreach(var rig in new[]{leftPoi,rightPoi})
+                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi;}
+            carryPoi=!poi;
+            if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !showPoi && held=="");
+            if(unpaidProp!=null)unpaidProp.SetActive(alive&&!poi);
+            if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&alive);
+            SetGrip(showPoi?"poi":held!=""?held:equipped,alive);
             presenting=receiving||!string.IsNullOrEmpty(player?.VisualOfferItem);
-            raiseRight=poi||held!=""||equipped!=""||receiving;
-            raiseLeft=poi||held=="map"||equipped=="map";
+            raiseRight=showPoi||held!=""||equipped!=""||receiving;
+            raiseLeft=showPoi||held=="map"||equipped=="map";
             previousCash=player?.Cash??-1;
         }
+        static bool IsPoi(string item)=>item=="poi_led"||item=="poi_practice";
         void SetGrip(string item,bool alive)
         {
             if(!alive)item="";
@@ -205,6 +213,9 @@ namespace Festival.Presentation
             transform.localPosition=rest+motion;
             // Attachment offsets use the same Blender Rest morph displacement.
             if(attachments!=null)attachments.localPosition=motion+LoweredGrip*restRight;
+            // Carried poi wheel only while the camera is travelling; standing still they hang.
+            if(leftPoi!=null)leftPoi.Carrying=carryPoi&&movement>.15f;
+            if(rightPoi!=null)rightPoi.Carrying=carryPoi&&movement>.15f;
             if(leftPoi!=null)leftPoi.transform.localPosition=new Vector3(-RightPalm.x,RightPalm.y,RightPalm.z)+Vector3.Scale(LoweredGrip,new Vector3(-1,1,1))*restLeft-LoweredGrip*restRight;
 
         }

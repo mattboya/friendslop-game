@@ -1,0 +1,415 @@
+{
+  "assets": {
+    "Medical": {
+      "file": "AH03_Medical.fbx",
+      "sourceObjects": 18,
+      "exportMeshes": 10,
+      "triangles": 7444,
+      "pivots": {}
+    },
+    "Security": {
+      "file": "AH03_Security.fbx",
+      "sourceObjects": 11,
+      "exportMeshes": 7,
+      "triangles": 7780,
+      "pivots": {}
+    },
+    "Shuttle": {
+      "file": "AH03_Shuttle.fbx",
+      "sourceObjects": 25,
+      "exportMeshes": 15,
+      "triangles": 10776,
+      "pivots": {
+        "AH03_DoorLeft": [
+          -1.309999942779541,
+          -1.6100000143051147,
+          0.4000000059604645
+        ],
+        "AH03_DoorRight": [
+          1.309999942779541,
+          -1.6100000143051147,
+          0.4000000059604645
+        ]
+      }
+    },
+    "StallSupplies": {
+      "file": "AH03_StallSupplies.fbx",
+      "sourceObjects": 11,
+      "exportMeshes": 7,
+      "triangles": 6072,
+      "pivots": {}
+    },
+    "StallStock": {
+      "file": "AH03_StallStock.fbx",
+      "sourceObjects": 12,
+      "exportMeshes": 8,
+      "triangles": 5612,
+      "pivots": {}
+    },
+    "CampShop": {
+      "file": "AH03_CampShop.fbx",
+      "sourceObjects": 13,
+      "exportMeshes": 12,
+      "triangles": 7372,
+      "pivots": {}
+    },
+    "Tent": {
+      "file": "AH03_Tent.fbx",
+      "sourceObjects": 6,
+      "exportMeshes": 6,
+      "triangles": 2172,
+      "pivots": {}
+    },
+    "DomeTent": {
+      "file": "AH03_DomeTent.fbx",
+      "sourceObjects": 7,
+      "exportMeshes": 7,
+      "triangles": 4260,
+      "pivots": {}
+    },
+    "CampCar": {
+      "file": "AH03_CampCar.fbx",
+      "sourceObjects": 8,
+      "exportMeshes": 8,
+      "triangles": 4836,
+      "pivots": {}
+    },
+    "CampVan": {
+      "file": "AH03_CampVan.fbx",
+      "sourceObjects": 9,
+      "exportMeshes": 9,
+      "triangles": 4420,
+      "pivots": {}
+    },
+    "CampShade": {
+      "file": "AH03_CampShade.fbx",
+      "sourceObjects": 6,
+      "exportMeshes": 6,
+      "triangles": 8444,
+      "pivots": {}
+    },
+    "PortaPotty": {
+      "file": "AH03_PortaPotty.fbx",
+      "sourceObjects": 13,
+      "exportMeshes": 5,
+      "triangles": 3080,
+      "pivots": {}
+    },
+    "TreeA": {
+      "file": "AH03_TreeA.fbx",
+      "sourceObjects": 8,
+      "exportMeshes": 3,
+      "triangles": 3352,
+      "pivots": {}
+    },
+    "TreeB": {
+      "file": "AH03_TreeB.fbx",
+      "sourceObjects": 8,
+      "exportMeshes": 3,
+      "triangles": 3032,
+      "pivots": {}
+    },
+    "TreeFir": {
+      "file": "AH03_TreeFir.fbx",
+      "sourceObjects": 8,
+      "exportMeshes": 3,
+      "triangles": 1710,
+      "pivots": {}
+    },
+    "GroveDetail": {
+      "file": "AH03_GroveDetail.fbx",
+      "sourceObjects": 5,
+      "exportMeshes": 5,
+      "triangles": 1722,
+      "pivots": {}
+    },
+    "LittleSpoon": {
+      "file": "AH03_LittleSpoon.fbx",
+      "sourceObjects": 3,
+      "exportMeshes": 3,
+      "triangles": 712,
+      "pivots": {}
+    },
+    "Confetti": {
+      "file": "AH03_Confetti.fbx",
+      "sourceObjects": 5,
+      "exportMeshes": 4,
+      "triangles": 1596,
+      "pivots": {}
+    },
+    "MerchBag": {
+      "file": "AH03_MerchBag.fbx",
+      "sourceObjects": 7,
+      "exportMeshes": 7,
+      "triangles": 4667,
+      "pivots": {}
+    },
+    "Map": {
+      "file": "AH03_Map.fbx",
+      "sourceObjects": 7,
+      "exportMeshes": 7,
+      "triangles": 1697,
+      "pivots": {}
+    },
+    "StagePass": {
+      "file": "AH03_StagePass.fbx",
+      "sourceObjects": 3,
+      "exportMeshes": 3,
+      "triangles": 729,
+      "pivots": {}
+    },
+    "Stock": {
+      "file": "AH03_Stock.fbx",
+      "sourceObjects": 5,
+      "exportMeshes": 5,
+      "triangles": 2686,
+      "pivots": {}
+    },
+    "Voucher": {
+      "file": "AH03_Voucher.fbx",
+      "sourceObjects": 3,
+      "exportMeshes": 3,
+      "triangles": 531,
+      "pivots": {}
+    },
+    "Stash": {
+      "file": "AH03_Stash.fbx",
+      "sourceObjects": 33,
+      "exportMeshes": 5,
+      "triangles": 5640,
+      "pivots": {
+        "AH03_StashLid": [
+          0.0,
+          0.574999988079071,
+          1.0
+        ]
+      }
+    },
+    "Bench": {
+      "file": "AH03_Bench.fbx",
+      "sourceObjects": 10,
+      "exportMeshes": 2,
+      "triangles": 824,
+      "pivots": {}
+    },
+    "CrowdBarrier": {
+      "file": "AH03_CrowdBarrier.fbx",
+      "sourceObjects": 13,
+      "exportMeshes": 2,
+      "triangles": 588,
+      "pivots": {}
+    },
+    "RecyclingBin": {
+      "file": "AH03_RecyclingBin.fbx",
+      "sourceObjects": 4,
+      "exportMeshes": 3,
+      "triangles": 1788,
+      "pivots": {}
+    },
+    "WayfindingPost": {
+      "file": "AH03_WayfindingPost.fbx",
+      "sourceObjects": 8,
+      "exportMeshes": 6,
+      "triangles": 3393,
+      "pivots": {}
+    },
+    "StringLights": {
+      "file": "AH03_StringLights.fbx",
+      "sourceObjects": 23,
+      "exportMeshes": 4,
+      "triangles": 4288,
+      "pivots": {}
+    },
+    "WaterBottle": {
+      "file": "AH03_WaterBottle.fbx",
+      "sourceObjects": 4,
+      "exportMeshes": 2,
+      "triangles": 852,
+      "pivots": {}
+    },
+    "RecoveryWristband": {
+      "file": "AH03_RecoveryWristband.fbx",
+      "sourceObjects": 5,
+      "exportMeshes": 3,
+      "triangles": 484,
+      "pivots": {
+        "AH03_WristSocket": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "ShuttleStop": {
+      "file": "AH03_ShuttleStop.fbx",
+      "sourceObjects": 5,
+      "exportMeshes": 3,
+      "triangles": 2416,
+      "pivots": {}
+    }
+  },
+  "placementsBlender": {
+    "Medical": [
+      -24.0,
+      0,
+      0
+    ],
+    "Security": [
+      -12.0,
+      0,
+      0
+    ],
+    "Shuttle": [
+      0.0,
+      0,
+      0
+    ],
+    "StallSupplies": [
+      12.0,
+      0,
+      0
+    ],
+    "StallStock": [
+      24.0,
+      0,
+      0
+    ],
+    "CampShop": [
+      -24.0,
+      -12,
+      0
+    ],
+    "Tent": [
+      -12.0,
+      -12,
+      0
+    ],
+    "DomeTent": [
+      0.0,
+      -12,
+      0
+    ],
+    "CampCar": [
+      12.0,
+      -12,
+      0
+    ],
+    "CampVan": [
+      24.0,
+      -12,
+      0
+    ],
+    "CampShade": [
+      -24.0,
+      -24,
+      0
+    ],
+    "PortaPotty": [
+      -12.0,
+      -24,
+      0
+    ],
+    "TreeA": [
+      0.0,
+      -24,
+      0
+    ],
+    "TreeB": [
+      12.0,
+      -24,
+      0
+    ],
+    "TreeFir": [
+      24.0,
+      -24,
+      0
+    ],
+    "GroveDetail": [
+      -24.0,
+      -36,
+      0
+    ],
+    "LittleSpoon": [
+      -12.0,
+      -36,
+      0
+    ],
+    "Confetti": [
+      0.0,
+      -36,
+      0
+    ],
+    "MerchBag": [
+      12.0,
+      -36,
+      0
+    ],
+    "Map": [
+      24.0,
+      -36,
+      0
+    ],
+    "StagePass": [
+      -24.0,
+      -48,
+      0
+    ],
+    "Stock": [
+      -12.0,
+      -48,
+      0
+    ],
+    "Voucher": [
+      0.0,
+      -48,
+      0
+    ],
+    "Stash": [
+      12.0,
+      -48,
+      0
+    ],
+    "Bench": [
+      24.0,
+      -48,
+      0
+    ],
+    "CrowdBarrier": [
+      -24.0,
+      -60,
+      0
+    ],
+    "RecyclingBin": [
+      -12.0,
+      -60,
+      0
+    ],
+    "WayfindingPost": [
+      0.0,
+      -60,
+      0
+    ],
+    "StringLights": [
+      12.0,
+      -60,
+      0
+    ],
+    "WaterBottle": [
+      24.0,
+      -60,
+      0
+    ],
+    "RecoveryWristband": [
+      -24.0,
+      -72,
+      0
+    ],
+    "ShuttleStop": [
+      -12.0,
+      -72,
+      0
+    ]
+  },
+  "source": "Incremental adaptation of original Generated/FestivalWorld and FestivalGear; eight new support assets.",
+  "status": "Unity/native review delegated to Sol."
+}

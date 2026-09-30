@@ -128,29 +128,29 @@
       "triangles": 176
     },
     "FestivalMerchBag": {
-      "parts": 2,
-      "renderers": 2,
-      "triangles": 288
+      "parts": 48,
+      "renderers": 7,
+      "triangles": 4667
     },
     "FestivalMap": {
-      "parts": 2,
-      "renderers": 2,
-      "triangles": 24
+      "parts": 63,
+      "renderers": 7,
+      "triangles": 1697
     },
     "FestivalStagePass": {
-      "parts": 2,
-      "renderers": 2,
-      "triangles": 24
+      "parts": 29,
+      "renderers": 3,
+      "triangles": 729
     },
     "FestivalStock": {
-      "parts": 2,
-      "renderers": 2,
-      "triangles": 80
+      "parts": 16,
+      "renderers": 5,
+      "triangles": 2686
     },
     "FestivalVoucher": {
-      "parts": 2,
-      "renderers": 2,
-      "triangles": 24
+      "parts": 7,
+      "renderers": 3,
+      "triangles": 531
     },
     "FestivalStash": {
       "parts": 2,

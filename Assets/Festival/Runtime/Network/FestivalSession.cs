@@ -104,6 +104,7 @@ namespace Festival.Network
             else if(host!="")Join(Argument(args,"--name","Friend"),host,port);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(Array.IndexOf(args,"--smoke-test")>=0||Array.IndexOf(args,"--solo-smoke-test")>=0||Array.IndexOf(args,"--ui-screens")>=0)gameObject.AddComponent<DevelopmentSmoke>();
+            if(Array.IndexOf(args,"--art-review")>=0||Array.IndexOf(args,"--motion-review")>=0)gameObject.AddComponent<ArtReviewCapture>();
 #endif
         }
         static string Argument(string[] args,string key,string fallback){int i=Array.IndexOf(args,key);return i>=0&&i+1<args.Length?args[i+1]:fallback;}
@@ -527,7 +528,7 @@ namespace Festival.Network
                 foreach(var child in textObject.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
             }
             var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.PlayerDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);}
-            tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:pose=="Downed"?-.4f:0,z);
+            tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:0,z);
             tr.position=Vector3.Distance(tr.position,target)>5?target:Vector3.Lerp(tr.position,target,1-Mathf.Exp(-15*Time.unscaledDeltaTime));tr.rotation=Quaternion.Euler(0,angle,0);
             var nameTag=names[id];nameTag.text=label;nameTag.transform.parent.rotation=ViewCamera.transform.rotation;
             nameBubbles[id].localScale=new Vector3(Mathf.Max(.9f,label.Length*.033f+.28f),.29f,.05f);
@@ -546,7 +547,8 @@ namespace Festival.Network
             if(item=="medical_voucher")return "FestivalVoucher";
             if(item=="stash_box")return "FestivalStash";
             if(item=="poi_led"||item=="poi_practice")return "FestivalPoi";
-            if(item=="stock_lsd"||item=="stock_mushrooms")return "FestivalStock";
+            if(item=="stock_lsd")return "FestivalStockPrism";
+            if(item=="stock_mushrooms")return "FestivalStockMoon";
             return null;
         }
         private static Color PlayerColor(string id){int h=0;foreach(char c in id)h=unchecked(h*31+c);return Color.HSVToRGB((h&0xffff)/65536f,.6f,.95f);}

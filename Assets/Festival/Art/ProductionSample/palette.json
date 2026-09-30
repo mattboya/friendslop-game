@@ -1,0 +1,193 @@
+{
+  "entries": [
+    {
+      "name": "AH01_SkinA",
+      "rgb": [
+        0.67,
+        0.37,
+        0.23
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_SkinV",
+      "rgb": [
+        0.82,
+        0.57,
+        0.36
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Coral",
+      "rgb": [
+        0.72,
+        0.2,
+        0.15
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Teal",
+      "rgb": [
+        0.055,
+        0.29,
+        0.28
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Ochre",
+      "rgb": [
+        0.83,
+        0.5,
+        0.13
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Cream",
+      "rgb": [
+        0.88,
+        0.78,
+        0.57
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Ink",
+      "rgb": [
+        0.026,
+        0.042,
+        0.055
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_White",
+      "rgb": [
+        0.96,
+        0.93,
+        0.83
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_HairA",
+      "rgb": [
+        0.14,
+        0.075,
+        0.047
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_HairV",
+      "rgb": [
+        0.12,
+        0.12,
+        0.14
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Wood",
+      "rgb": [
+        0.26,
+        0.135,
+        0.066
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_WoodLight",
+      "rgb": [
+        0.43,
+        0.25,
+        0.12
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Metal",
+      "rgb": [
+        0.2,
+        0.24,
+        0.25
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Rubber",
+      "rgb": [
+        0.038,
+        0.047,
+        0.042
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Ground",
+      "rgb": [
+        0.145,
+        0.155,
+        0.085
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Dirt",
+      "rgb": [
+        0.29,
+        0.18,
+        0.105
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Stone",
+      "rgb": [
+        0.3,
+        0.34,
+        0.28
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Leaf",
+      "rgb": [
+        0.09,
+        0.21,
+        0.12
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_LeafLight",
+      "rgb": [
+        0.22,
+        0.32,
+        0.1
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_Glow",
+      "rgb": [
+        1,
+        0.57,
+        0.18
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH01_MintGlow",
+      "rgb": [
+        0.16,
+        0.85,
+        0.63
+      ],
+      "roughness": 0.72
+    }
+  ]
+}

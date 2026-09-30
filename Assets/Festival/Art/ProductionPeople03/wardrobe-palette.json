@@ -1,0 +1,76 @@
+{
+  "entries": [
+    {
+      "name": "AH03W_Skin",
+      "rgb": [
+        0.67,
+        0.37,
+        0.23
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Coral",
+      "rgb": [
+        0.72,
+        0.2,
+        0.15
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Ink",
+      "rgb": [
+        0.026,
+        0.042,
+        0.055
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Teal",
+      "rgb": [
+        0.055,
+        0.29,
+        0.28
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Cream",
+      "rgb": [
+        0.88,
+        0.78,
+        0.57
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Dark",
+      "rgb": [
+        0.035,
+        0.04,
+        0.038
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Hair",
+      "rgb": [
+        0.1,
+        0.055,
+        0.035
+      ],
+      "roughness": 0.72
+    },
+    {
+      "name": "AH03W_Ochre",
+      "rgb": [
+        0.83,
+        0.5,
+        0.13
+      ],
+      "roughness": 0.72
+    }
+  ]
+}

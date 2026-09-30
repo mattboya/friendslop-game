@@ -90,3 +90,26 @@ The tote, tin, folded map, pass and voucher details are original geometry and pr
 ## First-person grip shapes — September 28, 2026
 
 `scripts/generate_festival_hands.py` authors segmented fingers and opposing thumbs with five original grip shape keys. The three hand shape variants and four sleeve variants remain in the existing FBX; staged Blender source and manifest are in `ArtSource/Generated/FestivalHands.blend` and `ArtSource/hands-manifest.json`. No external hand models, animation clips, or motion capture were used.
+
+## Camp car and tent interiors — September 29, 2026
+
+`scripts/generate_camp_interiors.py` authors original car and tent interior furnishing kits in `ArtSource/CampInteriors.blend`, exported as `FestivalCarInterior.fbx` and `FestivalTentInterior.fbx` in `Assets/Festival/Art/Resources`. They replace the Unity primitive furnishing inside the teleported camp rooms; the room shell, exit and lamp stay Unity geometry. The script audits that every part connects to the room shell and that nothing stands in the exit doorway. It writes `ArtSource/camp-interiors-manifest.json` and ignored review renders under `artifacts/camp-interiors/`. Run it with `Blender -b --factory-startup --python-expr "import bpy;bpy.ops.wm.read_homefile(use_empty=True)" --python scripts/generate_camp_interiors.py`, or open the source blend and rerun the script. No external model, texture or asset pack was used.
+
+## Camp, festival and package 04 set dressing — September 29, 2026
+
+All new models are original scripted Blender geometry built on the shared helper `scripts/festival_kit.py`. The helper authors in Unity axes, audits that every part rests on its support, and exports Workbench review renders and FBXs. No external model, texture or asset pack was used.
+
+- In the game (`Assets/Festival/Art/Resources`, replacing Unity primitive placeholders):
+  - `scripts/generate_camp_props.py`: roof loads, camp DJ, cooler, lantern stake, mat trim, picnic tables and review podium (`ArtSource/CampProps.blend`).
+  - `scripts/generate_camp_shop_dressing.py`: shop shelves, supply sign, counter goods, trailhead and porta-potty interior (`ArtSource/CampShopDressing.blend`).
+  - `scripts/generate_festival_dressing.py`: market counter, price tag, bunting pole, light pole, stage DJ riser, and the Prism tabs and Moon caps stock tins (`ArtSource/FestivalDressing.blend`).
+  - `scripts/generate_poi_parts.py`: poi handle (from the package 01 handle), LED head and practice head (`ArtSource/PoiParts.blend`).
+- Package 04 (`Assets/Festival/Art/ProductionSample04`, not yet used by gameplay):
+  - `scripts/generate_mission_props.py`: checkpoint, backstage and mission-objective props, plus a side stage.
+  - `scripts/generate_catalog_items.py`: backlog catalog items, poi variants and wayfinding sign plates.
+  - Sources and manifests are in `ArtSource/ProductionPackage04/`.
+- Package 04 people (`Assets/Festival/Art/ProductionPeople04`, not yet used by gameplay):
+  - `scripts/generate_people_motion_lod.py`: 16 rig-only motion clips in `AH04P_Motion.fbx`, which carry bone curves only and no shape-key curves, plus LOD1 and LOD2 of the nine AH03P cast.
+  - `scripts/generate_crew_uniform.py`: `AH04W_CrewUniform.fbx`, a crew role vest, lanyard and cap with the six Fit channels.
+- In-engine review: a development-only `--art-review <dir>` run of the macOS development player renders fixed views of the set dressing. `scripts/verify-release-diagnostics.mjs` checks that release builds exclude it.
+- Runtime motion: `Assets/Festival/Art/Resources/FestivalMotion.fbx` and `FestivalMotionActing.fbx` are unchanged copies of the package 04 and 03 rig-only motion exports (`AH04P_Motion.fbx` and `AH03P_Motion.fbx`). They were authored by `scripts/generate_people_motion_lod.py` and `scripts/upgrade_festival_people.py`, and `FestivalMotionLibrary` bakes them at runtime. No external animation or motion capture was used.

@@ -117,9 +117,8 @@ namespace Festival.Presentation
             ProxyBox("Stage backdrop",new Vector3(0,4,36),new Vector3(18,6,.5f),dark);
             Visual("FestivalStage",new Vector3(0,0,32));
             Sign("AFTER HOURS",new Vector3(0,6.50f,27.10f),gold,.20f);
-            Box("DJ console raised base",new Vector3(0,1.51f,30.15f),new Vector3(3.8f,.22f,1.4f),dark,false);
+            Visual("FestivalDJRiser",new Vector3(0,1.40f,30.15f));
             var djConsole=Visual("FestivalDJDeck",new Vector3(0,1.62f,30.15f));
-            Box("Resident DJ low riser",new Vector3(0,1.44f,30.88f),new Vector3(2.25f,.08f,.75f),dark,false);
             var stageDj=FestivalCharacter.Create(owned,"resident_stage_dj",Color.white,"Attendee");
             stageDj.Pose="Dj";
             stageDj.DjConsole=djConsole==null?null:djConsole.transform;
@@ -155,13 +154,8 @@ namespace Festival.Presentation
             ProxyBox("Speaker L",new Vector3(-10,2,31),new Vector3(2,4,2),dark);
             ProxyBox("Speaker R",new Vector3(10,2,31),new Vector3(2,4,2),dark);
             Booth("Vendor",new Vector3(-18,0,-22),rose,wood,"NIGHT MARKET");
-            Box("Night market merchandise counter",new Vector3(-18,.72f,-20.05f),new Vector3(6.7f,.16f,1),wood,false);
-            Box("Night market lower display ledge",new Vector3(-18,.67f,-21.15f),new Vector3(6.7f,.14f,.8f),wood,false);
-            Box("Night market shelf back",new Vector3(-18,1.4f,-19.55f),new Vector3(6.7f,1.5f,.16f),dark,false);
-            Box("Night market shelf ledge",new Vector3(-18,1.78f,-20.05f),new Vector3(6.7f,.09f,1),wood,false);
-            Box("Night market painted shelf edge",new Vector3(-18,1.78f,-20.57f),new Vector3(6.7f,.055f,.07f),rose,false);
-            for(int plank=0;plank<12;plank++)
-                Box("Night market counter plank",new Vector3(-21.04f+plank*.55f,1.84f,-20.05f),new Vector3(.48f,.025f,.92f),plank%3==0?artMaterials["Cream"]:wood,false);
+            // Display surfaces at y 1.18 and 2.07 hold shop items at their holder height + .12.
+            Visual("FestivalMarketCounter",new Vector3(-18,0,-20.05f));
             Visual("FestivalStallSupplies",new Vector3(-24,0,-19));
             Visual("FestivalStallPerformance",new Vector3(-18,0,-19));
             Visual("FestivalStallStock",new Vector3(-12,0,-19));
@@ -185,8 +179,10 @@ namespace Festival.Presentation
             for (int i=0;i<8;i++)
             {
                 float x = i%2==0 ? -33 : 33; float z=-28+(i/2)*17;
-                Box("Light pole",new Vector3(x,3.5f,z),new Vector3(.15f,7,.15f),wood);
-                var bulb=Box("Lantern",new Vector3(x,7,z),Vector3.one*.7f,i%2==0?lampGold:lampRose,false);
+                ProxyBox("Light pole",new Vector3(x,3.5f,z),new Vector3(.15f,7,.15f),wood);
+                if(i%2==1)Recolor(Visual("FestivalLightPole",new Vector3(x,0,z)),"StageGlowGold","StageGlowRose");
+                else Visual("FestivalLightPole",new Vector3(x,0,z));
+                var bulb=new GameObject("Lantern");bulb.transform.SetParent(owned,false);bulb.transform.localPosition=new Vector3(x,7,z);
                 var light=bulb.AddComponent<Light>();light.type=LightType.Point;light.range=13;light.intensity=2;light.color=i%2==0?new Color(1,.65f,.25f):new Color(1,.3f,.6f);light.shadows=LightShadows.None;
             }
             foreach(var staff in new[]{
@@ -240,19 +236,22 @@ namespace Festival.Presentation
             }
             foreach(var table in new[]{new Vector3(-24,0,2),new Vector3(22,0,-10)})
             {
-                Box("Festival picnic tabletop",table+new Vector3(0,.72f,0),new Vector3(2.4f,.14f,1.18f),wood);
-                ProxyBox("Festival picnic table base",table+new Vector3(0,.38f,0),new Vector3(1.5f,.76f,.60f),wood);
+                Visual("FestivalPicnicTableLarge",table);
+                ProxyBox("Festival picnic tabletop",table+new Vector3(0,.76f,0),new Vector3(2.9f,.06f,.93f),wood);
                 foreach(float side in new[]{-1f,1f})
-                    Box("Festival picnic bench",table+new Vector3(side*1.49f,.39f,0),new Vector3(.39f,.12f,2.10f),wood);
+                {
+                    ProxyBox("Festival picnic bench",table+new Vector3(0,.44f,side*.82f),new Vector3(2.9f,.06f,.312f),wood);
+                    ProxyBox("Festival picnic table base",table+new Vector3(side*1.05f,.4f,0),new Vector3(.1f,.8f,1.9f),wood);
+                }
             }
             var ambient=owned.gameObject.AddComponent<FestivalAmbientCrowd>();
             ambient.Build();
             for(int i=0;i<12;i++)
             {
                 float x=-28+i*5;
-                Box("Bunting pole",new Vector3(x,4,-14),new Vector3(.09f,8,.09f),wood,false);
-                var flag=Box("Festival pennant",new Vector3(x+1.5f,6.8f,-14),new Vector3(1.5f,.8f,.05f),i%2==0?rose:gold,false);
-                flag.transform.localRotation=Quaternion.Euler(0,0,-12+i%3*12);
+                var pole=Visual("FestivalBuntingPole",new Vector3(x,0,-14));
+                if(pole!=null)pole.transform.localRotation=Quaternion.Euler(0,-12+i%3*12,0);
+                if(i%2==1)Recolor(pole,"CanvasRose","CanvasGold");
             }
             for(int i=0;i<8;i++)
             {
@@ -363,11 +362,7 @@ namespace Festival.Presentation
             campMat.mainTexture=Resources.Load<Texture2D>("FestivalCanvas");
             campMat.mainTextureScale=new Vector2(5,5);
             Box("Camp gathering mat",new Vector3(0,.02f,0),new Vector3(17,.04f,15),campMat,false);
-            for(int stripe=0;stripe<7;stripe++)
-            {
-                float z=-6+stripe*2;
-                Box("Camp woven mat stripe",new Vector3(0,.049f,z),new Vector3(16,.012f,.11f),stripe%2==0?mint:rose,false);
-            }
+            Visual("FestivalMatTrim",Vector3.zero);
             foreach(float x in new[]{-4.3f,4.3f})
             {
                 var shade=Visual("FestivalCampShade",new Vector3(x,0,0));
@@ -392,8 +387,9 @@ namespace Festival.Presentation
             for(int i=0;i<4;i++)
             {
                 float x=i%2==0?-7.8f:7.8f,z=i<2?-6:6;
-                Box("Camp lantern stake",new Vector3(x,.7f,z),new Vector3(.09f,1.4f,.09f),wood,false);
-                var lantern=Box("Camp lantern",new Vector3(x,1.48f,z),new Vector3(.42f,.36f,.42f),i%2==0?lampGold:lampMint,false);
+                var stake=Visual("FestivalLanternStake",new Vector3(x,0,z));
+                if(i%2==1)Recolor(stake,"StageGlowGold","StageGlowMint");
+                var lantern=new GameObject("Camp lantern");lantern.transform.SetParent(owned,false);lantern.transform.localPosition=new Vector3(x,1.48f,z);
                 var light=lantern.AddComponent<Light>();light.type=LightType.Point;light.range=8;light.intensity=1.8f;light.color=i%2==0?new Color(1,.63f,.35f):new Color(.4f,1,.8f);
             }
             foreach(var site in CampFeatures.Sites)
@@ -421,9 +417,10 @@ namespace Festival.Presentation
                 else if(site.Kind=="Car")
                 {
                     ProxyBox("Parked car body",center+new Vector3(0,.7f,0),new Vector3(3.4f,1.4f,5.3f),dark);
-                    if(site.Id.EndsWith("2"))Box("Festival road trip surfboard",center+new Vector3(0,1.98f,0),new Vector3(.62f,.11f,2.4f),mint,false);
-                    if(site.Id.EndsWith("3"))Box("Overpacked roof box",center+new Vector3(0,2.03f,-.1f),new Vector3(1.4f,.36f,1.9f),gold,false);
-                    if(site.Id.EndsWith("4"))Box("Camp luggage stack",center+new Vector3(0,1.99f,-.3f),new Vector3(1.5f,.32f,1.3f),rose,false);
+                    // Roof loads are authored in camp-car space, so they share the car's yaw.
+                    string load=site.Id.EndsWith("2")?"FestivalRoofSurfboard":site.Id.EndsWith("3")?"FestivalRoofBox":site.Id.EndsWith("4")?"FestivalRoofLuggage":null;
+                    var roof=load==null?null:Visual(load,center);
+                    if(roof!=null)roof.transform.localRotation=Quaternion.Euler(0,site.Yaw,0);
                 }
                 else
                 {
@@ -433,25 +430,22 @@ namespace Festival.Presentation
             }
             BuildCampInteriors(wood,dark,mint,rose,gold);
             // The shared DJ is on the gathering mat. The server owns the track choice.
-            Box("Camp DJ table",new Vector3(CampFeatures.DjX,.76f,CampFeatures.DjZ),new Vector3(2.5f,.16f,1.0f),wood,false);
-            Box("Camp DJ deck",new Vector3(CampFeatures.DjX,.89f,CampFeatures.DjZ),new Vector3(1.65f,.10f,.68f),dark,false);
-            foreach(float x in new[]{-1.45f,1.45f})
-            {
-                Box("Camp DJ speaker",new Vector3(CampFeatures.DjX+x,1.16f,CampFeatures.DjZ),new Vector3(.52f,.86f,.44f),dark,false);
-                Box("Camp DJ speaker cone",new Vector3(CampFeatures.DjX+x,1.16f,CampFeatures.DjZ-.25f),new Vector3(.30f,.30f,.04f),mint,false);
-            }
-            Sign("CAMP DJ  •  PICK THE VIBE",new Vector3(CampFeatures.DjX,1.78f,CampFeatures.DjZ-.25f),gold,.037f);
-            Box("Round review podium",new Vector3(-8,.62f,3.6f),new Vector3(1.7f,1.2f,.8f),wood,false);
-            Sign("ROUND REVIEW",new Vector3(-8,1.39f,3.15f),rose,.038f);
+            // DJ and podium face north toward the shades, clear of the shade poles and the shop's
+            // interaction range. Sign boards sit flush on their .08 header boards (front faces .22 and .42),
+            // so the legend repeats on the header backs for players arriving from the south path.
+            var dj=Visual("FestivalCampDJ",new Vector3(CampFeatures.DjX,0,CampFeatures.DjZ));
+            if(dj!=null)dj.transform.localRotation=Quaternion.Euler(0,180,0);
+            Sign("CAMP DJ  •  PICK THE VIBE",new Vector3(CampFeatures.DjX,1.78f,CampFeatures.DjZ+.268f),gold,.037f,180,.143f);
+            var podium=Visual("FestivalReviewPodium",new Vector3(-CampFeatures.DjX,0,CampFeatures.DjZ));
+            if(podium!=null)podium.transform.localRotation=Quaternion.Euler(0,180,0);
+            Sign("ROUND REVIEW",new Vector3(-CampFeatures.DjX,1.39f,CampFeatures.DjZ+.468f),rose,.038f,180,.143f);
             // Camp life clusters make the shaded center feel used and provide
             // landmarks without obstructing the seller-to-trailhead route.
             foreach(float x in new[]{-5.2f,5.2f})
             {
-                Box("Camp picnic tabletop",new Vector3(x,.66f,-1.6f),new Vector3(2.2f,.12f,.9f),wood,false);
-                foreach(float side in new[]{-1f,1f})
-                    Box("Camp picnic bench",new Vector3(x+side*1.23f,.36f,-1.6f),new Vector3(.43f,.10f,1.8f),wood,false);
-                Box("Camp cooler body",new Vector3(x>0?x+1.65f:x-1.65f,.36f,-3.6f),new Vector3(.9f,.65f,.6f),x>0?mint:rose,false);
-                Box("Camp cooler lid",new Vector3(x>0?x+1.65f:x-1.65f,.73f,-3.6f),new Vector3(.96f,.1f,.66f),artMaterials["Cream"],false);
+                Visual("FestivalPicnicTable",new Vector3(x,0,-1.6f));
+                var cooler=Visual("FestivalCampCooler",new Vector3(x>0?x+1.65f:x-1.65f,0,-3.6f));
+                if(x>0)Recolor(cooler,"Rose","Mint");
             }
             for(int i=0;i<28;i++)
             {
@@ -462,30 +456,24 @@ namespace Festival.Presentation
             }
             ProxyBox("Seller table collision",new Vector3(0,.62f,8.8f),new Vector3(3.4f,1.2f,1),wood);
             Visual("FestivalCampShop",new Vector3(0,0,9.15f));
-            Box("Camp supplies signboard",new Vector3(0,2.5f,9.49f),new Vector3(4.5f,.66f,.12f),dark,false);
-            Sign("CAMP SUPPLIES",new Vector3(0,2.5f,9.4f),gold,.075f);
-            Box("Seller sign glow",new Vector3(0,2.12f,9.42f),new Vector3(4.4f,.08f,.08f),lampGold,false);
-            for(int i=0;i<5;i++)
-                Box("Seller counter goods",new Vector3(-1.2f+i*.6f,1.35f,8.65f),new Vector3(.30f,.24f,.36f),i%2==0?rose:mint,false);
+            // Sign text origins sit .0475 in front of each Blender backing so the Sign board lies flush.
+            Visual("FestivalSupplySign",new Vector3(0,0,9.15f));
+            Sign("CAMP SUPPLIES",new Vector3(0,2.5f,9.3825f),gold,.075f);
+            Visual("FestivalCounterGoods",new Vector3(0,0,9.15f));
             foreach(float x in new[]{-4.65f,4.65f})
             {
-                Box("Camp gear shelf",new Vector3(x,.74f,9.05f),new Vector3(3.45f,.14f,.8f),wood,false);
-                Box("Camp shelf back",new Vector3(x,1.15f,9.43f),new Vector3(3.45f,1.05f,.12f),dark,false);
-                Box("Camp shelf trim",new Vector3(x,1.76f,9.1f),new Vector3(3.5f,.12f,.85f),gold,false);
-                foreach(float edge in new[]{-1.7f,1.7f})
-                    Box("Shelf frame",new Vector3(x+edge,.94f,9.28f),new Vector3(.09f,1.78f,.09f),wood,false);
-                for(int slat=0;slat<8;slat++)
-                    Box("Seller shelf wood slat",new Vector3(x-1.46f+slat*.42f,.72f,9.04f),new Vector3(.34f,.055f,.88f),slat%2==0?wood:artMaterials["Cream"],false);
-                Sign(x<0?"ESSENTIALS":"FESTIVAL GEAR",new Vector3(x,1.45f,9.31f),gold,.047f);
+                // Shelf tops at y 1.184 and 2.074 carry the shop items; the label sits above the row-1 tags.
+                Visual("FestivalCampShelf",new Vector3(x,0,9.05f));
+                Sign(x<0?"ESSENTIALS":"FESTIVAL GEAR",new Vector3(x,1.86f,9.2925f),gold,.047f);
             }
             Box("Trailhead path",new Vector3(0,.045f,16),new Vector3(4.2f,.04f,14),path,false);
-            Box("Trailhead left post",new Vector3(-2,1.8f,19),new Vector3(.23f,3.6f,.24f),wood);
-            Box("Trailhead right post",new Vector3(2,1.8f,19),new Vector3(.23f,3.6f,.24f),wood);
-            Box("Trailhead crown",new Vector3(0,3.4f,19),new Vector3(4.2f,.42f,.35f),gold,false);
-            Sign("READY FOR THE FESTIVAL?",new Vector3(0,3.42f,18.8f),dark,.048f);
+            ProxyBox("Trailhead left post",new Vector3(-2,1.8f,19),new Vector3(.23f,3.6f,.24f),wood);
+            ProxyBox("Trailhead right post",new Vector3(2,1.8f,19),new Vector3(.23f,3.6f,.24f),wood);
+            Visual("FestivalTrailhead",new Vector3(0,0,19));
+            Sign("READY FOR THE FESTIVAL?",new Vector3(0,3.42f,18.7775f),dark,.048f);
             foreach(float x in new[]{-2f,2f})
             {
-                var bulb=Box("Trailhead light",new Vector3(x,3.02f,18.74f),Vector3.one*.28f,lampMint,false);
+                var bulb=new GameObject("Trailhead light");bulb.transform.SetParent(owned,false);bulb.transform.localPosition=new Vector3(x,3.02f,18.74f);
                 var light=bulb.AddComponent<Light>();light.type=LightType.Point;light.range=6;light.intensity=2;light.color=mint.color;
             }
             for(int i=0;i<28;i++)
@@ -591,90 +579,11 @@ namespace Festival.Presentation
                 interiorLight.range=7;interiorLight.intensity=2.8f;interiorLight.shadows=LightShadows.None;
                 interiorLight.color=kind=="Potty"?new Color(.7f,.9f,1f):new Color(1f,.86f,.66f);
                 Box(kind+" lamp shade",center+new Vector3(0,2.95f,-.35f),new Vector3(.65f,.12f,.65f),gold,false);
-                if(kind=="Car")
-                {
-                    Box("Car windshield",center+new Vector3(0,1.91f,2.76f),new Vector3(4.13f,1.08f,.07f),artMaterials["Glass"],false);
-                    Box("Car windscreen header",center+new Vector3(0,2.55f,2.65f),new Vector3(5.1f,.16f,.25f),dark,false);
-                    foreach(float side in new[]{-1f,1f})
-                    {
-                        Box("Car A pillar",center+new Vector3(side*2.23f,1.87f,2.60f),new Vector3(.20f,1.38f,.24f),dark,false);
-                        Box("Car side window",center+new Vector3(side*2.78f,1.92f,.20f),new Vector3(.07f,.94f,2.20f),artMaterials["Glass"],false);
-                        Box("Car window sill",center+new Vector3(side*2.72f,1.39f,.20f),new Vector3(.18f,.10f,2.42f),artMaterials["Metal"],false);
-                        Box("Car door latch",center+new Vector3(side*2.71f,1.09f,-.62f),new Vector3(.17f,.08f,.30f),gold,false);
-                        Box("Car bucket seat cushion",center+new Vector3(side*1.36f,.52f,.05f),new Vector3(1.27f,.36f,1.18f),rose,false);
-                        var back=Box("Car bucket seat back",center+new Vector3(side*1.36f,1.12f,.49f),new Vector3(1.22f,1.25f,.27f),rose,false);
-                        back.transform.localRotation=Quaternion.Euler(-9,0,0);
-                        Box("Car headrest",center+new Vector3(side*1.36f,1.87f,.52f),new Vector3(.60f,.29f,.24f),rose,false);
-                        Box("Car floor mat",center+new Vector3(side*1.36f,.11f,1.15f),new Vector3(1.35f,.02f,1.40f),dark,false);
-                    }
-                    Box("Car dashboard",center+new Vector3(0,1.02f,1.88f),new Vector3(4.75f,.39f,.97f),artMaterials["Metal"],false);
-                    Box("Car instrument cowl",center+new Vector3(-1.08f,1.27f,1.48f),new Vector3(1.26f,.24f,.44f),dark,false);
-                    for(int spoke=0;spoke<8;spoke++)
-                    {
-                        float angle=spoke*Mathf.PI/4;
-                        var segment=Box("Car steering wheel rim",center+new Vector3(-1+Mathf.Sin(angle)*.35f,1.48f+Mathf.Cos(angle)*.35f,1.04f),new Vector3(.29f,.07f,.11f),dark,false);
-                        segment.transform.rotation=Quaternion.Euler(0,0,-spoke*45);
-                    }
-                    Box("Car steering wheel hub",center+new Vector3(-1,1.48f,1.04f),new Vector3(.21f,.21f,.16f),gold,false);
-                    Box("Car radio",center+new Vector3(.7f,1.18f,1.08f),new Vector3(.62f,.24f,.12f),dark,false);
-                    for(int dial=0;dial<3;dial++)
-                        Box("Car ridiculous radio dial",center+new Vector3(.49f+dial*.20f,1.19f,1.015f),new Vector3(.075f,.075f,.04f),gold,false);
-                    Box("Car rear view mirror",center+new Vector3(0,2.30f,2.32f),new Vector3(.72f,.22f,.09f),dark,false);
-                    Box("Car hanging fuzzy dice",center+new Vector3(0,1.99f,2.30f),new Vector3(.18f,.18f,.18f),mint,false);
-                    Box("Car bobblehead body",center+new Vector3(1.7f,1.35f,1.1f),new Vector3(.18f,.25f,.18f),rose,false);
-                    campAnticProps[kind]=Box("Car bobblehead head",center+new Vector3(1.7f,1.55f,1.1f),Vector3.one*.24f,gold,false).transform;
-                    Box("Car rear bench",center+new Vector3(0,.45f,-2.38f),new Vector3(4.6f,.72f,.65f),rose,false);
-                }
-                else if(kind=="Tent")
-                {
-                    var groundsheet=FestivalArtView.MaterialFor("CanvasDark");
-                    foreach(float side in new[]{-1f,1f})
-                        Box("Tent groundsheet bound edge",center+new Vector3(side*2.70f,.11f,0),new Vector3(.08f,.035f,5.45f),groundsheet,false);
-                    foreach(float side in new[]{-1f,1f})
-                    {
-                        var roof=Box("Tent pitched interior liner",center+new Vector3(side*1.42f,2.47f,0),new Vector3(3.16f,.09f,5.55f),
-                            FestivalArtView.MaterialFor(side<0?"CanvasCream":"CanvasRose"),false);
-                        roof.transform.localRotation=Quaternion.Euler(0,0,side<0?25:-25);
-                        Box("Tent interior guy tape",center+new Vector3(side*2.34f,1.59f,0),new Vector3(.08f,.07f,5.30f),gold,false);
-                        foreach(float seamZ in new[]{-1.62f,1.62f})
-                        {
-                            var seam=Box("Tent liner stitched panel join",center+new Vector3(side*1.42f,2.49f,seamZ),new Vector3(3.12f,.025f,.045f),
-                                FestivalArtView.MaterialFor("CanvasGold"),false);
-                            seam.transform.localRotation=roof.transform.localRotation;
-                        }
-                    }
-                    foreach(float x in new[]{-1.15f,1.15f})
-                    {
-                        Box("Tent sleeping mat",center+new Vector3(x,.14f,.1f),new Vector3(1.3f,.055f,3.48f),groundsheet,false);
-                        SoftProp("Tent padded sleeping bag",center+new Vector3(x,.30f,.05f),new Vector3(1.05f,1.48f,.22f),
-                            x<0?FestivalArtView.MaterialFor("CanvasMint"):FestivalArtView.MaterialFor("CanvasGold"),Quaternion.Euler(90,0,0));
-                        SoftProp("Tent stuffed pillow",center+new Vector3(x,.42f,1.30f),new Vector3(.85f,.30f,.18f),
-                            FestivalArtView.MaterialFor("CanvasCream"),Quaternion.Euler(90,0,0));
-                        Box("Tent folded blanket",center+new Vector3(x,.39f,-1.04f),new Vector3(.88f,.06f,.38f),
-                            x<0?FestivalArtView.MaterialFor("CanvasRose"):FestivalArtView.MaterialFor("CanvasMint"),false);
-                    }
-                    Box("Tent hanging lantern cord",center+new Vector3(0,2.75f,1.9f),new Vector3(.035f,.40f,.035f),groundsheet,false);
-                    Box("Tent tiny lantern shade",center+new Vector3(0,2.49f,1.9f),new Vector3(.52f,.15f,.52f),groundsheet,false);
-                    Box("Tent tiny lantern",center+new Vector3(0,2.34f,1.9f),new Vector3(.30f,.27f,.30f),gold,false);
-                    Box("Tent rear organizer rail",center+new Vector3(-1.92f,1.68f,2.75f),new Vector3(1.15f,.07f,.06f),groundsheet,false);
-                    foreach(float x in new[]{-2.25f,-1.59f})
-                        Box("Tent canvas wall pocket",center+new Vector3(x,1.30f,2.72f),new Vector3(.49f,.53f,.10f),
-                            FestivalArtView.MaterialFor("CanvasGold"),false);
-                    Box("Tent camp cooler",center+new Vector3(0,.37f,2.1f),new Vector3(.85f,.65f,.7f),artMaterials["Blue"],false);
-                    campAnticProps[kind]=Box("Tent cooler lid",center+new Vector3(0,.72f,2.1f),new Vector3(.9f,.08f,.74f),artMaterials["Cream"],false).transform;
-                    Box("Tent zipper line",center+new Vector3(0,1.5f,2.78f),new Vector3(.05f,2.7f,.05f),gold,false);
-                }
-                else
-                {
-                    Box("Porta molded wall panel",center+new Vector3(0,1.53f,2.78f),new Vector3(4.95f,2.61f,.05f),artMaterials["Blue"],false);
-                    Box("Porta seat",center+new Vector3(0,.55f,1.7f),new Vector3(1.15f,1.1f,.9f),artMaterials["Cream"],false);
-                    campAnticProps[kind]=Box("Porta lid",center+new Vector3(0,1.15f,2.13f),new Vector3(1.23f,1.15f,.1f),artMaterials["Cream"],false).transform;
-                    Box("Porta mirror",center+new Vector3(0,1.9f,2.75f),new Vector3(1.2f,.9f,.08f),artMaterials["Glass"],false);
-                    Box("Emergency paper roll",center+new Vector3(1.9f,1.1f,.4f),new Vector3(.5f,.5f,.5f),artMaterials["Cream"],false);
-                    Box("Porta occupied sign",center+new Vector3(0,2.55f,2.68f),new Vector3(.6f,.22f,.1f),rose,false);
-                    Box("Porta coat hook",center+new Vector3(-1.9f,1.81f,.36f),new Vector3(.22f,.24f,.16f),gold,false);
-                    Box("Porta hand sanitizer",center+new Vector3(1.8f,1.27f,1.12f),new Vector3(.26f,.39f,.22f),mint,false);
-                }
+                // Furnishing kits from scripts/generate_camp_interiors.py and generate_camp_shop_dressing.py.
+                // The bobblehead head, cooler lid and toilet lid are separate meshes so the gag can bounce them.
+                var kit=Visual(kind=="Car"?"FestivalCarInterior":kind=="Tent"?"FestivalTentInterior":"FestivalPottyInterior",center);
+                string gag=kind=="Car"?"BobbleHead__Gold":kind=="Tent"?"CoolerLid__Cream":"PottyLid__Cream";
+                if(kit!=null)foreach(var part in kit.GetComponentsInChildren<Transform>(true))if(part.name==gag)campAnticProps[kind]=part;
                 room.SetActive(false);
             }
             owned=previous;
@@ -766,16 +675,11 @@ namespace Festival.Presentation
                 prop.transform.localScale=Vector3.one*(count==1?.43f:.29f);
             }
             props.Add(copies);
-            var card=GameObject.CreatePrimitive(PrimitiveType.Cube);card.name="Painted price tag";card.transform.SetParent(holder,false);
-            card.transform.localPosition=new Vector3(0,index<4?-.47f:-.39f,atCamp?-.48f:index<4?-.65f:-.63f);card.transform.localScale=new Vector3(.96f,.26f,.05f);
-            card.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Dark");
-            card.GetComponent<Collider>().enabled=false;Destroy(card.GetComponent<Collider>());
-            var edge=GameObject.CreatePrimitive(PrimitiveType.Cube);edge.name="Price tag accent";edge.transform.SetParent(holder,false);
-            edge.transform.localPosition=card.transform.localPosition+new Vector3(0,.13f,-.003f);edge.transform.localScale=new Vector3(.96f,.028f,.06f);
-            edge.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Gold");
-            edge.GetComponent<Collider>().enabled=false;Destroy(edge.GetComponent<Collider>());
+            var tagPosition=new Vector3(0,index<4?-.47f:-.39f,atCamp?-.48f:index<4?-.65f:-.63f);
+            var card=FestivalArtView.Create(holder,"FestivalPriceTag");
+            if(card!=null){card.name="Painted price tag";card.transform.localPosition=tagPosition;}
             var label=new GameObject("Name and price");label.transform.SetParent(holder,false);
-            label.transform.localPosition=card.transform.localPosition+new Vector3(0,0,-.038f);
+            label.transform.localPosition=tagPosition+new Vector3(0,0,-.038f);
             var text=label.AddComponent<TextMesh>();text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.fontSize=50;text.characterSize=.013f;text.color=new Color(.96f,.94f,.84f);
             if(worldFont!=null){text.font=worldFont;text.GetComponent<MeshRenderer>().sharedMaterial=worldFont.material;}
             tags.Add(text);
@@ -806,12 +710,12 @@ namespace Festival.Presentation
             if(view!=null)
             {
                 foreach(var sign in worldSigns)
-                    if(sign!=null)sign.GetComponent<Renderer>().enabled=Vector3.SqrMagnitude(view.position-sign.transform.position)<
-                        (sign.text=="CREW STASH"?64f:sign.text=="AFTER HOURS"?1600f:sign.text=="NIGHT MARKET"?484f:225f);
+                    if(sign!=null)sign.GetComponent<Renderer>().enabled=Readable(view,sign.transform,
+                        sign.text=="CREW STASH"?64f:sign.text=="AFTER HOURS"?1600f:sign.text=="NIGHT MARKET"?484f:225f);
                 foreach(var tag in campTags)
-                    if(tag!=null)tag.GetComponent<Renderer>().enabled=Vector3.SqrMagnitude(view.position-tag.transform.position)<64f;
+                    if(tag!=null)tag.GetComponent<Renderer>().enabled=Readable(view,tag.transform,64f);
                 foreach(var tag in marketTags)
-                    if(tag!=null)tag.GetComponent<Renderer>().enabled=Vector3.SqrMagnitude(view.position-tag.transform.position)<64f;
+                    if(tag!=null)tag.GetComponent<Renderer>().enabled=Readable(view,tag.transform,64f);
             }
             for(int i=0;i<stageLights.Count;i++)
             {
@@ -994,6 +898,14 @@ namespace Festival.Presentation
             var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
             renderer.shadowCastingMode=ShadowCastingMode.Off;
         }
+        private GameObject Recolor(GameObject go,string from,string to)
+        {
+            if(go==null)return null;
+            var material=artMaterials.TryGetValue(to,out var tint)?tint:FestivalArtView.MaterialFor(to);
+            foreach(var renderer in go.GetComponentsInChildren<Renderer>())
+                if(renderer.name.EndsWith("__"+from,System.StringComparison.Ordinal))renderer.sharedMaterial=material;
+            return go;
+        }
         private GameObject ProxyBox(string label,Vector3 position,Vector3 scale,Material material)
         {
             var go=Box(label,position,scale,material);
@@ -1060,7 +972,14 @@ namespace Festival.Presentation
             Visual(label=="SUN"?"FestivalSun":"FestivalMoon",position);
             Sign(label,position+new Vector3(0,2.95f,-.65f),accent,.075f);
         }
-        private void Sign(string label,Vector3 position,Material material,float size,float yaw=0)
+        // TextMesh font materials ignore depth, so text would draw mirrored through
+        // its own board. Only show a legend within range and from its readable side.
+        private static bool Readable(Transform view,Transform text,float sqrRange)
+        {
+            var offset=view.position-text.position;
+            return offset.sqrMagnitude<sqrRange&&Vector3.Dot(offset,text.forward)<0;
+        }
+        private void Sign(string label,Vector3 position,Material material,float size,float yaw=0,float backZ=0)
         {
             var go=new GameObject(label+" sign");go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localRotation=Quaternion.Euler(0,yaw,0);
             // Boogaloo glyphs are wider than the TextMesh character-size unit.
@@ -1073,7 +992,13 @@ namespace Festival.Presentation
             var backing=GameObject.CreatePrimitive(PrimitiveType.Cube);backing.name="Label bubble";backing.transform.SetParent(go.transform,false);
             backing.transform.localPosition=new Vector3(0,0,-.012f);backing.transform.localScale=new Vector3(width,height,.045f);
             backing.GetComponent<Renderer>().sharedMaterial=artMaterials["Dark"];var backingCollider=backing.GetComponent<Collider>();backingCollider.enabled=false;Dispose(backingCollider);
-            var face=new GameObject("Text");face.transform.SetParent(go.transform,false);face.transform.localPosition=new Vector3(0,0,-.050f);
+            SignFace(go.transform,label,size,new Vector3(0,0,-.050f),0);
+            // backZ>0 repeats the legend on the rear face of whatever the board is mounted on.
+            if(backZ>0)SignFace(go.transform,label,size,new Vector3(0,0,backZ),180);
+        }
+        private void SignFace(Transform board,string label,float size,Vector3 position,float yaw)
+        {
+            var face=new GameObject("Text");face.transform.SetParent(board,false);face.transform.localPosition=position;face.transform.localRotation=Quaternion.Euler(0,yaw,0);
             var text=face.AddComponent<TextMesh>();text.text=label;text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.characterSize=size;text.fontSize=48;text.color=new Color(.96f,.94f,.84f);
             if(worldFont!=null){text.font=worldFont;text.GetComponent<MeshRenderer>().sharedMaterial=worldFont.material;}
             worldSigns.Add(text);

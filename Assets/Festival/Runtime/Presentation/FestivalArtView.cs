@@ -29,6 +29,7 @@ namespace Festival.Presentation
             {"CanvasDark",new Color(.13f,.20f,.24f)},
             {"StageGlowGold",new Color(1f,.64f,.28f)},
             {"StageGlowMint",new Color(.28f,.92f,.75f)},
+            {"StageGlowRose",new Color(1f,.30f,.55f)},
             {"Rubber",new Color(.10f,.12f,.16f)},
             {"Glass",new Color(.30f,.73f,.79f)},{"White",new Color(.86f,.90f,.82f)}
         };

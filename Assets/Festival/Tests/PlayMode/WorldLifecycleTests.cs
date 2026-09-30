@@ -502,6 +502,13 @@ namespace Festival.Tests
                     var floor=room.Find(site.Kind+" interior floor").GetComponent<Renderer>();
                     Assert.That(rise.bounds.Intersects(floor.bounds),Is.False,site.Id+" floor is hidden by the woodland rise");
                     Assert.That(room.GetComponentsInChildren<Collider>(true),Is.Empty,site.Id+" decoration blocks interior movement");
+                    var kit=room.Find(site.Kind=="Car"?"FestivalCarInterior":site.Kind=="Tent"?"FestivalTentInterior":"FestivalPottyInterior");
+                    Assert.That(kit,Is.Not.Null,site.Id+" interior kit missing");
+                    var gag=System.Array.Find(kit.GetComponentsInChildren<Transform>(true),t=>t.name==(site.Kind=="Car"?"BobbleHead__Gold":site.Kind=="Tent"?"CoolerLid__Cream":"PottyLid__Cream"));
+                    Assert.That(gag,Is.Not.Null,site.Id+" gag prop missing");
+                    // The bobblehead sits on the passenger dash, the cooler and toilet at the rear wall; a flipped FBX axis moves them.
+                    var expected=site.Kind=="Car"?new Vector3(1.55f,1.80f,1.75f):site.Kind=="Tent"?new Vector3(0,.72f,2.10f):new Vector3(0,1.15f,2.13f);
+                    Assert.That(Vector3.Distance(kit.InverseTransformPoint(gag.position),expected),Is.LessThan(.05f),site.Id+" interior kit is mirrored or rotated");
                 }
             }
             finally{Object.Destroy(root);}
@@ -576,7 +583,7 @@ namespace Festival.Tests
                     Assert.That(NavMesh.CalculatePath(Vector3.zero,doorApproach,NavMesh.AllAreas,path),Is.True,site.Id+" has no path query");
                     Assert.That(path.status,Is.EqualTo(NavMeshPathStatus.PathComplete),site.Id+" is unreachable");
                 }
-                Assert.That(camp.Find("Trailhead crown"),Is.Not.Null);
+                Assert.That(camp.Find("FestivalTrailhead"),Is.Not.Null);
             }
             finally{Object.Destroy(root);}
             yield return null;

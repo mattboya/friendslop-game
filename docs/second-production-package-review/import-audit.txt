@@ -1,0 +1,200 @@
+Stage: renderers=10 triangles=40512 localScale=(1.00, 1.00, 1.00)
+  renderer=AH02_Stage_AH02_Coral bounds=Center: (7.30, 3.75, -4.20), Extents: (1.40, 2.35, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_Cream bounds=Center: (0.01, 6.92, 3.97), Extents: (1.76, 0.19, 0.00) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_Deck bounds=Center: (0.00, 0.70, 1.19), Extents: (8.99, 0.70, 5.69) materials=AH02_Deck:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_GoldGlow bounds=Center: (0.39, 4.45, -0.16), Extents: (7.75, 2.16, 3.94) materials=AH02_GoldGlow:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_Ink bounds=Center: (0.00, 3.64, 0.00), Extents: (9.00, 3.64, 4.55) materials=AH02_Ink:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_Metal bounds=Center: (0.00, 4.10, 0.96), Extents: (9.45, 4.00, 5.97) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_MetalDark bounds=Center: (0.00, 3.39, -0.17), Extents: (8.76, 3.39, 4.23) materials=AH02_MetalDark:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_MintGlow bounds=Center: (-1.59, 4.45, -0.10), Extents: (6.55, 2.16, 3.88) materials=AH02_MintGlow:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_Ochre bounds=Center: (0.00, 0.78, 5.73), Extents: (9.00, 0.63, 1.16) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_Stage_AH02_Teal bounds=Center: (0.00, 4.03, 0.00), Extents: (9.45, 4.03, 4.95) materials=AH02_Teal:Universal Render Pipeline/Lit
+SpeakerStack: renderers=4 triangles=7674 localScale=(1.00, 1.00, 1.00)
+  renderer=AH02_SpeakerStack_AH02_Ink bounds=Center: (0.00, 1.95, 0.00), Extents: (0.78, 1.95, 0.63) materials=AH02_Ink:Universal Render Pipeline/Lit
+  renderer=AH02_SpeakerStack_AH02_Metal bounds=Center: (0.00, 1.95, 0.21), Extents: (0.90, 1.95, 0.47) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_SpeakerStack_AH02_MetalDark bounds=Center: (0.00, 1.95, 0.58), Extents: (0.69, 1.86, 0.05) materials=AH02_MetalDark:Universal Render Pipeline/Lit,AH02_Ink:Universal Render Pipeline/Lit
+  renderer=AH02_SpeakerStack_AH02_Rubber bounds=Center: (0.00, 1.83, 0.58), Extents: (0.48, 1.54, 0.08) materials=AH02_Rubber:Universal Render Pipeline/Lit
+DJStation: renderers=58 triangles=23080 localScale=(1.00, 1.00, 1.00)
+  renderer=AH02_ChannelFader0_AH02_Cream bounds=Center: (0.29, 0.87, 0.20), Extents: (0.05, 0.03, 0.03) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_ChannelFader1_AH02_Cream bounds=Center: (0.10, 0.87, 0.16), Extents: (0.05, 0.03, 0.03) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_ChannelFader2_AH02_Cream bounds=Center: (-0.10, 0.87, 0.12), Extents: (0.05, 0.03, 0.03) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_ChannelFader3_AH02_Cream bounds=Center: (-0.29, 0.87, 0.08), Extents: (0.05, 0.03, 0.03) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_DJStation_AH02_Cream bounds=Center: (0.00, 0.42, 0.63), Extents: (0.78, 0.05, 0.00) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_DJStation_AH02_Ink bounds=Center: (0.00, 0.44, 0.00), Extents: (1.85, 0.36, 0.63) materials=AH02_Ink:Universal Render Pipeline/Lit
+  renderer=AH02_DJStation_AH02_MetalDark bounds=Center: (0.00, 0.82, 0.00), Extents: (1.81, 0.02, 0.58) materials=AH02_MetalDark:Universal Render Pipeline/Lit,AH02_Ink:Universal Render Pipeline/Lit
+  renderer=AH02_DJStation_AH02_MintGlow bounds=Center: (0.00, 0.84, -0.24), Extents: (1.35, 0.01, 0.33) materials=AH02_MintGlow:Universal Render Pipeline/Lit
+  renderer=AH02_DJStation_AH02_Rubber bounds=Center: (0.00, 0.13, -0.19), Extents: (1.78, 0.13, 0.74) materials=AH02_Rubber:Universal Render Pipeline/Lit
+  renderer=AH02_DJStation_AH02_Screen bounds=Center: (0.00, 0.83, -0.50), Extents: (1.36, 0.00, 0.09) materials=AH02_Screen:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_0_0_AH02_Cream bounds=Center: (0.29, 0.91, -0.08), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_0_0_AH02_Ochre bounds=Center: (0.29, 0.88, -0.10), Extents: (0.04, 0.04, 0.04) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_0_1_AH02_Cream bounds=Center: (0.29, 0.91, -0.19), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_0_1_AH02_Teal bounds=Center: (0.29, 0.88, -0.21), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_0_2_AH02_Cream bounds=Center: (0.29, 0.91, -0.30), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_0_2_AH02_Teal bounds=Center: (0.29, 0.88, -0.32), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_1_0_AH02_Cream bounds=Center: (0.10, 0.91, -0.08), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_1_0_AH02_Ochre bounds=Center: (0.10, 0.88, -0.10), Extents: (0.04, 0.04, 0.04) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_1_1_AH02_Cream bounds=Center: (0.10, 0.91, -0.19), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_1_1_AH02_Teal bounds=Center: (0.10, 0.88, -0.21), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_1_2_AH02_Cream bounds=Center: (0.10, 0.91, -0.30), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_1_2_AH02_Teal bounds=Center: (0.10, 0.88, -0.32), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_2_0_AH02_Cream bounds=Center: (-0.10, 0.91, -0.08), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_2_0_AH02_Ochre bounds=Center: (-0.10, 0.88, -0.10), Extents: (0.04, 0.04, 0.04) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_2_1_AH02_Cream bounds=Center: (-0.10, 0.91, -0.19), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_2_1_AH02_Teal bounds=Center: (-0.10, 0.88, -0.21), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_2_2_AH02_Cream bounds=Center: (-0.10, 0.91, -0.30), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_2_2_AH02_Teal bounds=Center: (-0.10, 0.88, -0.32), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_3_0_AH02_Cream bounds=Center: (-0.29, 0.91, -0.08), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_3_0_AH02_Ochre bounds=Center: (-0.29, 0.88, -0.10), Extents: (0.04, 0.04, 0.04) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_3_1_AH02_Cream bounds=Center: (-0.29, 0.91, -0.19), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_3_1_AH02_Teal bounds=Center: (-0.29, 0.88, -0.21), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_3_2_AH02_Cream bounds=Center: (-0.29, 0.91, -0.30), Extents: (0.00, 0.00, 0.02) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_EQ_3_2_AH02_Teal bounds=Center: (-0.29, 0.88, -0.32), Extents: (0.04, 0.04, 0.04) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad0_AH02_Coral bounds=Center: (1.37, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad1_AH02_Coral bounds=Center: (1.24, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad2_AH02_Coral bounds=Center: (1.12, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad3_AH02_Coral bounds=Center: (0.99, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad4_AH02_Coral bounds=Center: (1.37, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad5_AH02_Coral bounds=Center: (1.24, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad6_AH02_Coral bounds=Center: (1.12, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_LeftPad7_AH02_Coral bounds=Center: (0.99, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterLeft_AH02_Coral bounds=Center: (1.18, 0.89, -0.05), Extents: (0.10, 0.00, 0.10) materials=AH02_Coral:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterLeft_AH02_Cream bounds=Center: (1.18, 0.89, -0.05), Extents: (0.28, 0.00, 0.28) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterLeft_AH02_Metal bounds=Center: (1.18, 0.86, -0.05), Extents: (0.34, 0.04, 0.34) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterLeft_AH02_Rubber bounds=Center: (1.18, 0.86, -0.05), Extents: (0.33, 0.02, 0.33) materials=AH02_Rubber:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterRight_AH02_Cream bounds=Center: (-1.18, 0.89, -0.05), Extents: (0.28, 0.00, 0.28) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterRight_AH02_Metal bounds=Center: (-1.18, 0.86, -0.05), Extents: (0.34, 0.04, 0.34) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterRight_AH02_Rubber bounds=Center: (-1.18, 0.86, -0.05), Extents: (0.33, 0.02, 0.33) materials=AH02_Rubber:Universal Render Pipeline/Lit
+  renderer=AH02_PlatterRight_AH02_Teal bounds=Center: (-1.18, 0.89, -0.05), Extents: (0.10, 0.00, 0.10) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad0_AH02_Teal bounds=Center: (-0.99, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad1_AH02_Teal bounds=Center: (-1.12, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad2_AH02_Teal bounds=Center: (-1.24, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad3_AH02_Teal bounds=Center: (-1.37, 0.86, 0.38), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad4_AH02_Teal bounds=Center: (-0.99, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad5_AH02_Teal bounds=Center: (-1.12, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad6_AH02_Teal bounds=Center: (-1.24, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_RightPad7_AH02_Teal bounds=Center: (-1.37, 0.86, 0.50), Extents: (0.05, 0.02, 0.05) materials=AH02_Teal:Universal Render Pipeline/Lit
+  control=AH02_ChannelFader0 local=(0.29, 0.87, 0.20) children=1 renderers=1
+  control=AH02_ChannelFader0_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_ChannelFader1 local=(0.10, 0.87, 0.16) children=1 renderers=1
+  control=AH02_ChannelFader1_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_ChannelFader2 local=(-0.10, 0.87, 0.12) children=1 renderers=1
+  control=AH02_ChannelFader2_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_ChannelFader3 local=(-0.29, 0.87, 0.08) children=1 renderers=1
+  control=AH02_ChannelFader3_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_0_0 local=(0.29, 0.84, -0.10) children=2 renderers=2
+  control=AH02_EQ_0_0_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_0_0_AH02_Ochre local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_0_1 local=(0.29, 0.84, -0.21) children=2 renderers=2
+  control=AH02_EQ_0_1_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_0_1_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_0_2 local=(0.29, 0.84, -0.32) children=2 renderers=2
+  control=AH02_EQ_0_2_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_0_2_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_1_0 local=(0.10, 0.84, -0.10) children=2 renderers=2
+  control=AH02_EQ_1_0_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_1_0_AH02_Ochre local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_1_1 local=(0.10, 0.84, -0.21) children=2 renderers=2
+  control=AH02_EQ_1_1_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_1_1_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_1_2 local=(0.10, 0.84, -0.32) children=2 renderers=2
+  control=AH02_EQ_1_2_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_1_2_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_2_0 local=(-0.10, 0.84, -0.10) children=2 renderers=2
+  control=AH02_EQ_2_0_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_2_0_AH02_Ochre local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_2_1 local=(-0.10, 0.84, -0.21) children=2 renderers=2
+  control=AH02_EQ_2_1_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_2_1_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_2_2 local=(-0.10, 0.84, -0.32) children=2 renderers=2
+  control=AH02_EQ_2_2_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_2_2_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_3_0 local=(-0.29, 0.84, -0.10) children=2 renderers=2
+  control=AH02_EQ_3_0_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_3_0_AH02_Ochre local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_3_1 local=(-0.29, 0.84, -0.21) children=2 renderers=2
+  control=AH02_EQ_3_1_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_3_1_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_3_2 local=(-0.29, 0.84, -0.32) children=2 renderers=2
+  control=AH02_EQ_3_2_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_EQ_3_2_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftHandContact local=(1.18, 0.89, -0.05) children=0 renderers=0
+  control=AH02_LeftPad0 local=(1.37, 0.84, 0.38) children=1 renderers=1
+  control=AH02_LeftPad0_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad1 local=(1.24, 0.84, 0.38) children=1 renderers=1
+  control=AH02_LeftPad1_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad2 local=(1.12, 0.84, 0.38) children=1 renderers=1
+  control=AH02_LeftPad2_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad3 local=(0.99, 0.84, 0.38) children=1 renderers=1
+  control=AH02_LeftPad3_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad4 local=(1.37, 0.84, 0.50) children=1 renderers=1
+  control=AH02_LeftPad4_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad5 local=(1.24, 0.84, 0.50) children=1 renderers=1
+  control=AH02_LeftPad5_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad6 local=(1.12, 0.84, 0.50) children=1 renderers=1
+  control=AH02_LeftPad6_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_LeftPad7 local=(0.99, 0.84, 0.50) children=1 renderers=1
+  control=AH02_LeftPad7_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PerformerFeet local=(0.00, 0.00, -1.09) children=0 renderers=0
+  control=AH02_PlatterLeft local=(1.18, 0.84, -0.05) children=4 renderers=4
+  control=AH02_PlatterLeft_AH02_Coral local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterLeft_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterLeft_AH02_Metal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterLeft_AH02_Rubber local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterRight local=(-1.18, 0.84, -0.05) children=4 renderers=4
+  control=AH02_PlatterRight_AH02_Cream local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterRight_AH02_Metal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterRight_AH02_Rubber local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_PlatterRight_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightHandContact local=(-0.10, 0.90, 0.14) children=0 renderers=0
+  control=AH02_RightPad0 local=(-0.99, 0.84, 0.38) children=1 renderers=1
+  control=AH02_RightPad0_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad1 local=(-1.12, 0.84, 0.38) children=1 renderers=1
+  control=AH02_RightPad1_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad2 local=(-1.24, 0.84, 0.38) children=1 renderers=1
+  control=AH02_RightPad2_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad3 local=(-1.37, 0.84, 0.38) children=1 renderers=1
+  control=AH02_RightPad3_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad4 local=(-0.99, 0.84, 0.50) children=1 renderers=1
+  control=AH02_RightPad4_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad5 local=(-1.12, 0.84, 0.50) children=1 renderers=1
+  control=AH02_RightPad5_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad6 local=(-1.24, 0.84, 0.50) children=1 renderers=1
+  control=AH02_RightPad6_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+  control=AH02_RightPad7 local=(-1.37, 0.84, 0.50) children=1 renderers=1
+  control=AH02_RightPad7_AH02_Teal local=(0.00, 0.00, 0.00) children=0 renderers=1
+FlightCase: renderers=5 triangles=4256 localScale=(1.00, 1.00, 1.00)
+  renderer=AH02_FlightCase_AH02_Cream bounds=Center: (0.00, 0.36, 0.39), Extents: (0.21, 0.03, 0.00) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_FlightCase_AH02_Metal bounds=Center: (0.00, 0.50, 0.04), Extents: (0.61, 0.41, 0.40) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_FlightCase_AH02_Ochre bounds=Center: (0.00, 0.69, 0.39), Extents: (0.37, 0.06, 0.02) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_FlightCase_AH02_Rubber bounds=Center: (0.00, 0.09, 0.00), Extents: (0.50, 0.09, 0.27) materials=AH02_Rubber:Universal Render Pipeline/Lit
+  renderer=AH02_FlightCase_AH02_Teal bounds=Center: (0.00, 0.53, 0.00), Extents: (0.59, 0.36, 0.35) materials=AH02_Teal:Universal Render Pipeline/Lit
+SunTotem: renderers=6 triangles=3352 localScale=(1.00, 1.00, 1.00)
+  renderer=AH02_SunTotem_AH02_Cream bounds=Center: (0.00, 0.28, 0.67), Extents: (0.11, 0.04, 0.00) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_SunTotem_AH02_GoldGlow bounds=Center: (0.00, 2.04, 0.08), Extents: (0.39, 0.39, 0.02) materials=AH02_GoldGlow:Universal Render Pipeline/Lit
+  renderer=AH02_SunTotem_AH02_Metal bounds=Center: (0.00, 1.62, 0.00), Extents: (0.59, 1.00, 0.46) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_SunTotem_AH02_MetalDark bounds=Center: (0.00, 0.58, 0.00), Extents: (0.73, 0.02, 0.65) materials=AH02_MetalDark:Universal Render Pipeline/Lit
+  renderer=AH02_SunTotem_AH02_Ochre bounds=Center: (0.00, 1.47, 0.17), Extents: (0.70, 1.28, 0.49) materials=AH02_Ochre:Universal Render Pipeline/Lit
+  renderer=AH02_SunTotem_AH02_Wood bounds=Center: (0.00, 0.29, 0.00), Extents: (0.70, 0.29, 0.63) materials=AH02_Wood:Universal Render Pipeline/Lit
+  control=AH02_InteractAnchor local=(0.00, 0.58, 0.63) children=0 renderers=0
+  control=AH02_PrivateClueAnchor local=(0.00, 2.04, 0.00) children=0 renderers=0
+MoonTotem: renderers=6 triangles=3660 localScale=(1.00, 1.00, 1.00)
+  renderer=AH02_MoonTotem_AH02_Cream bounds=Center: (0.00, 0.28, 0.67), Extents: (0.18, 0.04, 0.00) materials=AH02_Cream:Universal Render Pipeline/Lit
+  renderer=AH02_MoonTotem_AH02_Metal bounds=Center: (0.00, 1.62, 0.00), Extents: (0.59, 1.00, 0.46) materials=AH02_Metal:Universal Render Pipeline/Lit
+  renderer=AH02_MoonTotem_AH02_MetalDark bounds=Center: (0.00, 0.58, 0.00), Extents: (0.73, 0.02, 0.65) materials=AH02_MetalDark:Universal Render Pipeline/Lit
+  renderer=AH02_MoonTotem_AH02_MintGlow bounds=Center: (0.09, 2.04, 0.08), Extents: (0.35, 0.44, 0.02) materials=AH02_MintGlow:Universal Render Pipeline/Lit
+  renderer=AH02_MoonTotem_AH02_Teal bounds=Center: (0.08, 1.36, 0.17), Extents: (0.42, 1.17, 0.49) materials=AH02_Teal:Universal Render Pipeline/Lit
+  renderer=AH02_MoonTotem_AH02_Wood bounds=Center: (0.00, 0.29, 0.00), Extents: (0.70, 0.29, 0.63) materials=AH02_Wood:Universal Render Pipeline/Lit
+  control=AH02_InteractAnchor.001 local=(0.00, 0.58, 0.63) children=0 renderers=0
+  control=AH02_PrivateClueAnchor.001 local=(0.00, 2.04, 0.00) children=0 renderers=0
+scene: renderers=94 triangles=90408 lights=1
+scene-anchor AH02_LeftHandContact: world=(1.18, 2.29, -0.15)
+scene-anchor AH02_PerformerFeet: world=(0.00, 1.40, -1.19)
+scene-anchor AH02_RightHandContact: world=(-0.10, 2.30, 0.04)
+scene-anchor AH02_InteractAnchor: world=(-6.66, 0.58, 7.93)
+scene-anchor AH02_PrivateClueAnchor: world=(-6.66, 2.04, 7.30)
+scene-anchor AH02_InteractAnchor.001: world=(6.66, 0.58, 7.93)
+scene-anchor AH02_PrivateClueAnchor.001: world=(6.66, 2.04, 7.30)
+pivot-motion AH02_PlatterLeft: moved-vertex-metres=0.0581
+pivot-motion AH02_ChannelFader0: moved-vertex-metres=0.0500
+pivot-motion AH02_LeftPad0: moved-vertex-metres=0.0500
+pivot-motion AH02_EQ_0_0: moved-vertex-metres=0.0350

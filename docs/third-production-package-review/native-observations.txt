@@ -1,0 +1,180 @@
+cast-count=9
+motion Cast_AttendeeAverage idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_AttendeeAverage Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_AttendeeAverage Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeAverage Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeAverage Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeAverage Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeAverage Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeAverage Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeAverage Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_AttendeeAverage left=100.0 right=100.0
+motion Cast_AttendeeLanky idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_AttendeeLanky Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_AttendeeLanky Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeLanky Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeLanky Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeLanky Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeLanky Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeLanky Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeLanky Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_AttendeeLanky left=100.0 right=100.0
+motion Cast_AttendeeStocky idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_AttendeeStocky Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_AttendeeStocky Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeStocky Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeStocky Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeStocky Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeStocky Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeStocky Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_AttendeeStocky Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_AttendeeStocky left=100.0 right=100.0
+motion Cast_Medic idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_Medic Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_Medic Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_Medic Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_Medic Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_Medic Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_Medic Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_Medic Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_Medic Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_Medic left=100.0 right=100.0
+motion Cast_MissingFriend idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_MissingFriend Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_MissingFriend Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_MissingFriend Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_MissingFriend Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_MissingFriend Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_MissingFriend Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_MissingFriend Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_MissingFriend Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_MissingFriend left=100.0 right=100.0
+motion Cast_Security idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_Security Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_Security Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_Security Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_Security Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_Security Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_Security Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_Security Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_Security Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_Security left=100.0 right=100.0
+motion Cast_VendorPerformance idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_VendorPerformance Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_VendorPerformance Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorPerformance Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorPerformance Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorPerformance Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorPerformance Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorPerformance Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorPerformance Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_VendorPerformance left=100.0 right=100.0
+motion Cast_VendorStock idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_VendorStock Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_VendorStock Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorStock Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorStock Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorStock Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorStock Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorStock Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorStock Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_VendorStock left=100.0 right=100.0
+motion Cast_VendorSupplies idle-dance-spine-angle=10.620 state=-645213589
+expression Cast_VendorSupplies Neutral requested=0.0 observed-after-Animator=0.0
+expression Cast_VendorSupplies Blink requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorSupplies Delight requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorSupplies Alarm requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorSupplies Concern requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorSupplies Suspicious requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorSupplies Exhausted requested=100.0 observed-after-Animator=100.0
+expression Cast_VendorSupplies Confused requested=100.0 observed-after-Animator=100.0
+grip Cast_VendorSupplies left=100.0 right=100.0
+wardrobe-fit Fit_0_0 renderers=11
+wardrobe-fit Fit_0_1 renderers=11
+wardrobe-fit Fit_0_2 renderers=11
+wardrobe-fit Fit_1_0 renderers=11
+wardrobe-fit Fit_1_1 renderers=11
+wardrobe-fit Fit_1_2 renderers=11
+wardrobe-slot Headgear 0 visible=11
+wardrobe-slot Headgear 1 visible=11
+wardrobe-slot Headgear 2 visible=11
+wardrobe-slot Headgear 3 visible=11
+wardrobe-slot Headgear 4 visible=11
+wardrobe-slot Headgear 5 visible=11
+wardrobe-slot Headgear 6 visible=11
+wardrobe-slot Headgear 7 visible=11
+wardrobe-slot Headgear 8 visible=11
+wardrobe-slot Headgear 9 visible=11
+wardrobe-slot Sunglasses 0 visible=11
+wardrobe-slot Sunglasses 1 visible=11
+wardrobe-slot Sunglasses 2 visible=11
+wardrobe-slot Sunglasses 3 visible=11
+wardrobe-slot Sunglasses 4 visible=11
+wardrobe-slot Sunglasses 5 visible=11
+wardrobe-slot Sunglasses 6 visible=11
+wardrobe-slot Sunglasses 7 visible=11
+wardrobe-slot Sunglasses 8 visible=11
+wardrobe-slot Sunglasses 9 visible=11
+wardrobe-slot Shirt 0 visible=11
+wardrobe-slot Shirt 1 visible=11
+wardrobe-slot Shirt 2 visible=11
+wardrobe-slot Shirt 3 visible=11
+wardrobe-slot Shirt 4 visible=11
+wardrobe-slot Shirt 5 visible=11
+wardrobe-slot Shirt 6 visible=11
+wardrobe-slot Shirt 7 visible=11
+wardrobe-slot Shirt 8 visible=11
+wardrobe-slot Shirt 9 visible=11
+wardrobe-slot Pants 0 visible=11
+wardrobe-slot Pants 1 visible=11
+wardrobe-slot Pants 2 visible=11
+wardrobe-slot Pants 3 visible=11
+wardrobe-slot Pants 4 visible=11
+wardrobe-slot Pants 5 visible=11
+wardrobe-slot Pants 6 visible=11
+wardrobe-slot Pants 7 visible=11
+wardrobe-slot Pants 8 visible=11
+wardrobe-slot Pants 9 visible=11
+wardrobe-slot Shoes 0 visible=11
+wardrobe-slot Shoes 1 visible=11
+wardrobe-slot Shoes 2 visible=11
+wardrobe-slot Shoes 3 visible=11
+wardrobe-slot Shoes 4 visible=11
+wardrobe-slot Shoes 5 visible=11
+wardrobe-slot Shoes 6 visible=11
+wardrobe-slot Shoes 7 visible=11
+wardrobe-slot Shoes 8 visible=11
+wardrobe-slot Shoes 9 visible=11
+wardrobe-slot FacialHair 0 visible=11
+wardrobe-slot FacialHair 1 visible=11
+wardrobe-slot FacialHair 2 visible=11
+wardrobe-slot FacialHair 3 visible=11
+wardrobe-slot FacialHair 4 visible=11
+wardrobe-slot FacialHair 5 visible=11
+wardrobe-slot FacialHair 6 visible=11
+wardrobe-slot FacialHair 7 visible=11
+wardrobe-slot FacialHair 8 visible=11
+wardrobe-slot FacialHair 9 visible=11
+wardrobe-slot Hairstyle 0 visible=10
+wardrobe-slot Hairstyle 1 visible=10
+wardrobe-slot Hairstyle 2 visible=10
+wardrobe-slot Hairstyle 3 visible=10
+wardrobe-slot Hairstyle 4 visible=10
+wardrobe-slot Hairstyle 5 visible=10
+wardrobe-slot Hairstyle 6 visible=10
+wardrobe-slot Hairstyle 7 visible=10
+wardrobe-slot Hairstyle 8 visible=10
+wardrobe-slot Hairstyle 9 visible=10
+wardrobe-slot Accessory 0 visible=10
+wardrobe-slot Accessory 1 visible=10
+wardrobe-slot Accessory 2 visible=10
+wardrobe-slot Accessory 3 visible=10
+wardrobe-slot Accessory 4 visible=10
+wardrobe-slot Accessory 5 visible=10
+wardrobe-slot Accessory 6 visible=10
+wardrobe-slot Accessory 7 visible=10
+wardrobe-slot Accessory 8 visible=10
+wardrobe-slot Accessory 9 visible=10
+frame-sample people-gallery frames=180 mean-ms=8.47 max-ms=33.35
+frame-sample world-overview frames=180 mean-ms=9.03 max-ms=91.62
+active-renderers=326 allocated-mb=218.8

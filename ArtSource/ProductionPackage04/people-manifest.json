@@ -1,0 +1,1048 @@
+{
+ "motion": {
+  "fbx": "AH04P_Motion.fbx",
+  "armature": "FestivalRig",
+  "fps": 30,
+  "takes": "FBX take name = clip name; NLA strips start at frame 1, exported takes start at 0; last frame of a loop repeats the first pose.",
+  "curves": "Bone transforms only (rig-only FBX); no mesh, no shape-key curves.",
+  "rootMotion": "None. Locomotion clips are in place: planted feet/hands slide on a treadmill at groundSpeed (m/s) along the facing axis; scale Animator speed by actualSpeed/groundSpeed. DragOther travels backwards. BoardShuttle is a one-shot that ends with Hips displaced (0, +0.47 m forward, +0.32 m up) to stand on the AH03_Shuttle floor; move the root at clip end.",
+  "dragPair": {
+   "note": "Play DragOther and BeingDragged with the same normalized time. Place the BeingDragged root 1.14 m in front of the DragOther root, rotated 180 degrees; both face each other and travel toward the dragger's back. Wrists meet at dragger-space (\u00b10.40, 0.42 fwd, 1.00 up)."
+  },
+  "clips": {
+   "Walk": {
+    "frames": [
+     1,
+     43
+    ],
+    "seconds": 1.4,
+    "loop": true,
+    "maxStepDeg": 19.21,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 5.9,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 48.4,
+    "maxInteriorAccelMm": 78.56,
+    "groundSpeed": 1.19,
+    "plantedFootFwdVelocity": [
+     -1.19,
+     -1.19
+    ]
+   },
+   "Run": {
+    "frames": [
+     1,
+     31
+    ],
+    "seconds": 1.0,
+    "loop": true,
+    "maxStepDeg": 32.42,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 118.12,
+    "maxInteriorAccelMm": 158.35,
+    "groundSpeed": 3.333,
+    "plantedFootFwdVelocity": [
+     -3.333,
+     -3.333
+    ]
+   },
+   "CrawlDowned": {
+    "frames": [
+     1,
+     61
+    ],
+    "seconds": 2.0,
+    "loop": true,
+    "maxStepDeg": 16.68,
+    "plantedAnkleErrMm": 0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": null,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 14.73,
+    "maxInteriorAccelMm": 61.35,
+    "groundSpeed": 0.667,
+    "plantedFootFwdVelocity": null,
+    "minMeshZByCast": {
+     "AttendeeLanky": -0.0,
+     "AttendeeAverage": -0.321,
+     "AttendeeStocky": -0.029,
+     "VendorSupplies": -0.129,
+     "VendorPerformance": -0.129,
+     "VendorStock": -0.129,
+     "Medic": -0.057,
+     "Security": -0.057,
+     "MissingFriend": -0.057
+    }
+   },
+   "DragOther": {
+    "frames": [
+     1,
+     43
+    ],
+    "seconds": 1.4,
+    "loop": true,
+    "maxStepDeg": 17.57,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 44.31,
+    "maxInteriorAccelMm": 86.88,
+    "groundSpeed": 1.232,
+    "plantedFootFwdVelocity": [
+     1.232,
+     1.232
+    ]
+   },
+   "BeingDragged": {
+    "frames": [
+     1,
+     43
+    ],
+    "seconds": 1.4,
+    "loop": true,
+    "maxStepDeg": 6.93,
+    "plantedAnkleErrMm": 0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": null,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 8.96,
+    "maxInteriorAccelMm": 13.46,
+    "minMeshZByCast": {
+     "AttendeeLanky": -0.006,
+     "AttendeeAverage": -0.333,
+     "AttendeeStocky": -0.011,
+     "VendorSupplies": -0.006,
+     "VendorPerformance": -0.011,
+     "VendorStock": -0.006,
+     "Medic": -0.006,
+     "Security": -0.011,
+     "MissingFriend": -0.061
+    }
+   },
+   "DetainedEscort": {
+    "frames": [
+     1,
+     49
+    ],
+    "seconds": 1.6,
+    "loop": true,
+    "maxStepDeg": 9.99,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 22.0,
+    "maxInteriorAccelMm": 40.02,
+    "groundSpeed": 0.685,
+    "plantedFootFwdVelocity": [
+     -0.685,
+     -0.685
+    ]
+   },
+   "SwarmLunge": {
+    "frames": [
+     1,
+     49
+    ],
+    "seconds": 1.6,
+    "loop": true,
+    "maxStepDeg": 22.28,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 5.0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 18.03,
+    "maxInteriorAccelMm": 127.15,
+    "plantedFootSpeedMax": 0.0
+   },
+   "WookStare": {
+    "frames": [
+     1,
+     61
+    ],
+    "seconds": 2.0,
+    "loop": false,
+    "maxStepDeg": 5.94,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "plantedFootSpeedMax": 0.0
+   },
+   "WookLockedOn": {
+    "frames": [
+     1,
+     61
+    ],
+    "seconds": 2.0,
+    "loop": true,
+    "maxStepDeg": 7.44,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 7.29,
+    "maxInteriorAccelMm": 8.98,
+    "plantedFootSpeedMax": 0.0
+   },
+   "DJLoop": {
+    "frames": [
+     1,
+     61
+    ],
+    "seconds": 2.0,
+    "loop": true,
+    "maxStepDeg": 8.7,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 38.46,
+    "maxInteriorAccelMm": 66.15,
+    "plantedFootSpeedMax": 0.0
+   },
+   "PoiRoutine": {
+    "frames": [
+     1,
+     61
+    ],
+    "seconds": 2.0,
+    "loop": true,
+    "maxStepDeg": 30.82,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 44.11,
+    "maxInteriorAccelMm": 156.34,
+    "plantedFootSpeedMax": 0.0
+   },
+   "BoardShuttle": {
+    "frames": [
+     1,
+     55
+    ],
+    "seconds": 1.8,
+    "loop": false,
+    "maxStepDeg": 35.83,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.0023,
+    "hipsClampMm": 21.8,
+    "plantedFootSpeedMax": 0.0
+   },
+   "Talk": {
+    "frames": [
+     1,
+     73
+    ],
+    "seconds": 2.4,
+    "loop": true,
+    "maxStepDeg": 25.74,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "loopPoseDeltaDeg": 0.0,
+    "loopPoseDeltaMm": 0.0,
+    "seamAccelMm": 17.64,
+    "maxInteriorAccelMm": 51.73,
+    "plantedFootSpeedMax": 0.0
+   },
+   "Handoff": {
+    "frames": [
+     1,
+     46
+    ],
+    "seconds": 1.5,
+    "loop": false,
+    "maxStepDeg": 19.83,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "plantedFootSpeedMax": 0.0
+   },
+   "Sell": {
+    "frames": [
+     1,
+     76
+    ],
+    "seconds": 2.5,
+    "loop": false,
+    "maxStepDeg": 28.53,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "plantedFootSpeedMax": 0.0
+   },
+   "Consume": {
+    "frames": [
+     1,
+     61
+    ],
+    "seconds": 2.0,
+    "loop": false,
+    "maxStepDeg": 24.91,
+    "plantedAnkleErrMm": 0.0,
+    "handTargetErrMm": 0.0,
+    "minSoleZ": 0.012,
+    "hipsClampMm": 0,
+    "plantedFootSpeedMax": 0.0
+   }
+  }
+ },
+ "lods": {
+  "AttendeeLanky": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_AttendeeLanky.fbx",
+    "triangles": 33484,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 343,
+    "fbx": "AH04P_AttendeeLanky_LOD1.fbx",
+    "triangles": 16735,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_0_0": 0.266,
+     "HairUnderHat": 0.727,
+     "Hairstyle_2": 0.348,
+     "Headgear_2": 0.482,
+     "Shirt_0": 0.266,
+     "Shoes_0": 0.266,
+     "Wardrobe": 0.319
+    },
+    "nonManifoldEdges": 49,
+    "shapeKeys": {
+     "Body_0_0": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 229,
+    "fbx": "AH04P_AttendeeLanky_LOD2.fbx",
+    "triangles": 5854,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_0_0": 0.166,
+     "Face": 0.166,
+     "HairUnderHat": 0.455,
+     "Hairstyle_2": 0.217,
+     "Headgear_2": 0.301,
+     "Shirt_0": 0.166,
+     "Shoes_0": 0.166,
+     "Wardrobe": 0.199
+    },
+    "nonManifoldEdges": 42,
+    "shapeKeys": {}
+   }
+  },
+  "AttendeeAverage": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_AttendeeAverage.fbx",
+    "triangles": 35052,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 476,
+    "fbx": "AH04P_AttendeeAverage_LOD1.fbx",
+    "triangles": 17519,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_1_1": 0.293,
+     "HairTop_1": 0.408,
+     "Hairstyle_1": 0.293,
+     "Shirt_3": 0.293,
+     "Shoes_1": 0.293,
+     "Wardrobe": 0.39
+    },
+    "nonManifoldEdges": 43,
+    "shapeKeys": {
+     "Body_1_1": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 285,
+    "fbx": "AH04P_AttendeeAverage_LOD2.fbx",
+    "triangles": 6125,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_1_1": 0.171,
+     "Face": 0.171,
+     "HairTop_1": 0.255,
+     "Hairstyle_1": 0.171,
+     "Shirt_3": 0.171,
+     "Shoes_1": 0.171,
+     "Wardrobe": 0.244
+    },
+    "nonManifoldEdges": 29,
+    "shapeKeys": {}
+   }
+  },
+  "AttendeeStocky": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_AttendeeStocky.fbx",
+    "triangles": 36988,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 592,
+    "fbx": "AH04P_AttendeeStocky_LOD1.fbx",
+    "triangles": 18488,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_0_2": 0.305,
+     "HairUnderHat": 0.727,
+     "Hairstyle_3": 0.305,
+     "Headgear_1": 0.364,
+     "Shirt_1": 0.305,
+     "Shoes_2": 0.305,
+     "Wardrobe": 0.305
+    },
+    "nonManifoldEdges": 40,
+    "shapeKeys": {
+     "Body_0_2": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 346,
+    "fbx": "AH04P_AttendeeStocky_LOD2.fbx",
+    "triangles": 6464,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_0_2": 0.17,
+     "Face": 0.17,
+     "HairUnderHat": 0.455,
+     "Hairstyle_3": 0.17,
+     "Headgear_1": 0.227,
+     "Shirt_1": 0.17,
+     "Shoes_2": 0.17,
+     "Wardrobe": 0.17
+    },
+    "nonManifoldEdges": 28,
+    "shapeKeys": {}
+   }
+  },
+  "VendorSupplies": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_VendorSupplies.fbx",
+    "triangles": 37328,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 709,
+    "fbx": "AH04P_VendorSupplies_LOD1.fbx",
+    "triangles": 18651,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_1_1": 0.311,
+     "HairTop_3": 0.311,
+     "Hairstyle_3": 0.311,
+     "Role_Vendor0": 0.62,
+     "Shirt_0": 0.311,
+     "Shoes_0": 0.311,
+     "Wardrobe": 0.311
+    },
+    "nonManifoldEdges": 39,
+    "shapeKeys": {
+     "Body_1_1": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 424,
+    "fbx": "AH04P_VendorSupplies_LOD2.fbx",
+    "triangles": 6523,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_1_1": 0.172,
+     "Face": 0.172,
+     "HairTop_3": 0.172,
+     "Hairstyle_3": 0.172,
+     "Role_Vendor0": 0.388,
+     "Shirt_0": 0.172,
+     "Shoes_0": 0.172,
+     "Wardrobe": 0.172
+    },
+    "nonManifoldEdges": 29,
+    "shapeKeys": {}
+   }
+  },
+  "VendorPerformance": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_VendorPerformance.fbx",
+    "triangles": 34592,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 396,
+    "fbx": "AH04P_VendorPerformance_LOD1.fbx",
+    "triangles": 17292,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_0_2": 0.268,
+     "HairUnderHat": 0.727,
+     "Hairstyle_0": 0.348,
+     "Headgear_0": 0.576,
+     "Role_Vendor1": 0.62,
+     "Shirt_2": 0.268,
+     "Shoes_0": 0.268,
+     "Wardrobe": 0.319
+    },
+    "nonManifoldEdges": 42,
+    "shapeKeys": {
+     "Body_0_2": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 260,
+    "fbx": "AH04P_VendorPerformance_LOD2.fbx",
+    "triangles": 6043,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_0_2": 0.162,
+     "Face": 0.162,
+     "HairUnderHat": 0.455,
+     "Hairstyle_0": 0.217,
+     "Headgear_0": 0.36,
+     "Role_Vendor1": 0.388,
+     "Shirt_2": 0.162,
+     "Shoes_0": 0.162,
+     "Wardrobe": 0.199
+    },
+    "nonManifoldEdges": 35,
+    "shapeKeys": {}
+   }
+  },
+  "VendorStock": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_VendorStock.fbx",
+    "triangles": 38960,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 744,
+    "fbx": "AH04P_VendorStock_LOD1.fbx",
+    "triangles": 19471,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_0_0": 0.321,
+     "HairTop_3": 0.321,
+     "Hairstyle_3": 0.321,
+     "Role_Vendor2": 0.62,
+     "Shirt_3": 0.321,
+     "Shoes_1": 0.321,
+     "Wardrobe": 0.321
+    },
+    "nonManifoldEdges": 43,
+    "shapeKeys": {
+     "Body_0_0": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 447,
+    "fbx": "AH04P_VendorStock_LOD2.fbx",
+    "triangles": 6809,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_0_0": 0.172,
+     "Face": 0.172,
+     "HairTop_3": 0.172,
+     "Hairstyle_3": 0.172,
+     "Role_Vendor2": 0.388,
+     "Shirt_3": 0.172,
+     "Shoes_1": 0.172,
+     "Wardrobe": 0.172
+    },
+    "nonManifoldEdges": 29,
+    "shapeKeys": {}
+   }
+  },
+  "Medic": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_Medic.fbx",
+    "triangles": 38228,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 975,
+    "fbx": "AH04P_Medic_LOD1.fbx",
+    "triangles": 19101,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_1_1": 0.32,
+     "HairTop_1": 0.408,
+     "Hairstyle_1": 0.32,
+     "Role_Medic": 0.32,
+     "Shirt_0": 0.32,
+     "Shoes_1": 0.32,
+     "Wardrobe": 0.32
+    },
+    "nonManifoldEdges": 43,
+    "shapeKeys": {
+     "Body_1_1": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 569,
+    "fbx": "AH04P_Medic_LOD2.fbx",
+    "triangles": 6677,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_1_1": 0.173,
+     "Face": 0.173,
+     "HairTop_1": 0.255,
+     "Hairstyle_1": 0.173,
+     "Role_Medic": 0.173,
+     "Shirt_0": 0.173,
+     "Shoes_1": 0.173,
+     "Wardrobe": 0.173
+    },
+    "nonManifoldEdges": 29,
+    "shapeKeys": {}
+   }
+  },
+  "Security": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_Security.fbx",
+    "triangles": 37752,
+    "nonManifoldEdges": 92
+   },
+   "LOD1": {
+    "tuckedVerts": 848,
+    "fbx": "AH04P_Security_LOD1.fbx",
+    "triangles": 18862,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Body_0_2": 0.307,
+     "HairUnderHat": 0.727,
+     "Hairstyle_0": 0.348,
+     "Headgear_2": 0.482,
+     "Role_Security": 0.307,
+     "Shirt_0": 0.307,
+     "Shoes_2": 0.307,
+     "Wardrobe": 0.307
+    },
+    "nonManifoldEdges": 42,
+    "shapeKeys": {
+     "Body_0_2": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 505,
+    "fbx": "AH04P_Security_LOD2.fbx",
+    "triangles": 6591,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Body_0_2": 0.168,
+     "Face": 0.168,
+     "HairUnderHat": 0.455,
+     "Hairstyle_0": 0.217,
+     "Headgear_2": 0.301,
+     "Role_Security": 0.168,
+     "Shirt_0": 0.168,
+     "Shoes_2": 0.168,
+     "Wardrobe": 0.168
+    },
+    "nonManifoldEdges": 35,
+    "shapeKeys": {}
+   }
+  },
+  "MissingFriend": {
+   "LOD0": {
+    "fbx": "../ProductionPeople03/AH03P_MissingFriend.fbx",
+    "triangles": 39320,
+    "nonManifoldEdges": 108
+   },
+   "LOD1": {
+    "tuckedVerts": 507,
+    "fbx": "AH04P_MissingFriend_LOD1.fbx",
+    "triangles": 19651,
+    "ratioOfLOD0": 0.5,
+    "meshDecimateRatio": {
+     "Accessory_0": 0.328,
+     "Body_1_0": 0.328,
+     "HairTop_2": 0.328,
+     "Hairstyle_2": 0.348,
+     "Shirt_2": 0.328,
+     "Shoes_0": 0.328,
+     "Wardrobe": 0.328
+    },
+    "nonManifoldEdges": 63,
+    "shapeKeys": {
+     "Body_1_0": [
+      "GripL",
+      "GripR"
+     ],
+     "Face": [
+      "Blink",
+      "Exhausted",
+      "Delight",
+      "Alarm",
+      "Concern",
+      "Suspicious",
+      "Confused"
+     ]
+    }
+   },
+   "LOD2": {
+    "tuckedVerts": 328,
+    "fbx": "AH04P_MissingFriend_LOD2.fbx",
+    "triangles": 6864,
+    "ratioOfLOD0": 0.175,
+    "meshDecimateRatio": {
+     "Accessory_0": 0.174,
+     "Body_1_0": 0.174,
+     "Face": 0.174,
+     "HairTop_2": 0.174,
+     "Hairstyle_2": 0.217,
+     "Shirt_2": 0.174,
+     "Shoes_0": 0.174,
+     "Wardrobe": 0.174
+    },
+    "nonManifoldEdges": 54,
+    "shapeKeys": {}
+   }
+  }
+ },
+ "poseCheck": {
+  "AttendeeLanky": {
+   "Rest": {
+    "LOD1": {
+     "maxMm": 8.3,
+     "p99Mm": 7.0,
+     "meanMm": 1.06,
+     "worst": "AttendeeLanky_LOD1_Wardrobe"
+    },
+    "LOD2": {
+     "maxMm": 11.9,
+     "p99Mm": 10.8,
+     "meanMm": 3.29,
+     "worst": "AttendeeLanky_LOD2_Wardrobe"
+    }
+   },
+   "Walk": {
+    "LOD1": {
+     "maxMm": 8.3,
+     "p99Mm": 7.0,
+     "meanMm": 1.07,
+     "worst": "AttendeeLanky_LOD1_Wardrobe"
+    },
+    "LOD2": {
+     "maxMm": 11.9,
+     "p99Mm": 10.8,
+     "meanMm": 3.3,
+     "worst": "AttendeeLanky_LOD2_Wardrobe"
+    }
+   },
+   "DJLoop": {
+    "LOD1": {
+     "maxMm": 8.3,
+     "p99Mm": 7.1,
+     "meanMm": 1.07,
+     "worst": "AttendeeLanky_LOD1_Wardrobe"
+    },
+    "LOD2": {
+     "maxMm": 11.9,
+     "p99Mm": 10.9,
+     "meanMm": 3.29,
+     "worst": "AttendeeLanky_LOD2_Body_0_0"
+    }
+   },
+   "CrawlDowned": {
+    "LOD1": {
+     "maxMm": 8.3,
+     "p99Mm": 7.0,
+     "meanMm": 1.07,
+     "worst": "AttendeeLanky_LOD1_Wardrobe"
+    },
+    "LOD2": {
+     "maxMm": 11.9,
+     "p99Mm": 10.9,
+     "meanMm": 3.31,
+     "worst": "AttendeeLanky_LOD2_Wardrobe"
+    }
+   },
+   "GripBothLOD1Body": {
+    "maxMm": 8.0,
+    "p99Mm": 7.7,
+    "meanMm": 2.31,
+    "worst": "AttendeeLanky_LOD1_Body_0_0"
+   },
+   "GripOffLOD1Body": {
+    "maxMm": 8.0,
+    "p99Mm": 7.7,
+    "meanMm": 2.35,
+    "worst": "AttendeeLanky_LOD1_Body_0_0"
+   }
+  },
+  "VendorPerformance": {
+   "Rest": {
+    "LOD1": {
+     "maxMm": 9.1,
+     "p99Mm": 7.0,
+     "meanMm": 1.13,
+     "worst": "VendorPerformance_LOD1_Body_0_2"
+    },
+    "LOD2": {
+     "maxMm": 15.7,
+     "p99Mm": 11.9,
+     "meanMm": 3.53,
+     "worst": "VendorPerformance_LOD2_Headgear_0"
+    }
+   },
+   "Walk": {
+    "LOD1": {
+     "maxMm": 9.9,
+     "p99Mm": 7.0,
+     "meanMm": 1.14,
+     "worst": "VendorPerformance_LOD1_Body_0_2"
+    },
+    "LOD2": {
+     "maxMm": 15.7,
+     "p99Mm": 11.7,
+     "meanMm": 3.51,
+     "worst": "VendorPerformance_LOD2_Headgear_0"
+    }
+   },
+   "DJLoop": {
+    "LOD1": {
+     "maxMm": 10.1,
+     "p99Mm": 7.0,
+     "meanMm": 1.14,
+     "worst": "VendorPerformance_LOD1_Body_0_2"
+    },
+    "LOD2": {
+     "maxMm": 15.7,
+     "p99Mm": 11.6,
+     "meanMm": 3.52,
+     "worst": "VendorPerformance_LOD2_Headgear_0"
+    }
+   },
+   "CrawlDowned": {
+    "LOD1": {
+     "maxMm": 9.3,
+     "p99Mm": 7.0,
+     "meanMm": 1.13,
+     "worst": "VendorPerformance_LOD1_Body_0_2"
+    },
+    "LOD2": {
+     "maxMm": 15.7,
+     "p99Mm": 11.7,
+     "meanMm": 3.5,
+     "worst": "VendorPerformance_LOD2_Headgear_0"
+    }
+   },
+   "GripBothLOD1Body": {
+    "maxMm": 9.1,
+    "p99Mm": 7.7,
+    "meanMm": 2.4,
+    "worst": "VendorPerformance_LOD1_Body_0_2"
+   },
+   "GripOffLOD1Body": {
+    "maxMm": 9.1,
+    "p99Mm": 7.7,
+    "meanMm": 2.44,
+    "worst": "VendorPerformance_LOD1_Body_0_2"
+   }
+  },
+  "Medic": {
+   "Rest": {
+    "LOD1": {
+     "maxMm": 8.7,
+     "p99Mm": 7.6,
+     "meanMm": 1.42,
+     "worst": "Medic_LOD1_Body_1_1"
+    },
+    "LOD2": {
+     "maxMm": 13.0,
+     "p99Mm": 11.5,
+     "meanMm": 3.78,
+     "worst": "Medic_LOD2_Body_1_1"
+    }
+   },
+   "Walk": {
+    "LOD1": {
+     "maxMm": 9.0,
+     "p99Mm": 7.5,
+     "meanMm": 1.42,
+     "worst": "Medic_LOD1_Body_1_1"
+    },
+    "LOD2": {
+     "maxMm": 13.3,
+     "p99Mm": 11.3,
+     "meanMm": 3.85,
+     "worst": "Medic_LOD2_Body_1_1"
+    }
+   },
+   "DJLoop": {
+    "LOD1": {
+     "maxMm": 8.9,
+     "p99Mm": 7.6,
+     "meanMm": 1.43,
+     "worst": "Medic_LOD1_Body_1_1"
+    },
+    "LOD2": {
+     "maxMm": 13.3,
+     "p99Mm": 11.4,
+     "meanMm": 3.85,
+     "worst": "Medic_LOD2_Body_1_1"
+    }
+   },
+   "CrawlDowned": {
+    "LOD1": {
+     "maxMm": 8.7,
+     "p99Mm": 7.6,
+     "meanMm": 1.41,
+     "worst": "Medic_LOD1_Body_1_1"
+    },
+    "LOD2": {
+     "maxMm": 13.2,
+     "p99Mm": 11.4,
+     "meanMm": 3.8,
+     "worst": "Medic_LOD2_Body_1_1"
+    }
+   },
+   "GripBothLOD1Body": {
+    "maxMm": 8.7,
+    "p99Mm": 8.4,
+    "meanMm": 3.3,
+    "worst": "Medic_LOD1_Body_1_1"
+   },
+   "GripOffLOD1Body": {
+    "maxMm": 8.7,
+    "p99Mm": 8.4,
+    "meanMm": 3.32,
+    "worst": "Medic_LOD1_Body_1_1"
+   }
+  }
+ },
+ "notes": [
+  "LOD FBXs reuse AH03P_ material names; use ProductionPeople03/palette.json.",
+  "LOD1 keeps the unified face mesh and its seven expression keys untouched; body GripL/GripR are rebuilt on the decimated body by barycentric transfer restricted to the dominant deform group.",
+  "LOD2 drops all shape keys (neutral face, relaxed grip).",
+  "All LOD FBXs export WITHOUT animation with the same FestivalRig hierarchy and bone names, so AH03P_Motion and AH04P_Motion clips bind unchanged.",
+  "poseCheck distances are nearest-surface deviations of LODn vertices from the posed LOD0 surface (skinning sanity check)."
+ ]
+}

@@ -5,7 +5,6 @@ namespace Festival.Presentation
     /// <summary>Visual-only support and swing feet. Never changes the networked actor root.</summary>
     internal sealed class FestivalFootPlant
     {
-        const float StanceFraction=.54f;
         sealed class Foot
         {
             public readonly Transform Thigh,Shin,Ankle;
@@ -30,6 +29,7 @@ namespace Festival.Presentation
         readonly Foot left,right;
         bool danceMode;
         bool wasWalking;
+        FestivalGait gait;
         bool hasFacing;
         Quaternion previousFacing;
         Vector3 previousDancePosition;
@@ -47,8 +47,9 @@ namespace Festival.Presentation
             right=new Foot(actor,rightThigh,rightShin,rightFoot);
         }
 
-        public void Update(bool active,bool walking,Vector3 displacement,float speed,float cycle,float strideDistance,float dt)
+        public void Update(bool active,bool walking,Vector3 displacement,float speed,float cycle,FestivalGait gait,float dt,float idleShift=0)
         {
+            this.gait=gait;
             if(danceMode){left.Reset();right.Reset();danceMode=false;wasWalking=false;hasFacing=false;}
             float facingJump=hasFacing?Quaternion.Angle(previousFacing,actor.rotation):0;
             previousFacing=actor.rotation;hasFacing=true;
@@ -67,27 +68,31 @@ namespace Festival.Presentation
             }
             if(!walking)
             {
-                hips.localPosition=Vector3.Lerp(hips.localPosition,restHips,1-Mathf.Exp(-12f*dt));
+                // Standing weight drifts from foot to foot; the planted legs absorb it.
+                var weight=actor.right*(idleShift*actor.lossyScale.y)+Vector3.down*(Mathf.Abs(idleShift)*.35f*actor.lossyScale.y);
+                hips.localPosition=Vector3.Lerp(hips.localPosition,restHips+hips.parent.InverseTransformVector(weight),1-Mathf.Exp(-6f*dt));
                 Settle(dt,wasWalking);
                 wasWalking=false;
                 return;
             }
             if(!wasWalking){left.Reset();right.Reset();}
             wasWalking=true;
-            float pace=Mathf.Clamp01((speed-1.4f)/2.4f);
-            float planted=Mathf.Pow(Mathf.Abs(Mathf.Sin(cycle)),2);
             // Imported bone parents carry a rotated 100x transform. Convert
             // the intended world bob through that parent before editing local position.
+            // A walk rides highest over the planted foot; a run is lowest there and
+            // rises through the flight phase. Weight shifts over each supporting foot.
             float scale=actor.lossyScale.y;
-            var bob=actor.right*(Mathf.Sin(cycle)*.018f*scale)+
-                Vector3.down*((.085f+.015f*pace-planted*.010f)*scale);
+            float support=Mathf.Cos(cycle-Mathf.PI*gait.Stance);
+            float rise=Mathf.Cos(2*(cycle-Mathf.PI*gait.Stance))*Mathf.Lerp(.022f,-.045f,gait.Run);
+            var bob=actor.right*(support*Mathf.Lerp(.025f,.010f,gait.Run)*scale)+
+                Vector3.down*((.10f+.02f*gait.Run-rise)*scale);
             var pelvis=restHips+hips.parent.InverseTransformVector(bob);
             hips.localPosition=Vector3.Lerp(hips.localPosition,pelvis,1-Mathf.Exp(-16f*dt));
             var direction=Vector3.ProjectOnPlane(displacement,Vector3.up);
             if(direction.sqrMagnitude<.00001f)direction=actor.forward;
             direction.Normalize();
-            Step(left,Mathf.Repeat(cycle/(2*Mathf.PI),1f),direction,strideDistance);
-            Step(right,Mathf.Repeat(cycle/(2*Mathf.PI)+.5f,1f),direction,strideDistance);
+            Step(left,Mathf.Repeat(cycle/(2*Mathf.PI),1f),direction);
+            Step(right,Mathf.Repeat(cycle/(2*Mathf.PI)+.5f,1f),direction);
         }
 
         void Settle(float dt,bool justStopped)
@@ -103,7 +108,7 @@ namespace Festival.Presentation
             {
                 float leftOffset=Vector3.Distance(left.Anchor,RestTarget(left));
                 float rightOffset=Vector3.Distance(right.Anchor,RestTarget(right));
-                float threshold=.14f*actor.lossyScale.y;
+                float threshold=.11f*actor.lossyScale.y;
                 if(Mathf.Max(leftOffset,rightOffset)>threshold)
                     BeginSettle(leftOffset>=rightOffset?left:right);
             }
@@ -181,7 +186,7 @@ namespace Festival.Presentation
             previousDancePosition=actor.position;
             float scale=actor.lossyScale.y;
             float pulse=Mathf.Abs(Mathf.Sin(beat));
-            var shift=actor.right*(Mathf.Sin(beat)*.035f*scale)
+            var shift=actor.right*(Mathf.Sin(beat)*.06f*scale)
                 +Vector3.down*((.13f-.020f*pulse)*scale);
             var pelvis=restHips+hips.parent.InverseTransformVector(shift);
             hips.localPosition=Vector3.Lerp(hips.localPosition,pelvis,1-Mathf.Exp(-16f*dt));
@@ -266,16 +271,16 @@ namespace Festival.Presentation
             return target;
         }
 
-        void Step(Foot foot,float phase,Vector3 direction,float strideDistance)
+        void Step(Foot foot,float phase,Vector3 direction)
         {
-            bool stance=phase<StanceFraction;
+            bool stance=phase<gait.Stance;
             if(!foot.Initialized)
             {
                 foot.Anchor=foot.Ankle.position;
                 foot.Anchor.y=GroundAnkleHeight(foot);
                 foot.AnchorRotation=foot.Ankle.rotation;
                 foot.SwingFrom=foot.Anchor;foot.SwingFromRotation=foot.AnchorRotation;
-                PlanLanding(foot,direction,strideDistance,phase);
+                PlanLanding(foot,direction,phase);
                 foot.WasStance=stance;foot.Initialized=true;
             }
             else if(stance&&!foot.WasStance)
@@ -287,7 +292,7 @@ namespace Festival.Presentation
             {
                 foot.SwingFrom=foot.Anchor;
                 foot.SwingFromRotation=foot.AnchorRotation;
-                PlanLanding(foot,direction,strideDistance,phase);
+                PlanLanding(foot,direction,phase);
             }
             else if(!stance)
             {
@@ -295,7 +300,7 @@ namespace Festival.Presentation
                 // is airborne. Ease the target to the new walking direction.
                 var previous=foot.SwingTo;
                 var previousRotation=foot.SwingToRotation;
-                PlanLanding(foot,direction,strideDistance,phase);
+                PlanLanding(foot,direction,phase);
                 foot.SwingTo=Vector3.Lerp(previous,foot.SwingTo,.25f);
                 foot.SwingToRotation=Quaternion.Slerp(previousRotation,foot.SwingToRotation,.25f);
             }
@@ -314,21 +319,22 @@ namespace Festival.Presentation
             Quaternion orientation=foot.AnchorRotation;
             if(!stance)
             {
-                float u=Mathf.Clamp01((phase-StanceFraction)/(1f-StanceFraction));
+                float u=Mathf.Clamp01((phase-gait.Stance)/(1f-gait.Stance));
                 float smooth=u*u*(3-2*u);
                 target=Vector3.Lerp(foot.SwingFrom,foot.SwingTo,smooth)+
-                    Vector3.up*(.11f*actor.lossyScale.y*Mathf.Sin(u*Mathf.PI));
+                    Vector3.up*(Mathf.Lerp(.09f,.20f,gait.Run)*actor.lossyScale.y*Mathf.Sin(u*Mathf.PI));
                 orientation=Quaternion.Slerp(foot.SwingFromRotation,foot.SwingToRotation,smooth);
             }
             SolveLeg(foot,target);
             foot.Ankle.rotation=orientation;
         }
 
-        void PlanLanding(Foot foot,Vector3 direction,float strideDistance,float phase)
+        void PlanLanding(Foot foot,Vector3 direction,float phase)
         {
+            // Land half a stance ahead so the body passes over the foot mid-stance.
             float scale=actor.lossyScale.y;
             Vector3 lane=actor.right*(foot.RestInActor.x*scale);
-            foot.SwingTo=actor.position+lane+direction*(strideDistance*(1f-phase)+.21f*scale);
+            foot.SwingTo=actor.position+lane+direction*(gait.Stride*(1f-phase)+.5f*gait.Stance*gait.Stride);
             foot.SwingTo.y=GroundAnkleHeight(foot);
             foot.SwingToRotation=actor.rotation*foot.RestRotationInActor;
         }

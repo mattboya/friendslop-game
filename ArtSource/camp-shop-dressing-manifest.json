@@ -1,0 +1,66 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalCampShelf": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 11,
+      "triangles": 1504,
+      "separate": [],
+      "origin": "(+-4.65,0,9.05)",
+      "surfaces": {
+        "row0": 1.184,
+        "row1": 2.074,
+        "low": 0.26
+      },
+      "textBackingZ": 0.29
+    },
+    "FestivalSupplySign": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 804,
+      "separate": [],
+      "origin": "(0,0,9.15)",
+      "boardFrontZ": 0.28,
+      "glow": "StageGlowGold strip y2.12 z.27 local"
+    },
+    "FestivalCounterGoods": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 18,
+      "triangles": 3246,
+      "separate": [],
+      "origin": "(0,0,9.15)",
+      "restsOn": "FestivalCampShop countertop y1.30"
+    },
+    "FestivalTrailhead": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 15,
+      "triangles": 1660,
+      "separate": [],
+      "origin": "(0,0,19)",
+      "crownFrontZ": -0.175,
+      "lanterns": "(+-2,3.02,-.26) local"
+    },
+    "FestivalPottyInterior": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 17,
+      "triangles": 4622,
+      "separate": [
+        "PottyLidFace__Dark",
+        "PottyLidSticker__Gold",
+        "PottyLid__Cream"
+      ],
+      "lidPivot": [
+        0,
+        1.15,
+        2.13
+      ],
+      "lidTravel": 0.36
+    }
+  }
+}

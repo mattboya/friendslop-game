@@ -1,0 +1,531 @@
+{
+ "fbx": "Assets/Festival/Art/ProductionPeople04/AH04W_CrewUniform.fbx",
+ "source": "ArtSource/ProductionPackage04/CrewUniform.blend",
+ "generator": "scripts/generate_crew_uniform.py",
+ "rig": "FestivalRig (shared 15-bone master skeleton; bones Hips, Spine, Head, ArmL, ForearmL, HandL, ArmR, ForearmR, HandR, LegL, ShinL, FootL, LegR, ShinR, FootR)",
+ "meshes": {
+  "AH04W_Role_Crew": {
+   "slot": "Role_Crew",
+   "bone": "Spine",
+   "triangles": 9240,
+   "vertices": 4714,
+   "materials": [
+    "AH04W_HiVis",
+    "AH04W_Reflective",
+    "AH04W_Ink",
+    "AH04W_Magenta",
+    "AH04W_White",
+    "AH04W_Dark",
+    "AH04W_Ochre",
+    "AH04W_Teal"
+   ],
+   "shapeKeys": [
+    "Basis",
+    "Fit_0_0",
+    "Fit_0_1",
+    "Fit_0_2",
+    "Fit_1_0",
+    "Fit_1_1",
+    "Fit_1_2"
+   ]
+  },
+  "AH04W_Headgear_CrewCap": {
+   "slot": "Headgear_CrewCap",
+   "bone": "Head",
+   "triangles": 1608,
+   "vertices": 824,
+   "materials": [
+    "AH04W_HiVis",
+    "AH04W_Reflective",
+    "AH04W_Ink",
+    "AH04W_Magenta",
+    "AH04W_White",
+    "AH04W_Dark",
+    "AH04W_Ochre",
+    "AH04W_Teal"
+   ],
+   "shapeKeys": [
+    "Basis",
+    "Fit_0_0",
+    "Fit_0_1",
+    "Fit_0_2",
+    "Fit_1_0",
+    "Fit_1_1",
+    "Fit_1_2"
+   ]
+  }
+ },
+ "trianglesTotal": 10848,
+ "hatRule": {
+  "Headgear_CrewCap": "opaque: hide HairTop_*, show HairUnderHat plus the Hairstyle lower locks"
+ },
+ "fits": [
+  "Fit_0_0",
+  "Fit_0_1",
+  "Fit_0_2",
+  "Fit_1_0",
+  "Fit_1_1",
+  "Fit_1_2"
+ ],
+ "fitWidths": {
+  "Fit_0_0": 0.9568,
+  "Fit_0_1": 1.04,
+  "Fit_0_2": 1.1648,
+  "Fit_1_0": 0.8832,
+  "Fit_1_1": 0.96,
+  "Fit_1_2": 1.0752
+ },
+ "palette": {
+  "entries": [
+   {
+    "name": "AH04W_HiVis",
+    "rgb": [
+     0.72,
+     0.93,
+     0.02
+    ],
+    "roughness": 0.55
+   },
+   {
+    "name": "AH04W_Reflective",
+    "rgb": [
+     0.66,
+     0.69,
+     0.71
+    ],
+    "roughness": 0.28
+   },
+   {
+    "name": "AH04W_Ink",
+    "rgb": [
+     0.026,
+     0.042,
+     0.055
+    ],
+    "roughness": 0.72
+   },
+   {
+    "name": "AH04W_Magenta",
+    "rgb": [
+     0.7,
+     0.06,
+     0.32
+    ],
+    "roughness": 0.6
+   },
+   {
+    "name": "AH04W_White",
+    "rgb": [
+     0.93,
+     0.91,
+     0.84
+    ],
+    "roughness": 0.5
+   },
+   {
+    "name": "AH04W_Dark",
+    "rgb": [
+     0.035,
+     0.04,
+     0.038
+    ],
+    "roughness": 0.6
+   },
+   {
+    "name": "AH04W_Ochre",
+    "rgb": [
+     0.83,
+     0.5,
+     0.13
+    ],
+    "roughness": 0.6
+   },
+   {
+    "name": "AH04W_Teal",
+    "rgb": [
+     0.055,
+     0.29,
+     0.28
+    ],
+    "roughness": 0.72
+   }
+  ]
+ },
+ "torsoClearance": {
+  "Fit_0_0": {
+   "worstPenetration_m": -0.0053,
+   "worstSource": "Shirt_9",
+   "verticesOverTolerance": 0,
+   "verticesThroughOuterSurface": 0,
+   "pass": true,
+   "shoulderTapeDepthPastInner_m": 0,
+   "shoulderTapeVerticesThroughOuter": 0,
+   "pushOut_m": 0.0641,
+   "refinePasses": 2,
+   "overlaps": {}
+  },
+  "Fit_0_1": {
+   "worstPenetration_m": -0.0051,
+   "worstSource": "Shirt_9",
+   "verticesOverTolerance": 0,
+   "verticesThroughOuterSurface": 0,
+   "pass": true,
+   "shoulderTapeDepthPastInner_m": 0,
+   "shoulderTapeVerticesThroughOuter": 0,
+   "pushOut_m": 0.0619,
+   "refinePasses": 2,
+   "overlaps": {}
+  },
+  "Fit_0_2": {
+   "worstPenetration_m": -0.0047,
+   "worstSource": "Shirt_0",
+   "verticesOverTolerance": 0,
+   "verticesThroughOuterSurface": 0,
+   "pass": true,
+   "shoulderTapeDepthPastInner_m": 0,
+   "shoulderTapeVerticesThroughOuter": 0,
+   "pushOut_m": 0.0658,
+   "refinePasses": 2,
+   "overlaps": {}
+  },
+  "Fit_1_0": {
+   "worstPenetration_m": -0.0043,
+   "worstSource": "Shirt_9",
+   "verticesOverTolerance": 0,
+   "verticesThroughOuterSurface": 0,
+   "pass": true,
+   "shoulderTapeDepthPastInner_m": 0,
+   "shoulderTapeVerticesThroughOuter": 0,
+   "pushOut_m": 0.0865,
+   "refinePasses": 2,
+   "overlaps": {}
+  },
+  "Fit_1_1": {
+   "worstPenetration_m": -0.0053,
+   "worstSource": "Shirt_9",
+   "verticesOverTolerance": 0,
+   "verticesThroughOuterSurface": 0,
+   "pass": true,
+   "shoulderTapeDepthPastInner_m": 0,
+   "shoulderTapeVerticesThroughOuter": 0,
+   "pushOut_m": 0.0631,
+   "refinePasses": 2,
+   "overlaps": {}
+  },
+  "Fit_1_2": {
+   "worstPenetration_m": -0.005,
+   "worstSource": "Shirt_9",
+   "verticesOverTolerance": 0,
+   "verticesThroughOuterSurface": 0,
+   "pass": true,
+   "shoulderTapeDepthPastInner_m": 0.0005,
+   "shoulderTapeVerticesThroughOuter": 0,
+   "pushOut_m": 0.063,
+   "refinePasses": 2,
+   "overlaps": {}
+  }
+ },
+ "capFit": {
+  "Fit_0_0": {
+   "HairUnderHat": 0,
+   "HeadSkin": 0,
+   "Faces": 0,
+   "SunglassesTouching": [],
+   "HairstylesPiercing": [],
+   "bucketHairstylesPiercing": [],
+   "beanieHairstylesPiercing": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ]
+  },
+  "Fit_0_1": {
+   "HairUnderHat": 0,
+   "HeadSkin": 0,
+   "Faces": 0,
+   "SunglassesTouching": [],
+   "HairstylesPiercing": [],
+   "bucketHairstylesPiercing": [],
+   "beanieHairstylesPiercing": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ]
+  },
+  "Fit_0_2": {
+   "HairUnderHat": 0,
+   "HeadSkin": 0,
+   "Faces": 0,
+   "SunglassesTouching": [],
+   "HairstylesPiercing": [],
+   "bucketHairstylesPiercing": [],
+   "beanieHairstylesPiercing": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ]
+  },
+  "Fit_1_0": {
+   "HairUnderHat": 0,
+   "HeadSkin": 0,
+   "Faces": 0,
+   "SunglassesTouching": [],
+   "HairstylesPiercing": [],
+   "bucketHairstylesPiercing": [],
+   "beanieHairstylesPiercing": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ]
+  },
+  "Fit_1_1": {
+   "HairUnderHat": 0,
+   "HeadSkin": 0,
+   "Faces": 0,
+   "SunglassesTouching": [],
+   "HairstylesPiercing": [],
+   "bucketHairstylesPiercing": [],
+   "beanieHairstylesPiercing": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ]
+  },
+  "Fit_1_2": {
+   "HairUnderHat": 0,
+   "HeadSkin": 0,
+   "Faces": 0,
+   "SunglassesTouching": [],
+   "HairstylesPiercing": [],
+   "bucketHairstylesPiercing": [],
+   "beanieHairstylesPiercing": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+   ]
+  }
+ },
+ "poseCheck": {
+  "shirt": "Shirt_3",
+  "frames": [
+   1,
+   16,
+   31,
+   46
+  ],
+  "results": {
+   "Rest": {
+    "Fit_0_0": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_1": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_2": {
+     "armVestTriangleOverlaps": 82,
+     "armVerticesUnderVestOnly": 16,
+     "vestClipDepth_m": 0.0294,
+     "armVerticesAlreadyInsideShirt": 16,
+     "shirtClipDepth_m": 0.0138
+    },
+    "Fit_1_0": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_1": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_2": {
+     "armVestTriangleOverlaps": 60,
+     "armVerticesUnderVestOnly": 8,
+     "vestClipDepth_m": 0.0039,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    }
+   },
+   "Idle": {
+    "Fit_0_0": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_1": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_2": {
+     "armVestTriangleOverlaps": 82,
+     "armVerticesUnderVestOnly": 64,
+     "vestClipDepth_m": 0.0294,
+     "armVerticesAlreadyInsideShirt": 64,
+     "shirtClipDepth_m": 0.0138
+    },
+    "Fit_1_0": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_1": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_2": {
+     "armVestTriangleOverlaps": 60,
+     "armVerticesUnderVestOnly": 32,
+     "vestClipDepth_m": 0.0039,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    }
+   },
+   "Dance": {
+    "Fit_0_0": {
+     "armVestTriangleOverlaps": 28,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_1": {
+     "armVestTriangleOverlaps": 28,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_2": {
+     "armVestTriangleOverlaps": 24,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_0": {
+     "armVestTriangleOverlaps": 28,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_1": {
+     "armVestTriangleOverlaps": 28,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_2": {
+     "armVestTriangleOverlaps": 28,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    }
+   },
+   "Cheer": {
+    "Fit_0_0": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_1": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_0_2": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_0": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_1": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    },
+    "Fit_1_2": {
+     "armVestTriangleOverlaps": 0,
+     "armVerticesUnderVestOnly": 0,
+     "vestClipDepth_m": 0,
+     "armVerticesAlreadyInsideShirt": 0,
+     "shirtClipDepth_m": 0
+    }
+   }
+  }
+ },
+ "notes": [
+  "Vest, lanyard and pass are one Spine-weighted renderer like the existing Role_* layers; the cap is one Head-weighted Headgear renderer.",
+  "Vest Fit keys are measured: x-scaled by the body width factor, then pushed out radially to clear the union of the fitted body torso and all ten Shirt slots (hoodie hood excluded; it lies over the vest collar).",
+  "Cap Fit keys follow the Headgear convention (x-scale by head factor).",
+  "Fictional CREW print and interlocking sun/moon pass mark; no real brand or agency marks."
+ ]
+}

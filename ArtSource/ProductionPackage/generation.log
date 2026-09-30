@@ -1,0 +1,88 @@
+/Users/mboyajian/Code/friendslop-game/scripts/create_first_production_package.py:22: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m=bpy.data.materials.new(P+n); m.diffuse_color=(*c,1); m.use_nodes=True
+/Users/mboyajian/Code/friendslop-game/scripts/create_first_production_package.py:297: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world=bpy.data.worlds.new(P+'Dusk');scene.world.use_nodes=True;scene.world.node_tree.nodes['Background'].inputs[0].default_value=(*CONFIG['render']['world'],1)
+00:10.563  render           | Saved: '/Users/mboyajian/Code/friendslop-game/ArtSource/ProductionPackage/package-preview.png'
+00:26.436  render           | Saved: '/Users/mboyajian/Code/friendslop-game/ArtSource/ProductionPackage/character-preview.png'
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample/AH01_Attendee.fbx'
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+(bpy.data.armatures['FestivalRig'], 'POSE')
+export finished in 0.1251 sec.
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample/AH01_Vendor.fbx'
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+(bpy.data.armatures['FestivalRig.001'], 'POSE')
+export finished in 0.1293 sec.
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample/AH01_Stall.fbx'
+export finished in 0.0135 sec.
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample/AH01_PoiPractice.fbx'
+export finished in 0.0044 sec.
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample/AH01_PoiLED.fbx'
+export finished in 0.0046 sec.
+Warning: No mesh data to join
+Warning: No mesh data to join
+
+FBX export starting... '/Users/mboyajian/Code/friendslop-game/Assets/Festival/Art/ProductionSample/AH01_Path.fbx'
+export finished in 0.0077 sec.
+Info: Saved as "FirstProductionPackage.blend"
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:49:19)
+
+Blender quit

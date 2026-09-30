@@ -1,0 +1,26 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalCarInterior": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 11,
+      "triangles": 2704,
+      "separate": [
+        "BobbleFace__Dark",
+        "BobbleHead__Gold"
+      ]
+    },
+    "FestivalTentInterior": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 14,
+      "triangles": 2268,
+      "separate": [
+        "CoolerLatch__Gold",
+        "CoolerLid__Cream"
+      ]
+    }
+  }
+}

@@ -1,0 +1,4 @@
+AH03_Shuttle.fbx AH03_DoorLeft local=(1.310, 0.400, 1.610) renderers=2 max-center-move-30deg=0.104m
+AH03_Shuttle.fbx AH03_DoorRight local=(-1.310, 0.400, 1.610) renderers=2 max-center-move-30deg=0.104m
+AH03_Stash.fbx AH03_StashLid local=(0.000, 1.000, -0.575) renderers=1 max-center-move-30deg=0.298m
+AH03_RecoveryWristband.fbx AH03_WristSocket local=(0.000, 0.000, 0.000) renderers=0 max-center-move-30deg=0.000m

@@ -6,7 +6,7 @@ namespace Festival.Core
     /// <summary>One source of truth for camp dressing, interaction points and interior views.</summary>
     public static class CampFeatures
     {
-        public const float DjX=8,DjZ=-3.5f;
+        public const float DjX=4.3f,DjZ=-5.6f;
         public const float CampHalfWidth=31,CampHalfDepth=30;
         // Keep interior cells beyond the 100 m decorative woodland rise. At
         // 70 m the hill rendered over their floors and furnishings.

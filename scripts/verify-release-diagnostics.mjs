@@ -9,7 +9,7 @@ const development=process.env.FESTIVAL_MAC_DEV_OUTPUT
   : assembly('Development');
 const release=assembly('Release');
 const forbidden=['DevelopmentGraphicsDiagnostics','DevelopmentSmoke','DevelopmentSimulation',
-  'DevelopmentAnimationUpdates','[Festival.Motion]'];
+  'DevelopmentAnimationUpdates','[Festival.Motion]','ArtReviewCapture'];
 for(const marker of forbidden)
 {
   const signatures=[Buffer.from(marker,'utf8'),Buffer.from(marker,'utf16le')];

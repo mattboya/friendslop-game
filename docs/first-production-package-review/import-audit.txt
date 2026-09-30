@@ -1,0 +1,129 @@
+Attendee: renderers=28 meshes=28 triangles=24040 blendshapes=12 animationType=Generic
+  renderer=AH01_Attendee_Body_0_1 bounds=Center: (0.00, 1.14, 0.01), Extents: (0.61, 1.05, 0.22) materials=AH01_SkinA:Universal Render Pipeline/Lit
+    shape=GripL default=0
+    shape=GripR default=0
+  renderer=AH01_Attendee_HairUnderHat bounds=Center: (0.00, 2.08, -0.02), Extents: (0.22, 0.07, 0.19) materials=AH01_HairA:Universal Render Pipeline/Lit
+  renderer=AH01_Attendee_Headgear_0 bounds=Center: (0.00, 2.19, 0.01), Extents: (0.36, 0.12, 0.33) materials=AH01_Ochre:Universal Render Pipeline/Lit
+  renderer=AH01_Attendee_Pants_0 bounds=Center: (0.00, 0.77, 0.00), Extents: (0.37, 0.15, 0.24) materials=AH01_Ink:Universal Render Pipeline/Lit
+  renderer=AH01_Attendee_Shoes_0 bounds=Center: (0.00, 0.14, 0.10), Extents: (0.35, 0.13, 0.24) materials=AH01_Teal:Universal Render Pipeline/Lit,AH01_Ink:Universal Render Pipeline/Lit,AH01_Cream:Universal Render Pipeline/Lit,AH01_Ochre:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeBrow bounds=Center: (0.10, 2.06, 0.18), Extents: (0.07, 0.03, 0.04) materials=AH01_HairA:Universal Render Pipeline/Lit
+    shape=Concern default=0
+    shape=Delight default=0
+  renderer=AH01_AttendeeBrow.001 bounds=Center: (-0.10, 2.06, 0.18), Extents: (0.07, 0.03, 0.04) materials=AH01_HairA:Universal Render Pipeline/Lit
+    shape=Concern default=0
+    shape=Delight default=0
+  renderer=AH01_AttendeeButton bounds=Center: (0.00, 1.05, 0.26), Extents: (0.01, 0.01, 0.01) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeButton.001 bounds=Center: (0.00, 1.19, 0.26), Extents: (0.01, 0.01, 0.01) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeButton.002 bounds=Center: (0.00, 1.33, 0.26), Extents: (0.01, 0.01, 0.01) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeCatchlight bounds=Center: (0.12, 1.97, 0.28), Extents: (0.01, 0.01, 0.01) materials=AH01_White:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeCatchlight.001 bounds=Center: (-0.09, 1.97, 0.28), Extents: (0.01, 0.01, 0.01) materials=AH01_White:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeChestPocket bounds=Center: (0.17, 1.34, 0.22), Extents: (0.06, 0.06, 0.01) materials=AH01_Coral:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeCollar bounds=Center: (0.00, 1.56, 0.00), Extents: (0.16, 0.01, 0.15) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeEye bounds=Center: (0.10, 1.96, 0.22), Extents: (0.06, 0.07, 0.04) materials=AH01_White:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_AttendeeEye.001 bounds=Center: (-0.10, 1.96, 0.22), Extents: (0.06, 0.07, 0.04) materials=AH01_White:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_AttendeeMouth bounds=Center: (0.00, 1.76, 0.20), Extents: (0.07, 0.03, 0.02) materials=AH01_Ink:Universal Render Pipeline/Lit
+    shape=Delight default=0
+    shape=Concern default=0
+  renderer=AH01_AttendeeNose bounds=Center: (-0.01, 1.85, 0.25), Extents: (0.05, 0.07, 0.08) materials=AH01_SkinA:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeNostril bounds=Center: (0.03, 1.81, 0.31), Extents: (0.01, 0.01, 0.01) materials=AH01_HairA:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeNostril.001 bounds=Center: (-0.03, 1.81, 0.31), Extents: (0.01, 0.01, 0.01) materials=AH01_HairA:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeePupil bounds=Center: (0.11, 1.96, 0.25), Extents: (0.02, 0.03, 0.02) materials=AH01_Ink:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_AttendeePupil.001 bounds=Center: (-0.09, 1.96, 0.25), Extents: (0.02, 0.03, 0.02) materials=AH01_Ink:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_AttendeeRolledCuff bounds=Center: (0.38, 1.25, 0.00), Extents: (0.14, 0.03, 0.16) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeRolledCuff.001 bounds=Center: (-0.38, 1.25, 0.00), Extents: (0.14, 0.03, 0.16) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeShirt bounds=Center: (0.00, 1.22, 0.00), Extents: (0.38, 0.34, 0.25) materials=AH01_Coral:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeSleeve bounds=Center: (0.38, 1.35, 0.00), Extents: (0.15, 0.13, 0.15) materials=AH01_Coral:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeSleeve.001 bounds=Center: (-0.38, 1.35, 0.00), Extents: (0.15, 0.13, 0.15) materials=AH01_Coral:Universal Render Pipeline/Lit
+  renderer=AH01_AttendeeWristband bounds=Center: (0.52, 0.80, 0.02), Extents: (0.08, 0.02, 0.08) materials=AH01_Ochre:Universal Render Pipeline/Lit
+  clip=Dance length=1.97 loop=True
+  clip=Idle length=1.97 loop=True
+Vendor: renderers=30 meshes=30 triangles=26496 blendshapes=12 animationType=Generic
+  renderer=AH01_Vendor_Body_0_2 bounds=Center: (0.02, 1.14, 0.16), Extents: (0.60, 1.05, 0.38) materials=AH01_SkinV:Universal Render Pipeline/Lit
+    shape=GripL default=0
+    shape=GripR default=0
+  renderer=AH01_Vendor_Hairstyle_0 bounds=Center: (0.01, 1.89, -0.02), Extents: (0.28, 0.16, 0.23) materials=AH01_HairV:Universal Render Pipeline/Lit
+  renderer=AH01_Vendor_HairTop_0 bounds=Center: (0.00, 2.13, 0.00), Extents: (0.25, 0.14, 0.24) materials=AH01_HairV:Universal Render Pipeline/Lit
+  renderer=AH01_Vendor_Pants_1 bounds=Center: (0.00, 0.53, 0.00), Extents: (0.38, 0.39, 0.24) materials=AH01_Ink:Universal Render Pipeline/Lit
+  renderer=AH01_Vendor_Shoes_0 bounds=Center: (0.00, 0.14, 0.10), Extents: (0.35, 0.13, 0.24) materials=AH01_Teal:Universal Render Pipeline/Lit,AH01_Ink:Universal Render Pipeline/Lit,AH01_Cream:Universal Render Pipeline/Lit,AH01_Ochre:Universal Render Pipeline/Lit
+  renderer=AH01_VendorApron bounds=Center: (0.00, 1.12, 0.24), Extents: (0.36, 0.35, 0.07) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_VendorApronStrap bounds=Center: (0.18, 1.45, 0.01), Extents: (0.07, 0.14, 0.23) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_VendorApronStrap.001 bounds=Center: (-0.18, 1.45, 0.01), Extents: (0.07, 0.14, 0.23) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_VendorBadge bounds=Center: (0.09, 1.37, 0.27), Extents: (0.05, 0.04, 0.01) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_VendorBrow bounds=Center: (0.10, 2.06, 0.19), Extents: (0.07, 0.03, 0.04) materials=AH01_HairV:Universal Render Pipeline/Lit
+    shape=Concern default=0
+    shape=Delight default=0
+  renderer=AH01_VendorBrow.001 bounds=Center: (-0.10, 2.06, 0.19), Extents: (0.07, 0.03, 0.04) materials=AH01_HairV:Universal Render Pipeline/Lit
+    shape=Concern default=0
+    shape=Delight default=0
+  renderer=AH01_VendorCatchlight bounds=Center: (0.12, 1.97, 0.28), Extents: (0.01, 0.01, 0.01) materials=AH01_White:Universal Render Pipeline/Lit
+  renderer=AH01_VendorCatchlight.001 bounds=Center: (-0.09, 1.97, 0.28), Extents: (0.01, 0.01, 0.01) materials=AH01_White:Universal Render Pipeline/Lit
+  renderer=AH01_VendorCollar bounds=Center: (0.00, 1.56, 0.00), Extents: (0.16, 0.01, 0.15) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_VendorEye bounds=Center: (0.10, 1.96, 0.22), Extents: (0.06, 0.07, 0.04) materials=AH01_White:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_VendorEye.001 bounds=Center: (-0.10, 1.96, 0.22), Extents: (0.06, 0.07, 0.04) materials=AH01_White:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_VendorMoustache bounds=Center: (0.04, 1.78, 0.24), Extents: (0.03, 0.02, 0.02) materials=AH01_HairV:Universal Render Pipeline/Lit
+  renderer=AH01_VendorMoustache.001 bounds=Center: (-0.04, 1.78, 0.24), Extents: (0.03, 0.02, 0.02) materials=AH01_HairV:Universal Render Pipeline/Lit
+  renderer=AH01_VendorMouth bounds=Center: (0.00, 1.76, 0.20), Extents: (0.07, 0.03, 0.02) materials=AH01_Ink:Universal Render Pipeline/Lit
+    shape=Delight default=0
+    shape=Concern default=0
+  renderer=AH01_VendorNose bounds=Center: (-0.01, 1.85, 0.25), Extents: (0.05, 0.07, 0.08) materials=AH01_SkinV:Universal Render Pipeline/Lit
+  renderer=AH01_VendorNostril bounds=Center: (0.03, 1.81, 0.31), Extents: (0.01, 0.01, 0.01) materials=AH01_HairV:Universal Render Pipeline/Lit
+  renderer=AH01_VendorNostril.001 bounds=Center: (-0.03, 1.81, 0.31), Extents: (0.01, 0.01, 0.01) materials=AH01_HairV:Universal Render Pipeline/Lit
+  renderer=AH01_VendorPocket bounds=Center: (0.00, 1.08, 0.32), Extents: (0.15, 0.08, 0.01) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_VendorPupil bounds=Center: (0.11, 1.96, 0.25), Extents: (0.02, 0.03, 0.02) materials=AH01_Ink:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_VendorPupil.001 bounds=Center: (-0.09, 1.96, 0.25), Extents: (0.02, 0.03, 0.02) materials=AH01_Ink:Universal Render Pipeline/Lit
+    shape=Blink default=0
+  renderer=AH01_VendorRolledCuff bounds=Center: (0.38, 1.25, 0.00), Extents: (0.14, 0.03, 0.16) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_VendorRolledCuff.001 bounds=Center: (-0.36, 1.25, 0.04), Extents: (0.15, 0.08, 0.16) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_VendorShirt bounds=Center: (0.00, 1.22, 0.00), Extents: (0.42, 0.34, 0.25) materials=AH01_Ochre:Universal Render Pipeline/Lit
+  renderer=AH01_VendorSleeve bounds=Center: (0.38, 1.35, 0.00), Extents: (0.15, 0.13, 0.15) materials=AH01_Ochre:Universal Render Pipeline/Lit
+  renderer=AH01_VendorSleeve.001 bounds=Center: (-0.37, 1.35, 0.01), Extents: (0.16, 0.19, 0.18) materials=AH01_Ochre:Universal Render Pipeline/Lit
+  clip=Offer length=1.97 loop=True
+  clip=Welcome length=1.97 loop=True
+Stall: renderers=10 meshes=10 triangles=20868 blendshapes=0 animationType=None
+  renderer=AH01_Stall_AH01_Coral bounds=Center: (-0.32, 1.61, 0.02), Extents: (1.54, 0.49, 1.32) materials=AH01_Coral:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Cream bounds=Center: (0.00, 2.30, 0.00), Extents: (1.90, 1.15, 1.63) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Glow bounds=Center: (0.00, 2.40, 1.64), Extents: (1.80, 0.15, 0.10) materials=AH01_Glow:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Ink bounds=Center: (-0.15, 1.89, 1.51), Extents: (0.94, 0.78, 0.05) materials=AH01_Ink:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Metal bounds=Center: (0.00, 1.42, 0.13), Extents: (2.52, 1.42, 1.65) materials=AH01_Metal:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_MintGlow bounds=Center: (1.70, 1.18, 1.28), Extents: (0.21, 0.06, 0.06) materials=AH01_MintGlow:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Ochre bounds=Center: (0.03, 1.91, 0.12), Extents: (1.97, 0.85, 1.42) materials=AH01_Ochre:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Teal bounds=Center: (0.00, 1.79, 0.00), Extents: (2.66, 1.58, 1.63) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_Wood bounds=Center: (0.00, 1.74, 0.00), Extents: (2.47, 1.74, 1.56) materials=AH01_Wood:Universal Render Pipeline/Lit
+  renderer=AH01_Stall_AH01_WoodLight bounds=Center: (0.00, 1.94, 0.07), Extents: (2.66, 1.52, 1.54) materials=AH01_WoodLight:Universal Render Pipeline/Lit
+PoiPractice: renderers=9 meshes=9 triangles=1144 blendshapes=0 animationType=None
+  renderer=AH01_PracticeGripRib bounds=Center: (0.00, 0.03, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_PracticeGripRib.001 bounds=Center: (0.00, 0.05, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_PracticeGripRib.002 bounds=Center: (0.00, 0.07, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_PracticeGripRib.003 bounds=Center: (0.00, 0.09, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_PracticeHandle bounds=Center: (0.00, 0.06, 0.00), Extents: (0.03, 0.06, 0.03) materials=AH01_Rubber:Universal Render Pipeline/Lit
+  renderer=AH01_PracticeHead bounds=Center: (0.00, 0.65, 0.00), Extents: (0.08, 0.09, 0.08) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_PracticeTether bounds=Center: (0.00, 0.34, 0.00), Extents: (0.01, 0.22, 0.01) materials=AH01_Cream:Universal Render Pipeline/Lit
+  renderer=AH01_SockNeck bounds=Center: (0.00, 0.57, 0.00), Extents: (0.05, 0.03, 0.05) materials=AH01_Coral:Universal Render Pipeline/Lit
+  renderer=AH01_SockSeam bounds=Center: (-0.04, 0.65, 0.00), Extents: (0.04, 0.09, 0.00) materials=AH01_Coral:Universal Render Pipeline/Lit
+PoiLED: renderers=9 meshes=9 triangles=988 blendshapes=0 animationType=None
+  renderer=AH01_LEDGripRib bounds=Center: (0.00, 0.03, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_LEDGripRib.001 bounds=Center: (0.00, 0.05, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_LEDGripRib.002 bounds=Center: (0.00, 0.07, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_LEDGripRib.003 bounds=Center: (0.00, 0.09, 0.00), Extents: (0.03, 0.00, 0.03) materials=AH01_Teal:Universal Render Pipeline/Lit
+  renderer=AH01_LEDHandle bounds=Center: (0.00, 0.06, 0.00), Extents: (0.03, 0.06, 0.03) materials=AH01_Rubber:Universal Render Pipeline/Lit
+  renderer=AH01_LEDHead bounds=Center: (0.00, 0.65, 0.00), Extents: (0.08, 0.09, 0.08) materials=AH01_MintGlow:Universal Render Pipeline/Lit
+  renderer=AH01_LEDHousingCap bounds=Center: (0.00, 0.57, 0.00), Extents: (0.04, 0.00, 0.04) materials=AH01_Metal:Universal Render Pipeline/Lit
+  renderer=AH01_LEDHousingCap.001 bounds=Center: (0.00, 0.71, 0.00), Extents: (0.04, 0.00, 0.04) materials=AH01_Metal:Universal Render Pipeline/Lit
+  renderer=AH01_LEDTether bounds=Center: (0.00, 0.34, 0.00), Extents: (0.01, 0.22, 0.01) materials=AH01_Cream:Universal Render Pipeline/Lit
+Path: renderers=8 meshes=8 triangles=12446 blendshapes=0 animationType=None
+  renderer=AH01_Path_AH01_Dirt bounds=Center: (-0.04, -0.01, 0.00), Extents: (1.85, 0.00, 4.50) materials=AH01_Dirt:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_Glow bounds=Center: (0.00, 0.65, 0.17), Extents: (2.29, 0.06, 2.91) materials=AH01_Glow:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_Ground bounds=Center: (0.00, -0.12, 0.00), Extents: (5.50, 0.10, 6.00) materials=AH01_Ground:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_Leaf bounds=Center: (0.14, 0.16, 0.06), Extents: (4.67, 0.16, 4.95) materials=AH01_Leaf:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_LeafLight bounds=Center: (0.19, 0.16, -0.14), Extents: (4.66, 0.16, 4.76) materials=AH01_LeafLight:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_Metal bounds=Center: (0.00, 0.78, 0.10), Extents: (2.34, 0.03, 2.99) materials=AH01_Metal:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_Stone bounds=Center: (0.01, -0.01, 0.15), Extents: (4.47, 0.14, 3.55) materials=AH01_Stone:Universal Render Pipeline/Lit
+  renderer=AH01_Path_AH01_Wood bounds=Center: (0.00, 0.38, 0.10), Extents: (2.31, 0.38, 2.96) materials=AH01_Wood:Universal Render Pipeline/Lit
+scene: renderers=112 triangles=88114 lights=3

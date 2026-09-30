@@ -1,0 +1,104 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalRoofSurfboard": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 7,
+      "triangles": 1204,
+      "separate": []
+    },
+    "FestivalRoofBox": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 1238,
+      "separate": []
+    },
+    "FestivalRoofLuggage": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 11,
+      "triangles": 1860,
+      "separate": []
+    },
+    "FestivalCampDJ": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 21,
+      "triangles": 3486,
+      "separate": [
+        "DJConeL__Mint",
+        "DJConeR__Mint",
+        "DJMarkerL__Gold",
+        "DJMarkerR__Gold",
+        "DJPlatterL__Metal",
+        "DJPlatterR__Metal"
+      ],
+      "anchors": {
+        "signFrontZ": -0.22,
+        "tableTop": 0.84
+      }
+    },
+    "FestivalCampCooler": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 1148,
+      "separate": [
+        "CampCoolerCups__Dark",
+        "CampCoolerLatch__Gold",
+        "CampCoolerLid__Cream"
+      ],
+      "anchors": {
+        "lidTop": 0.788
+      }
+    },
+    "FestivalLanternStake": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 720,
+      "separate": [],
+      "anchors": {
+        "light": [
+          0,
+          1.48,
+          0
+        ]
+      }
+    },
+    "FestivalMatTrim": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 3236,
+      "separate": []
+    },
+    "FestivalPicnicTable": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 816,
+      "separate": []
+    },
+    "FestivalPicnicTableLarge": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 860,
+      "separate": []
+    },
+    "FestivalReviewPodium": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 11,
+      "triangles": 2052,
+      "separate": [],
+      "anchors": {
+        "signFrontZ": -0.42
+      }
+    }
+  }
+}

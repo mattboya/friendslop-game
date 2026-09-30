@@ -1,0 +1,148 @@
+{
+  "entries": [
+    {
+      "name": "AH03P_SkinWarm",
+      "rgb": [
+        0.62,
+        0.32,
+        0.19
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_SkinDeep",
+      "rgb": [
+        0.27,
+        0.115,
+        0.07
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_SkinLight",
+      "rgb": [
+        0.86,
+        0.6,
+        0.39
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Coral",
+      "rgb": [
+        0.72,
+        0.2,
+        0.15
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Teal",
+      "rgb": [
+        0.055,
+        0.29,
+        0.28
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Ochre",
+      "rgb": [
+        0.83,
+        0.5,
+        0.13
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Cream",
+      "rgb": [
+        0.88,
+        0.78,
+        0.57
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Ink",
+      "rgb": [
+        0.026,
+        0.042,
+        0.055
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_White",
+      "rgb": [
+        0.95,
+        0.92,
+        0.82
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_HairDark",
+      "rgb": [
+        0.055,
+        0.037,
+        0.025
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_HairGrey",
+      "rgb": [
+        0.29,
+        0.3,
+        0.29
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_HairPurple",
+      "rgb": [
+        0.24,
+        0.1,
+        0.25
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Iris",
+      "rgb": [
+        0.13,
+        0.26,
+        0.2
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Mouth",
+      "rgb": [
+        0.045,
+        0.012,
+        0.009
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Tongue",
+      "rgb": [
+        0.68,
+        0.26,
+        0.22
+      ],
+      "roughness": 0.68
+    },
+    {
+      "name": "AH03P_Ground",
+      "rgb": [
+        0.16,
+        0.2,
+        0.17
+      ],
+      "roughness": 0.68
+    }
+  ]
+}

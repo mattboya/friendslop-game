@@ -1,0 +1,246 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/ProductionSample04",
+  "models": {
+    "AH04_CheckpointBooth": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 9,
+      "triangles": 1804,
+      "separate": []
+    },
+    "AH04_BagSearchTable": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 10,
+      "triangles": 1564,
+      "separate": []
+    },
+    "AH04_BarrierArm": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 7,
+      "triangles": 760,
+      "separate": [
+        "BarrierArmStripes__Rose",
+        "BarrierArmWeight__Dark",
+        "BarrierArm__White"
+      ],
+      "pivots": {
+        "BarrierArm__White": [
+          -0.0,
+          0.88,
+          -0.305
+        ],
+        "BarrierArmStripes__Rose": [
+          -0.0,
+          0.88,
+          -0.305
+        ],
+        "BarrierArmWeight__Dark": [
+          -0.0,
+          0.88,
+          -0.305
+        ]
+      }
+    },
+    "AH04_QueueStanchion": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 7,
+      "triangles": 968,
+      "separate": [
+        "StanchionEndBase__Dark",
+        "StanchionEndCap__Gold",
+        "StanchionEndPost__Metal"
+      ],
+      "pivots": {
+        "StanchionEndPost__Metal": [
+          0.75,
+          0.0,
+          -0.0
+        ],
+        "StanchionEndBase__Dark": [
+          0.75,
+          0.0,
+          -0.0
+        ],
+        "StanchionEndCap__Gold": [
+          0.75,
+          0.0,
+          -0.0
+        ]
+      },
+      "tilingPitch": 1.5
+    },
+    "AH04_BackstageFence": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 1740,
+      "separate": [],
+      "tilingPitch": 3.0
+    },
+    "AH04_CrewGate": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 8,
+      "triangles": 2132,
+      "separate": [
+        "CrewGateCaster__Rubber",
+        "CrewGateLeaf__Metal",
+        "CrewGateScrim__CanvasDark",
+        "CrewGateTrim__Gold"
+      ],
+      "pivots": {
+        "CrewGateLeaf__Metal": [
+          -1.4,
+          0.0,
+          0.0
+        ],
+        "CrewGateScrim__CanvasDark": [
+          -1.4,
+          0.0,
+          0.0
+        ],
+        "CrewGateTrim__Gold": [
+          -1.4,
+          0.0,
+          0.0
+        ],
+        "CrewGateCaster__Rubber": [
+          1.2,
+          0.06,
+          -0.0
+        ]
+      },
+      "tilingPitch": 3.0
+    },
+    "AH04_CrewLockers": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 13,
+      "triangles": 1402,
+      "separate": [
+        "LockerDetail1__Dark",
+        "LockerDetail2__Dark",
+        "LockerDetail3__Dark",
+        "LockerDoor1__Mint",
+        "LockerDoor2__Gold",
+        "LockerDoor3__Rose",
+        "LockerHandle1__Metal",
+        "LockerHandle2__Metal",
+        "LockerHandle3__Metal"
+      ],
+      "pivots": {
+        "LockerDoor1__Mint": [
+          -0.625,
+          0.12,
+          -0.26
+        ],
+        "LockerHandle1__Metal": [
+          -0.625,
+          0.12,
+          -0.26
+        ],
+        "LockerDetail1__Dark": [
+          -0.625,
+          0.12,
+          -0.26
+        ],
+        "LockerDoor2__Gold": [
+          -0.205,
+          0.12,
+          -0.26
+        ],
+        "LockerHandle2__Metal": [
+          -0.205,
+          0.12,
+          -0.26
+        ],
+        "LockerDetail2__Dark": [
+          -0.205,
+          0.12,
+          -0.26
+        ],
+        "LockerDoor3__Rose": [
+          0.215,
+          0.12,
+          -0.26
+        ],
+        "LockerHandle3__Metal": [
+          0.215,
+          0.12,
+          -0.26
+        ],
+        "LockerDetail3__Dark": [
+          0.215,
+          0.12,
+          -0.26
+        ]
+      }
+    },
+    "AH04_BelongingsBag": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 9,
+      "triangles": 1472,
+      "separate": []
+    },
+    "AH04_HandTruckSpeaker": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 9,
+      "triangles": 1368,
+      "separate": [
+        "TruckHubL__Gold",
+        "TruckHubR__Gold",
+        "TruckWheelL__Rubber",
+        "TruckWheelR__Rubber"
+      ],
+      "pivots": {
+        "TruckWheelL__Rubber": [
+          -0.295,
+          0.13,
+          0.14
+        ],
+        "TruckHubL__Gold": [
+          -0.295,
+          0.13,
+          0.14
+        ],
+        "TruckWheelR__Rubber": [
+          0.295,
+          0.13,
+          0.14
+        ],
+        "TruckHubR__Gold": [
+          0.295,
+          0.13,
+          0.14
+        ]
+      }
+    },
+    "AH04_InflatableCargo": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 11,
+      "triangles": 2652,
+      "separate": []
+    },
+    "AH04_FragileCrate": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 840,
+      "separate": []
+    },
+    "AH04_SideStage": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 12,
+      "triangles": 6852,
+      "separate": []
+    }
+  }
+}

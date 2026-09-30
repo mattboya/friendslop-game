@@ -1,0 +1,169 @@
+{
+  "entries": [
+    {
+      "name": "AH02_Ink",
+      "rgb": [
+        0.026,
+        0.042,
+        0.055
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Teal",
+      "rgb": [
+        0.055,
+        0.29,
+        0.28
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Coral",
+      "rgb": [
+        0.72,
+        0.2,
+        0.15
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Ochre",
+      "rgb": [
+        0.83,
+        0.5,
+        0.13
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Cream",
+      "rgb": [
+        0.88,
+        0.78,
+        0.57
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Metal",
+      "rgb": [
+        0.3,
+        0.34,
+        0.36
+      ],
+      "roughness": 0.36,
+      "metallic": 0.68,
+      "emission": 0
+    },
+    {
+      "name": "AH02_MetalDark",
+      "rgb": [
+        0.12,
+        0.15,
+        0.17
+      ],
+      "roughness": 0.36,
+      "metallic": 0.68,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Rubber",
+      "rgb": [
+        0.038,
+        0.047,
+        0.042
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Wood",
+      "rgb": [
+        0.26,
+        0.135,
+        0.066
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Deck",
+      "rgb": [
+        0.13,
+        0.17,
+        0.18
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_Screen",
+      "rgb": [
+        0.015,
+        0.08,
+        0.085
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    },
+    {
+      "name": "AH02_GoldGlow",
+      "rgb": [
+        1,
+        0.57,
+        0.18
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 2
+    },
+    {
+      "name": "AH02_MintGlow",
+      "rgb": [
+        0.16,
+        0.85,
+        0.63
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 2
+    },
+    {
+      "name": "AH02_RoseGlow",
+      "rgb": [
+        0.92,
+        0.24,
+        0.31
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 2
+    },
+    {
+      "name": "AH02_Ground",
+      "rgb": [
+        0.12,
+        0.15,
+        0.12
+      ],
+      "roughness": 0.7,
+      "metallic": 0,
+      "emission": 0
+    }
+  ]
+}

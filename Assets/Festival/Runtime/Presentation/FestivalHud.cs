@@ -284,7 +284,9 @@ namespace Festival.Presentation
             checkoutPanel=Card(root.transform,"Counter price confirmation",new Vector2(.022f,.625f),new Vector2(.405f,.705f),false);
             Accent(checkoutPanel.transform,Orange);
             checkoutText=Label(checkoutPanel.transform,"Handoff price",22,TextAnchor.MiddleCenter);checkoutText.color=Ink;Fill(checkoutText.rectTransform,12);
-            heldDetailPanel=Card(root.transform,"Held item label",new Vector2(.61f,.245f),new Vector2(.955f,.365f),false);
+            // Docked under the crew card, clear of the session notice, so it stays above
+            // the shelves and never covers price tags near the reticle.
+            heldDetailPanel=Card(root.transform,"Held item label",new Vector2(.633f,.66f),new Vector2(.978f,.78f),false);
             Accent(heldDetailPanel.transform,Orange);
             heldTitle=Label(heldDetailPanel.transform,"Held item title",24,TextAnchor.MiddleLeft);heldTitle.fontStyle=FontStyle.Normal;heldTitle.color=Ink;Place(heldTitle.rectTransform,.06f,.59f,.78f,.91f);
             heldPrice=Label(heldDetailPanel.transform,"Held item price",24,TextAnchor.MiddleRight);heldPrice.fontStyle=FontStyle.Normal;heldPrice.color=new Color(.12f,.43f,.37f);Place(heldPrice.rectTransform,.78f,.59f,.94f,.91f);

@@ -1,0 +1,172 @@
+{
+  "cast": {
+    "AttendeeLanky": {
+      "fbx": "AH03P_AttendeeLanky.fbx",
+      "body": "0_0",
+      "role": null,
+      "face": "AH03P_AttendeeLanky_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 33484,
+      "armature": "AH03P_AttendeeLankyRig"
+    },
+    "AttendeeAverage": {
+      "fbx": "AH03P_AttendeeAverage.fbx",
+      "body": "1_1",
+      "role": null,
+      "face": "AH03P_AttendeeAverage_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 35052,
+      "armature": "AH03P_AttendeeAverageRig"
+    },
+    "AttendeeStocky": {
+      "fbx": "AH03P_AttendeeStocky.fbx",
+      "body": "0_2",
+      "role": null,
+      "face": "AH03P_AttendeeStocky_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 36988,
+      "armature": "AH03P_AttendeeStockyRig"
+    },
+    "VendorSupplies": {
+      "fbx": "AH03P_VendorSupplies.fbx",
+      "body": "1_1",
+      "role": "Vendor0",
+      "face": "AH03P_VendorSupplies_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 37328,
+      "armature": "AH03P_VendorSuppliesRig"
+    },
+    "VendorPerformance": {
+      "fbx": "AH03P_VendorPerformance.fbx",
+      "body": "0_2",
+      "role": "Vendor1",
+      "face": "AH03P_VendorPerformance_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 34592,
+      "armature": "AH03P_VendorPerformanceRig"
+    },
+    "VendorStock": {
+      "fbx": "AH03P_VendorStock.fbx",
+      "body": "0_0",
+      "role": "Vendor2",
+      "face": "AH03P_VendorStock_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 38960,
+      "armature": "AH03P_VendorStockRig"
+    },
+    "Medic": {
+      "fbx": "AH03P_Medic.fbx",
+      "body": "1_1",
+      "role": "Medic",
+      "face": "AH03P_Medic_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 38228,
+      "armature": "AH03P_MedicRig"
+    },
+    "Security": {
+      "fbx": "AH03P_Security.fbx",
+      "body": "0_2",
+      "role": "Security",
+      "face": "AH03P_Security_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 37752,
+      "armature": "AH03P_SecurityRig"
+    },
+    "MissingFriend": {
+      "fbx": "AH03P_MissingFriend.fbx",
+      "body": "1_0",
+      "role": "Friend",
+      "face": "AH03P_MissingFriend_Face",
+      "expressions": [
+        "Blink",
+        "Exhausted",
+        "Delight",
+        "Alarm",
+        "Concern",
+        "Suspicious",
+        "Confused"
+      ],
+      "source": "Original modular base plus new unified expressive face",
+      "triangles": 39320,
+      "armature": "AH03P_MissingFriendRig"
+    }
+  },
+  "motion": "AH03P_Motion.fbx",
+  "notes": [
+    "Cast meshes exported without animation curves: facial poses remain independently controllable.",
+    "Rig-only motion file has six stationary acting clips; no locomotion or gameplay transfer claimed.",
+    "Existing six body fit shapes baked into each assembled outfit; raw master remains unchanged."
+  ]
+}
