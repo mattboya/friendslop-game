@@ -5,7 +5,7 @@ namespace Festival.Presentation
 {
     public sealed class FestivalInput : IDisposable
     {
-        public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Conversation"||kind=="Sale"||kind=="Police"||kind=="Poi"||kind=="Dj";
+        public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Conversation"||kind=="Sale"||kind=="Police"||kind=="Poi"||kind=="Dj"||kind=="ConfirmDance";
         public readonly InputActionMap Map = new InputActionMap("Festival");
         public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3;
         public readonly InputAction[] Notes = new InputAction[4];

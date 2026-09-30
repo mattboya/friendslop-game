@@ -71,7 +71,7 @@ public static class ConfirmTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{OnlyTheTripperChecks,AChecksNeedsSomethingToCheck,AChatTakesFiveSafeSeconds,TheChatCarriesTheirTells,
-            ADanceIsQuickButRisky,TheTrailMovesOnlyOnATrueHolder,WalkingAwayEndsTheChat,AChatSurvivesASnapshot})
+            ADanceIsQuickButRisky,EveryStepShowsOnTheDancer,TheTrailMovesOnlyOnATrueHolder,WalkingAwayEndsTheChat,AChatSurvivesASnapshot})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" confirm test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -177,6 +177,15 @@ public static class ConfirmTests
         Check(Math.Abs(fair.Score-.65)<1e-9&&heat<30,"a .65 dance calms the watchers like any good dance: 30 -> "+heat);
         heat=After(4,0,out var perfect);
         Check(perfect.Score==1&&heat<30,"a perfect dance calms them most: 30 -> "+heat);
+    }
+
+    // Friends watch a check dance like any other: each step the tripper takes shows on their character.
+    static void EveryStepShowsOnTheDancer()
+    {
+        var s=Start(10,0);var tripper=Tripper(s);var npc=Npc(s,s.State.Visions.First(v=>v.NpcId!="").NpcId);
+        var dance=Dance(s,npc,4,0);Check(dance.Score==1,"setup: a perfect check dance");
+        var last=RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes[3];
+        Check(tripper.VisualDanceStepSequence==4&&tripper.VisualDanceStepDirection==last.Direction,"all four steps showed, the last one "+last.Direction+"; got "+tripper.VisualDanceStepSequence+" steps, last "+tripper.VisualDanceStepDirection);
     }
 
     static void TheTrailMovesOnlyOnATrueHolder()
