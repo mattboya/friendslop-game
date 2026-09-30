@@ -166,5 +166,53 @@ namespace Festival.Tests
             }
             yield return null;
         }
+
+        // The trailhead posts (x = +-2, z = 19) stand inside the 3.2 m circle where everyone readies, so a tripper who stops
+        // just in front of one, facing the gate, has a post on the head-on camera's line.
+        [UnityTest]public IEnumerator TrailheadPostsNeverBlockTheTake()
+        {
+            var world=new GameObject("Spinner world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Spinner session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            try
+            {
+                session.Host("Tester",8611);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var me=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("spin_mate","Mate");
+                var state=sim.State;string idle=state.Phase;
+                var cut=host.GetComponentsInChildren<Camera>(true).First(c=>c.name=="Spinner take camera");
+                foreach(var (x,z,yaw,otherX,otherZ) in new[]{(1.95f,17.3f,0f,0f,17f),(2.6f,17.5f,-20f,-1f,18f),(-1.2f,17.6f,-30f,1f,18f)})
+                {
+                    state.Phase=idle;mate.X=x;mate.Z=z;mate.Yaw=yaw;me.X=otherX;me.Z=otherZ;me.Yaw=180;
+                    yield return new WaitForSeconds(1f);
+                    state.Phase="Spinning";state.SpinSeed=4242;state.TripperId=mate.Id;
+                    state.Doses.Clear();state.Doses.Add(new PlayerDose{PlayerId=mate.Id,Dose=3});
+                    foreach(var at in new[]{FestivalSpinner.TakeStarts+.3,FestivalSpinner.ReactStarts+.8})
+                    {
+                        state.SpinEndsAt=state.SimulationSeconds+FestivalSimulation.SpinSeconds-at;
+                        yield return new WaitForSeconds(.3f);
+                        string where=$"for a tripper at ({x},{z}) facing {yaw} at {at} s";
+                        Assert.That(cut.enabled,"setup: the camera cuts to the mate "+where);
+                        var eye=cut.transform.position;var face=session.WorldCharacter(mate.Id).transform.position+Vector3.up*1.4f;
+                        Assert.That(Vector3.Angle(cut.transform.forward,face-eye),Is.LessThan(12f),"the shot frames the mate "+where);
+                        string Blocker(Vector3 from,Vector3 to)=>Physics.Linecast(from,to,out var hit,~0,QueryTriggerInteraction.Ignore)?hit.collider.name:"nothing";
+                        Debug.Log($"[Festival.Test] post take {where}: camera={eye} face={face} blocked by {Blocker(eye,face)} / {Blocker(face,eye)}");
+                        Assert.That(Blocker(eye,face),Is.EqualTo("nothing"),"nothing stands between the camera and the mate's face "+where);
+                        Assert.That(Blocker(face,eye),Is.EqualTo("nothing"),"and the camera is not inside anything "+where);
+                    }
+                }
+                state.Phase=idle;
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var leftover in new[]{"First-person camera","Authoritative actor presentation"}){var found=GameObject.Find(leftover);if(found!=null)Object.Destroy(found);}
+                Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+        }
     }
 }
