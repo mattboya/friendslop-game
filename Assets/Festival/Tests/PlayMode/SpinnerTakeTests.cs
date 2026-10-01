@@ -63,7 +63,8 @@ namespace Festival.Tests
                 while(session.State.Phase!="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.State.Phase,Is.EqualTo("Spinning"),"setup: the ready countdown ends in the spin: "+session.Message);
                 double start=session.State.SpinEndsAt-FestivalSimulation.SpinSeconds;
-                string tripper=session.State.TripperId;int dose=session.State.Doses.Find(d=>d.PlayerId==tripper).Dose;
+                string tripper=session.State.TripperId;var spun=session.State.Doses.Find(d=>d.PlayerId==tripper);int dose=spun.Dose;
+                string took=Catalog.FindEffect(spun.Substance).Name.ToUpperInvariant();
                 yield return new WaitForSeconds(.3f);
 
                 var overlay=host.transform.Find("Festival spinner");
@@ -71,11 +72,12 @@ namespace Festival.Tests
                 var shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
                 Assert.That(shown,Does.Contain("TESTER").And.Contain("MATE"),"the people wheel has a slice for each friend");
                 Assert.That(shown,Does.Contain("1").And.Contain("4"),"the dose wheel shows its slices, sliver included");
+                Assert.That(shown,Is.SupersetOf(new[]{"TONGUE\nSTAMPS","FUN\nGUYS","ROLLY\nPOLLIES","PONY\nDUST","COUCH\nLOCK"}),"the substance wheel shows its five, each name on two lines");
 
                 while(session.EstimatedSimulationSeconds<start+FestivalSpinner.WheelStops(FestivalSimulation.WheelCount-1)+.2&&Time.realtimeSinceStartup<deadline)yield return null;
                 string name=sim.Player(tripper).Name.ToUpperInvariant();
                 shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
-                Assert.That(shown.Any(t=>t.Contains(name))&&shown.Any(t=>t.StartsWith(dose+" DOSE")),"both results read out once the wheels land: "+string.Join(" | ",shown));
+                Assert.That(shown.Any(t=>t.Contains(name))&&shown.Any(t=>t.StartsWith(dose+" DOSE"))&&shown.Contains(took),"all three results read out once the wheels land: "+string.Join(" | ",shown));
                 // What sits under each pointer on screen is the result's own slice: the wheel's pixels there match the pixels behind its label.
                 void PointerOn(string wheel,string label)
                 {
@@ -85,7 +87,7 @@ namespace Festival.Tests
                     var pointer=((Vector2)disc.InverseTransformPoint(holder.Find("Pointer").position)).normalized*slice.magnitude;
                     Assert.That(Vector4.Distance(Pixel(pointer),Pixel(slice)),Is.LessThan(.05f),"the "+wheel+"'s pointer rests on "+label+"'s slice");
                 }
-                PointerOn("People wheel",name);PointerOn("Dose wheel",dose.ToString());
+                PointerOn("People wheel",name);PointerOn("Dose wheel",dose.ToString());PointerOn("Substance wheel",took.Replace(' ','\n'));
 
                 while(session.EstimatedSimulationSeconds<start+FestivalSpinner.TakeStarts+.4&&Time.realtimeSinceStartup<deadline)yield return null;
                 var cut=host.GetComponentsInChildren<Camera>(true).First(c=>c.name=="Spinner take camera");
@@ -94,6 +96,7 @@ namespace Festival.Tests
                 var shot=overlay.Find("Take letterbox/Take shot").GetComponent<RawImage>();
                 Assert.That(shot.enabled&&shot.texture!=null&&shot.texture==cut.targetTexture,"the shot fills the spinner's own canvas, over the HUD");
                 Assert.That(actor.Beat,Is.EqualTo("TakeDose"),"the tripper takes the dose");
+                Assert.That(overlay.Find("Take letterbox/Bottom bar/Take caption").GetComponent<Text>().text,Is.EqualTo(name+" TAKES "+dose+(dose==1?" DOSE":" DOSES")+" OF "+took),"the caption names what they take");
                 var toFace=actor.transform.position+Vector3.up*1.25f-cut.transform.position;
                 Assert.That(Vector3.Angle(cut.transform.forward,toFace),Is.LessThan(12f),"the shot frames the tripper");
                 Assert.That(toFace.magnitude,Is.LessThan(3.5f),"close up");

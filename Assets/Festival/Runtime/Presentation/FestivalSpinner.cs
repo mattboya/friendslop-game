@@ -7,12 +7,12 @@ using UnityEngine.UI;
 
 namespace Festival.Presentation
 {
-    /// <summary>SPIN-1: the people wheel lands on the tripper, the dose wheel on their dose, then the camera cuts to the
-    /// tripper taking it at camp. Everything is computed from the public spin result (SpinSeed, SpinEndsAt, TripperId,
-    /// Doses), so every client shows the same spin, landing and reaction without any extra network traffic.</summary>
+    /// <summary>SPIN-1: the people wheel lands on the tripper, the dose wheel on their dose, TRIP-5's substance wheel on what they
+    /// took, then the camera cuts to the tripper taking it at camp. Everything is computed from the public spin result (SpinSeed,
+    /// SpinEndsAt, TripperId, Doses), so every client shows the same spin, landing and reaction without any extra network traffic.</summary>
     public sealed class FestivalSpinner : MonoBehaviour
     {
-        // SPIN-2: seconds from the spin's start (SpinEndsAt - SpinSeconds), all from Core's timeline. Wheel i (0 people, 1 dose)
+        // SPIN-2: seconds from the spin's start (SpinEndsAt - SpinSeconds), all from Core's timeline. Wheel i (0 people, 1 dose, 2 substance)
         // turns from WheelStarts(i) to WheelStops(i) and rests on its result; after the last rest come the take and the reaction.
         public static float WheelStarts(int wheel)=>wheel*(float)(FestivalSimulation.WheelSeconds+FestivalSimulation.PauseSeconds);
         public static float WheelStops(int wheel)=>WheelStarts(wheel)+(float)FestivalSimulation.WheelSeconds;
@@ -20,14 +20,15 @@ namespace Festival.Presentation
         public static float ReactStarts=>TakeStarts+(float)FestivalSimulation.TakeSeconds;
         // About 8 turns under the cubic ease-out keeps a 4 s wheel sweeping over 120 degrees a second at 3 s, not crawling.
         const int Turns=8;
-        public enum Stage{Hidden,People,Dose,Take,React}
+        public enum Stage{Hidden,People,Dose,Substance,Take,React}
         public struct Beat
         {
             public Stage Stage;
             // Wheel rotations are clockwise degrees; the pointer sits at the top. Reaction is the dose's size, 0-1.
-            public float Elapsed,PeopleDegrees,DoseDegrees,Reaction;
-            public bool PeopleLanded,DoseLanded;
+            public float Elapsed,PeopleDegrees,DoseDegrees,SubstanceDegrees,Reaction;
+            public bool PeopleLanded,DoseLanded,SubstanceLanded;
             public int Dose;
+            public string Substance;
         }
 
         // Connected friends in state order; a tripper who just dropped keeps a slice so the wheel can still land.
@@ -56,17 +57,24 @@ namespace Festival.Presentation
         static float Turn(float landing,float progress){float left=1-Mathf.Clamp01(progress);return landing*(1-left*left*left);}
         static float Progress(float elapsed,int wheel)=>(elapsed-WheelStarts(wheel))/(float)FestivalSimulation.WheelSeconds;
         static int[] Equal(int count){var weights=new int[count];for(int i=0;i<count;i++)weights[i]=1;return weights;}
+        static readonly int[] SubstanceSlices=Equal(FestivalSimulation.Substances.Count);
+        // The substance wheel's slice for a catalog id; an unknown one (a host from before the wheel) rests on the first.
+        static int SubstanceSlice(string substance){for(int i=0;i<FestivalSimulation.Substances.Count;i++)if(FestivalSimulation.Substances[i]==substance)return i;return 0;}
+        /// <summary>What a substance id reads as on screen ("FUN GUYS"), or "" for none.</summary>
+        public static string SubstanceName(string substance)=>string.IsNullOrEmpty(substance)?"":Catalog.FindEffect(substance)?.Name.ToUpperInvariant()??"";
         public static Beat At(RoundState state,List<string> crew,double now)
         {
             var beat=new Beat();
             if(state==null||state.Phase!="Spinning"||crew.Count==0)return beat;
             float t=beat.Elapsed=(float)(now-(state.SpinEndsAt-FestivalSimulation.SpinSeconds));
-            beat.Dose=Mathf.Clamp(state.Doses.Find(d=>d.PlayerId==state.TripperId)?.Dose??1,1,FestivalSimulation.DoseSlices.Count);
+            var took=state.Doses.Find(d=>d.PlayerId==state.TripperId);
+            beat.Dose=Mathf.Clamp(took?.Dose??1,1,FestivalSimulation.DoseSlices.Count);beat.Substance=took?.Substance??"";
             beat.Reaction=beat.Dose/(float)FestivalSimulation.DoseSlices.Count;
             beat.PeopleDegrees=Turn(LandingDegrees(Equal(crew.Count),Mathf.Max(0,crew.IndexOf(state.TripperId)),state.SpinSeed,Turns),Progress(t,0));
             beat.DoseDegrees=Turn(LandingDegrees(FestivalSimulation.DoseSlices,beat.Dose-1,unchecked(state.SpinSeed*31+7),Turns),Progress(t,1));
-            beat.PeopleLanded=t>=WheelStops(0);beat.DoseLanded=t>=WheelStops(1);
-            beat.Stage=t<WheelStarts(1)?Stage.People:t<TakeStarts?Stage.Dose:t<ReactStarts?Stage.Take:Stage.React;
+            beat.SubstanceDegrees=Turn(LandingDegrees(SubstanceSlices,SubstanceSlice(beat.Substance),unchecked(state.SpinSeed*41+3),Turns),Progress(t,2));
+            beat.PeopleLanded=t>=WheelStops(0);beat.DoseLanded=t>=WheelStops(1);beat.SubstanceLanded=t>=WheelStops(2);
+            beat.Stage=t<WheelStarts(1)?Stage.People:t<WheelStarts(2)?Stage.Dose:t<TakeStarts?Stage.Substance:t<ReactStarts?Stage.Take:Stage.React;
             return beat;
         }
 
@@ -76,8 +84,11 @@ namespace Festival.Presentation
             new Color(.34f,.78f,1),new Color(.46f,.95f,.68f),new Color(.66f,.52f,1),new Color(.96f,.62f,.50f)};
         // The dose wheel heats up from calm mint to the hot pink 4-dose sliver.
         static readonly Color[] DoseColors={new Color(.385f,.86f,.725f),new Color(1,.76f,.29f),new Color(.99f,.465f,.255f),new Color(1,.25f,.55f)};
+        // The substance wheel, in Substances order: stamp pink, mushroom violet, warm gold, cool sky blue, leaf green.
+        static readonly Color[] SubstanceColors={new Color(1,.38f,.61f),new Color(.66f,.52f,1),new Color(1,.76f,.29f),new Color(.34f,.78f,1),new Color(.55f,.85f,.4f)};
         static readonly string[] Reactions={"","Feels fine. Probably.","Whoa.","The colors are talking.","Oh no. Oh yes. Oh no."};
-        const float WheelSize=520;
+        // Three wheels side by side at a fifth, a half and four fifths of the screen's width.
+        const float WheelSize=420;
         // The take camera pushes in from TakeFar to TakeNear. It swings to the first of TakeAngles (degrees from the tripper's
         // facing) whose line to their face passes SceneryClearance from the scenery and TakeClearance from every other friend at
         // camp; past 90 it would see the back of the head.
@@ -87,7 +98,7 @@ namespace Festival.Presentation
         FestivalSession session;
         Font font;
         GameObject overlay,wheels,letterbox;
-        Wheel people,dose;
+        Wheel people,dose,substance;
         Text caption;
         RawImage shot;
         RenderTexture shotTexture;
@@ -106,10 +117,14 @@ namespace Festival.Presentation
             var scaler=overlay.AddComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution=new Vector2(1920,1080);scaler.matchWidthOrHeight=.5f;
             wheels=Panel(overlay.transform,"Spinner backdrop",new Color(Ink.r,Ink.g,Ink.b,.92f),Vector2.zero,Vector2.one);
-            people=MakeWheel(wheels.transform,"People wheel",.3f,"WHO TRIPS?");
-            dose=MakeWheel(wheels.transform,"Dose wheel",.7f,"HOW MANY DOSES?");
+            people=MakeWheel(wheels.transform,"People wheel",.2f,"WHO TRIPS?");
+            dose=MakeWheel(wheels.transform,"Dose wheel",.5f,"HOW MANY DOSES?");
+            substance=MakeWheel(wheels.transform,"Substance wheel",.8f,"WHAT DID THEY TAKE?");
             var numbers=new List<string>();for(int n=1;n<=FestivalSimulation.DoseSlices.Count;n++)numbers.Add(n.ToString());
             Paint(dose,FestivalSimulation.DoseSlices,DoseColors,numbers);
+            // Two-word names stack on two lines so they fit their slice.
+            var names=new List<string>();foreach(var id in FestivalSimulation.Substances)names.Add(SubstanceName(id).Replace(' ','\n'));
+            Paint(substance,SubstanceSlices,SubstanceColors,names);
             letterbox=new GameObject("Take letterbox",typeof(RectTransform));letterbox.transform.SetParent(overlay.transform,false);
             Stretch((RectTransform)letterbox.transform);
             // The take renders into this canvas too, so the HUD stays hidden under the cut as it does under the wheels.
@@ -133,13 +148,15 @@ namespace Festival.Presentation
             FestivalCharacter tripper=null;
             if(beat.Stage!=Stage.Hidden)
             {
-                string name=Name(state,state.TripperId),doses=beat.Dose+(beat.Dose==1?" DOSE":" DOSES");
-                bool spinning=beat.Stage==Stage.People||beat.Stage==Stage.Dose;
+                string name=Name(state,state.TripperId),doses=beat.Dose+(beat.Dose==1?" DOSE":" DOSES"),took=SubstanceName(beat.Substance);
+                bool spinning=beat.Stage==Stage.People||beat.Stage==Stage.Dose||beat.Stage==Stage.Substance;
                 wheels.SetActive(spinning);letterbox.SetActive(!spinning);
                 people.Disc.localEulerAngles=new Vector3(0,0,-beat.PeopleDegrees);people.Result.text=beat.PeopleLanded?name+" TRIPS":"";
                 dose.Disc.localEulerAngles=new Vector3(0,0,-beat.DoseDegrees);dose.Result.text=beat.DoseLanded?doses:"";
+                substance.Disc.localEulerAngles=new Vector3(0,0,-beat.SubstanceDegrees);substance.Result.text=beat.SubstanceLanded?took:"";
                 dose.Group.alpha=beat.Stage==Stage.People?.35f:1;
-                caption.text=name+" TAKES "+doses+(beat.Stage==Stage.React?"\n"+Reactions[beat.Dose]:"");
+                substance.Group.alpha=beat.Stage==Stage.People||beat.Stage==Stage.Dose?.35f:1;
+                caption.text=name+" TAKES "+doses+(took!=""?" OF "+took:"")+(beat.Stage==Stage.React?"\n"+Reactions[beat.Dose]:"");
                 if(!spinning)tripper=session.WorldCharacter(state.TripperId);
             }
             Cut(tripper!=null&&tripper.gameObject.activeInHierarchy?tripper:null,beat,state);
@@ -221,7 +238,7 @@ namespace Festival.Presentation
             {
                 float span=weights[i]*360f/total,center=start+span*.5f;start+=span;
                 // Names read outward along their slice and turn with the wheel.
-                var label=Label(wheel.Disc,"Slice "+labels[i],weights.Count>5?26:34);label.color=Ink;label.text=labels[i];
+                var label=Label(wheel.Disc,"Slice "+labels[i],labels[i].Contains("\n")?24:weights.Count>5?21:28);label.color=Ink;label.text=labels[i];
                 label.rectTransform.anchoredPosition=new Vector2(Mathf.Sin(center*Mathf.Deg2Rad),Mathf.Cos(center*Mathf.Deg2Rad))*WheelSize*.3f;
                 label.rectTransform.localEulerAngles=new Vector3(0,0,90-center);
             }
@@ -252,9 +269,9 @@ namespace Festival.Presentation
             var discRect=(RectTransform)disc.transform;discRect.sizeDelta=new Vector2(WheelSize,WheelSize);disc.GetComponent<RawImage>().raycastTarget=false;
             // A diamond whose lower tip bites into the rim marks the winning slice.
             var pointer=Panel(holder.transform,"Pointer",Paper,new Vector2(.5f,1),new Vector2(.5f,1));
-            var tip=(RectTransform)pointer.transform;tip.sizeDelta=new Vector2(44,44);tip.anchoredPosition=new Vector2(0,6);tip.localEulerAngles=new Vector3(0,0,45);
-            var heading=Label(holder.transform,"Title",46);heading.text=title;heading.rectTransform.anchoredPosition=new Vector2(0,WheelSize*.5f+80);
-            var result=Label(holder.transform,"Result",56);result.color=Orange;result.rectTransform.anchoredPosition=new Vector2(0,-WheelSize*.5f-64);
+            var tip=(RectTransform)pointer.transform;tip.sizeDelta=new Vector2(38,38);tip.anchoredPosition=new Vector2(0,5);tip.localEulerAngles=new Vector3(0,0,45);
+            var heading=Label(holder.transform,"Title",40);heading.text=title;heading.rectTransform.anchoredPosition=new Vector2(0,WheelSize*.5f+70);
+            var result=Label(holder.transform,"Result",48);result.color=Orange;result.rectTransform.anchoredPosition=new Vector2(0,-WheelSize*.5f-56);
             return new Wheel{Disc=discRect,Image=disc.GetComponent<RawImage>(),Result=result,Group=holder.GetComponent<CanvasGroup>()};
         }
         static GameObject Panel(Transform parent,string name,Color color,Vector2 min,Vector2 max)
@@ -274,6 +291,7 @@ namespace Festival.Presentation
         {
             if(people?.Texture!=null)Destroy(people.Texture);
             if(dose?.Texture!=null)Destroy(dose.Texture);
+            if(substance?.Texture!=null)Destroy(substance.Texture);
             if(shotTexture!=null)Destroy(shotTexture);
         }
     }

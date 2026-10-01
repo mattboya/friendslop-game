@@ -10,18 +10,18 @@ namespace Festival.Tests
     // SPIN-1: the wheels and the take are computed only from the public spin result, so every client shows the same spin.
     public sealed class SpinnerSequenceTests
     {
-        static RoundState Spin(int seed,int crew,int tripper,int dose)
+        static RoundState Spin(int seed,int crew,int tripper,int dose,string substance="lsd")
         {
             var state=new RoundState{Phase="Spinning",RoundId="round_"+seed,SpinSeed=seed,SpinEndsAt=100+FestivalSimulation.SpinSeconds,TripperId="p"+tripper};
             for(int i=0;i<crew;i++)state.Players.Add(new PlayerState{Id="p"+i,Name="Friend "+i});
-            state.Doses.Add(new PlayerDose{PlayerId=state.TripperId,Dose=dose});
+            state.Doses.Add(new PlayerDose{PlayerId=state.TripperId,Dose=dose,Substance=substance});
             return state;
         }
         static int[] Equal(int count){var weights=new int[count];for(int i=0;i<count;i++)weights[i]=1;return weights;}
         static double Start(RoundState state)=>state.SpinEndsAt-FestivalSimulation.SpinSeconds;
-        // SPIN-2: the wheels in the order they spin, as a beat shows them.
+        // SPIN-2: the wheels in the order they spin, as a beat shows them. TRIP-5 adds the substance wheel third.
         static readonly (string Name,Func<FestivalSpinner.Beat,float> Degrees,Func<FestivalSpinner.Beat,bool> Landed)[] Wheels=
-            {("people",b=>b.PeopleDegrees,b=>b.PeopleLanded),("dose",b=>b.DoseDegrees,b=>b.DoseLanded)};
+            {("people",b=>b.PeopleDegrees,b=>b.PeopleLanded),("dose",b=>b.DoseDegrees,b=>b.DoseLanded),("substance",b=>b.SubstanceDegrees,b=>b.SubstanceLanded)};
         // The first millisecond of the spin at which reached holds.
         static double First(Func<double,bool> reached){for(int ms=0;ms<=FestivalSimulation.SpinSeconds*1000;ms++)if(reached(ms/1000.0))return ms/1000.0;return double.NaN;}
 
@@ -57,7 +57,7 @@ namespace Festival.Tests
                 foreach(var id in new[]{"host","friend","third","fourth"}){var p=game.AddPlayer(id,id);p.X=0;p.Z=19;game.Execute(id,new GameCommand{Id="ready_"+id,Kind="Ready"});}
                 game.Tick(5.2);
                 Assert.That(game.State.Phase,Is.EqualTo("Spinning"),"setup: seed "+seed+" is spinning");
-                int dose=game.State.Doses.Find(d=>d.PlayerId==game.State.TripperId).Dose;seen.Add(dose);
+                var spun=game.State.Doses.Find(d=>d.PlayerId==game.State.TripperId);int dose=spun.Dose;string substance=spun.Substance;seen.Add(dose);
                 FestivalSpinner.Beat? first=null;
                 foreach(var viewer in game.State.Players)
                 {
@@ -65,11 +65,29 @@ namespace Festival.Tests
                     var beat=FestivalSpinner.At(view,crew,Start(view)+FestivalSpinner.TakeStarts);
                     Assert.That(crew[FestivalSpinner.SliceUnderPointer(Equal(crew.Count),beat.PeopleDegrees)],Is.EqualTo(game.State.TripperId),viewer.Id+" sees the wheel pick the tripper");
                     Assert.That(FestivalSpinner.SliceUnderPointer(FestivalSimulation.DoseSlices,beat.DoseDegrees)+1,Is.EqualTo(dose),viewer.Id+" sees the tripper's dose");
+                    Assert.That(FestivalSimulation.Substances[FestivalSpinner.SliceUnderPointer(Equal(FestivalSimulation.Substances.Count),beat.SubstanceDegrees)],Is.EqualTo(substance),viewer.Id+" sees what the tripper took");
                     if(first==null)first=beat;
-                    else Assert.That(new[]{beat.PeopleDegrees,beat.DoseDegrees},Is.EqualTo(new[]{first.Value.PeopleDegrees,first.Value.DoseDegrees}),viewer.Id+" sees exactly the host's spin");
+                    else Assert.That(new[]{beat.PeopleDegrees,beat.DoseDegrees,beat.SubstanceDegrees},Is.EqualTo(new[]{first.Value.PeopleDegrees,first.Value.DoseDegrees,first.Value.SubstanceDegrees}),viewer.Id+" sees exactly the host's spin");
                 }
             }
             Assert.That(seen.Count,Is.GreaterThanOrEqualTo(2),"setup: the real spins covered more than one dose");
+        }
+
+        // TRIP-5: the third wheel's five equal slices are the substances, and it lands on the one the tripper's dose list entry
+        // holds, on its own seeded spot, so every client stops on the same point.
+        [Test] public void TheSubstanceWheelLandsOnTheRolledSlice()
+        {
+            var slices=Equal(FestivalSimulation.Substances.Count);
+            for(int seed=1;seed<=40;seed++)
+                foreach(var substance in FestivalSimulation.Substances)
+                {
+                    var state=Spin(seed*977,1+seed%8,0,1+seed%4,substance);
+                    var landed=FestivalSpinner.At(state,FestivalSpinner.Crew(state),Start(state)+FestivalSpinner.TakeStarts);
+                    Assert.That(landed.Substance,Is.EqualTo(substance),"seed "+seed+": the beat names what the tripper took");
+                    Assert.That(FestivalSimulation.Substances[FestivalSpinner.SliceUnderPointer(slices,landed.SubstanceDegrees)],Is.EqualTo(substance),"seed "+seed+": the substance wheel stops on "+substance);
+                    Assert.That(landed.SubstanceDegrees,Is.GreaterThan(3*360),"seed "+seed+": after a few turns");
+                }
+            Assert.That(FestivalSimulation.WheelCount,Is.EqualTo(3),"the timeline makes room for three wheels");
         }
 
         [Test] public void TheSequenceRunsFromTheSpinResult()
@@ -86,7 +104,11 @@ namespace Festival.Tests
             var dosing=At(FestivalSpinner.WheelStarts(1)+.5);
             Assert.That(dosing.Stage,Is.EqualTo(FestivalSpinner.Stage.Dose));
             Assert.That(dosing.DoseDegrees,Is.GreaterThan(0).And.LessThan(landed.DoseDegrees),"then the dose wheel turns");
-            Assert.That(At(FestivalSpinner.TakeStarts-.05).DoseLanded,"and lands before the take");
+            var tasting=At(FestivalSpinner.WheelStarts(2)+.5);
+            Assert.That(At(FestivalSpinner.WheelStarts(2)-.05).DoseLanded,"the dose wheel has landed before the substance wheel starts");
+            Assert.That(tasting.Stage,Is.EqualTo(FestivalSpinner.Stage.Substance),"then the substance wheel");
+            Assert.That(tasting.SubstanceDegrees,Is.GreaterThan(0).And.LessThan(landed.SubstanceDegrees),"turns");
+            Assert.That(At(FestivalSpinner.TakeStarts-.05).SubstanceLanded,"and lands before the take");
             Assert.That(At(FestivalSpinner.TakeStarts+.1).Stage,Is.EqualTo(FestivalSpinner.Stage.Take),"then the tripper takes the dose");
             Assert.That(At(FestivalSpinner.ReactStarts+.1).Stage,Is.EqualTo(FestivalSpinner.Stage.React),"and reacts");
             Assert.That(FestivalSimulation.SpinSeconds-FestivalSpinner.TakeStarts,Is.EqualTo(3).Within(.01),"the take and reaction fill the last 3 s before Loading");
@@ -151,7 +173,7 @@ namespace Festival.Tests
                 Assert.That(dose.RemainingSeconds,Is.EqualTo(full),"and so does the dose");
             }
             Assert.That(game.State.Phase,Is.EqualTo("Loading"),"the crew loads once the spin ends");
-            Assert.That(game.State.SimulationSeconds-began,Is.EqualTo(Wheels.Length*(4+.6)+1.4+1.6).Within(.15),"the spin lasts 4 s and a .6 s rest per wheel, the 1.4 s take and the 1.6 s reaction");
+            Assert.That(game.State.SimulationSeconds-began,Is.EqualTo(Wheels.Length*(4+.6)+1.4+1.6).Within(.15),"the spin lasts 4 s and a .6 s rest per wheel (three wheels), the 1.4 s take and the 1.6 s reaction");
         }
 
         [Test] public void TheReactionGrowsWithTheDose()

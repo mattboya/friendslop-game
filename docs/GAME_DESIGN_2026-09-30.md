@@ -12,9 +12,9 @@ past two hours (Steam's refund window) with the group still wanting more.
 ## Pitch
 
 Friends survive a two-day festival weekend. Each level a spinner picks one
-friend, a second spinner picks their dose, and that "tripper" is the only one
-who can see where to go. Their visions are partly false, and the whole crew
-has to dance to stay hidden.
+friend, a second spinner picks their dose, a third what they took, and that
+"tripper" is the only one who can see where to go. Their visions are partly
+false, and the whole crew has to dance to stay hidden.
 
 The two hooks the design is built around:
 
@@ -58,6 +58,10 @@ The two hooks the design is built around:
 - **How much:** a dose spinner picks 1 to 4 doses. Its slices are 31/31/31/7:
   1, 2 and 3 doses are equally likely, and the 4-dose slice is a thin
   sliver.
+- **What:** a third spinner, with five equal slices, picks the substance:
+  Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust or Couch Lock. Each
+  looks and feels different on the dosed player's own screen, but only the
+  dose changes the rules. On Night 2 every dosed friend rolls their own.
 - **Presentation:** an animation shows the tripper taking the dose and
   reacting.
 
