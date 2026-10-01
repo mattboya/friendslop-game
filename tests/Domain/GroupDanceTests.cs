@@ -142,5 +142,17 @@ public static class GroupDanceTests
             Check(talk.Status=="Active"&&talk.Inputs.Count==0&&Heat(s,"a")==solo&&Heat(s,"b")==20,kind+": a friend's challenge still in its lead-in is dancing but not scored yet (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
             Live(s,()=>talk.Status!="Active",talk);Check(talk.Score==1&&Heat(s,"b")==solo&&Heat(s,"a")==solo,kind+": the friend then settles once, through their own challenge");
         }
+
+        // J2: a friend who presses in the last moments before a's verdict is visibly dancing from the press, though their chart only
+        // starts 2 s later, after a's Dance window has closed. Both play perfectly, live: neither is an idle 0, each settles once.
+        foreach(var kind in new[]{"StartSale","Conversation","Police","Dance"})
+            foreach(double early in new[]{2.5,1.5,.5})
+            {
+                s=Crew(kind);dance=Start(s,"a");double press=dance.StartSeconds+dance.DurationSeconds+.75-early;Live(s,()=>s.State.SimulationSeconds>=press-1e-9,dance);
+                var late=Start(s,"b",kind);Live(s,()=>dance.Status!="Active",dance,late);
+                Check(late.Status=="Active"&&Heat(s,"a")==solo&&Heat(s,"b")==20,kind+" pressed "+early+" s before the verdict: the friend is dancing, so the dancer is not charged for them and they are not charged (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+                Live(s,()=>late.Status!="Active",late);
+                Check(late.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,kind+" pressed "+early+" s before the verdict: the friend then settles once, through their own challenge (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+            }
     }
 }

@@ -15,9 +15,14 @@ public sealed partial class FestivalSimulation {
     // The tripper's check dance (TRIP-3 ConfirmDance) counts as dancing here, so the tripper is never an idle 0, but its score is
     // the tripper's own: it never sets a friend's worst, just as a friend's Dance never judges the check dance (FinishInteraction).
     // A sale, chat or security talk is scored by its own chart, like a Dance: only a Dance's finish judges the group.
-    // Overlap means the [Start, Start+Duration] windows intersect. A challenge still running is judged on the notes due so far; worst stays null while every overlapping one is still before its first note.
+    // Overlap means the windows players see intersect: from the press, ChallengeLeadIn before the first beat (a check dance has none,
+    // BeginConfirm), to the verdict .75 s after the chart (Danger.cs). A challenge still running is judged on the notes due so far;
+    // worst stays null while every overlapping one is still before its first note.
     bool OverlappingDance(PlayerState q,InteractionState i,out double? worst){worst=null;bool dancing=false;foreach(var x in State.Interactions){if(x==i||!DancesVisibly(x.Kind)||x.PlayerId!=q.Id||(x.Status!="Active"&&x.Status!="Complete")||!Overlap(x,i))continue;dancing=true;double? score=x.Kind=="ConfirmDance"?null:x.Status=="Complete"?x.Score:ScoreSoFar(x);if(score!=null)worst=worst==null?score:Math.Min(worst.Value,score.Value);}return dancing;}
-    static bool Overlap(InteractionState a,InteractionState b)=>a.StartSeconds<=b.StartSeconds+b.DurationSeconds&&b.StartSeconds<=a.StartSeconds+a.DurationSeconds;
+    const double ChallengeLeadIn=2;
+    static double PressedAt(InteractionState x)=>x.StartSeconds-(x.Kind=="ConfirmDance"?0:ChallengeLeadIn);
+    static double VerdictAt(InteractionState x)=>x.StartSeconds+x.DurationSeconds+.75;
+    static bool Overlap(InteractionState a,InteractionState b)=>PressedAt(a)<=VerdictAt(b)&&PressedAt(b)<=VerdictAt(a);
     double? ScoreSoFar(InteractionState x){var judge=new RhythmJudge(RhythmChart.For(x),x.GoodWindowSeconds);foreach(var input in x.Inputs)judge.Submit(input.Direction,input.TimeSeconds);judge.Advance(State.SimulationSeconds-x.StartSeconds);return judge.ScoreSoFar;}
     // CROWD-1: big packs draw attention. Every positive suspicion gain on a player (passive gains in WookTick, rhythm results
     // through Adjust) is multiplied by 1 + PackStep for each connected crew member standing within PackRadius of them beyond
