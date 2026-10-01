@@ -53,11 +53,22 @@ namespace Festival.Core
         public sealed class Sky
         {
             public readonly float WindX,WindZ; public readonly Cloud[] Clouds; public readonly Show[] Shows;
+            /// <summary>TRIP-4: the day's clue cloud (FestivalSimulation.CloudClueUp): an ordinary cloud with a lane of its own, Offset
+            /// to the side of the middle at Altitude. Its Lane and Phase go unused, as it crosses the sky only once (ClueAt).</summary>
+            public readonly Cloud Clue;
             readonly double alongX,alongZ,speed;
-            public Sky(int spinSeed,double heading,double speed,Cloud[] clouds)
+            public Sky(int spinSeed,double heading,double speed,Cloud[] clouds,Cloud clue)
             {
-                alongX=Math.Cos(heading);alongZ=Math.Sin(heading);this.speed=speed;WindX=(float)(alongX*speed);WindZ=(float)(alongZ*speed);Clouds=clouds;
+                alongX=Math.Cos(heading);alongZ=Math.Sin(heading);this.speed=speed;WindX=(float)(alongX*speed);WindZ=(float)(alongZ*speed);Clouds=clouds;Clue=clue;
                 Shows=Schedule(spinSeed);
+            }
+            /// <summary>Where the clue cloud is `seconds` into a level whose clue comes up at `start`: down its lane with the wind,
+            /// nearest the middle of the sky half way through its ClueSeconds, fading in and out over ClueFadeSeconds. Alpha is 0
+            /// outside the window.</summary>
+            public Place ClueAt(double start,double seconds)
+            {
+                double into=seconds-start,along=speed*(into-ClueSeconds/2);
+                return new Place((float)(alongX*along-alongZ*Clue.Offset),Clue.Altitude,(float)(alongZ*along+alongX*Clue.Offset),(float)Math.Max(0,Math.Min(1,Math.Min(into,ClueSeconds-into)/ClueFadeSeconds)));
             }
             public Place At(int cloud,double seconds)
             {
@@ -109,7 +120,10 @@ namespace Festival.Core
                 float phase=(c+random.Next(50)/100f)/clouds.Length*2*lane,altitude=MinAltitude+random.Next((int)(MaxAltitude-MinAltitude)+1);
                 clouds[c]=new Cloud(offset,lane,phase,altitude,Ordinary(random));
             }
-            return new Sky(spinSeed,heading,speed,clouds);
+            // TRIP-4: drawn after the rest, so the sky's other clouds stay as they were. On the inner lane at a modest height, it
+            // stays on the band from one end of its window to the other, at 2 m/s too.
+            var clue=new Cloud((random.Next(2)==0?1:-1)*LaneInner,0,0,MinAltitude+random.Next(11),Ordinary(random));
+            return new Sky(spinSeed,heading,speed,clouds,clue);
         }
         // An ordinary cloud: 6-10 overlapping puffs in a row, bigger and higher in the middle, on a flat base.
         static Puff[] Ordinary(ContentRandom random)
@@ -161,20 +175,37 @@ namespace Festival.Core
         // level and drifts through the sky for ClueSeconds.
         public const int ClueEarliestSeconds=60,ClueLatestSeconds=240;
         public const double ClueSeconds=90;
+        // It fades in and out over ClueFadeSeconds. In the tripper's sky, once read, it glides overhead and into its landmark's
+        // picture over MorphSeconds, holds the picture CluePictureSeconds, then fades away (FestivalClouds).
+        public const double ClueFadeSeconds=5,CluePictureSeconds=20;
         /// <summary>A landmark the clue cloud can picture: where it stands, and the spot 5-8 m off, away from the paths and wherever
         /// players routinely stand, where reading the cloud leaves a cash stash.</summary>
-        public sealed class Landmark { public readonly string Name; public readonly WorldPoint At,Stash; public Landmark(string name,WorldPoint at,WorldPoint stash){Name=name;At=at;Stash=stash;} }
-        /// <summary>The landmarks a clue cloud pictures. The last, the Ferris wheel, stands only on Palm Mirage (LandmarkCount).
-        /// The stage's stash is behind it, backstage, where being seen draws suspicion.</summary>
+        public sealed class Landmark
+        {
+            public readonly string Name; public readonly WorldPoint At,Stash; public readonly Shape Picture;
+            internal Landmark(string name,float x,float z,float stashX,float stashZ,params float[] xyr){Name=name;At=new WorldPoint(x,z);Stash=new WorldPoint(stashX,stashZ);Picture=Table(name,xyr);}
+        }
+        /// <summary>The landmarks a clue cloud pictures, each as seen from below, like Shapes, with its stand point and stash spot. The
+        /// last, the Ferris wheel, stands only on Palm Mirage (LandmarkCount). The stage's stash is behind it, backstage, where being
+        /// seen draws suspicion.</summary>
         public static readonly Landmark[] Landmarks={
-            new Landmark("stage",new WorldPoint(0,32),new WorldPoint(-5,38)),
-            new Landmark("night market",new WorldPoint(-18,-22),new WorldPoint(-18,-28)),
-            new Landmark("medical tent",new WorldPoint(24,-20),new WorldPoint(29,-25)),
-            new Landmark("security",new WorldPoint(27,5),new WorldPoint(21,9)),
-            new Landmark("shuttle",new WorldPoint(0,-36),new WorldPoint(-7,-37)),
-            new Landmark("lost property",new WorldPoint(-28,16),new WorldPoint(-23,20)),
-            new Landmark("Ferris wheel",new WorldPoint(Festivals.WheelX,Festivals.WheelZ),new WorldPoint(14,-32)),
+            // A stage's frame on its deck.
+            new Landmark("stage",0,32,-5,38, -17.5f,8.5f,4.5f, -17.5f,4.2f,4.5f, -17.5f,0,4.5f, -17.5f,-4.2f,4.5f, -17.5f,-8.5f,4.5f, -13.6f,-8.5f,4.5f, -9.7f,-8.5f,4.5f, -5.8f,-8.5f,4.5f, -1.9f,-8.5f,4.5f, 1.9f,-8.5f,4.5f, 5.8f,-8.5f,4.5f, 9.7f,-8.5f,4.5f, 13.6f,-8.5f,4.5f, 17.5f,-8.5f,4.5f, 17.5f,-4.2f,4.5f, 17.5f,0,4.5f, 17.5f,4.2f,4.5f, 17.5f,8.5f,4.5f, 13.6f,8.5f,4.5f, 9.7f,8.5f,4.5f, 5.8f,8.5f,4.5f, 1.9f,8.5f,4.5f, -1.9f,8.5f,4.5f, -5.8f,8.5f,4.5f, -9.7f,8.5f,4.5f, -13.6f,8.5f,4.5f),
+            // A market stall's peaked awning over its counter.
+            new Landmark("night market",-18,-22,-18,-28, -18,2,4, -15,3.2f,4, -12,4.3f,4, -9,5.5f,4, -6,6.7f,4, -3,7.8f,4, 0,9,4, 3,7.8f,4, 6,6.7f,4, 9,5.5f,4, 12,4.3f,4, 15,3.2f,4, 18,2,4, -12.1f,1,4, -12.2f,-2.4f,4, -12.4f,-5.7f,4, -12.5f,-9,4, -8.9f,-9,4, -5.4f,-9,4, -1.8f,-9,4, 1.8f,-9,4, 5.4f,-9,4, 8.9f,-9,4, 12.5f,-9,4, 12.4f,-5.7f,4, 12.2f,-2.3f,4, 12.1f,1,4),
+            // A big plus.
+            new Landmark("medical tent",24,-20,29,-25, 0,-8.5f,4.2f, 0,-5.1f,4.2f, 0,-1.7f,4.2f, 0,1.7f,4.2f, 0,5.1f,4.2f, 0,8.5f,4.2f, -17,0,4.2f, -13.6f,0,4.2f, -10.2f,0,4.2f, -6.8f,0,4.2f, -3.4f,0,4.2f, 0,0,4.2f, 3.4f,0,4.2f, 6.8f,0,4.2f, 10.2f,0,4.2f, 13.6f,0,4.2f, 17,0,4.2f),
+            // A security badge's star.
+            new Landmark("security",27,5,21,9, 0,0,6, 0,4.5f,3.6f, 0,6.8f,3.6f, 0,9.2f,3.6f, -4.3f,1.4f,3.6f, -6.5f,2.1f,3.6f, -8.7f,2.8f,3.6f, -2.6f,-3.6f,3.6f, -4,-5.5f,3.6f, -5.4f,-7.4f,3.6f, 2.6f,-3.6f,3.6f, 4,-5.5f,3.6f, 5.4f,-7.4f,3.6f, 4.3f,1.4f,3.6f, 6.5f,2.1f,3.6f, 8.7f,2.8f,3.6f),
+            // A long bus on two wheels.
+            new Landmark("shuttle",0,-36,-7,-37, -17,3.5f,4, -13.6f,3.5f,4, -10.2f,3.5f,4, -6.8f,3.5f,4, -3.4f,3.5f,4, 0,3.5f,4, 3.4f,3.5f,4, 6.8f,3.5f,4, 10.2f,3.5f,4, 13.6f,3.5f,4, 17,3.5f,4, -17,-0.5f,4, -13.6f,-0.5f,4, -10.2f,-0.5f,4, -6.8f,-0.5f,4, -3.4f,-0.5f,4, 0,-0.5f,4, 3.4f,-0.5f,4, 6.8f,-0.5f,4, 10.2f,-0.5f,4, 13.6f,-0.5f,4, 17,-0.5f,4, -10.5f,-4.5f,4.5f, 10.5f,-4.5f,4.5f),
+            // A question mark.
+            new Landmark("lost property",-28,16,-23,20, -4.7f,6.2f,3.5f, -3.1f,8.4f,3.5f, -0.6f,9.5f,3.5f, 2.1f,9.1f,3.5f, 4.1f,7.3f,3.5f, 5,4.7f,3.5f, 4.4f,2.1f,3.5f, 2.5f,0.2f,3.5f, 1.7f,-1.7f,3.5f, 0.8f,-3.6f,3.5f, 0,-5.5f,3.5f, 0,-9,3.5f),
+            // A wheel on its A-frame.
+            new Landmark("Ferris wheel",Festivals.WheelX,Festivals.WheelZ,14,-32, 8,1,3.5f, 7.4f,4.1f,3.5f, 5.7f,6.7f,3.5f, 3.1f,8.4f,3.5f, 0,9,3.5f, -3.1f,8.4f,3.5f, -5.7f,6.7f,3.5f, -7.4f,4.1f,3.5f, -8,1,3.5f, -7.4f,-2.1f,3.5f, -5.7f,-4.7f,3.5f, -3.1f,-6.4f,3.5f, 0,-7,3.5f, 3.1f,-6.4f,3.5f, 5.7f,-4.7f,3.5f, 7.4f,-2.1f,3.5f, 0,1,3.5f, -1.6f,-1.1f,3.5f, -3.2f,-3.2f,3.5f, -4.8f,-5.3f,3.5f, -6.4f,-7.4f,3.5f, -8,-9.5f,3.5f, 1.6f,-1.1f,3.5f, 3.2f,-3.2f,3.5f, 4.8f,-5.3f,3.5f, 6.4f,-7.4f,3.5f, 8,-9.5f,3.5f),
         };
+        /// <summary>The "$" beside a read clue cloud's picture: smaller puffs, right of its footprint, as tall as a cloud.</summary>
+        public static readonly Puff[] Dollar=Table("$",31,5.2f,2.5f, 29.5f,6.7f,2.5f, 27.5f,7,2.5f, 25.6f,6.1f,2.5f, 24.6f,4.3f,2.5f, 24.7f,2.2f,2.5f, 26,0.6f,2.5f, 28,0,2.5f, 30,-0.6f,2.5f, 31.3f,-2.2f,2.5f, 31.4f,-4.3f,2.5f, 30.4f,-6.1f,2.5f, 28.5f,-7,2.5f, 26.5f,-6.7f,2.5f, 25,-5.2f,2.5f, 28,-10.5f,2.5f, 28,-8.8f,2.5f, 28,8.8f,2.5f, 28,10.5f,2.5f).Puffs;
         /// <summary>How many of Landmarks a festival's clue cloud can picture: all of them where there is a Ferris wheel.</summary>
         public static int LandmarkCount(int festival)=>festival==Festivals.PoloFestival?Landmarks.Length:Landmarks.Length-1;
         static Shape Table(string name,params float[] xyr){var puffs=new Puff[xyr.Length/3];for(int i=0;i<puffs.Length;i++)puffs[i]=new Puff(xyr[3*i],xyr[3*i+1],xyr[3*i+2]);return new Shape(name,puffs);}

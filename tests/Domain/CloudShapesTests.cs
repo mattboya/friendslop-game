@@ -16,7 +16,8 @@ public static class CloudShapesTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EachLevelHas8To14CloudsOnTheBand,OneWindCarriesEveryCloud,CloudsFadeOutAndBackInWhereTheyWrap,
             TheSameSpinGivesTheSameSky,AShapeShowsEvery60To120SAndHolds15To20S,TheCloudNearestTheZenithTakesTheShape,
-            EveryShapeFitsOneCloud,EveryShapeIsOneBoldCloud,ACloudMorphsIntoItsShapeAndBack})
+            EveryShapeFitsOneCloud,EveryShapeIsOneBoldCloud,ACloudMorphsIntoItsShapeAndBack,
+            EveryLandmarkIsPicturedAsOneBoldCloudWithADollarSignBesideIt,TheClueCloudDriftsWithTheWindOnTheBandWhileItIsUp})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" cloud test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -116,6 +117,8 @@ public static class CloudShapesTests
             foreach(double t in new[]{0,77.5,313.25}){var at=sky.At(c,t);parts.Add(at.X+","+at.Y+","+at.Z+","+at.Alpha);}
         }
         foreach(var show in sky.Shows)parts.Add(show.Cloud+","+show.Shape+","+show.Start+","+show.Hold);
+        parts.Add(string.Join(";",sky.Clue.Puffs.Select(p=>p.X+","+p.Y+","+p.Radius)));
+        foreach(double t in new[]{101,146.5,180}){var at=sky.ClueAt(100,t);parts.Add(at.X+","+at.Y+","+at.Z+","+at.Alpha);}
         return string.Join("|",parts);
     }
 
@@ -219,19 +222,78 @@ public static class CloudShapesTests
     {
         foreach(var shape in CloudShapes.Shapes)
         {
-            var puffs=shape.Puffs;
-            foreach(var p in puffs)Check(p.Radius>=MinPuff,shape.Name+": no puff smaller than "+MinPuff+" m, got one of "+p.Radius+" at ("+p.X+", "+p.Y+")");
-            var joined=new HashSet<int>{0};
-            for(bool grew=true;grew;)
-            {
-                grew=false;
-                for(int i=0;i<puffs.Length;i++)
-                    if(!joined.Contains(i)&&joined.Any(j=>Math.Sqrt(Sq(puffs[i].X-puffs[j].X)+Sq(puffs[i].Y-puffs[j].Y))<=Touch*(puffs[i].Radius+puffs[j].Radius)))grew=joined.Add(i);
-            }
-            var loose=Enumerable.Range(0,puffs.Length).Where(i=>!joined.Contains(i)).Select(i=>"("+puffs[i].X+", "+puffs[i].Y+")");
-            Check(joined.Count==puffs.Length,shape.Name+" is one cloud, but these puffs float apart: "+string.Join(" ",loose));
-            float wide=puffs.Max(p=>p.X+p.Radius)-puffs.Min(p=>p.X-p.Radius),tall=puffs.Max(p=>p.Y+p.Radius)-puffs.Min(p=>p.Y-p.Radius);
+            OneCloud(shape.Puffs,shape.Name,MinPuff);
+            float wide=shape.Puffs.Max(p=>p.X+p.Radius)-shape.Puffs.Min(p=>p.X-p.Radius),tall=shape.Puffs.Max(p=>p.Y+p.Radius)-shape.Puffs.Min(p=>p.Y-p.Radius);
             Check(wide>=1.5f*CloudShapes.HalfWidth||tall>=1.5f*CloudShapes.HalfHeight,shape.Name+" fills most of a cloud's footprint, got "+wide+" x "+tall+" m");
+        }
+    }
+    // Puffs of at least `smallest` m whose solid middles all join up.
+    static void OneCloud(CloudShapes.Puff[] puffs,string what,float smallest)
+    {
+        foreach(var p in puffs)Check(p.Radius>=smallest,what+": no puff smaller than "+smallest+" m, got one of "+p.Radius+" at ("+p.X+", "+p.Y+")");
+        var joined=new HashSet<int>{0};
+        for(bool grew=true;grew;)
+        {
+            grew=false;
+            for(int i=0;i<puffs.Length;i++)
+                if(!joined.Contains(i)&&joined.Any(j=>Math.Sqrt(Sq(puffs[i].X-puffs[j].X)+Sq(puffs[i].Y-puffs[j].Y))<=Touch*(puffs[i].Radius+puffs[j].Radius)))grew=joined.Add(i);
+        }
+        var loose=Enumerable.Range(0,puffs.Length).Where(i=>!joined.Contains(i)).Select(i=>"("+puffs[i].X+", "+puffs[i].Y+")");
+        Check(joined.Count==puffs.Length,what+" is one cloud, but these puffs float apart: "+string.Join(" ",loose));
+    }
+
+    // TRIP-4: a read clue cloud pictures its landmark as boldly as a funny shape, and a "$" made of smaller puffs floats beside it,
+    // to the picture's right, as tall as a cloud and clear of the picture's footprint.
+    static void EveryLandmarkIsPicturedAsOneBoldCloudWithADollarSignBesideIt()
+    {
+        foreach(var landmark in CloudShapes.Landmarks)
+        {
+            var picture=landmark.Picture;Check(picture!=null&&picture.Name==landmark.Name,landmark.Name+" has a picture of its own");
+            Fits(picture.Puffs,landmark.Name+"'s picture");OneCloud(picture.Puffs,landmark.Name+"'s picture",MinPuff);
+            float wide=picture.Puffs.Max(p=>p.X+p.Radius)-picture.Puffs.Min(p=>p.X-p.Radius),tall=picture.Puffs.Max(p=>p.Y+p.Radius)-picture.Puffs.Min(p=>p.Y-p.Radius);
+            Check(wide>=1.5f*CloudShapes.HalfWidth||tall>=1.5f*CloudShapes.HalfHeight,landmark.Name+"'s picture fills most of a cloud's footprint, got "+wide+" x "+tall+" m");
+        }
+        Check(CloudShapes.Landmarks.Select(l=>string.Join(";",l.Picture.Puffs.Select(p=>p.X+","+p.Y+","+p.Radius))).Distinct().Count()==CloudShapes.Landmarks.Length,"every landmark has a picture unlike the others");
+        var dollar=CloudShapes.Dollar;
+        Check(dollar.Length>=8,"the $ takes a few puffs, got "+dollar.Length);
+        OneCloud(dollar,"the $",2.5f);
+        foreach(var p in dollar)
+        {
+            Check(p.X-p.Radius>=CloudShapes.HalfWidth,"the $'s puff at ("+p.X+", "+p.Y+") r "+p.Radius+" stands beside the picture, right of its footprint");
+            Check(p.X+p.Radius<=CloudShapes.HalfWidth+14&&Math.Abs(p.Y)+p.Radius<=CloudShapes.HalfHeight+1e-4,"the $'s puff at ("+p.X+", "+p.Y+") r "+p.Radius+" stays close by, no taller than a cloud");
+        }
+        float high=dollar.Max(p=>p.Y+p.Radius),low=dollar.Min(p=>p.Y-p.Radius);
+        Check(high-low>=1.5f*CloudShapes.HalfHeight,"the $ stands as tall as the picture beside it, got "+(high-low)+" m");
+    }
+
+    // TRIP-4: the day's clue cloud comes up and goes with the window (CloudClueUp), fading in and out over ClueFadeSeconds, and in
+    // between drifts with the level's wind along its own lane on the band, passing nearest the middle of the sky half way through.
+    // Standing, it looks like any other cloud: its own ordinary puffs, as high and as far out as the rest.
+    static void TheClueCloudDriftsWithTheWindOnTheBandWhileItIsUp()
+    {
+        double fade=CloudShapes.ClueFadeSeconds,up=CloudShapes.ClueSeconds;
+        Check(fade>=3&&fade<=8,"the clue cloud fades over a few seconds, got "+fade);
+        foreach(int spin in Spins().Take(60))
+        {
+            var sky=CloudShapes.For(spin);Fits(sky.Clue.Puffs,"spin "+spin+"'s clue cloud");
+            Check(sky.Clue.Puffs.Length>=6&&sky.Clue.Puffs.Length<=10,"spin "+spin+": the clue cloud is an ordinary 6-10 puff cloud, got "+sky.Clue.Puffs.Length);
+            foreach(double start in new double[]{60,151,240})
+            {
+                string which="spin "+spin+" from "+start+" s: ";
+                Check(sky.ClueAt(start,start-.01).Alpha==0&&sky.ClueAt(start,start+up).Alpha==0&&sky.ClueAt(start,start+up+30).Alpha==0,which+"not in the sky outside its window");
+                Check(Math.Abs(sky.ClueAt(start,start+fade/2).Alpha-.5)<1e-3&&Math.Abs(sky.ClueAt(start,start+up-fade/2).Alpha-.5)<1e-3,which+"half faded half way through its fades");
+                double nearest=double.MaxValue,when=0;
+                for(double t=start;t<start+up;t+=.5)
+                {
+                    var at=sky.ClueAt(start,t);var next=sky.ClueAt(start,t+1);
+                    if(t>=start+fade&&t<=start+up-fade)Check(at.Alpha==1,which+"solid in the sky at "+t+" s, got "+at.Alpha);
+                    Check(Out(at)>=60-1e-3&&Out(at)<=110+1e-3,which+"stays 60-110 m out, got "+Out(at).ToString("0.0")+" at "+t+" s");
+                    Check(at.Y>=45&&at.Y<=70&&at.Y==next.Y,which+"floats 45-70 m up at one height, got "+at.Y);
+                    if(t+1<start+up)Check(Math.Abs(next.X-at.X-sky.WindX)<1e-3&&Math.Abs(next.Z-at.Z-sky.WindZ)<1e-3,which+"drifts with the wind at "+t+" s");
+                    if(Out(at)<nearest){nearest=Out(at);when=t;}
+                }
+                Check(Math.Abs(when-(start+up/2))<=1,which+"passes nearest the middle of the sky half way through, not at "+when+" s");
+            }
         }
     }
     static double Sq(double x)=>x*x;

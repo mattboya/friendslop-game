@@ -718,11 +718,11 @@ namespace Festival.Presentation
         }
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase=="Results";
         // LIGHT-1: night levels and the local player's dose, straight from the round state. LIGHT-2: the day sky's clouds, kept
-        // over the local view.
+        // over the local view, and TRIP-4's clue cloud as the local player sees it.
         public void SetLighting(RoundState state,string localPlayerId)
         {
             if(lighting!=null)lighting.Apply(state,localPlayerId);
-            if(clouds!=null)clouds.Apply(state,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero);
+            if(clouds!=null)clouds.Apply(state,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero,localPlayerId);
         }
         // TWISTVIS-1: the festival's twist stand-ins, straight from the round state, and GAS-2's Giggle Tank.
         public void SetTwists(RoundState state){if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);if(giggleTank!=null)FestivalGiggleTank.Show(giggleTank,state);}

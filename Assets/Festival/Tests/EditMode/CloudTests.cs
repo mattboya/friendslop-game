@@ -223,13 +223,19 @@ namespace Festival.Tests
                 state.ElapsedSeconds+=.5;
                 Assert.That(()=>clouds.Apply(state,Vector3.zero),Is.Not.AllocatingGCMemory(),Festivals.Name(festival)+": a frame makes no garbage");
             }
+            // TRIP-4: nor does the tripper's frame with the clue cloud read and half way into its picture, rim and all.
+            // The id is passed in, as FestivalWorld does: a string literal inside the measured call would allocate as it first runs.
+            var tripper=Sky(out _);string me=Tripper;var read=Clue(Festivals.PoloFestival,150,175,1,175-CloudShapes.MorphSeconds/2);tripper.Apply(read,Vector3.zero,me);
+            read.ElapsedSeconds+=.25;read.SimulationSeconds+=.25;
+            Assert.That(()=>tripper.Apply(read,Vector3.zero,me),Is.Not.AllocatingGCMemory(),"the tripper's frame with the clue cloud makes no garbage");
         }
 
         [Test]public void CloudsAreSoftUnlitPuffsThatCastNoShadowsAndNeverCollide()
         {
             var clouds=Sky(out var root);clouds.Apply(Round(Festivals.PoloFestival,0,"Playing",Spin,30),Vector3.zero);
             var renderers=root.GetComponentsInChildren<Renderer>(true);
-            Assert.That(renderers.Length,Is.EqualTo(CloudShapes.MaxClouds),"one renderer a cloud");
+            // TRIP-4: and two for the day's clue cloud, the cloud and its rainbow rim.
+            Assert.That(renderers.Length,Is.EqualTo(CloudShapes.MaxClouds+2),"one renderer a cloud, and the clue cloud's two");
             Assert.That(root.GetComponentsInChildren<Collider>(true),Is.Empty,"clouds never block a sight line");
             foreach(var renderer in renderers)
             {
@@ -256,14 +262,124 @@ namespace Festival.Tests
             Assert.That(sky,Is.Not.Null,"the clouds hang under the festival, so camp has none");
             world.SetLighting(Round(Festivals.PoloFestival,0,"Playing",Spin,40),"me");
             Assert.That(Shown(sky).Count,Is.EqualTo(CloudShapes.For(Spin).Clouds.Length),"a day level's clouds");
+            // TRIP-4: the world draws its local player's sky, so the local tripper sees the clue cloud's rim and a friend doesn't.
+            var clue=Clue(Festivals.PoloFestival,150,195);clue.TripperId="me";
+            world.SetLighting(clue,"me");Assert.That(Shows(Rim(sky)),Is.True,"the local tripper's sky rims the clue cloud");
+            world.SetLighting(clue,"you");Assert.That(Shows(Rim(sky)),Is.False,"a local friend's doesn't");
             world.SetLighting(Round(Festivals.PoloFestival,1,"Playing",Spin,40),"me");
             Assert.That(Shown(sky),Is.Empty,"none at night");
             world.SetLighting(Round(Festivals.PoloFestival,2,"Playing",Spin,40),"me");world.SetPhase("CampReview");
             Assert.That(sky.gameObject.activeInHierarchy,Is.False,"camp hides the festival's sky");
             var material=sky.GetComponentInChildren<Renderer>(true).sharedMaterial;var puff=material.mainTexture;var mesh=sky.GetComponentInChildren<MeshFilter>(true).sharedMesh;
+            var clueMesh=ClueCloud(sky).GetComponent<MeshFilter>().sharedMesh;var rimMesh=Rim(sky).GetComponent<MeshFilter>().sharedMesh;
             // Edit mode sends the world no OnDestroy; play mode and builds do, so call it as they would.
             typeof(FestivalWorld).GetMethod("OnDestroy",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(world,null);
-            Assert.That(material==null&&puff==null&&mesh==null,Is.True,"the world destroys the clouds' material, texture and meshes as it goes");
+            Assert.That(material==null&&puff==null&&mesh==null&&clueMesh==null&&rimMesh==null,Is.True,"the world destroys the clouds' material, texture and meshes, the clue cloud's included, as it goes");
+        }
+
+        // TRIP-4: a day's clue cloud is up for 90 s. Everyone sees it drift through the sky like any other cloud, from wherever they
+        // stand; only the tripper's sky gives it a faint rainbow rim. Before and after its window, at night and in a storm it is gone.
+        [Test]public void EveryoneSeesTheClueCloudButOnlyTheTripperSeesItsRainbowRim()
+        {
+            var mine=Sky(out var myRoot);var yours=Sky(out var yourRoot);var sky=CloudShapes.For(Spin);var block=new MaterialPropertyBlock();
+            var state=Clue(Festivals.PoloFestival,150,149);
+            mine.Apply(state,new Vector3(-20,1.65f,10),Tripper);yours.Apply(state,new Vector3(14,1.65f,-30),"sober");
+            Assert.That(Shows(ClueCloud(myRoot))||Shows(ClueCloud(yourRoot)),Is.False,"no clue cloud before its window opens");
+            foreach(double t in new[]{150+CloudShapes.ClueFadeSeconds/2,195,237})
+            {
+                state.ElapsedSeconds=t;mine.Apply(state,new Vector3(-20,1.65f,10),Tripper);yours.Apply(state,new Vector3(14,1.65f,-30),"sober");
+                var at=sky.ClueAt(150,t);
+                foreach(var root in new[]{myRoot,yourRoot})
+                {
+                    string whose=(root==myRoot?"the tripper's":"a friend's")+" sky at "+t+" s: ";var clue=ClueCloud(root);
+                    Assert.That(Shows(clue),Is.True,whose+"the clue cloud is up");
+                    Assert.That(Vector3.Distance(clue.localPosition,new Vector3(at.X,at.Y,at.Z)),Is.LessThan(1e-3f),whose+"it is where the sky says");
+                    Assert.That(Vector3.Angle(clue.forward,clue.position-root.position),Is.LessThan(.1f),whose+"it faces the viewer like the rest");
+                    clue.GetComponent<MeshRenderer>().GetPropertyBlock(block);
+                    Assert.That(block.GetColor("_Color").a,Is.EqualTo(FestivalClouds.Opacity*at.Alpha).Within(1e-4f),whose+"it fades in and out like the rest");
+                    Assert.That(Match(CluePuffs(clue,0,CloudShapes.MaxPuffs),sky.Clue.Puffs),Is.True,whose+"standing, it looks like any other cloud");
+                    Assert.That(CluePuffs(clue,CloudShapes.MaxPuffs,CloudShapes.Dollar.Length),Is.Empty,whose+"with no $ beside it");
+                }
+                var rim=Rim(myRoot);
+                Assert.That(Shows(rim),Is.True,"the tripper's sky rims the clue cloud at "+t+" s");
+                Assert.That(Shows(Rim(yourRoot)),Is.False,"a friend's sky doesn't at "+t+" s");
+                Assert.That((rim.position-myRoot.position).magnitude,Is.GreaterThan((ClueCloud(myRoot).position-myRoot.position).magnitude),"the rim hangs just behind the cloud, so it shows only round its edge");
+                var colors=rim.GetComponent<MeshFilter>().sharedMesh.colors;var hues=new HashSet<int>();float strongest=0;
+                for(int v=0;v<4*sky.Clue.Puffs.Length;v++){Color.RGBToHSV(colors[v],out float h,out float sat,out _);if(sat>.3f)hues.Add(Mathf.RoundToInt(h*6)%6);strongest=Mathf.Max(strongest,colors[v].a);}
+                Assert.That(hues.Count,Is.GreaterThanOrEqualTo(4),"the rim runs through the rainbow, got "+hues.Count+" hues");
+                Assert.That(strongest,Is.InRange(.05f,.5f),"and is faint");
+            }
+            state.ElapsedSeconds=240;mine.Apply(state,Vector3.zero,Tripper);yours.Apply(state,Vector3.zero,"sober");
+            Assert.That(Shows(ClueCloud(myRoot))||Shows(ClueCloud(yourRoot))||Shows(Rim(myRoot)),Is.False,"gone once its 90 s are up");
+            state.ElapsedSeconds=190;state.CloudClueStart=-1;mine.Apply(state,Vector3.zero,Tripper);
+            Assert.That(Shows(ClueCloud(myRoot)),Is.False,"a level with no clue cloud (a night, an old snapshot) shows none");
+            var storm=Clue(Festivals.PlayaFestival,0,0);while(!FestivalSimulation.DustStorm(storm))storm.ElapsedSeconds++;
+            storm.CloudClueStart=storm.ElapsedSeconds-20;mine.Apply(storm,Vector3.zero,Tripper);
+            Assert.That(ClueCloud(myRoot).gameObject.activeInHierarchy,Is.False,"a dust storm hides it with the rest of the sky");
+        }
+
+        // TRIP-4: once the tripper has read it, their sky (and theirs alone: no other view holds the landmark) draws the clue cloud
+        // gliding overhead over a morph's 4 s, toward where their body faces as they lie there, turning into the landmark with a gold
+        // "$" beside it. The picture holds 20 s, then fades away, even past the end of the cloud's window.
+        [Test]public void TheTrippersReadCloudDriftsOverheadAndBecomesTheLandmarkWithADollarSign()
+        {
+            var clouds=Sky(out var root);var sky=CloudShapes.For(Spin);var viewer=new Vector3(6,.3f,-12);
+            for(int k=0;k<CloudShapes.Landmarks.Length;k++)
+            {
+                var landmark=CloudShapes.Landmarks[k];float yaw=40*k;double readAt=150+CloudShapes.ClueSeconds-1;
+                var state=Clue(Festivals.PoloFestival,150,readAt,k,readAt);state.Players.Find(p=>p.Id==Tripper).Yaw=yaw;
+                clouds.Apply(state,viewer,Tripper);var clue=ClueCloud(root);var path=sky.ClueAt(150,readAt);
+                Assert.That(Vector3.Distance(clue.localPosition,new Vector3(path.X,path.Y,path.Z)),Is.LessThan(1e-3f),landmark.Name+": as it is read the cloud is still on its path");
+                Assert.That(Match(CluePuffs(clue,0,CloudShapes.MaxPuffs),sky.Clue.Puffs),Is.True,landmark.Name+": and still itself");
+                foreach(double into in new[]{CloudShapes.MorphSeconds,CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds-.5})
+                {
+                    string when=landmark.Name+" "+into+" s after the read: ";
+                    state.SimulationSeconds=readAt+into;state.ElapsedSeconds=readAt+into;clouds.Apply(state,viewer,Tripper);
+                    Assert.That(Shows(clue),Is.True,when+"still up, though its window has closed");
+                    var away=clue.position-root.position;var ground=new Vector2(away.x,away.z);
+                    Assert.That(Mathf.Atan2(away.y,ground.magnitude)*Mathf.Rad2Deg,Is.InRange(70f,85f),when+"high overhead");
+                    Assert.That(Vector2.Angle(ground,new Vector2(Mathf.Sin(yaw*Mathf.Deg2Rad),Mathf.Cos(yaw*Mathf.Deg2Rad))),Is.LessThan(1f),when+"toward where the tripper's body faces");
+                    Assert.That(Vector3.Angle(clue.forward,away),Is.LessThan(.1f),when+"facing them");
+                    Assert.That(Vector3.Dot(clue.up,new Vector3(-Mathf.Sin(yaw*Mathf.Deg2Rad),0,-Mathf.Cos(yaw*Mathf.Deg2Rad))),Is.GreaterThan(.9f),when+"its top toward their head, so it reads upright as they look up");
+                    Assert.That(Match(CluePuffs(clue,0,CloudShapes.MaxPuffs),landmark.Picture.Puffs),Is.True,when+"it pictures the "+landmark.Name);
+                    Assert.That(Match(CluePuffs(clue,CloudShapes.MaxPuffs,CloudShapes.Dollar.Length),CloudShapes.Dollar),Is.True,when+"with the $ beside it");
+                    var colors=clue.GetComponent<MeshFilter>().sharedMesh.colors;var gold=colors[4*CloudShapes.MaxPuffs];
+                    Assert.That(gold.r>.9f&&gold.g>.6f&&gold.b<.5f,Is.True,when+"a gold $, got "+gold);
+                }
+                state.SimulationSeconds=readAt+CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds+CloudShapes.ClueFadeSeconds+.1;state.ElapsedSeconds=state.SimulationSeconds;
+                clouds.Apply(state,viewer,Tripper);
+                Assert.That(Shows(clue),Is.False,landmark.Name+": the picture fades away 20 s after it forms");
+            }
+            // Read near the middle of the window, a friend's sky still shows the cloud drifting on as itself.
+            var friendView=Clue(Festivals.PoloFestival,150,190);clouds.Apply(friendView,viewer,"sober");
+            var drifting=sky.ClueAt(150,190);
+            Assert.That(Vector3.Distance(ClueCloud(root).localPosition,new Vector3(drifting.X,drifting.Y,drifting.Z)),Is.LessThan(1e-3f),"a friend sees it drift on");
+            Assert.That(Match(CluePuffs(ClueCloud(root),0,CloudShapes.MaxPuffs),sky.Clue.Puffs),Is.True,"as an ordinary cloud");
+        }
+
+        private const string Tripper="trip";
+        // A day level whose clue cloud comes up at `start`, `seconds` in, with the tripper's view holding landmark `landmark` read at
+        // `readAt` (-1 for neither, as in everyone else's view).
+        private static RoundState Clue(int festival,double start,double seconds,int landmark=-1,double readAt=-1)
+        {
+            var state=Round(festival,0,"Playing",Spin,seconds);state.SimulationSeconds=seconds;state.CloudClueStart=start;state.TripperId=Tripper;
+            state.CloudClueLandmark=landmark;state.CloudClueReadAt=readAt;state.Players.Add(new PlayerState{Id=Tripper});return state;
+        }
+        private static Transform ClueCloud(Transform root){var clue=root.Find(FestivalClouds.ClueName);Assert.That(clue,Is.Not.Null,"the clue cloud");return clue;}
+        private static Transform Rim(Transform root){var rim=ClueCloud(root).Find(FestivalClouds.RimName);Assert.That(rim,Is.Not.Null,"the clue cloud's rim");return rim;}
+        private static bool Shows(Transform part)=>part.gameObject.activeInHierarchy&&part.GetComponent<Renderer>().enabled;
+        // Puffs `from` to `from+count` of the clue cloud's mesh: its picture first, then its $.
+        private static List<CloudShapes.Puff> CluePuffs(Transform clue,int from,int count)
+        {
+            var vertices=clue.GetComponent<MeshFilter>().sharedMesh.vertices;var puffs=new List<CloudShapes.Puff>();
+            Assert.That(vertices.Length,Is.EqualTo(4*(CloudShapes.MaxPuffs+CloudShapes.Dollar.Length)),"setup: a quad for every puff the clue cloud can have, and its $");
+            for(int q=4*from;q<4*(from+count);q+=4)
+            {
+                float minX=float.MaxValue,maxX=float.MinValue,minY=float.MaxValue,maxY=float.MinValue;
+                for(int v=q;v<q+4;v++){minX=Mathf.Min(minX,vertices[v].x);maxX=Mathf.Max(maxX,vertices[v].x);minY=Mathf.Min(minY,vertices[v].y);maxY=Mathf.Max(maxY,vertices[v].y);}
+                if(maxX-minX>1e-4f)puffs.Add(new CloudShapes.Puff((minX+maxX)/2,(minY+maxY)/2,(maxX-minX)/2));
+            }
+            return puffs;
         }
 
         private FestivalClouds Sky(out Transform root)
