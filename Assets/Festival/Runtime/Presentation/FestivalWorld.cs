@@ -21,6 +21,7 @@ namespace Festival.Presentation
         private VolumeProfile duskProfile;
         private FestivalNightLighting lighting;
         private FestivalTwistVisuals twists;
+        private FestivalClouds clouds;
         private Font worldFont;
         private Transform owned;
         private Transform camp;
@@ -327,6 +328,8 @@ namespace Festival.Presentation
             surface.BuildNavMesh();
             // After the navmesh, though they never collide: twist stand-ins don't shape where anyone walks.
             twists=new FestivalTwistVisuals(owned);
+            // LIGHT-2: the day sky's clouds hang under the festival, so camp has none.
+            clouds=new FestivalClouds(owned);
             marketShopRoot=ShopDisplayRoot("Night market goods",owned);
             // Only one of the two overlapping walkable spaces is active at a
             // time. The camp has its own navigation and collision geometry.
@@ -711,8 +714,13 @@ namespace Festival.Presentation
 #endif
         }
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase=="Results";
-        // LIGHT-1: night levels and the local player's dose, straight from the round state.
-        public void SetLighting(RoundState state,string localPlayerId){if(lighting!=null)lighting.Apply(state,localPlayerId);}
+        // LIGHT-1: night levels and the local player's dose, straight from the round state. LIGHT-2: the day sky's clouds, kept
+        // over the local view.
+        public void SetLighting(RoundState state,string localPlayerId)
+        {
+            if(lighting!=null)lighting.Apply(state,localPlayerId);
+            if(clouds!=null)clouds.Apply(state,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero);
+        }
         // TWISTVIS-1: the festival's twist stand-ins, straight from the round state.
         public void SetTwists(RoundState state){if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);}
         private void Update()
@@ -1029,6 +1037,7 @@ namespace Festival.Presentation
             foreach(var material in materials)if(material!=null)Dispose(material);
             foreach(var mesh in generatedMeshes)if(mesh!=null)Dispose(mesh);
             if(duskProfile!=null)Dispose(duskProfile);
+            if(clouds!=null)clouds.Dispose();
         }
     }
 }
