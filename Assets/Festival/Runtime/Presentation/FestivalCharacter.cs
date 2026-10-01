@@ -72,6 +72,8 @@ namespace Festival.Presentation
         int blinkIndex=-1;
         int intoxicatedEyesIndex=-1;
         public bool HighlyIntoxicated { get; private set; }
+        /// <summary>GAS-1: on Giggle Gas, so they giggle (FestivalSession sets it from the view's VisualGiggling).</summary>
+        public bool Giggling;
         public bool RedEyes { get; private set; }
         FestivalPoiRig poiLeft,poiRight;
         string carriedPoi="",poiPairItem="";
@@ -572,6 +574,13 @@ namespace Festival.Presentation
             float presentation=Mathf.Sin(Mathf.Clamp01((Time.time-receiptAt)/.85f)*Mathf.PI);
             if(presentation>.01f&&!dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying)
             {Aim("ArmR",new Vector3(-28-25*presentation,0,8));Aim("ForearmR",new Vector3(-62+15*presentation,0,0));Layer("Head",new Vector3(6*presentation,0,0));}
+            // GAS-1: on Giggle Gas they giggle: quick little laughs tip the head back and shake the shoulders, under a big smile.
+            if(Giggling&&Pose!="Downed"&&Pose!="Spirit"&&!dance&&!lying)
+            {
+                float laugh=Mathf.Abs(Mathf.Sin(Time.time*11f+phase*3f));
+                Layer("Spine",new Vector3(-3-5*laugh,0,0));Layer("Head",new Vector3(-8-9*laugh,0,Mathf.Sin(Time.time*1.9f+phase)*6));
+                Layer("ArmL",new Vector3(0,0,-6*laugh));Layer("ArmR",new Vector3(0,0,6*laugh));
+            }
             bool canExchange=Pose!="Downed"&&Pose!="Spirit"&&!dance&&!lying;
             exchangeWeight=Mathf.MoveTowards(exchangeWeight,exchanging&&canExchange?1:0,animationDelta*4);
             if(exchangeWeight>.001f)
@@ -588,7 +597,7 @@ namespace Festival.Presentation
             }
             if(faceRenderer!=null&&!UsesDistantMesh)
             {
-                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),dance?65:Time.time-receiptAt<1.4f?80:0,1-Mathf.Exp(-7*animationDelta)));
+                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),dance?65:Time.time-receiptAt<1.4f||Giggling?80:0,1-Mathf.Exp(-7*animationDelta)));
                 if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:key=="DoseReaction"?85*BeatStrength:Threat*65,1-Mathf.Exp(-7*animationDelta)));
             }
             if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)

@@ -482,12 +482,14 @@ namespace Festival.Network
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
-                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")?.Kind switch{null=>p.Effects.Count>0?"Intoxicated":"Idle",var kind when FestivalSimulation.DancesVisibly(kind)=>"Dance",var kind=>kind};
+                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")?.Kind switch{null=>p.Effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect)?"Intoxicated":"Idle",var kind when FestivalSimulation.DancesVisibly(kind)=>"Dance",var kind=>kind};
                 var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
                 copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
                 copy.WearingLittleSpoon=p.Inventory.Exists(item=>item.ItemId=="little_spoon"&&item.Count>0);
                 copy.VisualWideEyes=p.Effects.Exists(effect=>effect.Id=="lsd"||effect.Id=="mushrooms"||effect.Id=="ecstasy"||effect.Id==FestivalSimulation.DoseEffect);
                 copy.VisualRedEyes=p.Effects.Exists(effect=>effect.Id=="weed");
+                // GAS-1: Giggle Gas is no Intoxicated pose (above); friends see a giggle instead, once it has kicked in.
+                copy.VisualGiggling=FestivalSimulation.Giggling(p,source.SimulationSeconds);
                 if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;}view.Players.Add(copy);
             }
             if(!spirit)
@@ -530,6 +532,7 @@ namespace Festival.Network
                     var contact=exchange?new Vector3(togetherInside?(p.CampInteriorX+peer.CampInteriorX)*.5f:(p.X+peer.X)*.5f,1.08f,togetherInside?(p.CampInteriorZ+peer.CampInteriorZ)*.5f:(p.Z+peer.Z)*.5f):Vector3.zero;
                     exchangeCharacter.SetExchange(exchange,p.VisualOfferItem,contact);
                     exchangeCharacter.SetReceipt(p.VisualReceiptSequence,p.VisualReceivedItem,(float)(State.SimulationSeconds-p.VisualReceiptAt));
+                    exchangeCharacter.Giggling=p.VisualGiggling;
                 }
                 seen.Add(p.Id);
                 if(p.Id==LocalPlayerId)

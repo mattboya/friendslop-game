@@ -15,7 +15,7 @@ namespace Festival.Tests
     // GAS-1 in a running session: at camp, beside the Giggle Balloons, the prompt offers one and E takes it. Once it kicks in, the
     // gas reaches the hitter's screen through the single writers: FestivalHud adds the throb to the field of view, FestivalNightLighting
     // drains the colour grade, and FestivalTrip pulses its overlay, closes a low-pass and dips the volume. All of it lets go when the
-    // gas ends, when the player leaves the session, and when FestivalTrip is turned off or destroyed.
+    // gas ends, when the player leaves the session, and when FestivalTrip is turned off or destroyed. Friends see the hitter giggle.
     public sealed class GiggleGasPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator EAtTheBalloonsTakesAHitThatPulsesThroughTheSingleWriters()
@@ -61,6 +61,7 @@ namespace Festival.Tests
                 Sober("while it kicks in");
                 Assert.That(view.fieldOfView,Is.EqualTo(75).Within(1e-3f),"while it kicks in: the view holds still");
                 Assert.That(grade.saturation.value,Is.EqualTo(camp).Within(1e-3f),"while it kicks in: camp's colours");
+                Assert.That(session.WorldCharacter(me).Giggling,Is.False,"while it kicks in: no giggle");
 
                 // Kicked in (the wait skipped), at full motion: each writer moves its own property with the pulse, every frame. A test
                 // resumes after the frame's Updates (the HUD's throb, the session's grade) and before its LateUpdates, so the overlay and
@@ -83,6 +84,7 @@ namespace Festival.Tests
                     widest=Mathf.Max(widest,Mathf.Abs(view.fieldOfView-75));quietest=Mathf.Min(quietest,AudioListener.volume);
                 }
                 Assert.That(grade.saturation.value,Is.LessThan(camp-30),"the colours drain");
+                Assert.That(session.WorldCharacter(me).Giggling,Is.True,"the hitter's body giggles, as friends see it");
                 Assert.That(widest,Is.GreaterThan(.5f),"the view throbs");
                 Assert.That(quietest,Is.LessThan(.8f),"the sound goes wah-wah");
 
@@ -104,6 +106,7 @@ namespace Festival.Tests
                 Sober("once it has worn off");
                 Assert.That(view.fieldOfView,Is.EqualTo(75).Within(1e-3f),"once it has worn off: the view");
                 Assert.That(grade.saturation.value,Is.EqualTo(camp).Within(1e-3f),"once it has worn off: camp's colours");
+                Assert.That(session.WorldCharacter(me).Giggling,Is.False,"once it has worn off: the giggling stops");
                 Assert.That(Find("Prompt")?.text,Is.EqualTo("TAKE A GIGGLE BALLOON"),"and E takes another");
 
                 // Another, kicked in at once, then the player leaves the session: the sound comes back for the menu.

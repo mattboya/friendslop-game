@@ -172,6 +172,28 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.Empty,"out of reach, no prompt");
         }
 
+        // Friends see the hitter giggle: ViewFor sends a giggling flag, like the wide-eyes flag, only while the gas has strength (not
+        // while it kicks in). The gas is no intoxication to look at: no "Intoxicated" pose, no wide eyes, and still no effect list.
+        [Test]public void FriendsSeeTheHitterGiggleOnlyWhileTheGasIsOn()
+        {
+            var game=new FestivalSimulation(3);var hitter=game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");
+            hitter.X=CampFeatures.GiggleBalloonX;hitter.Z=CampFeatures.GiggleBalloonZ;
+            Assert.That(game.Execute("p0",new GameCommand{Id="hit",Kind=FestivalSimulation.TakeGiggleBalloonKind}).Accepted,Is.True,"setup: a hit");
+            PlayerState Seen(string viewer)=>Festival.Network.FestivalSession.ViewFor(game,viewer).Players.Find(p=>p.Id=="p0");
+            game.Tick(9.9);
+            Assert.That(Seen("p1").VisualGiggling,Is.False,"no giggle while it kicks in");
+            game.Tick(.4);
+            Assert.That(Seen("p1").VisualGiggling,Is.True,"a friend sees the giggle once it has");
+            Assert.That(Seen("p0").VisualGiggling,Is.True,"so does the hitter's own view");
+            var seen=Seen("p1");
+            Assert.That(seen.Effects,Is.Empty,"a friend still sees no effect list");
+            Assert.That(seen.VisualPose,Is.EqualTo("Idle"),"the gas is no Intoxicated pose");
+            Assert.That(seen.VisualWideEyes||seen.VisualRedEyes,Is.False,"nor wide or red eyes");
+            game.Tick(29.8);
+            Assert.That(game.State.Players[0].Effects,Is.Empty,"setup: the host has ended it");
+            Assert.That(Seen("p1").VisualGiggling,Is.False,"no giggle once it's over");
+        }
+
         // A Giggle Balloon's gas: it kicks in at Kick.
         private static ActiveEffect Gas()=>new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=Kick,RemainingSeconds=FestivalSimulation.GiggleGasSeconds};
         // Camp at simulation time now, with "me" on the gas.
