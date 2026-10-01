@@ -84,8 +84,9 @@ namespace Festival.Core
 
         /// <summary>
         /// The festival twists player can use where they stand, as the HUD lists them: on Palm Mirage the Ferris wheel at its base
-        /// and a VIP wristband at the night market's VIP stall (POLO-1), on Ember Playa an art car rolling past (PLAYA-1). Each is
-        /// offered exactly where the rules take it (FestivalSimulation.AtWheel, AtVipStall, ArtCarBeside). The VIP guard's chat is
+        /// and a VIP wristband at the night market's VIP stall (POLO-1), on Ember Playa an art car rolling past (PLAYA-1), and on
+        /// either a Giggle Tank (GAS-2). Each is offered exactly where the rules take it (FestivalSimulation.AtWheel, AtVipStall,
+        /// ArtCarBeside, AtGiggleTank). The VIP guard's chat is
         /// offered like a check (FestivalHudText.CheckTarget), since F starts it too.
         /// </summary>
         public static List<(string Label,GameCommand Command)> TwistActions(RoundState state,PlayerState player)
@@ -96,6 +97,8 @@ namespace Festival.Core
             if(FestivalSimulation.ArtCarBeside(state,player)>=0)actions.Add(("Climb aboard the art car",new GameCommand{Kind=FestivalSimulation.RideCarKind}));
             var band=Catalog.FindItem(FestivalSimulation.VipWristband);
             if(FestivalSimulation.AtVipStall(state,player)&&!player.Inventory.Exists(i=>i.ItemId==band.Id))actions.Add(("Buy "+band.Name+"  •  $"+band.Price,new GameCommand{Kind="Buy",ItemId=band.Id}));
+            // GAS-2: a Giggle Tank, on either festival.
+            if(FestivalSimulation.AtGiggleTank(state,player))actions.Add(("Grab the Giggle Tank",new GameCommand{Kind=FestivalSimulation.GrabGiggleTankKind}));
             return actions;
         }
 

@@ -79,6 +79,13 @@ namespace Festival.Core
         // accusation only BurnShoutRange, not the usual 10 m, so it reaches its neighbours in the ring rather than the whole ring.
         public const float EffigyX=0,EffigyZ=2,BurnRadius=12,BurnRingRadius=5,BurnWalkSpeed=1.5f;
         public const double BurnSeconds=180,BurnCrushFactor=.7,BurnCalmFactor=2,BurnShoutRange=3;
+        // GAS-2: GiggleTankPercent of levels hide a Giggle Tank at one of these spots, the same on every festival: behind the stage,
+        // behind the medical tent, behind security, the north-west grove, west of lost property and the east lawn. Each is off
+        // the paths, the VIP ropes, the art cars' loops and the Ferris wheel, clear of walls, and more than 2.5 m from anywhere
+        // players routinely stand. Any living, free player within GiggleTankReach grabs it for GiggleTankCash in the crew stash.
+        public static readonly WorldPoint[] GiggleTankSpots={new WorldPoint(11,37.5f),new WorldPoint(27,-12.5f),new WorldPoint(30,14),new WorldPoint(-31,31),new WorldPoint(-34,15),new WorldPoint(29,-1)};
+        public const int GiggleTankPercent=20,GiggleTankCash=25;
+        public const float GiggleTankReach=1.5f;
         /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
         public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}

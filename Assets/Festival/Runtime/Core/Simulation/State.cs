@@ -69,6 +69,9 @@ namespace Festival.Core
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
         // Sale cash paid out this level, after any payout multiplier; a day's quota counts it (DayQuota.cs).
         public int LevelSales;
+        // GAS-2: this level's Giggle Tank (GiggleTanks.cs), public like the spin: its place in Festivals.GiggleTankSpots, or -1 for
+        // none (as in a snapshot from before tanks); found once someone has grabbed it.
+        public int GiggleTankSpot=-1; public bool GiggleTankFound;
         public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
         public List<CampReviewVote> ReviewVotes=new List<CampReviewVote>();
         // The debrief's awards (two worst, then one best) and, once every vote is in, each award's winner in the same order.
