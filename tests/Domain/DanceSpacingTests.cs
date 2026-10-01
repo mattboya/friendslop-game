@@ -7,7 +7,8 @@ using Festival.Core;
 // ropes, a carried body's reach); a blocked spot leaves the dancer where they stood. The partner never turns, and the dancer
 // keeps facing them through the dance whatever the camera does.
 // DANCE-2: a sale, a chat and a talk with security are danced too (the live dancer view shows every four-lane challenge), so
-// they keep the same space and facing, and every note played shows as a step.
+// they keep the same space and facing, and every note played shows as a step. A sale is still judged where the seller stood:
+// its step never carries them over a VIP rope, or into or out of a cop's sight.
 public static class DanceSpacingTests
 {
     static int sequence;
@@ -50,7 +51,8 @@ public static class DanceSpacingTests
         foreach(var test in new Action[]{OnlyPartnerChallengesKeepTheirDistance,ASaleAChatAndSecurityAreDancedToo,ACloseDancerStepsBackFacingTheirPartner,ADancerFurtherOffStaysPut,
             OnTopOfThePartnerTheyStepBackFromTheirFacing,AWallBehindKeepsTheDancerPut,TheNavigatorMustReachTheSpot,
             TheGroundsEdgeAndTheRopesKeepTheDancerPut,ACarrierKeepsTheBodyInReach,ACheckDanceKeepsTheSameSpace,
-            TheWatchersSeeTheDancerWhereTheyDance,TheFacingHoldsUntilTheDanceEnds,ARefusedDanceMovesNobody})
+            TheWatchersSeeTheDancerWhereTheyDance,TheFacingHoldsUntilTheDanceEnds,ARefusedDanceMovesNobody,
+            ASaleIsPaidWhereTheSellerStood,ACopJudgesASaleWhereTheSellerStood})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" dance spacing test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -180,5 +182,40 @@ public static class DanceSpacingTests
         var p=Dancer(s);float x=p.X,z=p.Z;
         Check(!Start(s).Accepted,"setup: a busy partner refuses the dance");
         Check(p.X==x&&p.Z==z&&p.Yaw==DancerYaw,"a refused dance neither moves nor turns the player");
+    }
+
+    // Starts a sale and plays every note on time; returns what it paid.
+    static int SoldFor(FestivalSimulation s)
+    {
+        var p=Dancer(s);int cash=p.Cash;Starts(s,"Sale");var i=s.Interaction(p.InteractionId);
+        foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);
+        Check(i.Status=="Complete","setup: the sale finishes");return p.Cash-cash;
+    }
+
+    // Palm Mirage's west VIP zone ends at x = -8, and the buyer stands 0.6 m inside it. A seller 0.5 m from them, with the rope
+    // behind, would step back over it and lose the VIP pay.
+    static void ASaleIsPaidWhereTheSellerStood()
+    {
+        int inside=SoldFor(Pair(1.4,270,"Sale",-8.6f,22)),over=SoldFor(Pair(1.4,90,"Sale",-8.6f,22));
+        Check(inside>over,"setup: a sale inside the ropes pays more than one over them ($"+inside+" vs $"+over+")");
+        var s=Pair(.5,90,"Sale",-8.6f,22);var p=Dancer(s);float x=p.X,z=p.Z;int paid=SoldFor(s);
+        Check(p.X==x&&p.Z==z,"the seller stays inside, where they stood (now "+p.X+", "+p.Z+")");
+        Check(paid==inside,"and is paid as inside the ropes ($"+paid+", not $"+inside+")");
+        Check(OffFacing(s)<.5,"still facing the buyer");
+    }
+
+    // The cop at the origin looks along +z. A seller 0.15 m from the buyer, just out of its sight, would step back into it and be
+    // busted; one just in its sight would step back out of it and get away with the deal.
+    static void ACopJudgesASaleWhereTheSellerStood()
+    {
+        var s=Pair(.15,315,"Sale",4,2);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});var p=Dancer(s);float x=p.X,z=p.Z;
+        Starts(s,"Sale");var cop=s.State.Npcs.Find(n=>n.Id=="cop");
+        Check(p.X==x&&p.Z==z&&cop.Evidence.Count==0,"a seller out of the cop's sight stays there unseen (now "+p.X+", "+p.Z+", "+cop.Evidence.Count+" evidence)");
+        for(int t=0;t<60;t++)s.Tick(.1);
+        Check(p.Life=="Alive","and isn't busted ("+p.Life+")");
+        s=Pair(.15,135,"Sale",3,2.3f);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});p=Dancer(s);x=p.X;z=p.Z;
+        Starts(s,"Sale");cop=s.State.Npcs.Find(n=>n.Id=="cop");
+        Check(p.X==x&&p.Z==z&&cop.Evidence.Exists(e=>e.Kind=="WitnessedDeal"),"a seller in the cop's sight stays there, and the deal is witnessed (now "+p.X+", "+p.Z+")");
     }
 }
