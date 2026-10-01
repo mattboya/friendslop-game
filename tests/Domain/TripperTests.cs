@@ -157,9 +157,10 @@ public static class TripperTests
         var crew=Crew(51,3);Spin(crew);Play(crew);Die(crew,Tripper(crew));var heir=Tripper(crew);
         Check(Dose(heir)==1,"setup: a stand-in takes over at dose 1");TookFromTheWheel(crew,heir,"the stand-in");
         var solo=Crew(52,1);Spin(solo);Play(solo);var me=solo.Player("p0");Die(solo,me);
-        var entry=solo.State.Doses.Find(d=>d.PlayerId=="p0");entry.Substance=FestivalSimulation.Substances.First(id=>id!=entry.Substance);
+        // Held before the revival: taking the dose again writes the entry, so reading it back after would always match.
+        var entry=solo.State.Doses.Find(d=>d.PlayerId=="p0");string kept=entry.Substance=FestivalSimulation.Substances.First(id=>id!=entry.Substance);
         me.X=24;me.Z=-20;Check(Act(solo,"p0","BeginRevival",target:"p0").Accepted,"setup: the solo spirit starts a self-revival");solo.Tick(15.3);
-        Check(Dose(me)==1&&Substance(me)==entry.Substance,"a revived tripper takes their dose again, of the "+entry.Substance+" in their dose list entry, got "+Substance(me));
+        Check(Dose(me)==1&&Substance(me)==kept,"a revived tripper takes their dose again, of the "+kept+" in their dose list entry, got "+Substance(me));
         var finale=Crew(53,3);finale.State.LevelIndex=3;Spin(finale);Play(finale);var gone=Tripper(finale);
         var spun=finale.State.Players.ToDictionary(q=>q.Id,Substance);Die(finale,gone);var next=Tripper(finale);
         Check(next!=gone&&Substance(next)==spun[next.Id],"on Night 2 the stand-in keeps the substance they already took");
