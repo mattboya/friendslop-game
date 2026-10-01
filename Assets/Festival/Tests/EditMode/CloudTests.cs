@@ -181,13 +181,32 @@ namespace Festival.Tests
                     var cloud=Cloud(root,show.Cloud);var shape=CloudShapes.Shapes[show.Shape];var puffs=PuffsOf(cloud);
                     Assert.That(puffs,Is.Not.Empty,shape.Name+" has puffs");
                     Assert.That(Match(puffs,shape.Puffs),Is.True,"cloud "+show.Cloud+" shows the "+shape.Name+" at spin "+spin);
-                    var bounds=cloud.GetComponent<MeshFilter>().sharedMesh.bounds;
-                    Assert.That(Mathf.Max(-bounds.min.x,bounds.max.x),Is.LessThanOrEqualTo(CloudShapes.HalfWidth+1e-3f),shape.Name+" fits a cloud's width");
-                    Assert.That(Mathf.Max(-bounds.min.y,bounds.max.y),Is.LessThanOrEqualTo(CloudShapes.HalfHeight+1e-3f),shape.Name+" fits a cloud's height");
+                    // Measured from the drawn corners, as the mesh's bounds are the footprint whatever is drawn.
+                    float wide=0,tall=0;foreach(var v in cloud.GetComponent<MeshFilter>().sharedMesh.vertices){wide=Mathf.Max(wide,Mathf.Abs(v.x));tall=Mathf.Max(tall,Mathf.Abs(v.y));}
+                    Assert.That(wide,Is.LessThanOrEqualTo(CloudShapes.HalfWidth+1e-3f),shape.Name+" fits a cloud's width");
+                    Assert.That(tall,Is.LessThanOrEqualTo(CloudShapes.HalfHeight+1e-3f),shape.Name+" fits a cloud's height");
                     seen.Add(show.Shape);
                 }
             }
             Assert.That(seen.Count,Is.EqualTo(CloudShapes.Shapes.Length),"every shape turns up in the sky");
+        }
+
+        // Unity culls a cloud by its renderer's bounds. Bounds that miss part of the cloud drop the whole of it the moment its
+        // middle leaves the view, so turning your head would pop a half-visible duck out of the sky at the screen's edge.
+        [Test]public void EveryCloudsBoundsHoldAllOfItSoItIsNotCulledWhileStillOnScreen()
+        {
+            var clouds=Sky(out var root);var sky=CloudShapes.For(Spin);var show=sky.Shows[1];
+            var state=Round(Festivals.PoloFestival,0,"Playing",Spin);
+            foreach(double t in new[]{show.Start+CloudShapes.MorphSeconds/2,show.Start+CloudShapes.MorphSeconds+show.Hold/2,show.End+3})
+            {
+                state.ElapsedSeconds=t;clouds.Apply(state,new Vector3(31,1.65f,-24));
+                for(int c=0;c<sky.Clouds.Length;c++)
+                {
+                    var cloud=Cloud(root,c);var bounds=cloud.GetComponent<MeshRenderer>().bounds;bounds.Expand(1e-3f);
+                    foreach(var vertex in cloud.GetComponent<MeshFilter>().sharedMesh.vertices)
+                        Assert.That(bounds.Contains(cloud.TransformPoint(vertex)),Is.True,"cloud "+c+" at "+t+" s: its bounds "+bounds+" hold its corner "+cloud.TransformPoint(vertex));
+                }
+            }
         }
 
         [Test]public void CloudsAreSoftUnlitPuffsThatCastNoShadowsAndNeverCollide()

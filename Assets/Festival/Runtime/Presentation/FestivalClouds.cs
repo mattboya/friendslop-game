@@ -49,6 +49,10 @@ namespace Festival.Presentation
             {
                 var cloud=new GameObject("Cloud "+c);cloud.transform.SetParent(root,false);clouds[c]=cloud.transform;
                 var mesh=new Mesh{name="Cloud "+c};mesh.MarkDynamic();mesh.vertices=corners;mesh.uv=uv;mesh.colors=tints;mesh.triangles=triangles;meshes[c]=mesh;
+                // Unity culls by these bounds and leaves them alone when Draw moves the puffs, so they are set once to the whole
+                // footprint every puff stays inside, ordinary, shaped or halfway between. Bounds of the empty pool would be a point,
+                // and the whole cloud would vanish the moment its middle left the view.
+                mesh.bounds=new Bounds(Vector3.zero,new Vector3(2*CloudShapes.HalfWidth,2*CloudShapes.HalfHeight,1));
                 cloud.AddComponent<MeshFilter>().sharedMesh=mesh;
                 var renderer=cloud.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;renderers[c]=renderer;
                 renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
