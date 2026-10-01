@@ -50,12 +50,13 @@ namespace Festival.Core
         }
 
         bool InVip(float x,float z)=>Festivals.InVipZone(State.FestivalIndex,x,z);
-        // TryMove's check as p steps to (x,z). A Ferris wheel or art car rider only looks around. At the festival the VIP ropes keep out anyone
+        // TryMove's check as p steps to (x,z). A Ferris wheel or art car rider, or someone lying on the grass (CloudClue.cs), only
+        // looks around. At the festival the VIP ropes keep out anyone
         // without a wristband; stepping out, or about inside, is always fine, so nobody handing theirs over inside is stranded,
         // and spirits float through.
         bool MayStep(PlayerState p,float x,float z)
         {
-            if(OnWheel(State,p.Id)||ArtCarOf(State,p.Id)>=0)return Distance(p.X,p.Z,x,z)<=.001;
+            if(OnWheel(State,p.Id)||ArtCarOf(State,p.Id)>=0||LyingDown(State,p.Id))return Distance(p.X,p.Z,x,z)<=.001;
             return State.Phase!="Playing"||p.Life=="Spirit"||!InVip(x,z)||InVip(p.X,p.Z)||Count(p,VipWristband)>0;
         }
         // A sale made inside a VIP zone, to a buyer inside, pays VipPayoutFactor times: one over the rope pays as usual.

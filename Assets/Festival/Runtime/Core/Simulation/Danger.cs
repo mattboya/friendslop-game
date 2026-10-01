@@ -21,7 +21,7 @@ public sealed partial class FestivalSimulation {
         RideArtCars();foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);Film(dt);GatherAtBurn(dt);
         foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0))FinishInteraction(i,p);}
         Escort(State.FriendFound,State.FriendPosition,ref State.FriendLeaderId,dt);Escort(State.SecondFriend.Found,State.SecondFriend.Position,ref State.SecondFriend.LeaderId,dt);
-        FindStashes();DropFoundClues();BodiesTick();if(State.Phase=="Playing")EndIfLevelOver();
+        FindStashes();WatchClouds();DropFoundClues();BodiesTick();if(State.Phase=="Playing")EndIfLevelOver();
     }
     // PLAYA-1: a dust storm cuts a festivalgoer's sight, and they never see an art car's rider (FestivalTwists.cs). Suspicion of
     // someone in the burn's crush cools faster (Calm), and an accusation made there carries only a few metres (ShoutRange).

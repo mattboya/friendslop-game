@@ -157,6 +157,26 @@ namespace Festival.Core
                 3.1f,-1.5f,3.5f, 6.2f,-1.5f,3.5f, 9.2f,-1.5f,3.5f, 12.3f,-1.5f,3.5f, 15.4f,-1.5f,3.5f, 18.5f,-1.5f,3.5f, -9,-2.5f,4.5f, 0,-3,5, 9,-2.5f,4.5f,
                 0,3,5.5f, -4.5f,2.5f,4, 4.5f,2.5f,4, -8.5f,-6,3, -8.5f,-8,3, 0,-6.5f,3, 0,-9,3, 8.5f,-6,3, 8.5f,-8,3),
         };
+        // TRIP-4: a day level's clue cloud (FestivalSimulation.CloudClueUp) comes up a whole ClueEarliest-ClueLatestSeconds into the
+        // level and drifts through the sky for ClueSeconds.
+        public const int ClueEarliestSeconds=60,ClueLatestSeconds=240;
+        public const double ClueSeconds=90;
+        /// <summary>A landmark the clue cloud can picture: where it stands, and the spot 5-8 m off, away from the paths and wherever
+        /// players routinely stand, where reading the cloud leaves a cash stash.</summary>
+        public sealed class Landmark { public readonly string Name; public readonly WorldPoint At,Stash; public Landmark(string name,WorldPoint at,WorldPoint stash){Name=name;At=at;Stash=stash;} }
+        /// <summary>The landmarks a clue cloud pictures. The last, the Ferris wheel, stands only on Palm Mirage (LandmarkCount).
+        /// The stage's stash is behind it, backstage, where being seen draws suspicion.</summary>
+        public static readonly Landmark[] Landmarks={
+            new Landmark("stage",new WorldPoint(0,32),new WorldPoint(-5,38)),
+            new Landmark("night market",new WorldPoint(-18,-22),new WorldPoint(-18,-28)),
+            new Landmark("medical tent",new WorldPoint(24,-20),new WorldPoint(29,-25)),
+            new Landmark("security",new WorldPoint(27,5),new WorldPoint(21,9)),
+            new Landmark("shuttle",new WorldPoint(0,-36),new WorldPoint(-7,-37)),
+            new Landmark("lost property",new WorldPoint(-28,16),new WorldPoint(-23,20)),
+            new Landmark("Ferris wheel",new WorldPoint(Festivals.WheelX,Festivals.WheelZ),new WorldPoint(14,-32)),
+        };
+        /// <summary>How many of Landmarks a festival's clue cloud can picture: all of them where there is a Ferris wheel.</summary>
+        public static int LandmarkCount(int festival)=>festival==Festivals.PoloFestival?Landmarks.Length:Landmarks.Length-1;
         static Shape Table(string name,params float[] xyr){var puffs=new Puff[xyr.Length/3];for(int i=0;i<puffs.Length;i++)puffs[i]=new Puff(xyr[3*i],xyr[3*i+1],xyr[3*i+2]);return new Shape(name,puffs);}
     }
 }

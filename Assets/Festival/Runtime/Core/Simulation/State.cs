@@ -75,6 +75,11 @@ namespace Festival.Core
         // GAS-2: this level's Giggle Tank (GiggleTanks.cs), public like the spin: its place in Festivals.GiggleTankSpots, or -1 for
         // none (as in a snapshot from before tanks); found once someone has grabbed it.
         public int GiggleTankSpot=-1; public bool GiggleTankFound;
+        // TRIP-4: a day's clue cloud (CloudClue.cs), up for CloudShapes.ClueSeconds from CloudClueStart on the level clock, or -1 for
+        // none (a night, or a snapshot from before it); every view has it, as everyone sees the cloud. It pictures landmark
+        // CloudClueLandmark (CloudShapes.Landmarks), which leaves the host only for the tripper once they read it at CloudClueReadAt
+        // (SimulationSeconds, -1 unread). Then a cash stash waits by the landmark until someone finds it (CloudStashFound).
+        public double CloudClueStart=-1,CloudClueReadAt=-1; public int CloudClueLandmark=-1; public bool CloudStashFound;
         public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
         public List<CampReviewVote> ReviewVotes=new List<CampReviewVote>();
         // The debrief's awards (two worst, then one best) and, once every vote is in, each award's winner in the same order.

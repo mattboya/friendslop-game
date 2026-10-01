@@ -105,6 +105,7 @@ namespace Festival.Core
                 case RideWheelKind:return RideWheel(p);
                 case RideCarKind:return RideCar(p);
                 case GrabGiggleTankKind:return GrabGiggleTank(p);
+                case LieDownKind:return LieDown(p);
                 case "Police":return BeginChallenge(p,c,"Police");
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
@@ -169,7 +170,7 @@ namespace Festival.Core
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             // The level runs the table's length whatever the round was saved with (a snapshot from before weekends held 600 s).
-            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;Spin(connected);DealRoles();DealTwists();RollGiggleTank();
+            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;Spin(connected);DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();
         }
         void BeginCampReview()
         {
