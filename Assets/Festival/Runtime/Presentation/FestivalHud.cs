@@ -984,6 +984,9 @@ namespace Festival.Presentation
                     FinishActions();return;
                 }
             }
+            // TRIP-4: E runs the first action listed, so lying on the grass E gets you up before anything else.
+            bool lying=FestivalSimulation.LyingDown(state,player.Id);
+            if(lying)AddAction(FestivalHudText.GetUpAction,()=>session.Command("Cancel"),ref y);
             // E runs the first action listed. Ending the level comes before the carry prompts, so the leader standing beside
             // a body already home at the gate still ends Night 2 with E, and a carrier arriving there does too.
             if(state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId==""&&FestivalSimulation.CanExtract(state,player))AddAction(FestivalHudText.ExtractAction(state),()=>session.Command("Extract"),ref y);
@@ -993,7 +996,7 @@ namespace Festival.Presentation
                 if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
-            if(FestivalHudText.CanCancel(state,player))AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
+            if(!lying&&FestivalHudText.CanCancel(state,player))AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+ItemName(drop.ItemId),()=>session.Command("Pickup",drop.Id),ref y);
@@ -1078,6 +1081,9 @@ namespace Festival.Presentation
                     if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
                 }
             }
+            // TRIP-4: lying down comes last of all, after the festivalgoer beside you, so E never lies you down instead of dancing,
+            // chatting or selling.
+            if(FestivalSimulation.CanLieDown(state,player))AddAction(FestivalHudText.LieDownAction,()=>session.Command(FestivalSimulation.LieDownKind),ref y);
             // POLO-2: up on the Ferris wheel nothing is worth E; the prompt counts the turn down instead.
             string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
             if(riding!=""){prompt.text=riding;primaryAction=null;}

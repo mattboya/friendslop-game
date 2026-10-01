@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Festival.Core;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -41,6 +42,9 @@ namespace Festival.Presentation
         readonly Quaternion[] clipPose=new Quaternion[15];
         Vector3 restHips;
         static float DanceAngularSpeed(int style) => style==0?8.8f:style==1?7.6f:8.3f;
+        // TRIP-4: someone lying on the grass watching the clouds lies on their back with their hips this high, in metres at the
+        // actor's own scale.
+        const float LieHipHeight=.12f;
         int latestDanceDirection=-1;
         float latestDanceStepTime=-100;
         public string Pose="Idle";
@@ -321,7 +325,8 @@ namespace Festival.Presentation
             if(measuredSpeed>.12f)walkCycle+=delta.magnitude*(Mathf.PI*2/gait.Stride);
             float idleShift=0,still=0,look=0,nod=0,shift=0;
             float t=Time.time*4+phase,wave=Mathf.Sin(t),walk=Mathf.Sin(walkCycle);
-            if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit");
+            bool lying=Pose==FestivalSimulation.LieDownKind;
+            if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit"&&!lying);
             foreach(var item in bones)targets[item.Key]=rest[item.Key];
             bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose=="Dj"||Pose=="Distracted";
             if(Pose=="Downed")
@@ -329,6 +334,14 @@ namespace Festival.Presentation
                 Aim("Hips",new Vector3(75,0,walk*4));Aim("Head",new Vector3(-35,0,12));
                 Aim("ArmL",new Vector3(-85+walk*20,0,20));Aim("ArmR",new Vector3(-85-walk*20,0,-20));
                 Aim("LegL",new Vector3(walk*12,0,10));Aim("LegR",new Vector3(-walk*12,0,-10));
+            }
+            else if(lying)
+            {
+                // TRIP-4: flat on their back, legs out ahead and hands behind the head, gazing up at the clouds. The hips sink to the
+                // grass below, once the foot plant has had its say.
+                Aim("Hips",new Vector3(-90,0,0));Aim("Spine",new Vector3(-3+Mathf.Sin(Time.time*1.1f+phase)*1.5f,0,0));Aim("Head",new Vector3(-10,0,0));
+                Aim("ArmL",new Vector3(-155,0,-35));Aim("ArmR",new Vector3(-155,0,35));Aim("ForearmL",new Vector3(-115,0,0));Aim("ForearmR",new Vector3(-115,0,0));
+                Aim("LegL",new Vector3(0,0,7));Aim("LegR",new Vector3(0,0,-7));
             }
             else if(dance)
             {
@@ -500,11 +513,11 @@ namespace Festival.Presentation
             }
             // Authored acting clips (package 03/04 people) replace the stiff single-frame
             // poses. Upper-body clips leave the legs to the gait and foot plant.
-            string key=Beat!=""?Beat:exchanging&&!dance&&Pose!="Downed"&&Pose!="Spirit"?"Exchange":Pose;
+            string key=Beat!=""?Beat:exchanging&&!dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying?"Exchange":Pose;
             if(key!=motionKey)
             {
                 foreach(var item in bones)transitionFrom[item.Key]=item.Value.localRotation;
-                transitionLength=key=="Downed"||motionKey=="Downed"?.5f:key=="Dance"||key=="Poi"?.22f:.32f;
+                transitionLength=key=="Downed"||motionKey=="Downed"||key==FestivalSimulation.LieDownKind||motionKey==FestivalSimulation.LieDownKind?.5f:key=="Dance"||key=="Poi"?.22f:.32f;
                 motionKey=key;poseStart=Time.time-.02f;transitionEnd=poseStart+transitionLength;
             }
             var acting=ActingClip(key,speed);
@@ -557,9 +570,9 @@ namespace Festival.Presentation
                 Aim("HandR",new Vector3(0,0,-6));
             }
             float presentation=Mathf.Sin(Mathf.Clamp01((Time.time-receiptAt)/.85f)*Mathf.PI);
-            if(presentation>.01f&&!dance&&Pose!="Downed"&&Pose!="Spirit")
+            if(presentation>.01f&&!dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying)
             {Aim("ArmR",new Vector3(-28-25*presentation,0,8));Aim("ForearmR",new Vector3(-62+15*presentation,0,0));Layer("Head",new Vector3(6*presentation,0,0));}
-            bool canExchange=Pose!="Downed"&&Pose!="Spirit"&&!dance;
+            bool canExchange=Pose!="Downed"&&Pose!="Spirit"&&!dance&&!lying;
             exchangeWeight=Mathf.MoveTowards(exchangeWeight,exchanging&&canExchange?1:0,animationDelta*4);
             if(exchangeWeight>.001f)
             {
@@ -607,11 +620,17 @@ namespace Festival.Presentation
             if(dance&&Pose!="Dj")
                 footPlant?.Dance(Time.time*DanceAngularSpeed(danceStyle)+phase,
                     danceStyle,animationDelta);
-            else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!fullBodyClip,
-                !dance&&Pose!="Downed"&&Pose!="Spirit"&&speed>.14f,
+            else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!lying&&!fullBodyClip,
+                !dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying&&speed>.14f,
                 delta,speed,walkCycle,gait,animationDelta,idleShift);
             if(fullBodyClip&&hipsBone!=null)
                 hipsBone.localPosition=Vector3.Lerp(hipsBefore,restHips+clipHips,1-Mathf.Exp(-10f*animationDelta));
+            else if(lying&&hipsBone!=null)
+            {
+                // Imported bone parents carry a rotated, scaled transform, so the drop is worked out in the world and taken back.
+                float above=hipsBone.parent.TransformPoint(restHips).y-transform.position.y-LieHipHeight*transform.lossyScale.y;
+                hipsBone.localPosition=Vector3.Lerp(hipsBefore,restHips+hipsBone.parent.InverseTransformVector(Vector3.down*above),1-Mathf.Exp(-10f*animationDelta));
+            }
             if(exchangeWeight>.001f&&bones.Count==15)
             {
                 var hand=bones["HandR"];

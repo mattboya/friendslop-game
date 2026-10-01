@@ -268,6 +268,9 @@ namespace Festival.Presentation
         public static readonly string CheckChatAction="Check by chatting ("+FestivalSimulation.ConfirmChatSeconds+" s, safe)";
         /// <summary>Beside someone the host won't let anyone check right now (FestivalSimulation.Engaged): said, not offered.</summary>
         public const string BusyAction="They're busy right now";
+        /// <summary>TRIP-4: anyone free at the festival can lie on the grass and watch the clouds. The HUD lists it last of all, so E
+        /// never lies down instead of anything else; lying there, getting up (Cancel) comes first.</summary>
+        public const string LieDownAction="Lie down and watch the clouds",GetUpAction="Get up";
         /// <summary>Beside the VIP guard with no vision about them to check, E or F chats them into handing over a VIP wristband.</summary>
         public static readonly string RopeChatAction="Talk your way past the VIP rope ("+FestivalSimulation.ConfirmChatSeconds+" s)";
 
