@@ -9,7 +9,10 @@ CONFIG={"out":"Assets/Festival/Art/Resources","src":"ArtSource/PoloDressing.blen
 "armL":((-1.5,6.2,2.0),(-3.0,3.4,4.6),(-3.1,1.15,5.8)),"armR":((1.5,6.2,2.0),(3.5,6.4,5.8),(2.6,8.6,7.4)),"arm_r":.95,"glove":1.15,
 "leg":((1.3,4.6,-2.2),(1.9,1.15,-3.6),(1.9,1.15,-7.4)),"leg_r":1.15,"boot":((1.9,1.2,-8.4),(2.2,2.4,2.8)),
 "phone":((2.4,9.6,8.4),(2.6,5.0,.35)),"lens":((3.2,11.4,8.62),.35),"rec":((1.8,11.6,8.6),.15),"panel":((0,4.3,3.0),(2.0,1.2,.5))},
-"ridge":{"w":66,"d":6,"foot":2.5,"h":(30,40,24),"peaks":((0,0),(.08,.45),(.17,.3),(.27,.85),(.36,.6),(.46,1.0),(.55,.7),(.66,.9),(.76,.4),(.86,.55),(1,0))}}
+"ridge":{"w":66,"d":6,"foot":2.5,"h":(30,40,24),"peaks":((0,0),(.08,.45),(.17,.3),(.27,.85),(.36,.6),(.46,1.0),(.55,.7),(.66,.9),(.76,.4),(.86,.55),(1,0))},
+"tank":{"body":((.17,0),(.21,.03),(.21,.78),(.19,.9),(.12,1.0),(.06,1.02)),"bands":((.54,.66,.22),(.3,.34,.215)),"valve":(1.0,1.17,.05),"wheel":(1.18,.1,.015)},
+"balloon":{"body":((.02,-.21),(.07,-.18),(.15,-.1),(.17,0),(.15,.11),(.09,.18),(.01,.21)),"knot":(-.25,-.2,.025)},
+"vip":{"pole":(2.25,3.4,.09),"board":(4.8,.4,4.15),"trim":.075}}
 import sys,os;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from festival_kit import *
 import festival_kit as FK
@@ -151,11 +154,29 @@ def ridge(k,v):
     ring=lambda z:[(-w/2,R["foot"],z)]+[(x,y,z) for x,y in top[1:-1]]+[(w/2,R["foot"],z)]
     loft("Ridge","Sand",[ring(0),ring(d)])
     box("Foot","Stone",(0,R["foot"]/2,d/2),(w,R["foot"],d))
+def giggle_tank(k):
+    T=G["tank"];kit(k)
+    cyl("Base","Dark",(0,0,0),(0,.04,0),.19,14);lathe("Body","PaintMint",T["body"],k=14,smooth=True)
+    for i,(y0,y1,r) in enumerate(T["bands"]):cyl("Band"+str(i),"StageGlowRose",(0,y0,0),(0,y1,0),r,14)
+    v0,v1,vr=T["valve"];cyl("Valve","Metal",(0,v0,0),(0,v1,0),vr,8);cyl("Spout","Metal",(0,1.1,0),(.12,1.1,0),.025,6)
+    wy,wr,wt=T["wheel"];tube("HandWheel","Gold",[(wr*math.cos(6.2832*i/10),wy,wr*math.sin(6.2832*i/10)) for i in range(10)],wt,5,closed=True)
+    slab("WheelBarX","Gold",(-wr,wy,0),(wr,wy,0),.02,.02);slab("WheelBarZ","Gold",(0,wy,-wr),(0,wy,wr),.02,.02)
+    ico("Gauge","White",(0,.85,.19),.05,2)
+def giggle_balloon(k):
+    B=G["balloon"];kit(k);lathe("Balloon","Rose",B["body"],k=12,smooth=True)
+    y0,y1,r=B["knot"];cyl("Knot","White",(0,y0,0),(0,y1,0),r,6,r2=r*.4)
+def vip_board(k):
+    V_=G["vip"];px,py,pz=V_["pole"];bw,bh,by=V_["board"];t=V_["trim"];kit(k,[("Anchor","Stone",(0,py-.02,pz),(2*px+.3,.04,.1),0)])
+    for x in (-px,px):cyl("Post"+str(x),"Gold",(x,py,pz),(x,by+bh/2,pz),.04,6)
+    box("Trim","StageGlowGold",(0,by,.025),(bw+t,bh+t,.045));box("Board","Dark",(0,by,-.012),(bw,bh,.045))
+    top=by+(bh+t)/2;box("CrownBase","Gold",(0,top+.03,0),(.7,.08,.06))
+    for x in (-.25,0,.25):cyl("Spike"+str(x),"Gold",(x,top+.07,0),(x,top+.32,0),.06,6,r2=.005);ico("Gem"+str(x),"StageGlowRose",(x,top+.32,0),.045,1)
 BUILD={"FestivalPalmTall":lambda k:palm(k,G["palm"]["tall"]),"FestivalPalmLean":lambda k:palm(k,G["palm"]["lean"]),
 "FestivalWheelBase":wheel_base,"FestivalWheelRotor":wheel_rotor,"FestivalWheelGondola":gondola,
 "FestivalStageMirage":stage_mirage,"FestivalPetalCanopy":petal_canopy,
 "FestivalRainbowTower":rainbow_tower,"FestivalAstronaut":astronaut,
-"FestivalDesertRidge1":lambda k:ridge(k,0),"FestivalDesertRidge2":lambda k:ridge(k,1),"FestivalDesertRidge3":lambda k:ridge(k,2)}
+"FestivalDesertRidge1":lambda k:ridge(k,0),"FestivalDesertRidge2":lambda k:ridge(k,1),"FestivalDesertRidge3":lambda k:ridge(k,2),
+"FestivalGiggleTank":giggle_tank,"FestivalGiggleBalloon":giggle_balloon,"FestivalVipBoard":vip_board}
 CLEAR={"FestivalStageMirage":lambda:[G["stage"]["crowd"],G["stage"]["dj"]],"FestivalPetalCanopy":canopy_clear}
 REVIEW={"FestivalPetalCanopy":stage_review}
 want=sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else list(BUILD)

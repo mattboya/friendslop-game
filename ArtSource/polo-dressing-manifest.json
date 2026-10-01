@@ -85,6 +85,27 @@
       "renderers": 2,
       "triangles": 52,
       "separate": []
+    },
+    "FestivalGiggleTank": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 572,
+      "separate": []
+    },
+    "FestivalGiggleBalloon": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 184,
+      "separate": []
+    },
+    "FestivalVipBoard": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 196,
+      "separate": []
     }
   }
 }
