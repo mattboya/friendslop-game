@@ -19,7 +19,8 @@ namespace Festival.Core
         // A FindFriend interaction's target: the first friend's is "friend".
         const string SecondFriendTarget="friend_2";
         // Friends get lost at one of these: the first at the one the round's seed and the level's DealSeed pick, a second friend at
-        // either other one, along steps further on (TRIP-10: drawn from its own DealSeed-mixed stream, so the first no longer gives it away).
+        // either other one, 1 or 2 spots along from the first (TRIP-10: drawn from its own DealSeed-mixed stream, so the first no
+        // longer gives it away).
         static readonly WorldPoint[] FriendSpots={new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
         static WorldPoint FriendSpot(int seed,int along){var at=FriendSpots[((seed&int.MaxValue)%FriendSpots.Length+along)%FriendSpots.Length];return new WorldPoint(at.X,at.Z);}
 

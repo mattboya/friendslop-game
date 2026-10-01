@@ -137,18 +137,26 @@ public static class DealSecretTests
 
     // TRIP-10: the second lost friend was always at the spot after the first's, so finding one gave the other away. Now it is at
     // either of the other two spots, drawn from the level's secret: on two-friend nights at Palm Mirage, whichever spot the first
-    // friend is at, the second is at each of the other two on 35-65% of those nights.
+    // friend is at, the second is at each of the other two on 35-65% of those nights. And a client cannot work out which: its
+    // rebuild from the public seeds loses its friends one or two spots apart round the three, and once the host's first friend is
+    // found, stepping the same way from there lands on the host's second only about half the time (a second friend drawn from
+    // the public Seed alone would land every time).
     static void TheFirstFriendLeavesTheSecondAGuess()
     {
-        var pairs=new Dictionary<string,Dictionary<string,int>>();int nights=0;
+        var pairs=new Dictionary<string,Dictionary<string,int>>();int nights=0;var deals=new List<(string First,string Second,string RebuiltFirst,string RebuiltSecond)>();
         foreach(var level in new[]{1,3})for(int seed=0;seed<400;seed++)
         {
             var s=Start(seed,Festivals.PoloFestival,level,5,()=>Secret(seed)).State;Check(s.SecondFriend.Active,"setup: level "+level+", seed "+seed+": two friends are lost");nights++;
             string first=s.FriendPosition.X+","+s.FriendPosition.Z,second=s.SecondFriend.Position.X+","+s.SecondFriend.Position.Z;
             Check(first!=second,"level "+level+", seed "+seed+": the friends are lost at different spots");
             if(!pairs.ContainsKey(first))pairs[first]=new Dictionary<string,int>();pairs[first][second]=pairs[first].TryGetValue(second,out var c)?c+1:1;
+            var r=Start(seed,Festivals.PoloFestival,level,5,null).State;deals.Add((first,second,r.FriendPosition.X+","+r.FriendPosition.Z,r.SecondFriend.Position.X+","+r.SecondFriend.Position.Z));
         }
         Check(pairs.Count==3,"setup: the first friend is lost at each of the three spots, got "+pairs.Count);
+        // Round three spots, the step from a to b goes on from b to the third spot and from there back to a.
+        string Step(string a,string b,string from)=>from==a?b:from==b?pairs.Keys.First(k=>k!=a&&k!=b):a;
+        int guessed=deals.Count(d=>Step(d.RebuiltFirst,d.RebuiltSecond,d.First)==d.Second);
+        Check(guessed*100<=65*nights,"stepping from the host's first friend the way the client's rebuild steps finds the host's second on "+guessed+" of "+nights+" nights");
         foreach(var first in pairs)
         {
             int total=first.Value.Values.Sum();
