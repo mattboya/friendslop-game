@@ -7,7 +7,8 @@ namespace Festival.Core
     [Serializable] public sealed class CommandResult { public bool Accepted; public string Reason="", Id=""; public long Sequence; }
     [Serializable] public sealed class CommittedCommand { public string PlayerId="", Id=""; public CommandResult Result=new CommandResult(); }
     [Serializable] public sealed class ItemStack { public string ItemId=""; public int Count; }
-    [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId=""; public double RemainingSeconds, StartSeconds; public int Intensity; }
+    // TRIP-5: Substance is what the spinner's dose was (a catalog effect id, FestivalSimulation.Substances); "" on every other effect and in older snapshots.
+    [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId="", Substance=""; public double RemainingSeconds, StartSeconds; public int Intensity; }
     [Serializable] public sealed class PlayerState {
         public string Id="", Name="", Life="Alive", InteractionId="", DragTargetId="", CarryBodyId="", HeldOfferId="", EquippedItemId="", CampVisitId="", CampGag="";
         // DEBRIEF-1: the award names this player won at the last debrief, worn until the next level's Results.
@@ -56,7 +57,7 @@ namespace Festival.Core
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }
     // One debrief vote: PlayerId picked TargetId for award slot Award (an index into RoundState.ReviewAwards).
     [Serializable] public sealed class CampReviewVote { public string PlayerId="", TargetId=""; public int Award; }
-    [Serializable] public sealed class PlayerDose { public string PlayerId=""; public int Dose; }
+    [Serializable] public sealed class PlayerDose { public string PlayerId="", Substance=""; public int Dose; }
     [Serializable] public sealed class RoundState {
         // Schema 2 is festival weekends. A schema 1 round, saved before them, is still restored (FestivalSimulation.Restore).
         public const int CurrentSchemaVersion=2;
