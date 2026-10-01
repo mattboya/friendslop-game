@@ -11,7 +11,7 @@ namespace Festival.Tests
     {
         static RoundState Level(int level,string phase="Playing")=>new RoundState{LevelIndex=level,Phase=phase,DurationSeconds=Festivals.Level(0,level,0).DurationSeconds};
         static PlayerState Crew(RoundState s,string id,string name,string life="Alive"){var p=new PlayerState{Id=id,Name=name,Life=life};s.Players.Add(p);return p;}
-        static void Dose(RoundState s,string id,int dose)=>s.Doses.Add(new PlayerDose{PlayerId=id,Dose=dose});
+        static void Dose(RoundState s,string id,int dose,string substance="")=>s.Doses.Add(new PlayerDose{PlayerId=id,Dose=dose,Substance=substance});
         static NpcState Npc(RoundState s,string id,float x,float z){var n=new NpcState{Id=id,X=x,Z=z};s.Npcs.Add(n);return n;}
 
         // A real Day 1 for three, under way: the spinners picked the tripper and dealt their visions.
@@ -35,15 +35,18 @@ namespace Festival.Tests
         }
         static PlayerState Me(RoundState view,string id)=>view.Players.Find(p=>p.Id==id);
 
+        // TRIP-5: and what they took, as the substance wheel named it.
         [Test] public void EveryoneSeesWhoTripsAndOnHowManyDoses()
         {
-            var s=Level(0);Crew(s,"you","You");Crew(s,"sam","Sam");s.TripperId="sam";Dose(s,"sam",2);
-            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  2 DOSES"));
-            Assert.That(FestivalHudText.Tripping(s,"sam"),Is.EqualTo("YOU TRIP  •  2 DOSES"),"the tripper reads it too");
+            var s=Level(0);Crew(s,"you","You");Crew(s,"sam","Sam");s.TripperId="sam";Dose(s,"sam",2,"mushrooms");
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  2 DOSES  •  FUN GUYS"));
+            Assert.That(FestivalHudText.Tripping(s,"sam"),Is.EqualTo("YOU TRIP  •  2 DOSES  •  FUN GUYS"),"the tripper reads it too");
             s.Doses[0].Dose=1;
-            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  1 DOSE"));
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  1 DOSE  •  FUN GUYS"));
             s.Phase="Loading";
-            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  1 DOSE"),"shown from the moment the crew heads out");
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  1 DOSE  •  FUN GUYS"),"shown from the moment the crew heads out");
+            s.Doses[0].Substance="";
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  1 DOSE"),"a dose spun before the substance wheel names none");
             foreach(var phase in new[]{"Shopping","Spinning","Results","CampReview"})
             {
                 s.Phase=phase;
@@ -56,11 +59,11 @@ namespace Festival.Tests
         [Test] public void NightTwoListsEveryonesDose()
         {
             var s=Level(3);Crew(s,"you","You");Crew(s,"sam","Sam");Crew(s,"kim","Kim");s.TripperId="sam";
-            Dose(s,"you",2);Dose(s,"sam",4);Dose(s,"kim",1);
-            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  4 DOSES\nDOSED  YOU 2  •  KIM 1"));
-            foreach(var (id,name,dose) in new[]{("alex","Alex",3),("lee","Lee",2),("pat","Pat",1),("jo","Jo",4),("max","Max",1)}){Crew(s,id,name);Dose(s,id,dose);}
-            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  4 DOSES\nDOSED  YOU 2  •  KIM 1  •  ALEX 3\nLEE 2  •  PAT 1  •  JO 4\nMAX 1"),
-                "a crew of eight reads three doses to a line");
+            Dose(s,"you",2,"mushrooms");Dose(s,"sam",4,"lsd");Dose(s,"kim",1,"ketamine");
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  4 DOSES  •  TONGUE STAMPS\nDOSED  YOU 2 FUN GUYS  •  KIM 1 PONY DUST"),"each friend's substance shows beside their dose");
+            foreach(var (id,name,dose,took) in new[]{("alex","Alex",3,"ecstasy"),("lee","Lee",2,"weed"),("pat","Pat",1,"lsd"),("jo","Jo",4,"mushrooms"),("max","Max",1,"ketamine")}){Crew(s,id,name);Dose(s,id,dose,took);}
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("SAM TRIPS  •  4 DOSES  •  TONGUE STAMPS\nDOSED  YOU 2 FUN GUYS  •  KIM 1 PONY DUST\nALEX 3 ROLLY POLLIES  •  LEE 2 COUCH LOCK\nPAT 1 TONGUE STAMPS  •  JO 4 FUN GUYS\nMAX 1 PONY DUST"),
+                "a crew of eight reads two doses to a line");
             s.Players.Find(p=>p.Id=="max").Connected=false;
             Assert.That(FestivalHudText.Tripping(s,"you"),Does.Not.Contain("MAX"),"nobody lists a friend who left");
 
@@ -73,8 +76,8 @@ namespace Festival.Tests
         {
             // A spirit's view lists only spirits (FestivalSession.ViewFor): the living tripper is "a friend", the living's doses unlisted.
             var s=Level(3);Crew(s,"you","You","Spirit");Crew(s,"alex","Alex","Spirit");s.TripperId="sam";
-            Dose(s,"you",2);Dose(s,"sam",4);Dose(s,"alex",1);Dose(s,"kim",3);
-            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("A FRIEND TRIPS  •  4 DOSES\nDOSED  YOU 2  •  ALEX 1"));
+            Dose(s,"you",2,"weed");Dose(s,"sam",4,"ecstasy");Dose(s,"alex",1,"lsd");Dose(s,"kim",3,"mushrooms");
+            Assert.That(FestivalHudText.Tripping(s,"you"),Is.EqualTo("A FRIEND TRIPS  •  4 DOSES  •  ROLLY POLLIES\nDOSED  YOU 2 COUCH LOCK  •  ALEX 1 TONGUE STAMPS"));
         }
 
         [Test] public void TrustButVerifyShowsTheTripperOncePerLevel()

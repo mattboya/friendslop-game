@@ -74,12 +74,12 @@ namespace Festival.Tests
                     yield return null;
                 }
                 Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
-                // Pin the spin: who trips, on how many doses (the dose effect keeps the sim from re-picking).
-                void Trip(PlayerState who,int dose)
+                // Pin the spin: who trips, on how many doses of what (the dose effect keeps the sim from re-picking).
+                void Trip(PlayerState who,int dose,string substance="")
                 {
                     foreach(var p in sim.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
-                    who.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="hud_dose_"+who.Id,Intensity=dose,RemainingSeconds=600});
-                    sim.State.TripperId=who.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=who.Id,Dose=dose});
+                    who.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="hud_dose_"+who.Id,Intensity=dose,Substance=substance,RemainingSeconds=600});
+                    sim.State.TripperId=who.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=who.Id,Dose=dose,Substance=substance});
                 }
 
                 // You trip on two doses as Day 1 starts: the crew reads it, and you get the one hint for a while.
@@ -91,10 +91,10 @@ namespace Festival.Tests
                 sim.State.ElapsedSeconds=30;
                 yield return new WaitForSeconds(.6f);
                 Expect("day 1, you trip, 30 s in","Trust line","(hidden)");
-                // Sam trips on three: you read who, and the hint is not yours.
-                Trip(mate,3);sim.State.ElapsedSeconds=0;
+                // Sam trips on three Fun Guys: you read who, on what, and the hint is not yours.
+                Trip(mate,3,"mushrooms");sim.State.ElapsedSeconds=0;
                 yield return new WaitForSeconds(.6f);
-                Expect("day 1, Sam trips","Tripping","SAM TRIPS  •  3 DOSES");
+                Expect("day 1, Sam trips","Tripping","SAM TRIPS  •  3 DOSES  •  FUN GUYS");
                 Expect("day 1, Sam trips, level start","Trust line","(hidden)");
 
                 // Beside a festivalgoer you have a vision about: E checks by dancing, F by chatting.
@@ -178,11 +178,11 @@ namespace Festival.Tests
                 if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("tripper beside a busy vision: E or F starts a check ("+session.Message+")");
                 sim.Execute(mate.Id,new GameCommand{Id="hud_mate_stop",Kind="Cancel"});mate.X=30;mate.Z=0;
 
-                // Night 2 doses everyone: the crew reads every dose.
-                session.Command("Cancel");Trip(mate,3);sim.State.LevelIndex=3;sim.State.DurationSeconds=600;
-                sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=1});
+                // Night 2 doses everyone: the crew reads every dose, and what each friend took.
+                session.Command("Cancel");Trip(mate,3,"lsd");sim.State.LevelIndex=3;sim.State.DurationSeconds=600;
+                sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=1,Substance="ketamine"});
                 yield return new WaitForSeconds(.6f);
-                Expect("night 2","Tripping","SAM TRIPS  •  3 DOSES\nDOSED  YOU 1");
+                Expect("night 2","Tripping","SAM TRIPS  •  3 DOSES  •  TONGUE STAMPS\nDOSED  YOU 1 PONY DUST");
                 Fits("night 2","Tripping");
             }
             finally
@@ -201,8 +201,8 @@ namespace Festival.Tests
         private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat check card","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};
 
         // HUD-2 on Night 2 with a full crew of 8, the busiest the HUD gets: the tripper checks by chat while the everyone-home
-        // checklist lists all 8 (its lowest), the dose card lists everyone's dose (4 lines, pushing the notice down) and a
-        // notice is up. Laid out at 1920x1080, no card may cover another.
+        // checklist lists all 8 (its lowest), the dose card lists everyone's dose and substance (TRIP-5: two to a line, so 5
+        // lines, pushing the notice down) and a notice is up. Laid out at 1920x1080, no card may cover another or cut its text.
         [UnityTest]public IEnumerator NightTwoChatCheckCoversNoOtherCard()
         {
             var world=new GameObject("HUD night 2 world");world.AddComponent<FestivalWorld>();yield return null;
@@ -234,9 +234,11 @@ namespace Festival.Tests
                 // Night 2: you trip on four doses, the crew is dosed too and away from home.
                 sim.State.LevelIndex=3;sim.State.DurationSeconds=600;sim.State.ElapsedSeconds=30;
                 foreach(var p in sim.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
-                player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="hud_night2_dose",Intensity=4,RemainingSeconds=600});
-                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4});
-                for(int i=0;i<mates.Count;i++){sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=i%4+1});mates[i].X=-30+i*2;mates[i].Z=-30;}
+                player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="hud_night2_dose",Intensity=4,Substance="ecstasy",RemainingSeconds=600});
+                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="ecstasy"});
+                // The longest names on the wheel sit beside the longest friend's name.
+                var took=new[]{"lsd","mushrooms","ecstasy","ketamine","weed","lsd","ecstasy"};
+                for(int i=0;i<mates.Count;i++){sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=i%4+1,Substance=took[i]});mates[i].X=-30+i*2;mates[i].Z=-30;}
                 // Beside a festivalgoer you have a vision about, you check by chat, and a notice comes up meanwhile.
                 var seen=sim.State.Visions.Find(v=>v.NpcId!=""&&!v.Confirmed);Assert.That(seen,Is.Not.Null,"setup: the day deals visions about festivalgoers");
                 var npc=sim.State.Npcs.Find(n=>n.Id==seen.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);
@@ -258,8 +260,12 @@ namespace Festival.Tests
                 }
                 foreach(var card in new[]{"Chat check card","Crew card","Session notice","Tripper card"})if(!shown.Exists(c=>c.name==card))failures.Add("setup: the "+card+" is hidden");
                 string roster="",tripping="";
-                foreach(var text in hud.GetComponentsInChildren<Text>(false)){if(text.name=="Roster")roster=text.text;if(text.name=="Tripping")tripping=text.text;}
-                if(roster.Split('\n').Length!=9||tripping.Split('\n').Length!=4)failures.Add("setup: expected the 9-line checklist and 4-line dose card, got \""+roster.Replace("\n"," | ")+"\" and \""+tripping.Replace("\n"," | ")+"\"");
+                foreach(var text in hud.GetComponentsInChildren<Text>(false))
+                {
+                    if(text.name=="Roster")roster=text.text;if(text.name!="Tripping")continue;tripping=text.text;
+                    if(text.cachedTextGenerator.characterCountVisible<tripping.Length)failures.Add("the dose card "+text.rectTransform.rect.size+" cuts \""+tripping.Replace("\n"," | ")+"\"");
+                }
+                if(roster.Split('\n').Length!=9||tripping.Split('\n').Length!=5)failures.Add("setup: expected the 9-line checklist and 5-line dose card, got \""+roster.Replace("\n"," | ")+"\" and \""+tripping.Replace("\n"," | ")+"\"");
                 for(int i=0;i<shown.Count;i++)for(int j=i+1;j<shown.Count;j++)
                 {
                     var a=shown[i].rect;var b=shown[j].rect;if(!a.Overlaps(b))continue;

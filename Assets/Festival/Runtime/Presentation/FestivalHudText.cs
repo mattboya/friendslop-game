@@ -218,23 +218,24 @@ namespace Festival.Presentation
         internal static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
 
         /// <summary>
-        /// Who trips this level and on how many doses, from the public spin result, while the crew is out (the spinner names them
-        /// before that, and camp still holds the last level's). Night 2 doses everyone, so the rest of the crew's doses follow,
-        /// three to a line. A spirit's view lists only spirits: a living tripper is "A FRIEND" and the living's doses go unlisted.
+        /// Who trips this level, on how many doses and of what (TRIP-5's substance wheel), from the public spin result, while the crew
+        /// is out (the spinner names them before that, and camp still holds the last level's). Night 2 doses everyone, so the rest of
+        /// the crew's doses and substances follow, two to a line. A spirit's view lists only spirits: a living tripper is "A FRIEND"
+        /// and the living's doses go unlisted. A dose spun before the substance wheel names no substance.
         /// </summary>
         public static string Tripping(RoundState s,string localId)
         {
             if(s.TripperId==""||s.Phase!="Loading"&&s.Phase!="Playing")return "";
-            int dose=FestivalSimulation.TripperDose(s);
-            string text=(s.TripperId==localId?"YOU TRIP":(s.Players.Find(p=>p.Id==s.TripperId)?.Name.ToUpperInvariant()??"A FRIEND")+" TRIPS")+Dot+dose+(dose==1?" DOSE":" DOSES");
+            int dose=FestivalSimulation.TripperDose(s);string took=FestivalSpinner.SubstanceName(s.Doses.Find(d=>d.PlayerId==s.TripperId)?.Substance);
+            string text=(s.TripperId==localId?"YOU TRIP":(s.Players.Find(p=>p.Id==s.TripperId)?.Name.ToUpperInvariant()??"A FRIEND")+" TRIPS")+Dot+dose+(dose==1?" DOSE":" DOSES")+(took==""?"":Dot+took);
             if(s.LevelIndex!=Festivals.LevelCount-1)return text;
             var rest=new List<string>();
             foreach(var d in s.Doses)
             {
-                var p=s.Players.Find(x=>x.Id==d.PlayerId);
-                if(p!=null&&p.Connected&&p.Id!=s.TripperId)rest.Add((p.Id==localId?"YOU":p.Name.ToUpperInvariant())+" "+d.Dose);
+                var p=s.Players.Find(x=>x.Id==d.PlayerId);string theirs=FestivalSpinner.SubstanceName(d.Substance);
+                if(p!=null&&p.Connected&&p.Id!=s.TripperId)rest.Add((p.Id==localId?"YOU":p.Name.ToUpperInvariant())+" "+d.Dose+(theirs==""?"":" "+theirs));
             }
-            for(int i=0;i<rest.Count;i+=3)text+="\n"+(i==0?"DOSED  ":"")+string.Join(Dot,rest.GetRange(i,Math.Min(3,rest.Count-i)));
+            for(int i=0;i<rest.Count;i+=2)text+="\n"+(i==0?"DOSED  ":"")+string.Join(Dot,rest.GetRange(i,Math.Min(2,rest.Count-i)));
             return text;
         }
 
