@@ -147,7 +147,7 @@ public static class PoloTwistTests
     }
     // p0 steps from (x,22) to (to,22) in a tenth of a second.
     static bool Step(FestivalSimulation s,float x,float to){Place(s,0,x,22);return s.TryMove("p0",to,22,0,.1);}
-    // p sells a Prism tab to n, hitting every note on the beat; returns the cash it made.
+    // p sells a Tongue Stamp to n, hitting every note on the beat; returns the cash it made.
     static int Sell(FestivalSimulation s,PlayerState p,NpcState n)
     {
         p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int before=p.Cash;

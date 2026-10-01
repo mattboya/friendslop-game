@@ -14,7 +14,7 @@ namespace Festival.Tests
     public sealed class HudMoneyPlayTests:FestivalPlayModeTest
     {
         // HUD-3 with PLAYA-1: on Ember Playa the running HUD never shows a dollar. Hosts a real round as the crew member who counts
-        // in friendship bracelets, the longest odd object: at camp they eye the Prism tabs on the shelf, pick them up, show them to
+        // in friendship bracelets, the longest odd object: at camp they eye the Tongue Stamps on the shelf, pick them up, show them to
         // the seller and pay; out on Day 1 they read their pocket, the stash, the sales and the quota with security closing in,
         // and try to leave early, which the host refuses in dollars. Labels are laid out on a 1920x1080 canvas and must draw
         // whole, and the shelf's price tags must stay within their slot.
@@ -55,14 +55,14 @@ namespace Festival.Tests
                 // The weekend is at Ember Playa, and you are the crew member who counts in friendship bracelets.
                 sim.State.FestivalIndex=Festivals.PlayaFestival;player.Ordinal=3;
                 Assert.That(Festivals.CurrencyName(Festivals.PlayaFestival,3,2),Is.EqualTo("2 friendship bracelets"),"setup: the longest odd object");
-                int shelf=sim.State.VendorOffers.IndexOf("stock_lsd");Assert.That(shelf,Is.GreaterThanOrEqualTo(0),"setup: Prism tabs are on the shelf");
+                int shelf=sim.State.VendorOffers.IndexOf("stock_lsd");Assert.That(shelf,Is.GreaterThanOrEqualTo(0),"setup: Tongue Stamps are on the shelf");
 
-                // At the shelf, eyeing the Prism tabs.
+                // At the shelf, eyeing the Tongue Stamps.
                 var spot=Catalog.ShopPoint(true,shelf);player.X=spot.X;player.Z=6.3f;
                 typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,0f);
                 typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Atan2((shelf<4?1.17f:2.05f)-1.65f,9f-6.3f)*Mathf.Rad2Deg);
                 yield return new WaitForSeconds(.5f);
-                Expect("at the shelf","Prompt","PICK UP PRISM TABS  •  5 FRIENDSHIP BRACELETS  •  Sell for up to 10 friendship bracelets or take: 60s of warped cues and slower, drifting steps.");
+                Expect("at the shelf","Prompt","PICK UP TONGUE STAMPS  •  5 FRIENDSHIP BRACELETS  •  Sell for up to 10 friendship bracelets or take: 60s of warped cues and slower, drifting steps.");
                 Fits("at the shelf","Prompt");NoDollars("at the shelf");
                 // The price tags on both shelves, each lettered within its painted card.
                 int tags=0;
@@ -78,17 +78,17 @@ namespace Festival.Tests
 
                 // Picked up, shown to the seller, paid.
                 PressE();yield return new WaitForSeconds(.4f);
-                Assert.That(player.HeldOfferId,Is.EqualTo("stock_lsd"),"setup: E picks up the Prism tabs ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                Assert.That(player.HeldOfferId,Is.EqualTo("stock_lsd"),"setup: E picks up the Tongue Stamps ("+session.Message+"), after:\n"+string.Join("\n",failures));
                 player.X=0;player.Z=7;yield return new WaitForSeconds(.4f);
                 Expect("holding them","Held item price","5 FRIENDSHIP BRACELETS");
                 Expect("holding them","Held item details","Sell for up to 10 friendship bracelets or take: 60s of warped cues and slower, drifting steps.");
                 Fits("holding them","Held item title","Held item price","Held item details");
                 PressE();yield return new WaitForSeconds(.4f);
-                Expect("at the counter","Handoff price","E  PAY 5 FRIENDSHIP BRACELETS  •  PRISM TABS    G CANCEL");
-                Expect("at the counter","Prompt","PAY 5 FRIENDSHIP BRACELETS FOR PRISM TABS");
+                Expect("at the counter","Handoff price","E  PAY 5 FRIENDSHIP BRACELETS  •  TONGUE STAMPS    G CANCEL");
+                Expect("at the counter","Prompt","PAY 5 FRIENDSHIP BRACELETS FOR TONGUE STAMPS");
                 Fits("at the counter","Handoff price","Prompt","Held item price");NoDollars("at the counter");
                 PressE();yield return new WaitForSeconds(.4f);
-                Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: E pays for the Prism tabs ("+session.Message+")");
+                Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: E pays for the Tongue Stamps ("+session.Message+")");
                 Fits("paid","Vitals");NoDollars("paid");
 
                 // Out on Day 1.

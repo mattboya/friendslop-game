@@ -68,7 +68,7 @@ public static class MissionTests
         Check(Act(game,solo.Id,"MapReady").Accepted&&game.State.Phase=="Playing","solo enters festival");
         game.State.Npcs.Clear();game.State.LevelIndex=1;solo.X=-18;solo.Z=-22;
         Check(FestivalSimulation.VisibleVisions(game.State,solo.Id).Count>0,"the solo tripper sees the visions");
-        Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Moon caps bought at camp");
+        Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Fun Guys bought at camp");
         // Two samples a second apart: the drift is a slow sine, so one sample can land on a zero crossing.
         Check(Intoxication.MovementMultiplier(solo)<1&&Math.Abs(Intoxication.LateralDrift(solo,1))+Math.Abs(Intoxication.LateralDrift(solo,2))>.01,"intoxication changes walking");
         game.State.Npcs.Add(new NpcState{Id="dancer",X=solo.X,Z=solo.Z});

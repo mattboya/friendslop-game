@@ -36,11 +36,11 @@ namespace Festival.Tests
                 var mate=sim.AddPlayer("theme_mate","Mate");mate.Ready=true;
                 player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});
 
-                // Camp: a friend beside you offers Moon caps, and you can hand them your Prism tabs.
+                // Camp: a friend beside you offers Fun Guys, and you can hand them your Tongue Stamps.
                 mate.X=player.X+1;mate.Z=player.Z;
                 sim.State.Transfers.Add(new TransferOffer{Id="theme_camp_offer",FromId=mate.Id,ToId=player.Id,ItemId="stock_mushrooms",Amount=1,ExpiresAt=sim.State.SimulationSeconds+600});
                 yield return new WaitForSeconds(.6f);
-                Check(hud,failures,"camp",null,null,"Accept Moon caps ×1","Offer Prism tabs to Mate");
+                Check(hud,failures,"camp",null,null,"Accept Fun Guys ×1","Offer Tongue Stamps to Mate");
 
                 player.X=0;player.Z=19;session.Command("Ready");
                 deadline=Time.realtimeSinceStartup+90;
@@ -52,21 +52,21 @@ namespace Festival.Tests
                 }
                 Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
 
-                // Festival: take a Prism tab, then a dropped tab lies at your feet with a festivalgoer to sell to.
+                // Festival: take a Tongue Stamp, then a dropped stamp lies at your feet with a festivalgoer to sell to.
                 sim.State.Npcs.Clear();mate.X=player.X+30;mate.Z=player.Z;
                 session.Command("Use",item:"stock_lsd");
-                Assert.That(player.Effects.Exists(e=>e.Id=="lsd"),"took a Prism tab: "+session.Message);
+                Assert.That(player.Effects.Exists(e=>e.Id=="lsd"),"took a Tongue Stamp: "+session.Message);
                 sim.State.Drops.Add(new DropState{Id="theme_drop",ItemId="stock_lsd",Count=1,X=player.X,Z=player.Z});
                 sim.State.Npcs.Add(new NpcState{Id="theme_goer",Kind="Wook",X=player.X,Z=player.Z+1,Yaw=180,CanTalk=true});
                 yield return new WaitForSeconds(.8f);
-                Check(hud,failures,"festival","Pick up Prism tabs","PRISM","Pick up Prism tabs","Offer Prism tabs");
+                Check(hud,failures,"festival","Pick up Tongue Stamps","TONGUE STAMPS","Pick up Tongue Stamps","Offer Tongue Stamps");
 
-                // Then a shared stash holding Moon caps, and the friend beside you offering Moon caps again.
+                // Then a shared stash holding Fun Guys, and the friend beside you offering Fun Guys again.
                 sim.State.Stashes.Add(new StashState{Id="theme_stash",X=player.X,Z=player.Z,Items=new List<ItemStack>{new ItemStack{ItemId="stock_mushrooms",Count=1}}});
                 mate.X=player.X+1;mate.Z=player.Z;
                 sim.State.Transfers.Add(new TransferOffer{Id="theme_offer",FromId=mate.Id,ToId=player.Id,ItemId="stock_mushrooms",Amount=1,ExpiresAt=sim.State.SimulationSeconds+600});
                 yield return new WaitForSeconds(.8f);
-                Check(hud,failures,"festival crew","Accept Moon caps ×1",null,"Accept Moon caps ×1","Deposit Prism tabs","Withdraw Moon caps","Offer Prism tabs to Mate");
+                Check(hud,failures,"festival crew","Accept Fun Guys ×1",null,"Accept Fun Guys ×1","Deposit Tongue Stamps","Withdraw Fun Guys","Offer Tongue Stamps to Mate");
             }
             finally
             {
@@ -80,7 +80,7 @@ namespace Festival.Tests
 
         // A dropped item floats a world-space name tag that every player reads from 1.1 m to 7 m away. The tag must show the
         // display name while the drop keeps its own model (the id picks the model; the display name would give a grey cube).
-        [UnityTest]public IEnumerator DroppedPrismTabsFloatTheirDisplayName()
+        [UnityTest]public IEnumerator DroppedTongueStampsFloatTheirDisplayName()
         {
             var world=new GameObject("Theme drop world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("Theme drop HUD");
@@ -101,19 +101,19 @@ namespace Festival.Tests
                 while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
 
-                // Drop a Prism tab (G), then step 3 m away, where its tag shows.
+                // Drop a Tongue Stamp (G), then step 3 m away, where its tag shows.
                 sim.State.Npcs.Clear();
                 session.Command("Drop",item:"stock_lsd");
                 yield return new WaitForSeconds(.4f);
-                Assert.That(sim.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),"dropped a Prism tab: "+session.Message);
+                Assert.That(sim.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),"dropped a Tongue Stamp: "+session.Message);
                 player.X+=3;
                 yield return new WaitForSeconds(1f);
                 TextMesh tag=null;
                 foreach(Transform actor in GameObject.Find("Authoritative actor presentation").transform)
                     if(actor.gameObject.activeSelf&&actor.name.StartsWith("FestivalStockPrism"))tag=actor.Find("Label/Text").GetComponent<TextMesh>();
-                if(tag==null)failures.Add("no dropped tab with the FestivalStockPrism model");
-                else if(!tag.gameObject.activeInHierarchy||tag.text!="Prism tabs")failures.Add("the dropped tab's tag reads \""+tag.text+"\" (shown: "+tag.gameObject.activeInHierarchy+"), expected \"Prism tabs\"");
-                Check(hud,failures,"dropped tab",null,null);
+                if(tag==null)failures.Add("no dropped stamp with the FestivalStockPrism model");
+                else if(!tag.gameObject.activeInHierarchy||tag.text!="Tongue Stamps")failures.Add("the dropped stamp's tag reads \""+tag.text+"\" (shown: "+tag.gameObject.activeInHierarchy+"), expected \"Tongue Stamps\"");
+                Check(hud,failures,"dropped stamp",null,null);
             }
             finally
             {
@@ -122,7 +122,7 @@ namespace Festival.Tests
                 Object.Destroy(hud);Object.Destroy(world);
             }
             yield return null;
-            Assert.That(failures,Is.Empty,"text a player reads around a dropped tab:\n"+string.Join("\n",failures));
+            Assert.That(failures,Is.Empty,"text a player reads around a dropped stamp:\n"+string.Join("\n",failures));
         }
 
         // The native two-client smoke checks each side's handoff button with DevelopmentSmoke.ShowsHandoffAction. THEME-1 made

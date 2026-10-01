@@ -11,8 +11,12 @@ public static class ThemeTests
     private static void Check(bool condition,string message) { if(!condition) throw new Exception("Theme: "+message); }
     // THEME-1's real-drug words, matched in any case and inside other words too, so "Shrooms" or "drugstore" also fail.
     private static readonly string[] Banned={"lsd","acid","mushroom","shroom","ecstasy","molly","mdma","ketamine","weed","marijuana","cannabis","cocaine","drug"};
-    // Wave doc, L7 Theme: internal effect id and the name a player reads.
-    private static readonly string[][] EffectNames={new[]{"lsd","Prism"},new[]{"mushrooms","Moon"},new[]{"ecstasy","Hug Drops"},new[]{"ketamine","Couch Lock"},new[]{"alcohol","Shot"},new[]{"weed","Snack Leaf"}};
+    // THEME-2: internal effect id and the name a player reads (the ids never change, so snapshots and models keep working).
+    private static readonly string[][] EffectNames={new[]{"lsd","Tongue Stamps"},new[]{"mushrooms","Fun Guys"},new[]{"ecstasy","Rolly Pollies"},new[]{"ketamine","Pony Dust"},new[]{"alcohol","Shot"},new[]{"weed",WeedName}};
+    // THEME-1's stand-ins that THEME-2 retired, matched like the real-drug words. "Couch Lock" moved from ketamine to weed, so
+    // only the weed effect's own name may read it. Never bare "moon": the MOON totem, its map pin and MOONLIT DISCO stay.
+    private static readonly string[] Retired={"prism","moon cap","hug drop","snack leaf","couch lock"};
+    private const string WeedName="Couch Lock";
     // Every source of HUD text: FestivalHud, any FestivalHud* helper it moves strings into, and the Core guidance lines it shows. Paths are from the repo root, the runner's working directory.
     private static List<string> HudSources()
     {
@@ -23,7 +27,10 @@ public static class ThemeTests
     public static void Run()
     {
         foreach(var pair in EffectNames) Check(Catalog.FindEffect(pair[0])?.Name==pair[1],"effect "+pair[0]+" reads as "+pair[1]);
-        Check(Catalog.EffectsLine(new List<ActiveEffect>{new ActiveEffect{Id="lsd",RemainingSeconds=42.4},new ActiveEffect{Id="mushrooms",RemainingSeconds=9.6}})=="Prism 42s, Moon 10s","the HUD's effects line uses display names, got "+Catalog.EffectsLine(new List<ActiveEffect>{new ActiveEffect{Id="lsd",RemainingSeconds=42.4},new ActiveEffect{Id="mushrooms",RemainingSeconds=9.6}}));
+        // The stock a player buys, sells and drops, and its short name on the shelf tags.
+        foreach(var item in new[]{new[]{"stock_lsd","Tongue Stamps","TONGUE STAMPS"},new[]{"stock_mushrooms","Fun Guys","FUN GUYS"}})
+            Check(Catalog.FindItem(item[0])?.Name==item[1]&&Catalog.ShopTag(item[0])==item[2],"item "+item[0]+" reads as "+item[1]+" and tags as "+item[2]+", got "+Catalog.FindItem(item[0])?.Name+" / "+Catalog.ShopTag(item[0]));
+        Check(Catalog.EffectsLine(new List<ActiveEffect>{new ActiveEffect{Id="lsd",RemainingSeconds=42.4},new ActiveEffect{Id="mushrooms",RemainingSeconds=9.6}})=="Tongue Stamps 42s, Fun Guys 10s","the HUD's effects line uses display names, got "+Catalog.EffectsLine(new List<ActiveEffect>{new ActiveEffect{Id="lsd",RemainingSeconds=42.4},new ActiveEffect{Id="mushrooms",RemainingSeconds=9.6}}));
         Check(Catalog.EffectsLine(new List<ActiveEffect>())=="clear"&&Catalog.EffectsLine(null)=="clear","no effects reads as clear");
         Check(Catalog.EffectsLine(new List<ActiveEffect>{new ActiveEffect{Id="dose",RemainingSeconds=5}})=="dose 5s","an effect with no catalog entry falls back to its id");
 
@@ -34,7 +41,7 @@ public static class ThemeTests
         int before=texts.Count;
         foreach(var field in typeof(DialogueGrammar).GetFields(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)) Collect(field.GetValue(null),texts);
         Check(texts.Count-before>=400,"every DialogueGrammar pool is read, got "+(texts.Count-before)+" strings");
-        foreach(var text in texts) Check(Offence(text)==null,"real-drug word '"+Offence(text)+"' in: "+text);
+        foreach(var text in texts) Check(Offence(text)==null,"real-drug or retired word '"+Offence(text)+"' in: "+text);
 
         // Internal ids may stay as they are, so a literal that is exactly a catalog id (e.Id=="lsd") is code, not text.
         // Ceiling: a label that is exactly an id, or an id joined into a label at runtime, passes this scan. The PlayMode
@@ -46,17 +53,22 @@ public static class ThemeTests
         foreach(var path in sources) foreach(var literal in Literals(File.ReadAllText(path)))
         {
             literals++;
-            if(!ids.Contains(literal)) Check(Offence(literal)==null,"real-drug word '"+Offence(literal)+"' in "+path+": \""+literal+"\"");
+            if(!ids.Contains(literal)) Check(Offence(literal)==null,"real-drug or retired word '"+Offence(literal)+"' in "+path+": \""+literal+"\"");
         }
         Check(literals>=300,"HUD string literals are read, got "+literals);
         // The scanner itself: it finds a real word in text, and skips comments, char literals and escapes.
         var sample=Literals("a=\"Weed 5s\"; // \"lsd\"\n/* \"acid\" */ c='\"'; d=@\"say \"\"hi\"\"\"; e=\"x\\\"y\";");
         Check(string.Join("|",sample)=="Weed 5s|say \"hi\"|x y"&&Offence(sample[0])=="weed","the literal scanner reads strings only, got "+string.Join("|",sample));
+        // Retired names fail in any case and inside a line; only the weed effect's own name may read "Couch Lock".
+        Check(Offence("PRISM 42S")=="prism"&&Offence("one Moon cap short")=="moon cap"&&Offence("a Hug Drop")=="hug drop"&&Offence("Snack Leaf 9s")=="snack leaf","the scanner finds retired names");
+        Check(Offence(WeedName)==null&&Offence("Got Couch Lock?")=="couch lock"&&Offence("MOONLIT DISCO")==null,"only the weed effect is Couch Lock, and bare moon stays");
     }
     private static string Offence(string text)
     {
         string lower=(text??"").ToLowerInvariant();
         foreach(var word in Banned) if(lower.Contains(word)) return word;
+        if(text==WeedName) return null;
+        foreach(var word in Retired) if(lower.Contains(word)) return word;
         return null;
     }
     private static void Collect(object value,List<string> into)

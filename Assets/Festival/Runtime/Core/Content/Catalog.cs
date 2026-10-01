@@ -25,8 +25,8 @@ namespace Festival.Core
         public const float StageTakeoverStartRange=1.25f;
         public static readonly ItemDefinition[] Items = {
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
-            Item("stock_lsd", "Prism tabs", "Sell for up to $10 or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
-            Item("stock_mushrooms", "Moon caps", "Sell for up to $10 or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
+            Item("stock_lsd", "Tongue Stamps", "Sell for up to $10 or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
+            Item("stock_mushrooms", "Fun Guys", "Sell for up to $10 or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
             Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
             Item("confetti", "Confetti cannon", "Redirect nearby idle or questioning wooks for 4 seconds; cannot stop a swarm.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
             Item("merch_bag", "Official merch bag", "Hide stock from casual inspection; witnessed sales and searches still count.",5,1,"Equipment","Passive","Self",0,0,0,false),
@@ -40,12 +40,12 @@ namespace Festival.Core
             Item("vip_wristband", "VIP wristband", "Gets you past Palm Mirage's VIP ropes, where buyers pay double.",15,1,"Access","Passive","Self",0,0,0,false)
         };
         public static readonly EffectDefinition[] Effects = {
-            Effect("lsd","Prism",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),
-            Effect("mushrooms","Moon",2,true,"Gentle curved paths and separate afterimages; fixed receptors."),
-            Effect("ecstasy","Hug Drops",1,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
-            Effect("ketamine","Couch Lock",3,false,"Longer visibility lead; unchanged hit times."),
+            Effect("lsd","Tongue Stamps",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),
+            Effect("mushrooms","Fun Guys",2,true,"Gentle curved paths and separate afterimages; fixed receptors."),
+            Effect("ecstasy","Rolly Pollies",1,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
+            Effect("ketamine","Pony Dust",3,false,"Longer visibility lead; unchanged hit times."),
             Effect("alcohol","Shot",2,false,"Spinning notes converge at fixed receptors; optional camera roll off."),
-            Effect("weed","Snack Leaf",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8)
+            Effect("weed","Couch Lock",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8)
         };
         public static ItemDefinition FindItem(string id) { foreach(var x in Items) if(x.Id==id) return x; return null; }
         public static EffectDefinition FindEffect(string id) { foreach(var x in Effects) if(x.Id==id) return x; return null; }
@@ -56,8 +56,6 @@ namespace Festival.Core
         {
             if(id=="medical_voucher")return "MED VOUCHER";
             if(id=="merch_bag")return "MERCH BAG";
-            if(id=="stock_lsd")return "PRISM TABS";
-            if(id=="stock_mushrooms")return "MOON CAPS";
             if(id=="poi_practice")return "PRACTICE POI";
             if(id=="poi_led")return "LED POI";
             return FindItem(id)?.Name.ToUpperInvariant()??id.ToUpperInvariant();

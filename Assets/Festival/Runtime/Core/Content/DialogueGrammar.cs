@@ -7,7 +7,7 @@ namespace Festival.Core
     // A chat is an opener (persona), three questions the tripper asks (small talk, the sales pitch, the lost friend)
     // and one answer to each: a persona interjection plus a line for the NPC's role. A line tagged "0:" is
     // Palm Mirage only and "1:" is Ember Playa only; untagged lines suit both. {ground} names the festival's
-    // grounds and {where} a landmark on its map. Only fictional goods (Prism tabs, Moon caps) are ever named.
+    // grounds and {where} a landmark on its map. Only fictional goods (Tongue Stamps, Fun Guys) are ever named.
     public static class DialogueGrammar
     {
         public static readonly string[] Roles={"Buyer","Narc","Regular","ClueHolder"};
@@ -152,21 +152,21 @@ namespace Festival.Core
                 "1:How long have you been on the playa? Is it going well?"},
             new[]{ // The sales pitch
                 "Are you, uh, in the market for anything sparkly?",
-                "Would a Moon cap improve your evening at all?",
+                "Would a Fun Guy improve your evening at all?",
                 "What would you pay for a very good mood?",
                 "Do you like colors? Like, more colors?",
-                "My friend has extra Prism tabs and not enough pockets. Any interest?",
+                "My friend has extra Tongue Stamps and not enough pockets. Any interest?",
                 "Is this a good spot to talk about snacks? The special kind?",
                 "Quick question: buyer, or just a very nice person?",
-                "I've got Prism tabs. You've got a face that says 'maybe'. Well?",
-                "If someone had Moon caps, would you be someone who wants Moon caps?",
+                "I've got Tongue Stamps. You've got a face that says 'maybe'. Well?",
+                "If someone had Fun Guys, would you be someone who wants Fun Guys?",
                 "Can I interest you in a small, colorful business opportunity?",
                 "0:Want something stronger than that iced matcha?",
-                "0:Does your VIP package include Moon caps? Because mine could.",
+                "0:Does your VIP package include Fun Guys? Because mine could.",
                 "0:Can I interest you in a little pre-headliner pick-me-up?",
-                "1:Would you accept a Prism tab as a gift? A gift with a price tag?",
+                "1:Would you accept a Tongue Stamp as a gift? A gift with a price tag?",
                 "1:I know it's a gifting economy, but is it also a selling economy?",
-                "1:Is anyone on your art car shopping for Moon caps?"},
+                "1:Is anyone on your art car shopping for Fun Guys?"},
             new[]{ // The lost friend
                 "Have you seen my friend? Lost, confused, smells like sunscreen.",
                 "I'm looking for someone about this tall with a lot of opinions. Seen them?",
@@ -196,16 +196,16 @@ namespace Festival.Core
         private static readonly string[][][] Answers={
             new[]{ // Buyer: keen, discreet, a little desperate.
                 new[]{
-                    "Good, but it could be more prismatic, if you catch my drift.",
-                    "Honestly? I'm one Moon cap short of a perfect weekend.",
+                    "Good, but it still needs a stamp of approval, if you catch my drift.",
+                    "Honestly? I'm one Fun Guy short of a perfect weekend.",
                     "I'm here for the music. And a small, colorful purchase.",
                     "Great! My wallet's full and my pockets are tragically empty.",
                     "I budgeted for merch and I am not buying merch.",
                     "Better, if someone around here sells what I think they sell.",
                     "I've been looking for a friendly salesperson for three stages now.",
-                    "Fine. Finer with a Prism tab or two.",
+                    "Fine. Finer with a Tongue Stamp or two.",
                     "Good. Ask me the next question. Ask me the business question.",
-                    "Great, but my evening is missing a certain moon-shaped something.",
+                    "Great, but my evening is missing a Fun Guy. Not a guy. A Fun Guy.",
                     "0:I skipped the iced matcha to save room in my budget for something better.",
                     "0:I've got VIP money and general admission feelings.",
                     "0:I promised myself something fun before the headliner. Clock's ticking.",
@@ -216,10 +216,10 @@ namespace Festival.Core
                     "Yes. Quietly yes. Enthusiastically quietly yes.",
                     "I have exact change and zero follow-up questions.",
                     "Keep your voice down and your prices reasonable.",
-                    "Is that a Prism tab in your pocket? Please say it's a Prism tab.",
+                    "Is that a Tongue Stamp in your pocket? Please say it's a Tongue Stamp.",
                     "Wonderful. I've been rehearsing a casual reaction all day. Oh. Neat.",
                     "Name your price. Now name a slightly lower price.",
-                    "I'm a Moon cap person, but I'm open to a Prism conversion.",
+                    "I'm a Fun Guys loyalist, but I'd start a stamp collection for you.",
                     "Oh, thank goodness. I almost asked a cop.",
                     "Yes, but act natural. More natural. Less natural. Perfect.",
                     "I've been waiting all day for someone to ask me that exact question.",
@@ -232,9 +232,9 @@ namespace Festival.Core
                 new[]{
                     "No idea, but if you find them, bring the extras back here.",
                     "Haven't seen anyone. I've been busy looking for a seller.",
-                    "Not a clue. Are they the one holding the Moon caps? Because I'll help look.",
+                    "Not a clue. Are they the one holding the Fun Guys? Because I'll help look.",
                     "I haven't looked at a face in hours. I've been scanning pockets.",
-                    "Sorry. But there's a finder's fee if they turn up with Prism tabs.",
+                    "Sorry. But there's a finder's fee if they turn up with Tongue Stamps.",
                     "Nope. Everyone here looks lost. Nobody looks like they're selling.",
                     "No, but I'll wait right here in case they come back with inventory.",
                     "I only notice people with business energy. Does your friend have business energy?",
@@ -244,7 +244,7 @@ namespace Festival.Core
                     "0:Try the VIP side. Everyone over there has lost something and bought something.",
                     "0:No, but everyone at the iced matcha cart is shopping. Just saying.",
                     "1:Out here? Everyone's lost. Few are selling. You're both, apparently.",
-                    "1:Nope. I've been chasing an art car with a rumor of Moon caps on it.",
+                    "1:Nope. I've been chasing an art car with a rumor of Fun Guys on it.",
                     "1:I can't see past the dust, but I can smell a sale. Is that you?"}},
             new[]{ // Narc: an undercover cop doing an impression of a festival-goer. Every line carries a tell.
                 new[]{
@@ -383,7 +383,7 @@ namespace Festival.Core
                     "0:No thanks. Your friend offered me one by the VIP fence, then wandered off.",
                     "0:Save them for your friend. They looked like they needed a treat and a map.",
                     "0:I'm just here for the headliner. But I saw someone who looked like you, only lost.",
-                    "1:No, but your friend gifted me a Moon cap and wandered into the dust.",
+                    "1:No, but your friend gifted me a Fun Guy and wandered into the dust.",
                     "1:I don't need one. I need you to find your friend before the Man burns.",
                     "1:No thanks, I'm gifting tonight, not buying. Your friend tried gifting too. Mostly confusion."},
                 new[]{

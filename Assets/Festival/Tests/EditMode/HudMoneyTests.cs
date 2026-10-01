@@ -35,12 +35,12 @@ namespace Festival.Tests
         {
             // The host's rules write money as "$5": a purchase, a refused Extract, a paid release, an item's description.
             var playa=Day(1);var sam=Crew(playa,"sam",1);
-            Assert.That(FestivalHudText.MoneyText(playa,sam,"Prism tabs bought for $5"),Is.EqualTo("Prism tabs bought for 5 ramen packets"));
+            Assert.That(FestivalHudText.MoneyText(playa,sam,"Tongue Stamps bought for $5"),Is.EqualTo("Tongue Stamps bought for 5 ramen packets"));
             Assert.That(FestivalHudText.MoneyText(playa,sam,Catalog.FindItem("stock_lsd").Description),Does.StartWith("Sell for up to 10 ramen packets or take"));
             Assert.That(FestivalHudText.MoneyText(playa,sam,"Release: $10 at holding desk, $1 tip"),Is.EqualTo("Release: 10 ramen packets at holding desk, 1 ramen packet tip"),"every amount in a line");
             Assert.That(FestivalHudText.MoneyText(playa,sam,"Inside the tent"),Is.EqualTo("Inside the tent"));
             var palm=Day(0);var you=Crew(palm,"you",0);
-            Assert.That(FestivalHudText.MoneyText(palm,you,"Prism tabs bought for $5"),Is.EqualTo("Prism tabs bought for $5"),"dollars stay dollars at Palm Mirage");
+            Assert.That(FestivalHudText.MoneyText(palm,you,"Tongue Stamps bought for $5"),Is.EqualTo("Tongue Stamps bought for $5"),"dollars stay dollars at Palm Mirage");
         }
 
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()
