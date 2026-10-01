@@ -48,8 +48,10 @@ namespace Festival.Tests
                     yield return null;
                 }
                 Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
-                // Sober, with empty hands, among the crowd's chatty festivalgoers; Sam trips at the way back to camp.
-                sim.State.TripperId=mate.Id;mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;
+                // Sober, with empty hands, among the crowd's chatty festivalgoers; Sam trips at the way back to camp, dosed, so the
+                // rules keep them the tripper. Whatever the spin dosed you with is gone, as a dose's look can trail the view (TRIP-5).
+                sim.State.TripperId=mate.Id;mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;player.Effects.Clear();
+                mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
                 foreach(var n in sim.State.Npcs)n.Twist="";
 
@@ -76,7 +78,7 @@ namespace Festival.Tests
                 if(eye.position.y>.6f)failures.Add("lying down: the view is "+eye.position.y.ToString("0.00")+" m up, not down on the grass");
                 if(HandsShown())failures.Add("lying down: the first-person hands still reach into the sky");
                 // The mouse still looks round while lying there.
-                pitchField.SetValue(session,-40f);yield return null;
+                pitchField.SetValue(session,-40f);yield return new WaitForSeconds(.3f);
                 if(eye.forward.y>.8f)failures.Add("lying down: the view can't look round, still along "+eye.forward);
 
                 // E gets you up, and the view goes back to where it looked before.
