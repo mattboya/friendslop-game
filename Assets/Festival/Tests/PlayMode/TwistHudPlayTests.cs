@@ -41,7 +41,9 @@ namespace Festival.Tests
             void PressE()=>((System.Action)primary.GetValue(view))?.Invoke();
             void PressF()=>chatKey.Invoke(view,new object[]{session.State,session.LocalPlayer});
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
-            const string Rope="Talk your way past the VIP rope (5 s)",Band="Buy VIP wristband  •  $15",Wheel="Ride the Ferris wheel (20 s)",Car="Climb aboard the art car",DanceAndChat="Dance with festivalgoer  •  F CHAT";
+            const string Rope="Talk your way past the VIP rope (5 s)",Band="Buy VIP wristband  •  $15",Wheel="Ride the Ferris wheel (20 s)",Car="Climb aboard the art car",DanceAndChat="Dance with festivalgoer  •  F CHAT",Cancel="Cancel current action";
+            // The pause menu's CANCEL ACTION button.
+            bool CancelShown(){foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name=="CANCEL ACTION")return b.gameObject.activeSelf;return false;}
             try
             {
                 session.Host("Tester",HostPort);
@@ -78,8 +80,22 @@ namespace Festival.Tests
                 yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds+.4f);
                 if(!Banded())failures.Add("the guard's chat is over and there is no VIP wristband ("+session.Message+")");
 
+                // POLO-2: at the VIP stall's end of the night market's shelves, eyeing the nearest shelf: E stays the shelf's, and
+                // the wristband is still listed.
+                player.Inventory.RemoveAll(i=>i.ItemId==FestivalSimulation.VipWristband);player.X=Festivals.VipStallX-2.2f;player.Z=Festivals.VipStallZ;
+                var shelf=Catalog.ShopPoint(false,3);var eyed=Catalog.FindItem(sim.State.VendorOffers[3]);var eyedStock=sim.State.ShopStock.Find(s=>s.ItemId==eyed.Id);
+                Assert.That(FestivalSimulation.AtVipStall(sim.State,player)&&Vector2.Distance(new Vector2(player.X,player.Z),new Vector2(shelf.X,shelf.Z))<3.3f&&eyedStock!=null,Is.True,"setup: at the VIP stall and in reach of a stocked shelf");
+                eyedStock.MarketAvailable=Mathf.Max(1,eyedStock.MarketAvailable);
+                typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,Mathf.Atan2(shelf.X-player.X,shelf.Z-player.Z)*Mathf.Rad2Deg);
+                typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Atan2(1.17f-1.65f,Vector2.Distance(new Vector2(player.X,player.Z),new Vector2(shelf.X,shelf.Z)))*Mathf.Rad2Deg);
+                yield return new WaitForSeconds(.6f);
+                if(!Read("Prompt").StartsWith("BUY "+eyed.Name.ToUpperInvariant()+"  •  "))failures.Add("eyeing a shelf at the VIP stall: the prompt reads \""+Read("Prompt")+"\", not the shelf's");
+                if(!Actions().Contains(Band))failures.Add("eyeing a shelf at the VIP stall: the wristband is not listed: \""+Actions()+"\"");
+                PressE();yield return null;
+                if(Banded()||player.Cash!=20)failures.Add("eyeing a shelf at the VIP stall: E buys a wristband instead of picking the shelf (cash $"+player.Cash+")");
+
                 // At the night market's VIP stall: E buys a wristband.
-                player.Inventory.RemoveAll(i=>i.ItemId==FestivalSimulation.VipWristband);player.X=Festivals.VipStallX;player.Z=Festivals.VipStallZ+1;
+                player.X=Festivals.VipStallX;player.Z=Festivals.VipStallZ+1;
                 yield return new WaitForSeconds(.6f);
                 Expect("at the VIP stall","Prompt",Band);
                 PressE();yield return null;
@@ -92,6 +108,9 @@ namespace Festival.Tests
                 Expect("beside an art car","Prompt",Car);
                 PressE();yield return null;
                 if(FestivalSimulation.ArtCarOf(sim.State,player.Id)!=0)failures.Add("beside an art car: E puts you aboard no car ("+session.Message+")");
+                // Aboard, you can still hop off.
+                yield return new WaitForSeconds(.6f);
+                if(!Actions().Contains(Cancel)||!CancelShown())failures.Add("aboard an art car: there is no way to hop off: \""+Actions()+"\"");
                 session.Command("Cancel");sim.State.FestivalIndex=Festivals.PoloFestival;
 
                 // At the Ferris wheel's base on Night 1, the trail not yet followed and the friend far away: E boards it.
@@ -104,6 +123,12 @@ namespace Festival.Tests
                 PressE();yield return null;
                 if(!FestivalSimulation.OnWheel(sim.State,player.Id))failures.Add("at the Ferris wheel's base: E boards no ride ("+session.Message+")");
                 yield return new WaitForSeconds(.6f);
+                // POLO-2: up there nothing cancels the ride, so nothing offers to; the prompt counts down the turn and E does nothing.
+                string riding=Read("Prompt");
+                if(!System.Text.RegularExpressions.Regex.IsMatch(riding,@"^ON THE FERRIS WHEEL  •  (1?[0-9]|20) s$"))failures.Add("on the wheel: the prompt reads \""+riding+"\"");
+                Fits("on the wheel","Prompt");
+                if(primary.GetValue(view)!=null)failures.Add("on the wheel: E still runs an action");
+                if(Actions().Contains(Cancel)||CancelShown())failures.Add("on the wheel: Cancel is still offered: \""+Actions()+"\", menu button "+(CancelShown()?"shown":"hidden"));
                 string detail=Read("Objective detail");
                 if(!detail.StartsWith("From the wheel you spot your friend ")||!detail.Contains(" and security "))failures.Add("on the wheel at night: the objective card reads \""+detail+"\"");
                 Fits("on the wheel at night","Objective detail");

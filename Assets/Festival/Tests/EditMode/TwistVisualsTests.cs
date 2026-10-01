@@ -51,6 +51,38 @@ namespace Festival.Tests
             Assert.That(Quaternion.Angle(start,rotor.rotation),Is.LessThan(.5f),"one ride is one full turn");
         }
 
+        // POLO-2: a gold-trimmed sign over the night market's stock stall says where the rules sell wristbands, and for how much.
+        // TextMesh draws through its own board, so like the world's signs it shows only from the market's side and within range.
+        [Test]public void AGoldSignMarksTheNightMarketsVipStall()
+        {
+            var world=Made("VIP stall world").AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");
+            var grounds=world.transform.Find(FestivalWorld.RootName);var round=Round(Festivals.PoloFestival);world.SetTwists(round);
+            var sign=Part(Part(grounds,FestivalTwistVisuals.PoloRootName),FestivalTwistVisuals.VipSignName);
+            var text=sign.GetComponentInChildren<TextMesh>(true);
+            Assert.That(text!=null?text.text:"(no text)",Is.EqualTo("VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price),"the sign says what the stall sells, for what the rules charge");
+            Assert.That(Part(sign,"Gold trim").GetComponent<Renderer>().sharedMaterial,Is.EqualTo(FestivalArtView.MaterialFor("StageGlowGold")),"its trim is gold, and glows so it reads at night");
+            Transform stall=null;foreach(Transform child in grounds)if(child.name=="FestivalStallStock")stall=child;
+            Assert.That(stall,Is.Not.Null,"setup: the night market has its stock stall");
+            var under=Bounds(stall);var board=Part(sign,"Board").GetComponent<Renderer>().bounds;
+            Assert.That(board.min.y,Is.GreaterThan(under.max.y),"the board hangs over the stall's awning, clear of it");
+            Assert.That(board.center.x,Is.InRange(under.min.x,under.max.x),"over the stall, not beside it");
+            Assert.That(board.center.z,Is.InRange(under.min.z,under.max.z),"over the stall, not in front of or behind it");
+            Assert.That(Vector2.Distance(Flat(board.center),new Vector2(Festivals.VipStallX,Festivals.VipStallZ)),Is.LessThanOrEqualTo(Festivals.VipStallRange),"where the rules sell wristbands");
+            var renderer=text.GetComponent<Renderer>();
+            Assert.That(new[]{renderer.bounds.min.x,renderer.bounds.max.x},Is.EqualTo(new[]{board.center.x,board.center.x}).Within(board.extents.x),"the lettering fits across the board");var previous=FestivalCharacter.ViewTransform;var eye=Made("Eye").transform;
+            try
+            {
+                FestivalCharacter.ViewTransform=eye;
+                foreach(var (at,shown,where) in new[]{(new Vector3(Festivals.VipStallX,1.65f,-24),true,"from the market's footpath"),(new Vector3(Festivals.VipStallX+6,1.65f,-30),true,"from down the path"),
+                    (new Vector3(Festivals.VipStallX,1.65f,-14),false,"from behind, where it would read mirrored"),(new Vector3(Festivals.VipStallX,1.65f,-50),false,"from across the grounds, through everything between")})
+                {
+                    eye.position=at;world.SetTwists(round);
+                    Assert.That(renderer.enabled,Is.EqualTo(shown),"the lettering "+(shown?"shows ":"hides ")+where);
+                }
+            }
+            finally{FestivalCharacter.ViewTransform=previous;}
+        }
+
         [Test]public void InfluencersFilmThroughAFrameShapedLikeTheRules()
         {
             var view=Wire(Level(Festivals.PoloFestival),"p0");var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);

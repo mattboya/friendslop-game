@@ -509,7 +509,7 @@ namespace Festival.Presentation
             ApplyContrast(session.Profile.Data.HighContrast);
             UpdatePurchaseFeedback(state,player);
             nextButton.SetActive(state.Phase=="Results"&&session.IsHost);
-            cancelButton.SetActive(state.Phase=="Playing"&&player.InteractionId!="");
+            cancelButton.SetActive(state.Phase=="Playing"&&FestivalHudText.CanCancel(state,player));
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             UpdateText(state,player);
             trippingPanel.SetActive(!showMenu&&tripping.text!="");
@@ -949,6 +949,8 @@ namespace Festival.Presentation
                         else SetPromptAction("E  BUY "+item.Name.ToUpperInvariant()+"  •  "+FestivalHudText.Money(state,player,item.Price).ToUpperInvariant()+"  •  "+FestivalHudText.MoneyText(state,player,item.Description),()=>checkoutItem=focused);
                     }
                     else SetPromptAction(item.Name.ToUpperInvariant()+"  •  SOLD OUT",null);
+                    // POLO-2: the VIP stall stands at the night market's shelves. E stays the shelf's; the wristband is still listed.
+                    var shelf=primaryAction;AddTwistActions(state,player,ref y);primaryAction=shelf;
                     FinishActions();return;
                 }
             }
@@ -961,7 +963,7 @@ namespace Festival.Presentation
                 if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
-            if(player.InteractionId!="")AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
+            if(FestivalHudText.CanCancel(state,player))AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+ItemName(drop.ItemId),()=>session.Command("Pickup",drop.Id),ref y);
@@ -1025,7 +1027,7 @@ namespace Festival.Presentation
                     else AddAction(FestivalHudText.RopeChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
                 }
                 // The festival's twists where they stand: the Ferris wheel, the VIP stall, a passing art car.
-                foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
+                AddTwistActions(state,player,ref y);
             }
             // Offering your gear to a friend in reach follows the errands above and the checks: the sober crew sticks by the
             // tripper, so a friend is often in reach, and E must not hand them your gear instead of checking.
@@ -1046,9 +1048,13 @@ namespace Festival.Presentation
                     if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
                 }
             }
-            prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
+            // POLO-2: up on the Ferris wheel nothing is worth E; the prompt counts the turn down instead.
+            string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
+            if(riding!=""){prompt.text=riding;primaryAction=null;}
+            else prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
             FinishActions();
         }
+        private void AddTwistActions(RoundState state,PlayerState player,ref float y){foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);}
 
         private void AddHandoffActions(RoundState state,PlayerState player,ref float y)
         {

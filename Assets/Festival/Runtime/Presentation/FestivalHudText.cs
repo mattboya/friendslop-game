@@ -56,6 +56,17 @@ namespace Festival.Presentation
         // Downed, detained and spirit players keep the guidance about getting back on their feet.
         static bool SellingToday(RoundState s,PlayerState p)=>s.Phase=="Playing"&&p.Life=="Alive"&&!Festivals.For(s).Night;
 
+        /// <summary>POLO-2: whether p's HUD offers Cancel for what they are doing. Nothing cancels a turn on the Ferris wheel (the
+        /// host refuses it), so nothing offers to; an Ember Playa art car rider still hops off.</summary>
+        public static bool CanCancel(RoundState s,PlayerState p)=>p.InteractionId!=""&&!FestivalSimulation.OnWheel(s,p.Id);
+        /// <summary>POLO-2: a Ferris wheel rider's prompt, in place of an action: what the turn has left at `now` (the view's
+        /// simulation clock), in whole seconds rounded up like Clock. "" off the wheel.</summary>
+        public static string WheelPrompt(RoundState s,PlayerState p,double now)
+        {
+            var ride=s.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active");
+            return ride==null?"":"ON THE FERRIS WHEEL"+Dot+(int)Math.Ceiling(Math.Max(0,ride.StartSeconds+ride.DurationSeconds-now))+" s";
+        }
+
         /// <summary>The Extract action at the way back to camp, or "" while there is nothing to finish there.</summary>
         public static string ExtractAction(RoundState s)
         {

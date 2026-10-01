@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Network;
+using Festival.Presentation;
 using UnityEngine;
 
 namespace Festival.Tests
@@ -63,6 +64,31 @@ namespace Festival.Tests
             }
             game.Tick(Festivals.WheelRideSeconds+.1);
             Assert.That(Hidden(Wire(game,rider.Id).FriendPosition),Is.True,"the view ends with the ride");
+        }
+
+        // POLO-2: nothing cancels a turn on the wheel (the host refuses it), so the rider's HUD offers no Cancel and counts the
+        // turn down instead, in whole seconds rounded up like the level clock. Off the wheel there is no such line, and every
+        // other ride or task, an Ember Playa art car included, still offers Cancel (hopping off).
+        [Test] public void OnTheWheelTheHudCountsDownTheTurnAndOffersNoCancel()
+        {
+            var game=Level(0);var rider=Ride(game);
+            foreach(var (after,left) in new[]{(0.0,"20"),(5.5,"15"),(14.4,"1")})
+            {
+                if(after>0)game.Tick(after);var view=Wire(game,rider.Id);var me=view.Players.Find(p=>p.Id==rider.Id);
+                Assert.That(FestivalHudText.CanCancel(view,me),Is.False,"nothing cancels the turn, so nothing offers to");
+                Assert.That(FestivalHudText.WheelPrompt(view,me,view.SimulationSeconds),Is.EqualTo("ON THE FERRIS WHEEL  •  "+left+" s"),"the rider reads how long the turn has left");
+            }
+            game.Tick(.2);var down=Wire(game,rider.Id);var landed=down.Players.Find(p=>p.Id==rider.Id);
+            Assert.That(FestivalHudText.WheelPrompt(down,landed,down.SimulationSeconds),Is.EqualTo(""),"back on the ground, no wheel line");
+            var friend=game.State.Players.Find(p=>p.Id!=rider.Id);var theirs=Wire(game,friend.Id);
+            Assert.That(FestivalHudText.WheelPrompt(theirs,theirs.Players.Find(p=>p.Id==friend.Id),theirs.SimulationSeconds),Is.EqualTo(""),"nobody else reads it");
+
+            var playa=new RoundState{Phase="Playing",FestivalIndex=Festivals.PlayaFestival};var aboard=new PlayerState{Id="me",InteractionId="ride"};playa.Players.Add(aboard);
+            playa.Interactions.Add(new InteractionState{Id="ride",PlayerId="me",Kind=FestivalSimulation.RideCarKind,TargetId="0",DurationSeconds=600});
+            Assert.That(FestivalHudText.CanCancel(playa,aboard),Is.True,"an art car rider can still hop off");
+            Assert.That(FestivalHudText.WheelPrompt(playa,aboard,0),Is.EqualTo(""),"and reads no wheel line");
+            aboard.InteractionId="";
+            Assert.That(FestivalHudText.CanCancel(playa,aboard),Is.False,"with nothing under way there is nothing to cancel");
         }
 
         [Test] public void ByDayTheWheelShowsNoFriend()

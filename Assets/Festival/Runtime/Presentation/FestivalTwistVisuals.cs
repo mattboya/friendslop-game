@@ -5,13 +5,14 @@ using UnityEngine;
 namespace Festival.Presentation
 {
     /// <summary>TWISTVIS-1: stand-ins for each festival's twists, from primitives and existing props, until ART-1 and ART-2
-    /// replace them. Palm Mirage: the influencers' phone frames, the VIP ropes and the Ferris wheel. Ember Playa: the art
-    /// cars and the effigy, which burns for Night 2's last three minutes; its dust storms are FestivalNightLighting's fog.
+    /// replace them. Palm Mirage: the influencers' phone frames, the VIP ropes, the VIP stall's sign (POLO-2) and the Ferris
+    /// wheel. Ember Playa: the art cars and the effigy, which burns for Night 2's last three minutes; its dust storms are
+    /// FestivalNightLighting's fog.
     /// Everything follows the round state with no network calls, and nothing collides, so sight lines, steps and paths stay
     /// exactly the rules'.</summary>
     public sealed class FestivalTwistVisuals
     {
-        public const string PoloRootName="Palm Mirage twists",PlayaRootName="Ember Playa twists",FramePrefix="Influencer frame ";
+        public const string PoloRootName="Palm Mirage twists",PlayaRootName="Ember Playa twists",FramePrefix="Influencer frame ",VipSignName="VIP stall sign";
         // Frames and cars glide to each snapshot the way FestivalSession's actors do (snapping past 5 m), so a rider's body
         // stays on its car's deck and an influencer's frame stays at their feet.
         private const float Glide=15,SnapDistance=5;
@@ -32,6 +33,11 @@ namespace Festival.Presentation
         // sees over the van's roof.
         private const double TurnLookahead=2.5;
         private const float DeckWidth=2.8f,DeckBack=1.4f,DeckFront=.45f,VanScale=.55f,VanAhead=DeckFront+.05f+2.81f*VanScale;
+        // POLO-2: the VIP stall's sign stands on the corner poles of the night market's stock stall, which FestivalWorld raises at
+        // (VipStallX, 0, StallZ) beside the rules' stall point; the poles top out at PoleTop, just clear of the awning, and the board
+        // clears the stall's banner. It faces the market's footpath to the south, and like FestivalWorld's signs its lettering shows
+        // only from that side and within SignRange, since TextMesh draws through its board.
+        private const float StallZ=-19,PoleX=2.25f,PoleTop=3.4f,SignBottom=3.95f,LetterSize=.12f,SignRange=22;
         // The fire's flames stretch and shrink out of step with each other.
         private const float FlickerHz=9,FlickerDepth=.3f,FireGlow=6;
         // The grounds' middle festoon hangs along z=2 at chest height, through the rules' point, so the figure and its fire stand
@@ -40,6 +46,7 @@ namespace Festival.Presentation
 
         private readonly Transform grounds,polo,playa,rotor,fire;
         private readonly Light fireLight;
+        private readonly Renderer vipLettering;
         private readonly Transform[] gondolas=new Transform[Gondolas],cars=new Transform[Festivals.ArtCars];
         private readonly Vector3[] anchors=new Vector3[Gondolas];
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
@@ -52,6 +59,7 @@ namespace Festival.Presentation
             grounds=festival;
             polo=Group(festival,PoloRootName,Vector3.zero);playa=Group(festival,PlayaRootName,Vector3.zero);
             for(int i=0;i<Festivals.VipZones.Length;i++)Ropes(Group(polo,"VIP rope "+i,Vector3.zero),Festivals.VipZones[i]);
+            vipLettering=VipSign(Group(polo,VipSignName,new Vector3(Festivals.VipStallX,0,StallZ)));
             rotor=Wheel(Group(polo,"Ferris wheel",new Vector3(Festivals.WheelX,0,Festivals.WheelZ)));
             for(int k=0;k<cars.Length;k++)cars[k]=ArtCar(Group(playa,"Art car "+k,Vector3.zero),k);
             fire=Effigy(Group(playa,"Effigy",new Vector3(Festivals.EffigyX,0,Festivals.EffigyZ)));fireLight=fire.GetComponentInChildren<Light>(true);
@@ -63,6 +71,7 @@ namespace Festival.Presentation
             playa.gameObject.SetActive(state.FestivalIndex==Festivals.PlayaFestival);
             clock+=deltaTime;
             Film(state,deltaTime);
+            var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
             turn=Mathf.Repeat(turn+deltaTime*360/(float)Festivals.WheelRideSeconds,360);Turn();
             for(int k=0;k<cars.Length;k++)
             {
@@ -117,6 +126,20 @@ namespace Festival.Presentation
                     Beam(ropes,"Velvet rope",from+Vector3.up*RopeHeight,to+Vector3.up*RopeHeight,.06f,"PaintRose");
                 }
             }
+        }
+
+        // A dark board in glowing gold trim, as wide as the stall's poles it stands on: "VIP WRISTBANDS $15", at the rules' price.
+        private static Renderer VipSign(Transform sign)
+        {
+            float width=2*PoleX+.3f,height=LetterSize*2.25f+.13f,middle=SignBottom+height/2;
+            foreach(float x in new[]{-PoleX,PoleX})Beam(sign,"Sign post",new Vector3(x,PoleTop,.09f),new Vector3(x,SignBottom+height,.09f),.08f,"Gold");
+            Block(sign,"Gold trim",PrimitiveType.Cube,new Vector3(0,middle,.025f),new Vector3(width+.075f,height+.075f,.045f),"StageGlowGold");
+            Block(sign,"Board",PrimitiveType.Cube,new Vector3(0,middle,-.012f),new Vector3(width,height,.045f),"Dark");
+            var face=new GameObject("Text");face.transform.SetParent(sign,false);face.transform.localPosition=new Vector3(0,middle,-.05f);
+            var text=face.AddComponent<TextMesh>();text.text="VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price;
+            text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.characterSize=LetterSize;text.fontSize=48;text.color=new Color(.96f,.94f,.84f);
+            var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){text.font=font;face.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+            return face.GetComponent<MeshRenderer>();
         }
 
         // Two A-frames hold the axle over a boarding platform at the rules' base; the rotor carries a glowing rim and its spokes.

@@ -1000,7 +1000,7 @@ namespace Festival.Presentation
         }
         // TextMesh font materials ignore depth, so text would draw mirrored through
         // its own board. Only show a legend within range and from its readable side.
-        private static bool Readable(Transform view,Transform text,float sqrRange)
+        internal static bool Readable(Transform view,Transform text,float sqrRange)
         {
             var offset=view.position-text.position;
             return offset.sqrMagnitude<sqrRange&&Vector3.Dot(offset,text.forward)<0;
