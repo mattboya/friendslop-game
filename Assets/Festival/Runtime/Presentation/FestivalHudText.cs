@@ -233,24 +233,29 @@ namespace Festival.Presentation
         public static string TrustLine(RoundState s,string localId)=>s.Phase=="Playing"&&s.TripperId==localId&&s.ElapsedSeconds<TrustSeconds?"Trust, but verify.":"";
 
         /// <summary>
-        /// The festivalgoer F chats with right now (FestivalHud.ChatKey): the nearest within FestivalSimulation.ConfirmReach that
-        /// FestivalSimulation.MayConfirm lets p chat-check. That is the tripper beside someone they still have an unchecked vision
-        /// about, or anyone with a free hand beside Palm Mirage's VIP guard, who talks them past the rope (POLO-1); null otherwise.
+        /// The festivalgoer F chats with right now (FestivalHud.ChatKey), among those within FestivalSimulation.ConfirmReach that
+        /// FestivalSimulation.MayConfirm lets p chat-check: the tripper's festivalgoers they still have an unchecked vision about, or,
+        /// only with none of those in reach (VISION-3), Palm Mirage's VIP guard, who talks anyone with a free hand past the rope
+        /// (POLO-1). A free one before one FestivalSimulation.Engaged, which the HUD says is busy, then the nearest; null otherwise.
         /// </summary>
         public static NpcState CheckTarget(RoundState s,PlayerState p)
         {
             if(s.Phase!="Playing"||p.Life!="Alive"||p.InteractionId!="")return null;
-            NpcState best=null;double reach=FestivalSimulation.ConfirmReach;
+            NpcState best=null;double reach=0;int rank=int.MaxValue;
             foreach(var n in s.Npcs)
             {
                 double dx=p.X-n.X,dz=p.Z-n.Z,distance=Math.Sqrt(dx*dx+dz*dz);
-                if(distance<=reach&&FestivalSimulation.MayConfirm(s,p,n,"ConfirmChat")){best=n;reach=distance;}
+                if(distance>FestivalSimulation.ConfirmReach||!FestivalSimulation.MayConfirm(s,p,n,"ConfirmChat"))continue;
+                int order=(FestivalSimulation.CanCheckVision(s,p,n)?0:2)+(FestivalSimulation.Engaged(s,n)?1:0);
+                if(order<rank||order==rank&&distance<reach){best=n;rank=order;reach=distance;}
             }
             return best;
         }
         /// <summary>The checks, as beside anyone else: E dances (quick, but a miss draws the crowd's eye), F chats (safe).</summary>
         public static readonly string CheckDanceAction="Check by dancing"+Dot+"F CHECK BY CHAT ("+FestivalSimulation.ConfirmChatSeconds+" s)";
         public static readonly string CheckChatAction="Check by chatting ("+FestivalSimulation.ConfirmChatSeconds+" s, safe)";
+        /// <summary>Beside someone the host won't let anyone check right now (FestivalSimulation.Engaged): said, not offered.</summary>
+        public const string BusyAction="They're busy right now";
         /// <summary>Beside the VIP guard with no vision about them to check, E or F chats them into handing over a VIP wristband.</summary>
         public static readonly string RopeChatAction="Talk your way past the VIP rope ("+FestivalSimulation.ConfirmChatSeconds+" s)";
 

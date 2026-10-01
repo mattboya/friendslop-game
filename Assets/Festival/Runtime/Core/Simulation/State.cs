@@ -35,6 +35,9 @@ namespace Festival.Core
         public string Role="";
         // POLO-1: a festival twist this festivalgoer plays (FestivalTwists.cs), public so every client can show it: Influencer, VipGuard or "".
         public string Twist="";
+        // VISION-3: view-only, never set on the host: FestivalSession.ViewFor sets it when FestivalSimulation.Engaged says the host
+        // would refuse a check on them, which the view's masked Mode and filtered interactions can't tell the HUD.
+        public bool Busy;
         public bool HighlyIntoxicated,RedEyes,CanTalk;
         public double Suspicion, DistractedUntil, AttackAt, AttackCooldownUntil, LastTalkSeconds=-100; public int Sales,TalkCount;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();

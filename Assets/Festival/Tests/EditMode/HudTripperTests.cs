@@ -132,6 +132,51 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.CheckTarget(s,you),Is.Null,"only while playing");
         }
 
+        // VISION-3: a client's view hides why a festivalgoer can't stop (whom they accuse, other players' interactions), so it
+        // carries Busy. Beside them the HUD says they're busy instead of offering a check the host would refuse.
+        [Test] public void AFestivalgoerTooBusyToCheckIsSaidNotOffered()
+        {
+            var game=Day();var npc=Beside(game,out var tripper,out var sober);
+            bool Offered(string why)
+            {
+                var mine=FestivalSession.ViewFor(game,tripper.Id);var check=FestivalHudText.CheckTarget(mine,Me(mine,tripper.Id));
+                Assert.That(check?.Id,Is.EqualTo(npc.Id),why+": the HUD points at the festivalgoer beside the tripper");
+                return !FestivalSimulation.Engaged(mine,check);
+            }
+            npc.Mode="Accusing";npc.TargetId=sober.Id;
+            var seen=FestivalSession.ViewFor(game,tripper.Id).Npcs.Find(n=>n.Id==npc.Id);
+            Assert.That(seen.Mode=="Blending"&&seen.TargetId=="",Is.True,"setup: the tripper's view hides whom they accuse");
+            Assert.That(Offered("accusing a friend"),Is.False,"accusing a friend, they're busy");
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="busy_accusing",Kind="ConfirmChat",TargetId=npc.Id}).Accepted,Is.False,"as the host says too");
+            npc.Mode="Blending";npc.TargetId="";
+            var dance=game.Execute(sober.Id,new GameCommand{Id="busy_dance",Kind="Dance",TargetId=npc.Id});
+            Assert.That(dance.Accepted,Is.True,"setup: the sober friend dances with them: "+dance.Reason);
+            Assert.That(Offered("dancing with a friend"),Is.False,"dancing with a friend, they're busy");
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="busy_dancing",Kind="ConfirmChat",TargetId=npc.Id}).Accepted,Is.False,"as the host says too");
+            game.Execute(sober.Id,new GameCommand{Id="busy_stop",Kind="Cancel"});
+            Assert.That(Offered("free again"),Is.True,"free again, the check is offered");
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="busy_free",Kind="ConfirmChat",TargetId=npc.Id}).Accepted,Is.True,"and the host takes it");
+            Assert.That(FestivalHudText.BusyAction,Is.EqualTo("They're busy right now"));
+        }
+
+        // VISION-3: standing nearer Palm Mirage's VIP guard than someone you have a vision about no longer hides that check: the
+        // guard's chat is offered only with no vision target in reach. A free vision target comes before a busy one.
+        [Test] public void AVisionTargetComesBeforeTheGuardAndAFreeOneBeforeABusyOne()
+        {
+            var s=Level(0);var you=Crew(s,"you","You");s.TripperId="you";Dose(s,"you",2);
+            var guard=Npc(s,"guard",.5f,0);guard.Twist=FestivalSimulation.VipGuard;
+            var target=Npc(s,"target",0,2);s.Visions.Add(new VisionState{Id="v1",Kind="Buyer",NpcId="target"});
+            Assert.That(FestivalHudText.CheckTarget(s,you),Is.SameAs(target),"a vision target in reach before the nearer VIP guard");
+            target.X=2.6f;
+            Assert.That(FestivalHudText.CheckTarget(s,you),Is.SameAs(guard),"with none in reach, the guard talks you past the rope");
+            target.X=0;target.Busy=true;
+            Assert.That(FestivalHudText.CheckTarget(s,you),Is.SameAs(target),"a busy vision target still comes before the guard, and the HUD says they're busy");
+            var free=Npc(s,"free",0,-2.2f);s.Visions.Add(new VisionState{Id="v2",Kind="Narc",NpcId="free"});
+            Assert.That(FestivalHudText.CheckTarget(s,you),Is.SameAs(free),"a free vision target before a nearer busy one");
+            target.Busy=false;
+            Assert.That(FestivalHudText.CheckTarget(s,you),Is.SameAs(target),"then the nearest free one");
+        }
+
         [Test] public void TheChatPickerAsksTheTrippersQuestions()
         {
             var game=Day();var npc=Beside(game,out var tripper,out _);

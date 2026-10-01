@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using Festival.Core;
 
 // VISION-3: the tripper's visions at their edges, each found by journey J2 of the 2026-09-30 wave: a fake never sits on a link
-// still ahead on its own trail, a clue the tripper finds says TRUE for a few seconds before the trail moves on, and no dud
-// Shortcut secret is dealt.
+// still ahead on its own trail, a clue the tripper finds says TRUE for a few seconds before the trail moves on, no dud
+// Shortcut secret is dealt, and the host and the HUD agree on who is too busy to check (the HUD half: HudTripperTests).
 public static class VisionEdgeTests
 {
     static void Check(bool pass,string message){if(!pass)throw new Exception("VisionEdge: "+message);}
@@ -30,7 +30,7 @@ public static class VisionEdgeTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{FakesKeepOffTheirOwnTrail,AFoundClueSaysTrueAWhile,NightSecretsAreAStashOrADoubleBuyer})
+        foreach(var test in new Action[]{FakesKeepOffTheirOwnTrail,AFoundClueSaysTrueAWhile,NightSecretsAreAStashOrADoubleBuyer,AnEngagedFestivalgoerIsNotChecked})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" vision edge test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -102,5 +102,29 @@ public static class VisionEdgeTests
             foreach(var v in secrets){seen.Add(v.Kind);Check(v.Kind=="Stash"?v.NpcId==""&&(v.X!=0||v.Z!=0):Npc(s,v.NpcId)?.Role=="Buyer",where+"a stash is a spot on the grounds, a double buyer a real buyer");}
         }
         Check(nights>40&&seen.Count==2,"setup: plenty of dose 3+ nights dealing both secrets, got "+nights+" nights and "+string.Join(",",seen));
+    }
+
+    // 4. The HUD offered checks the host refused: a client's view shows a festivalgoer accusing someone else as blending.
+    // FestivalSimulation.Engaged is the one rule the host's refusals and the HUD's offer share; the refusals keep their words.
+    static void AnEngagedFestivalgoerIsNotChecked()
+    {
+        var s=Start(3,0);var tripper=s.Player(s.State.TripperId);var other=s.State.Players.Find(p=>p!=tripper);
+        var npc=Npc(s,s.State.Visions.Find(v=>v.NpcId!="").NpcId);Beside(tripper,npc);
+        Check(!FestivalSimulation.Engaged(s.State,npc),"setup: a festivalgoer just standing there is free");
+        foreach(var mode in new[]{"Accusing","Swarming"})
+        {
+            npc.Mode=mode;npc.TargetId=other.Id;
+            Check(FestivalSimulation.Engaged(s.State,npc),"a festivalgoer "+mode.ToLowerInvariant()+" someone else is engaged");
+            var refused=Act(s,tripper.Id,"ConfirmChat",npc.Id);
+            Check(!refused.Accepted&&refused.Reason=="They're too worked up to stop for you","and the host refuses the check: "+refused.Reason);
+        }
+        npc.Mode="Blending";npc.TargetId="";Beside(other,npc);
+        Check(Act(s,other.Id,"Dance",npc.Id).Accepted,"setup: a friend dances with them");
+        Check(FestivalSimulation.Engaged(s.State,npc),"someone in a friend's dance is engaged");
+        var busy=Act(s,tripper.Id,"ConfirmChat",npc.Id);Check(!busy.Accepted&&busy.Reason=="NPC is busy","and the host refuses the check: "+busy.Reason);
+        Check(Act(s,other.Id,"Cancel").Accepted&&!FestivalSimulation.Engaged(s.State,npc),"free again once the dance stops");
+        Check(Act(s,tripper.Id,"ConfirmChat",npc.Id).Accepted,"and the check goes ahead");
+        var seen=new NpcState{Id=npc.Id,Busy=true};
+        Check(FestivalSimulation.Engaged(new RoundState{Npcs={seen}},seen),"a client's view, with no modes or other players' interactions, says busy by Busy alone");
     }
 }

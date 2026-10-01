@@ -19,14 +19,18 @@ namespace Festival.Core
         /// <summary>Whether p has a vision about n still to check. A client's view carries visions only to its tripper, so the HUD
         /// asks it of the view to offer the checks.</summary>
         public static bool CanCheckVision(RoundState s,PlayerState p,NpcState n)=>p.Id==s.TripperId&&s.Visions.Exists(v=>v.NpcId==n.Id&&!v.Confirmed);
+        /// <summary>VISION-3: whether n is too taken up for anyone to check: worked up (swarming or accusing anyone) or the target of an
+        /// interaction under way. A client's view hides both and carries the host's answer in Busy (FestivalSession.ViewFor), so the
+        /// HUD asks it of the view and says they're busy instead of offering a check the host would refuse.</summary>
+        public static bool Engaged(RoundState s,NpcState n)=>n.Busy||WorkedUp(n)||s.Interactions.Exists(x=>x.TargetId==n.Id&&x.Status=="Active");
+        static bool WorkedUp(NpcState n)=>n.Mode=="Swarming"||n.Mode=="Accusing";
 
         CommandResult BeginConfirm(PlayerState p,GameCommand c)
         {
             var npc=State.Npcs.Find(n=>n.Id==c.TargetId);
             if(npc==null||!Near(p,npc.X,npc.Z,ConfirmReach))return Reject("Stand next to the festivalgoer you want to check");
             if(!MayConfirm(State,p,npc,c.Kind))return Reject(npc.Twist==VipGuard&&c.Kind=="ConfirmChat"?RopeRefusal(p):p.Id==State.TripperId?"You have no vision about them to check":"Only the tripper can check a vision");
-            if(npc.Mode=="Swarming"||npc.Mode=="Accusing")return Reject("They're too worked up to stop for you");
-            if(State.Interactions.Exists(x=>x.TargetId==npc.Id&&x.Status=="Active"))return Reject("NPC is busy");
+            if(Engaged(State,npc))return Reject(WorkedUp(npc)?"They're too worked up to stop for you":"NPC is busy");
             if(c.Kind=="ConfirmChat")
             {
                 var chat=NewInteraction(p,c.Kind,npc.Id,ConfirmChatSeconds);

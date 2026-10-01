@@ -167,6 +167,17 @@ namespace Festival.Tests
                     Expect("second chat check","Chat check","CHECKING BY CHAT  •  1–3 ASK\n\""+said.Opener+"\"\n1  "+said.Questions[0]+"\n2  "+said.Questions[1]+"\n3  "+said.Questions[2]);
                 }
 
+                // VISION-3: Sam dances with that festivalgoer, so the host would refuse your check: the HUD says they're busy, and
+                // neither E nor F starts one.
+                session.Command("Cancel");mate.X=npc.X-.6f;mate.Z=npc.Z;
+                var mateDance=sim.Execute(mate.Id,new GameCommand{Id="hud_mate_dance",Kind="Dance",TargetId=npc.Id});
+                if(!mateDance.Accepted)failures.Add("setup: Sam dances with the festivalgoer: "+mateDance.Reason);
+                yield return new WaitForSeconds(.6f);
+                Expect("tripper beside a busy vision","Prompt","They're busy right now");
+                PressE();PressF();yield return null;
+                if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("tripper beside a busy vision: E or F starts a check ("+session.Message+")");
+                sim.Execute(mate.Id,new GameCommand{Id="hud_mate_stop",Kind="Cancel"});mate.X=30;mate.Z=0;
+
                 // Night 2 doses everyone: the crew reads every dose.
                 session.Command("Cancel");Trip(mate,3);sim.State.LevelIndex=3;sim.State.DurationSeconds=600;
                 sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=1});

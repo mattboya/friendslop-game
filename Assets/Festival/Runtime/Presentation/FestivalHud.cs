@@ -656,12 +656,13 @@ namespace Festival.Presentation
         }
 
         // F while playing: the tripper checks a vision by chatting when they have one to check within reach, and anyone beside the
-        // VIP guard talks their way past the rope (FestivalHudText.CheckTarget); otherwise F talks.
+        // VIP guard talks their way past the rope (FestivalHudText.CheckTarget); otherwise F talks. Beside someone busy it does
+        // nothing, as the HUD says (VISION-3).
         private void ChatKey(RoundState state,PlayerState player)
         {
             if(state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return;
             var check=FestivalHudText.CheckTarget(state,player);
-            if(check!=null){session.Command("ConfirmChat",check.Id);return;}
+            if(check!=null){if(!FestivalSimulation.Engaged(state,check))session.Command("ConfirmChat",check.Id);return;}
             var speaker=NearestTalker(state.Npcs,player.X,player.Z,2.7f);
             if(speaker!=null)session.Command("Talk",speaker.Id);
         }
@@ -1014,7 +1015,9 @@ namespace Festival.Presentation
                 if(check!=null)
                 {
                     string checkId=check.Id;
-                    if(FestivalSimulation.CanCheckVision(state,player,check))
+                    // VISION-3: someone the host won't let anyone check right now is said to be busy; E does nothing.
+                    if(FestivalSimulation.Engaged(state,check))AddAction(FestivalHudText.BusyAction,()=>{},ref y);
+                    else if(FestivalSimulation.CanCheckVision(state,player,check))
                     {
                         AddAction(FestivalHudText.CheckDanceAction,()=>session.Command("ConfirmDance",checkId),ref y);
                         AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
