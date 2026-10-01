@@ -484,6 +484,8 @@ namespace Festival.Network
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
                 view.Drops=source.Drops;view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
+                // GAS-2: the level's Giggle Tank, public to all but spirits.
+                view.GiggleTankSpot=source.GiggleTankSpot;view.GiggleTankFound=source.GiggleTankFound;
             }
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then

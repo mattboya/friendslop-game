@@ -21,6 +21,7 @@ namespace Festival.Presentation
         private VolumeProfile duskProfile;
         private FestivalNightLighting lighting;
         private FestivalTwistVisuals twists;
+        private Transform giggleTank;
         private FestivalClouds clouds;
         private Font worldFont;
         private Transform owned;
@@ -328,6 +329,8 @@ namespace Festival.Presentation
             surface.BuildNavMesh();
             // After the navmesh, though they never collide: twist stand-ins don't shape where anyone walks.
             twists=new FestivalTwistVisuals(owned);
+            // GAS-2: hidden until a view has a Giggle Tank (SetTwists).
+            giggleTank=FestivalGiggleTank.Build(owned);giggleTank.gameObject.SetActive(false);
             // LIGHT-2: the day sky's clouds hang under the festival, so camp has none.
             clouds=new FestivalClouds(owned);
             marketShopRoot=ShopDisplayRoot("Night market goods",owned);
@@ -721,8 +724,8 @@ namespace Festival.Presentation
             if(lighting!=null)lighting.Apply(state,localPlayerId);
             if(clouds!=null)clouds.Apply(state,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero);
         }
-        // TWISTVIS-1: the festival's twist stand-ins, straight from the round state.
-        public void SetTwists(RoundState state){if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);}
+        // TWISTVIS-1: the festival's twist stand-ins, straight from the round state, and GAS-2's Giggle Tank.
+        public void SetTwists(RoundState state){if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);if(giggleTank!=null)FestivalGiggleTank.Show(giggleTank,state);}
         private void Update()
         {
             float time=Time.time;
