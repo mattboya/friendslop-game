@@ -72,7 +72,7 @@ namespace Festival.Tests
                 Assert.That(shown,Does.Contain("TESTER").And.Contain("MATE"),"the people wheel has a slice for each friend");
                 Assert.That(shown,Does.Contain("1").And.Contain("4"),"the dose wheel shows its slices, sliver included");
 
-                while(session.EstimatedSimulationSeconds<start+FestivalSpinner.DoseStarts+FestivalSpinner.DoseSpin+.2&&Time.realtimeSinceStartup<deadline)yield return null;
+                while(session.EstimatedSimulationSeconds<start+FestivalSpinner.WheelStops(FestivalSimulation.WheelCount-1)+.2&&Time.realtimeSinceStartup<deadline)yield return null;
                 string name=sim.Player(tripper).Name.ToUpperInvariant();
                 shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
                 Assert.That(shown.Any(t=>t.Contains(name))&&shown.Any(t=>t.StartsWith(dose+" DOSE")),"both results read out once the wheels land: "+string.Join(" | ",shown));

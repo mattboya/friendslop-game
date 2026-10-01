@@ -1079,11 +1079,11 @@ namespace Festival.Presentation
             }
             Debug.Log("FESTIVAL SMOKE CLUE TRAIL PASSED: "+session.State.CluesRead+" links checked; host="+session.IsHost);
         }
-        // SPIN-1: once both wheels have landed, just before the take, the spinner's own overlay is what the screen shows.
+        // SPIN-1: once every wheel has landed, just before the take, the spinner's own overlay is what the screen shows.
         IEnumerator CaptureSpinner(FestivalSession session,string file,float deadline)
         {
             while(session.State.Phase!="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
-            while(session.State.Phase=="Spinning"&&session.EstimatedSimulationSeconds<session.State.SpinEndsAt-FestivalSimulation.SpinSeconds+FestivalSpinner.DoseStarts+FestivalSpinner.DoseSpin+.2f&&Time.realtimeSinceStartup<deadline)yield return null;
+            while(session.State.Phase=="Spinning"&&session.EstimatedSimulationSeconds<session.State.SpinEndsAt-FestivalSimulation.SpinSeconds+FestivalSpinner.WheelStops(FestivalSimulation.WheelCount-1)+.2f&&Time.realtimeSinceStartup<deadline)yield return null;
             var overlay=transform.Find("Festival spinner");
             if(session.State.Phase!="Spinning"||overlay==null||!overlay.gameObject.activeSelf){failed="spinner overlay at "+session.State.Phase;yield break;}
             yield return Capture(file,"SPINNER RENDER");

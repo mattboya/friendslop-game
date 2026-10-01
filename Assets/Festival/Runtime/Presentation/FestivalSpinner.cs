@@ -12,9 +12,14 @@ namespace Festival.Presentation
     /// Doses), so every client shows the same spin, landing and reaction without any extra network traffic.</summary>
     public sealed class FestivalSpinner : MonoBehaviour
     {
-        // Seconds from the spin's start (SpinEndsAt - SpinSeconds). The last 3 s are the take and the reaction.
-        public const float PeopleSpin=2.4f,DoseStarts=3f,DoseSpin=1.4f,TakeStarts=5f,ReactStarts=6.4f;
-        const int PeopleTurns=4,DoseTurns=5;
+        // SPIN-2: seconds from the spin's start (SpinEndsAt - SpinSeconds), all from Core's timeline. Wheel i (0 people, 1 dose)
+        // turns from WheelStarts(i) to WheelStops(i) and rests on its result; after the last rest come the take and the reaction.
+        public static float WheelStarts(int wheel)=>wheel*(float)(FestivalSimulation.WheelSeconds+FestivalSimulation.PauseSeconds);
+        public static float WheelStops(int wheel)=>WheelStarts(wheel)+(float)FestivalSimulation.WheelSeconds;
+        public static float TakeStarts=>WheelStarts(FestivalSimulation.WheelCount);
+        public static float ReactStarts=>TakeStarts+(float)FestivalSimulation.TakeSeconds;
+        // About 8 turns under the cubic ease-out keeps a 4 s wheel sweeping over 120 degrees a second at 3 s, not crawling.
+        const int Turns=8;
         public enum Stage{Hidden,People,Dose,Take,React}
         public struct Beat
         {
@@ -49,6 +54,7 @@ namespace Festival.Presentation
         }
         static float Unit(int seed){uint x=unchecked((uint)seed*2654435761u);x^=x>>15;x=unchecked(x*0x2c1b3c6du);x^=x>>12;return (x>>8)/16777216f;}
         static float Turn(float landing,float progress){float left=1-Mathf.Clamp01(progress);return landing*(1-left*left*left);}
+        static float Progress(float elapsed,int wheel)=>(elapsed-WheelStarts(wheel))/(float)FestivalSimulation.WheelSeconds;
         static int[] Equal(int count){var weights=new int[count];for(int i=0;i<count;i++)weights[i]=1;return weights;}
         public static Beat At(RoundState state,List<string> crew,double now)
         {
@@ -57,10 +63,10 @@ namespace Festival.Presentation
             float t=beat.Elapsed=(float)(now-(state.SpinEndsAt-FestivalSimulation.SpinSeconds));
             beat.Dose=Mathf.Clamp(state.Doses.Find(d=>d.PlayerId==state.TripperId)?.Dose??1,1,FestivalSimulation.DoseSlices.Count);
             beat.Reaction=beat.Dose/(float)FestivalSimulation.DoseSlices.Count;
-            beat.PeopleDegrees=Turn(LandingDegrees(Equal(crew.Count),Mathf.Max(0,crew.IndexOf(state.TripperId)),state.SpinSeed,PeopleTurns),t/PeopleSpin);
-            beat.DoseDegrees=Turn(LandingDegrees(FestivalSimulation.DoseSlices,beat.Dose-1,unchecked(state.SpinSeed*31+7),DoseTurns),(t-DoseStarts)/DoseSpin);
-            beat.PeopleLanded=t>=PeopleSpin;beat.DoseLanded=t>=DoseStarts+DoseSpin;
-            beat.Stage=t<DoseStarts?Stage.People:t<TakeStarts?Stage.Dose:t<ReactStarts?Stage.Take:Stage.React;
+            beat.PeopleDegrees=Turn(LandingDegrees(Equal(crew.Count),Mathf.Max(0,crew.IndexOf(state.TripperId)),state.SpinSeed,Turns),Progress(t,0));
+            beat.DoseDegrees=Turn(LandingDegrees(FestivalSimulation.DoseSlices,beat.Dose-1,unchecked(state.SpinSeed*31+7),Turns),Progress(t,1));
+            beat.PeopleLanded=t>=WheelStops(0);beat.DoseLanded=t>=WheelStops(1);
+            beat.Stage=t<WheelStarts(1)?Stage.People:t<TakeStarts?Stage.Dose:t<ReactStarts?Stage.Take:Stage.React;
             return beat;
         }
 

@@ -7,7 +7,12 @@ namespace Festival.Core
     public sealed partial class FestivalSimulation
     {
         public const string DoseEffect="dose";
-        public const double SpinSeconds=8;
+        // SPIN-2: the spin's one timeline, which FestivalSpinner animates. The wheels go one after another, each turning for
+        // WheelSeconds and resting PauseSeconds on its result; then the tripper takes the dose and reacts. The level clock only
+        // runs while Playing, so it waits out all of it.
+        public const int WheelCount=2;
+        public const double WheelSeconds=4,PauseSeconds=.6,TakeSeconds=1.4,ReactSeconds=1.6;
+        public const double SpinSeconds=WheelCount*(WheelSeconds+PauseSeconds)+TakeSeconds+ReactSeconds;
         // Dose spinner slices in percent for 1-4 doses; the 4-dose slice is a thin sliver.
         static readonly int[] DoseWeights={40,30,22,8};
         // The dose wheel draws these same slices, so what players see is what the spinner rolls.

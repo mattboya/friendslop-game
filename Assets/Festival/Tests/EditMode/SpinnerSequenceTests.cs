@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Festival.Core;
 using Festival.Network;
@@ -18,6 +19,11 @@ namespace Festival.Tests
         }
         static int[] Equal(int count){var weights=new int[count];for(int i=0;i<count;i++)weights[i]=1;return weights;}
         static double Start(RoundState state)=>state.SpinEndsAt-FestivalSimulation.SpinSeconds;
+        // SPIN-2: the wheels in the order they spin, as a beat shows them.
+        static readonly (string Name,Func<FestivalSpinner.Beat,float> Degrees,Func<FestivalSpinner.Beat,bool> Landed)[] Wheels=
+            {("people",b=>b.PeopleDegrees,b=>b.PeopleLanded),("dose",b=>b.DoseDegrees,b=>b.DoseLanded)};
+        // The first millisecond of the spin at which reached holds.
+        static double First(Func<double,bool> reached){for(int ms=0;ms<=FestivalSimulation.SpinSeconds*1000;ms++)if(reached(ms/1000.0))return ms/1000.0;return double.NaN;}
 
         [Test] public void ThePointerReadsTheSliceAtTheTopWithTheFourDoseSliver()
         {
@@ -75,9 +81,9 @@ namespace Festival.Tests
             Assert.That(spinning.Stage,Is.EqualTo(FestivalSpinner.Stage.People),"the people wheel goes first");
             Assert.That(spinning.PeopleDegrees,Is.GreaterThan(0).And.LessThan(landed.PeopleDegrees),"and is still turning a second in");
             Assert.That(spinning.PeopleLanded||spinning.DoseDegrees!=0,Is.False,"the dose wheel waits its turn");
-            var picked=At(FestivalSpinner.DoseStarts-.05);
+            var picked=At(FestivalSpinner.WheelStarts(1)-.05);
             Assert.That(picked.PeopleLanded&&picked.PeopleDegrees==landed.PeopleDegrees,"the people wheel has landed before the dose wheel starts");
-            var dosing=At(FestivalSpinner.DoseStarts+.5);
+            var dosing=At(FestivalSpinner.WheelStarts(1)+.5);
             Assert.That(dosing.Stage,Is.EqualTo(FestivalSpinner.Stage.Dose));
             Assert.That(dosing.DoseDegrees,Is.GreaterThan(0).And.LessThan(landed.DoseDegrees),"then the dose wheel turns");
             Assert.That(At(FestivalSpinner.TakeStarts-.05).DoseLanded,"and lands before the take");
@@ -87,6 +93,65 @@ namespace Festival.Tests
             Assert.That(FestivalSpinner.ReactStarts,Is.GreaterThan(FestivalSpinner.TakeStarts).And.LessThan(FestivalSimulation.SpinSeconds),"the reaction starts inside the spin");
             state.Phase="Loading";
             Assert.That(At(FestivalSimulation.SpinSeconds+.1).Stage,Is.EqualTo(FestivalSpinner.Stage.Hidden),"Loading ends the sequence");
+        }
+
+        // SPIN-2: one wheel after another, each turning 4 s from start to stop and resting .6 s on its result; after the last rest
+        // the tripper takes the dose for 1.4 s and reacts for 1.6 s, which ends the spin.
+        [Test] public void EachWheelTurnsForFourSecondsThenRestsOnItsResult()
+        {
+            var state=Spin(4242,4,2,3);var crew=FestivalSpinner.Crew(state);double start=Start(state);
+            FestivalSpinner.Beat At(double seconds)=>FestivalSpinner.At(state,crew,start+seconds);
+            var landed=At(FestivalSimulation.SpinSeconds-.01);double rested=0;
+            for(int i=0;i<Wheels.Length;i++)
+            {
+                var wheel=Wheels[i];
+                double moves=First(t=>wheel.Degrees(At(t))>0),stops=First(t=>wheel.Landed(At(t)));
+                Assert.That(stops-moves,Is.EqualTo(4).Within(.01),"the "+wheel.Name+" wheel turns for 4 s from start to stop");
+                Assert.That(moves-rested,Is.EqualTo(i==0?0:.6).Within(.01),i==0?"the people wheel turns as the spin starts":"the "+wheel.Name+" wheel waits .6 s after the last one stops");
+                Assert.That(wheel.Degrees(At(stops-.05)),Is.LessThan(wheel.Degrees(landed)),"the "+wheel.Name+" wheel is still turning just before it stops");
+                Assert.That(wheel.Degrees(At(stops)),Is.EqualTo(wheel.Degrees(landed)),"and stops where it lands");
+                rested=stops;
+            }
+            double take=First(t=>At(t).Stage==FestivalSpinner.Stage.Take),react=First(t=>At(t).Stage==FestivalSpinner.Stage.React);
+            Assert.That(take-rested,Is.EqualTo(.6).Within(.01),"the last wheel rests .6 s on its result before the take");
+            Assert.That(react-take,Is.EqualTo(1.4).Within(.01),"the take lasts 1.4 s");
+            Assert.That(FestivalSimulation.SpinSeconds-react,Is.EqualTo(1.6).Within(.01),"and the reaction 1.6 s, up to Loading");
+        }
+
+        // About 8 turns under the cubic ease-out: 3 s into its 4 s, a wheel still sweeps over 120 degrees a second instead of
+        // crawling through the second half of its spin.
+        [Test] public void EveryWheelStillTurnsBrisklyThreeSecondsIn()
+        {
+            for(int seed=1;seed<=20;seed++)
+            {
+                int size=1+seed%8;var state=Spin(seed*977,size,seed*7%size,1+seed%4);var crew=FestivalSpinner.Crew(state);double start=Start(state);
+                FestivalSpinner.Beat At(double seconds)=>FestivalSpinner.At(state,crew,start+seconds);
+                foreach(var wheel in Wheels)
+                {
+                    double moves=First(t=>wheel.Degrees(At(t))>0);
+                    float speed=(wheel.Degrees(At(moves+3.01))-wheel.Degrees(At(moves+3)))/.01f;
+                    Assert.That(speed,Is.GreaterThan(120),"seed "+seed+": the "+wheel.Name+" wheel still turns briskly 3 s in");
+                }
+            }
+        }
+
+        // The level clock and the tripper's dose stand still while the wheels, the rests, the take and the reaction run.
+        [Test] public void TheLevelClockWaitsOutTheWholeSpin()
+        {
+            var game=new FestivalSimulation(5);
+            foreach(var id in new[]{"host","friend"}){var p=game.AddPlayer(id,id);p.X=0;p.Z=19;game.Execute(id,new GameCommand{Id="ready_"+id,Kind="Ready"});}
+            game.Tick(5.2);
+            Assert.That(game.State.Phase,Is.EqualTo("Spinning"),"setup: the ready countdown ends in the spin");
+            var dose=game.Player(game.State.TripperId).Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
+            double full=dose.RemainingSeconds,began=game.State.SimulationSeconds;
+            while(game.State.Phase=="Spinning"&&game.State.SimulationSeconds<began+60)
+            {
+                game.Tick(.1);
+                Assert.That(game.State.ElapsedSeconds,Is.Zero,"the level clock stands still "+(game.State.SimulationSeconds-began).ToString("F1")+" s into the spin");
+                Assert.That(dose.RemainingSeconds,Is.EqualTo(full),"and so does the dose");
+            }
+            Assert.That(game.State.Phase,Is.EqualTo("Loading"),"the crew loads once the spin ends");
+            Assert.That(game.State.SimulationSeconds-began,Is.EqualTo(Wheels.Length*(4+.6)+1.4+1.6).Within(.15),"the spin lasts 4 s and a .6 s rest per wheel, the 1.4 s take and the 1.6 s reaction");
         }
 
         [Test] public void TheReactionGrowsWithTheDose()
