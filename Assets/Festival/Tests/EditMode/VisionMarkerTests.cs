@@ -68,10 +68,10 @@ namespace Festival.Tests
 
             // Crafted: a truth and a fake of every kind, side by side.
             var state=Round();var eye=View();var crafted=Markers();var bodies=new Dictionary<string,Transform>();
-            foreach(var kind in new[]{"Buyer","Narc","Clue","Stash","DoubleBuyer","Shortcut"})
+            foreach(var kind in new[]{"Buyer","Narc","Clue","Stash","DoubleBuyer"})
                 foreach(bool fake in new[]{false,true})
                 {
-                    var id=kind+(fake?" fake":" truth");bool place=kind=="Stash"||kind=="Shortcut";
+                    var id=kind+(fake?" fake":" truth");bool place=kind=="Stash";
                     state.Visions.Add(new VisionState{Id=id,Kind=kind,NpcId=place?"":id,X=bodies.Count,Z=4,Tell=fake});
                     if(!place)bodies[id]=Made(id).transform;
                 }
@@ -79,7 +79,7 @@ namespace Festival.Tests
             crafted.Apply(state,eye,id=>bodies.TryGetValue(id,out var t)?t:null,.5f,.02f);
             float still=Glyph(crafted,state.Visions[0]).transform.localScale.x;
             foreach(var vision in state.Visions)Assert.That(Glyph(crafted,vision).transform.localScale.x,Is.EqualTo(still).Within(1e-5f),vision.Id+": nothing shimmers while the camera is still");
-            foreach(var kind in new[]{"Buyer","Narc","Clue","Stash","DoubleBuyer","Shortcut"})
+            foreach(var kind in new[]{"Buyer","Narc","Clue","Stash","DoubleBuyer"})
             {
                 Color truth=Glyph(crafted,state.Visions.Find(v=>v.Id==kind+" truth")).sharedMaterial.color,fake=Glyph(crafted,state.Visions.Find(v=>v.Id==kind+" fake")).sharedMaterial.color;
                 Color.RGBToHSV(truth,out float th,out float ts,out float tv);Color.RGBToHSV(fake,out float fh,out float fs,out float fv);
@@ -153,7 +153,7 @@ namespace Festival.Tests
             foreach(var kind in new[]{"Buyer","Narc","Clue"}){state.Visions.Add(new VisionState{Id=kind,Kind=kind,NpcId=kind});bodies[kind]=Made(kind).transform;}
             // A buyer who pays double can also carry a buyer mark: one festivalgoer, two visions.
             state.Visions.Add(new VisionState{Id="DoubleBuyer",Kind="DoubleBuyer",NpcId="Buyer"});
-            foreach(var kind in new[]{"Stash","Shortcut"})state.Visions.Add(new VisionState{Id=kind,Kind=kind,X=3,Z=3});
+            state.Visions.Add(new VisionState{Id="Stash",Kind="Stash",X=3,Z=3});
             var markers=Markers();Func<string,Transform> actorFor=id=>bodies.TryGetValue(id,out var t)?t:null;var view=View();markers.Apply(state,view,actorFor,0,.02f);
             Assert.That(markers.Shown,Is.EqualTo(state.Visions.Count),"every vision is drawn");
             Assert.That(()=>markers.Apply(state,view,actorFor,.02f,.02f),Is.Not.AllocatingGCMemory(),"drawing a frame makes no garbage");
@@ -165,11 +165,8 @@ namespace Festival.Tests
                 Assert.That(looks.Add(glyph.GetComponent<MeshFilter>().sharedMesh.name),Is.True,kind+" has its own shape, so colour is never the only cue");
                 Assert.That(looks.Add(ColorUtility.ToHtmlStringRGB(glyph.sharedMaterial.color)),Is.True,kind+" has its own colour");
             }
-            foreach(var secret in new[]{"DoubleBuyer","Shortcut"})
-            {
-                Assert.That(Glyph(markers,secret).GetComponent<MeshFilter>().sharedMesh,Is.EqualTo(Glyph(markers,"Stash").GetComponent<MeshFilter>().sharedMesh),secret+" looks like the other secrets");
-                Assert.That(Glyph(markers,secret).sharedMaterial.color,Is.EqualTo(Glyph(markers,"Stash").sharedMaterial.color),secret+" shares the secrets' colour");
-            }
+            Assert.That(Glyph(markers,"DoubleBuyer").GetComponent<MeshFilter>().sharedMesh,Is.EqualTo(Glyph(markers,"Stash").GetComponent<MeshFilter>().sharedMesh),"a double buyer looks like the stash, the other secret");
+            Assert.That(Glyph(markers,"DoubleBuyer").sharedMaterial.color,Is.EqualTo(Glyph(markers,"Stash").sharedMaterial.color),"a double buyer shares the secrets' colour");
         }
 
         // A day level at dose 3 or 4 on the real deal, so the tripper sees truths, fakes and a secret. Three friends.

@@ -102,7 +102,7 @@ namespace Festival.Presentation
         public static Color FakeTint(Color color){Color.RGBToHSV(color,out float h,out float s,out float v);return Color.HSVToRGB(Mathf.Repeat(h+FakeHueShift,1),s,v);}
 
         // Each kind has its own shape and colour, so colour is never the only cue. The secrets (a cash stash, a buyer who
-        // pays double, a shortcut) share one gold look.
+        // pays double) share one gold look.
         private static (PrimitiveType Shape,Color Color) Look(string kind)=>kind switch
         {
             "Buyer"=>(PrimitiveType.Sphere,new Color(.25f,.95f,.35f)),

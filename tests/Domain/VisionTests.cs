@@ -12,7 +12,8 @@ public static class VisionTests
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
     // The design's share of true visions for doses 1-4.
     static readonly double[] Reliability={0,.75,.50,.25,.10};
-    static readonly string[] SecretKinds={"Stash","DoubleBuyer","Shortcut"};
+    // VISION-3: nights deal these too; the night's old Shortcut secret did nothing and is no longer dealt.
+    static readonly string[] SecretKinds={"Stash","DoubleBuyer"};
     static int sequence;
     static void Check(bool pass,string message){if(!pass)throw new Exception("Vision: "+message);}
     static CommandResult Act(FestivalSimulation s,string id,string kind,string target="",string item="")=>s.Execute(id,new GameCommand{Id="vision"+(sequence++),Kind=kind,TargetId=target,ItemId=item});
@@ -123,8 +124,8 @@ public static class VisionTests
             Check(secrets.Select(v=>v.Kind).Distinct().Count()==secrets.Count,where+": two different secrets");
             foreach(var v in secrets)
             {
-                Check(level==0?v.Kind=="Stash"||v.Kind=="DoubleBuyer":v.Kind=="Stash"||v.Kind=="Shortcut",where+": a "+v.Kind+" secret");
-                Check(v.Kind=="DoubleBuyer"?Npc(s,v.NpcId)?.Role=="Buyer":v.NpcId==""&&(v.X!=0||v.Z!=0),where+": a double buyer is a real buyer; a stash or shortcut is a spot on the grounds");
+                Check(v.Kind=="Stash"||v.Kind=="DoubleBuyer",where+": a "+v.Kind+" secret, by day or night");
+                Check(v.Kind=="DoubleBuyer"?Npc(s,v.NpcId)?.Role=="Buyer":v.NpcId==""&&(v.X!=0||v.Z!=0),where+": a double buyer is a real buyer; a stash is a spot on the grounds");
             }
         }
     }
@@ -165,8 +166,12 @@ public static class VisionTests
         p.X=stash.X;p.Z=stash.Z;s.Tick(.1);
         Check(s.State.StashCash==banked+15&&stash.Confirmed,"reaching the secret stash banks $15 for the crew");
         p.X+=10;s.Tick(.1);p.X-=10;s.Tick(.2);Check(s.State.StashCash==banked+15,"a stash pays once");
-        var night=Dosed(4,1,ref seed);var shortcut=night.State.Visions.Find(v=>v.Kind=="Shortcut");var q=night.Player("p0");banked=night.State.StashCash;
-        q.X=shortcut.X;q.Z=shortcut.Z;night.Tick(.1);Check(night.State.StashCash==banked,"a shortcut is a way through, not cash");
+        // VISION-3: a night deals the same two secrets, no dud shortcut. Its double buyer stands on open ground for the sale, since
+        // one inside Palm Mirage's VIP zones pays double again.
+        var night=Dosed(4,1,ref seed);night.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
+        Check(night.State.Visions.Exists(v=>v.Kind=="DoubleBuyer")&&night.State.Visions.Exists(v=>v.Kind=="Stash"),"a dose-4 night shows a double buyer and a stash too");
+        var nightDoubler=Npc(night,night.State.Visions.Find(v=>v.Kind=="DoubleBuyer").NpcId);nightDoubler.X=0;nightDoubler.Z=5;
+        Check(Sell(night,"p0",nightDoubler)==35,"by night too the secret double buyer pays twice");
     }
 
     static void OnlyTheTripperSeesVisions()

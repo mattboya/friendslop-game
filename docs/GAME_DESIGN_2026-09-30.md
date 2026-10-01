@@ -78,8 +78,8 @@ The two hooks the design is built around:
 **How the visions behave:**
 
 - The truth is always somewhere among the visions, buried in fakes.
-- Heavier doses also reveal secret things: a hidden cash stash, a shortcut, or
-  a buyer who pays double. They also raise the level's payout.
+- Heavier doses also reveal secret things, by day or night: a hidden cash
+  stash or a buyer who pays double. They also raise the level's payout.
 
 **Spotting fakes:** false visions have learnable tells. They cast no shadow,
 shimmer when the camera moves, and are slightly off in colour. The only hint in

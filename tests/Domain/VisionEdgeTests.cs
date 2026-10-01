@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using Festival.Core;
 
 // VISION-3: the tripper's visions at their edges, each found by journey J2 of the 2026-09-30 wave: a fake never sits on a link
-// still ahead on its own trail, and a clue the tripper finds says TRUE for a few seconds before the trail moves on.
+// still ahead on its own trail, a clue the tripper finds says TRUE for a few seconds before the trail moves on, and no dud
+// Shortcut secret is dealt.
 public static class VisionEdgeTests
 {
     static void Check(bool pass,string message){if(!pass)throw new Exception("VisionEdge: "+message);}
@@ -29,7 +30,7 @@ public static class VisionEdgeTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{FakesKeepOffTheirOwnTrail,AFoundClueSaysTrueAWhile})
+        foreach(var test in new Action[]{FakesKeepOffTheirOwnTrail,AFoundClueSaysTrueAWhile,NightSecretsAreAStashOrADoubleBuyer})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" vision edge test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -86,5 +87,20 @@ public static class VisionEdgeTests
             for(string next=Next(t,0);next!="";next=Next(t,0)){t.ConfirmVisionsOf(Npc(t,next));if(t.State.Visions.FindAll(v=>v.Kind=="Clue"&&v.NpcId==next).Count>1)stacked++;}
         }
         Check(nights>20&&stacked==0,stacked+" fake(s) landed on a found clue holder still showing TRUE, over "+nights+" nights");
+    }
+
+    // 3. A night Shortcut secret looked like the gold stash, did nothing when reached and could never be checked. Nights now
+    // deal the day's secrets instead: at dose 3 a cash stash or a buyer who pays double, at dose 4 both.
+    static void NightSecretsAreAStashOrADoubleBuyer()
+    {
+        var seen=new HashSet<string>();int nights=0;
+        foreach(var (festival,level) in new[]{(0,1),(1,3)})for(int seed=0;seed<160;seed++)
+        {
+            var s=Start(seed,level,festival:festival);int dose=FestivalSimulation.TripperDose(s.State);if(dose<3)continue;nights++;
+            var secrets=s.State.Visions.FindAll(v=>v.Kind!="Clue");string where=Festivals.Name(festival)+" level "+level+" seed "+seed+" dose "+dose+": ";
+            Check(secrets.Count==dose-2&&secrets.TrueForAll(v=>v.Kind=="Stash"||v.Kind=="DoubleBuyer"),where+"a stash or a double buyer, got "+string.Join(",",secrets.ConvertAll(v=>v.Kind)));
+            foreach(var v in secrets){seen.Add(v.Kind);Check(v.Kind=="Stash"?v.NpcId==""&&(v.X!=0||v.Z!=0):Npc(s,v.NpcId)?.Role=="Buyer",where+"a stash is a spot on the grounds, a double buyer a real buyer");}
+        }
+        Check(nights>40&&seen.Count==2,"setup: plenty of dose 3+ nights dealing both secrets, got "+nights+" nights and "+string.Join(",",seen));
     }
 }

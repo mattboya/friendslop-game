@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Festival.Core
 {
     /// <summary>A sight only the tripper gets: a role over a festivalgoer (Buyer, Narc), the next clue holder (Clue), or a secret:
-    /// a cash Stash or a Shortcut at a spot, a DoubleBuyer over a buyer. Tell is presentation-only and true on fakes, so they can
+    /// a cash Stash at a spot or a DoubleBuyer over a buyer. Tell is presentation-only and true on fakes, so they can
     /// show their tells; IsTrue reaches the tripper only once the vision is Confirmed (VisibleVisions). Trail says which lost
     /// friend's trail a Clue belongs to (0 the first, 1 the second; SplitObjective.cs) and stays on the host. VISION-3: ShowUntil is
     /// when the host drops a found clue, still saying TRUE, in SimulationSeconds; 0 never (every other vision, and older snapshots).</summary>
@@ -24,7 +24,7 @@ namespace Festival.Core
         const double RefusedSaleSuspicion=10;
         // A secret stash banks this much in the crew's shared stash, once, for whoever reaches it.
         const int SecretStashCash=15;
-        // Secret stashes and shortcuts sit at fixed reachable spots: the old totem nooks and the far corners of the grounds.
+        // Secret stashes sit at fixed reachable spots: the old totem nooks and the far corners of the grounds.
         static readonly WorldPoint[] SecretSpots={new WorldPoint(16,-4),new WorldPoint(-16,5),new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
 
         /// <summary>This level's sale payout multiplier: x1, x1.25, x1.5 or x1.75 for the tripper's dose, times the encore lap's
@@ -84,17 +84,18 @@ namespace Festival.Core
             foreach(var v in seen)v.Trail=trail;
             return seen;
         }
-        // Doses 3 and 4 also see real secrets, looking like any true vision until found: one at dose 3, two at dose 4.
-        // By day a cash stash or a buyer who pays double; by night a cash stash or a shortcut (presentation only for now).
+        // Doses 3 and 4 also see real secrets, looking like any true vision until found: one at dose 3, two at dose 4, a cash stash
+        // or a buyer who pays double. VISION-3: nights dealt a shortcut instead of the double buyer, a dud nothing used. A night's
+        // double buyer comes from its own stream, so the night's deal draws exactly what it drew when the shortcut stood there.
         List<VisionState> SecretSights(ContentRandom random,int dose,bool night)
         {
-            var kinds=Shuffled(new List<string>{"Stash",night?"Shortcut":"DoubleBuyer"},random);var spots=Shuffled(new List<WorldPoint>(SecretSpots),random);
-            var buyers=State.Npcs.FindAll(n=>n.Role=="Buyer");var seen=new List<VisionState>();
+            var kinds=Shuffled(new List<string>{"Stash","DoubleBuyer"},random);var spots=Shuffled(new List<WorldPoint>(SecretSpots),random);
+            var buyers=State.Npcs.FindAll(n=>n.Role=="Buyer");var pick=night?new ContentRandom(unchecked(State.SpinSeed*37+13)):random;var seen=new List<VisionState>();
             for(int i=0;i<dose-2;i++)
             {
                 // ponytail: a crowd with no buyers (only in hand-built states) simply has no double buyer.
                 if(kinds[i]!="DoubleBuyer")seen.Add(new VisionState{Kind=kinds[i],X=spots[i].X,Z=spots[i].Z,IsTrue=true});
-                else if(buyers.Count>0)seen.Add(Sight(buyers[random.Next(buyers.Count)],"DoubleBuyer",true));
+                else if(buyers.Count>0)seen.Add(Sight(buyers[pick.Next(buyers.Count)],"DoubleBuyer",true));
             }
             return seen;
         }
