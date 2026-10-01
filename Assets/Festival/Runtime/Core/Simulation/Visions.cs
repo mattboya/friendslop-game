@@ -36,10 +36,11 @@ namespace Festival.Core
         // The tripper's dose from the public spin result, 1-4; a round with no spin counts as dose 1.
         public static int TripperDose(RoundState s)=>Math.Min(Reliability.Length,Math.Max(1,s.Doses.Find(d=>d.PlayerId==s.TripperId)?.Dose??1));
 
-        // As the crew leaves camp, once the spinners have picked the tripper: deal this level's roles, then show the visions.
+        // As the crew leaves camp, once the spinners have picked the tripper: deal this level's roles, then show the visions. TRIP-7:
+        // every stream of the deal mixes in the host's DealSeed, which no view carries, so no client can deal it again.
         void DealRoles()
         {
-            var level=Festivals.For(State);var random=new ContentRandom(unchecked(State.SpinSeed*7+1));
+            var level=Festivals.For(State);var random=new ContentRandom(unchecked((State.SpinSeed*7+1)^State.DealSeed));
             var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"),random);int trails=LoseFriends();
             int narcs=Math.Min(level.Narcs,crowd.Count),chain=Math.Min(level.ChainLength,(crowd.Count-narcs)/trails),holders=chain*trails;
             int buyers=Math.Min((int)Math.Round(BuyerShare*crowd.Count,MidpointRounding.AwayFromZero),crowd.Count-narcs-holders);
@@ -90,7 +91,7 @@ namespace Festival.Core
         List<VisionState> SecretSights(ContentRandom random,int dose,bool night)
         {
             var kinds=Shuffled(new List<string>{"Stash","DoubleBuyer"},random);var spots=Shuffled(new List<WorldPoint>(SecretSpots),random);
-            var buyers=State.Npcs.FindAll(n=>n.Role=="Buyer");var pick=night?new ContentRandom(unchecked(State.SpinSeed*37+13)):random;var seen=new List<VisionState>();
+            var buyers=State.Npcs.FindAll(n=>n.Role=="Buyer");var pick=night?new ContentRandom(unchecked((State.SpinSeed*37+13)^State.DealSeed)):random;var seen=new List<VisionState>();
             for(int i=0;i<dose-2;i++)
             {
                 // ponytail: a crowd with no buyers (only in hand-built states) simply has no double buyer.

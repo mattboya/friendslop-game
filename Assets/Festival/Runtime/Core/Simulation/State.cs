@@ -68,6 +68,10 @@ namespace Festival.Core
         public int FestivalIndex,LevelIndex,EncoreTier,UnlockedFestivalCount=1;
         // TRIP-1 spin result, public so every client animates the same spin. TripperBag: players still due a turn this weekend.
         public int SpinSeed; public double SpinEndsAt; public string TripperId=""; public List<PlayerDose> Doses=new List<PlayerDose>(); public List<string> TripperBag=new List<string>();
+        // TRIP-7: the host's secret for this level's hidden deal (FestivalSimulation.DealSecret, asked for at each spin), mixed into
+        // the roles, the clue trails, the lost friends' spots and the cloud's landmark. No view carries it (FestivalSession.ViewFor),
+        // so no client can rebuild them from the public seeds. 0, no secret (tests, previews, older snapshots), deals as before.
+        public int DealSeed;
         public double ElapsedSeconds,DurationSeconds=600,SimulationSeconds,LaunchAtSeconds; public long Tick,TransactionSequence,EntitySequence;
         public int CluesRead, ObjectiveReward, SurvivorBonus, Survivors, ConnectedCrewCount;
         // The night's clue trail is complete (Visions.cs): the lost friend can be found.

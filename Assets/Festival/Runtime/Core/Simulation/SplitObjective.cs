@@ -18,16 +18,17 @@ namespace Festival.Core
         const double FoundClueSeconds=3;
         // A FindFriend interaction's target: the first friend's is "friend".
         const string SecondFriendTarget="friend_2";
-        // Friends get lost at one of these, picked by the round's seed; a second friend at the next one along.
+        // Friends get lost at one of these, picked by the round's seed and the level's DealSeed; a second friend at the next one along.
         static readonly WorldPoint[] FriendSpots={new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
         static WorldPoint FriendSpot(int seed,int friend){var at=FriendSpots[((seed&int.MaxValue)%FriendSpots.Length+friend)%FriendSpots.Length];return new WorldPoint(at.X,at.Z);}
 
-        // As the crew leaves camp: a night with TwoFriendCrew or more connected loses the second friend too. Counted once, here,
-        // so someone leaving mid-night does not call the search off. Returns how many trails DealRoles lays.
+        // As the crew leaves camp: the friend is lost at the spot the round's seed and the host's DealSeed pick (TRIP-7; with no
+        // secret it is CreateRound's spot). A night with TwoFriendCrew or more connected loses the second friend too, counted once,
+        // here, so someone leaving mid-night does not call the search off. Returns how many trails DealRoles lays.
         int LoseFriends()
         {
             var second=State.SecondFriend;second.Active=Festivals.For(State).Night&&State.Players.FindAll(p=>p.Connected).Count>=TwoFriendCrew;
-            if(second.Active)second.Position=FriendSpot(State.Seed,1);
+            int seed=State.Seed^State.DealSeed;State.FriendPosition=FriendSpot(seed,0);if(second.Active)second.Position=FriendSpot(seed,1);
             return second.Active?2:1;
         }
         List<string> Chain(int trail)=>trail==0?State.ClueChain:State.SecondFriend.ClueChain;
@@ -45,8 +46,9 @@ namespace Festival.Core
             if(read==Chain(trail).Count){if(trail==0)State.GateOpened=true;else second.GateOpened=true;}
             // The link's one true clue is the one just found; an earlier link's, still saying TRUE, keeps its own time.
             foreach(var v in State.Visions)if(v.Kind=="Clue"&&v.Trail==trail&&v.IsTrue&&v.ShowUntil==0)v.ShowUntil=State.SimulationSeconds+FoundClueSeconds;
-            // Each trail draws its fakes from its own seeds: the first trail's (and DealRoles') offsets stay at or under MaxChainLength+1.
-            State.Visions.RemoveAll(v=>v.Kind=="Clue"&&v.Trail==trail&&v.ShowUntil==0);var random=new ContentRandom(unchecked(State.SpinSeed*7+1+read+(Festivals.MaxChainLength+1)*trail));
+            // Each trail draws its fakes from its own seeds, mixed with the DealSeed as DealRoles' is: the first trail's (and DealRoles')
+            // offsets stay at or under MaxChainLength+1.
+            State.Visions.RemoveAll(v=>v.Kind=="Clue"&&v.Trail==trail&&v.ShowUntil==0);var random=new ContentRandom(unchecked((State.SpinSeed*7+1+read+(Festivals.MaxChainLength+1)*trail)^State.DealSeed));
             Show(ClueVisions(random,TripperDose(State),trail,State.Visions),random);
         }
 

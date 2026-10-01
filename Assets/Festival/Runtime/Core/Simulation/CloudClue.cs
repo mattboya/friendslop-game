@@ -29,13 +29,16 @@ namespace Festival.Core
         public static int VisibleCloudLandmark(RoundState s,string viewer)=>s.TripperId!=""&&viewer==s.TripperId&&s.CloudClueReadAt>=0?s.CloudClueLandmark:-1;
 
         // As the crew leaves camp, after the spinners: a day's clue cloud, and the landmark it pictures, from its own stream. It
-        // warms up with one draw, as GiggleTanks.cs does, so neither reads a fresh stream's barely stirred first value.
+        // warms up with one draw, as GiggleTanks.cs does, so neither reads a fresh stream's barely stirred first value. TRIP-7: the
+        // landmark is part of the hidden deal, so it comes from the stream's twin mixed with the host's DealSeed, kept in step past
+        // the warm-up and the window (with no secret, the landmark it always was). The window, in every view, stays public.
         void PlaceCloudClue()
         {
-            var random=new ContentRandom(unchecked(State.SpinSeed*29+17));random.Next(100);
+            int seed=unchecked(State.SpinSeed*29+17),window=CloudShapes.ClueLatestSeconds-CloudShapes.ClueEarliestSeconds+1;
+            var random=new ContentRandom(seed);random.Next(100);var hidden=new ContentRandom(seed^State.DealSeed);hidden.Next(100);hidden.Next(window);
             bool day=!Festivals.For(State).Night;State.CloudClueReadAt=-1;State.CloudStashFound=false;
-            State.CloudClueStart=day?CloudShapes.ClueEarliestSeconds+random.Next(CloudShapes.ClueLatestSeconds-CloudShapes.ClueEarliestSeconds+1):-1;
-            State.CloudClueLandmark=day?random.Next(CloudShapes.LandmarkCount(State.FestivalIndex)):-1;
+            State.CloudClueStart=day?CloudShapes.ClueEarliestSeconds+random.Next(window):-1;
+            State.CloudClueLandmark=day?hidden.Next(CloudShapes.LandmarkCount(State.FestivalIndex)):-1;
         }
         // Apply lets only a living, free player at the festival this far; CanLieDown turns away one holding a friend or a body.
         CommandResult LieDown(PlayerState p)

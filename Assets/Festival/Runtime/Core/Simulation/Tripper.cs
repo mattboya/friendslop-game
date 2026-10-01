@@ -20,6 +20,11 @@ namespace Festival.Core
         // TRIP-5: the substance spinner's five equal slices, as catalog effect ids (Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust,
         // Couch Lock); Shot stays the debrief's. Perception only: no rule reads which one a dose is.
         public static readonly IReadOnlyList<string> Substances=new[]{"lsd","mushrooms","ecstasy","ketamine","weed"};
+        // TRIP-7: where each level's DealSeed comes from, set by the host like HasLineOfSight and Navigate (FestivalSession.Host asks
+        // a fresh Guid). Null, as in tests and previews, deals with 0, as before.
+        // ponytail: 32 bits, all a ContentRandom seed holds. A tripper's client, which sees the visions, could still try every seed
+        // offline (minutes on a desktop); widen ContentRandom if strangers or leaderboards ever make that worth stopping.
+        public Func<int> DealSecret;
         static readonly float[] DoseSpeeds={.92f,.88f,.84f,.80f};
         public static float DoseMovementMultiplier(int dose)=>dose<1?1:DoseSpeeds[Math.Min(dose,DoseSpeeds.Length)-1];
         // The medical tent treats other effects but cannot talk anyone down from the spinner's dose.
@@ -29,7 +34,7 @@ namespace Festival.Core
         // highest dose rolled, so the tripper has the max and each friend still trips exactly once a weekend.
         void Spin(List<PlayerState> crew)
         {
-            State.SpinSeed=unchecked(State.Seed*31+(int)State.Tick);var random=new ContentRandom(State.SpinSeed);
+            State.SpinSeed=unchecked(State.Seed*31+(int)State.Tick);State.DealSeed=DealSecret?.Invoke()??0;var random=new ContentRandom(State.SpinSeed);
             var tripper=SpinPeople(crew,random);
             var dosed=State.LevelIndex==Festivals.LevelCount-1?crew:new List<PlayerState>{tripper};
             var doses=dosed.ConvertAll(p=>SpinDose(random));
