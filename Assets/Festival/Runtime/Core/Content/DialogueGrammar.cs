@@ -15,8 +15,10 @@ namespace Festival.Core
         // Cop-speak only narcs use. Every narc answer carries one; no other line in the grammar may contain any.
         public static readonly string[] NarcTells={"fellow festival-goer","street value","hypothetically speaking","where might one acquire","for my records","in the vicinity","ten-four","copy that","the suspect","the perpetrator","civilian","youths","the kids call","controlled substance","illicit","hundred hours","proceeding on foot","exit the vehicle"};
         public static bool HasNarcTell(string text) { if(string.IsNullOrEmpty(text)) return false; foreach(var tell in NarcTells) if(text.IndexOf(tell,StringComparison.OrdinalIgnoreCase)>=0) return true; return false; }
-        // FNV-1a, so host and clients agree on an NPC's persona; string.GetHashCode differs between processes.
-        public static string PersonaFor(string npcId) { uint hash=2166136261; foreach(char c in npcId??"") hash=unchecked((hash^c)*16777619); return Personas[hash%(uint)Personas.Length]; }
+        // POLO-2: whoever films (FestivalSimulation.DealTwists) talks like an influencer, and nobody else does; the rest of the crowd
+        // takes one of the other four by an FNV-1a hash of their id, so host and clients agree (string.GetHashCode differs between processes).
+        private static readonly string[] Unfilmed=Array.FindAll(Personas,p=>p!="Influencer");
+        public static string PersonaFor(string npcId,string twist) { if(twist==FestivalSimulation.Influencer) return "Influencer"; uint hash=2166136261; foreach(char c in npcId??"") hash=unchecked((hash^c)*16777619); return Unfilmed[hash%(uint)Unfilmed.Length]; }
         public static Conversation Build(string role,string persona,int festival,int seed)
         {
             int r=Array.IndexOf(Roles,role),p=Array.IndexOf(Personas,persona);

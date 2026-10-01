@@ -34,7 +34,7 @@ namespace Festival.Core
             if(c.Kind=="ConfirmChat")
             {
                 var chat=NewInteraction(p,c.Kind,npc.Id,ConfirmChatSeconds);
-                chat.Chat=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id),State.FestivalIndex,chat.ChartSeed);
+                chat.Chat=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id,npc.Twist),State.FestivalIndex,chat.ChartSeed);
                 return Ok();
             }
             GiveDanceRoom(p,npc,c.Kind);

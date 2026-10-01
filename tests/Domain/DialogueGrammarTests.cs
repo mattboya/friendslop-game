@@ -44,10 +44,18 @@ public static class DialogueGrammarTests
         Check(DialogueGrammar.HasNarcTell("So what's the STREET VALUE of a hug?")&&!DialogueGrammar.HasNarcTell("Nice hat.")&&!DialogueGrammar.HasNarcTell(null)&&!DialogueGrammar.HasNarcTell(""),"tells match in any case; plain and empty lines have none");
         foreach(var bad in new[]{new object[]{"Cop","Wook",0},new object[]{null,"Wook",0},new object[]{"Buyer","Clown",0},new object[]{"Buyer","Wook",2},new object[]{"Buyer","Wook",-1}})
         { bool refused=false; try { DialogueGrammar.Build((string)bad[0],(string)bad[1],(int)bad[2],1); } catch(ArgumentException) { refused=true; } Check(refused,"unknown role, persona or festival is refused"); }
+        // POLO-2: whoever films (FestivalSimulation.Influencer) talks like an influencer; nobody else does, and the rest of a crowd
+        // of 40 has all four other personas.
         var crowd=new HashSet<string>();
-        for(int i=0;i<40;i++) { string persona=DialogueGrammar.PersonaFor("wook_"+i); Check(Array.IndexOf(DialogueGrammar.Personas,persona)>=0,"a known persona"); crowd.Add(persona); }
-        Check(crowd.Count==5,"a crowd of 40 has all five personas");
+        for(int i=0;i<40;i++)
+        {
+            string persona=DialogueGrammar.PersonaFor("wook_"+i,"");
+            Check(Array.IndexOf(DialogueGrammar.Personas,persona)>=0&&persona!="Influencer","a known persona, and not filming, so no influencer: "+persona);crowd.Add(persona);
+            Check(DialogueGrammar.PersonaFor("wook_"+i,FestivalSimulation.Influencer)=="Influencer","wook_"+i+" films, so talks like an influencer");
+            Check(DialogueGrammar.PersonaFor("wook_"+i,FestivalSimulation.VipGuard)==persona,"guarding the VIP rope doesn't change how wook_"+i+" talks");
+        }
+        Check(crowd.Count==4,"a crowd of 40 has all four other personas, got "+string.Join(", ",crowd));
         // Pinned values: host and clients in different processes must agree, which string.GetHashCode does not promise.
-        Check(DialogueGrammar.PersonaFor("wook_0")=="Influencer"&&DialogueGrammar.PersonaFor("wook_1")=="Wook","persona comes from a fixed hash of the NPC id");
+        Check(DialogueGrammar.PersonaFor("wook_0","")=="Raver"&&DialogueGrammar.PersonaFor("wook_1","")=="Burner","persona comes from a fixed hash of the NPC id, got "+DialogueGrammar.PersonaFor("wook_0","")+", "+DialogueGrammar.PersonaFor("wook_1",""));
     }
 }
