@@ -50,6 +50,20 @@
       "renderers": 5,
       "triangles": 768,
       "separate": []
+    },
+    "FestivalRainbowTower": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 9,
+      "triangles": 1392,
+      "separate": []
+    },
+    "FestivalAstronaut": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 10,
+      "triangles": 1448,
+      "separate": []
     }
   }
 }

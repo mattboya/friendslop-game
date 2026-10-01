@@ -3,7 +3,12 @@ CONFIG={"out":"Assets/Festival/Art/Resources","src":"ArtSource/PoloDressing.blen
 "wheel":{"axle":7.5,"r":6,"inner":4.2,"legs":(1.1,3.2),"leg_r":.14,"plat":(3.2,.25,2.4),"rim":16,"spokes":8,"gond":(1.2,.9,1.0),"drop":.75,"rim_x":.8,"roof":.04},
 "stage":{"screen":(10,4.2,-1.0,1.9,3.2),"arch":(8.8,7.2,3.9,4.4,.16,.35),"pylon":(1.0,.5),"sign":(7.2,1.3,"PALM MIRAGE",.85),
 "crowd":((-16,0,-14),(16,6,-4.7)),"dj":((-3.2,1.4,-2.4),(3.2,3.7,.2))},
-"canopy":{"mast":(10,-1,11.2,.25),"cap":.55,"width":2.8,"thick":.35,"sag":.6,"petals":((-.78,-.62,9,12,"CanvasRose"),(-.35,-.94,10,18,"CanvasGold"),(.25,-.97,7,22,"CanvasMint")),"floor":6.0}}
+"canopy":{"mast":(10,-1,11.2,.25),"cap":.55,"width":2.8,"thick":.35,"sag":.6,"petals":((-.78,-.62,9,12,"CanvasRose"),(-.35,-.94,10,18,"CanvasGold"),(.25,-.97,7,22,"CanvasMint")),"floor":6.0},
+"tower":{"h":20,"base":4.0,"top":6.0,"levels":8,"post_r":.12,"panels":40,"panel":(1.5,1.1,.08),"cols":("Rose","PaintRose","Gold","Cream","Mint","Glass","Blue")},
+"astro":{"torso":((0,5.4,0),(2.2,2.1,3.5)),"helmet":((0,7.6,4.4),2.3),"visor":((0,7.5,6.25),(1.5,1.1,.5)),"pack":((0,8.1,-.6),(3.4,2.4,3.8)),
+"armL":((-1.5,6.2,2.0),(-3.0,3.4,4.6),(-3.1,1.15,5.8)),"armR":((1.5,6.2,2.0),(3.5,6.4,5.8),(2.6,8.6,7.4)),"arm_r":.95,"glove":1.15,
+"leg":((1.3,4.6,-2.2),(1.9,1.15,-3.6),(1.9,1.15,-7.4)),"leg_r":1.15,"boot":((1.9,1.2,-8.4),(2.2,2.4,2.8)),
+"phone":((2.4,9.6,8.4),(2.6,5.0,.35)),"lens":((3.2,11.4,8.62),.35),"rec":((1.8,11.6,8.6),.15),"panel":((0,4.3,3.0),(2.0,1.2,.5))}}
 import sys,os;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from festival_kit import *
 G=CONFIG
@@ -97,9 +102,44 @@ def stage_review(k):
     stage_bounds()
     for name,eye,at in (("front",(0,1.6,-24),(0,6,0)),("high",(18,14,-22),(0,6,0))):
         render(os.path.join(G["rev"],k+"-"+name+".png"),camera(eye,at,28),lambda o:o.get("kit") in ("FestivalStageMirage","FestivalPetalCanopy") or o.get("ctx"))
+def rainbow_tower(k):
+    T=G["tower"];h,n=T["h"],T["levels"];kit(k)
+    half=lambda y:T["base"]/2+(T["top"]-T["base"])/2*(y/h)
+    for sx in (-1,1):
+        for sz in (-1,1):cyl("Post"+str(sx)+str(sz),"Metal",(sx*T["base"]/2,0,sz*T["base"]/2),(sx*T["top"]/2,h,sz*T["top"]/2),T["post_r"],6)
+    corners=lambda s,y:[(-s,y,-s),(s,y,-s),(s,y,s),(-s,y,s)]
+    for L in range(1,n+1):
+        y=h*L/n;c=corners(half(y),y)
+        for f in range(4):slab("Ring"+str(L)+str(f),"Metal",c[f],c[(f+1)%4],.08,.08)
+    for L in range(n):
+        y0,y1=h*L/n,h*(L+1)/n
+        for f,(nx,nz) in enumerate(((0,-1),(1,0),(0,1),(-1,0))):
+            slab("Strut"+str(L)+str(f),"Metal",(nx*half(y0),max(y0,.01),nz*half(y0)),(nx*half(y1),y1,nz*half(y1)),.08,.08)
+    pw,ph,pt=T["panel"]
+    for i in range(T["panels"]):
+        y=.8+i/T["panels"]*(h-2.2);f=i%4;nx,nz=((0,-1),(1,0),(0,1),(-1,0))[f];along=((i//4)%3-1)*.45;s=half(y)
+        c=(nx*s+(along if nz else 0),y,nz*s+(along if nx else 0))
+        box("Panel"+str(i),T["cols"][i%len(T["cols"])],c,(pw,ph,pt) if nz else (pt,ph,pw))
+    s=half(h);slab("TopX1","Metal",(-s,h,-s),(s,h,s),.08,.08);slab("TopX2","Metal",(s,h,-s),(-s,h,s),.08,.08)
+    cyl("Crown mast","Metal",(0,h,0),(0,h+1.2,0),.06,6);ico("Star","StageGlowGold",(0,h+1.4,0),.6,1)
+def astronaut(k):
+    S=G["astro"];kit(k,[("Ground","Stone",(0,-.05,0),(24,.1,26),0)])
+    ico("Torso","White",S["torso"][0],1,3,s=S["torso"][1],smooth=True);ico("Helmet","White",S["helmet"][0],S["helmet"][1],3,smooth=True)
+    ico("Visor","Glass",S["visor"][0],1,2,s=S["visor"][1],smooth=True);box("Pack","Cream",S["pack"][0],S["pack"][1],.3)
+    box("ChestPanel","Blue",S["panel"][0],S["panel"][1],.1)
+    for i,m in enumerate(("StageGlowGold","StageGlowMint","StageGlowRose")):ico("Button"+str(i),m,(S["panel"][0][0]-.5+.5*i,S["panel"][0][1],S["panel"][0][2]+.28),.18,1)
+    for nme in ("armL","armR"):
+        pts=S[nme];tube(nme,"White",pts,S["arm_r"],8,smooth=True);ico(nme+"Glove","Gold",pts[-1],S["glove"],2,smooth=True)
+    for sx in (-1,1):
+        pts=[(sx*p[0],p[1],p[2]) for p in S["leg"]];tube("Leg"+str(sx),"White",pts,S["leg_r"],8,smooth=True)
+        bc,bs=S["boot"];box("Boot"+str(sx),"Gold",(sx*bc[0],bc[1],bc[2]),bs,.25)
+    box("Phone","Dark",S["phone"][0],S["phone"][1],.15)
+    pc,ps=S["phone"];box("Screen","StageGlowMint",(pc[0],pc[1],pc[2]-ps[2]/2-.02),(ps[0]-.3,ps[1]-.6,.04))
+    ico("Lens","Rubber",S["lens"][0],S["lens"][1],2);ico("Rec","StageGlowRose",S["rec"][0],S["rec"][1],1)
 BUILD={"FestivalPalmTall":lambda k:palm(k,G["palm"]["tall"]),"FestivalPalmLean":lambda k:palm(k,G["palm"]["lean"]),
 "FestivalWheelBase":wheel_base,"FestivalWheelRotor":wheel_rotor,"FestivalWheelGondola":gondola,
-"FestivalStageMirage":stage_mirage,"FestivalPetalCanopy":petal_canopy}
+"FestivalStageMirage":stage_mirage,"FestivalPetalCanopy":petal_canopy,
+"FestivalRainbowTower":rainbow_tower,"FestivalAstronaut":astronaut}
 CLEAR={"FestivalStageMirage":lambda:[G["stage"]["crowd"],G["stage"]["dj"]],"FestivalPetalCanopy":canopy_clear}
 REVIEW={"FestivalPetalCanopy":stage_review}
 want=sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else list(BUILD)
