@@ -19,9 +19,9 @@ namespace Festival.Core
         public const float MinWind=1,MaxWind=2,FadeMetres=15;
         const int LaneInner=60,LaneOuter=90;
         // Every puff of a cloud, ordinary or shaped, stays within ±HalfWidth across and ±HalfHeight up of its middle, and a cloud
-        // has at most MaxPuffs of them.
-        public const float HalfWidth=18,HalfHeight=11;
-        public const int MaxPuffs=16;
+        // has at most MaxPuffs of them. Shapes fill the footprint; an ordinary cloud is smaller, about 30 x 16 m.
+        public const float HalfWidth=22,HalfHeight=13;
+        public const int MaxPuffs=28;
         // Start to start, a shape follows MinGap-MaxGapSeconds after the last one began (the first after the level starts). It
         // morphs in over MorphSeconds, holds MinHold-MaxHoldSeconds and melts back over MorphSeconds.
         public const int MinGapSeconds=60,MaxGapSeconds=120,MinHoldSeconds=15,MaxHoldSeconds=20;
@@ -118,7 +118,7 @@ namespace Festival.Core
             for(int i=0;i<puffs.Length;i++)
             {
                 float across=2f*i/(puffs.Length-1)-1,hump=1-across*across,radius=3.5f+3*hump+random.Next(16)/10f;
-                puffs[i]=new Puff(across*(HalfWidth-7)+(random.Next(31)-15)/10f,1-HalfHeight+radius+hump*random.Next(41)/10f,radius);
+                puffs[i]=new Puff(across*11+(random.Next(31)-15)/10f,radius-10+hump*random.Next(41)/10f,radius);
             }
             return puffs;
         }
@@ -131,21 +131,31 @@ namespace Festival.Core
             return new Puff(a.X*stay+b.X*amount,a.Y*stay+b.Y*amount,a.Radius*stay+b.Radius*amount);
         }
 
-        /// <summary>The funny shapes, as seen from below: x across, y up and radius for each puff, in metres.</summary>
+        /// <summary>The funny shapes, as seen from below: x across, y up and radius for each puff, in metres. Their puffs overlap
+        /// as closely as an ordinary cloud's, so each reads as one cloud, not a string of beads.</summary>
         public static readonly Shape[] Shapes={
-            Table("duck",-15,1,2.5f, -12,-1,3.5f, -7,-3,5.5f, -1,-4,6, 5,-3,5, -3,0,3.5f, 7,2,3, 9,5.5f,4, 13.5f,4.5f,2.2f, 15.8f,4.2f,1.8f),
-            Table("rubber chicken",-15,3,2.5f, -10,1,5, -5,0,5, 0,1.5f,2.4f, 3.5f,2.5f,2.2f, 7,3,2.2f, 10.5f,2.5f,2.2f, 13.5f,2.5f,2.8f, 16.6f,1.6f,1.3f,
-                13,6,1.6f, 11.5f,5.5f,1.4f, -8,-5.5f,1.8f, -8.5f,-8.8f,1.6f, -3,-5.5f,1.8f, -2.5f,-8.8f,1.6f),
-            Table("giant hand",0,-8.8f,2.2f, -2,-4,4.5f, 2,-4,4.5f, 0,-1,4, -4.8f,3,1.8f, -4.8f,6.6f,1.7f, -1.6f,3.4f,1.8f, -1.6f,7,1.7f, -1.6f,9.3f,1.5f,
-                1.6f,3.4f,1.8f, 1.6f,7,1.7f, 1.6f,8.8f,1.5f, 4.8f,2.8f,1.6f, 4.8f,5.8f,1.5f, -6.5f,-3,2, -9,-.5f,1.8f),
-            Table("face",-5,4.5f,2.6f, 5,4.5f,2.6f, 0,.5f,2, -9,-1.5f,2.2f, -6.8f,-4.8f,2.2f, -3.5f,-6.8f,2.2f, 0,-7.5f,2.2f, 3.5f,-6.8f,2.2f, 6.8f,-4.8f,2.2f, 9,-1.5f,2.2f),
-            Table("dolphin",-16,-2,1.8f, -15.8f,-7,1.8f, -12.5f,-4,2.4f, -8.5f,-1.5f,3.2f, -4,1,3.8f, 1,2.2f,4, 6,1.8f,3.6f, 10.5f,0,2.8f, 13.5f,-1.5f,2.2f,
-                16,-2.5f,1.6f, -1,6.5f,2, -2.5f,8.8f,1.4f, 4,-3,1.8f),
-            Table("pizza slice",-12,7.5f,2.8f, -6,8,2.8f, 0,8.2f,2.8f, 6,8,2.8f, 12,7.5f,2.8f, -8,3.5f,3.4f, 0,3.5f,3.8f, 8,3.5f,3.4f, -4,-1.5f,3.2f, 4,-1.5f,3.2f,
-                0,-5.5f,2.8f, 0,-8.8f,2),
-            Table("sneaker",-12.5f,-7,2.4f, -7.5f,-7.5f,2.5f, -2.5f,-7.5f,2.5f, 2.5f,-7.5f,2.5f, 7.5f,-7.2f,2.5f, 12.5f,-6.5f,2.4f, 12,-3,2.8f, 6,-2.5f,3.4f,
-                0,-1.5f,3.8f, -6,-.5f,3.8f, -11,1.5f,3, -10,5.5f,2.4f, -4,4,2.4f, -.5f,2.8f,2),
-            Table("UFO",-15,-1,2.2f, -10,-1.5f,3, -4,-2,3.4f, 4,-2,3.4f, 10,-1.5f,3, 15,-1,2.2f, 0,3.8f,4, -3,2.5f,2.6f, 3,2.5f,2.6f, -7,-5.2f,1.5f, 0,-6,1.6f, 7,-5.2f,1.5f),
+            Table("duck",-6,-6,6.5f, 0,-6,7, 6,-5.5f,6.5f, -10.5f,-4,4.5f, -12.3f,-2.5f,4.2f, -14.2f,-1,3.8f, -16,.5f,3.5f, -2,-1.5f,5, 8.5f,-1.5f,4.2f,
+                9.5f,.8f,4.2f, 10.5f,3,4.2f, 11,6.5f,5.5f, 15.3f,6,3.2f, 17.1f,5.6f,3.2f, 18.8f,5.2f,3.2f),
+            Table("rubber chicken",-11,2,6.5f, -5,1,6.5f, -14.5f,5.5f,3.5f, -16.2f,7,3.2f, -18,8.5f,3, -.5f,2,3.4f, 2.1f,2.3f,3.4f, 4.7f,2.6f,3.4f, 7.3f,2.9f,3.3f,
+                9.9f,3.2f,3.3f, 12.5f,3.5f,3.3f, 15,4.5f,4, 18,3.4f,3, 14.8f,7.8f,3, 13.7f,8.7f,3, 12.5f,9.5f,3, -11,-2.5f,3, -11.2f,-5,3, -11.3f,-7.5f,3,
+                -11.5f,-10,3, -14,-10,3, -4,-2.5f,3, -3.8f,-5,3, -3.7f,-7.5f,3, -3.5f,-10,3, -.5f,-10,3),
+            Table("giant hand",-5.2f,0,5.5f, 0,.5f,5.5f, 5.2f,0,5.5f, -3,-5,5.5f, 3,-5,5.5f, 0,-8.5f,4, -7.8f,3.1f,3, -8.2f,5.6f,3, -8.5f,8,3, -2.6f,3.6f,3,
+                -2.7f,5.7f,3, -2.7f,7.9f,3, -2.8f,10,3, 2.6f,3.6f,3, 2.7f,5.7f,3, 2.7f,7.9f,3, 2.8f,10,3, 7.8f,3.1f,3, 8,4.9f,3, 8.3f,6.7f,3, 8.5f,8.5f,3,
+                -8.8f,-2.4f,3.5f, -10.9f,-1.3f,3.3f, -12.9f,-.1f,3.2f, -15,1,3),
+            Table("face",-11,2,6.5f, -6,6,6.5f, -.5f,6.5f,5.5f, -6,-2,6.5f, -.5f,0,5.5f, 3.6f,5.2f,3.5f, 4,1.5f,4, 6.3f,.7f,3.8f, 8.7f,-.2f,3.7f, 11,-1,3.5f,
+                2.8f,-3,3.5f, 2,-6.5f,4, -3.5f,-6.5f,4.5f),
+            Table("dolphin",-13,-5,3.3f, -11,-3.7f,3.7f, -9,-2.3f,4.1f, -7,-1,4.5f, -3,1.5f,5.2f, .5f,1.8f,5.2f, 4,2,5.2f, 8,.5f,4.5f, 10.5f,-1,3.9f, 13,-2.5f,3.3f,
+                15.5f,-3.3f,3, 17.1f,-3.8f,3, 18.8f,-4.3f,3, -14.5f,-3.5f,3, -16.5f,-1.8f,3, -18.5f,0,3, -15,-6.5f,3, -16.8f,-8,3, -18.5f,-9.5f,3, 0,6,3.5f,
+                -1,7.8f,3.2f, -2,9.5f,3, 4,-2,3.2f),
+            Table("pizza slice",-15,9.5f,3.5f, -12,9.5f,3.5f, -9,9.5f,3.5f, -6,9.5f,3.5f, -3,9.5f,3.5f, 0,9.5f,3.5f, 3,9.5f,3.5f, 6,9.5f,3.5f, 9,9.5f,3.5f,
+                12,9.5f,3.5f, 15,9.5f,3.5f, -9,5.5f,4.5f, -4.5f,5.5f,5, 0,5.5f,5, 4.5f,5.5f,5, 9,5.5f,4.5f, -5,1,4.5f, 0,1,5, 5,1,4.5f, -2.2f,-2.8f,4, 2.2f,-2.8f,4,
+                0,-5.8f,3.6f, 0,-7.9f,3.3f, 0,-10,3),
+            Table("sneaker",-18.5f,-9.5f,3.5f, -15.4f,-9.5f,3.5f, -12.3f,-9.5f,3.5f, -9.2f,-9.5f,3.5f, -6.2f,-9.5f,3.5f, -3.1f,-9.5f,3.5f, 0,-9.5f,3.5f,
+                3.1f,-9.5f,3.5f, 6.2f,-9.5f,3.5f, 9.2f,-9.5f,3.5f, 12.3f,-9.5f,3.5f, 15.4f,-9.5f,3.5f, 18.5f,-9.5f,3.5f, -13,-5.5f,5, -8,-5.5f,5, -3,-5.5f,5,
+                2,-5.5f,5, 7,-5.5f,5, 12,-5.5f,5, 16.5f,-7,3.5f, -13,-.5f,5, -11,3,4, -6.5f,-1.8f,3.5f, -2,-1.5f,3.5f),
+            Table("UFO",-18.5f,-1.5f,3.5f, -15.4f,-1.5f,3.5f, -12.3f,-1.5f,3.5f, -9.2f,-1.5f,3.5f, -6.2f,-1.5f,3.5f, -3.1f,-1.5f,3.5f, 0,-1.5f,3.5f,
+                3.1f,-1.5f,3.5f, 6.2f,-1.5f,3.5f, 9.2f,-1.5f,3.5f, 12.3f,-1.5f,3.5f, 15.4f,-1.5f,3.5f, 18.5f,-1.5f,3.5f, -9,-2.5f,4.5f, 0,-3,5, 9,-2.5f,4.5f,
+                0,3,5.5f, -4.5f,2.5f,4, 4.5f,2.5f,4, -8.5f,-6,3, -8.5f,-8,3, 0,-6.5f,3, 0,-9,3, 8.5f,-6,3, 8.5f,-8,3),
         };
         static Shape Table(string name,params float[] xyr){var puffs=new Puff[xyr.Length/3];for(int i=0;i<puffs.Length;i++)puffs[i]=new Puff(xyr[3*i],xyr[3*i+1],xyr[3*i+2]);return new Shape(name,puffs);}
     }

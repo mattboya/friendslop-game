@@ -16,7 +16,7 @@ public static class CloudShapesTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EachLevelHas8To14CloudsOnTheBand,OneWindCarriesEveryCloud,CloudsFadeOutAndBackInWhereTheyWrap,
             TheSameSpinGivesTheSameSky,AShapeShowsEvery60To120SAndHolds15To20S,TheCloudNearestTheZenithTakesTheShape,
-            EveryShapeFitsOneCloud,ACloudMorphsIntoItsShapeAndBack})
+            EveryShapeFitsOneCloud,EveryShapeIsOneBoldCloud,ACloudMorphsIntoItsShapeAndBack})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" cloud test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -210,6 +210,31 @@ public static class CloudShapesTests
                 what+": the puff at ("+p.X+", "+p.Y+") r "+p.Radius+" fits one cloud's "+2*CloudShapes.HalfWidth+" x "+2*CloudShapes.HalfHeight+" m footprint");
         }
     }
+
+    // A shape has to read from the ground as one cloud at least the size of the others, not a string of beads. FestivalClouds' puff
+    // texture is solid only in the middle half of a puff's reach, so two puffs read as one cloud when those middles touch (centres
+    // within Touch of the sum of their reaches); and a puff under MinPuff m shows as a dot.
+    const float Touch=.5f,MinPuff=3;
+    static void EveryShapeIsOneBoldCloud()
+    {
+        foreach(var shape in CloudShapes.Shapes)
+        {
+            var puffs=shape.Puffs;
+            foreach(var p in puffs)Check(p.Radius>=MinPuff,shape.Name+": no puff smaller than "+MinPuff+" m, got one of "+p.Radius+" at ("+p.X+", "+p.Y+")");
+            var joined=new HashSet<int>{0};
+            for(bool grew=true;grew;)
+            {
+                grew=false;
+                for(int i=0;i<puffs.Length;i++)
+                    if(!joined.Contains(i)&&joined.Any(j=>Math.Sqrt(Sq(puffs[i].X-puffs[j].X)+Sq(puffs[i].Y-puffs[j].Y))<=Touch*(puffs[i].Radius+puffs[j].Radius)))grew=joined.Add(i);
+            }
+            var loose=Enumerable.Range(0,puffs.Length).Where(i=>!joined.Contains(i)).Select(i=>"("+puffs[i].X+", "+puffs[i].Y+")");
+            Check(joined.Count==puffs.Length,shape.Name+" is one cloud, but these puffs float apart: "+string.Join(" ",loose));
+            float wide=puffs.Max(p=>p.X+p.Radius)-puffs.Min(p=>p.X-p.Radius),tall=puffs.Max(p=>p.Y+p.Radius)-puffs.Min(p=>p.Y-p.Radius);
+            Check(wide>=1.5f*CloudShapes.HalfWidth||tall>=1.5f*CloudShapes.HalfHeight,shape.Name+" fills most of a cloud's footprint, got "+wide+" x "+tall+" m");
+        }
+    }
+    static double Sq(double x)=>x*x;
 
     // Puff i of a cloud slides to puff i of the shape. A puff the shape lacks shrinks away where it is; one the cloud lacks grows
     // in place.
