@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -15,6 +16,7 @@ namespace Festival.Tests
     // TRIP-5 in a running session: the local player's dose reaches their own screen through the single writers. FestivalHud adds
     // the swell to the field of view, FestivalSession trails the mouse, FestivalNightLighting lifts the colour grade, and
     // FestivalTrip draws its overlay and muffles the listener. A dose with nothing on the wheel puts every one of them back.
+    // In a live dance, the rhythm arrows take the substance's look-ahead.
     public sealed class TripPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator TheLocalDoseReachesTheScreenThroughTheSingleWriters()
@@ -81,6 +83,23 @@ namespace Festival.Tests
                 Assert.That(muffle.enabled,Is.False,"and the sound comes back");
                 from=view.transform.eulerAngles.y;aim.SetValue(session,(float)aim.GetValue(session)+90);yield return null;
                 Assert.That(Mathf.Abs(Mathf.DeltaAngle(from+90,view.transform.eulerAngles.y)),Is.LessThan(.5f),"the camera follows the mouse at once");
+
+                // Pony Dust in a live dance: the HUD's arrows rise into view 2.4 s ahead of their beat, not the plain 2 s. Each
+                // frame, how far ahead of its beat the farthest arrow on screen is; the partner is held in place so the dance runs on.
+                dose.Substance="ketamine";
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float npcX=npc.X,npcZ=npc.Z;player.X=npcX+.8f;player.Z=npcZ;
+                Assert.That(sim.Execute(me,new GameCommand{Id="trip_dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True,"setup: a dance with a festivalgoer starts");
+                var notes=host.GetComponentsInChildren<Transform>(true).First(t=>t.name=="Notes");
+                double farthest=0,danced=0;
+                for(deadline=Time.realtimeSinceStartup+6;Time.realtimeSinceStartup<deadline&&danced<1;)
+                {
+                    npc.X=npcX;npc.Z=npcZ;yield return null;
+                    var dance=session.State.Interactions.Find(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");if(dance==null)continue;
+                    var chart=RhythmChart.For(dance);danced=session.EstimatedSimulationSeconds-dance.StartSeconds;
+                    foreach(Transform note in notes)if(note.gameObject.activeSelf)farthest=System.Math.Max(farthest,chart.Notes[int.Parse(note.name.Substring(5))].TimeSeconds-danced);
+                }
+                Assert.That(danced,Is.GreaterThanOrEqualTo(1),"setup: the dance runs a second past its countdown");
+                Assert.That(farthest,Is.GreaterThan(2.1).And.LessThanOrEqualTo(Catalog.FindEffect("ketamine").LeadSeconds+.05),"Pony Dust's arrows show further ahead than the plain 2 s");
             }
             finally
             {
