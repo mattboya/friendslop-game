@@ -6,6 +6,8 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -92,6 +94,13 @@ namespace Festival.Tests
                 PressE();yield return new WaitForSeconds(.6f);
                 if(player.CarryBodyId!="")failures.Add("night 2 carrying a body: E does not put it down ("+session.Message+")");
 
+                // HUD-4: the friend is found but nobody escorts them; the longest escort line still fits its box at 1080p.
+                sim.State.FriendFound=true;sim.State.FriendLeaderId="";player.X=0;player.Z=0;
+                yield return new WaitForSeconds(.6f);
+                Expect("night 2, friend without an escort","Objective title","ESCORT FRIEND BACK TO CAMP");
+                Expect("night 2, friend without an escort","Objective detail","Friend needs an escort. Reach them and press E, then lead them to the way back to camp 32 m S.");
+                Fits("night 2, friend without an escort","Objective detail");
+
                 // Night 2 won: you lead the friend to the way back to camp, Sam's body lies home right beside you.
                 sim.State.FriendFound=true;sim.State.FriendLeaderId=player.Id;sim.State.FriendPosition=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
                 sim.State.Bodies[0].X=Festivals.CampGateX+.5f;sim.State.Bodies[0].Z=Festivals.CampGateZ;player.X=Festivals.CampGateX;player.Z=Festivals.CampGateZ;
@@ -139,6 +148,105 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"HUD text a player reads:\n"+string.Join("\n",failures));
+        }
+
+        // HUD-4: a menu left open at camp closes as the wheels start, so the spin is seen. While the wheels spin and the festival
+        // loads, the host refuses every action, so the HUD offers none and 1, Q and G send nothing. A key being rebound keeps the
+        // menu open as the festival opens. Hosts a real two-player round; the keys are pressed on a virtual keyboard, so they go
+        // through the HUD's own input handling (FestivalHud.UpdateKeyboard).
+        [UnityTest]public IEnumerator TheSpinClosesTheMenuAndOffersNothingToPress()
+        {
+            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
+            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            keyboard=InputSystem.AddDevice<Keyboard>("HUD spin keyboard");
+            var world=new GameObject("HUD spin world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD spin");
+            var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
+            string Prompt(){foreach(var text in hud.GetComponentsInChildren<Text>(true))if(text.name=="Prompt")return text.text;return "(no prompt)";}
+            IEnumerator Press(Key key)
+            {
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+            }
+            // No prompt, nothing for E, and the gear keys send nothing for the host to refuse.
+            IEnumerator NothingToPress(string where)
+            {
+                yield return new WaitForSeconds(.3f);
+                if(Prompt()!="")failures.Add(where+": the prompt reads \""+Prompt()+"\"");
+                if(primary.GetValue(view)!=null)failures.Add(where+": E still runs an action");
+                foreach(var key in new[]{Key.Digit1,Key.Q,Key.G})
+                {
+                    yield return Press(key);
+                    if(session.Message=="Round is not interactive")failures.Add(where+": "+key+" sent a command the host refused");
+                }
+            }
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("spin_mate","Sam");
+                // Gear in hand and Sam within reach: at the festival the HUD would offer to hand it over.
+                player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+                player.X=0;player.Z=19;mate.X=1.5f;mate.Z=19;mate.Ready=true;
+                yield return new WaitForSeconds(.3f);
+                Assert.That(Prompt(),Is.Not.Empty,"setup: at the trailhead the HUD offers something to press");
+                session.MenuOpen=true;session.Command("Ready");
+                deadline=Time.realtimeSinceStartup+30;
+                while(session.State.Phase!="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.State.Phase,Is.EqualTo("Spinning"),"setup: the ready countdown ends in the spin: "+session.Message);
+                yield return null;yield return null;
+                if(session.MenuOpen)failures.Add("spinning: the menu left open at camp still covers the wheels");
+                session.MenuOpen=false;yield return null;
+                var wheels=hud.transform.Find("Festival spinner");
+                if(wheels==null||!wheels.gameObject.activeInHierarchy)failures.Add("spinning: the wheels are not on screen");
+                yield return NothingToPress("spinning");
+
+                // Sam has no client of their own, so the festival stays loading until they are marked ready below.
+                deadline=Time.realtimeSinceStartup+40;
+                while(!(session.State.Phase=="Loading"&&player.MapReady)&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.State.Phase,Is.EqualTo("Loading"),"setup: the spin ends in loading, and this client's map is ready: "+session.Message);
+                yield return NothingToPress("loading");
+
+                session.MenuOpen=true;session.Controls.Rebind(session.Controls.Use,0,null);
+                Assert.That(session.Controls.Rebinding,"setup: a key is being rebound");
+                sim.Execute(mate.Id,new GameCommand{Id="spin_mate_loaded",Kind="MapReady"});
+                deadline=Time.realtimeSinceStartup+10;
+                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"setup: the festival opens: "+session.Message);
+                yield return null;yield return null;
+                if(!session.MenuOpen)failures.Add("the festival opens while a key is being rebound: the menu closed under the player");
+                ((InputActionRebindingExtensions.RebindingOperation)typeof(FestivalInput).GetField("rebind",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session.Controls)).Cancel();
+                Assert.That(session.Controls.Rebinding,Is.False,"setup: the rebind is cancelled");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"The spin a player sees:\n"+string.Join("\n",failures));
+        }
+
+        // The virtual keyboard and the input settings go back however the test ended (an error log skips its own finally).
+        private Keyboard keyboard;
+        private InputSettings.BackgroundBehavior oldBackground;
+        private InputSettings.EditorInputBehaviorInPlayMode oldEditor;
+        [UnityTearDown]public IEnumerator RestoreTheKeyboard()
+        {
+            if(keyboard!=null)
+            {
+                InputSystem.RemoveDevice(keyboard);keyboard=null;
+                InputSystem.settings.backgroundBehavior=oldBackground;InputSystem.settings.editorInputBehaviorInPlayMode=oldEditor;
+            }
+            yield return null;
         }
     }
 }

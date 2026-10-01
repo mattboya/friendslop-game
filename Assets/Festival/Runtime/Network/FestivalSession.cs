@@ -368,7 +368,8 @@ namespace Festival.Network
                 if(world!=null&&world.IsReady&&world.NavigationReady){loadedRound=State.RoundId;Command("MapReady");}
                 else Message="Waiting for festival navigation to finish…";
             }
-            if((State.Phase=="Playing"||State.Phase=="CampReview") && MenuOpen && lastPhase!=State.Phase)MenuOpen=false;
+            // HUD-4: never while a key is being rebound, so the menu does not close on a player in the middle of it.
+            if(MenuOpen&&!Controls.Rebinding&&ClosesMenu(State.Phase,lastPhase))MenuOpen=false;
             lastPhase=State.Phase;
             if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)MenuOpen=!MenuOpen;
             Cursor.lockState=PointerFree?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=PointerFree;
@@ -388,6 +389,9 @@ namespace Festival.Network
             UpdateActors();UpdateCamera(player);
         }
         private string lastPhase="";
+        /// <summary>Whether a menu left open closes itself as the round moves from lastPhase into phase: as the wheels start (HUD-4:
+        /// the spinner hides under the menu), the festival opens or the debrief begins.</summary>
+        public static bool ClosesMenu(string phase,string lastPhase)=>phase!=lastPhase&&(phase=="Spinning"||phase=="Playing"||phase=="CampReview");
         public void AcknowledgeDisplayedDialogue(InteractionState interaction)
         {
             if(interaction==null||string.IsNullOrEmpty(interaction.DialogueId)||acknowledgedDialogue==interaction.Id+interaction.DialogueId)return;

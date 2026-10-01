@@ -57,6 +57,9 @@ namespace Festival.Core
             var result=Apply(p,command);result.Id=command.Id;result.Sequence=++State.TransactionSequence;
             State.Commands.Add(new CommittedCommand{PlayerId=playerId,Id=command.Id,Result=result});return result;
         }
+        /// <summary>HUD-4: whether players can act in this phase: at camp shopping and at the festival. The host refuses any other
+        /// action as "Round is not interactive", and the HUD offers none then (the wheels spinning, the festival loading).</summary>
+        public static bool Interactive(string phase)=>phase=="Playing"||phase=="Shopping";
         CommandResult Apply(PlayerState p,GameCommand c) {
             if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
             if(c.Kind=="Start") {
@@ -79,7 +82,7 @@ namespace Festival.Core
             if(c.Kind=="HelpSelf")return HelpSelf(p);
             if(c.Kind=="BeginRevival"&&p.Life=="Spirit")return Revive(p,c);
             if(p.Life!="Alive")return Reject("Requires a living, free player");
-            if(State.Phase!="Playing"&&State.Phase!="Shopping")return Reject("Round is not interactive");
+            if(!Interactive(State.Phase))return Reject("Round is not interactive");
             if(c.Kind=="Transfer")return Transfer(p,c);
             if(c.Kind=="AcceptTransfer")return AcceptTransfer(p,c);
             if(c.Kind=="CancelTransfer")return CancelTransfer(p,c);

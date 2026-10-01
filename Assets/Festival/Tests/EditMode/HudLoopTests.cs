@@ -170,5 +170,37 @@ namespace Festival.Tests
             s.ReviewResult="Missed the quota";
             Assert.That(FestivalHudText.ReviewOutcome(s),Is.EqualTo("A GLORIOUS DISASTER"));
         }
+
+        // HUD-4: players act at camp and at the festival, nowhere else. The host refuses anything else and the HUD offers nothing
+        // and sends no gear keys then (FestivalHud.UpdateActions, UpdateKeyboard), by this one rule; HudLoopPlayTests watches it live.
+        [Test] public void NobodyActsWhileTheWheelsSpinOrTheFestivalLoads()
+        {
+            foreach(var phase in new[]{"Lobby","Spinning","Loading","CampReview","Results"})Assert.That(FestivalSimulation.Interactive(phase),Is.False,phase+" takes no actions");
+            foreach(var phase in new[]{"Shopping","Playing"})Assert.That(FestivalSimulation.Interactive(phase),Is.True,phase+" does");
+            var game=new FestivalSimulation(5);var you=game.AddPlayer("you","You");you.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+            int sent=0;
+            foreach(var phase in new[]{"Spinning","Loading"})
+            {
+                game.State.Phase=phase;
+                foreach(var kind in new[]{"Equip","Use","Drop"})
+                {
+                    var result=game.Execute("you",new GameCommand{Id="hud4-"+sent++,Kind=kind,ItemId="confetti"});
+                    Assert.That(result.Accepted,Is.False,kind+" while "+phase);Assert.That(result.Reason,Is.EqualTo("Round is not interactive"),kind+" while "+phase);
+                }
+            }
+        }
+
+        // HUD-4: a menu left open closes itself as the wheels start, so nobody misses the spin, as it does when the festival opens
+        // or the debrief begins. Opened again in the same phase, it stays (FestivalSession keeps it open while a key is rebound).
+        [Test] public void TheMenuClosesAsTheWheelsStart()
+        {
+            Assert.That(FestivalSession.ClosesMenu("Spinning","Shopping"),Is.True,"the ready countdown ends in the spin");
+            Assert.That(FestivalSession.ClosesMenu("Playing","Loading"),Is.True,"the festival opens");
+            Assert.That(FestivalSession.ClosesMenu("CampReview","Results"),Is.True,"the debrief begins");
+            foreach(var phase in new[]{"Spinning","Playing","CampReview"})Assert.That(FestivalSession.ClosesMenu(phase,phase),Is.False,"opened again during "+phase+", it stays open");
+            Assert.That(FestivalSession.ClosesMenu("Loading","Spinning"),Is.False,"loading leaves it as it was");
+            Assert.That(FestivalSession.ClosesMenu("Results","Playing"),Is.False,"results leave it open for NEXT ROUND");
+            Assert.That(FestivalSession.ClosesMenu("Shopping","CampReview"),Is.False,"so does the camp shop opening");
+        }
     }
 }

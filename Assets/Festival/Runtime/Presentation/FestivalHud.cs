@@ -641,12 +641,14 @@ namespace Festival.Presentation
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
             // While a chat check runs, 1-3 ask its questions instead of equipping.
             if(equipSlot>=0&&!session.MenuOpen&&chatText.text!=""){chatQuestion=equipSlot;equipSlot=-1;}
-            if(equipSlot>=0&&!session.MenuOpen&&state.Phase!="CampReview"){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
+            // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
+            bool gearKeys=FestivalSimulation.Interactive(state.Phase);
+            if(equipSlot>=0&&!session.MenuOpen&&gearKeys){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen)primaryAction?.Invoke();
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
-            if(handGear.Count>0)
+            if(handGear.Count>0&&gearKeys)
             {
                 selectedSlot=Mathf.Clamp(selectedSlot,0,handGear.Count-1);string item=player.EquippedItemId!=""?player.EquippedItemId:handGear[selectedSlot].ItemId;
                 if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Use",item:item);
@@ -924,6 +926,12 @@ namespace Festival.Presentation
             if(state.Phase=="Results")
             {
                 SetPromptAction(FestivalHudText.ResultsPrompt(state,player.Id),null);
+                FinishActions();return;
+            }
+            // HUD-4: while the wheels spin and the festival loads the host refuses every action, so none is offered.
+            if(!FestivalSimulation.Interactive(state.Phase))
+            {
+                SetPromptAction("",null);
                 FinishActions();return;
             }
             if(state.Phase=="Shopping")
