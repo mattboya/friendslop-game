@@ -33,6 +33,7 @@ namespace Festival.Core
                 chat.Chat=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id),State.FestivalIndex,chat.ChartSeed);
                 return Ok();
             }
+            GiveDanceRoom(p,npc,c.Kind);
             var dance=NewInteraction(p,c.Kind,npc.Id,0);dance.NoteCount=ConfirmDanceNotes;dance.BeatSeconds=ConfirmDanceBeat;
             dance.DurationSeconds=RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).DurationSeconds;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))dance.WitnessIds.Add(n.Id);

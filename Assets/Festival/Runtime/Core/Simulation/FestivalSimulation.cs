@@ -137,7 +137,7 @@ namespace Festival.Core
                 }
                 p.CampInteriorX=x;p.CampInteriorZ=z;p.Yaw=yaw%360;return true;
             }
-            if(Math.Abs(x)>39||Math.Abs(z)>39)return false;
+            if(!InBounds(x,z))return false;
             if(State.Phase=="Shopping"&&p.Ready&&Distance(p.X,p.Z,x,z)>.001)return false;
             double speed=6*Intoxication.MovementMultiplier(p);if(p.InteractionId!="")speed=1;if(p.DragTargetId!="")speed=2;
             if(p.Life=="Downed")speed=.8;
@@ -148,9 +148,11 @@ namespace Festival.Core
             if(!MayStep(p,x,z))return false;
             if(!CarryTo(p,x,z))return false;
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
-            p.X=x;p.Z=z;p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
+            p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
         }
         static bool Finite(double d){return !double.IsNaN(d)&&!double.IsInfinity(d);}
+        // The festival grounds' walkable square: TryMove refuses steps beyond it, as does a dancer's step back (DanceSpacing.cs).
+        static bool InBounds(float x,float z){return Math.Abs(x)<=39&&Math.Abs(z)<=39;}
         static double Distance(float x,float z,float xx,float zz){double a=x-xx,b=z-zz;return Math.Sqrt(a*a+b*b);}
         static bool Near(PlayerState p,float x,float z,double range=2.5){return Distance(p.X,p.Z,x,z)<=range;}
         static CommandResult Ok(string reason="Accepted"){return new CommandResult{Accepted=true,Reason=reason};}
