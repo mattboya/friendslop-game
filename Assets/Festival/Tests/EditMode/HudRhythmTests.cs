@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace Festival.Tests
     // DANCE-7: the rhythm lane's arrows rise onto the outline arrows in the receptor wells and draw over them.
     // DANCE-6: each well shows its lane's WASD key, as currently bound, upright on its outline arrow.
     // DANCE-5: a beat can hold up to four notes, so the lane grows a note view for every note of a chart and counts its notes.
+    // DANCE-2: the live dancer view shows beside every four-lane challenge, and the character in it dances through each one.
     //
     // Building the HUD in EditMode (checked for DANCE-7, for DANCE-6, DANCE-2 and DANCE-5 to build on): AddComponent<FestivalHud>()
     // alone never calls Awake in EditMode (FestivalHud is not [ExecuteAlways]), so Hud() calls it directly. Awake then builds the
@@ -161,6 +163,22 @@ namespace Festival.Tests
             }
             if(shown!=64)wrong.Add("only "+shown+" of the 64 notes show a second before their time");
             Assert.That(wrong,Is.Empty,string.Join("; ",wrong));
+        }
+
+        // A sale, a chat and a talk with security are danced (FestivalSimulation.DancesVisibly), so every client, the dancer's own
+        // live view included, shows the player dancing with whoever they're talking to.
+        [Test]public void EveryoneSeesASaleAChatAndSecurityDanced()
+        {
+            foreach(var kind in new[]{"Sale","Conversation","Police"})
+            {
+                var game=new FestivalSimulation(5);var dancer=game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");game.State.Phase="Playing";game.State.Npcs.Clear();
+                game.State.Npcs.Add(new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",X=0,Z=2,Yaw=180,CanTalk=true});
+                dancer.X=0;dancer.Z=0;dancer.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                var started=game.Execute("p0",new GameCommand{Id="dance2_"+kind,Kind=kind=="Sale"?"StartSale":kind,TargetId="partner",ItemId=kind=="Sale"?"stock_lsd":""});
+                Assert.That(started.Accepted,Is.True,"setup: the "+kind+" starts: "+started.Reason);
+                foreach(var viewer in game.State.Players)
+                    Assert.That(FestivalSession.ViewFor(game,viewer.Id).Players.Find(p=>p.Id=="p0").VisualPose,Is.EqualTo("Dance"),viewer.Id+" sees P0 dance through the "+kind);
+            }
         }
 
         private static Text Key(RectTransform lane,int direction)=>lane.Find("Receptor well "+direction+"/Key")?.GetComponent<Text>();

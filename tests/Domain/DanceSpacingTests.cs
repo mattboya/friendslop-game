@@ -6,24 +6,27 @@ using Festival.Core;
 // them, so the two don't overlap in the dancer view. The step is checked like a move (the navigator, the grounds' edge, the VIP
 // ropes, a carried body's reach); a blocked spot leaves the dancer where they stood. The partner never turns, and the dancer
 // keeps facing them through the dance whatever the camera does.
+// DANCE-2: a sale, a chat and a talk with security are danced too (the live dancer view shows every four-lane challenge), so
+// they keep the same space and facing, and every note played shows as a step.
 public static class DanceSpacingTests
 {
     static int sequence;
     static void Check(bool pass,string message){if(!pass)throw new Exception("DanceSpacing: "+message);}
     const float PartnerX=2,PartnerZ=3,PartnerYaw=200,DancerYaw=10;
     // p0 stands `metres` from a lone partner, on the given compass bearing from them, looking off at DancerYaw. For a check
-    // dance p0 is the tripper with a vision of the partner still to check.
+    // dance p0 is the tripper with a vision of the partner still to check; for a sale p0 holds stock; security is a cop.
     static FestivalSimulation Pair(double metres,double bearing=60,string kind="Dance",float x=PartnerX,float z=PartnerZ)
     {
         var s=new FestivalSimulation(5);s.AddPlayer("p0","P0");s.State.Phase="Playing";s.State.Npcs.Clear();
-        s.State.Npcs.Add(new NpcState{Id="partner",X=x,Z=z,Yaw=PartnerYaw,CanTalk=true});
+        s.State.Npcs.Add(new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",X=x,Z=z,Yaw=PartnerYaw,CanTalk=true});
         var p=s.Player("p0");double b=bearing*Math.PI/180;p.X=x+(float)(metres*Math.Sin(b));p.Z=z+(float)(metres*Math.Cos(b));p.Yaw=DancerYaw;
         if(kind=="ConfirmDance"){s.State.TripperId="p0";s.State.Visions.Add(new VisionState{Id="vision",Kind="Buyer",NpcId="partner"});}
+        if(kind=="Sale")p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         return s;
     }
     static PlayerState Dancer(FestivalSimulation s)=>s.Player("p0");
     static NpcState Partner(FestivalSimulation s)=>s.State.Npcs.Find(n=>n.Id=="partner");
-    static CommandResult Start(FestivalSimulation s,string kind="Dance")=>s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind=kind,TargetId="partner"});
+    static CommandResult Start(FestivalSimulation s,string kind="Dance")=>s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind=kind=="Sale"?"StartSale":kind,TargetId="partner",ItemId=kind=="Sale"?"stock_lsd":""});
     static void Starts(FestivalSimulation s,string kind="Dance"){var started=Start(s,kind);Check(started.Accepted,"setup: the "+kind+" starts: "+started.Reason);}
     static double Gap(FestivalSimulation s){var p=Dancer(s);var n=Partner(s);return Math.Sqrt((p.X-n.X)*(p.X-n.X)+(p.Z-n.Z)*(p.Z-n.Z));}
     // Degrees between where the dancer faces and the line to their partner (0 = facing them).
@@ -44,7 +47,7 @@ public static class DanceSpacingTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{OnlyDancesKeepTheirDistance,ACloseDancerStepsBackFacingTheirPartner,ADancerFurtherOffStaysPut,
+        foreach(var test in new Action[]{OnlyPartnerChallengesKeepTheirDistance,ASaleAChatAndSecurityAreDancedToo,ACloseDancerStepsBackFacingTheirPartner,ADancerFurtherOffStaysPut,
             OnTopOfThePartnerTheyStepBackFromTheirFacing,AWallBehindKeepsTheDancerPut,TheNavigatorMustReachTheSpot,
             TheGroundsEdgeAndTheRopesKeepTheDancerPut,ACarrierKeepsTheBodyInReach,ACheckDanceKeepsTheSameSpace,
             TheWatchersSeeTheDancerWhereTheyDance,TheFacingHoldsUntilTheDanceEnds,ARefusedDanceMovesNobody})
@@ -52,11 +55,31 @@ public static class DanceSpacingTests
         if(failures.Count>0)throw new Exception(failures.Count+" dance spacing test(s) failed:\n"+string.Join("\n",failures));
     }
 
-    static void OnlyDancesKeepTheirDistance()
+    static void OnlyPartnerChallengesKeepTheirDistance()
     {
         Check(FestivalSimulation.DanceSpacing==1.4,"dancers keep 1.4 m from their partner");
-        Check(FestivalSimulation.DancesVisibly("Dance")&&FestivalSimulation.DancesVisibly("ConfirmDance"),"a dance and a check dance show the player dancing");
+        foreach(var kind in PartnerKinds)Check(FestivalSimulation.DancesVisibly(kind),"a "+kind+" shows the player dancing with their partner");
         foreach(var kind in new[]{"Poi","Dj","ConfirmChat","FindFriend",""})Check(!FestivalSimulation.DancesVisibly(kind),kind+" is not a partner dance");
+    }
+
+    static readonly string[] PartnerKinds={"Dance","ConfirmDance","Sale","Conversation","Police"};
+
+    // DANCE-2: whoever the player sells to, chats with or answers to, they dance it: 1.4 m back, facing them, held there, and
+    // each note they play shows as a step.
+    static void ASaleAChatAndSecurityAreDancedToo()
+    {
+        foreach(var kind in new[]{"Sale","Conversation","Police"})
+        {
+            var s=Pair(.3,kind:kind);Starts(s,kind);var p=Dancer(s);
+            Check(Math.Abs(Gap(s)-FestivalSimulation.DanceSpacing)<1e-3&&OffFacing(s)<.5,"a "+kind+" started at 0.3 m leaves the player 1.4 m away, facing their partner (gap "+Gap(s).ToString("0.###")+" m, "+OffFacing(s).ToString("0.#")+"° off)");
+            Check(Partner(s).Yaw==PartnerYaw,"the "+kind+"'s partner doesn't turn");
+            float yaw=p.Yaw;
+            Check(s.TryMove("p0",p.X,p.Z,250,.1)&&p.Yaw==yaw,"the camera's yaw doesn't turn them away during the "+kind);
+            s.Tick(2.1);int steps=p.VisualDanceStepSequence;
+            var played=s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind="Rhythm",Direction=3,TimeSeconds=.1});
+            Check(played.Accepted,"setup: the "+kind+" takes a note: "+played.Reason);
+            Check(p.VisualDanceStepSequence==steps+1&&p.VisualDanceStepDirection==3,"a note played in the "+kind+" shows as a dance step");
+        }
     }
 
     static void ACloseDancerStepsBackFacingTheirPartner()
@@ -134,7 +157,7 @@ public static class DanceSpacingTests
     // A watcher who can't see the spot the dance starts from, only the one it steps back to, witnesses the dance.
     static void TheWatchersSeeTheDancerWhereTheyDance()
     {
-        foreach(var kind in new[]{"Dance","ConfirmDance"})
+        foreach(var kind in PartnerKinds)
         {
             var s=Pair(.3,0,kind);s.State.Npcs.Add(new NpcState{Id="watcher",X=PartnerX,Z=PartnerZ+6,Yaw=180});
             s.HasLineOfSight=(x,z,tx,tz)=>tz>PartnerZ+1;Starts(s,kind);
