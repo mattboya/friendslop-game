@@ -92,15 +92,7 @@ namespace Festival.Tests
                 Fits("paid","Vitals");NoDollars("paid");
 
                 // Out on Day 1.
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    // Sam has no client of their own to report the map loaded.
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="money_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
                 // Mid-day with money in every pot and security about to detain you; no effects trail the warning.
                 player.Effects.Clear();player.Cash=187;sim.State.StashCash=45;sim.State.LevelSales=12;player.X=0;player.Z=0;mate.X=30;mate.Z=0;
                 sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
