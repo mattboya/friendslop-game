@@ -174,7 +174,7 @@ namespace Festival.Tests
 
         [Test] public void RhythmBoundariesRemainIndependentFromPresentation()
         {
-            var chart=RhythmChart.Create(7,1);
+            var chart=RhythmChart.Create(7,1,.5,0);
             var note=chart.Notes[0];
             Assert.That(new RhythmJudge(chart).Submit(note.Direction,note.TimeSeconds+.08),Is.EqualTo("Perfect"));
             Assert.That(new RhythmJudge(chart).Submit(note.Direction,note.TimeSeconds+.081),Is.EqualTo("Good"));

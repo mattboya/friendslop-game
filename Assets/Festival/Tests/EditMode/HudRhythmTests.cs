@@ -14,13 +14,15 @@ namespace Festival.Tests
 {
     // DANCE-7: the rhythm lane's arrows rise onto the outline arrows in the receptor wells and draw over them.
     // DANCE-6: each well shows its lane's WASD key, as currently bound, upright on its outline arrow.
+    // DANCE-5: a beat can hold up to four notes, so the lane grows a note view for every note of a chart and counts its notes.
     //
     // Building the HUD in EditMode (checked for DANCE-7, for DANCE-6, DANCE-2 and DANCE-5 to build on): AddComponent<FestivalHud>()
     // alone never calls Awake in EditMode (FestivalHud is not [ExecuteAlways]), so Hud() calls it directly. Awake then builds the
     // whole interface cleanly: nothing is logged, the dance preview's RenderTexture is created, and the overlay canvas has a real
     // size (640x480 in batch mode), so rects can be measured. DestroyImmediate skips OnDestroy in EditMode, which would leak the
     // generated sprites, textures, RenderTexture and chime, so Cleanup unloads them. UpdateRhythm still needs a connected session,
-    // so the lane's per-frame work is tested through public members it calls (FestivalHud.PlaceNote, ShowRhythmKeys).
+    // so the lane's per-frame work is tested through public members it calls (FestivalHud.PlaceNote, ShowRhythmKeys, ShowChart,
+    // DrawChart).
     public sealed class HudRhythmTests
     {
         private readonly List<GameObject> made=new List<GameObject>();
@@ -133,6 +135,32 @@ namespace Festival.Tests
         [Test]public void TheBottomLineReadsArrowsOrWasd()
         {
             Assert.That(Lane().Find("Controls").GetComponent<Text>().text,Is.EqualTo("ARROWS OR WASD"));
+        }
+
+        // A 16-beat chart of nothing but sixteenth runs is 64 notes, twice the lane's first pool of note views.
+        [Test]public void TheLaneShowsEveryNoteOfAChartOfSixteenthRuns()
+        {
+            var hud=Hud();var lane=LaneOf(hud);float tolerance=.02f*lane.rect.width;
+            var chart=new RhythmChart{DurationSeconds=2+16*.5};
+            for(int i=0;i<64;i++)chart.Notes.Add(new RhythmNote{Id=i,Direction=i%4,TimeSeconds=2+i*.5/4});
+            hud.ShowChart(new InteractionState{Id="runs",Kind="Dance",NoteCount=16,BeatSeconds=.5},chart);
+            // Every miss is listed, so a counter that counts beats and a pool that stops at 32 show up together.
+            var wrong=new List<string>();
+            hud.DrawChart(0,2,"",false);
+            string counter=lane.Find("Tempo and steps").GetComponent<Text>().text;
+            if(counter!="0 / 64   •   120 BPM")wrong.Add("the step counter reads \""+counter+"\", not the chart's 64 notes");
+            int shown=0;
+            foreach(var note in chart.Notes)
+            {
+                hud.DrawChart(note.TimeSeconds-1,2,"",false);
+                var view=(RectTransform)lane.Find("Notes/Note "+note.Id);
+                if(view==null||!view.gameObject.activeSelf)continue;
+                shown++;
+                var outline=(RectTransform)lane.Find("Receptor well "+note.Direction+"/Target arrow");
+                if(Mathf.Abs(Centre(lane,view).x-Centre(lane,outline).x)>tolerance)wrong.Add("note "+note.Id+" is out of its lane");
+            }
+            if(shown!=64)wrong.Add("only "+shown+" of the 64 notes show a second before their time");
+            Assert.That(wrong,Is.Empty,string.Join("; ",wrong));
         }
 
         private static Text Key(RectTransform lane,int direction)=>lane.Find("Receptor well "+direction+"/Key")?.GetComponent<Text>();

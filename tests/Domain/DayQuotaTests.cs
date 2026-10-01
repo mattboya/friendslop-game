@@ -27,7 +27,7 @@ public static class DayQuotaTests
         var p=s.Player(id);var npc=s.State.Npcs.Find(n=>n.Id==buyer);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         int before=p.Cash;Check(Act(s,id,"StartSale",buyer,"stock_lsd").Accepted,id+" starts a sale to "+buyer);
         var sale=s.Interaction(p.InteractionId);
-        if(perform)foreach(var note in RhythmChart.Create(sale.ChartSeed,sale.NoteCount,sale.BeatSeconds).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        if(perform)foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
         for(int guard=0;sale.Status=="Active"&&guard<200;guard++)s.Tick(.1);
         Check(sale.Status=="Complete","the sale to "+buyer+" settles");return p.Cash-before;
     }
@@ -210,7 +210,7 @@ public static class DayQuotaTests
                     p.X=buyer.X;p.Z=buyer.Z-.5f;if(Festivals.InVipZone(s.State.FestivalIndex,p.X,p.Z)){done.Add(buyer.Id);continue;}
                     if(!Act(s,p.Id,"StartSale",buyer.Id,stock.ItemId).Accepted){done.Add(buyer.Id);continue;}
                     var sale=s.Interaction(p.InteractionId);sales.Add(sale);
-                    foreach(var note in RhythmChart.Create(sale.ChartSeed,sale.NoteCount,sale.BeatSeconds).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+                    foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
                     break;
                 }
             }

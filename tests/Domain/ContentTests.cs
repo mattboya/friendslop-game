@@ -21,21 +21,22 @@ public static class ContentTests
         }
         foreach(double offset in new[]{0,0.08,0.081,0.15,0.151}) foreach(int sign in new[]{-1,1})
         {
-            var chart=RhythmChart.Create(17,1); var judge=new RhythmJudge(chart);
+            var chart=RhythmChart.Create(17,1,.5,0); var judge=new RhythmJudge(chart);
             string grade=judge.Submit(chart.Notes[0].Direction,chart.Notes[0].TimeSeconds+offset*sign);
             Check(grade==(offset<=0.08?"Perfect":offset<=0.15?"Good":"Extra"),"exact grading boundary "+offset);
         }
-        var baseline=RhythmChart.Create(42); var perfect=new RhythmJudge(baseline);
+        var baseline=RhythmChart.Create(42,8,.5,3); var perfect=new RhythmJudge(baseline);
+        Check(baseline.Notes.Count>8,"a Night 2 chart mixes eighths, jumps and runs into its eight beats (DANCE-5)");
         foreach(var n in baseline.Notes) perfect.Submit(n.Direction,n.TimeSeconds);
         Check(perfect.Score==1,"perfect score"); Check(!perfect.Complete,"timer owns completion");
         perfect.Submit(baseline.Notes[0].Direction,baseline.Notes[0].TimeSeconds);
-        Check(perfect.Hits==8&&Math.Abs(perfect.Score-.9)<1e-9,"duplicate note never awards twice, full normalized extra penalty");
-        var oneGood=RhythmChart.Create(11,1);var goodJudge=new RhythmJudge(oneGood);
+        Check(perfect.Hits==baseline.Notes.Count&&Math.Abs(perfect.Score-.9)<1e-9,"duplicate note never awards twice, full normalized extra penalty");
+        var oneGood=RhythmChart.Create(11,1,.5,0);var goodJudge=new RhythmJudge(oneGood);
         goodJudge.Submit(oneGood.Notes[0].Direction,oneGood.Notes[0].TimeSeconds+.1);
         Check(Math.Abs(goodJudge.Score-.6)<1e-9,"good is worth 0.6 normalized points");
         perfect.Advance(baseline.DurationSeconds); Check(perfect.Complete,"timer completes");
-        var silent=new RhythmJudge(baseline); silent.Advance(baseline.DurationSeconds);
-        Check(silent.Complete&&silent.Misses==8&&silent.Score==0,"all misses still complete");
+        var silent=new RhythmJudge(baseline); silent.Advance(baseline.DurationSeconds+silent.GoodWindowSeconds); // a run can end a sixteenth before the chart does
+        Check(silent.Complete&&silent.Misses==baseline.Notes.Count&&silent.Score==0,"all misses still complete once the last note's window has closed");
         var bad=new RhythmJudge(baseline); Check(bad.Submit(0,double.NaN)=="Miss"&&bad.Hits==0,"nonfinite rejected");
         foreach(var effect in Catalog.Effects) foreach(bool reduced in new[]{false,true})
         {

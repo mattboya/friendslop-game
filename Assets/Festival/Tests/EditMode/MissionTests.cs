@@ -19,7 +19,7 @@ public static class MissionTests
         a.X=16;a.Z=-4;b.X=a.X;b.Z=a.Z;Check(!Act(s,"a","ReadClue").Accepted,"the totems are gone: the tripper's clue trail replaces them (VisionTests)");
         var npc=new NpcState{Id="dance",X=a.X,Z=a.Z};s.State.Npcs.Add(npc);b.X=-38;
         Check(Act(s,"a","Dance","dance").Accepted,"the crew still dances");
-        var i=s.Interaction(a.InteractionId);var chart=RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds);
+        var i=s.Interaction(a.InteractionId);var chart=RhythmChart.For(i);
         foreach(var note in chart.Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
         s.Tick(10);Check(i.Score>.99&&!s.State.GateOpened,"a good dance no longer opens the way to the friend");
         // Setup: the tripper has followed the clue trail to its last link (VisionTests covers the trail).
@@ -38,7 +38,7 @@ public static class MissionTests
         Check(s.TryMove("b",b.X+.07f,b.Z,0,.1),"downed crawl");
         Check(!s.TryMove("b",b.X+1,b.Z,0,.1),"crawl speed enforced");
         Check(Act(s,"b","HelpSelf").Accepted,"downed distraction");
-        Check(RhythmChart.Create(1,12,.4).DurationSeconds<RhythmChart.Create(1,12,.5).DurationSeconds,"optional faster rhythm");
+        Check(RhythmChart.Create(1,12,.4,0).DurationSeconds<RhythmChart.Create(1,12,.5,0).DurationSeconds,"optional faster rhythm");
 
         s=new FestivalSimulation(8);a=s.AddPlayer("a","A");b=s.AddPlayer("b","B");
         s.State.Phase="Playing";s.State.LevelIndex=1;s.State.Npcs.Clear();s.State.GateOpened=true;s.State.FriendFound=true;
@@ -74,7 +74,7 @@ public static class MissionTests
         game.State.Npcs.Add(new NpcState{Id="dancer",X=solo.X,Z=solo.Z});
         Check(Act(game,solo.Id,"Dance","dancer").Accepted,"solo starts dance");
         var challenge=game.Interaction(solo.InteractionId);
-        foreach(var note in RhythmChart.Create(challenge.ChartSeed,challenge.NoteCount,challenge.BeatSeconds).Notes)challenge.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        foreach(var note in RhythmChart.For(challenge).Notes)challenge.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
         game.Tick(10);Check(!game.State.GateOpened,"a solo dance does not open the way either");
         // Setup: the solo tripper has followed the clue trail to its last link (VisionTests covers the trail).
         game.State.GateOpened=true;

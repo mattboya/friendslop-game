@@ -39,7 +39,7 @@ namespace Festival.Core
             }
             GiveDanceRoom(p,npc,c.Kind);
             var dance=NewInteraction(p,c.Kind,npc.Id,0);dance.NoteCount=ConfirmDanceNotes;dance.BeatSeconds=ConfirmDanceBeat;
-            dance.DurationSeconds=RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).DurationSeconds;
+            dance.DurationSeconds=RhythmChart.For(dance).DurationSeconds;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))dance.WitnessIds.Add(n.Id);
             return Ok();
         }

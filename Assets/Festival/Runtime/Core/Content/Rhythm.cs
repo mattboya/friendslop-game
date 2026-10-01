@@ -8,15 +8,39 @@ namespace Festival.Core
     {
         public List<RhythmNote> Notes = new List<RhythmNote>();
         public double DurationSeconds;
-        public static RhythmChart Create(int seed,int count=8,double beatSeconds=.5)
+        // The chart a rhythm challenge plays, the same on the host, in the HUD and in every replay. The tripper's check dance stays
+        // four quarter notes whatever the level.
+        public static RhythmChart For(InteractionState i)=>Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,i.Kind=="ConfirmDance"?QuarterNotes:i.ChartDifficulty);
+        // DANCE-5: after two lead-in quarter notes each beat is a quarter note, eighths (the beat and its "and"), a jump (two lanes at
+        // once) or a sixteenth run (3 or 4 notes from the beat), drawn with these percent odds by difficulty, the level the challenge
+        // began on: Day 1, Night 1, Day 2, then Night 2 and anything after. Runs start at Night 1.
+        static readonly int[][] PatternOdds={new[]{60,25,15,0},new[]{45,25,15,15},new[]{35,30,15,20},new[]{25,30,20,25}};
+        const int Eighths=1,Jump=2,Sixteenths=3;
+        // The difficulty that puts one quarter note on every beat, as charts were before DANCE-5 (the same seed, the same chart).
+        public const int QuarterNotes=-1;
+        // `count` beats from a 2 s lead-in. Any two notes a sixteenth apart, across a beat too, are in different lanes.
+        public static RhythmChart Create(int seed,int count,double beatSeconds,int difficulty)
         {
             if(count<1 || count>256) throw new ArgumentOutOfRangeException(nameof(count));
             if(double.IsNaN(beatSeconds)||double.IsInfinity(beatSeconds)||beatSeconds<.25||beatSeconds>1)throw new ArgumentOutOfRangeException(nameof(beatSeconds));
-            var chart=new RhythmChart(); var random=new ContentRandom(seed);
-            for(int i=0;i<count;i++) chart.Notes.Add(new RhythmNote { Id=i,Direction=random.Next(4),TimeSeconds=2+i*beatSeconds });
-            chart.DurationSeconds=chart.Notes[count-1].TimeSeconds+beatSeconds;
+            var chart=new RhythmChart{DurationSeconds=2+count*beatSeconds}; var random=new ContentRandom(seed);
+            var odds=difficulty<0?null:PatternOdds[Math.Min(difficulty,PatternOdds.Length-1)];
+            int before=-1; // the lane a sixteenth before this beat (a 4-note run's last note), or -1
+            for(int beat=0;beat<count;beat++)
+            {
+                int pattern=0;
+                if(odds!=null&&beat>=2)for(int roll=random.Next(100);roll>=odds[pattern];pattern++)roll-=odds[pattern];
+                int lane=Lane(random,before,-1);Add(chart,beat,0,lane,beatSeconds);
+                if(pattern==Jump)Add(chart,beat,0,Lane(random,before,lane),beatSeconds);
+                if(pattern==Eighths)Add(chart,beat,2,Lane(random,-1,-1),beatSeconds);
+                before=-1;
+                if(pattern==Sixteenths)for(int step=1,length=3+random.Next(2);step<length;step++){lane=Lane(random,lane,-1);Add(chart,beat,step,lane,beatSeconds);if(step==3)before=lane;}
+            }
             return chart;
         }
+        static void Add(RhythmChart chart,int beat,int sixteenth,int lane,double beatSeconds)=>chart.Notes.Add(new RhythmNote { Id=chart.Notes.Count,Direction=lane,TimeSeconds=2+(beat+sixteenth/4.0)*beatSeconds });
+        // A lane drawn evenly from those that are neither a nor b (-1 rules out none), in one draw however many are ruled out.
+        static int Lane(ContentRandom random,int a,int b){int pick=random.Next(4-(a>=0?1:0)-(b>=0&&b!=a?1:0));for(int lane=0;;lane++)if(lane!=a&&lane!=b&&pick--==0)return lane;}
     }
     public sealed class RhythmJudge
     {

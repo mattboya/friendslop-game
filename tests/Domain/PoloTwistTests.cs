@@ -152,7 +152,7 @@ public static class PoloTwistTests
     {
         p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int before=p.Cash;
         var started=Act(s,p.Id,"StartSale",n.Id,"stock_lsd");Check(started.Accepted,"setup: the sale starts: "+started.Reason);
-        var sale=s.Interaction(p.InteractionId);var notes=RhythmChart.Create(sale.ChartSeed,sale.NoteCount,sale.BeatSeconds).Notes;int next=0;
+        var sale=s.Interaction(p.InteractionId);var notes=RhythmChart.For(sale).Notes;int next=0;
         for(int guard=0;sale.Status=="Active"&&guard<400;guard++)
         {
             double now=s.State.SimulationSeconds-sale.StartSeconds;

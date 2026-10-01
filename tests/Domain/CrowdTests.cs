@@ -104,7 +104,7 @@ public static class CrowdTests
     }
 
     static InteractionState Start(FestivalSimulation s,string kind){Check(s.Execute("p0",new GameCommand{Id="crowd"+(sequence++),Kind=kind,TargetId="partner"}).Accepted,"p0 starts "+kind);return s.Interaction(s.Player("p0").InteractionId);}
-    static void Hit(InteractionState i){foreach(var n in RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds).Notes)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
+    static void Hit(InteractionState i){foreach(var n in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
     static void Finish(FestivalSimulation s,InteractionState i){for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);Check(i.Status=="Complete",i.Kind+" completes");}
 
     // A missed chat (+20) counts x1.7 in a pack of four.

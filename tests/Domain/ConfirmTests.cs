@@ -54,7 +54,7 @@ public static class ConfirmTests
     {
         var p=Tripper(s);Beside(p,n);var started=Act(s,p.Id,"ConfirmDance",n.Id);
         Check(started.Accepted,"setup: the tripper starts a dance with "+n.Id+": "+started.Reason);
-        var dance=s.Interaction(p.InteractionId);var notes=RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes;int next=0;
+        var dance=s.Interaction(p.InteractionId);var notes=RhythmChart.For(dance).Notes;int next=0;
         for(int guard=0;dance.Status=="Active"&&guard<200;guard++)
         {
             double now=s.State.SimulationSeconds-dance.StartSeconds;
@@ -160,7 +160,7 @@ public static class ConfirmTests
         var s=Start(6,0);var tripper=Tripper(s);
         var vision=s.State.Visions.Find(v=>v.NpcId!="");var npc=Npc(s,vision.NpcId);Beside(tripper,npc);
         Check(Act(s,tripper.Id,"ConfirmDance",npc.Id).Accepted,"the tripper dances with someone they have a vision about");
-        var dance=s.Interaction(tripper.InteractionId);var notes=RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes;
+        var dance=s.Interaction(tripper.InteractionId);var notes=RhythmChart.For(dance).Notes;
         Check(dance.Kind=="ConfirmDance"&&notes.Count==4&&Math.Abs(notes[3].TimeSeconds+dance.BeatSeconds-notes[0].TimeSeconds-2)<1e-9,"four steps taking 2 s");
         var witnesses=dance.WitnessIds.ConvertAll(id=>Npc(s,id));Check(witnesses.Contains(npc),"their dance partner watches");
         s.Tick(4.6);Check(dance.Status=="Active"&&!vision.Confirmed,"4.6 s in, the dance is still being judged");
@@ -186,7 +186,7 @@ public static class ConfirmTests
     {
         var s=Start(10,0);var tripper=Tripper(s);var npc=Npc(s,s.State.Visions.First(v=>v.NpcId!="").NpcId);
         var dance=Dance(s,npc,4,0);Check(dance.Score==1,"setup: a perfect check dance");
-        var last=RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes[3];
+        var last=RhythmChart.For(dance).Notes[3];
         Check(tripper.VisualDanceStepSequence==4&&tripper.VisualDanceStepDirection==last.Direction,"all four steps showed, the last one "+last.Direction+"; got "+tripper.VisualDanceStepSequence+" steps, last "+tripper.VisualDanceStepDirection);
     }
 

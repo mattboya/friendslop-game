@@ -458,7 +458,7 @@ namespace Festival.Presentation
                 if(File.Exists(rhythmPath))File.Delete(rhythmPath);
                 string judgmentPath=Path.Combine(Application.persistentDataPath,"smoke","client-rhythm-judgment.png");
                 if(File.Exists(judgmentPath))File.Delete(judgmentPath);
-                var chart=RhythmChart.Create(performance.ChartSeed,performance.NoteCount,performance.BeatSeconds);
+                var chart=RhythmChart.For(performance);
                 bool rhythmCaptured=false,judgmentCaptured=false;
                 foreach(var note in chart.Notes)
                 {
@@ -939,7 +939,7 @@ namespace Festival.Presentation
             session.Command("Conversation",npc.Id);
             var talk=sim.Interaction(player.InteractionId);
             if(talk==null||talk.Kind!="Conversation"||string.IsNullOrEmpty(talk.DialogueText)){Fail("solo NPC conversation");yield break;}
-            foreach(var note in RhythmChart.Create(talk.ChartSeed,talk.NoteCount,talk.BeatSeconds).Notes)
+            foreach(var note in RhythmChart.For(talk).Notes)
             {
                 while(sim.State.SimulationSeconds-talk.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
                 session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
@@ -951,7 +951,7 @@ namespace Festival.Presentation
             session.Command("Dance",npc.Id);
             var dance=sim.Interaction(player.InteractionId);
             if(dance==null||dance.Kind!="Dance"){Fail("solo dance start");yield break;}
-            foreach(var note in RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes)
+            foreach(var note in RhythmChart.For(dance).Notes)
             {
                 while(sim.State.SimulationSeconds-dance.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
                 session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
@@ -1022,7 +1022,7 @@ namespace Festival.Presentation
             }
             if(running==null)yield break;
             if(FestivalInput.IsRhythmKind(kind))
-                foreach(var note in RhythmChart.Create(running.ChartSeed,running.NoteCount,running.BeatSeconds).Notes)
+                foreach(var note in RhythmChart.For(running).Notes)
                 {
                     while(session.EstimatedSimulationSeconds-running.StartSeconds<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
                     session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);

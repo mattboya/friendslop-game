@@ -44,7 +44,7 @@ public static class VisionTests
         var p=s.Player(id);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int before=p.Cash;
         Check(Act(s,id,"StartSale",npc.Id,"stock_lsd").Accepted,"setup: "+id+" starts a sale to buyer "+npc.Id);
         var sale=s.Interaction(p.InteractionId);
-        foreach(var note in RhythmChart.Create(sale.ChartSeed,sale.NoteCount,sale.BeatSeconds).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
         for(int guard=0;sale.Status=="Active"&&guard<200;guard++)s.Tick(.1);
         Check(sale.Status=="Complete","setup: the sale to "+npc.Id+" settles ("+sale.Status+")");return p.Cash-before;
     }
@@ -225,7 +225,7 @@ public static class VisionTests
         s.State.CluesRead=2;var npc=Wooks(s)[0];tripper.X=npc.X;tripper.Z=npc.Z-1;
         Check(Act(s,tripper.Id,"Dance",npc.Id).Accepted,"setup: the tripper dances with a festivalgoer");
         var dance=s.Interaction(tripper.InteractionId);
-        foreach(var note in RhythmChart.Create(dance.ChartSeed,dance.NoteCount,dance.BeatSeconds).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        foreach(var note in RhythmChart.For(dance).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
         for(int guard=0;dance.Status=="Active"&&guard<200;guard++)s.Tick(.1);
         Check(dance.Score>.99&&!s.State.GateOpened,"a perfect dance no longer opens the way to the friend");
     }

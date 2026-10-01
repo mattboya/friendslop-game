@@ -22,8 +22,8 @@ public static class GroupDanceTests
     static void Place(FestivalSimulation s,string id,float x,float z){var p=s.Player(id);p.X=x;p.Z=z;}
     static double Heat(FestivalSimulation s,string id)=>s.State.Npcs.Find(n=>n.Id=="watcher").Observers.Find(o=>o.PlayerId==id).Suspicion;
     static InteractionState Start(FestivalSimulation s,string id,string kind="Dance"){Check(s.Execute(id,new GameCommand{Id="group"+(sequence++),Kind=kind,TargetId="partner_"+id}).Accepted,id+" starts "+kind);return s.Interaction(s.Player(id).InteractionId);}
-    // Enter the correct input for notes [from,to) of the chart.
-    static void Hit(InteractionState i,int from,int to){var notes=RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds).Notes;for(int n=from;n<to;n++)i.Inputs.Add(new RhythmInput{Direction=notes[n].Direction,TimeSeconds=notes[n].TimeSeconds});}
+    // Enter the correct input for every note in beats [from,to) of the chart (DANCE-5: a beat can hold up to four notes).
+    static void Hit(InteractionState i,int from,int to){foreach(var n in RhythmChart.For(i).Notes)if(n.TimeSeconds>=2+from*i.BeatSeconds-1e-9&&n.TimeSeconds<2+to*i.BeatSeconds-1e-9)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
     // Tick until done, entering each note's correct input through the Rhythm command once the clock reaches it, as a player would.
     static void Live(FestivalSimulation s,Func<bool> done,params InteractionState[] dances)
     {
@@ -31,7 +31,7 @@ public static class GroupDanceTests
         {
             foreach(var d in dances)
             {
-                var notes=RhythmChart.Create(d.ChartSeed,d.NoteCount,d.BeatSeconds).Notes;
+                var notes=RhythmChart.For(d).Notes;
                 while(d.Status=="Active"&&d.Inputs.Count<notes.Count&&notes[d.Inputs.Count].TimeSeconds<=s.State.SimulationSeconds-d.StartSeconds)
                 {var n=notes[d.Inputs.Count];Check(s.Execute(d.PlayerId,new GameCommand{Id="group"+(sequence++),Kind="Rhythm",Direction=n.Direction,TimeSeconds=n.TimeSeconds}).Accepted,d.PlayerId+" hits note "+n.Id+" live");}
             }

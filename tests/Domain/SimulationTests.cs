@@ -28,7 +28,7 @@ public static class SimulationTests {
   Assert(localSuspicion!=null&&localSuspicion.Suspicion>0&&remoteSuspicion!=null&&remoteSuspicion.Suspicion==0,"suspicion is observer-local");
   s=Game();p=s.Player("a");s.State.Npcs.Clear();p.X=0;p.Z=0;var listener=new NpcState{Id="listener",X=0,Z=1,Yaw=180,CanTalk=true};listener.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});s.State.Npcs.Add(listener);
   Assert(s.Execute("a",C("Conversation",target:listener.Id)).Accepted,"start NPC conversation");var talk=s.Interaction(p.InteractionId);Assert(!string.IsNullOrWhiteSpace(talk.DialogueText),"NPC responds with dialogue");
-  foreach(var note in RhythmChart.Create(talk.ChartSeed,talk.NoteCount,talk.BeatSeconds).Notes)talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+  foreach(var note in RhythmChart.For(talk).Notes)talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
   s.Tick(10);Assert(p.LastRhythmScore>.99&&listener.Observers[0].Suspicion<40,"conversation improves local trust");
   p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});Assert(s.Execute("a",C("Use","confetti")).Accepted,"confetti works");
   Assert(p.Inventory.Find(x=>x.ItemId=="confetti")==null&&listener.DistractedUntil>s.State.SimulationSeconds,"item consumed and wook distracted");s.Tick(.1);Assert(listener.Mode=="Distracted","wook visibly changes mode");

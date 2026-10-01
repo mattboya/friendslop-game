@@ -47,6 +47,8 @@ namespace Festival.Core
     [Serializable] public sealed class InteractionState {
         public string Id="",PlayerId="",TargetId="",Kind="",Status="Active",ReservedItemId="",DialogueId="",DialogueText="",PartnerId="";
         public int ChartSeed,NoteCount=8,Phrase,ReservedCash; public double StartSeconds,DurationSeconds,GoodWindowSeconds=.15,Score,BeatSeconds=.5;
+        // DANCE-5: how busy a rhythm challenge's chart is (RhythmChart.For), the level it began on; 0 in older snapshots.
+        public int ChartDifficulty;
         public List<RhythmInput> Inputs=new List<RhythmInput>(); public List<string> WitnessIds=new List<string>();
         // TRIP-3: a ConfirmChat's conversation (DialogueGrammar). A view carries only its own player's interactions, so only the tripper reads it.
         public Conversation Chat=new Conversation();

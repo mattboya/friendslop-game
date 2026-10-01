@@ -44,11 +44,12 @@ namespace Festival.Presentation
         private readonly Text[] slotTexts=new Text[3];
         private InputField nameField, addressField, portField;
         private readonly List<Image> noteViews = new List<Image>();
+        private Transform noteContainer;
         private readonly Image[] rhythmReceptors=new Image[4];
         private readonly Image[] rhythmReceptorWells=new Image[4];
         private readonly Text[] rhythmKeys=new Text[4];
         private readonly float[] rhythmFlashUntil=new float[4];
-        private readonly bool[] rhythmConsumed=new bool[32];
+        private bool[] rhythmConsumed=Array.Empty<bool>();
         private Image rhythmProgressFill;
         private RhythmChart displayedChart;
         private string displayedInteractionId="";
@@ -296,14 +297,8 @@ namespace Festival.Presentation
                 key.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);rhythmKeys[lane]=key;
             }
             // Notes come after the wells, so they draw over the wells and their outlines, and before the judgment, combo and timing text.
-            var notes=new GameObject("Notes",typeof(RectTransform));notes.transform.SetParent(rhythmPanel.transform,false);Fill(Rect(notes),0);
-            for(int i=0;i<32;i++)
-            {
-                var note=Panel(notes.transform,"Note "+i,Color.white,Vector2.zero,Vector2.zero).GetComponent<Image>();
-                note.sprite=arrowSprite;note.preserveAspect=true;note.raycastTarget=false;
-                var noteEdge=note.gameObject.AddComponent<Outline>();noteEdge.effectColor=new Color(.005f,.018f,.025f,.94f);noteEdge.effectDistance=new Vector2(3,-3);
-                noteViews.Add(note);note.gameObject.SetActive(false);
-            }
+            var notes=new GameObject("Notes",typeof(RectTransform));notes.transform.SetParent(rhythmPanel.transform,false);Fill(Rect(notes),0);noteContainer=notes.transform;
+            for(int i=0;i<32;i++)AddNoteView(); // ponytail: a typical chart's worth up front; ShowChart grows the pool for longer ones
             rhythmJudgment=Label(rhythmPanel.transform,"Judgment",45,TextAnchor.MiddleCenter);rhythmJudgment.font=displayFont;rhythmJudgment.fontStyle=FontStyle.Normal;Place(rhythmJudgment.rectTransform,.06f,.46f,.94f,.57f);
             rhythmJudgment.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);
             rhythmCombo=Label(rhythmPanel.transform,"Combo",56,TextAnchor.MiddleCenter);rhythmCombo.font=displayFont;rhythmCombo.fontStyle=FontStyle.Normal;rhythmCombo.color=Paper;Place(rhythmCombo.rectTransform,.06f,.36f,.94f,.47f);
@@ -737,10 +732,7 @@ namespace Festival.Presentation
             if(!rhythm)return;
             if(displayedChart==null||displayedInteractionId!=interaction.Id||displayedSeed!=interaction.ChartSeed||displayedNoteCount!=interaction.NoteCount||displayedPhrase!=interaction.Phrase||Math.Abs(displayedBeatSeconds-interaction.BeatSeconds)>.0001)
             {
-                displayedChart=RhythmChart.Create(interaction.ChartSeed,interaction.NoteCount,interaction.BeatSeconds);
-                displayedInteractionId=interaction.Id;displayedSeed=interaction.ChartSeed;displayedNoteCount=interaction.NoteCount;displayedPhrase=interaction.Phrase;displayedBeatSeconds=interaction.BeatSeconds;
-                Array.Clear(rhythmConsumed,0,rhythmConsumed.Length);processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
-                shownRhythmHits=shownRhythmBpm=shownRhythmCount=shownRhythmCombo=-1;
+                ShowChart(interaction,RhythmChart.For(interaction));
                 rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);
                 ShowRhythmKeys(session.Controls);
             }
@@ -748,12 +740,6 @@ namespace Festival.Presentation
             string effect=player.Effects.Count==0?"":player.Effects[0].Id;
             double lead=Catalog.FindEffect(effect)?.LeadSeconds??2;
             ProcessRhythmFeedback(interaction,now);
-            int bpm=Mathf.RoundToInt(60f/(float)interaction.BeatSeconds);
-            if(shownRhythmHits!=rhythmHitCount||shownRhythmCount!=interaction.NoteCount||shownRhythmBpm!=bpm)
-            {
-                rhythmStatus.text=rhythmHitCount+" / "+interaction.NoteCount+"   •   "+bpm+" BPM";
-                shownRhythmHits=rhythmHitCount;shownRhythmCount=interaction.NoteCount;shownRhythmBpm=bpm;
-            }
             if(dialoguePanel.activeSelf)
             {
                 dialogueSpeaker.text=interaction.Kind=="Police"?"SECURITY":interaction.Kind=="Dj"?"STAGE CREW":"FESTIVALGOER";
@@ -767,13 +753,7 @@ namespace Festival.Presentation
             float completed=Mathf.Clamp01((float)(now/displayedChart.DurationSeconds));
             var progressRect=rhythmProgressFill.rectTransform;progressRect.anchorMin=new Vector2(.08f,.055f);progressRect.anchorMax=new Vector2(.08f+.84f*completed,.071f);progressRect.offsetMin=progressRect.offsetMax=Vector2.zero;
             if(!string.IsNullOrEmpty(interaction.DialogueText))session.AcknowledgeDisplayedDialogue(interaction);
-            for(int i=0;i<noteViews.Count;i++)
-            {
-                var view=noteViews[i];if(i>=displayedChart.Notes.Count){view.gameObject.SetActive(false);continue;}
-                var note=displayedChart.Notes[i];double remaining=note.TimeSeconds-now;
-                bool visible=!rhythmConsumed[i]&&remaining<=lead&&remaining>=-MissOvershootSeconds;view.gameObject.SetActive(visible);if(!visible)continue;
-                PlaceNote(view,note,remaining,lead,effect,session.Profile.Data.ReducedMotion);
-            }
+            DrawChart(now,lead,effect,session.Profile.Data.ReducedMotion);
             for(int direction=0;direction<4;direction++)
             {
                 bool pressed=!session.MenuOpen&&!session.Controls.Objectives.IsPressed()&&session.Controls.Notes[direction].WasPressedThisFrame();
@@ -782,6 +762,45 @@ namespace Festival.Presentation
                 rhythmReceptors[direction].color=flashing?RhythmColors[direction]:new Color(.76f,.85f,.84f,.9f);
                 rhythmReceptorWells[direction].color=flashing?new Color(.25f,.43f,.44f,1):new Color(.22f,.32f,.35f,1);
             }
+        }
+
+        // Readies the lane for a challenge's chart. DANCE-5: a beat can hold up to four notes, so the note pool grows (inside the
+        // Notes container, keeping DANCE-7's draw order) until every note of the chart has a view, and the hit record is the chart's size.
+        public void ShowChart(InteractionState interaction,RhythmChart chart)
+        {
+            displayedChart=chart;
+            displayedInteractionId=interaction.Id;displayedSeed=interaction.ChartSeed;displayedNoteCount=interaction.NoteCount;displayedPhrase=interaction.Phrase;displayedBeatSeconds=interaction.BeatSeconds;
+            while(noteViews.Count<chart.Notes.Count)AddNoteView();
+            rhythmConsumed=new bool[chart.Notes.Count];processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
+            shownRhythmHits=shownRhythmBpm=shownRhythmCount=shownRhythmCombo=-1;
+        }
+
+        // Draws the displayed chart `now` seconds in: the step counter (hits out of the chart's notes, at its tempo) and each note
+        // within `lead` seconds of its time, or just missed.
+        public void DrawChart(double now,double lead,string effect,bool reducedMotion)
+        {
+            int bpm=Mathf.RoundToInt(60f/(float)displayedBeatSeconds),notes=displayedChart.Notes.Count;
+            if(shownRhythmHits!=rhythmHitCount||shownRhythmCount!=notes||shownRhythmBpm!=bpm)
+            {
+                rhythmStatus.text=rhythmHitCount+" / "+notes+"   •   "+bpm+" BPM";
+                shownRhythmHits=rhythmHitCount;shownRhythmCount=notes;shownRhythmBpm=bpm;
+            }
+            for(int i=0;i<noteViews.Count;i++)
+            {
+                var view=noteViews[i];if(i>=displayedChart.Notes.Count){view.gameObject.SetActive(false);continue;}
+                var note=displayedChart.Notes[i];double remaining=note.TimeSeconds-now;
+                bool visible=!rhythmConsumed[i]&&remaining<=lead&&remaining>=-MissOvershootSeconds;view.gameObject.SetActive(visible);if(!visible)continue;
+                PlaceNote(view,note,remaining,lead,effect,reducedMotion);
+            }
+        }
+
+        // One more hidden note view at the end of the Notes container, so it draws over the wells and under the judgment text.
+        private void AddNoteView()
+        {
+            var note=Panel(noteContainer,"Note "+noteViews.Count,Color.white,Vector2.zero,Vector2.zero).GetComponent<Image>();
+            note.sprite=arrowSprite;note.preserveAspect=true;note.raycastTarget=false;
+            var noteEdge=note.gameObject.AddComponent<Outline>();noteEdge.effectColor=new Color(.005f,.018f,.025f,.94f);noteEdge.effectDistance=new Vector2(3,-3);
+            noteViews.Add(note);note.gameObject.SetActive(false);
         }
 
         // Labels each receptor well with its lane's WASD key as bound now, so a rebound key shows its new name. Read once per challenge.
