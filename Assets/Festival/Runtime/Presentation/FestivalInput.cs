@@ -35,6 +35,8 @@ namespace Festival.Presentation
         }
         private InputAction Button(string name,string binding) => Map.AddAction(name,InputActionType.Button,binding);
         public string Label(InputAction action) => action.GetBindingDisplayString();
+        // A rhythm lane's WASD key as bound now: binding 1 (binding 0 is its arrow), overrides included.
+        public string NoteKey(int lane) => Notes[lane].GetBindingDisplayString(1);
         public void Rebind(InputAction action, int bindingIndex, Action done)
         {
             if(rebind!=null)return;

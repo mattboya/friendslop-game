@@ -6,19 +6,21 @@ using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 namespace Festival.Tests
 {
     // DANCE-7: the rhythm lane's arrows rise onto the outline arrows in the receptor wells and draw over them.
+    // DANCE-6: each well shows its lane's WASD key, as currently bound, upright on its outline arrow.
     //
     // Building the HUD in EditMode (checked for DANCE-7, for DANCE-6, DANCE-2 and DANCE-5 to build on): AddComponent<FestivalHud>()
-    // alone never calls Awake in EditMode (FestivalHud is not [ExecuteAlways]), so Lane() calls it directly. Awake then builds the
+    // alone never calls Awake in EditMode (FestivalHud is not [ExecuteAlways]), so Hud() calls it directly. Awake then builds the
     // whole interface cleanly: nothing is logged, the dance preview's RenderTexture is created, and the overlay canvas has a real
     // size (640x480 in batch mode), so rects can be measured. DestroyImmediate skips OnDestroy in EditMode, which would leak the
     // generated sprites, textures, RenderTexture and chime, so Cleanup unloads them. UpdateRhythm still needs a connected session,
-    // so the lane's per-frame work is tested through public statics on the component (FestivalHud.PlaceNote).
+    // so the lane's per-frame work is tested through public members it calls (FestivalHud.PlaceNote, ShowRhythmKeys).
     public sealed class HudRhythmTests
     {
         private readonly List<GameObject> made=new List<GameObject>();
@@ -83,6 +85,60 @@ namespace Festival.Tests
             Assert.That(view.color.a,Is.EqualTo(0).Within(1e-4),"it has faded out when the overshoot ends");
         }
 
+        [Test]public void EachWellShowsItsLanesWasdKey()
+        {
+            var hud=Hud();var lane=LaneOf(hud);string[] wasd={"a","s","w","d"};
+            using(var input=new FestivalInput("hud-rhythm-keys-test"))
+            {
+                hud.ShowRhythmKeys(input);
+                for(int direction=0;direction<4;direction++)
+                    Assert.That(Key(lane,direction)?.text,Is.EqualTo(KeyName("<Keyboard>/"+wasd[direction])),"lane "+direction+" shows its WASD key (A / S / W / D on a US layout), not its arrow");
+            }
+        }
+
+        [Test]public void AReboundLaneShowsItsNewKey()
+        {
+            var hud=Hud();var lane=LaneOf(hud);
+            using(var input=new FestivalInput("hud-rhythm-keys-test"))
+            {
+                hud.ShowRhythmKeys(input);
+                Assert.That(KeyName("<Keyboard>/j"),Is.Not.EqualTo(KeyName("<Keyboard>/w")),"the new key reads differently from the old one");
+                input.Notes[2].ApplyBindingOverride(1,"<Keyboard>/j");
+                hud.ShowRhythmKeys(input);
+                Assert.That(Key(lane,2)?.text,Is.EqualTo(KeyName("<Keyboard>/j")),"the up lane, its WASD key rebound to J, shows J");
+                Assert.That(Key(lane,0)?.text,Is.EqualTo(KeyName("<Keyboard>/a")),"the other lanes keep their keys");
+                Assert.That(Key(lane,3)?.text,Is.EqualTo(KeyName("<Keyboard>/d")),"the other lanes keep their keys");
+            }
+        }
+
+        [Test]public void KeyLabelsSitUprightOnTheirOutlineArrows()
+        {
+            var lane=Lane();float tolerance=.02f*lane.rect.height;int turned=0;
+            for(int direction=0;direction<4;direction++)
+            {
+                var arrow=(RectTransform)lane.Find("Receptor well "+direction+"/Target arrow");var key=Key(lane,direction);
+                if(Quaternion.Angle(lane.rotation,arrow.rotation)>1)turned++;
+                Assert.That(key,Is.Not.Null,"well "+direction+" holds a key label");
+                Assert.That(key.transform.parent,Is.SameAs(arrow.parent),"the key is the outline arrow's sibling, so it doesn't turn with it");
+                Assert.That(key.transform.GetSiblingIndex(),Is.GreaterThan(arrow.GetSiblingIndex()),"the key draws over its outline arrow");
+                Assert.That(Quaternion.Angle(lane.rotation,key.transform.rotation),Is.LessThan(.01f),"lane "+direction+"'s key reads upright");
+                Assert.That(Vector2.Distance(Centre(lane,key.rectTransform),Centre(lane,arrow)),Is.LessThanOrEqualTo(tolerance),"lane "+direction+"'s key sits on its outline arrow");
+                Assert.That(key.fontStyle,Is.EqualTo(FontStyle.Bold),"the key is bold");
+                Assert.That(key.resizeTextForBestFit,Is.True,"the key shrinks to fit its well");
+                Assert.That(key.resizeTextMinSize,Is.InRange(1,key.resizeTextMaxSize),"down to a minimum size");
+            }
+            Assert.That(turned,Is.EqualTo(3),"the left, down and right outline arrows are turned, so an upright key means something");
+        }
+
+        [Test]public void TheBottomLineReadsArrowsOrWasd()
+        {
+            Assert.That(Lane().Find("Controls").GetComponent<Text>().text,Is.EqualTo("ARROWS OR WASD"));
+        }
+
+        private static Text Key(RectTransform lane,int direction)=>lane.Find("Receptor well "+direction+"/Key")?.GetComponent<Text>();
+        // What a binding to this key shows: the attached keyboard's name for it (its layout) when there is one, else the Keyboard
+        // layout's default. Derived from the key's path, so the tests hold on any keyboard layout.
+        private static string KeyName(string path)=>InputControlPath.ToHumanReadableString(path,InputControlPath.HumanReadableStringOptions.OmitDevice|InputControlPath.HumanReadableStringOptions.UseShortNames,InputSystem.FindControl(path));
         private static bool IsNote(Transform t)=>Regex.IsMatch(t.name,@"^Note \d+$");
         private static bool InWell(Transform t){for(;t!=null;t=t.parent)if(t.name.StartsWith("Receptor well "))return true;return false;}
         private static Image NoteView(RectTransform lane)=>DepthFirst(lane).Find(IsNote).GetComponent<Image>();
@@ -92,12 +148,14 @@ namespace Festival.Tests
         // uGUI draws a canvas's graphics in depth-first hierarchy order, so a later transform draws over an earlier one.
         private static void Walk(Transform t,List<Transform> into){into.Add(t);foreach(Transform child in t)Walk(child,into);}
 
-        private RectTransform Lane()
+        private RectTransform Lane()=>LaneOf(Hud());
+        private static RectTransform LaneOf(FestivalHud hud)=>(RectTransform)hud.transform.Find("Festival HUD/Rhythm lane");
+        private FestivalHud Hud()
         {
             var go=new GameObject("HUD under test");made.Add(go);
             var hud=go.AddComponent<FestivalHud>();
             typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
-            return (RectTransform)go.transform.Find("Festival HUD/Rhythm lane");
+            return hud;
         }
     }
 }

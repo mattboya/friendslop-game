@@ -46,6 +46,7 @@ namespace Festival.Presentation
         private readonly List<Image> noteViews = new List<Image>();
         private readonly Image[] rhythmReceptors=new Image[4];
         private readonly Image[] rhythmReceptorWells=new Image[4];
+        private readonly Text[] rhythmKeys=new Text[4];
         private readonly float[] rhythmFlashUntil=new float[4];
         private readonly bool[] rhythmConsumed=new bool[32];
         private Image rhythmProgressFill;
@@ -290,6 +291,9 @@ namespace Festival.Presentation
                 var well=Panel(rhythmPanel.transform,"Receptor well "+lane,new Color(.22f,.32f,.35f,1),new Vector2(x+.007f,WellBottom),new Vector2(x+.203f,WellTop));Round(well);rhythmReceptorWells[lane]=well.GetComponent<Image>();rhythmReceptorWells[lane].raycastTarget=false;
                 var arrow=Panel(well.transform,"Target arrow",new Color(.76f,.85f,.84f,.9f),new Vector2(.12f,.09f),new Vector2(.88f,.91f)).GetComponent<Image>();
                 arrow.sprite=arrowOutlineSprite;arrow.preserveAspect=true;arrow.raycastTarget=false;arrow.transform.localRotation=Quaternion.Euler(0,0,RhythmAngles[lane]);rhythmReceptors[lane]=arrow;
+                // The arrow's sibling, not its child, so the key reads upright while the arrow turns.
+                var key=Label(well.transform,"Key",30,TextAnchor.MiddleCenter);key.fontStyle=FontStyle.Bold;Place(key.rectTransform,.12f,.09f,.88f,.91f);ShrinkToFit(key,14);
+                key.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);rhythmKeys[lane]=key;
             }
             // Notes come after the wells, so they draw over the wells and their outlines, and before the judgment, combo and timing text.
             var notes=new GameObject("Notes",typeof(RectTransform));notes.transform.SetParent(rhythmPanel.transform,false);Fill(Rect(notes),0);
@@ -307,7 +311,7 @@ namespace Festival.Presentation
             rhythmTiming=Label(rhythmPanel.transform,"Timing",20,TextAnchor.MiddleCenter);rhythmTiming.color=MutedPaper;Place(rhythmTiming.rectTransform,.06f,.315f,.94f,.37f);
             var progressTrack=Panel(rhythmPanel.transform,"Step progress track",new Color(.33f,.43f,.44f,1),new Vector2(.08f,.055f),new Vector2(.92f,.071f));progressTrack.GetComponent<Image>().raycastTarget=false;
             rhythmProgressFill=Panel(rhythmPanel.transform,"Step progress",Mint,new Vector2(.08f,.055f),new Vector2(.08f,.071f)).GetComponent<Image>();rhythmProgressFill.raycastTarget=false;
-            var controls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);controls.text="← / A    ↓ / S    ↑ / W    → / D";controls.color=MutedPaper;Place(controls.rectTransform,.06f,.005f,.94f,.049f);
+            var controls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);controls.text="ARROWS OR WASD";controls.color=MutedPaper;Place(controls.rectTransform,.06f,.005f,.94f,.049f);
             rhythmPanel.SetActive(false);
             dialoguePanel=Card(root.transform,"Interaction dialogue",new Vector2(.70f,.52f),new Vector2(.96f,.69f),false);
             Accent(dialoguePanel.transform,Orange);
@@ -738,6 +742,7 @@ namespace Festival.Presentation
                 Array.Clear(rhythmConsumed,0,rhythmConsumed.Length);processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
                 shownRhythmHits=shownRhythmBpm=shownRhythmCount=shownRhythmCombo=-1;
                 rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);
+                ShowRhythmKeys(session.Controls);
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
             string effect=player.Effects.Count==0?"":player.Effects[0].Id;
@@ -778,6 +783,9 @@ namespace Festival.Presentation
                 rhythmReceptorWells[direction].color=flashing?new Color(.25f,.43f,.44f,1):new Color(.22f,.32f,.35f,1);
             }
         }
+
+        // Labels each receptor well with its lane's WASD key as bound now, so a rebound key shows its new name. Read once per challenge.
+        public void ShowRhythmKeys(FestivalInput controls){for(int lane=0;lane<4;lane++)rhythmKeys[lane].text=controls.NoteKey(lane);}
 
         // Places a note's view `remaining` seconds before its time, with `lead` seconds of look-ahead under the effect: it rises
         // from just above the step progress bar onto its lane's outline arrow, and a missed one fades out as it rises past it.

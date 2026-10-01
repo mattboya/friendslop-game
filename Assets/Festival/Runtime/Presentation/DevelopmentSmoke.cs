@@ -448,8 +448,11 @@ namespace Festival.Presentation
                 var lane=transform.Find("Festival HUD/Rhythm lane")?.GetComponent<RectTransform>();
                 var dancerPanel=transform.Find("Festival HUD/Live dancer")?.GetComponent<RectTransform>();
                 var controls=transform.Find("Festival HUD/Rhythm lane/Controls")?.GetComponent<Text>();
-                if(lane==null||dancerPanel==null||controls==null||lane.anchorMax.x>.5f||dancerPanel.anchorMin.x<.5f||Mathf.Abs((lane.anchorMax.x-lane.anchorMin.x)-(dancerPanel.anchorMax.x-dancerPanel.anchorMin.x))>.001f||!controls.text.Contains("/ A")||!controls.text.Contains("/ D"))
-                {Fail("split dance layout and WASD hint");yield break;}
+                // DANCE-6: each well shows its lane's WASD key as bound, set when the challenge's chart arrived.
+                bool keysShown=true;
+                for(int k=0;k<4;k++){var key=lane!=null?lane.Find("Receptor well "+k+"/Key")?.GetComponent<Text>():null;keysShown&=key!=null&&key.text!=""&&key.text==session.Controls.NoteKey(k);}
+                if(lane==null||dancerPanel==null||controls==null||lane.anchorMax.x>.5f||dancerPanel.anchorMin.x<.5f||Mathf.Abs((lane.anchorMax.x-lane.anchorMin.x)-(dancerPanel.anchorMax.x-dancerPanel.anchorMin.x))>.001f||controls.text!="ARROWS OR WASD"||!keysShown)
+                {Fail("split dance layout and WASD keys");yield break;}
                 rhythmFrameCount=0;recordRhythmFrames=true;
                 string rhythmPath=Path.Combine(Application.persistentDataPath,"smoke","client-rhythm.png");
                 if(File.Exists(rhythmPath))File.Delete(rhythmPath);
