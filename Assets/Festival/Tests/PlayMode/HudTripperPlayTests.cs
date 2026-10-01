@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -18,6 +19,7 @@ namespace Festival.Tests
         // HUD-2: the running HUD puts FestivalHudText's tripper lines on screen. Hosts a real two-player Day 1, pins the spin,
         // and reads what a player sees: who trips and on how many doses, the tripper's one hint, the checks beside a festivalgoer
         // they have a vision about (E dances, F chats), the chat picker, and nothing to check for the sober friend.
+        // DANCE-2: the check dance and a chat show the live dancer beside the lanes; the menu and the end of the challenge hide it.
         // Labels are laid out on a 1920x1080 canvas, so a line its box cuts off fails.
         [UnityTest]public IEnumerator TheCrewSeesTheSpinAndOnlyTheTripperChecks()
         {
@@ -40,6 +42,31 @@ namespace Festival.Tests
                 Canvas.ForceUpdateCanvases();
                 var drawn=text.cachedTextGenerator;int shown=drawn.characterCountVisible;
                 if(shown<text.text.Length)failures.Add(where+": "+label+" box "+text.rectTransform.rect.size+" (font "+text.fontSize+") cuts \""+text.text.Replace("\n"," | ")+"\" after \""+text.text.Substring(0,shown).Replace("\n"," | ")+"\"");
+            }
+            // Whether each text would fit, uncut, in the box of the shown label `name`, measured as Fits measures what it shows.
+            void FitsAll(string where,string name,IEnumerable<string> texts)
+            {
+                var label=Find(name);if(label==null){failures.Add(where+": "+name+" is hidden");return;}
+                Canvas.ForceUpdateCanvases();
+                var box=label.rectTransform.rect.size;var settings=label.GetGenerationSettings(box);var measure=new TextGenerator();
+                foreach(var text in texts)
+                {
+                    measure.Populate(text,settings);
+                    if(measure.characterCountVisible<text.Length)failures.Add(where+": "+name+" box "+box+" (font "+label.fontSize+") cuts \""+text+"\" after \""+text.Substring(0,measure.characterCountVisible)+"\"");
+                }
+            }
+            // DANCE-2: the live dancer beside the lanes shows your own character dancing, under this heading and caption, and the
+            // first-person hands step aside as they do for any dance.
+            var preview=view.GetComponent<FestivalDancePreview>();
+            var hands=typeof(FestivalSession).GetField("firstPersonHands",BindingFlags.NonPublic|BindingFlags.Instance);
+            void Dancing(string where,string heading,string caption)
+            {
+                Expect(where,"Dancer heading",heading);Expect(where,"Dancer caption",caption);Fits(where,"Dancer heading");
+                var you=session.LocalWorldCharacter;
+                if(preview==null||!preview.IsVisible||you==null||preview.Dancer!=you)failures.Add(where+": the live dancer view doesn't show your character");
+                else if(you.Pose!="Dance")failures.Add(where+": your character's pose is "+you.Pose+", not Dance");
+                var shownHands=hands?.GetValue(session) as Component;
+                if(shownHands==null||shownHands.gameObject.activeSelf)failures.Add(where+": the first-person hands "+(shownHands==null?"are missing":"still show"));
             }
             // E runs the HUD's primary action and F its chat key (FestivalHud.UpdateKeyboard); 1-3 pick a chat question.
             var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
@@ -115,9 +142,32 @@ namespace Festival.Tests
                 if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmDance"&&i.Status=="Active"))failures.Add("tripper beside a vision: E starts no check dance ("+session.Message+")");
                 yield return new WaitForSeconds(.4f);
                 Expect("check dance","Challenge title","CHECK DANCE  /  FOUR-LANE");
+                // DANCE-2: the check dance opens the live dancer beside the lanes, as every four-lane challenge does, showing your
+                // own character dancing; the menu hides it.
+                Dancing("check dance","YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES");
+                FitsAll("check dance","Dancer caption",FourLaneKinds.Select(FestivalHudText.DancerCaption));
+                session.MenuOpen=true;yield return null;yield return null;
+                Expect("check dance, menu open","Dancer heading","(hidden)");
+                if(preview.IsVisible)failures.Add("check dance, menu open: the live dancer view still renders");
+                session.MenuOpen=false;
                 session.Command("Cancel");
+                // A chat with them is danced too, and its line moves into the dancer panel: at 1920x1080 every line a four-lane
+                // challenge can say fits there, as does every heading.
+                session.Command("Conversation",npc.Id);
+                if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="Conversation"&&i.Status=="Active"))failures.Add("chat: no chat with the festivalgoer starts ("+session.Message+")");
+                yield return new WaitForSeconds(.4f);
+                Expect("chat","Challenge title","CONVERSATION  /  FOUR-LANE");
+                Dancing("chat","YOU  /  CHATTING","(hidden)");
+                var lines=new List<string>();
+                foreach(var line in DialogueCatalog.Lines)if(System.Array.IndexOf(new[]{"dance","sale","suspicion","police"},line.Context)>=0){lines.Add(line.Text);lines.Add(line.AwkwardText);}
+                FitsAll("chat","Dialogue line",lines);
+                FitsAll("chat","Dancer heading",FourLaneKinds.Select(FestivalHudText.DancerHeading));
+                session.Command("Cancel");npc.Suspicion=0;
                 player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
+                Expect("no challenge","Challenge title","(hidden)");
+                Expect("no challenge","Dancer heading","(hidden)");
+                if(preview.IsVisible)failures.Add("no challenge: the live dancer view still renders");
                 PressF();yield return null;
                 var chat=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.Status=="Active");
                 if(chat==null)failures.Add("tripper beside a vision: F starts no chat check ("+session.Message+")");
@@ -196,6 +246,8 @@ namespace Festival.Tests
             yield return null;
             Assert.That(failures,Is.Empty,"Tripper HUD a player reads:\n"+string.Join("\n",failures));
         }
+
+        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Conversation","Police"};
 
         // Every HUD card a player can see at once; none may cover another.
         private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat check card","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};

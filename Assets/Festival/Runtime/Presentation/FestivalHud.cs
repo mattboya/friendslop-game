@@ -712,16 +712,16 @@ namespace Festival.Presentation
             var interaction=state.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
             bool rhythm=interaction!=null&&FestivalInput.IsRhythmKind(interaction.Kind);
             rhythmPanel.SetActive(rhythm);
-            bool showDancer=rhythm&&(interaction.Kind=="Dance"||interaction.Kind=="Poi"||interaction.Kind=="Dj")&&!session.MenuOpen;
+            // DANCE-2: every four-lane challenge shows the live dancer beside its lanes.
+            bool showDancer=FestivalHudText.ShowsDancer(interaction?.Kind,session.MenuOpen);
             rhythmShade.SetActive(rhythm&&!session.MenuOpen);
             Place(rhythmPanel.GetComponent<RectTransform>(),showDancer ? .015f : .32f,showDancer ? .05f : .06f,showDancer ? .495f : .68f,showDancer ? .95f : .87f);
             dancePanel.SetActive(showDancer);
             if(showDancer)
             {
-                dancerHeading.text=interaction.Kind=="Poi"?"YOU  /  POI CIRCLE":interaction.Kind=="Dj"?"YOU  /  AT THE DECK":"YOU  /  ON THE FLOOR";
-                dancerCaption.text=interaction.Kind=="Poi"?"YOUR POI • YOUR FLOW":interaction.Kind=="Dj"?"YOUR LOOK • YOUR MIX":"YOUR LOOK • YOUR MOVES";
+                dancerHeading.text=FestivalHudText.DancerHeading(interaction.Kind);dancerCaption.text=FestivalHudText.DancerCaption(interaction.Kind);
+                dancePreview.Show(session.LocalWorldCharacter,session.ViewCamera);
             }
-            if(showDancer)dancePreview.Show(session.LocalWorldCharacter,session.ViewCamera);
             else dancePreview.Hide();
             bool chatter=!rhythm&&!session.MenuOpen&&player.NpcSpeechUntil>session.EstimatedSimulationSeconds&&!string.IsNullOrEmpty(player.NpcSpeech);
             bool showDialogue=(rhythm&&!string.IsNullOrEmpty(interaction.DialogueText))||chatter;

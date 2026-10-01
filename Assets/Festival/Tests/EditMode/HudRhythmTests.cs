@@ -165,6 +165,44 @@ namespace Festival.Tests
             Assert.That(wrong,Is.Empty,string.Join("; ",wrong));
         }
 
+        // Every four-lane challenge, and only one, opens the live dancer beside its lanes; the menu covers it. The HUD reads both
+        // panels from these (FestivalHud.UpdateRhythm), and HudTripperPlayTests watches them on a hosted check dance and chat.
+        [Test]public void EveryFourLaneChallengeShowsTheDancerUnlessTheMenuIsOpen()
+        {
+            foreach(var kind in FourLaneKinds)
+            {
+                Assert.That(FestivalInput.IsRhythmKind(kind),Is.True,"setup: a "+kind+" plays on the four lanes");
+                Assert.That(FestivalHudText.ShowsDancer(kind,false),Is.True,"a "+kind+" shows the live dancer beside its lanes");
+                Assert.That(FestivalHudText.ShowsDancer(kind,true),Is.False,"the menu hides the dancer during a "+kind);
+            }
+            foreach(var kind in new[]{null,"","ConfirmChat","FindFriend",FestivalSimulation.LieDownKind})
+                Assert.That(FestivalHudText.ShowsDancer(kind,false),Is.False,"no four-lane challenge ("+(kind??"none")+"), no dancer");
+        }
+
+        // A check dance reads as a dance; a sale, a chat and a talk with security each say what the player is doing, under the
+        // lanes' "YOU  /  …" heading with two spaces round the slash.
+        [Test]public void EachChallengeHasItsOwnHeadingAndCaption()
+        {
+            var expected=new Dictionary<string,(string heading,string caption)>
+            {
+                {"Dance",("YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES")},
+                {"ConfirmDance",("YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES")},
+                {"Poi",("YOU  /  POI CIRCLE","YOUR POI • YOUR FLOW")},
+                {"Dj",("YOU  /  AT THE DECK","YOUR LOOK • YOUR MIX")},
+                {"Sale",("YOU  /  MAKING A SALE","YOUR LOOK • YOUR PITCH")},
+                {"Conversation",("YOU  /  CHATTING","YOUR LOOK • YOUR VIBE")},
+                {"Police",("YOU  /  TALKING TO SECURITY","YOUR LOOK • YOUR ALIBI")},
+            };
+            Assert.That(expected.Keys,Is.EquivalentTo(FourLaneKinds),"every four-lane challenge is named here");
+            foreach(var pair in expected)
+            {
+                Assert.That(FestivalHudText.DancerHeading(pair.Key),Is.EqualTo(pair.Value.heading),pair.Key+"'s heading");
+                Assert.That(FestivalHudText.DancerCaption(pair.Key),Is.EqualTo(pair.Value.caption),pair.Key+"'s caption");
+            }
+        }
+
+        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Conversation","Police"};
+
         // A sale, a chat and a talk with security are danced (FestivalSimulation.DancesVisibly), so every client, the dancer's own
         // live view included, shows the player dancing with whoever they're talking to.
         [Test]public void EveryoneSeesASaleAChatAndSecurityDanced()

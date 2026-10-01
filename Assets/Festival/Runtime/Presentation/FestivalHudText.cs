@@ -313,5 +313,15 @@ namespace Festival.Presentation
 
         /// <summary>The rhythm lane's title, naming a check dance as the check it is.</summary>
         public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
+
+        /// <summary>DANCE-2: every four-lane challenge shows the live dancer beside its lanes, unless the menu covers it.</summary>
+        public static bool ShowsDancer(string kind,bool menuOpen)=>FestivalInput.IsRhythmKind(kind)&&!menuOpen;
+        /// <summary>The live dancer's heading. A check dance reads as a dance; a sale, a chat and a talk with security say what the
+        /// player is doing.</summary>
+        public static string DancerHeading(string kind)=>kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK","Sale"=>"YOU  /  MAKING A SALE",
+            "Conversation"=>"YOU  /  CHATTING","Police"=>"YOU  /  TALKING TO SECURITY",_=>"YOU  /  ON THE FLOOR"};
+        /// <summary>The caption under the live dancer, shown while nobody is saying a line.</summary>
+        public static string DancerCaption(string kind)=>kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX","Sale"=>"YOUR LOOK • YOUR PITCH",
+            "Conversation"=>"YOUR LOOK • YOUR VIBE","Police"=>"YOUR LOOK • YOUR ALIBI",_=>"YOUR LOOK • YOUR MOVES"};
     }
 }
