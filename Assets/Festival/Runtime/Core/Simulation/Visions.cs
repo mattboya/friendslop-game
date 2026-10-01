@@ -67,14 +67,17 @@ namespace Festival.Core
             return marks;
         }
         // Night: a trail's next clue holder, always shown, among round(1/r) - 1 fakes (0, 1, 3 or 9 for doses 1-4) on festivalgoers
-        // who hold neither this trail's next clue nor any link still ahead on the other trail, and carry no clue vision already
-        // shown. Keeping clear of the other trail's later links means that trail's next holder never already wears one of these fakes.
+        // who hold no link still ahead on either trail, and carry no clue vision already shown. Keeping clear of the other trail's
+        // later links means that trail's next holder never already wears one of these fakes; keeping clear of this trail's own
+        // (VISION-3) means a fake never says FALSE over someone the trail later leads to. Short of candidates, fewer fakes show.
         List<VisionState> ClueVisions(ContentRandom random,int dose,int trail,List<VisionState> shown)
         {
             var seen=new List<VisionState>();var holder=State.Npcs.Find(n=>n.Id==NextClue(trail));
             if(holder==null)return seen;
             seen.Add(Sight(holder,"Clue",true));
             var others=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=holder&&!StillOnTrail(1-trail,n.Id)&&!shown.Exists(v=>v.Kind=="Clue"&&v.NpcId==n.Id)),random);
+            // Dropped after the shuffle, so it draws what it always drew; only a fake that had to move changes the shuffles after it.
+            others.RemoveAll(n=>StillOnTrail(trail,n.Id));
             for(int i=0,fakes=(int)Math.Round(1/Reliability[dose-1])-1;i<fakes&&i<others.Count;i++)seen.Add(Sight(others[i],"Clue",false));
             foreach(var v in seen)v.Trail=trail;
             return seen;
