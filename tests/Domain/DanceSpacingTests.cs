@@ -7,8 +7,9 @@ using Festival.Core;
 // ropes, a carried body's reach); a blocked spot leaves the dancer where they stood. The partner never turns, and the dancer
 // keeps facing them through the dance whatever the camera does.
 // DANCE-2: a sale, a chat and a talk with security are danced too (the live dancer view shows every four-lane challenge), so
-// they keep the same space and facing, and every note played shows as a step. A sale is still judged where the seller stood:
-// its step never carries them over a VIP rope, or into or out of a cop's sight.
+// they keep the same space and facing, and every note played shows as a step. DANCE-9: no challenge's step carries the player
+// over a VIP rope, wristband or not, or into or out of a cop's sight; it only fixes the dancer view, so it never decides a
+// sale's pay or a stop.
 public static class DanceSpacingTests
 {
     static int sequence;
@@ -52,7 +53,8 @@ public static class DanceSpacingTests
             OnTopOfThePartnerTheyStepBackFromTheirFacing,AWallBehindKeepsTheDancerPut,TheNavigatorMustReachTheSpot,
             TheGroundsEdgeAndTheRopesKeepTheDancerPut,ACarrierKeepsTheBodyInReach,ACheckDanceKeepsTheSameSpace,
             TheWatchersSeeTheDancerWhereTheyDance,TheFacingHoldsUntilTheDanceEnds,ARefusedDanceMovesNobody,
-            ASaleIsPaidWhereTheSellerStood,ACopJudgesASaleWhereTheSellerStood})
+            ASaleIsPaidWhereTheSellerStood,ACopJudgesASaleWhereTheSellerStood,EveryChallengeStaysOnItsSideOfTheRope,
+            EveryChallengeKeepsWhoSeesThePlayer})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" dance spacing test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -132,8 +134,12 @@ public static class DanceSpacingTests
         // Palm Mirage: the west VIP zone's rope runs along x = -8, and the dancer would step back over it.
         s=Pair(.3,270,x:-7.4f,z:22);p=Dancer(s);x0=p.X;Starts(s);
         Check(s.State.FestivalIndex==Festivals.PoloFestival&&p.X==x0,"without a wristband the VIP rope keeps the dancer put");
-        s=Pair(.3,270,x:-7.4f,z:22);p=Dancer(s);p.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.VipWristband,Count=1});Starts(s);
-        Check(Math.Abs(Gap(s)-FestivalSimulation.DanceSpacing)<1e-3,"with one they step back past it");
+        // DANCE-9: a wristband lets them walk in, but the step never takes them over the rope.
+        s=Pair(.3,270,x:-7.4f,z:22);p=Dancer(s);x0=p.X;p.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.VipWristband,Count=1});Starts(s);
+        Check(p.X==x0,"with one the rope still keeps them put (now "+p.X+")");
+        // Well inside the zone, with the rope 2.8 m behind them, a wristband-holder steps back and stays inside.
+        s=Pair(.3,270,x:-9.4f,z:22);p=Dancer(s);p.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.VipWristband,Count=1});Starts(s);
+        Check(Math.Abs(Gap(s)-FestivalSimulation.DanceSpacing)<1e-3&&Festivals.InVipZone(s.State.FestivalIndex,p.X,p.Z),"one inside steps back about inside ("+p.X+", gap "+Gap(s).ToString("0.###")+")");
     }
 
     static void ACarrierKeepsTheBodyInReach()
@@ -217,5 +223,48 @@ public static class DanceSpacingTests
         s=Pair(.15,135,"Sale",3,2.3f);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});p=Dancer(s);x=p.X;z=p.Z;
         Starts(s,"Sale");cop=s.State.Npcs.Find(n=>n.Id=="cop");
         Check(p.X==x&&p.Z==z&&cop.Evidence.Exists(e=>e.Kind=="WitnessedDeal"),"a seller in the cop's sight stays there, and the deal is witnessed (now "+p.X+", "+p.Z+")");
+    }
+
+    static readonly string[] Unsold={"Dance","ConfirmDance","Conversation","Police"};
+
+    // DANCE-9: Palm Mirage's west VIP rope runs along x = -8 (the zone is west of it). A wristband-holder 0.5 m east of a partner
+    // 0.6 m inside would step back out over it; one 0.3 m west of a partner 0.6 m outside would step back in over it. Either way
+    // every challenge leaves them where they stood, still facing their partner; well inside, the same step is taken.
+    static void EveryChallengeStaysOnItsSideOfTheRope()
+    {
+        foreach(var kind in Unsold)
+        {
+            foreach(var (partnerX,bearing,side) in new[]{(-8.6f,90.0,"out of"),(-7.4f,270.0,"into")})
+            {
+                var s=Pair(bearing==90?.5:.3,bearing,kind,partnerX,22);var p=Dancer(s);p.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.VipWristband,Count=1});
+                float x=p.X,z=p.Z;Starts(s,kind);
+                Check(At(p,x,z)&&OffFacing(s)<.5,"a "+kind+" doesn't step the player "+side+" the VIP zone; they stay put, facing their partner (now "+p.X+", "+p.Z+")");
+            }
+            var inside=Pair(.3,270,kind,-9.4f,22);Dancer(inside).Inventory.Add(new ItemStack{ItemId=FestivalSimulation.VipWristband,Count=1});Starts(inside,kind);
+            Check(Math.Abs(Gap(inside)-FestivalSimulation.DanceSpacing)<1e-3,"a "+kind+" well inside the zone still steps back to 1.4 m ("+Gap(inside).ToString("0.###")+")");
+        }
+    }
+
+    // DANCE-9: the cop at the origin looks along +z. A player holding stock 0.15 m from their partner at (4, 2), just out of its
+    // sight, would step back into it; one 0.15 m from a partner at (3, 2.3), just in its sight, would step back out of it. Every
+    // challenge leaves them where they stood, and the first stays unseen; with no cop there the same steps are taken.
+    static void EveryChallengeKeepsWhoSeesThePlayer()
+    {
+        foreach(var kind in Unsold)
+        {
+            foreach(var (bearing,partnerX,partnerZ,watched) in new[]{(315.0,4f,2f,false),(135.0,3f,2.3f,true)})
+            {
+                var s=Pair(.15,bearing,kind,partnerX,partnerZ);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});
+                var p=Dancer(s);p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});float x=p.X,z=p.Z;Starts(s,kind);
+                Check(At(p,x,z)&&OffFacing(s)<.5,"a "+kind+" doesn't step the player "+(watched?"out of":"into")+" the cop's sight; they stay put, facing their partner (now "+p.X+", "+p.Z+")");
+                if(!watched)
+                {
+                    for(int t=0;t<20;t++)s.Tick(.1);var cop=s.State.Npcs.Find(n=>n.Id=="cop");
+                    Check(cop.Evidence.Count==0&&cop.Mode!="Stop","and after 2 s the cop has seen nothing ("+cop.Evidence.Count+" evidence, "+cop.Mode+")");
+                }
+                var alone=Pair(.15,bearing,kind,partnerX,partnerZ);Starts(alone,kind);
+                Check(Math.Abs(Gap(alone)-FestivalSimulation.DanceSpacing)<1e-3,"with no cop there the "+kind+" steps back to 1.4 m ("+Gap(alone).ToString("0.###")+")");
+            }
+        }
     }
 }
