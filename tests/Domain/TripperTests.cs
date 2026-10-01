@@ -27,7 +27,7 @@ public static class TripperTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseSpinnerWeights,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
+        foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseRollTable,DoseSpinnerWeights,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
             DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewFollowsTheTrail,DoseLeavesBothConsumableSlots,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" tripper test(s) failed:\n"+string.Join("\n",failures));
@@ -80,6 +80,18 @@ public static class TripperTests
         }
     }
 
+    // TRIP-6: the dose spinner walks one roll of 0-99 through its slices, so the exact odds are the rolls each dose takes. Doses
+    // 1, 2 and 3 are equally likely at 31 rolls each, the 4-dose sliver takes the last 7, and the wheel paints the same slices.
+    static void DoseRollTable()
+    {
+        var counts=new int[5];var astray=new List<int>();
+        for(int roll=0;roll<100;roll++){int dose=FestivalSimulation.DoseForRoll(roll);counts[dose]++;if(dose!=(roll<31?1:roll<62?2:roll<93?3:4))astray.Add(roll);}
+        string rolls=string.Join("/",counts.Skip(1)),wheel=string.Join("/",FestivalSimulation.DoseSlices);
+        Check(astray.Count==0,"the slices run 1, 2, 3, then the sliver, in roll order (0-30, 31-61, 62-92, 93-99), but rolls "+string.Join(",",astray)+" land elsewhere");
+        Check(rolls=="31/31/31/7","doses 1-4 take 31/31/31/7 of the 100 rolls, got "+rolls);
+        Check(wheel=="31/31/31/7","the dose wheel paints the same 31/31/31/7 slices, got "+wheel);
+    }
+
     static void DoseSpinnerWeights()
     {
         const int spins=10000;var counts=new int[5];
@@ -88,7 +100,7 @@ public static class TripperTests
             var s=Crew(seed,1);var solo=s.Player("p0");solo.X=0;solo.Z=19;Act(s,"p0","Ready");Act(s,"p0","Start");
             Check(s.State.TripperId=="p0"&&Dose(solo)>=1&&Dose(solo)<=4,"seed "+seed+" spins a dose for the solo tripper");counts[Dose(solo)]++;
         }
-        var weights=new[]{0,40,30,22,8};
+        var weights=new[]{0,31,31,31,7};
         for(int dose=1;dose<=4;dose++){double share=100.0*counts[dose]/spins;Check(Math.Abs(share-weights[dose])<=1.5,"dose "+dose+" landed on "+share+"% of 10k spins; the slice is "+weights[dose]+"%");}
     }
 

@@ -13,8 +13,8 @@ namespace Festival.Core
         public const int WheelCount=2;
         public const double WheelSeconds=4,PauseSeconds=.6,TakeSeconds=1.4,ReactSeconds=1.6;
         public const double SpinSeconds=WheelCount*(WheelSeconds+PauseSeconds)+TakeSeconds+ReactSeconds;
-        // Dose spinner slices in percent for 1-4 doses; the 4-dose slice is a thin sliver.
-        static readonly int[] DoseWeights={40,30,22,8};
+        // Dose spinner slices in percent for 1-4 doses (summing to 100): 1, 2 and 3 are equally likely; the 4-dose slice is a thin sliver.
+        static readonly int[] DoseWeights={31,31,31,7};
         // The dose wheel draws these same slices, so what players see is what the spinner rolls.
         public static IReadOnlyList<int> DoseSlices=>DoseWeights;
         static readonly float[] DoseSpeeds={.92f,.88f,.84f,.80f};
@@ -42,7 +42,9 @@ namespace Festival.Core
             if(due.Count==0){State.TripperBag=State.Players.FindAll(p=>p.Connected).ConvertAll(p=>p.Id);due=candidates;}
             var pick=due[random.Next(due.Count)];State.TripperBag.Remove(pick.Id);return pick;
         }
-        static int SpinDose(ContentRandom random){int roll=random.Next(100);for(int dose=0;;dose++)if((roll-=DoseWeights[dose])<0)return dose+1;}
+        // One draw of 0-99 per dosed friend, walked through the slices: each dose takes as many of the 100 rolls as its percent.
+        static int SpinDose(ContentRandom random)=>DoseForRoll(random.Next(100));
+        internal static int DoseForRoll(int roll){for(int dose=0;;dose++)if((roll-=DoseWeights[dose])<0)return dose+1;}
         // A tripper who dies, leaves, or is revived without their dose is replaced by the people spinner among the
         // living. A stand-in without a dose takes 1; on Night 2 they keep the dose they already took.
         void KeepTripper()

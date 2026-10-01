@@ -55,8 +55,9 @@ The two hooks the design is built around:
 
 - **Who:** a people spinner picks the tripper each level. Nobody goes again
   until everyone has had a turn.
-- **How much:** a dose spinner picks 1 to 4 doses. Its slices are 40/30/22/8,
-  and the 4-dose slice is a thin sliver.
+- **How much:** a dose spinner picks 1 to 4 doses. Its slices are 31/31/31/7:
+  1, 2 and 3 doses are equally likely, and the 4-dose slice is a thin
+  sliver.
 - **Presentation:** an animation shows the tripper taking the dose and
   reacting.
 
