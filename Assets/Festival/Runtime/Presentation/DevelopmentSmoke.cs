@@ -172,7 +172,7 @@ namespace Festival.Presentation
             while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
             if(Time.realtimeSinceStartup>=deadline){Fail("camp spoon purchase");yield break;}
             if(session.LocalPlayer.HeldOfferId!=""){Fail("purchase still held");yield break;}
-            // Days are sold (LOOP-2): each friend also takes a Prism tab off the shelf and pays the seller for it.
+            // Days are sold (LOOP-2): each friend also takes a Tongue Stamp off the shelf and pays the seller for it.
             var tabs=Catalog.ShopPoint(true,session.State.VendorOffers.IndexOf("stock_lsd"));
             if(session.IsHost)
             {
@@ -409,7 +409,7 @@ namespace Festival.Presentation
                 PlaceBoth(sim,0,0);
                 sim.Player(sim.State.HostPlayerId).X=-2.5f;
                 // The tripper dances with the buyer in their visions, checks them by chatting, then sells to both buyers until
-                // the crew's quota is met. The smoke hands them enough Prism tabs for every sale the two buyers take.
+                // the crew's quota is met. The smoke hands them enough Tongue Stamps for every sale the two buyers take.
                 Stand(buyers[0],0,1);Stand(buyers[1],1.6f,.6f);
                 var tabStack=seller.Inventory.Find(item=>item.ItemId=="stock_lsd");
                 if(tabStack==null){Fail("tripper's camp stock");yield break;}
@@ -899,7 +899,7 @@ namespace Festival.Presentation
             if(File.Exists(equippedCapture))File.Delete(equippedCapture);
             ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
             if(!File.Exists(equippedCapture)){Fail("solo equipped camp render");yield break;}
-            // Days are sold (LOOP-2): a Prism tab from the shelf to sell.
+            // Days are sold (LOOP-2): a Tongue Stamp from the shelf to sell.
             var tabs=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_lsd"));
             player.X=tabs.X;player.Z=tabs.Z;session.Command("HoldOffer",item:"stock_lsd");
             player.X=0;player.Z=7;session.Command("Buy",item:"stock_lsd");

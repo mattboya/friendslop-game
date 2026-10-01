@@ -1082,7 +1082,7 @@ namespace Festival.Presentation
             activeActionCount++;
             if(primaryAction==null)primaryAction=action;y-=.09f;
         }
-        // Players read an item's display name, never its internal id (THEME-1: "Prism tabs", not "stock_lsd").
+        // Players read an item's display name, never its internal id (THEME-2: "Tongue Stamps", not "stock_lsd").
         private static string ItemName(string id)=>Catalog.FindItem(id)?.Name??id;
         private void FinishActions(){for(int i=activeActionCount;i<dynamicActions.Count;i++)dynamicActions[i].SetActive(false);}
         private void SetPromptAction(string label,Action action){prompt.text=label.StartsWith("E  ")?label.Substring(3):label;primaryAction=action;}
