@@ -5,7 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Festival.Core;
 
-// CROWD-2: a crew of 5 or more at the start of a night looks for two lost friends at different spots, each at the end of its
+// CROWD-2: a crew of 5 or more at the start of a night looks for two lost friends at different spots (TRIP-10: the second at
+// either spot the first is not, drawn from the level's secret, so finding one leaves a guess; DealSecretTests), each at the end of its
 // own clue trail of the night's length. The night is won only with both friends at the way back to camp, and Night 2 still
 // brings everyone home. Days, and smaller crews, are unchanged.
 public static class SplitObjectiveTests

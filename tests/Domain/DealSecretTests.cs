@@ -52,7 +52,7 @@ public static class DealSecretTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{AClientCannotRebuildTheDeal,ASecretDealsItsOwnLevel,EachLevelHasAFreshSecret,TheNextLinksFakesComeFromTheSecret,SnapshotsKeepTheSecret,TheGuardPostGivesNoRoleAway,TheGuardSwapKeepsTheDeal})
+        foreach(var test in new Action[]{AClientCannotRebuildTheDeal,ASecretDealsItsOwnLevel,EachLevelHasAFreshSecret,TheNextLinksFakesComeFromTheSecret,SnapshotsKeepTheSecret,TheGuardPostGivesNoRoleAway,TheGuardSwapKeepsTheDeal,TheFirstFriendLeavesTheSecondAGuess})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" deal secret test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -133,6 +133,28 @@ public static class DealSecretTests
             Check(Trails(host)==Trails(plain).Replace(guard.Id,partner.Id),where+": the partner takes the guard's place in its trail");
         }
         Check(swaps>=10,"setup: the guard post's nearest festivalgoer drew another role on plenty of levels, got "+swaps);
+    }
+
+    // TRIP-10: the second lost friend was always at the spot after the first's, so finding one gave the other away. Now it is at
+    // either of the other two spots, drawn from the level's secret: on two-friend nights at Palm Mirage, whichever spot the first
+    // friend is at, the second is at each of the other two on 35-65% of those nights.
+    static void TheFirstFriendLeavesTheSecondAGuess()
+    {
+        var pairs=new Dictionary<string,Dictionary<string,int>>();int nights=0;
+        foreach(var level in new[]{1,3})for(int seed=0;seed<400;seed++)
+        {
+            var s=Start(seed,Festivals.PoloFestival,level,5,()=>Secret(seed)).State;Check(s.SecondFriend.Active,"setup: level "+level+", seed "+seed+": two friends are lost");nights++;
+            string first=s.FriendPosition.X+","+s.FriendPosition.Z,second=s.SecondFriend.Position.X+","+s.SecondFriend.Position.Z;
+            Check(first!=second,"level "+level+", seed "+seed+": the friends are lost at different spots");
+            if(!pairs.ContainsKey(first))pairs[first]=new Dictionary<string,int>();pairs[first][second]=pairs[first].TryGetValue(second,out var c)?c+1:1;
+        }
+        Check(pairs.Count==3,"setup: the first friend is lost at each of the three spots, got "+pairs.Count);
+        foreach(var first in pairs)
+        {
+            int total=first.Value.Values.Sum();
+            Check(first.Value.Count==2,"with the first friend at "+first.Key+" the second is lost at either other spot, got only "+string.Join(" ",first.Value.Keys)+" on "+total+" nights");
+            foreach(var second in first.Value)Check(second.Value*100>=35*total&&second.Value*100<=65*total,"with the first friend at "+first.Key+" the second is at "+second.Key+" on "+second.Value+" of "+total+" nights");
+        }
     }
 
     // The level keeps the host's secret as its deal seed. Two hosts with the same spin and different secrets deal different roles;
