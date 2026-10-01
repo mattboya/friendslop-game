@@ -20,7 +20,7 @@ namespace Festival.Core
             // CROWD-2: a big crew's night counts both lost friends.
             var second=state.SecondFriend;
             if(second.Active){int found=(state.FriendFound?1:0)+(second.Found?1:0);return found==2?"ESCORT BOTH FRIENDS BACK TO CAMP":"TWO FRIENDS LOST • "+found+" / 2 FOUND";}
-            if(state.FriendFound)return "ESCORT FRIEND TO SHUTTLE";
+            if(state.FriendFound)return "ESCORT FRIEND BACK TO CAMP";
             if(state.GateOpened)return "FIND THE MISSING FRIEND";
             int trail=Festivals.For(state).ChainLength;
             return trail>0?"FOLLOW THE CLUE TRAIL "+state.CluesRead+" / "+trail:"SELL THE DAY'S QUOTA";
@@ -60,10 +60,10 @@ namespace Festival.Core
             {
                 // CROWD-2: a big crew's two friends may follow different escorts, and each needs one.
                 var leader=Escort(state,state.FriendLeaderId);var other=second.Active?Escort(state,second.LeaderId):leader;
-                if(leader==null||other==null)return "Friend needs an escort. Reach them and press E; shuttle "+Route(player,0,-32)+".";
+                if(leader==null||other==null)return "Friend needs an escort. Reach them and press E, then lead them to the way back to camp "+Route(player,0,-32)+".";
                 return leader.Id==player.Id||other.Id==player.Id
-                    ?"Lead your friend to the shuttle "+Route(player,0,-32)+". Stay close."
-                    :"Follow the escort to the shuttle "+Route(player,0,-32)+".";
+                    ?"Lead your friend to the way back to camp "+Route(player,0,-32)+". Stay close."
+                    :"Follow the escort to the way back to camp "+Route(player,0,-32)+".";
             }
             // A lost friend at the end of a finished trail (either of a big crew's two): head for one in sight, else search.
             string search="";

@@ -88,7 +88,7 @@ namespace Festival.Core
         // A night's extract needs every lost friend found and within 3 m of the way back to camp.
         static bool FriendsBack(RoundState s)=>Back(s.FriendFound,s.FriendPosition)&&(!s.SecondFriend.Active||Back(s.SecondFriend.Found,s.SecondFriend.Position));
         static bool Back(bool found,WorldPoint friend)=>found&&Distance(friend.X,friend.Z,Festivals.CampGateX,Festivals.CampGateZ)<=3;
-        string NightExtractRefusal()=>!State.SecondFriend.Active?(Finale?FinaleExtractRefusal:"Bring the friend and a living survivor to the shuttle")
+        string NightExtractRefusal()=>!State.SecondFriend.Active?(Finale?FinaleExtractRefusal:"Bring the friend and a living survivor to the way back to camp")
             :Finale?"Everyone goes home on Night 2: bring both friends, the whole crew and any bodies to the way back to camp":"Bring both lost friends and a living survivor to the way back to camp";
     }
 }
