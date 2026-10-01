@@ -15,6 +15,27 @@
       "renderers": 3,
       "triangles": 704,
       "separate": []
+    },
+    "FestivalWheelBase": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 472,
+      "separate": []
+    },
+    "FestivalWheelRotor": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 1024,
+      "separate": []
+    },
+    "FestivalWheelGondola": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 436,
+      "separate": []
     }
   }
 }
