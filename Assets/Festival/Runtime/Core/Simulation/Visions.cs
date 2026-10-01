@@ -6,8 +6,9 @@ namespace Festival.Core
     /// <summary>A sight only the tripper gets: a role over a festivalgoer (Buyer, Narc), the next clue holder (Clue), or a secret:
     /// a cash Stash or a Shortcut at a spot, a DoubleBuyer over a buyer. Tell is presentation-only and true on fakes, so they can
     /// show their tells; IsTrue reaches the tripper only once the vision is Confirmed (VisibleVisions). Trail says which lost
-    /// friend's trail a Clue belongs to (0 the first, 1 the second; SplitObjective.cs) and stays on the host.</summary>
-    [Serializable] public sealed class VisionState { public string Id="",Kind="",NpcId=""; public float X,Z; public bool IsTrue,Tell,Confirmed; public int Trail; }
+    /// friend's trail a Clue belongs to (0 the first, 1 the second; SplitObjective.cs) and stays on the host. VISION-3: ShowUntil is
+    /// when the host drops a found clue, still saying TRUE, in SimulationSeconds; 0 never (every other vision, and older snapshots).</summary>
+    [Serializable] public sealed class VisionState { public string Id="",Kind="",NpcId=""; public float X,Z; public bool IsTrue,Tell,Confirmed; public int Trail; public double ShowUntil; }
 
     /// <summary>TRIP-2: each level deals the crowd hidden roles, and the spinner's tripper sees partly false visions of them.</summary>
     public sealed partial class FestivalSimulation
@@ -75,9 +76,10 @@ namespace Festival.Core
             var seen=new List<VisionState>();var holder=State.Npcs.Find(n=>n.Id==NextClue(trail));
             if(holder==null)return seen;
             seen.Add(Sight(holder,"Clue",true));
-            var others=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=holder&&!StillOnTrail(1-trail,n.Id)&&!shown.Exists(v=>v.Kind=="Clue"&&v.NpcId==n.Id)),random);
-            // Dropped after the shuffle, so it draws what it always drew; only a fake that had to move changes the shuffles after it.
-            others.RemoveAll(n=>StillOnTrail(trail,n.Id));
+            var others=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=holder&&!StillOnTrail(1-trail,n.Id)&&!shown.Exists(v=>v.Kind=="Clue"&&v.ShowUntil==0&&v.NpcId==n.Id)),random);
+            // This trail's links still ahead, and anyone whose found clue still says TRUE, are dropped after the shuffle, so it draws
+            // what it always drew; only a fake that had to move changes the shuffles after it.
+            others.RemoveAll(n=>StillOnTrail(trail,n.Id)||shown.Exists(v=>v.Kind=="Clue"&&v.NpcId==n.Id));
             for(int i=0,fakes=(int)Math.Round(1/Reliability[dose-1])-1;i<fakes&&i<others.Count;i++)seen.Add(Sight(others[i],"Clue",false));
             foreach(var v in seen)v.Trail=trail;
             return seen;
@@ -120,5 +122,7 @@ namespace Festival.Core
         int SalePayout(NpcState buyer,int pay)=>(int)Math.Round(pay*PayoutMultiplier(State)*(buyer!=null&&State.Visions.Exists(v=>v.Kind=="DoubleBuyer"&&v.NpcId==buyer.Id)?2:1),MidpointRounding.AwayFromZero);
         // Whoever reaches a secret stash first banks it for the crew, and the tripper sees it confirmed.
         void FindStashes(){foreach(var v in State.Visions)if(v.Kind=="Stash"&&!v.Confirmed&&State.Players.Exists(p=>p.Connected&&p.Life=="Alive"&&Near(p,v.X,v.Z))){v.Confirmed=true;State.StashCash+=SecretStashCash;}}
+        // VISION-3: a found clue goes once it has said TRUE for its few seconds (FollowTrail).
+        void DropFoundClues()=>State.Visions.RemoveAll(v=>v.ShowUntil>0&&State.SimulationSeconds>=v.ShowUntil);
     }
 }

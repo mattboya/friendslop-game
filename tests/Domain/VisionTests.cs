@@ -22,6 +22,8 @@ public static class VisionTests
     static List<NpcState> Wooks(FestivalSimulation s)=>s.State.Npcs.FindAll(n=>n.Kind=="Wook");
     static bool Secret(VisionState v)=>Array.IndexOf(SecretKinds,v.Kind)>=0;
     static bool DoubleBuyer(FestivalSimulation s,NpcState n)=>s.State.Visions.Exists(v=>v.Kind=="DoubleBuyer"&&v.NpcId==n.Id);
+    // A clue the tripper found says TRUE a few seconds before it goes (VISION-3); the trail's live clue visions are the rest.
+    static bool LiveClue(VisionState v)=>v.Kind=="Clue"&&!(v.Confirmed&&v.IsTrue);
 
     // The crew readies at camp for this level, the wheels land and everyone loads into the real crowd.
     static FestivalSimulation Start(int seed,int level,int festival=0,int encore=0,int crew=2)
@@ -195,7 +197,7 @@ public static class VisionTests
             Check(!Act(s,p.Id,"FindFriend").Accepted,where+"nobody reaches the friend before the trail ends");
             for(int link=0;link<chain.Count;link++)
             {
-                var clues=s.State.Visions.FindAll(v=>v.Kind=="Clue");
+                var clues=s.State.Visions.FindAll(LiveClue);
                 Check(clues.Count==shown[dose]&&clues.Count(v=>v.IsTrue)==1&&clues.Find(v=>v.IsTrue).NpcId==chain[link],where+"link "+link+" shows its real clue holder among the dose's fakes");
                 Check(clues.TrueForAll(v=>!v.Confirmed&&v.Tell==!v.IsTrue&&v.Id!=""),where+"link "+link+"'s visions are fresh, with their tells");
                 var fake=clues.Find(v=>!v.IsTrue);
@@ -204,7 +206,7 @@ public static class VisionTests
                 s.ConfirmVisionsOf(Npc(s,chain[link]));
                 Check(s.State.CluesRead==link+1,where+"finding the real clue holder moves the trail on to link "+(link+1));
             }
-            Check(s.State.GateOpened&&!s.State.Visions.Exists(v=>v.Kind=="Clue"),where+"the last link reveals the lost friend, and the trail's visions clear");
+            Check(s.State.GateOpened&&!s.State.Visions.Exists(LiveClue),where+"the last link reveals the lost friend, and the trail's visions clear");
             Check(secrets.TrueForAll(id=>s.State.Visions.Exists(v=>v.Id==id)),where+"secret sights stay for the whole night");
             Check(Act(s,p.Id,"FindFriend").Accepted,where+"then the crew can reach the friend");
         }
@@ -241,9 +243,9 @@ public static class VisionTests
 
     static void VisionsSurviveSnapshots()
     {
-        int seed=0;var s=Dosed(4,1,ref seed);Check(s.State.Visions.Count>0,"setup: a dose-4 night has visions");s.State.Visions[0].Confirmed=true;
+        int seed=0;var s=Dosed(4,1,ref seed);Check(s.State.Visions.Count>0,"setup: a dose-4 night has visions");s.State.Visions[0].Confirmed=true;s.State.Visions[0].ShowUntil=12.5;
         var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));var r=restored.State;
-        string Visions(RoundState x)=>string.Join(";",x.Visions.ConvertAll(v=>v.Id+v.Kind+v.NpcId+v.X+v.Z+v.IsTrue+v.Tell+v.Confirmed));
+        string Visions(RoundState x)=>string.Join(";",x.Visions.ConvertAll(v=>v.Id+v.Kind+v.NpcId+v.X+v.Z+v.IsTrue+v.Tell+v.Confirmed+v.ShowUntil));
         Check(Visions(r)==Visions(s.State)&&string.Join(",",r.ClueChain)==string.Join(",",s.State.ClueChain)&&string.Join(",",r.Npcs.ConvertAll(n=>n.Role))==string.Join(",",s.State.Npcs.ConvertAll(n=>n.Role)),"visions, the clue chain and the roles survive a snapshot");
         var legacy=JsonNode.Parse(JsonSerializer.Serialize(new FestivalSimulation(5).State,Json)).AsObject();legacy.Remove("Visions");legacy.Remove("ClueChain");
         foreach(var npc in legacy["Npcs"].AsArray())npc.AsObject().Remove("Role");

@@ -21,7 +21,8 @@ public static class SplitObjectiveTests
     static List<string> Chain(FestivalSimulation s,int trail)=>trail==0?s.State.ClueChain:s.State.SecondFriend.ClueChain;
     // The id of the trail's next clue holder, or "" once it is followed to the end.
     static string Next(FestivalSimulation s,int trail){int read=trail==0?s.State.CluesRead:s.State.SecondFriend.CluesRead;return read<Chain(s,trail).Count?Chain(s,trail)[read]:"";}
-    static List<VisionState> Clues(FestivalSimulation s,int trail)=>s.State.Visions.FindAll(v=>v.Kind=="Clue"&&v.Trail==trail);
+    // A trail's live clue visions: a clue the tripper found says TRUE a few seconds before it goes (VISION-3).
+    static List<VisionState> Clues(FestivalSimulation s,int trail)=>s.State.Visions.FindAll(v=>v.Kind=="Clue"&&v.Trail==trail&&!(v.Confirmed&&v.IsTrue));
     static double Distance(WorldPoint a,WorldPoint b)=>Math.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Z-b.Z)*(a.Z-b.Z));
     static PlayerState Place(FestivalSimulation s,string id,WorldPoint at){var p=s.Player(id);p.X=at.X;p.Z=at.Z;return p;}
     static readonly WorldPoint Gate=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
@@ -109,7 +110,7 @@ public static class SplitObjectiveTests
             FollowTrail(s,1);
             Check(s.State.SecondFriend.GateOpened&&!s.State.GateOpened&&Clues(s,1).Count==0&&Clues(s,0).Count==Shown[dose],where+"the second trail's end reveals only the second friend, and only its visions clear");
             FollowTrail(s,0);
-            Check(s.State.GateOpened&&!s.State.Visions.Exists(v=>v.Kind=="Clue"),where+"then the first trail ends too");
+            Check(s.State.GateOpened&&Clues(s,0).Count==0&&Clues(s,1).Count==0,where+"then the first trail ends too");
         }
         Check(doses.Count==4,"setup: every dose was spun");
         // Through the real check: the tripper chats with the second trail's first clue holder.

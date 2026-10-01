@@ -199,7 +199,9 @@ public static class ConfirmTests
         Check(s.State.CluesRead==0&&!s.State.GateOpened&&Seen(s,tripper,fake).Confirmed&&!Seen(s,tripper,fake).IsTrue,"checking a fake clue holder shows it false, and the trail stays put");
         Dance(s,Npc(s,chain[0]),4,0);
         Check(s.State.CluesRead==1&&!s.State.GateOpened,"dancing with the real first clue holder moves the trail on");
-        var next=s.State.Visions.Find(v=>v.Kind=="Clue"&&v.IsTrue);Check(next!=null&&next.NpcId==chain[1]&&!next.Confirmed,"to the next link's holder, unchecked");
+        // VISION-3: the found link's clue says TRUE a few seconds more, beside the next link's.
+        var next=s.State.Visions.Find(v=>v.Kind=="Clue"&&v.IsTrue&&!v.Confirmed);Check(next!=null&&next.NpcId==chain[1],"to the next link's holder, unchecked");
+        Check(s.State.Visions.Exists(v=>v.NpcId==chain[0]&&v.Kind=="Clue"&&v.IsTrue&&v.Confirmed),"while the first link's clue still says TRUE");
         Chat(s,Npc(s,chain[1]));
         Check(s.State.CluesRead==2&&s.State.GateOpened,"checking the last clue holder opens the way to the lost friend");
         var friend=Friend(s);friend.X=s.State.FriendPosition.X;friend.Z=s.State.FriendPosition.Z;

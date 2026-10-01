@@ -14,6 +14,8 @@ namespace Festival.Core
         public const int TwoFriendCrew=5;
         // Each friend rescued banks this in the crew's shared stash, once.
         const int FriendReward=20;
+        // A clue the tripper finds says TRUE this long before it goes.
+        const double FoundClueSeconds=3;
         // A FindFriend interaction's target: the first friend's is "friend".
         const string SecondFriendTarget="friend_2";
         // Friends get lost at one of these, picked by the round's seed; a second friend at the next one along.
@@ -34,14 +36,17 @@ namespace Festival.Core
         string NextClue(int trail){var chain=Chain(trail);int read=CluesRead(trail);return read<chain.Count?chain[read]:"";}
         // Whether npc holds one of the trail's links still to find, its next one included.
         bool StillOnTrail(int trail,string npc)=>Chain(trail).IndexOf(npc)>=CluesRead(trail);
-        // The tripper found trail's real next clue holder: that trail moves on and its next link's visions replace this link's.
-        // After the last link the way to its friend opens (the tripper's view then shows where that friend is).
+        // The tripper found trail's real next clue holder: that trail moves on and its next link's visions replace this link's,
+        // but for the clue just found, which says TRUE for FoundClueSeconds first (VISION-3). After the last link the way to its
+        // friend opens (the tripper's view then shows where that friend is).
         void FollowTrail(int trail)
         {
             var second=State.SecondFriend;int read=trail==0?++State.CluesRead:++second.CluesRead;
             if(read==Chain(trail).Count){if(trail==0)State.GateOpened=true;else second.GateOpened=true;}
+            // The link's one true clue is the one just found; an earlier link's, still saying TRUE, keeps its own time.
+            foreach(var v in State.Visions)if(v.Kind=="Clue"&&v.Trail==trail&&v.IsTrue&&v.ShowUntil==0)v.ShowUntil=State.SimulationSeconds+FoundClueSeconds;
             // Each trail draws its fakes from its own seeds: the first trail's (and DealRoles') offsets stay at or under MaxChainLength+1.
-            State.Visions.RemoveAll(v=>v.Kind=="Clue"&&v.Trail==trail);var random=new ContentRandom(unchecked(State.SpinSeed*7+1+read+(Festivals.MaxChainLength+1)*trail));
+            State.Visions.RemoveAll(v=>v.Kind=="Clue"&&v.Trail==trail&&v.ShowUntil==0);var random=new ContentRandom(unchecked(State.SpinSeed*7+1+read+(Festivals.MaxChainLength+1)*trail));
             Show(ClueVisions(random,TripperDose(State),trail,State.Visions),random);
         }
 
