@@ -36,6 +36,20 @@
       "renderers": 3,
       "triangles": 436,
       "separate": []
+    },
+    "FestivalStageMirage": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 8,
+      "triangles": 2000,
+      "separate": []
+    },
+    "FestivalPetalCanopy": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 768,
+      "separate": []
     }
   }
 }
