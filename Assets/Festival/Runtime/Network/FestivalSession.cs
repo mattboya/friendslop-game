@@ -27,7 +27,8 @@ namespace Festival.Network
         // The wire contract a client's hello names. Bump it whenever snapshots or commands change meaning, so a mismatched build
         // is turned away with "Incompatible game version." rather than joining a game it cannot play.
         // 2: festival weekends (the Spinning phase, the weekend's new commands, and a ReviewVote that names a friend).
-        public const int ProtocolVersion=2;
+        // 3: wave 2026-09-30 (2): clients build DANCE-5's busier rhythm charts from the same ChartSeed, and the spin runs longer.
+        public const int ProtocolVersion=3;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);

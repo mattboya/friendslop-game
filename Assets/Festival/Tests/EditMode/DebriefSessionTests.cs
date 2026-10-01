@@ -42,5 +42,12 @@ namespace Festival.Tests
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"New\",\"Token\":\"\",\"Protocol\":"+FestivalSession.ProtocolVersion+"}"),Is.True,"this build's own clients join");
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"New\",\"Token\":\""+new string('t',65)+"\",\"Protocol\":"+FestivalSession.ProtocolVersion+"}"),Is.False,"an oversized token is still refused");
         }
+
+        // A weekend build from before DANCE-5 draws a different rhythm chart from the same ChartSeed than the host scores, and times
+        // the spin differently, so every challenge it plays scores low: it must be told its version is incompatible too.
+        [Test] public void ABuildWithTheOldRhythmChartsCannotJoin()
+        {
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":2}"),Is.False,"a pre-DANCE-5 client is told its version is incompatible");
+        }
     }
 }
