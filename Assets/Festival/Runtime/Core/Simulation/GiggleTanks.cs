@@ -11,11 +11,13 @@ namespace Festival.Core
         /// spirit's). It reads only public state, so the HUD and the world show it from any client's view.</summary>
         public static WorldPoint GiggleTankAt(RoundState s)=>!s.GiggleTankFound&&s.GiggleTankSpot>=0&&s.GiggleTankSpot<Festivals.GiggleTankSpots.Length?Festivals.GiggleTankSpots[s.GiggleTankSpot]:null;
         // As the crew leaves camp, after the spinners: the level's own public stream rolls whether a tank turns up, and where. It
-        // warms up with one draw, so the roll never reads a fresh stream's first value, which is its seed barely stirred.
+        // warms up with one draw, so the roll never reads a fresh stream's first value, which is its seed barely stirred. ECON-1:
+        // never on the weekend's last level, whose stash the weekend's end empties, so "+$25 for camp" stays true; the guard
+        // skips only that level's draws, so every other level rolls as before.
         void RollGiggleTank()
         {
             var random=new ContentRandom(unchecked(State.SpinSeed*19+11));random.Next(100);
-            State.GiggleTankFound=false;State.GiggleTankSpot=random.Next(100)<Festivals.GiggleTankPercent?random.Next(Festivals.GiggleTankSpots.Length):-1;
+            State.GiggleTankFound=false;State.GiggleTankSpot=State.LevelIndex<Festivals.LevelCount-1&&random.Next(100)<Festivals.GiggleTankPercent?random.Next(Festivals.GiggleTankSpots.Length):-1;
         }
         /// <summary>Whether p stands within reach of the level's Giggle Tank, where GrabGiggleTank takes it (the HUD offers it there).</summary>
         public static bool AtGiggleTank(RoundState s,PlayerState p){var at=GiggleTankAt(s);return at!=null&&Near(p,at.X,at.Z,Festivals.GiggleTankReach);}

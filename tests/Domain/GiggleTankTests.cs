@@ -6,7 +6,8 @@ using Festival.Core;
 // GAS-2: about one level in five hides a Giggle Tank at one of six listed spots off the beaten path, the same on every festival.
 // It is public, not a vision: any living, free player within 1.5 m grabs it, which banks $25 in the crew's shared stash at once
 // (never sale cash, so a day's quota doesn't move) and takes the tank away for everyone. The stash carries through the weekend,
-// and withdrawing is a festival action at the crew stash, so the crew spends it there on the weekend's next level.
+// and withdrawing is a festival action at the crew stash, so the crew spends it there on the weekend's next level. ECON-1: the
+// weekend's last level has no next level and the weekend's end empties the stash, so no tank turns up there.
 public static class GiggleTankTests
 {
     const string Grab="Grab the Giggle Tank";
@@ -19,7 +20,7 @@ public static class GiggleTankTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{AboutOneLevelInFiveHidesATank,TheSpotsAreOffTheBeatenPath,AGrabBanksTheCrewStashOnce,OnlyTheLivingAndFreeGrabIt,
+        foreach(var test in new Action[]{AboutOneLevelInFiveHidesATank,TheWeekendsLastLevelHidesNone,TheSpotsAreOffTheBeatenPath,AGrabBanksTheCrewStashOnce,OnlyTheLivingAndFreeGrabIt,
             TheNextLevelWithdrawsItAtTheCrewStash,SnapshotsKeepTheTankAndOlderOnesHaveNone})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" giggle tank test(s) failed:\n"+string.Join("\n",failures));
@@ -46,14 +47,14 @@ public static class GiggleTankTests
     static GameCommand Offered(FestivalSimulation s,PlayerState p)=>FestivalGuidance.TwistActions(s.State,p).Find(a=>a.Label==Grab).Command;
     static bool Far(WorldPoint a,float x,float z,double range){double dx=a.X-x,dz=a.Z-z;return Math.Sqrt(dx*dx+dz*dz)>range;}
 
-    // 1,000 levels across both festivals and all four levels of a weekend. A level holds one spot, so never two tanks.
+    // 1,000 levels across both festivals and every level of a weekend but the last. A level holds one spot, so never two tanks.
     static void AboutOneLevelInFiveHidesATank()
     {
         Check(Festivals.GiggleTankSpots.Length==6,"six listed spots, got "+Festivals.GiggleTankSpots.Length);
         int tanks=0;var used=new int[Festivals.GiggleTankSpots.Length];
         for(int seed=1;seed<=1000;seed++)
         {
-            var s=Leave(seed,seed%Festivals.Count,seed/Festivals.Count%Festivals.LevelCount,1);var at=FestivalSimulation.GiggleTankAt(s.State);
+            var s=Leave(seed,seed%Festivals.Count,seed/Festivals.Count%(Festivals.LevelCount-1),1);var at=FestivalSimulation.GiggleTankAt(s.State);
             if(at==null)continue;
             int spot=Array.FindIndex(Festivals.GiggleTankSpots,w=>w.X==at.X&&w.Z==at.Z);
             Check(spot>=0&&spot==s.State.GiggleTankSpot,"seed "+seed+"'s tank sits on a listed spot, got ("+at.X+", "+at.Z+")");
@@ -61,6 +62,17 @@ public static class GiggleTankTests
         }
         Check(tanks>=170&&tanks<=230,"20% ±3% of 1,000 levels hide a tank, got "+tanks);
         Check(Array.IndexOf(used,0)<0,"every spot turns up: "+string.Join(", ",used));
+    }
+
+    // ECON-1: "+$25 for camp" must stay true, and the stash a tank fills on Night 2 is wiped when the weekend ends. The other
+    // levels turn one up one time in five, so 200 last levels across both festivals without one is no fluke.
+    static void TheWeekendsLastLevelHidesNone()
+    {
+        for(int seed=1;seed<=200;seed++)
+        {
+            var s=Leave(seed,seed%Festivals.Count,Festivals.LevelCount-1,1);
+            Check(s.State.GiggleTankSpot==-1&&FestivalSimulation.GiggleTankAt(s.State)==null,"seed "+seed+": "+Festivals.For(s.State).Name+" at "+Festivals.Name(s.State.FestivalIndex)+" hides no tank, got spot "+s.State.GiggleTankSpot);
+        }
     }
 
     // On both festivals: inside the fence, outside the VIP ropes, well off the art cars' loops and the Ferris wheel, and more than
