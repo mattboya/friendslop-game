@@ -59,13 +59,23 @@ function run(label,args,expectedMarker='')
   }
 }
 
+// `test-edit|test-play -testFilter <filter>` runs only the tests Unity's filter matches (a regular expression on full test
+// names, e.g. "VisionMarkerSessionTests|HudTripperPlayTests").
+const filterAt=process.argv.indexOf('-testFilter',3);
+const filter=filterAt<0?null:process.argv[filterAt+1];
+if(filterAt>=0&&!filter)
+{
+  console.error('Usage: -testFilter needs a filter');
+  process.exit(2);
+}
+
 function runTests(label,platform)
 {
   const results=path.join(artifacts,`${label}-results.xml`);
   if(existsSync(results))unlinkSync(results);
   // Unity's test runner exits batch mode after the run. Supplying -quit can
   // terminate before the Test Framework writes its result file.
-  run(label,['-buildTarget','OSXUniversal','-runTests','-testPlatform',platform,'-testResults',results]);
+  run(label,['-buildTarget','OSXUniversal','-runTests','-testPlatform',platform,'-testResults',results,...(filter?['-testFilter',filter]:[])]);
   if(!existsSync(results))
   {
     console.error(`Unity reported success but did not create ${results}`);
@@ -77,6 +87,12 @@ function runTests(label,platform)
   if(!passed)
   {
     console.error(`Unity tests did not pass; inspect ${results}`);
+    process.exit(1);
+  }
+  // A filter that matches nothing runs nothing, and nothing fails.
+  if(!/<test-run\b[^>]*\btotal="[1-9]/i.test(xml))
+  {
+    console.error(`Unity ran no tests${filter?` matching ${filter}`:''}; inspect ${results}`);
     process.exit(1);
   }
   console.log(`${platform.toUpperCase()} TESTS PASSED`);
@@ -114,6 +130,6 @@ else if(action==='build-windows-release')
 }
 else
 {
-  console.error('Usage: node scripts/unity.mjs generate|validate|test-edit|test-play|build-mac-development|build-mac-release|build-windows-development|build-windows-release');
+  console.error('Usage: node scripts/unity.mjs generate|validate|test-edit|test-play [-testFilter <filter>]|build-mac-development|build-mac-release|build-windows-development|build-windows-release');
   process.exit(2);
 }
