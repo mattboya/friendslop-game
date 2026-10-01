@@ -165,6 +165,25 @@ namespace Festival.Tests
             Assert.That(wrong,Is.Empty,string.Join("; ",wrong));
         }
 
+        // HUD-4: the arrows take the dose's substance (TRIP-5), else the newest catalog effect taken, so a Tongue Stamp or a Fun Guy
+        // still bends them for a friend who also took the debrief's shot or holds a dose from before TRIP-5. Neither the shot nor a
+        // dose is a catalog effect: they have no look of their own. The HUD draws and times the lane by this (UpdateRhythm).
+        [Test]public void TheArrowsKeepTheNewestLookAfterAShotOrADose()
+        {
+            var me=new PlayerState{Id="me"};
+            void Take(string id)=>me.Effects.Add(new ActiveEffect{Id=id,RemainingSeconds=60});
+            Take("shot");
+            Assert.That(FestivalTrip.LaneEffect(me),Is.Empty,"the debrief's shot alone leaves the arrows plain");
+            Take("lsd");
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("lsd"),"a Tongue Stamp taken after the shot bends them");
+            Take("mushrooms");
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("mushrooms"),"the newest one taken leads");
+            me.Effects.Insert(0,new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,RemainingSeconds=60});
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("mushrooms"),"a dose from an older snapshot has no substance and no look");
+            me.Effects[0].Substance="ketamine";
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("ketamine"),"a dose's substance still comes first");
+        }
+
         // Every four-lane challenge, and only one, opens the live dancer beside its lanes; the menu covers it. The HUD reads both
         // panels from these (FestivalHud.UpdateRhythm), and HudTripperPlayTests watches them on a hosted check dance and chat.
         [Test]public void EveryFourLaneChallengeShowsTheDancerUnlessTheMenuIsOpen()

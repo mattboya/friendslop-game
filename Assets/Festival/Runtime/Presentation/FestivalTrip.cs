@@ -90,11 +90,12 @@ namespace Festival.Presentation
         public static float Follow(float current,float target,float lag,float deltaTime)=>lag<=0?target:current+Mathf.DeltaAngle(current,target)*(1-Mathf.Exp(-deltaTime/lag));
 
         /// <summary>The effect whose look the rhythm arrows take (EffectPresentation.Path, Catalog's LeadSeconds): the dose's substance
-        /// first, else whatever was taken first, as before TRIP-5.</summary>
+        /// first, else the newest catalog effect taken (HUD-4). The dose and the debrief's shot are not catalog effects: no look.</summary>
         public static string LaneEffect(PlayerState player)
         {
             foreach(var e in player.Effects)if(e.Id==FestivalSimulation.DoseEffect&&!string.IsNullOrEmpty(e.Substance))return e.Substance;
-            return player.Effects.Count==0?"":player.Effects[0].Id;
+            for(int i=player.Effects.Count-1;i>=0;i--)if(Catalog.FindEffect(player.Effects[i].Id)!=null)return player.Effects[i].Id;
+            return "";
         }
 
         // Under the HUD (100) and the spinner (110), so the HUD stays readable over the bars and the spin covers it all.
