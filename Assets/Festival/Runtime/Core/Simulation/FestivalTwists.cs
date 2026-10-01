@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Festival.Core
 {
@@ -14,18 +15,40 @@ namespace Festival.Core
     {
         public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel",RideCarKind="RideCar";
 
-        // As the crew leaves camp, once DealRoles has dealt the level's roles: on Palm Mirage the regular festivalgoer nearest the
-        // guard post takes it up, and a fresh few of the others film. A big crew's encore night can deal every festivalgoer a role
-        // (narcs and two clue trails), and then the nearest buyer stands guard instead; a narc or a trail's link never does.
+        // As the crew leaves camp, once DealRoles has dealt the level's roles: on Palm Mirage the festivalgoer who stood nearest the
+        // guard post takes it up (TRIP-10: whoever that is; DealRoles has already made them a regular), and a fresh few of the others
+        // film. A big crew's encore night can deal every festivalgoer a role (narcs and two clue trails), and then a buyer stands
+        // guard instead; a narc or a trail's link never does.
         void DealTwists()
         {
-            if(State.FestivalIndex!=Festivals.PoloFestival)return;
-            NpcState guard=null;
-            foreach(var role in new[]{"Regular","Buyer"})if(guard==null)foreach(var n in State.Npcs)if(n.Role==role&&(guard==null||Distance(n.X,n.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)<Distance(guard.X,guard.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)))guard=n;
-            // ponytail: a crowd with neither (only in hand-built states) simply has no guard; the night market still sells wristbands.
-            if(guard!=null){guard.Twist=VipGuard;guard.X=Festivals.VipGuardPostX;guard.Z=Festivals.VipGuardPostZ;guard.Yaw=Festivals.VipGuardPostYaw;guard.IdlePose="Watching";}
+            var guard=GuardOf(State);
+            if(guard==null)return;
+            // ponytail: a crowd dealt neither a regular nor a buyer (only in hand-built states) simply has no guard; the night market still sells wristbands.
+            if(guard.Role=="Regular"||guard.Role=="Buyer"){guard.Twist=VipGuard;guard.X=Festivals.VipGuardPostX;guard.Z=Festivals.VipGuardPostZ;guard.Yaw=Festivals.VipGuardPostYaw;guard.IdlePose="Watching";}
+            else guard=null;
             var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"&&n!=guard),new ContentRandom(unchecked(State.SpinSeed*11+3)));
             for(int i=0;i<Festivals.Influencers&&i<crowd.Count;i++)crowd[i].Twist=Influencer;
+        }
+        // TRIP-10: Palm Mirage's VIP guard, the festivalgoer standing nearest the post as the level starts, whatever its role, so a
+        // client that rebuilds the crowd's start from the public Seed learns no one's role from it. Null on other festivals.
+        static NpcState GuardOf(RoundState s)
+        {
+            if(s.FestivalIndex!=Festivals.PoloFestival)return null;
+            NpcState guard=null;
+            foreach(var n in s.Npcs)if(n.Kind=="Wook"&&(guard==null||Distance(n.X,n.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)<Distance(guard.X,guard.Z,Festivals.VipGuardPostX,Festivals.VipGuardPostZ)))guard=n;
+            return guard;
+        }
+        // DealRoles, once the counts are set and before the trails are laid: crowd is the shuffled crowd, buyers from slot buyersFrom
+        // and regulars from regularsFrom. A guard dealt anything but a regular trades slots with a random regular (a random buyer if no
+        // regular is left) from its own stream, so every count stays and the partner says nothing about where anyone stood.
+        void SwapInGuard(List<NpcState> crowd,int buyersFrom,int regularsFrom)
+        {
+            int at=crowd.IndexOf(GuardOf(State)),from=regularsFrom,to=crowd.Count;
+            if(at<0||at>=regularsFrom)return;
+            if(from==to){if(at>=buyersFrom)return;from=buyersFrom;to=regularsFrom;}
+            if(from==to)return;
+            var random=new ContentRandom(unchecked((State.SpinSeed*43+7)^State.DealSeed));random.Next(2);
+            int partner=from+random.Next(to-from);var t=crowd[at];crowd[at]=crowd[partner];crowd[partner]=t;
         }
         // Every Playing step, after the crowd has looked around: a live player in an influencer's frame puts every wook within
         // FilmWitnessRadius of them on alert, whether or not that wook can see them (the stream shows their face). It is a passive

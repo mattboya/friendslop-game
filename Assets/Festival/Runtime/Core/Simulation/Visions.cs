@@ -44,6 +44,7 @@ namespace Festival.Core
             var crowd=Shuffled(State.Npcs.FindAll(n=>n.Kind=="Wook"),random);int trails=LoseFriends();
             int narcs=Math.Min(level.Narcs,crowd.Count),chain=Math.Min(level.ChainLength,(crowd.Count-narcs)/trails),holders=chain*trails;
             int buyers=Math.Min((int)Math.Round(BuyerShare*crowd.Count,MidpointRounding.AwayFromZero),crowd.Count-narcs-holders);
+            SwapInGuard(crowd,narcs+holders,narcs+holders+buyers);
             State.ClueChain.Clear();State.SecondFriend.ClueChain.Clear();
             for(int i=0;i<crowd.Count;i++)
             {

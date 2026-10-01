@@ -21,10 +21,11 @@ public static class DealSecretTests
 
     // `crew` friends ready at camp for this level of this festival; the wheels land and everyone loads into the real crowd. The
     // host hands the simulation `secret` (null: none, as in tests and previews).
-    static FestivalSimulation Start(int seed,int festival,int level,int crew,Func<int> secret)
+    // `before` changes the round before the crew sets off.
+    static FestivalSimulation Start(int seed,int festival,int level,int crew,Func<int> secret,Action<RoundState> before=null)
     {
         var s=new FestivalSimulation(seed){DealSecret=secret};for(int i=0;i<crew;i++)s.AddPlayer("p"+i,"P"+i);
-        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;Begin(s);return s;
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;before?.Invoke(s.State);Begin(s);return s;
     }
     static void Begin(FestivalSimulation s)
     {
@@ -51,7 +52,7 @@ public static class DealSecretTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{AClientCannotRebuildTheDeal,ASecretDealsItsOwnLevel,EachLevelHasAFreshSecret,TheNextLinksFakesComeFromTheSecret,SnapshotsKeepTheSecret})
+        foreach(var test in new Action[]{AClientCannotRebuildTheDeal,ASecretDealsItsOwnLevel,EachLevelHasAFreshSecret,TheNextLinksFakesComeFromTheSecret,SnapshotsKeepTheSecret,TheGuardPostGivesNoRoleAway,TheGuardSwapKeepsTheDeal})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" deal secret test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -86,6 +87,52 @@ public static class DealSecretTests
         Check(landmarks*3<days,"the rebuild pictures the host's landmark on "+landmarks+" of "+days+" days, no better than a guess");
         Check(doubleNights>=10,"setup: plenty of nights where both deal a double buyer, got "+doubleNights);
         Check(doubles*2<doubleNights,"the rebuild picks the host's double buyer on "+doubles+" of "+doubleNights+" nights, no better than a guess");
+    }
+
+    // TRIP-10: a client rebuilds where every festivalgoer stood as the level started (CreateRound's spots, from the public Seed).
+    // The VIP guard was the regular nearest the post, so everyone who stood nearer was a buyer or a narc. Now it is whoever stood
+    // nearest, whatever the deal gave them, and a guard dealt anything but a regular trades roles with a random regular: nobody
+    // stood nearer the post, and the next nearest are regulars about as often as anyone. (Trading with the regular nearest the
+    // post would only move the leak one rank down, to about 18% against a base near 37%; the rank checks catch that.)
+    static void TheGuardPostGivesNoRoleAway()
+    {
+        const int Ranks=2;int levels=0,others=0,regulars=0;var rankRegulars=new int[Ranks];
+        for(int level=0;level<Festivals.LevelCount;level++)foreach(var crew in new[]{2,5})for(int seed=0;seed<80;seed++)
+        {
+            var s=Start(seed,Festivals.PoloFestival,level,crew,()=>Secret(seed)).State;var start=new FestivalSimulation(seed).State.Npcs;levels++;
+            string where="level "+level+", "+crew+" players, seed "+seed;
+            double FromPost(NpcState n){var at=start.Find(o=>o.Id==n.Id);return Math.Sqrt((at.X-Festivals.VipGuardPostX)*(at.X-Festivals.VipGuardPostX)+(at.Z-Festivals.VipGuardPostZ)*(at.Z-Festivals.VipGuardPostZ));}
+            var guard=s.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);Check(guard!=null&&guard.Role=="Regular",where+": a regular guards the VIP ropes");
+            var rest=s.Npcs.Where(n=>n.Kind=="Wook"&&n!=guard).OrderBy(FromPost).ToList();
+            Check(FromPost(rest[0])>=FromPost(guard),where+": nobody stood nearer the post than the guard, but "+rest[0].Id+" ("+rest[0].Role+") stood "+FromPost(rest[0]).ToString("0.0")+" m off and the guard "+FromPost(guard).ToString("0.0")+" m");
+            for(int r=0;r<Ranks;r++)if(rest[r].Role=="Regular")rankRegulars[r]++;
+            others+=rest.Count;regulars+=rest.Count(n=>n.Role=="Regular");
+        }
+        double share=(double)regulars/others;
+        for(int r=0;r<Ranks;r++)Check(Math.Abs((double)rankRegulars[r]/levels-share)<.08,"the festivalgoer "+(r+2)+(r==0?"nd":"rd")+" nearest the post is a regular on "+rankRegulars[r]+" of "+levels+" levels, against "+(share*100).ToString("0")+"% of everyone else");
+    }
+
+    // The guard's trade changes two festivalgoers' roles and nothing else. The same level with one of the host's other regulars
+    // moved onto the post first deals with nobody to trade (that regular stands nearest and drew a regular): the host's deal is
+    // that one with the guard and one partner trading roles, a clue link included, so every role count is what it was.
+    static void TheGuardSwapKeepsTheDeal()
+    {
+        int swaps=0;
+        for(int level=0;level<Festivals.LevelCount;level++)foreach(var crew in new[]{2,5})for(int seed=0;seed<10;seed++)
+        {
+            var host=Start(seed,Festivals.PoloFestival,level,crew,()=>Secret(seed)).State;var guard=host.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);
+            string where="level "+level+", "+crew+" players, seed "+seed;
+            var stay=host.Npcs.Find(n=>n.Role=="Regular"&&n!=guard);Check(stay!=null,where+": setup: another regular");
+            var plain=Start(seed,Festivals.PoloFestival,level,crew,()=>Secret(seed),s=>{var n=s.Npcs.Find(o=>o.Id==stay.Id);n.X=Festivals.VipGuardPostX;n.Z=Festivals.VipGuardPostZ;}).State;
+            Check(plain.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard).Id==stay.Id,where+": setup: the moved regular guards the other deal");
+            Check(string.Join(",",host.Npcs.Select(n=>n.Role).OrderBy(r=>r))==string.Join(",",plain.Npcs.Select(n=>n.Role).OrderBy(r=>r)),where+": the same role counts");
+            var traded=host.Npcs.Where(n=>plain.Npcs.Find(o=>o.Id==n.Id).Role!=n.Role).ToList();
+            if(traded.Count==0){Check(Trails(host)==Trails(plain),where+": no trade, the same trails");continue;}
+            swaps++;var partner=traded.Find(n=>n!=guard);string drawn=plain.Npcs.Find(n=>n.Id==guard.Id).Role;
+            Check(traded.Count==2&&traded.Contains(guard)&&partner.Role==drawn&&plain.Npcs.Find(n=>n.Id==partner.Id).Role==guard.Role,where+": only the guard and one partner trade roles, got "+string.Join(",",traded.Select(n=>n.Id+":"+n.Role)));
+            Check(Trails(host)==Trails(plain).Replace(guard.Id,partner.Id),where+": the partner takes the guard's place in its trail");
+        }
+        Check(swaps>=10,"setup: the guard post's nearest festivalgoer drew another role on plenty of levels, got "+swaps);
     }
 
     // The level keeps the host's secret as its deal seed. Two hosts with the same spin and different secrets deal different roles;
