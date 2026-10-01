@@ -895,7 +895,8 @@ namespace Festival.Presentation
         /// </summary>
         public static Color EffectWash(List<ActiveEffect> effects,bool reducedMotion,float time)
         {
-            if(!effects.Exists(e=>Catalog.FindEffect(e.Id)!=null))return Color.clear;
+            // GAS-1: Giggle Gas is a catalog effect with a look of its own (FestivalTrip), so it never washes the screen either.
+            if(!effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect&&Catalog.FindEffect(e.Id)!=null))return Color.clear;
             var color=effects.Exists(e=>e.Id=="lsd")?Color.HSVToRGB(Mathf.Repeat(time*.035f,1),.7f,1):new Color(.25f,.6f,.3f);
             return new Color(color.r,color.g,color.b,reducedMotion?.025f:.055f);
         }
@@ -941,6 +942,13 @@ namespace Festival.Presentation
                 {
                     int next=(state.CampMusicTrack+1)%CampFeatures.Tracks.Length;
                     SetPromptAction("E  DJ: "+CampFeatures.Tracks[next],()=>session.Command("ChooseCampTrack",amount:next));
+                    FinishActions();return;
+                }
+                // GAS-1: beside the Giggle Balloons, E takes one, unless the last one is still on.
+                string balloon=FestivalHudText.GiggleBalloonPrompt(player);
+                if(balloon!="")
+                {
+                    SetPromptAction(balloon,balloon==FestivalHudText.TakeGiggleBalloon?()=>session.Command(FestivalSimulation.TakeGiggleBalloonKind):(Action)null);
                     FinishActions();return;
                 }
                 CampFeatures.Site nearestSite=null;float nearestDistance=3.5f;

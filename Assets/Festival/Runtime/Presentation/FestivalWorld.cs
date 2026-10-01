@@ -463,6 +463,8 @@ namespace Festival.Presentation
                 var cooler=Visual("FestivalCampCooler",new Vector3(x>0?x+1.65f:x-1.65f,0,-3.6f));
                 if(x>0)Recolor(cooler,"Rose","Mint");
             }
+            // GAS-1: the Giggle Balloons, off the mat's west edge. Nothing in them collides, so the camp's navmesh ignores them.
+            FestivalGiggleTank.BuildBalloons(camp).localPosition=new Vector3(CampFeatures.GiggleBalloonX,0,CampFeatures.GiggleBalloonZ);
             for(int i=0;i<28;i++)
             {
                 float x=-21f+(i*17%43),z=-20f+(i*29%41);

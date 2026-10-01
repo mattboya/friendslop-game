@@ -14,7 +14,8 @@ namespace Festival.Presentation
     /// reach the screen through the single writers: FestivalHud.ApplyEffects adds Fov to the view's field of view,
     /// FestivalSession.UpdateCamera trails the mouse by Lag (Follow), and FestivalNightLighting adds Saturation and Brightness to the
     /// colour grade. This component draws the rest: its own overlay canvas under the HUD (tint, haze, vignette, letterbox), pooled
-    /// colour trails and glows around other people, and a low-pass on the view's listener.</summary>
+    /// colour trails and glows around other people, and a low-pass on the view's listener. GAS-1: a Giggle Balloon's gas at camp (Gas)
+    /// goes the same way, and adds a tremolo: FestivalTrip is the one writer of AudioListener.volume.</summary>
     public sealed class FestivalTrip : MonoBehaviour
     {
         /// <summary>One moment of a trip. Zero everywhere is a sober view.</summary>
@@ -31,6 +32,8 @@ namespace Festival.Presentation
             public float Saturation,Brightness;
             // How strongly people leave colour trails and glow (0-1), and how muffled the sound is (0-1).
             public float Trails,Glow,Muffle;
+            // How far the volume of everything heard dips right now (0-1): GAS-1's tremolo.
+            public float Tremolo;
         }
 
         /// <summary>Reduced motion (on by default) keeps every colour but cuts camera motion, the swell and the lag, to this share.</summary>
@@ -62,18 +65,41 @@ namespace Festival.Presentation
             return look;
         }
 
-        /// <summary>The local player's trip in state: only while the festival is shown (Playing or Results), only for their own dose of
-        /// 1 or more, never for a spirit (cross-cutting call 3), and at night with its tint and haze held to NightTint.</summary>
+        /// <summary>GAS-1: the wah-wah's beat, in pulses a second.</summary>
+        public const float GasPulseHz=4;
+        // At full strength: the vignette's floor and its pulse on top, the throb in degrees, the colour drained from the grade, the haze,
+        // the low-pass's floor (it pulses up to 1) and how far the tremolo dips the volume.
+        private const float GasVignette=.3f,GasVignettePulse=.3f,GasThrob=1.2f,GasDrain=55,GasHaze=.1f,GasMuffle=.4f,GasTremolo=.4f;
+
+        /// <summary>GAS-1: Giggle Gas at strength 0-1 (FestivalSimulation.GiggleGasStrength, on the simulation clock) at local time t. A
+        /// wah-wah pulse GasPulseHz times a second runs through the sound (a low-pass closing in, and a tremolo) and the view (a pulsing
+        /// vignette and a slight field-of-view throb); colours drain and a pale haze puts the world at a distance. Reduced motion drops
+        /// the throb and halves the vignette's pulse; the sound stays.</summary>
+        public static Perception Gas(float strength,bool reducedMotion,float time)
+        {
+            var look=new Perception();if(strength<=0)return look;
+            float wave=Mathf.Sin(time*GasPulseHz*2*Mathf.PI),pulse=.5f+.5f*wave;
+            look.Vignette=strength*(GasVignette+GasVignettePulse*(reducedMotion?.5f:1)*pulse);
+            look.Fov=reducedMotion?0:strength*GasThrob*wave;
+            look.Saturation=-GasDrain*strength;look.Haze=GasHaze*strength;
+            look.Muffle=strength*(GasMuffle+(1-GasMuffle)*pulse);look.Tremolo=strength*GasTremolo*pulse;
+            return look;
+        }
+
+        /// <summary>The local player's trip in state, never for a spirit. A dose shows only while the festival is shown (Playing or
+        /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
+        /// Giggle Gas shows by its own strength; it lives only at camp (the host clears it as the crew leaves), so never with a dose.</summary>
         public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time)
         {
-            if(state==null||!FestivalWorld.ShowsFestival(state.Phase))return default;
+            if(state==null)return default;
             foreach(var p in state.Players)
             {
                 if(p.Id!=localPlayerId)continue;
                 if(p.Life=="Spirit")return default;
                 foreach(var e in p.Effects)
                 {
-                    if(e.Id!=FestivalSimulation.DoseEffect||e.Intensity<1)continue;
+                    if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(e,state.SimulationSeconds),reducedMotion,time);
+                    if(e.Id!=FestivalSimulation.DoseEffect||e.Intensity<1||!FestivalWorld.ShowsFestival(state.Phase))continue;
                     var look=Look(e.Substance,e.Intensity,reducedMotion,time);
                     if(FestivalNightLighting.IsNight(state)){look.Tint.a=Mathf.Min(look.Tint.a,NightTint);look.Haze=Mathf.Min(look.Haze,NightTint);}
                     return look;
@@ -144,16 +170,18 @@ namespace Festival.Presentation
             if(overlay.activeSelf!=shown)overlay.SetActive(shown);
             tint.color=look.Tint;haze.color=new Color(HazeColor.r,HazeColor.g,HazeColor.b,look.Haze);vignette.color=new Color(0,0,0,look.Vignette);
             top.rectTransform.anchorMin=new Vector2(0,1-look.Letterbox);bottom.rectTransform.anchorMax=new Vector2(1,look.Letterbox);
-            Muffle(view,look.Muffle);
+            Listen(view,look);
             Trail(state,localPlayerId,view,actorFor,look.Trails,deltaTime);
             Glow(state,localPlayerId,view,actorFor,look.Glow);
         }
 
-        private void Muffle(Transform view,float muffle)
+        private void Listen(Transform view,Perception look)
         {
+            // ponytail: a frame-rate tremolo on the global listener volume; an OnAudioFilterRead tremolo if it ever sounds stepped.
+            float volume=1-look.Tremolo;if(AudioListener.volume!=volume)AudioListener.volume=volume;
             // The filter needs the view's AudioListener beside it; a view without one (an EditMode test) is left alone.
-            if(lowPass==null){if(muffle<=0||view==null||view.GetComponent<AudioListener>()==null)return;lowPass=view.gameObject.AddComponent<AudioLowPassFilter>();}
-            lowPass.enabled=muffle>0;lowPass.cutoffFrequency=LowPassHz(muffle);
+            if(lowPass==null){if(look.Muffle<=0||view==null||view.GetComponent<AudioListener>()==null)return;lowPass=view.gameObject.AddComponent<AudioLowPassFilter>();}
+            lowPass.enabled=look.Muffle>0;lowPass.cutoffFrequency=LowPassHz(look.Muffle);
         }
 
         private void Trail(RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,float strength,float deltaTime)
@@ -256,6 +284,8 @@ namespace Festival.Presentation
 
         private void OnDestroy()
         {
+            // The listener's volume is global and outlives this component and its scene.
+            AudioListener.volume=1;
             if(lowPass!=null)Dispose(lowPass);
             foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,sprites})if(thing!=null)Dispose(thing);
         }

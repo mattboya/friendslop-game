@@ -103,8 +103,10 @@ namespace Festival.Tests
         {
             var effects=new List<ActiveEffect>{new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="weed"},new ActiveEffect{Id="shot"}};
             Assert.That(FestivalHud.EffectWash(effects,false,0).a,Is.Zero,"a dose and a debrief shot leave the HUD's wash clear");
+            // GAS-1: camp's Giggle Gas drains the grade and pulses on its own overlay (FestivalTrip) instead, so it leaves the wash clear.
             foreach(var taken in Catalog.Effects)
-                Assert.That(FestivalHud.EffectWash(new List<ActiveEffect>{new ActiveEffect{Id=taken.Id}},false,0).a,Is.GreaterThan(0),taken.Name+" still washes the screen");
+                if(taken.Id==FestivalSimulation.GiggleGasEffect)Assert.That(FestivalHud.EffectWash(new List<ActiveEffect>{new ActiveEffect{Id=taken.Id}},false,0).a,Is.Zero,taken.Name+" leaves the wash clear");
+                else Assert.That(FestivalHud.EffectWash(new List<ActiveEffect>{new ActiveEffect{Id=taken.Id}},false,0).a,Is.GreaterThan(0),taken.Name+" still washes the screen");
             float strongestDay=0;
             foreach(var substance in FestivalSimulation.Substances)
             {

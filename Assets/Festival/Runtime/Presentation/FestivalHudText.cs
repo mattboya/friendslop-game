@@ -67,6 +67,11 @@ namespace Festival.Presentation
             return ride==null?"":"ON THE FERRIS WHEEL"+Dot+(int)Math.Ceiling(Math.Max(0,ride.StartSeconds+ride.DurationSeconds-now))+" s";
         }
 
+        /// <summary>GAS-1: the camp prompt beside the Giggle Balloons: E takes one (TakeGiggleBalloon), or, while the last one is still on,
+        /// a reminder with nothing to press. "" out of their reach.</summary>
+        public static string GiggleBalloonPrompt(PlayerState p)=>!FestivalSimulation.AtGiggleBalloons(p)?"":p.Effects.Exists(e=>e.Id==FestivalSimulation.GiggleGasEffect)?"ONE GIGGLE BALLOON AT A TIME":TakeGiggleBalloon;
+        public const string TakeGiggleBalloon="E  TAKE A GIGGLE BALLOON";
+
         /// <summary>The Extract action at the way back to camp, or "" while there is nothing to finish there.</summary>
         public static string ExtractAction(RoundState s)
         {
