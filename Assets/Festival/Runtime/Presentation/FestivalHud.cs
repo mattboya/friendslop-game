@@ -737,7 +737,8 @@ namespace Festival.Presentation
                 ShowRhythmKeys(session.Controls);
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
-            string effect=player.Effects.Count==0?"":player.Effects[0].Id;
+            // TRIP-5: the dose's substance sets the arrows' path and look-ahead, the same for every lane.
+            string effect=FestivalTrip.LaneEffect(player);
             double lead=Catalog.FindEffect(effect)?.LeadSeconds??2;
             ProcessRhythmFeedback(interaction,now);
             if(dialoguePanel.activeSelf)
@@ -878,9 +879,11 @@ namespace Festival.Presentation
         private void ApplyEffects(PlayerState player)
         {
             if(player==null||player.Effects.Count==0){effectWash.color=Color.clear;if(session?.ViewCamera!=null)session.ViewCamera.fieldOfView=baseFov;return;}
-            bool mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms");
-            effectWash.color=EffectWash(player.Effects,session.Profile.Data.ReducedMotion,Time.unscaledTime);
-            if(session.ViewCamera!=null)session.ViewCamera.fieldOfView=mushrooms&&!session.Profile.Data.ReducedMotion?baseFov+Mathf.Sin(Time.unscaledTime*.8f)*1.2f:baseFov;
+            bool mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms"),reduced=session.Profile.Data.ReducedMotion;
+            effectWash.color=EffectWash(player.Effects,reduced,Time.unscaledTime);
+            // TRIP-5: the dose's substance adds its own swell (Fun Guys) on top of a shop-bought one; this stays the one writer.
+            float trip=FestivalTrip.For(session.State,player.Id,reduced,Time.unscaledTime).Fov;
+            if(session.ViewCamera!=null)session.ViewCamera.fieldOfView=(mushrooms&&!reduced?baseFov+Mathf.Sin(Time.unscaledTime*.8f)*1.2f:baseFov)+trip;
         }
 
         /// <summary>

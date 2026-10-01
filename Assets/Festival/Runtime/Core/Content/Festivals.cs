@@ -16,6 +16,8 @@ namespace Festival.Core
             new Row{Name="Ember Playa",DayQuota=new[]{22,30},Narcs=new[]{3,4,5,5},Suspicion=new[]{1.25,1.35,1.5,1.6},NightChain=new[]{3,4}},
         };
         public const int LevelCount=4;
+        // Levels run Day 1, Night 1, Day 2, Night 2. Without building the level's tuning, so per-frame callers make no garbage.
+        public static bool Night(int level)=>level%2==1;
         public const double DaySeconds=480,NightSeconds=600;
         // Each encore lap: quota and suspicion x(1 + .25 t), narcs and chain + t, each capped.
         public const double EncoreStep=.25,MaxSuspicionMultiplier=2.5;
@@ -102,7 +104,7 @@ namespace Festival.Core
         public static LevelTuning Level(int festival,int level,int encoreTier)
         {
             if(festival<0||festival>=Table.Length||level<0||level>=LevelCount||encoreTier<0)throw new ArgumentOutOfRangeException(nameof(level),"No such festival level");
-            var row=Table[festival];bool night=level%2==1;double scale=EncoreScale(encoreTier);
+            var row=Table[festival];bool night=Night(level);double scale=EncoreScale(encoreTier);
             return new LevelTuning{Name=(night?"Night ":"Day ")+(level/2+1),Night=night,DurationSeconds=night?NightSeconds:DaySeconds,
                 QuotaPerCrew=night?0:(int)Math.Round(row.DayQuota[level/2]*scale,MidpointRounding.AwayFromZero),
                 Narcs=Math.Min(MaxNarcs,row.Narcs[level]+encoreTier),

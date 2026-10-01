@@ -97,12 +97,45 @@ namespace Festival.Tests
 
         // J3: the HUD's effect wash is for what you took. The spinner's dose lasts the whole level (everyone's, on Night 2) and the
         // debrief's shot 90 s; a constant green wash under either swamped the neon night, and the dose already shows as exposure.
-        [Test]public void OnlyWhatYouTookWashesTheScreen()
+        // TRIP-5: the dose's substance now tints the view (FestivalTrip), but at night no stronger than a whisper (alpha .03), tint and
+        // haze alike, so the neon still reads; by day it may show more.
+        [Test]public void OnlyWhatYouTookWashesTheScreenAndASubstanceBarelyTintsTheNight()
         {
-            var effects=new List<ActiveEffect>{new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4},new ActiveEffect{Id="shot"}};
-            Assert.That(FestivalHud.EffectWash(effects,false,0).a,Is.Zero,"a dose and a debrief shot leave the night unwashed");
+            var effects=new List<ActiveEffect>{new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="weed"},new ActiveEffect{Id="shot"}};
+            Assert.That(FestivalHud.EffectWash(effects,false,0).a,Is.Zero,"a dose and a debrief shot leave the HUD's wash clear");
             foreach(var taken in Catalog.Effects)
                 Assert.That(FestivalHud.EffectWash(new List<ActiveEffect>{new ActiveEffect{Id=taken.Id}},false,0).a,Is.GreaterThan(0),taken.Name+" still washes the screen");
+            float strongestDay=0;
+            foreach(var substance in FestivalSimulation.Substances)
+            {
+                string name=Catalog.FindEffect(substance).Name;
+                foreach(var level in new[]{1,3})
+                {
+                    var look=FestivalTrip.For(Took(Round(level,"Playing",4),substance),"me",false,0);
+                    Assert.That(look.Tint.a,Is.LessThanOrEqualTo(.03f),name+" at four doses tints night "+level+" by .03 at most");
+                    Assert.That(look.Haze,Is.LessThanOrEqualTo(.03f),name+" at four doses hazes night "+level+" by .03 at most");
+                }
+                var day=FestivalTrip.For(Took(Round(0,"Playing",4),substance),"me",false,0);strongestDay=Mathf.Max(strongestDay,Mathf.Max(day.Tint.a,day.Haze));
+            }
+            Assert.That(strongestDay,Is.GreaterThan(.03f),"by day a substance may tint more strongly");
+        }
+
+        // TRIP-5: Rolly Pollies' warm, bright, saturated colours go through the one colour grade, on top of the dose's own lift, and
+        // camp takes them off again.
+        [Test]public void RollyPolliesBrightenAndSaturateTheGradeOnTopOfTheDose()
+        {
+            root=new GameObject("Rolly world");var world=root.AddComponent<FestivalWorld>();world.Build();
+            Assert.That(root.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True,"world colour grade");
+            float exposure=grade.postExposure.value,saturation=grade.saturation.value;
+            world.SetLighting(Took(Round(1,"Playing",2),"lsd"),"me");
+            float dosedExposure=grade.postExposure.value,dosedSaturation=grade.saturation.value;
+            Assert.That(dosedExposure,Is.EqualTo(exposure+.3f).Within(1e-5f),"setup: two doses of Tongue Stamps lift the grade as any dose does");
+            world.SetLighting(Took(Round(1,"Playing",2),"ecstasy"),"me");
+            Assert.That(grade.saturation.value,Is.GreaterThan(dosedSaturation+10),"Rolly Pollies are more saturated than the same dose of anything else");
+            Assert.That(grade.postExposure.value,Is.GreaterThan(dosedExposure+.05f),"and brighter");
+            world.SetLighting(Took(Round(1,"CampReview",2),"ecstasy"),"me");
+            Assert.That(grade.postExposure.value,Is.EqualTo(exposure).Within(1e-5f),"camp exposure");
+            Assert.That(grade.saturation.value,Is.EqualTo(saturation).Within(1e-5f),"camp saturation");
         }
 
         // A round at the given level and phase. "me" carries the spinner's dose when it is above 0; a friend is always on dose 4.
@@ -114,6 +147,8 @@ namespace Festival.Tests
             state.Players.Add(me);state.Players.Add(friend);
             return state;
         }
+        // The same round with "me"'s dose of the given substance.
+        private static RoundState Took(RoundState state,string substance){state.Players[0].Effects[0].Substance=substance;return state;}
         private static string Hue(Color color)
         {
             Color.RGBToHSV(color,out float h,out float s,out _);float degrees=h*360;

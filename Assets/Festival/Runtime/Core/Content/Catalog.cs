@@ -44,8 +44,10 @@ namespace Festival.Core
         public static readonly EffectDefinition[] Effects = {
             Effect("lsd","Tongue Stamps",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),
             Effect("mushrooms","Fun Guys",2,true,"Gentle curved paths and separate afterimages; fixed receptors."),
-            Effect("ecstasy","Rolly Pollies",1,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
-            Effect("ketamine","Pony Dust",3,false,"Longer visibility lead; unchanged hit times."),
+            // TRIP-5: the substance wheel's look-ahead stays mild and fixed whatever the dose: Rolly Pollies' arrows show 1.6 s ahead,
+            // Pony Dust's 2.4 s, the rest the usual 2 s.
+            Effect("ecstasy","Rolly Pollies",1.6,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
+            Effect("ketamine","Pony Dust",2.4,false,"Longer visibility lead; unchanged hit times."),
             Effect("alcohol","Shot",2,false,"Spinning notes converge at fixed receptors; optional camera roll off."),
             Effect("weed","Couch Lock",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8)
         };

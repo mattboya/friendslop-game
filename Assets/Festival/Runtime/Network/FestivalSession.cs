@@ -65,6 +65,8 @@ namespace Festival.Network
         private readonly Dictionary<string,TextMesh> names=new Dictionary<string,TextMesh>();
         private readonly Dictionary<string,Transform> nameBubbles=new Dictionary<string,Transform>();
         private float yaw,pitch,preVisitYaw,preVisitPitch;
+        // TRIP-5: where the camera looks, trailing yaw and pitch (the mouse) by the trip's lag; the same as them without one.
+        private float viewYaw,viewPitch;
         private string lastCampVisit="";
         // TRIP-4: lying on the grass the view drops to LyingEyeHeight and looks up at the sky; getting up looks where it did before.
         private const float LyingEyeHeight=.3f,LyingPitch=-80;
@@ -103,6 +105,7 @@ namespace Festival.Network
             world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
             gameObject.AddComponent<FestivalVisionMarkers>();
             gameObject.AddComponent<FestivalCreatures>();
+            gameObject.AddComponent<FestivalTrip>();
             gameObject.AddComponent<FestivalSpinner>();
         }
         // NGO registers its message types after scene Awake and before Start.
@@ -627,7 +630,10 @@ namespace Festival.Network
                     else if(effect.Id=="mushrooms")roll+=Mathf.Sin((float)State.SimulationSeconds*1.3f+1.1f)*1.5f;
                 }
             }
-            ViewCamera.transform.rotation=Quaternion.Euler(pitch,yaw,Mathf.Clamp(roll,-3.5f,3.5f));
+            // TRIP-5: Pony Dust's camera trails the mouse; movement still faces where the mouse points (yaw).
+            float lag=FestivalTrip.For(State,LocalPlayerId,Profile.Data.ReducedMotion,0).Lag;
+            viewYaw=FestivalTrip.Follow(viewYaw,yaw,lag,Time.unscaledDeltaTime);viewPitch=FestivalTrip.Follow(viewPitch,pitch,lag,Time.unscaledDeltaTime);
+            ViewCamera.transform.rotation=Quaternion.Euler(viewPitch,viewYaw,Mathf.Clamp(roll,-3.5f,3.5f));
         }
         private void TransportFailed(){if(!closing)Fail("Network transport failed. Leave and try another port or host address.");}
         private void Fail(string message){Leave();Message=message;}
