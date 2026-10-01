@@ -64,6 +64,27 @@
       "renderers": 10,
       "triangles": 1448,
       "separate": []
+    },
+    "FestivalDesertRidge1": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 52,
+      "separate": []
+    },
+    "FestivalDesertRidge2": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 52,
+      "separate": []
+    },
+    "FestivalDesertRidge3": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 2,
+      "triangles": 52,
+      "separate": []
     }
   }
 }

@@ -8,9 +8,17 @@ CONFIG={"out":"Assets/Festival/Art/Resources","src":"ArtSource/PoloDressing.blen
 "astro":{"torso":((0,5.4,0),(2.2,2.1,3.5)),"helmet":((0,7.6,4.4),2.3),"visor":((0,7.5,6.25),(1.5,1.1,.5)),"pack":((0,8.1,-.6),(3.4,2.4,3.8)),
 "armL":((-1.5,6.2,2.0),(-3.0,3.4,4.6),(-3.1,1.15,5.8)),"armR":((1.5,6.2,2.0),(3.5,6.4,5.8),(2.6,8.6,7.4)),"arm_r":.95,"glove":1.15,
 "leg":((1.3,4.6,-2.2),(1.9,1.15,-3.6),(1.9,1.15,-7.4)),"leg_r":1.15,"boot":((1.9,1.2,-8.4),(2.2,2.4,2.8)),
-"phone":((2.4,9.6,8.4),(2.6,5.0,.35)),"lens":((3.2,11.4,8.62),.35),"rec":((1.8,11.6,8.6),.15),"panel":((0,4.3,3.0),(2.0,1.2,.5))}}
+"phone":((2.4,9.6,8.4),(2.6,5.0,.35)),"lens":((3.2,11.4,8.62),.35),"rec":((1.8,11.6,8.6),.15),"panel":((0,4.3,3.0),(2.0,1.2,.5))},
+"ridge":{"w":66,"d":6,"foot":2.5,"h":(30,40,24),"peaks":((0,0),(.08,.45),(.17,.3),(.27,.85),(.36,.6),(.46,1.0),(.55,.7),(.66,.9),(.76,.4),(.86,.55),(1,0))}}
 import sys,os;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from festival_kit import *
+import festival_kit as FK
+_cam=FK.camera
+def _camera(*a,**kw):
+    c=_cam(*a,**kw)
+    if c.data.type=="ORTHO":c.data.clip_end=max(c.data.clip_end,6*c.data.ortho_scale)
+    return c
+FK.camera=_camera # the 66 m ridges push the gallery camera past the kit's 500 m clip, which rendered blank
 G=CONFIG
 def blade(n,m,a,b,w,t):
     z=(A(*b)-A(*a)).normalized();x=z.cross(V((0,0,1)));x.normalize();y=z.cross(x)
@@ -136,10 +144,18 @@ def astronaut(k):
     box("Phone","Dark",S["phone"][0],S["phone"][1],.15)
     pc,ps=S["phone"];box("Screen","StageGlowMint",(pc[0],pc[1],pc[2]-ps[2]/2-.02),(ps[0]-.3,ps[1]-.6,.04))
     ico("Lens","Rubber",S["lens"][0],S["lens"][1],2);ico("Rec","StageGlowRose",S["rec"][0],S["rec"][1],1)
+def ridge(k,v):
+    R=G["ridge"];w,d,H=R["w"],R["d"],R["h"][v];kit(k)
+    pk=R["peaks"];sh=[(t,pk[(i+3*v)%(len(pk)-2)+1][1] if 0<i<len(pk)-1 else 0) for i,(t,_) in enumerate(pk)]
+    top=[(-w/2+t*w,max(R["foot"]+.5,H*y)) for t,y in sh];top[0]=(-w/2,R["foot"]);top[-1]=(w/2,R["foot"])
+    ring=lambda z:[(-w/2,R["foot"],z)]+[(x,y,z) for x,y in top[1:-1]]+[(w/2,R["foot"],z)]
+    loft("Ridge","Sand",[ring(0),ring(d)])
+    box("Foot","Stone",(0,R["foot"]/2,d/2),(w,R["foot"],d))
 BUILD={"FestivalPalmTall":lambda k:palm(k,G["palm"]["tall"]),"FestivalPalmLean":lambda k:palm(k,G["palm"]["lean"]),
 "FestivalWheelBase":wheel_base,"FestivalWheelRotor":wheel_rotor,"FestivalWheelGondola":gondola,
 "FestivalStageMirage":stage_mirage,"FestivalPetalCanopy":petal_canopy,
-"FestivalRainbowTower":rainbow_tower,"FestivalAstronaut":astronaut}
+"FestivalRainbowTower":rainbow_tower,"FestivalAstronaut":astronaut,
+"FestivalDesertRidge1":lambda k:ridge(k,0),"FestivalDesertRidge2":lambda k:ridge(k,1),"FestivalDesertRidge3":lambda k:ridge(k,2)}
 CLEAR={"FestivalStageMirage":lambda:[G["stage"]["crowd"],G["stage"]["dj"]],"FestivalPetalCanopy":canopy_clear}
 REVIEW={"FestivalPetalCanopy":stage_review}
 want=sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else list(BUILD)
