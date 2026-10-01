@@ -89,6 +89,7 @@ namespace Festival.Core
             if(c.Kind=="Buy")return Buy(p,c);
             if(c.Kind=="Equip")return Equip(p,c);
             if(c.Kind=="Drop"&&State.Phase=="Shopping")return LeaveAtCamp(p,c);
+            if(c.Kind==TakeGiggleBalloonKind)return TakeGiggleBalloon(p);
             if(State.Phase!="Playing")return Reject("Start the round first");
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
             switch(c.Kind) {
@@ -170,7 +171,7 @@ namespace Festival.Core
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             // The level runs the table's length whatever the round was saved with (a snapshot from before weekends held 600 s).
-            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;Spin(connected);DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();
+            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;ClearGiggleGas();Spin(connected);DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();
         }
         void BeginCampReview()
         {

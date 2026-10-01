@@ -6,6 +6,9 @@ namespace Festival.Core
     public static class CampFeatures
     {
         public const float DjX=4.3f,DjZ=-5.6f;
+        // GAS-1: the Giggle Balloons stand 2 m off the gathering mat's west edge, clear of the picnic table, the cooler and tent 2's
+        // door; a hit is taken within GiggleBalloonReach of them.
+        public const float GiggleBalloonX=-10.5f,GiggleBalloonZ=-2,GiggleBalloonReach=2.5f;
         public const float CampHalfWidth=31,CampHalfDepth=30;
         // Keep interior cells beyond the 100 m decorative woodland rise. At
         // 70 m the hill rendered over their floors and furnishings.

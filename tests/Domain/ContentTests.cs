@@ -8,7 +8,7 @@ public static class ContentTests
     public static void Run()
     {
         Check(Catalog.Items.Length==13,"thirteen item definitions (POLO-1 added the VIP wristband)");
-        Check(Catalog.Effects.Length==6,"six effects");
+        Check(Catalog.Effects.Length==7,"seven effects (GAS-1 added camp's Giggle Gas)");
         var ids=new HashSet<string>();
         foreach(var item in Catalog.Items) { Check(ids.Add(item.Id),"unique item IDs"); Check(item.Price>=0&&item.StackLimit>0,"valid economics"); Check(!string.IsNullOrEmpty(item.CancellationRule),"use contract"); }
         for(int seed=-100;seed<100;seed++)
@@ -47,7 +47,7 @@ public static class ContentTests
                 var end=EffectPresentation.Path(effect.Id,note.Id,1,reduced); Check(end.X==0&&end.Y==0,"receptor convergence");
                 Check(judge.Submit(note.Direction,note.TimeSeconds)=="Perfect","presentation preserves scoring");
             }
-            Check(judge.Score==1,"all six effects preserve score");
+            Check(judge.Score==1,"every effect preserves score");
         }
         Check(DialogueCatalog.Lines.Length>=48,"dialogue count"); var texts=new HashSet<string>(); var lineIds=new HashSet<string>();
         foreach(var line in DialogueCatalog.Lines) { Check(texts.Add(line.Text)&&lineIds.Add(line.Id),"original distinct lines"); Check(line.Status=="Draft"&&!string.IsNullOrWhiteSpace(line.AwkwardText),"draft metadata and awkward variant"); }

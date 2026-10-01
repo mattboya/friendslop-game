@@ -8,6 +8,7 @@ public sealed partial class FestivalSimulation {
         foreach(var offer in State.Transfers.ToArray())if(offer.ExpiresAt<=State.SimulationSeconds)ReturnOffer(offer);
         if(State.Phase=="Shopping")
         {
+            GiggleGasTick(dt);
             var connected=State.Players.FindAll(p=>p.Connected);
             if(connected.Count<1||connected.Exists(p=>!p.Ready))State.LaunchAtSeconds=0;
             else if(State.LaunchAtSeconds<=0)State.LaunchAtSeconds=State.SimulationSeconds+5;
