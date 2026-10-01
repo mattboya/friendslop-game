@@ -5,6 +5,8 @@ using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace Festival.Tests
 {
@@ -206,6 +208,20 @@ namespace Festival.Tests
                     foreach(var vertex in cloud.GetComponent<MeshFilter>().sharedMesh.vertices)
                         Assert.That(bounds.Contains(cloud.TransformPoint(vertex)),Is.True,"cloud "+c+" at "+t+" s: its bounds "+bounds+" hold its corner "+cloud.TransformPoint(vertex));
                 }
+            }
+        }
+
+        // Per-frame code makes no garbage. Which sky shows (night, storm, camp) is rechecked once a second of clock, as storms
+        // turn on whole seconds, so a frame between those checks only moves and redraws the clouds.
+        [Test]public void DrawingAFrameMakesNoGarbage()
+        {
+            foreach(int festival in new[]{Festivals.PoloFestival,Festivals.PlayaFestival})
+            {
+                var clouds=Sky(out _);var show=CloudShapes.For(Spin).Shows[0];
+                // Just into a cloud's morph, so the frame redraws a mesh as well as moving every cloud.
+                var state=Round(festival,0,"Playing",Spin,(int)show.Start+1.1);clouds.Apply(state,Vector3.zero);
+                state.ElapsedSeconds+=.5;
+                Assert.That(()=>clouds.Apply(state,Vector3.zero),Is.Not.AllocatingGCMemory(),Festivals.Name(festival)+": a frame makes no garbage");
             }
         }
 

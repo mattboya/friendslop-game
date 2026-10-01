@@ -33,6 +33,9 @@ namespace Festival.Presentation
         private readonly MaterialPropertyBlock block=new MaterialPropertyBlock();
         private CloudShapes.Sky sky;
         private int seed;
+        // Whether the sky shows, and the phase, festival, level, encore tier, spin and whole second of clock it was worked out for.
+        private bool shown;
+        private (string,int,int,int,int,double) shownFor=(null,-1,-1,-1,0,0);
 
         // The pool: every cloud a level can have, each with a quad for every puff a cloud can have. Hidden until a day sky.
         public FestivalClouds(Transform festival)
@@ -60,8 +63,6 @@ namespace Festival.Presentation
             }
         }
 
-        // ponytail: IsNight and DustStorm allocate a little per call, as FestivalNightLighting's own calls already do every
-        // frame; cache them per level and spin if a profiler ever points here.
         /// <summary>Clouds fill day skies at the festival, but not while a dust storm blows; nights and camp have none. They pop
         /// off and on, like the storm's fog.</summary>
         public static bool Shows(RoundState state)=>FestivalWorld.ShowsFestival(state.Phase)&&!FestivalNightLighting.IsNight(state)&&!FestivalSimulation.DustStorm(state);
@@ -70,7 +71,10 @@ namespace Festival.Presentation
         /// that walking the grounds never brings a cloud nearer, and never past the camera's 130 m far clip.</summary>
         public void Apply(RoundState state,Vector3 viewer)
         {
-            bool shown=Shows(state);
+            // Shows makes a little garbage (a level's tuning, a storm's random), so it is rechecked only when what it reads changes.
+            // Storms start and stop on whole seconds, so checking once a second of clock misses none of them.
+            var key=(state.Phase,state.FestivalIndex,state.LevelIndex,state.EncoreTier,state.SpinSeed,System.Math.Floor(state.ElapsedSeconds));
+            if(key!=shownFor){shownFor=key;shown=Shows(state);}
             if(root.gameObject.activeSelf!=shown)root.gameObject.SetActive(shown);
             if(!shown)return;
             if(sky==null||seed!=state.SpinSeed){seed=state.SpinSeed;sky=CloudShapes.For(seed);Rebuild();}
