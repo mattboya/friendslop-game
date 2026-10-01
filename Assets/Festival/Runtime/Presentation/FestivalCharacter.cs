@@ -314,7 +314,10 @@ namespace Festival.Presentation
             float measuredTurn=delta.sqrMagnitude<.04f&&Mathf.Abs(yawChange)<75f
                 ?Mathf.Clamp(yawChange/animationDelta,-240f,240f):0;
             turnRate=Mathf.Lerp(turnRate,measuredTurn,1-Mathf.Exp(-9f*animationDelta));
-            float measuredSpeed=hasPrevious&&delta.magnitude<2?Mathf.Min(6,delta.magnitude/animationDelta):0;
+            // PLAYA-2: an art car carries its rider, so they stand on its deck: neither stepping with it nor planting their feet on
+            // the ground it rolls over.
+            bool riding=Pose==FestivalSimulation.RideCarKind;
+            float measuredSpeed=hasPrevious&&delta.magnitude<2&&!riding?Mathf.Min(6,delta.magnitude/animationDelta):0;
             float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
             float acceleration=Mathf.Clamp((speed-previousSpeed)/animationDelta,-5f,5f);
@@ -629,7 +632,7 @@ namespace Festival.Presentation
             if(dance&&Pose!="Dj")
                 footPlant?.Dance(Time.time*DanceAngularSpeed(danceStyle)+phase,
                     danceStyle,animationDelta);
-            else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!lying&&!fullBodyClip,
+            else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!lying&&!fullBodyClip&&!riding,
                 !dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying&&speed>.14f,
                 delta,speed,walkCycle,gait,animationDelta,idleShift);
             if(fullBodyClip&&hipsBone!=null)
