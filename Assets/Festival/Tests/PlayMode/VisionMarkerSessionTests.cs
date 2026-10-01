@@ -46,8 +46,17 @@ namespace Festival.Tests
                     Assert.That(marker.y-body.y,Is.GreaterThan(2f),vision.Kind+" floats over "+vision.NpcId+"'s head");
                 }
 
+                // VISION-2: the dosed tripper's own game also shows the little creatures the dose invents. Two minutes on the level
+                // clock at four doses passes the first arrival, however it was armed, and several more.
+                var creatures=host.GetComponent<FestivalCreatures>();
+                Assert.That(creatures!=null&&creatures.enabled,Is.True,"the game shows a dosed player's creatures");
+                player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect).Intensity=4;yield return null;
+                sim.State.ElapsedSeconds+=120;yield return null;yield return null;
+                Assert.That(creatures.Live,Is.GreaterThan(0),"two minutes at four doses bring creatures");
+
                 session.Leave();yield return null;
                 Assert.That(markers.Shown,Is.Zero,"leaving the game clears the markers");
+                Assert.That(creatures.Live,Is.Zero,"leaving the game clears the creatures");
                 foreach(Transform child in host.transform)Assert.That(child.name,Does.Not.StartWith("Vision "),"leaving the game removes the markers");
             }
             finally

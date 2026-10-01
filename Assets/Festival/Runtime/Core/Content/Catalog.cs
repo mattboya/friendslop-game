@@ -83,7 +83,7 @@ namespace Festival.Core
         { return new EffectDefinition { Id=id,Name=name,LeadSeconds=lead,Playable=playable,PresentationContract=contract,MovementMultiplier=speed }; }
     }
     // Fixed integer algorithm: stable across Unity/.NET versions and machines.
-    internal sealed class ContentRandom
+    public sealed class ContentRandom
     {
         private uint state;
         public ContentRandom(int seed) { state=unchecked((uint)seed)^0x9e3779b9u; if(state==0) state=1; }

@@ -32,10 +32,7 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
-        private Vector3 lastViewPosition;
-        private Quaternion lastViewRotation;
-        private bool viewSeen;
-        private float eased;
+        private readonly MotionTracker motion=new MotionTracker();
         private Material shade,glow;
         private FestivalSession session;
         private Func<string,Transform> actorFor;
@@ -57,7 +54,7 @@ namespace Festival.Presentation
             gone.Clear();
             foreach(var id in markers.Keys){bool kept=false;foreach(var v in visions)if(v.Id==id){kept=true;break;}if(!kept)gone.Add(id);}
             foreach(var id in gone){Dispose(markers[id].Root.gameObject);Dispose(markers[id].Material);markers.Remove(id);}
-            float shimmer=CameraMotion(view,deltaTime);Shown=0;
+            float shimmer=motion.Step(view,deltaTime);Shown=0;
             for(int i=0;i<visions.Count;i++)
             {
                 var vision=visions[i];if(!markers.TryGetValue(vision.Id,out var marker))markers[vision.Id]=marker=Create(vision,FestivalNightLighting.IsNight(state));
@@ -72,24 +69,37 @@ namespace Festival.Presentation
                 // Once checked the verdict is plain; until then only the host's Tell flag says which tells to show.
                 bool tells=vision.Tell&&!vision.Confirmed;
                 var look=Look(vision.Kind).Color;
-                marker.Material.color=vision.Confirmed&&!vision.IsTrue?CheckedFalse:tells?Shifted(look):look;
+                marker.Material.color=vision.Confirmed&&!vision.IsTrue?CheckedFalse:tells?FakeTint(look):look;
                 if(marker.Material.HasProperty("_EmissionColor"))marker.Material.SetColor("_EmissionColor",marker.Material.color*.6f);
                 if(marker.Shadow.gameObject.activeSelf==tells)marker.Shadow.gameObject.SetActive(!tells);
                 marker.Shadow.position=ground+Vector3.up*ShadowLift;
-                marker.Glyph.transform.localScale=Vector3.one*Size*(tells?1+ShimmerDepth*shimmer*Mathf.Sin(time*ShimmerHz*2*Mathf.PI+i):1);
+                marker.Glyph.transform.localScale=Vector3.one*Size*(tells?ShimmerScale(shimmer,time,i):1);
                 marker.Verdict.text=!vision.Confirmed?"":vision.IsTrue?TrueVerdict:FalseVerdict;
                 if(view!=null)marker.Label.rotation=view.rotation;
             }
         }
 
-        // 0 while the camera is still, 1 at a quick turn or a run; eased, so it settles within a few tenths of a second of the camera.
-        private float CameraMotion(Transform view,float deltaTime)
+        // The tells are shared with everything else the dose invents (VISION-2's creatures), so it all looks fake the same way.
+        /// <summary>How much the camera is turning or moving: 0 while it is still, 1 at a quick turn or a run; eased, so it settles
+        /// within a few tenths of a second of the camera. Each component that shimmers keeps its own.</summary>
+        public sealed class MotionTracker
         {
-            if(view==null){viewSeen=false;return eased=0;}
-            float motion=viewSeen&&deltaTime>0?Quaternion.Angle(lastViewRotation,view.rotation)/deltaTime/FullShimmerTurn+Vector3.Distance(lastViewPosition,view.position)/deltaTime/FullShimmerMove:0;
-            viewSeen=true;lastViewPosition=view.position;lastViewRotation=view.rotation;
-            return eased=Mathf.Lerp(eased,Mathf.Clamp01(motion),1-Mathf.Exp(-deltaTime/ShimmerEase));
+            private Vector3 lastPosition;
+            private Quaternion lastRotation;
+            private bool seen;
+            private float eased;
+            public float Step(Transform view,float deltaTime)
+            {
+                if(view==null){seen=false;return eased=0;}
+                float motion=seen&&deltaTime>0?Quaternion.Angle(lastRotation,view.rotation)/deltaTime/FullShimmerTurn+Vector3.Distance(lastPosition,view.position)/deltaTime/FullShimmerMove:0;
+                seen=true;lastPosition=view.position;lastRotation=view.rotation;
+                return eased=Mathf.Lerp(eased,Mathf.Clamp01(motion),1-Mathf.Exp(-deltaTime/ShimmerEase));
+            }
         }
+        /// <summary>A fake's size factor this frame, from its MotionTracker reading: steady while the camera is still.</summary>
+        public static float ShimmerScale(float motion,float time,int index)=>1+ShimmerDepth*motion*Mathf.Sin(time*ShimmerHz*2*Mathf.PI+index);
+        /// <summary>A fake's colour: the hue a little off, brightness and saturation kept.</summary>
+        public static Color FakeTint(Color color){Color.RGBToHSV(color,out float h,out float s,out float v);return Color.HSVToRGB(Mathf.Repeat(h+FakeHueShift,1),s,v);}
 
         // Each kind has its own shape and colour, so colour is never the only cue. The secrets (a cash stash, a buyer who
         // pays double, a shortcut) share one gold look.
@@ -100,7 +110,6 @@ namespace Festival.Presentation
             "Clue"=>(PrimitiveType.Capsule,new Color(.3f,.85f,1f)),
             _=>(PrimitiveType.Cylinder,new Color(1f,.78f,.2f)),
         };
-        private static Color Shifted(Color color){Color.RGBToHSV(color,out float h,out float s,out float v);return Color.HSVToRGB(Mathf.Repeat(h+FakeHueShift,1),s,v);}
 
         // A vision belongs to one level, so its pool is picked once, when it is first drawn.
         private Material Pool(bool night)
