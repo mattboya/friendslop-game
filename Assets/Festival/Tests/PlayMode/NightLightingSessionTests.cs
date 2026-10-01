@@ -13,7 +13,8 @@ namespace Festival.Tests
 {
     public sealed class NightLightingSessionTests:FestivalPlayModeTest
     {
-        // LIGHT-1: a hosted game switches the world to night lighting when Night 1 starts, brightened by the host's own dose.
+        // LIGHT-1: a hosted game switches the world to night lighting when Night 1 starts, brightened by the host's own dose
+        // and (TRIP-5) by the lift of the substance they took.
         [UnityTest]public IEnumerator NightLevelLightsNeonAndTheHostsDoseInTheRunningGame()
         {
             var world=new GameObject("Night lighting world");world.AddComponent<FestivalWorld>();yield return null;
@@ -38,13 +39,17 @@ namespace Festival.Tests
                 Assert.That(session.State.Phase,Is.EqualTo("Playing"),"Night 1 starts: "+session.Message);
                 yield return null;
 
-                int dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect)?.Intensity??0;
+                var taken=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);int dose=taken?.Intensity??0;
                 Assert.That(dose,Is.InRange(1,4),"setup: the solo host is the tripper");
+                // TRIP-5: the spin's substance is random (the hosted seed is the clock), so pin the one whose look lifts the grade too.
+                taken.Substance="ecstasy";yield return null;
                 Assert.That(RenderSettings.ambientSkyColor.b,Is.EqualTo(daySky.b*.2f).Within(1e-3f),"the night sky");
                 int lit=0;
                 foreach(var light in world.transform.Find(FestivalWorld.RootName).GetComponentsInChildren<Light>())if(light.name.StartsWith("Neon ")&&light.enabled)lit++;
                 Assert.That(lit,Is.InRange(12,20),"neon lit at night");
-                Assert.That(grade.postExposure.value,Is.EqualTo(dayExposure+.15f*dose).Within(1e-4f),"the host's dose brightens their own view");
+                float lift=FestivalTrip.For(session.State,session.LocalPlayerId,false,0).Brightness;
+                Assert.That(lift,Is.GreaterThan(0),"setup: the pinned substance lifts the grade");
+                Assert.That(grade.postExposure.value,Is.EqualTo(dayExposure+.15f*dose+lift).Within(1e-4f),"the host's dose, and the lift of what they took, brighten their own view");
             }
             finally
             {
