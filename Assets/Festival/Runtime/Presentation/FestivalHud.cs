@@ -22,6 +22,10 @@ namespace Festival.Presentation
         private static readonly Color Hairline=new Color(.51f,.56f,.50f,.35f);
         private static readonly Color[] RhythmColors={new Color(1,.38f,.61f,1),new Color(1,.76f,.29f,1),new Color(.34f,.78f,1,1),new Color(.46f,.95f,.68f,1)};
         private static readonly float[] RhythmAngles={90,180,0,-90};
+        // The rhythm lane's receptor wells span WellBottom to WellTop with each outline arrow centred in its well, so a note
+        // is on time at NoteHitY, the wells' middle. A missed note keeps rising for MissOvershootSeconds past it.
+        private const float WellBottom=.766f,WellTop=.895f,NoteStartY=.11f,NoteHitY=(WellBottom+WellTop)/2;
+        private const double MissOvershootSeconds=.18;
         private FestivalSession session;
         private Canvas canvas;
         private Font font;
@@ -280,20 +284,21 @@ namespace Festival.Presentation
                 float y=.19f+beat*.126f;
                 var grid=Panel(rhythmPanel.transform,"Beat grid "+beat,new Color(.82f,.95f,.88f,.09f),new Vector2(.08f,y),new Vector2(.92f,y+.002f));grid.GetComponent<Image>().raycastTarget=false;
             }
-            for(int i=0;i<32;i++)
-            {
-                var note=Panel(rhythmPanel.transform,"Note "+i,Color.white,Vector2.zero,Vector2.zero).GetComponent<Image>();
-                note.sprite=arrowSprite;note.preserveAspect=true;note.raycastTarget=false;
-                var noteEdge=note.gameObject.AddComponent<Outline>();noteEdge.effectColor=new Color(.005f,.018f,.025f,.94f);noteEdge.effectDistance=new Vector2(3,-3);
-                noteViews.Add(note);note.gameObject.SetActive(false);
-            }
-            var hitLine=Panel(rhythmPanel.transform,"Judgment line",Orange,new Vector2(.08f,.755f),new Vector2(.92f,.761f));hitLine.GetComponent<Image>().raycastTarget=false;
             for(int lane=0;lane<4;lane++)
             {
                 float x=.08f+lane*.21f;
-                var well=Panel(rhythmPanel.transform,"Receptor well "+lane,new Color(.22f,.32f,.35f,1),new Vector2(x+.007f,.766f),new Vector2(x+.203f,.895f));Round(well);rhythmReceptorWells[lane]=well.GetComponent<Image>();rhythmReceptorWells[lane].raycastTarget=false;
+                var well=Panel(rhythmPanel.transform,"Receptor well "+lane,new Color(.22f,.32f,.35f,1),new Vector2(x+.007f,WellBottom),new Vector2(x+.203f,WellTop));Round(well);rhythmReceptorWells[lane]=well.GetComponent<Image>();rhythmReceptorWells[lane].raycastTarget=false;
                 var arrow=Panel(well.transform,"Target arrow",new Color(.76f,.85f,.84f,.9f),new Vector2(.12f,.09f),new Vector2(.88f,.91f)).GetComponent<Image>();
                 arrow.sprite=arrowOutlineSprite;arrow.preserveAspect=true;arrow.raycastTarget=false;arrow.transform.localRotation=Quaternion.Euler(0,0,RhythmAngles[lane]);rhythmReceptors[lane]=arrow;
+            }
+            // Notes come after the wells, so they draw over the wells and their outlines, and before the judgment, combo and timing text.
+            var notes=new GameObject("Notes",typeof(RectTransform));notes.transform.SetParent(rhythmPanel.transform,false);Fill(Rect(notes),0);
+            for(int i=0;i<32;i++)
+            {
+                var note=Panel(notes.transform,"Note "+i,Color.white,Vector2.zero,Vector2.zero).GetComponent<Image>();
+                note.sprite=arrowSprite;note.preserveAspect=true;note.raycastTarget=false;
+                var noteEdge=note.gameObject.AddComponent<Outline>();noteEdge.effectColor=new Color(.005f,.018f,.025f,.94f);noteEdge.effectDistance=new Vector2(3,-3);
+                noteViews.Add(note);note.gameObject.SetActive(false);
             }
             rhythmJudgment=Label(rhythmPanel.transform,"Judgment",45,TextAnchor.MiddleCenter);rhythmJudgment.font=displayFont;rhythmJudgment.fontStyle=FontStyle.Normal;Place(rhythmJudgment.rectTransform,.06f,.46f,.94f,.57f);
             rhythmJudgment.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);
@@ -760,13 +765,8 @@ namespace Festival.Presentation
             {
                 var view=noteViews[i];if(i>=displayedChart.Notes.Count){view.gameObject.SetActive(false);continue;}
                 var note=displayedChart.Notes[i];double remaining=note.TimeSeconds-now;
-                bool visible=!rhythmConsumed[i]&&remaining<=lead&&remaining>=-.18;view.gameObject.SetActive(visible);if(!visible)continue;
-                double progress=1-remaining/lead;
-                var visual=EffectPresentation.Path(effect,note.Id,progress,session.Profile.Data.ReducedMotion);
-                view.color=RhythmColors[note.Direction];
-                var rect=view.rectTransform;float x=.185f+note.Direction*.21f,y=.11f+.65f*(float)progress;
-                rect.anchorMin=rect.anchorMax=new Vector2(x,y);rect.pivot=new Vector2(.5f,.5f);rect.sizeDelta=new Vector2(96,96);
-                rect.anchoredPosition=new Vector2((float)visual.X*32,0);rect.localRotation=Quaternion.Euler(0,0,RhythmAngles[note.Direction]+(float)visual.Rotation*.08f);
+                bool visible=!rhythmConsumed[i]&&remaining<=lead&&remaining>=-MissOvershootSeconds;view.gameObject.SetActive(visible);if(!visible)continue;
+                PlaceNote(view,note,remaining,lead,effect,session.Profile.Data.ReducedMotion);
             }
             for(int direction=0;direction<4;direction++)
             {
@@ -776,6 +776,18 @@ namespace Festival.Presentation
                 rhythmReceptors[direction].color=flashing?RhythmColors[direction]:new Color(.76f,.85f,.84f,.9f);
                 rhythmReceptorWells[direction].color=flashing?new Color(.25f,.43f,.44f,1):new Color(.22f,.32f,.35f,1);
             }
+        }
+
+        // Places a note's view `remaining` seconds before its time, with `lead` seconds of look-ahead under the effect: it rises
+        // from just above the step progress bar onto its lane's outline arrow, and a missed one fades out as it rises past it.
+        public static void PlaceNote(Image view,RhythmNote note,double remaining,double lead,string effect,bool reducedMotion)
+        {
+            double progress=1-remaining/lead;
+            var visual=EffectPresentation.Path(effect,note.Id,progress,reducedMotion);
+            var color=RhythmColors[note.Direction];color.a=Mathf.Clamp01(1+(float)(remaining/MissOvershootSeconds));view.color=color;
+            var rect=view.rectTransform;float x=.185f+note.Direction*.21f,y=NoteStartY+(NoteHitY-NoteStartY)*(float)progress;
+            rect.anchorMin=rect.anchorMax=new Vector2(x,y);rect.pivot=new Vector2(.5f,.5f);rect.sizeDelta=new Vector2(96,96);
+            rect.anchoredPosition=new Vector2((float)visual.X*32,0);rect.localRotation=Quaternion.Euler(0,0,RhythmAngles[note.Direction]+(float)visual.Rotation*.08f);
         }
 
         private void ProcessRhythmFeedback(InteractionState interaction,double now)
