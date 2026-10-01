@@ -73,9 +73,9 @@ namespace Festival.Presentation
         static readonly string[] Reactions={"","Feels fine. Probably.","Whoa.","The colors are talking.","Oh no. Oh yes. Oh no."};
         const float WheelSize=520;
         // The take camera pushes in from TakeFar to TakeNear. It swings to the first of TakeAngles (degrees from the tripper's
-        // facing) whose line to their face misses the scenery and passes TakeClearance from every other friend at camp; past 90 it
-        // would see the back of the head.
-        const float TakeFar=2.5f,TakeNear=1.8f,TakeClearance=.45f;
+        // facing) whose line to their face passes SceneryClearance from the scenery and TakeClearance from every other friend at
+        // camp; past 90 it would see the back of the head.
+        const float TakeFar=2.5f,TakeNear=1.8f,TakeClearance=.45f,SceneryClearance=.3f;
         static readonly float[] TakeAngles={0,30,-30,60,-60,90,-90};
         sealed class Wheel{public RectTransform Disc;public RawImage Image;public Text Result;public CanvasGroup Group;public Texture2D Texture;}
         FestivalSession session;
@@ -179,9 +179,9 @@ namespace Festival.Presentation
             // ponytail: the first-person camera keeps rendering underneath for these 3 s; disable it if camp frame time matters.
         }
         // Nobody can move while Spinning and every client builds the same static world colliders, so every client picks the
-        // same angle from the public positions. A line through scenery (the trailhead posts stand inside the gate's 3.2 m Ready
+        // same angle from the public positions. Scenery near the line (the trailhead posts stand inside the gate's 3.2 m Ready
         // circle) counts as no clearance at all, so if no angle clears everything the clearest one wins, preferring friends to posts.
-        // ponytail: LineOfSight runs at 1.2 m; something hung at face height with nothing under it slips past, cast at the camera's height then.
+        // ponytail: the scenery capsule runs at 1.2 m, so it reaches 0.9-1.5 m up; something hung higher with nothing under it slips past, raise it to the camera's height then.
         static float TakeYaw(RoundState state)
         {
             var tripper=state.Players.Find(p=>p.Id==state.TripperId);if(tripper==null)return 0;
@@ -191,8 +191,11 @@ namespace Festival.Presentation
                 float yaw=tripper.Yaw+angle,clearance=float.MaxValue;
                 var camera=face+new Vector2(Mathf.Sin(yaw*Mathf.Deg2Rad),Mathf.Cos(yaw*Mathf.Deg2Rad))*TakeFar;
                 foreach(var p in state.Players)if(p!=tripper&&p.Connected&&p.CampVisitId=="")clearance=Mathf.Min(clearance,Distance(new Vector2(p.X,p.Z),camera,face));
-                // Both ways, so a camera that would start inside a post is caught too. The push-in stays on this line.
-                if(!FestivalSession.LineOfSight(camera.x,camera.y,face.x,face.y)||!FestivalSession.LineOfSight(face.x,face.y,camera.x,camera.y))clearance=0;
+                // A capsule, not a line: a post a few centimetres off a zero-width line still covers half the face and the frame. It
+                // starts 0.4 m out, so its round end stops 0.1 m in front of the face and a post beside the head does not count; it also
+                // catches a camera that would start inside a post. The push-in stays inside it.
+                var from=new Vector3(face.x,1.2f,face.y);var to=new Vector3(camera.x,1.2f,camera.y);
+                if(Physics.CheckCapsule(Vector3.MoveTowards(from,to,.4f),to,SceneryClearance,~0,QueryTriggerInteraction.Ignore))clearance=0;
                 if(clearance>TakeClearance)return yaw;
                 if(clearance>widest){best=yaw;widest=clearance;}
             }

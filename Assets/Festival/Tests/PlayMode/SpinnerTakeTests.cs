@@ -168,7 +168,8 @@ namespace Festival.Tests
         }
 
         // The trailhead posts (x = +-2, z = 19) stand inside the 3.2 m circle where everyone readies, so a tripper who stops
-        // just in front of one, facing the gate, has a post on the head-on camera's line.
+        // just in front of one, facing the gate, has a post on the head-on camera's line. In the last three the head-on line
+        // misses the post by 1-2 cm, yet the post still covers the side of the face; the other friend stands well clear.
         [UnityTest]public IEnumerator TrailheadPostsNeverBlockTheTake()
         {
             var world=new GameObject("Spinner world");world.AddComponent<FestivalWorld>();yield return null;
@@ -184,7 +185,8 @@ namespace Festival.Tests
                 var me=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("spin_mate","Mate");
                 var state=sim.State;string idle=state.Phase;
                 var cut=host.GetComponentsInChildren<Camera>(true).First(c=>c.name=="Spinner take camera");
-                foreach(var (x,z,yaw,otherX,otherZ) in new[]{(1.95f,17.3f,0f,0f,17f),(2.6f,17.5f,-20f,-1f,18f),(-1.2f,17.6f,-30f,1f,18f)})
+                foreach(var (x,z,yaw,otherX,otherZ) in new[]{(1.95f,17.3f,0f,0f,17f),(2.6f,17.5f,-20f,-1f,18f),(-1.2f,17.6f,-30f,1f,18f),
+                    (2.62f,17.52f,-17f,0f,12f),(-1.86f,17.23f,0f,0f,12f),(2.04f,16.81f,-4.5f,0f,12f)})
                 {
                     state.Phase=idle;mate.X=x;mate.Z=z;mate.Yaw=yaw;me.X=otherX;me.Z=otherZ;me.Yaw=180;
                     yield return new WaitForSeconds(1f);
@@ -199,9 +201,14 @@ namespace Festival.Tests
                         var eye=cut.transform.position;var face=session.WorldCharacter(mate.Id).transform.position+Vector3.up*1.4f;
                         Assert.That(Vector3.Angle(cut.transform.forward,face-eye),Is.LessThan(12f),"the shot frames the mate "+where);
                         string Blocker(Vector3 from,Vector3 to)=>Physics.Linecast(from,to,out var hit,~0,QueryTriggerInteraction.Ignore)?hit.collider.name:"nothing";
-                        Debug.Log($"[Festival.Test] post take {where}: camera={eye} face={face} blocked by {Blocker(eye,face)} / {Blocker(face,eye)}");
-                        Assert.That(Blocker(eye,face),Is.EqualTo("nothing"),"nothing stands between the camera and the mate's face "+where);
-                        Assert.That(Blocker(face,eye),Is.EqualTo("nothing"),"and the camera is not inside anything "+where);
+                        // The whole face, edges included: a line to its centre can clear a post that still covers half of it.
+                        var right=cut.transform.right*.11f;var up=cut.transform.up*.13f;
+                        foreach(var point in new[]{face,face-right,face+right,face-up,face+up})
+                        {
+                            Debug.Log($"[Festival.Test] post take {where}: camera={eye} face point={point} blocked by {Blocker(eye,point)} / {Blocker(point,eye)}");
+                            Assert.That(Blocker(eye,point),Is.EqualTo("nothing"),"nothing stands between the camera and the mate's face at "+point+" "+where);
+                            Assert.That(Blocker(point,eye),Is.EqualTo("nothing"),"and the camera is not inside anything "+where);
+                        }
                     }
                 }
                 state.Phase=idle;
