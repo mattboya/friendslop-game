@@ -146,6 +146,22 @@ namespace Festival.Tests
                 // own character dancing; the menu hides it.
                 Dancing("check dance","YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES");
                 FitsAll("check dance","Dancer caption",FourLaneKinds.Select(FestivalHudText.DancerCaption));
+                // DANCE-4: the dancer camera moves with the music: it sits where the camera path puts it this far into the check
+                // dance at its beat, with reduced motion off and on. (Read after the HUD's Update, which places it.)
+                var danceCamera=preview.transform.Find("Live festival dance camera");var onPath=new GameObject("HUD tripper dance camera path").transform;
+                bool motion=session.Profile.Data.ReducedMotion;
+                foreach(bool reduced in new[]{false,true})
+                {
+                    session.Profile.Data.ReducedMotion=reduced;yield return null;yield return null;
+                    string where="check dance, reduced motion "+(reduced?"on":"off");
+                    var dance=session.State.Interactions.Find(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");var you=session.LocalWorldCharacter;
+                    if(dance==null||you==null||danceCamera==null){failures.Add(where+": no dance, dancer or dancer camera to check");continue;}
+                    double t=session.EstimatedSimulationSeconds-dance.StartSeconds;
+                    FestivalDancePreview.Frame(onPath,you.transform,false,t,dance.BeatSeconds,reduced);
+                    float off=Vector3.Distance(danceCamera.position,onPath.position);
+                    if(off>.05f)failures.Add(where+": the dancer camera is "+off.ToString("0.00")+" m from where the camera path puts it "+t.ToString("0.00")+" s in");
+                }
+                session.Profile.Data.ReducedMotion=motion;Object.Destroy(onPath.gameObject);
                 session.MenuOpen=true;yield return null;yield return null;
                 Expect("check dance, menu open","Dancer heading","(hidden)");
                 if(preview.IsVisible)failures.Add("check dance, menu open: the live dancer view still renders");

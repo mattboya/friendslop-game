@@ -720,7 +720,7 @@ namespace Festival.Presentation
             if(showDancer)
             {
                 dancerHeading.text=FestivalHudText.DancerHeading(interaction.Kind);dancerCaption.text=FestivalHudText.DancerCaption(interaction.Kind);
-                dancePreview.Show(session.LocalWorldCharacter,session.ViewCamera);
+                dancePreview.Show(session.LocalWorldCharacter,session.ViewCamera,session.EstimatedSimulationSeconds-interaction.StartSeconds,interaction.BeatSeconds,session.Profile.Data.ReducedMotion);
             }
             else dancePreview.Hide();
             bool chatter=!rhythm&&!session.MenuOpen&&player.NpcSpeechUntil>session.EstimatedSimulationSeconds&&!string.IsNullOrEmpty(player.NpcSpeech);
