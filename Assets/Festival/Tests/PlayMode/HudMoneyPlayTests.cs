@@ -62,7 +62,7 @@ namespace Festival.Tests
                 typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,0f);
                 typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Atan2((shelf<4?1.17f:2.05f)-1.65f,9f-6.3f)*Mathf.Rad2Deg);
                 yield return new WaitForSeconds(.5f);
-                Expect("at the shelf","Prompt","PICK UP TONGUE STAMPS  •  5 FRIENDSHIP BRACELETS  •  Sell for up to 10 friendship bracelets or take: 60s of warped cues and slower, drifting steps.");
+                Expect("at the shelf","Prompt","PICK UP TONGUE STAMPS  •  5 FRIENDSHIP BRACELETS  •  Sells for 10 friendship bracelets and up, or take: 60s of warped cues and slower, drifting steps.");
                 Fits("at the shelf","Prompt");NoDollars("at the shelf");
                 // The price tags on both shelves, each lettered within its painted card.
                 int tags=0;
@@ -81,7 +81,7 @@ namespace Festival.Tests
                 Assert.That(player.HeldOfferId,Is.EqualTo("stock_lsd"),"setup: E picks up the Tongue Stamps ("+session.Message+"), after:\n"+string.Join("\n",failures));
                 player.X=0;player.Z=7;yield return new WaitForSeconds(.4f);
                 Expect("holding them","Held item price","5 FRIENDSHIP BRACELETS");
-                Expect("holding them","Held item details","Sell for up to 10 friendship bracelets or take: 60s of warped cues and slower, drifting steps.");
+                Expect("holding them","Held item details","Sells for 10 friendship bracelets and up, or take: 60s of warped cues and slower, drifting steps.");
                 Fits("holding them","Held item title","Held item price","Held item details");
                 PressE();yield return new WaitForSeconds(.4f);
                 Expect("at the counter","Handoff price","E  PAY 5 FRIENDSHIP BRACELETS  •  TONGUE STAMPS    G CANCEL");

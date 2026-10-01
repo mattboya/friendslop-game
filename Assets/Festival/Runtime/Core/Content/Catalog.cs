@@ -25,8 +25,10 @@ namespace Festival.Core
         public const float StageTakeoverStartRange=1.25f;
         public static readonly ItemDefinition[] Items = {
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
-            Item("stock_lsd", "Tongue Stamps", "Sell for up to $10 or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
-            Item("stock_mushrooms", "Fun Guys", "Sell for up to $10 or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
+            // POLO-2: a clean sale pays $10 (FestivalSimulation.PerfectSalePay) at dose 1, and dose, VIP zones, double buyers and
+            // encores raise it, so the text names no ceiling. "$N" stays a token Ember Playa's odd-object money converts.
+            Item("stock_lsd", "Tongue Stamps", "Sells for $10 and up, or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
+            Item("stock_mushrooms", "Fun Guys", "Sells for $10 and up, or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
             Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
             Item("confetti", "Confetti cannon", "Redirect nearby idle or questioning wooks for 4 seconds; cannot stop a swarm.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
             Item("merch_bag", "Official merch bag", "Hide stock from casual inspection; witnessed sales and searches still count.",5,1,"Equipment","Passive","Self",0,0,0,false),
