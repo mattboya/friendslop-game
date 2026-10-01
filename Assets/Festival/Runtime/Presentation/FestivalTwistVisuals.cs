@@ -14,7 +14,9 @@ namespace Festival.Presentation
     {
         public const string PoloRootName="Palm Mirage twists",PlayaRootName="Ember Playa twists",FramePrefix="Influencer frame ",VipSignName="VIP stall sign";
         // Frames and cars glide to each snapshot the way FestivalSession's actors do (snapping past 5 m), so a rider's body
-        // stays on its car's deck and an influencer's frame stays at their feet.
+        // stays on its car's deck and an influencer's frame stays at their feet. PLAYA-2: a car glides along its loop, by easing
+        // the clock it is drawn at, rather than straight at its next point, which cut each corner a few centimetres toward the
+        // crowd standing beside it.
         private const float Glide=15,SnapDistance=5;
         // The phone is held up in the right hand. Edges lie on the ground and glow; there is no phone light, as URP lights the one
         // ground mesh with only 4 additional lights, so it showed as a 0.2/255 change.
@@ -56,6 +58,7 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Transform> frames=new Dictionary<string,Transform>();
         private readonly List<string> gone=new List<string>();
         private float turn,clock;
+        private double carClock;
 
         public FestivalTwistVisuals(Transform festival)
         {
@@ -76,10 +79,12 @@ namespace Festival.Presentation
             Film(state,deltaTime);
             var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
             turn=Mathf.Repeat(turn+deltaTime*360/(float)Festivals.WheelRideSeconds,360);Turn();
+            double lag=state.ElapsedSeconds-carClock;
+            carClock=System.Math.Abs(lag)*Festivals.ArtCarSpeed>SnapDistance?state.ElapsedSeconds:carClock+lag*(1-System.Math.Exp(-Glide*deltaTime));
             for(int k=0;k<cars.Length;k++)
             {
-                var at=Festivals.ArtCarAt(k,state.ElapsedSeconds);var ahead=Festivals.ArtCarAt(k,state.ElapsedSeconds+TurnLookahead);
-                cars[k].localPosition=Glided(cars[k].localPosition,new Vector3(at.X,0,at.Z),deltaTime);
+                var at=Festivals.ArtCarAt(k,carClock);var ahead=Festivals.ArtCarAt(k,carClock+TurnLookahead);
+                cars[k].localPosition=new Vector3(at.X,0,at.Z);
                 var heading=new Vector3(ahead.X-at.X,0,ahead.Z-at.Z);if(heading.sqrMagnitude>1e-6f)cars[k].localRotation=Quaternion.LookRotation(heading);
             }
             fire.gameObject.SetActive(FestivalSimulation.Burning(state));

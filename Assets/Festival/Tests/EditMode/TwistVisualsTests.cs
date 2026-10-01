@@ -165,12 +165,13 @@ namespace Festival.Tests
             var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var state=Round(Festivals.PlayaFestival);
             var playa=Part(grounds,FestivalTwistVisuals.PlayaRootName);
             Assert.That(Part(Part(playa,"Art car 0"),"FestivalCampVan").GetComponentsInChildren<Renderer>().Length,Is.GreaterThan(0),"setup: the real camp van pulls each deck");
-            // A lap is 46 m at ArtCarSpeed, 38.3 s, so 40 s takes each car all the way round, every corner included; a step moves
-            // a car about 2 cm, so even its swing through a corner is caught.
-            var lap=new List<(double When,int Car,Vector2 At,List<Box> Parts)>();
-            for(double t=0;t<40;t+=.02)
+            // A lap is 46 m at ArtCarSpeed, 38.3 s, so 40 s takes each car all the way round, every corner included. It runs in
+            // 60 fps frames, so each car is checked where it is drawn as it glides along, not at the rules' point; a frame moves a
+            // car 2 cm, so even its swing through a corner is caught.
+            var lap=new List<(double When,int Car,Vector2 At,List<Box> Parts)>();const float frame=1/60f;
+            for(int f=0;f*frame<40;f++)
             {
-                state.ElapsedSeconds=t;twists.Apply(state,10);
+                double t=f*(double)frame;state.ElapsedSeconds=t;twists.Apply(state,frame);
                 for(int k=0;k<Festivals.ArtCars;k++)
                 {
                     var car=Part(playa,"Art car "+k);var parts=new List<Box>();
