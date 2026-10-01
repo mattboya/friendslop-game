@@ -19,6 +19,8 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
     const screenshot=text.match(/FESTIVAL SMOKE RENDER PASSED: (.+)/)?.[1]?.trim();
     if(!screenshot||!existsSync(screenshot))return reject(new Error(role+' screenshot missing'));
     if(role==='client'){
+      // TEST-1: the tripper's clue render frames the marker over the buyer in their visions, drawn.
+      if(!text.includes('FESTIVAL SMOKE CLUE MARKERS PASSED'))return reject(new Error('Client clue render frames no vision marker; inspect '+log));
       const clue=text.match(/FESTIVAL SMOKE CLUE RENDER PASSED: (.+)/)?.[1]?.trim();
       if(!clue||!existsSync(clue))return reject(new Error('Client clue screenshot missing'));
       copyFileSync(clue,path.join(dir,'client-clue.png'));

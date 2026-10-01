@@ -390,17 +390,8 @@ namespace Festival.Presentation
             while(session.State.Visions.Count>0!=shouldSeeVisions&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.State.Visions.Count>0!=shouldSeeVisions){Fail("private vision visibility");yield break;}
             Debug.Log("FESTIVAL SMOKE CLUE VISIBILITY PASSED: visible="+(session.State.Visions.Count>0)+" host="+session.IsHost);
-            if(!session.IsHost)
-            {
-                string clueDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(clueDir);
-                string cluePath=Path.Combine(clueDir,"client-clue.png");if(File.Exists(cluePath))File.Delete(cluePath);
-                ScreenCapture.CaptureScreenshot(cluePath);
-                yield return new WaitForSeconds(.7f);
-                if(!File.Exists(cluePath)){Fail("tripper vision render");yield break;}
-                Debug.Log("FESTIVAL SMOKE CLUE RENDER PASSED: "+cluePath);
-                // Tabs out to sell. The host waits for this before moving everyone on from the market views.
-                session.Command("Equip",item:"stock_lsd");
-            }
+            // Tabs out to sell. The host waits for this before moving everyone on from the market views.
+            if(!session.IsHost)session.Command("Equip",item:"stock_lsd");
             if(session.IsHost)
             {
                 // The client's market voucher is equipped on purchase, so its tabs come out only after its market views.
@@ -422,6 +413,25 @@ namespace Festival.Presentation
                 NpcState dayBuyer=null;
                 while((!Near(session.LocalPlayer,0,0)||(dayBuyer=session.State.Npcs.Find(n=>Near(n,0,1)))==null)&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("performance placement");yield break;}
+                // TEST-1: the tripper's view of the buyer in their visions (the host stood DayBuyers()[0] here) shows the vision's marker
+                // over their head: drawn, and in frame.
+                var clue=session.State.Visions.Find(v=>v.NpcId==dayBuyer.Id);var clueMarker=clue!=null?transform.Find("Vision "+clue.Id):null;
+                var markers=GetComponent<FestivalVisionMarkers>();
+                captureCamera=session.ViewCamera;
+                capturePosition=new Vector3(0,2.2f,-3.5f);
+                captureRotation=Quaternion.LookRotation(new Vector3(0,1.9f,1)-capturePosition);
+                // Read once the frame is done: FestivalSession.Update puts the camera back at the eye, and LateUpdate here aims it again.
+                yield return new WaitForSeconds(.3f);yield return new WaitForEndOfFrame();
+                var framed=clueMarker!=null?captureCamera.WorldToViewportPoint(clueMarker.position):Vector3.zero;
+                if(markers==null||markers.Shown==0||clueMarker==null||!clueMarker.gameObject.activeInHierarchy||framed.z<=0||framed.x<0||framed.x>1||framed.y<0||framed.y>1)
+                {Fail("tripper vision marker in frame: shown="+(markers!=null?markers.Shown:0)+" marker="+(clueMarker!=null)+" viewport="+framed);yield break;}
+                Debug.Log("FESTIVAL SMOKE CLUE MARKERS PASSED: "+markers.Shown+" drawn, the buyer's at "+framed);
+                string cluePath=Path.Combine(Application.persistentDataPath,"smoke","client-clue.png");if(File.Exists(cluePath))File.Delete(cluePath);
+                ScreenCapture.CaptureScreenshot(cluePath);
+                yield return new WaitForSeconds(.7f);
+                if(!File.Exists(cluePath)){Fail("tripper vision render");yield break;}
+                Debug.Log("FESTIVAL SMOKE CLUE RENDER PASSED: "+cluePath);
+                captureCamera=null;
                 session.MenuOpen=true;
                 campMenu.Find("Pass home/CREW + NEARBY").GetComponent<Button>().onClick.Invoke();
                 yield return new WaitForSeconds(.3f);
