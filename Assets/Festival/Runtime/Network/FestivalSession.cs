@@ -66,6 +66,9 @@ namespace Festival.Network
         private readonly Dictionary<string,Transform> nameBubbles=new Dictionary<string,Transform>();
         private float yaw,pitch,preVisitYaw,preVisitPitch;
         private string lastCampVisit="";
+        // TRIP-4: lying on the grass the view drops to LyingEyeHeight and looks up at the sky; getting up looks where it did before.
+        private const float LyingEyeHeight=.3f,LyingPitch=-80;
+        private bool wasLying;private float preLiePitch;
         private double accumulator,nextSnapshot,nextInput,snapshotReceivedAt,serverClockAtSnapshot,connectAt;
         private int movementSequence;
         private string token="", endpoint="", loadedRound="", acknowledgedDialogue="", profileId="default";
@@ -454,6 +457,8 @@ namespace Festival.Network
         {
             // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials.
             var source=simulation.State;var local=simulation.Player(viewer);bool spirit=local?.Life=="Spirit";
+            // TRIP-4: everyone sees the clue cloud; only the tripper, once they have read it, is shown what it pictures, and when.
+            int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
@@ -462,7 +467,8 @@ namespace Festival.Network
                 SecondFriend=new LostFriendState{Active=source.SecondFriend.Active,GateOpened=source.SecondFriend.GateOpened,CluesRead=source.SecondFriend.CluesRead,Found=!spirit&&source.SecondFriend.Found,LeaderId=spirit?"":source.SecondFriend.LeaderId,Position=Spot(source.SecondFriend.GateOpened,source.SecondFriend.Found,source.SecondFriend.Position)},
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
-                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies};
+                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
+                CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1};
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
@@ -601,9 +607,16 @@ namespace Festival.Network
                 lastCampVisit=player.CampVisitId;
             }
             if(firstPersonHands==null && ViewCamera!=null && !string.IsNullOrEmpty(LocalPlayerId))firstPersonHands=FestivalHands.Create(ViewCamera,LocalPlayerId);
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance");firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
+            bool lying=State!=null&&FestivalSimulation.LyingDown(State,player.Id);
+            if(lying!=wasLying)
+            {
+                if(lying){preLiePitch=pitch;pitch=LyingPitch;}
+                else pitch=preLiePitch;
+                wasLying=lying;
+            }
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying);firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
             var visit=CampFeatures.Find(player.CampVisitId);
-            var target=visit==null?new Vector3(player.X,player.Life=="Downed"?.55f:1.65f,player.Z):new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ);
+            var target=visit==null?new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z):new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ);
             ViewCamera.transform.position=Vector3.Distance(ViewCamera.transform.position,target)>5?target:Vector3.Lerp(ViewCamera.transform.position,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;
             if(!Profile.Data.ReducedMotion)
@@ -623,7 +636,7 @@ namespace Festival.Network
         {
             closing=true;Connecting=false;Voice.Leave();
             if(manager!=null){manager.OnClientConnectedCallback-=PeerConnected;manager.OnClientDisconnectCallback-=PeerDisconnected;manager.OnTransportFailure-=TransportFailed;manager.Shutdown();Destroy(manager.gameObject);manager=null;}
-            State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";MenuOpen=true;accumulator=0;
+            State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
             if(firstPersonHands!=null){Destroy(firstPersonHands.gameObject);firstPersonHands=null;}
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
