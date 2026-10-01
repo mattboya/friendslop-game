@@ -113,5 +113,14 @@ namespace Festival.Tests
             yield return new WaitForSeconds(2.6f);
             Assert.That(second.Found&&second.LeaderId==player.Id&&sim.State.FriendLeaderId==mate.Id,Is.True,"the host leads the second friend; the mate keeps the first");
         }
+
+        // TRIP-7: a real host deals the night (its roles, both trails, where both friends are lost) from a secret of its own, which
+        // its own view, like every client's, never carries.
+        [UnityTest]public IEnumerator TheHostDealsFromASecretNoViewCarries()
+        {
+            yield return HostBigNight();
+            Assert.That(sim.State.DealSeed,Is.Not.Zero,"the host deals the night from a secret");
+            Assert.That(session.State.DealSeed,Is.Zero,"the host's own view never carries it");
+        }
     }
 }

@@ -8,9 +8,10 @@ namespace Festival.Tests
     // chain never leave the host.
     public sealed class VisionSessionTests
     {
-        static FestivalSimulation Night()
+        // The host deals from `secret` (TRIP-7); null, none, as in tests and previews.
+        static FestivalSimulation Night(System.Func<int> secret=null)
         {
-            var game=new FestivalSimulation(23);game.State.LevelIndex=1;
+            var game=new FestivalSimulation(23){DealSecret=secret};game.State.LevelIndex=1;
             foreach(var id in new[]{"host","friend","guest"}){var p=game.AddPlayer(id,id);p.X=0;p.Z=19;game.Execute(id,new GameCommand{Id="ready_"+id,Kind="Ready"});}
             game.Tick(5.2+FestivalSimulation.SpinSeconds+.1);
             foreach(var p in game.State.Players)game.Execute(p.Id,new GameCommand{Id="map_"+p.Id,Kind="MapReady"});
@@ -71,6 +72,23 @@ namespace Festival.Tests
                 Assert.That(view.Npcs,Is.Not.Empty,"setup: "+viewer.Id+" sees the crowd");
                 Assert.That(view.Npcs.TrueForAll(n=>n.Role==""),Is.True,viewer.Id+" is never told who is a buyer, narc or clue holder");
                 Assert.That(view.ClueChain,Is.Empty,viewer.Id+" is never sent the clue chain");
+            }
+        }
+
+        // TRIP-7: the host deals each level from a secret of its own, so no client can deal the roles, the trails, the friends'
+        // spots or the cloud's landmark again from the public seeds. No view carries it, whoever is looking and however they are.
+        [Test] public void TheDealSeedNeverLeavesTheHost()
+        {
+            const int secret=1987654321;var game=Night(()=>secret);var tripper=game.Player(game.State.TripperId);
+            Assert.That(game.State.DealSeed,Is.EqualTo(secret),"setup: the host dealt Night 1 from its secret");
+            // The tripper has checked a vision and finished the trail, so their view holds all it ever does.
+            game.State.Visions.Find(v=>v.IsTrue).Confirmed=true;game.State.GateOpened=true;
+            foreach(var viewer in game.State.Players)foreach(var life in new[]{"Alive","Detained","Spirit"})
+            {
+                viewer.Life=life;var view=FestivalSession.ViewFor(game,viewer.Id);string who=(viewer==tripper?"the tripper":viewer.Id)+", "+life;
+                Assert.That(view.DealSeed,Is.Zero,who+": the view has no deal seed");
+                Assert.That(UnityEngine.JsonUtility.ToJson(view),Does.Not.Contain(secret.ToString()),who+": nor the secret anywhere else");
+                viewer.Life="Alive";
             }
         }
     }

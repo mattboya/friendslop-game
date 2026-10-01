@@ -144,6 +144,9 @@ namespace Festival.Network
                 simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);Profile.ApplyUnlocks(simulation.State);
                 simulation.HasLineOfSight=LineOfSight;
                 simulation.Navigate=Navigate;
+                // TRIP-7: each level's hidden deal is mixed with a fresh secret no view carries. A Guid, never System.Random, which
+                // seeds from the clock as the public Seed does.
+                simulation.DealSecret=()=>BitConverter.ToInt32(Guid.NewGuid().ToByteArray(),0);
                 Configure(port,"127.0.0.1",true);
                 manager.NetworkConfig.ConnectionData=Encoding.UTF8.GetBytes(JsonUtility.ToJson(new Hello{Name=CleanName(name)}));
                 if(!manager.StartHost())throw new InvalidOperationException("Could not listen on that port.");
