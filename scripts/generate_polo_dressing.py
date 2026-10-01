@@ -12,7 +12,8 @@ CONFIG={"out":"Assets/Festival/Art/Resources","src":"ArtSource/PoloDressing.blen
 "ridge":{"w":66,"d":6,"foot":2.5,"h":(30,40,24),"peaks":((0,0),(.08,.45),(.17,.3),(.27,.85),(.36,.6),(.46,1.0),(.55,.7),(.66,.9),(.76,.4),(.86,.55),(1,0))},
 "tank":{"body":((.17,0),(.21,.03),(.21,.78),(.19,.9),(.12,1.0),(.06,1.02)),"bands":((.54,.66,.22),(.3,.34,.215)),"valve":(1.0,1.17,.05),"wheel":(1.18,.1,.015)},
 "balloon":{"body":((.02,-.21),(.07,-.18),(.15,-.1),(.17,0),(.15,.11),(.09,.18),(.01,.21)),"knot":(-.25,-.2,.025)},
-"vip":{"pole":(2.25,3.4,.09),"board":(4.8,.4,4.15),"trim":.075}}
+"vip":{"pole":(2.25,3.4,.09),"board":(4.8,.4,4.15),"trim":.075},
+"paints":((.22,.42,.9),(.9,.18,.16),(.95,.68,.52),(.98,.9,.62),(1,.45,.8),(.45,.95,1),(.3,.8,.3),(.15,.55,.35),(.72,.52,.32),(.85,.72,.5),(.3,.12,.4))}
 import sys,os;sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from festival_kit import *
 import festival_kit as FK
@@ -23,6 +24,9 @@ def _camera(*a,**kw):
     return c
 FK.camera=_camera # the 66 m ridges push the gallery camera past the kit's 500 m clip, which rendered blank
 G=CONFIG
+def paints(): # review colours only; the game assigns its own by the __P<n> suffix
+    for i,c in enumerate(G["paints"]):
+        m=bpy.data.materials.get("FK_P"+str(i)) or bpy.data.materials.new("FK_P"+str(i));m.diffuse_color=(*c,1);MAT["P"+str(i)]=m
 def blade(n,m,a,b,w,t):
     z=(A(*b)-A(*a)).normalized();x=z.cross(V((0,0,1)));x.normalize();y=z.cross(x)
     return box(n,m,[(p+q)/2 for p,q in zip(a,b)],(w,(A(*b)-A(*a)).length,t),0,M((x,y,z)).transposed().to_4x4())
@@ -171,16 +175,53 @@ def vip_board(k):
     box("Trim","StageGlowGold",(0,by,.025),(bw+t,bh+t,.045));box("Board","Dark",(0,by,-.012),(bw,bh,.045))
     top=by+(bh+t)/2;box("CrownBase","Gold",(0,top+.03,0),(.7,.08,.06))
     for x in (-.25,0,.25):cyl("Spike"+str(x),"Gold",(x,top+.07,0),(x,top+.32,0),.06,6,r2=.005);ico("Gem"+str(x),"StageGlowRose",(x,top+.32,0),.045,1)
+# creatures face +z, feet at y=0: the gnome's boots and the slanted dragon and jackalope leg ends are lifted by their dip below 0
+def eyes(y,z,dx,r=.012):
+    for s in (-1,1):ico("Eye"+str(s),"P10",(s*dx,y,z),r,1)
+def gnome(k):
+    kit(k);lathe("Coat","P0",[(.02,0),(.12,.005),(.13,.06),(.11,.16),(.07,.22),(.02,.23)],k=10)
+    for s in (-1,1):ico("Boot"+str(s),"P8",(s*.05,.024,.03),.04,1,s=(1,.6,1.4))
+    ico("Head","P2",(0,.28,0),.075,2,smooth=True);ico("Nose","P2",(0,.28,.075),.025,1)
+    cyl("Beard","P3",(0,.27,.05),(0,.17,.07),.065,8,r2=.01);cyl("Hat","P1",(0,.33,0),(.02,.47,-.02),.08,8,r2=.005);eyes(.3,.065,.028)
+def pixie(k):
+    kit(k);lathe("Dress","P4",[(.02,0),(.09,.01),(.07,.12),(.04,.2),(.02,.22)],k=10)
+    ico("Head","P2",(0,.27,0),.065,2,smooth=True);ico("Hair","P4",(0,.29,-.01),.07,2,s=(1,.8,1))
+    for s in (-1,1):
+        slab("WingUp"+str(s),"P5",(s*.02,.2,-.04),(s*.16,.32,-.08),.1,.008);slab("WingLow"+str(s),"P5",(s*.02,.18,-.04),(s*.13,.12,-.07),.07,.008)
+        tube("Antenna"+str(s),"P10",[(s*.02,.32,0),(s*.05,.4,.02)],.006,4);ico("AntennaTip"+str(s),"P5",(s*.05,.4,.02),.015,1)
+    eyes(.28,.058,.024)
+def dragon(k):
+    kit(k);ico("Body","P6",(0,.13,0),.1,2,s=(1,.9,1.5),smooth=True)
+    for sx in (-1,1):
+        for sz in (-1,1):cyl("Leg"+str(sx)+str(sz),"P7",(sx*.06,.08,sz*.07),(sx*.07,.0047,sz*.08),.025,6)
+        slab("Wing"+str(sx),"P7",(sx*.05,.2,0),(sx*.2,.3,-.04),.14,.01);cyl("Horn"+str(sx),"P3",(sx*.03,.29,.13),(sx*.04,.34,.1),.012,5,r2=.002)
+    ico("Head","P6",(0,.24,.15),.07,2,smooth=True);ico("Snout","P6",(0,.23,.22),.045,2,s=(1,.8,1.4))
+    tube("Tail","P6",[(0,.12,-.14),(0,.08,-.25),(.04,.06,-.33)],.03,6);cyl("TailTip","P1",(.04,.06,-.33),(.06,.05,-.38),.025,5,r2=.002)
+    eyes(.27,.2,.03)
+def mushroom_sprite(k):
+    kit(k);lathe("Stem","P3",[(.03,0),(.06,.01),(.055,.1),(.05,.18),(.045,.2)],k=10)
+    lathe("Cap","P1",[(.04,.17),(.14,.18),(.15,.21),(.12,.26),(.06,.29),(.01,.3)],k=12,smooth=True)
+    for i,p in enumerate(((.07,.27,.05),(-.08,.26,.04),(0,.28,-.08),(.1,.235,-.06),(-.03,.29,0))):ico("Spot"+str(i),"P3",p,.022,1)
+    for s in (-1,1):tube("Arm"+str(s),"P3",[(s*.05,.1,0),(s*.09,.06,.02)],.01,4)
+    eyes(.12,.05,.022)
+def jackalope(k):
+    kit(k);ico("Body","P8",(0,.11,0),.1,2,s=(1,1,1.3),smooth=True)
+    for s in (-1,1):
+        ico("Haunch"+str(s),"P8",(s*.06,.05,-.07),.05,1);cyl("Foot"+str(s),"P8",(s*.04,.06,.08),(s*.045,.0058,.1),.02,5)
+        tube("Ear"+str(s),"P8",[(s*.03,.27,.1),(s*.04,.36,.09)],.018,5)
+        tube("Antler"+str(s),"P9",[(s*.02,.28,.09),(s*.05,.38,.06),(s*.08,.44,.07)],.009,4);tube("Tine"+str(s),"P9",[(s*.05,.38,.06),(s*.02,.43,.05)],.007,4)
+    ico("Head","P8",(0,.22,.11),.07,2,smooth=True);ico("Snout","P3",(0,.2,.17),.03,1);ico("Tail","P3",(0,.14,-.13),.03,1);eyes(.24,.16,.04)
 BUILD={"FestivalPalmTall":lambda k:palm(k,G["palm"]["tall"]),"FestivalPalmLean":lambda k:palm(k,G["palm"]["lean"]),
 "FestivalWheelBase":wheel_base,"FestivalWheelRotor":wheel_rotor,"FestivalWheelGondola":gondola,
 "FestivalStageMirage":stage_mirage,"FestivalPetalCanopy":petal_canopy,
 "FestivalRainbowTower":rainbow_tower,"FestivalAstronaut":astronaut,
 "FestivalDesertRidge1":lambda k:ridge(k,0),"FestivalDesertRidge2":lambda k:ridge(k,1),"FestivalDesertRidge3":lambda k:ridge(k,2),
-"FestivalGiggleTank":giggle_tank,"FestivalGiggleBalloon":giggle_balloon,"FestivalVipBoard":vip_board}
+"FestivalGiggleTank":giggle_tank,"FestivalGiggleBalloon":giggle_balloon,"FestivalVipBoard":vip_board,
+"FestivalCreatureGnome":gnome,"FestivalCreaturePixie":pixie,"FestivalCreatureDragon":dragon,"FestivalCreatureMushroomSprite":mushroom_sprite,"FestivalCreatureJackalope":jackalope}
 CLEAR={"FestivalStageMirage":lambda:[G["stage"]["crowd"],G["stage"]["dj"]],"FestivalPetalCanopy":canopy_clear}
 REVIEW={"FestivalPetalCanopy":stage_review}
 want=sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else list(BUILD)
-setup(want)
+setup(want);paints()
 for k in want:BUILD[k](k)
 gallery(want,os.path.join(G["rev"],want[0]+".png"),cols=min(4,len(want)))
 for k in want:

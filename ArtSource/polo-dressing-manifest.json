@@ -106,6 +106,41 @@
       "renderers": 4,
       "triangles": 196,
       "separate": []
+    },
+    "FestivalCreatureGnome": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 6,
+      "triangles": 352,
+      "separate": []
+    },
+    "FestivalCreaturePixie": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 408,
+      "separate": []
+    },
+    "FestivalCreatureDragon": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 5,
+      "triangles": 464,
+      "separate": []
+    },
+    "FestivalCreatureMushroomSprite": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 400,
+      "separate": []
+    },
+    "FestivalCreatureJackalope": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 4,
+      "triangles": 408,
+      "separate": []
     }
   }
 }
