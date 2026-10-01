@@ -180,7 +180,7 @@ namespace Festival.Core
         {
             var old=State;
             var next=CreateRound(old.Seed+1);
-            next.ReviewResult=old.Result;next.ReviewSales=old.GrossSales;
+            next.ReviewResult=old.Result;next.ReviewSales=old.GrossSales;next.ReviewFestivalIndex=old.FestivalIndex;
             next.ReviewSurvivors=old.Survivors;
             foreach(var player in old.Players)next.ReviewAntics+=player.CampAntics;
             next.CampMusicTrack=old.CampMusicTrack;

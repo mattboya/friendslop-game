@@ -34,6 +34,18 @@ namespace Festival.Tests
             Assert.That(revealed.Players.Find(p=>p.Id=="friend").Badge,Is.EqualTo(string.Join(", ",game.State.ReviewAwards)),"everyone sees the winner's badge");
         }
 
+        // PLAYA-2: a client's debrief formats its sales in the money of the festival the round was played at, so its view carries
+        // that festival even once clearing a weekend has moved camp on to the next one.
+        [Test] public void ClientsSeeWhichFestivalTheDebriefReviews()
+        {
+            var game=new FestivalSimulation(12);game.AddPlayer("host","Host");game.AddPlayer("friend","Friend");
+            game.State.LevelIndex=Festivals.LevelCount-1;game.State.Phase="Results";game.State.Result="Success";
+            Assert.That(game.Execute("host",new GameCommand{Id="back-to-camp",Kind="Reset"}).Accepted,Is.True);
+            var view=FestivalSession.ViewFor(game,"friend");
+            Assert.That(view.FestivalIndex,Is.EqualTo(Festivals.PlayaFestival),"setup: clearing Palm Mirage moves camp on to Ember Playa");
+            Assert.That(view.ReviewFestivalIndex,Is.EqualTo(Festivals.PoloFestival),"the friend's debrief knows it reviews Palm Mirage");
+        }
+
         // A build from before festival weekends sends ReviewVote with no friend named. The host refuses those votes, and the campfire
         // waits for every connected player's vote, so one old client would hold the debrief open forever: it must not get in.
         [Test] public void ABuildFromBeforeWeekendsCannotJoin()

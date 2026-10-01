@@ -41,6 +41,7 @@ public static class DebriefTests
         SoloSkipsTheVote();
         ALeavingHoldoutCompletesTheVote();
         SnapshotsKeepTheDebrief();
+        TheDebriefReviewsTheFestivalJustPlayed();
     }
 
     static void AwardPools()
@@ -178,14 +179,37 @@ public static class DebriefTests
 
         s=Campfire(111,2);Vote(s,"a","b");
         var old=JsonNode.Parse(JsonSerializer.Serialize(s.State,json)).AsObject();
-        foreach(var field in new[]{"ReviewAwards","ReviewWinners"}){Check(old.ContainsKey(field),field+" is a serialised public field");old.Remove(field);}
+        foreach(var field in new[]{"ReviewAwards","ReviewWinners","ReviewFestivalIndex"}){Check(old.ContainsKey(field),field+" is a serialised public field");old.Remove(field);}
         foreach(var player in old["Players"].AsArray()){Check(player.AsObject().Remove("Badge"),"Badge is a serialised public field");}
         foreach(var vote in old["ReviewVotes"].AsArray()){Check(vote.AsObject().Remove("TargetId"),"TargetId is a serialised public field");}
         restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(old.ToJsonString(),json));
         Check(restored.State.Phase=="CampReview"&&FestivalSimulation.ReviewRevealed(restored.State)&&restored.Execute("a",new GameCommand{Id="old",Kind="FinishReview"}).Accepted,"a debrief saved before player votes lets the host move on");
+        Check(restored.State.ReviewFestivalIndex==-1,"a debrief saved before PLAYA-2 does not know which festival it reviews (the HUD reads FestivalIndex)");
 
         s=Campfire(112,2);Vote(s,"a","b","b","a");Vote(s,"b","b","b","a");
         var tamper=new Action<RoundState>[]{x=>x.ReviewAwards=null,x=>x.ReviewWinners=null,x=>x.ReviewWinners.RemoveAt(0),x=>x.ReviewWinners.Add("a")};
         for(int i=0;i<tamper.Length;i++){var bad=Copy(s.State);tamper[i](bad);Check(Refused(bad),"a snapshot with a broken verdict is refused (case "+i+")");}
+    }
+
+    // PLAYA-2: the campfire already holds the next round, so clearing a festival's last night has moved FestivalIndex on to the
+    // next festival before the debrief opens. The debrief keeps the festival it reviews, whose money its sales were made in.
+    static void TheDebriefReviewsTheFestivalJustPlayed()
+    {
+        var s=Level(120,2);s.State.LevelIndex=Festivals.LevelCount-1;s.State.GrossSales=45;Campfire(s);
+        Check(Festivals.Name(s.State.FestivalIndex)=="Ember Playa"&&s.State.LevelIndex==0,"setup: clearing Palm Mirage's last night moves camp on to Ember Playa");
+        Check(s.State.ReviewFestivalIndex>=0&&Festivals.Name(s.State.ReviewFestivalIndex)=="Palm Mirage"&&s.State.ReviewSales==45,"the debrief reviews the Palm Mirage weekend just cleared, not Ember Playa");
+
+        s=Level(121,2);s.State.FestivalIndex=Festivals.Count-1;s.State.UnlockedFestivalCount=Festivals.Count;s.State.LevelIndex=Festivals.LevelCount-1;Campfire(s);
+        Check(s.State.FestivalIndex==0&&s.State.EncoreTier==1,"setup: clearing the last festival starts an encore lap at the first");
+        Check(s.State.ReviewFestivalIndex==Festivals.Count-1,"the encore's debrief still reviews the last festival");
+
+        s=Level(122,2);Campfire(s);
+        Check(s.State.LevelIndex==1&&s.State.ReviewFestivalIndex==s.State.FestivalIndex,"mid-weekend the debrief reviews the festival camp is still at");
+        s=Level(123,2);s.State.LevelIndex=Festivals.LevelCount-1;Campfire(s,"Time expired");
+        Check(s.State.FestivalIndex==0&&s.State.ReviewFestivalIndex==0,"a lost night restarts the same festival, and its debrief reviews it");
+
+        var json=new JsonSerializerOptions{IncludeFields=true};
+        var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(Campfire(124,2).State,json),json));
+        Check(restored.State.ReviewFestivalIndex==0,"the reviewed festival survives a snapshot");
     }
 }

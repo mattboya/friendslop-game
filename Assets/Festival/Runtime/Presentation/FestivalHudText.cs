@@ -150,8 +150,9 @@ namespace Festival.Presentation
             return s.LevelIndex==0?"WEEKEND CLEARED":Festivals.Level(s.FestivalIndex,s.LevelIndex-1,s.EncoreTier).Name.ToUpperInvariant()+" CLEARED";
         }
 
-        /// <summary>The debrief card's heading: the verdict on the round just played and how it went.</summary>
-        public static string ReviewHeadline(RoundState s,PlayerState viewer)=>"THE VERY OFFICIAL ROUND REVIEW\n"+ReviewOutcome(s)+Dot+"SALES "+Money(s,viewer,s.ReviewSales).ToUpperInvariant()+Dot+"SURVIVORS "+s.ReviewSurvivors+Dot+"CAMP ANTICS "+s.ReviewAntics;
+        /// <summary>The debrief card's heading: the verdict on the round just played and how it went. Its sales read in the money of the
+        /// festival it was played at (PLAYA-2: clearing a weekend has already moved camp on), or camp's own for an older host's view.</summary>
+        public static string ReviewHeadline(RoundState s,PlayerState viewer)=>"THE VERY OFFICIAL ROUND REVIEW\n"+ReviewOutcome(s)+Dot+"SALES "+Festivals.CurrencyName(s.ReviewFestivalIndex>=0?s.ReviewFestivalIndex:s.FestivalIndex,viewer.Ordinal,s.ReviewSales).ToUpperInvariant()+Dot+"SURVIVORS "+s.ReviewSurvivors+Dot+"CAMP ANTICS "+s.ReviewAntics;
 
         /// <summary>The debrief vote is open: every award drawn, not every vote in. The pointer is free to click a friend.</summary>
         public static bool VoteOpen(RoundState s)=>s.Phase=="CampReview"&&!FestivalSimulation.ReviewRevealed(s);

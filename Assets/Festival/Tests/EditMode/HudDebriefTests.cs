@@ -103,6 +103,22 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.ReviewHeadline(s,ash),Does.Contain("SALES 45 RAMEN PACKETS"),"Ember Playa's camp counts your odd objects");
         }
 
+        // PLAYA-2: the campfire already holds the next round. Clearing Palm Mirage's last night moves camp on to Ember Playa, whose
+        // money is odd objects, but the sales being reviewed were made at Palm Mirage, in dollars.
+        [Test] public void ClearingAWeekendReviewsItsSalesInThatFestivalsMoney()
+        {
+            var game=new FestivalSimulation(12);game.AddPlayer("ash","Ash");game.AddPlayer("sam","Sam");
+            game.State.LevelIndex=Festivals.LevelCount-1;game.State.GrossSales=45;game.State.Phase="Results";game.State.Result="Success";
+            Assert.That(game.Execute("ash",new GameCommand{Id="back_to_camp",Kind="Reset"}).Accepted,Is.True,"setup: the host brings the crew back to camp");
+            var sam=FestivalSession.ViewFor(game,"sam");var you=sam.Players.Find(p=>p.Id=="sam");
+            Assert.That(Festivals.Name(sam.FestivalIndex),Is.EqualTo("Ember Playa"),"setup: camp has moved on to the next festival");
+            Assert.That(FestivalHudText.ReviewHeadline(sam,you),Is.EqualTo("THE VERY OFFICIAL ROUND REVIEW\nWEEKEND CLEARED  •  SALES $45  •  SURVIVORS 0  •  CAMP ANTICS 0"),"Palm Mirage's sales read in dollars");
+
+            // The way back: an encore lap returns camp to Palm Mirage after an Ember Playa weekend paid in odd objects.
+            var s=Campfire();var ash=Crew(s,"ash","Ash");ash.Ordinal=1;s.ReviewSales=45;s.ReviewFestivalIndex=Festivals.PlayaFestival;
+            Assert.That(FestivalHudText.ReviewHeadline(s,ash),Does.Contain("SALES 45 RAMEN PACKETS"),"Ember Playa's sales read in your odd objects at Palm Mirage's camp");
+        }
+
         [Test] public void WinnersWearTheirAwardsOverTheirHeads()
         {
             var game=Game(("ash","Ash"),("sam","Sam"));
