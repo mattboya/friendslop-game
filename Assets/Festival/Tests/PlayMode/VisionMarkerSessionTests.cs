@@ -93,24 +93,38 @@ namespace Festival.Tests
                 Assert.That(session.State.Phase,Is.EqualTo("Playing"),when+" starts: "+session.Message);
                 Assert.That(FestivalNightLighting.IsNight(session.State),Is.EqualTo(level==1),"setup: "+when+" is lit as "+when);
 
-                // The darkest a tripper's view gets: one dose brightens it least (LIGHT-1).
-                var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);Assert.That(dose,Is.Not.Null,"setup: the solo host trips");dose.Intensity=1;
+                // The darkest a tripper's view gets: one dose brightens it least (LIGHT-1). TEST-1: a dose of nothing in particular, so no
+                // substance's look (TRIP-5: tint, glows, trails, a lifted grade) touches the picture, and none of the dose's creatures
+                // (VISION-2) wander into it.
+                var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);Assert.That(dose,Is.Not.Null,"setup: the solo host trips");dose.Intensity=1;dose.Substance="";
+                var creatures=host.GetComponent<FestivalCreatures>();Assert.That(creatures,Is.Not.Null,"setup: the game draws creatures");creatures.enabled=false;
                 // One truth-marked festivalgoer 6 m ahead of the tripper on the open main path; the rest of the crowd is sent away.
+                // TEST-1: and the rest of the visions. A dose of 3 or 4 can deal a second truth (a double buyer) over the same buyer, whose
+                // shadow lies just where this one does and stays when this marker is hidden: no pixel changes. They film nothing (no
+                // influencer's frame on the ground) and stand plainly idle.
                 var truth=sim.State.Visions.Find(v=>v.NpcId!=""&&v.IsTrue);Assert.That(truth,Is.Not.Null,"setup: a truth over a festivalgoer");
-                var npc=sim.State.Npcs.Find(n=>n.Id==truth.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);
+                sim.State.Visions.RemoveAll(v=>v!=truth);
+                var npc=sim.State.Npcs.Find(n=>n.Id==truth.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);npc.Twist="";
                 IEnumerator Hold(float seconds)
                 {
                     for(float start=Time.realtimeSinceStartup;Time.realtimeSinceStartup-start<seconds;)
-                    {player.X=0;player.Z=0;npc.X=0;npc.Z=6;npc.Yaw=180;npc.Mode="Blending";yield return null;}
+                    {player.X=0;player.Z=0;npc.X=0;npc.Z=6;npc.Yaw=180;npc.Mode="Blending";npc.IdlePose="Idle";yield return null;}
+                    // Measured a whole frame later, so the markers' LateUpdate has placed them over the body as it stands. (The Editor's
+                    // batch-mode test runner never resumes a WaitForEndOfFrame.)
+                    yield return null;
                 }
-                yield return Hold(.6f);yield return null;
+                yield return Hold(.6f);
                 var marker=host.transform.Find("Vision "+truth.Id);var body=GameObject.Find("Authoritative actor presentation").transform.Find(npc.Id);
                 Assert.That(marker!=null&&marker.gameObject.activeSelf,Is.True,"setup: the truth's marker is drawn");
+                var shadow=marker.Find("Shadow");Aim(session.ViewCamera,body.position);var seen=session.ViewCamera.WorldToViewportPoint(shadow.position);
+                Assert.That(shadow.gameObject.activeInHierarchy,Is.True,"setup: the truth's shadow is drawn");
+                Assert.That(Vector2.Distance(new Vector2(shadow.position.x,shadow.position.z),new Vector2(body.position.x,body.position.z)),Is.LessThan(.05f),"setup: the truth's shadow lies at its festivalgoer's feet");
+                Assert.That(seen.z>0&&seen.x>0&&seen.x<1&&seen.y>0&&seen.y<1,Is.True,"setup: the tripper's view takes in the shadow ("+seen+")");
                 float solid=marker.Find("Glyph").localScale.x;int truthCue=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
 
                 // The host's Tell flag is all the tripper's client goes by: the same festivalgoer, now marked by a fake.
                 truth.Tell=true;
-                yield return Hold(.4f);yield return null;
+                yield return Hold(.4f);
                 int fakeCue=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
 
                 // Walking at 4 m/s moves the first-person camera, which sets the fake shimmering.
@@ -138,12 +152,15 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // The tripper's eye 6 m back from the feet, looking their way.
+        private static void Aim(Camera eye,Vector3 feet)=>eye.transform.SetPositionAndRotation(new Vector3(feet.x,1.65f,feet.z-6),Quaternion.identity);
+
         // Pixels on the ground within 1.5 m of the feet, in the tripper's 640x360 view from 6 m back, that change by more than 12
         // of 255 when the vision's marker is hidden: what the marker puts at its festivalgoer's feet.
         private static int AtTheFeet(Camera eye,GameObject marker,Vector3 feet)
         {
             const int width=640,height=360;
-            eye.transform.SetPositionAndRotation(new Vector3(feet.x,1.65f,feet.z-6),Quaternion.identity);
+            Aim(eye,feet);
             var target=RenderTexture.GetTemporary(width,height,24);var picture=new Texture2D(width,height,TextureFormat.RGBA32,false);
             eye.targetTexture=target;
             try
