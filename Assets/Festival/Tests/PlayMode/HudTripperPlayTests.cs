@@ -24,10 +24,7 @@ namespace Festival.Tests
         [UnityTest]public IEnumerator TheCrewSeesTheSpinAndOnlyTheTripperChecks()
         {
             // 1-3 are pressed on a virtual keyboard, so they go through the HUD's own input handling (FestivalHud.UpdateKeyboard).
-            var input=InputSystem.settings;var oldBackground=input.backgroundBehavior;var oldEditor=input.editorInputBehaviorInPlayMode;
-            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
-            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-            var keyboard=InputSystem.AddDevice<Keyboard>("HUD tripper keyboard");
+            UseAVirtualKeyboard();
             var world=new GameObject("HUD tripper world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("HUD tripper");
             var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
@@ -256,14 +253,48 @@ namespace Festival.Tests
                 session.Leave();
                 foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
                 Object.Destroy(hud);Object.Destroy(world);
-                InputSystem.RemoveDevice(keyboard);
-                input.backgroundBehavior=oldBackground;input.editorInputBehaviorInPlayMode=oldEditor;
             }
             yield return null;
             Assert.That(failures,Is.Empty,"Tripper HUD a player reads:\n"+string.Join("\n",failures));
         }
 
         private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Conversation","Police"};
+
+        // The virtual keyboard a test presses keys on, and the input settings it changed to let the keys through without focus.
+        private const string VirtualKeyboard="HUD tripper keyboard";
+        private Keyboard keyboard;
+        private InputSettings.BackgroundBehavior oldBackground;
+        private InputSettings.EditorInputBehaviorInPlayMode oldEditor;
+        private void UseAVirtualKeyboard()
+        {
+            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
+            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            keyboard=InputSystem.AddDevice<Keyboard>(VirtualKeyboard);
+        }
+        // TEST-1: Unity stops a test at an unexpected error log without running the test's own finally, so the fixture puts the
+        // real keyboard's input back after every test, however it ended.
+        [UnityTearDown]public IEnumerator PutTheRealKeyboardBack()
+        {
+            if(keyboard==null)yield break;
+            InputSystem.RemoveDevice(keyboard);keyboard=null;
+            var input=InputSystem.settings;input.backgroundBehavior=oldBackground;input.editorInputBehaviorInPlayMode=oldEditor;
+        }
+
+        // TEST-1: a test that stops with the virtual keyboard in (here it simply never takes it out) still leaves the next test the
+        // real keyboard's input: no virtual keyboard, and the settings as they were.
+        [UnityTest,Order(1)]public IEnumerator ATestStoppedWithTheVirtualKeyboardInLeavesIt()
+        {
+            UseAVirtualKeyboard();yield return null;
+            Assert.That(InputSystem.devices.Any(d=>d.name==VirtualKeyboard),Is.True,"setup: the virtual keyboard is in");
+        }
+        [UnityTest,Order(2)]public IEnumerator TheNextTestHasTheRealKeyboardBack()
+        {
+            Assert.That(InputSystem.devices.Where(d=>d.name.StartsWith(VirtualKeyboard)).Select(d=>d.name),Is.Empty,"a virtual keyboard left by an earlier test");
+            var input=InputSystem.settings;
+            Assert.That((input.backgroundBehavior,input.editorInputBehaviorInPlayMode),Is.EqualTo((oldBackground,oldEditor)),"the input settings an earlier test changed");
+            yield break;
+        }
 
         // Every HUD card a player can see at once; none may cover another.
         private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat check card","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};
