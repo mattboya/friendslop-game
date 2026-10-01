@@ -64,6 +64,8 @@ namespace Festival.Presentation
         Color baseTint;
         float lastAppliedThreat=-1;
         float lastAnimationTime;
+        // Time this actor has stood in the world, so its idle sway starts from its own spawn rather than the shared clock.
+        float idleClock;
         Material eyeMaterial;
         Texture2D ownedPalette,garmentPalette;
         Renderer eyeRenderer;
@@ -277,6 +279,7 @@ namespace Festival.Presentation
 #endif
             float animationDelta=lastAnimationTime<=0?Time.deltaTime:Mathf.Max(Time.time-lastAnimationTime,.001f);
             lastAnimationTime=Time.time;
+            idleClock+=animationDelta;
             if(faceRenderer!=null&&blinkIndex>=0&&!HighlyIntoxicated)
             {
                 float cycle=(Time.time+phase)%(3.6f+phase*.11f);
@@ -493,10 +496,10 @@ namespace Festival.Presentation
                 if(Pose!="Downed"&&Pose!="Spirit")
                 {
                     still=1-move;
-                    float drift=Time.time*.21f+phase*1.3f;
+                    float drift=idleClock*.21f+phase*1.3f;
                     shift=(Mathf.Sin(drift)+.4f*Mathf.Sin(drift*2.7f+1.1f))*still;
-                    look=Mathf.Clamp((Mathf.PerlinNoise(Time.time*.35f+phase*5.1f,phase)-.5f)*4f,-1f,1f);
-                    nod=Mathf.PerlinNoise(phase,Time.time*.23f)-.5f;
+                    look=Mathf.Clamp((Mathf.PerlinNoise(idleClock*.35f+phase*5.1f,phase)-.5f)*4f,-1f,1f);
+                    nod=Mathf.PerlinNoise(phase,idleClock*.23f)-.5f;
                     idleShift=shift*.03f;
                 }
                 if(Pose=="Detained")
