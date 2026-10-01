@@ -34,9 +34,12 @@ namespace Festival.Core
             foreach(var point in starts){x+=point.X;z+=point.Z;}
             return new WorldPoint(x/starts.Length,z/starts.Length);
         }
+        // Each crew's standing spots are jittered from these by at most MaxJitter along each axis.
+        public const float MaxJitter=.21f;
+        public static Start Spot(int index)=>starts[index];
         public static Start Get(int index,int seed)
         {
-            var point=starts[index];
+            var point=Spot(index);
             return new Start(point.X+Jitter(seed,index,13),point.Z+Jitter(seed,index,29),point.Yaw,point.Pose);
         }
         static float Jitter(int seed,int index,int salt)
@@ -45,7 +48,7 @@ namespace Festival.Core
             {
                 uint hash=(uint)seed*747796405u+(uint)(index*97+salt)*2891336453u;
                 hash^=hash>>16;hash*=2246822519u;hash^=hash>>13;
-                return ((hash%1001)/1000f-.5f)*.42f;
+                return ((hash%1001)/1000f-.5f)*(2*MaxJitter);
             }
         }
     }

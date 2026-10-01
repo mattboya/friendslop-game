@@ -30,11 +30,12 @@ namespace Festival.Presentation
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
         // ahead, it rounds each corner clear of the totems, poles and trees the rules route the loop past; and the rider sees over
-        // the van's roof. PLAYA-2: the loops pass festivalgoers' standing spots within a couple of metres, so the deck is 1.9 m
-        // wide and the van .44 of full size (1.6 m wide), the largest that pass every standing festivalgoer on every lap; the
-        // van rounding car 1's corner at (8, -10) past the one standing south of it is what holds it to that.
+        // the van's roof. PLAYA-2: the loops pass festivalgoers' standing spots within a couple of metres, and a round's seed can
+        // shift each spot up to FestivalCrowdLayout.MaxJitter either way, so the deck is 1.75 m wide and the van .42 of full size
+        // (1.5 m wide), which pass every standing festivalgoer on every lap wherever the jitter puts them; car 1 rounding its
+        // corner at (8, -10) past the one standing south of it is what holds it to that (1.9 m and .44 grazed them).
         private const double TurnLookahead=2.5;
-        private const float DeckWidth=1.9f,DeckBack=1.4f,DeckFront=.45f,VanScale=.44f,VanAhead=DeckFront+.05f+2.81f*VanScale;
+        private const float DeckWidth=1.75f,DeckBack=1.4f,DeckFront=.45f,VanScale=.42f,VanAhead=DeckFront+.05f+2.81f*VanScale;
         // POLO-2: the VIP stall's sign stands on the corner poles of the night market's stock stall, which FestivalWorld raises at
         // (VipStallX, 0, StallZ) beside the rules' stall point; the poles top out at PoleTop, just clear of the awning, and the board
         // clears the stall's banner. It faces the market's footpath to the south, and like FestivalWorld's signs its lettering shows

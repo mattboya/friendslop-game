@@ -158,15 +158,17 @@ namespace Festival.Tests
 
         // PLAYA-2: the rules route each loop past the crowd's standing spots, but a car drawn 2.8 m wide behind a van reaching
         // 3.6 m ahead drove through the festivalgoers standing beside its loop on every lap. Over 40 crews' crowds (each seed
-        // jitters where they stand), nothing of either car comes within a standing festivalgoer's reach on a full lap.
+        // jitters where they stand), nothing of either car comes within a standing festivalgoer's reach on a full lap. A real
+        // round's seed is random, so every spot's whole jitter square is checked too, not just the jitter these 40 seeds draw.
         [Test]public void ArtCarsDriveRoundTheStandingCrowdNotThroughIt()
         {
             var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var state=Round(Festivals.PlayaFestival);
             var playa=Part(grounds,FestivalTwistVisuals.PlayaRootName);
             Assert.That(Part(Part(playa,"Art car 0"),"FestivalCampVan").GetComponentsInChildren<Renderer>().Length,Is.GreaterThan(0),"setup: the real camp van pulls each deck");
-            // A lap is 46 m at ArtCarSpeed, 38.3 s, so 40 s takes each car all the way round, every corner included.
+            // A lap is 46 m at ArtCarSpeed, 38.3 s, so 40 s takes each car all the way round, every corner included; a step moves
+            // a car about 2 cm, so even its swing through a corner is caught.
             var lap=new List<(double When,int Car,Vector2 At,List<Box> Parts)>();
-            for(double t=0;t<40;t+=.1)
+            for(double t=0;t<40;t+=.02)
             {
                 state.ElapsedSeconds=t;twists.Apply(state,10);
                 for(int k=0;k<Festivals.ArtCars;k++)
@@ -176,26 +178,40 @@ namespace Festival.Tests
                     lap.Add((t,k,Flat(car.position),parts));
                 }
             }
-            var hits=new SortedDictionary<string,string>();int crowd=0;
-            for(int seed=0;seed<40;seed++)
-                foreach(var n in new FestivalSimulation(seed).State.Npcs)
+            var hits=new SortedDictionary<string,(float Gap,string Where)>();
+            void Check(Vector2 feet,string who,string where)
+            {
+                foreach(var (when,k,at,parts) in lap)
                 {
-                    if(n.Kind!="Wook")continue;
-                    crowd++;var feet=new Vector2(n.X,n.Z);
-                    foreach(var (when,k,at,parts) in lap)
+                    if(Vector2.Distance(at,feet)>CarReach+Shoulders)continue;
+                    foreach(var part in parts)
                     {
-                        if(Vector2.Distance(at,feet)>CarReach+Shoulders)continue;
-                        foreach(var part in parts)
-                        {
-                            float gap=part.Gap(feet,Standing,Shoulders);if(gap>=Shoulders)continue;
-                            string hit="car "+k+"'s "+part.Name.Split('/')[0]+" runs through "+n.Id;
-                            if(!hits.ContainsKey(hit))hits[hit]="seed "+seed+", "+when.ToString("0.0")+" s in, "+gap.ToString("0.00")+" m from their middle";
-                        }
+                        float gap=part.Gap(feet,Standing,Shoulders);if(gap>=Shoulders)continue;
+                        string hit="car "+k+"'s "+part.Name.Split('/')[0]+" runs through "+who;
+                        if(!hits.TryGetValue(hit,out var worst)||gap<worst.Gap)hits[hit]=(gap,where+", "+when.ToString("0.00")+" s in");
                     }
                 }
+            }
+            int crowd=0;
+            for(int seed=0;seed<40;seed++)
+                foreach(var n in new FestivalSimulation(seed).State.Npcs)
+                    if(n.Kind=="Wook"){crowd++;Check(new Vector2(n.X,n.Z),n.Id,"seed "+seed);}
             Assert.That(crowd,Is.EqualTo(40*FestivalCrowdLayout.Count),"setup: every crew's whole standing crowd is checked");
-            var list="";foreach(var hit in hits)list+="\n  "+hit.Key+" (first "+hit.Value+")";
-            Assert.That(hits.Keys,Is.Empty,"the rules route each loop clear of where the crowd stands, so the car drawn on it must pass them by too:"+list);
+            // Each part's shadow on the ground is convex, so the nearest it comes to a jitter square is on the square's edge: walk
+            // every edge in 3 cm steps (a car part's gap moves no faster than the feet, so a step hides under 1.5 cm).
+            const int steps=14;float jitter=FestivalCrowdLayout.MaxJitter;
+            for(int i=0;i<FestivalCrowdLayout.Count;i++)
+            {
+                var spot=FestivalCrowdLayout.Spot(i);
+                for(int s=0;s<=steps;s++)
+                {
+                    float along=-jitter+2*jitter*s/steps;
+                    foreach(var off in new[]{new Vector2(along,-jitter),new Vector2(along,jitter),new Vector2(-jitter,along),new Vector2(jitter,along)})
+                        Check(new Vector2(spot.X,spot.Z)+off,"wook_"+i,"jittered ("+off.x.ToString("0.00")+", "+off.y.ToString("0.00")+")");
+                }
+            }
+            var list="";foreach(var hit in hits)list+="\n  "+hit.Key+" (nearest "+hit.Value.Gap.ToString("0.000")+" m from their middle, "+hit.Value.Where+")";
+            Assert.That(hits.Keys,Is.Empty,"the rules route each loop clear of where the crowd stands, however a crew's jitter falls, so the car drawn on it must pass them by too:"+list);
         }
         // A standing festivalgoer, as the rules place them: this tall, and this far round their middle (shoulders and hanging arms).
         // Nothing of a car reaches further than CarReach from its point.
