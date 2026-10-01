@@ -33,10 +33,8 @@ namespace Festival.Tests
                 float dayExposure=grade.postExposure.value;var daySky=RenderSettings.ambientSkyColor;
 
                 sim.State.LevelIndex=1;
-                var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"Night 1 starts: "+session.Message);
+                var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);
                 yield return null;
 
                 var taken=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);int dose=taken?.Intensity??0;

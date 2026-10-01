@@ -43,15 +43,7 @@ namespace Festival.Tests
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("vitals_mate","Sam");mate.Ready=true;
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    // Sam has no client of their own to report the map loaded.
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="vitals_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
 
                 // You trip on a dose with 431 s left, alone in the field with $87 made and $120 sold, and no crowd around.
                 var wooks=sim.State.Npcs.FindAll(n=>n.Kind=="Wook");sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");

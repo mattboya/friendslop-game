@@ -40,14 +40,8 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("cloud_mate","Sam");mate.Ready=true;
-                sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="cloud_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;
+                yield return StartLevel(session);
                 // Sober, with empty hands, among the crowd's chatty festivalgoers; Sam trips at the way back to camp, dosed, so the
                 // rules keep them the tripper. Whatever the spin dosed you with is gone, as a dose's look can trail the view (TRIP-5).
                 sim.State.TripperId=mate.Id;mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;player.Effects.Clear();

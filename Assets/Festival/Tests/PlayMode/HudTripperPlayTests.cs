@@ -90,14 +90,7 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="hud_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
                 // Pin the spin: who trips, on how many doses of what (the dose effect keeps the sim from re-picking).
                 void Trip(PlayerState who,int dose,string substance="")
                 {
@@ -321,14 +314,7 @@ namespace Festival.Tests
                 var player=sim.Player(session.LocalPlayerId);
                 var mates=new List<PlayerState>();
                 foreach(var name in new[]{"Sam","Kim","Alexandria Longname","Jo","Riya","Kai","Lu"}){var mate=sim.AddPlayer("hud_"+name.Split(' ')[0].ToLowerInvariant(),name);mate.Ready=true;mates.Add(mate);}
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    if(sim.State.Phase=="Loading")foreach(var mate in mates)if(!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="hud_loaded_"+mate.Id,Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
 
                 // Night 2: you trip on four doses, the crew is dosed too and away from home.
                 sim.State.LevelIndex=3;sim.State.DurationSeconds=600;sim.State.ElapsedSeconds=30;

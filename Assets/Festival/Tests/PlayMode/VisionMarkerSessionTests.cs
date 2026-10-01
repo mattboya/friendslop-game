@@ -26,10 +26,8 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
-                var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"Day 1 starts: "+session.Message);
+                var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);
                 yield return null;
 
                 Assert.That(session.State.TripperId,Is.EqualTo(session.LocalPlayerId),"setup: the solo host is the tripper");
@@ -88,9 +86,7 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 sim.State.LevelIndex=level;
                 var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),when+" starts: "+session.Message);
+                yield return SkipCountdown(session);yield return SkipSpin(session);yield return FinishLoading(session);
                 Assert.That(FestivalNightLighting.IsNight(session.State),Is.EqualTo(level==1),"setup: "+when+" is lit as "+when);
 
                 // The darkest a tripper's view gets: one dose brightens it least (LIGHT-1). TEST-1: a dose of nothing in particular, so no
