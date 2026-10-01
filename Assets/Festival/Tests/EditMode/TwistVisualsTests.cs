@@ -156,6 +156,51 @@ namespace Festival.Tests
             Assert.That(hits.Keys,Is.Empty,"the rules route each loop clear of trees, totems and the crowd, so the car on it must clear them too:"+Listed(hits));
         }
 
+        // PLAYA-2: the rules route each loop past the crowd's standing spots, but a car drawn 2.8 m wide behind a van reaching
+        // 3.6 m ahead drove through the festivalgoers standing beside its loop on every lap. Over 40 crews' crowds (each seed
+        // jitters where they stand), nothing of either car comes within a standing festivalgoer's reach on a full lap.
+        [Test]public void ArtCarsDriveRoundTheStandingCrowdNotThroughIt()
+        {
+            var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var state=Round(Festivals.PlayaFestival);
+            var playa=Part(grounds,FestivalTwistVisuals.PlayaRootName);
+            Assert.That(Part(Part(playa,"Art car 0"),"FestivalCampVan").GetComponentsInChildren<Renderer>().Length,Is.GreaterThan(0),"setup: the real camp van pulls each deck");
+            // A lap is 46 m at ArtCarSpeed, 38.3 s, so 40 s takes each car all the way round, every corner included.
+            var lap=new List<(double When,int Car,Vector2 At,List<Box> Parts)>();
+            for(double t=0;t<40;t+=.1)
+            {
+                state.ElapsedSeconds=t;twists.Apply(state,10);
+                for(int k=0;k<Festivals.ArtCars;k++)
+                {
+                    var car=Part(playa,"Art car "+k);var parts=new List<Box>();
+                    foreach(var renderer in car.GetComponentsInChildren<Renderer>())parts.Add(Box.Of(renderer,PathOf(renderer.transform,car)));
+                    lap.Add((t,k,Flat(car.position),parts));
+                }
+            }
+            var hits=new SortedDictionary<string,string>();int crowd=0;
+            for(int seed=0;seed<40;seed++)
+                foreach(var n in new FestivalSimulation(seed).State.Npcs)
+                {
+                    if(n.Kind!="Wook")continue;
+                    crowd++;var feet=new Vector2(n.X,n.Z);
+                    foreach(var (when,k,at,parts) in lap)
+                    {
+                        if(Vector2.Distance(at,feet)>CarReach+Shoulders)continue;
+                        foreach(var part in parts)
+                        {
+                            float gap=part.Gap(feet,Standing,Shoulders);if(gap>=Shoulders)continue;
+                            string hit="car "+k+"'s "+part.Name.Split('/')[0]+" runs through "+n.Id;
+                            if(!hits.ContainsKey(hit))hits[hit]="seed "+seed+", "+when.ToString("0.0")+" s in, "+gap.ToString("0.00")+" m from their middle";
+                        }
+                    }
+                }
+            Assert.That(crowd,Is.EqualTo(40*FestivalCrowdLayout.Count),"setup: every crew's whole standing crowd is checked");
+            var list="";foreach(var hit in hits)list+="\n  "+hit.Key+" (first "+hit.Value+")";
+            Assert.That(hits.Keys,Is.Empty,"the rules route each loop clear of where the crowd stands, so the car drawn on it must pass them by too:"+list);
+        }
+        // A standing festivalgoer, as the rules place them: this tall, and this far round their middle (shoulders and hanging arms).
+        // Nothing of a car reaches further than CarReach from its point.
+        private const float Standing=1.8f,Shoulders=.3f,CarReach=5;
+
         [Test]public void TheBurningEffigyKeepsClearOfTheFestoonStrungOverThePath()
         {
             var (grounds,twists)=OnTheGrounds();var scenery=Scenery(grounds);
@@ -323,6 +368,22 @@ namespace Festival.Tests
                 float least=float.MaxValue;var apart=other.Centre-Centre;
                 foreach(var axis in axes)least=Mathf.Min(least,Reach(axis)+other.Reach(axis)-Mathf.Abs(Vector3.Dot(apart,axis)));
                 return least;
+            }
+            // The nearest this box comes to an upright body standing at feet, from the ground to height; when even its world box
+            // is further than within, that box's distance, which is never more than the real one.
+            public float Gap(Vector2 feet,float height,float within)
+            {
+                float far=Mathf.Sqrt(Aabb.SqrDistance(new Vector3(feet.x,Mathf.Clamp(Aabb.center.y,0,height),feet.y)));
+                if(far>=within)return far;
+                float best=float.MaxValue;
+                // The body's axis is upright and a box's nearest point to it moves smoothly, so sampling it every 5 cm is close enough.
+                for(float h=0;h<=height;h+=.05f)
+                {
+                    var apart=new Vector3(feet.x,h,feet.y)-Centre;var outside=Vector3.zero;
+                    for(int i=0;i<3;i++)outside[i]=Mathf.Max(0,Mathf.Abs(Vector3.Dot(apart,Axes[i]))-Extents[i]);
+                    best=Mathf.Min(best,outside.magnitude);
+                }
+                return best;
             }
             private float Reach(Vector3 axis)=>Extents.x*Mathf.Abs(Vector3.Dot(Axes[0],axis))+Extents.y*Mathf.Abs(Vector3.Dot(Axes[1],axis))+Extents.z*Mathf.Abs(Vector3.Dot(Axes[2],axis));
         }
