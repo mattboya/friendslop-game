@@ -1,0 +1,20 @@
+{
+  "source": "Original scripted Blender geometry; no external assets",
+  "runtimeDirectory": "Assets/Festival/Art/Resources",
+  "models": {
+    "FestivalPalmTall": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 728,
+      "separate": []
+    },
+    "FestivalPalmLean": {
+      "floating": [],
+      "blocking": [],
+      "renderers": 3,
+      "triangles": 704,
+      "separate": []
+    }
+  }
+}
