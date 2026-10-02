@@ -1372,17 +1372,21 @@ namespace Festival.Presentation
 
         private void AddAction(string label,Action action,ref float y)
         {
+            // K1: a click on the Esc menu's list is a choice made, so the menu shuts on it: a dance, sale, buy or talk it starts takes
+            // your keys, which the open menu would drop, and its pass no longer covers the lanes offering only CANCEL ACTION. E runs
+            // the bare action (the menu is shut whenever E acts).
+            Action chosen=()=>{action();session.MenuOpen=false;};
             GameObject item;
             if(activeActionCount<dynamicActions.Count)
             {
                 item=dynamicActions[activeActionCount];item.SetActive(true);
                 item.name="Action:"+label;
                 item.transform.Find("Text").GetComponent<Text>().text=label;
-                var control=item.GetComponent<Button>();control.onClick.RemoveAllListeners();control.onClick.AddListener(()=>action());
+                var control=item.GetComponent<Button>();control.onClick.RemoveAllListeners();control.onClick.AddListener(()=>chosen());
             }
             else
             {
-                item=Button(actionsContent,label,Vector2.zero,Vector2.one,action);item.name="Action:"+label;
+                item=Button(actionsContent,label,Vector2.zero,Vector2.one,chosen);item.name="Action:"+label;
                 item.AddComponent<LayoutElement>().preferredHeight=64;
                 // PLAYA-2: Ember Playa's odd-object money and a long crew name shrink to fit the button.
                 ShrinkToFit(item.transform.Find("Text").GetComponent<Text>(),14);

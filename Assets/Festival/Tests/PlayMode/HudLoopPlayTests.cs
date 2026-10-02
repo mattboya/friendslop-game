@@ -431,7 +431,7 @@ namespace Festival.Tests
                 RectTransform Card(string name){foreach(var r in hud.GetComponentsInChildren<RectTransform>(true))if(r.name==name)return r;return null;}
                 var strip=Card("Nearby actions");var sundown=Card("Sundown warning");
                 if(strip==null||sundown==null||strip.anchorMax.x>sundown.anchorMin.x&&strip.anchorMin.y<sundown.anchorMax.y)failures.Add("the strip overlaps the sundown card");
-                // Esc opens the menu on the list, and a click there sells.
+                // Esc opens the menu on the list, and a click there sells, closing the menu so the sale has your keys.
                 yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
                 if(!session.MenuOpen)failures.Add("Esc: the menu doesn't open");
                 Button offer=null;foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="Action:"+Offer)offer=b;
@@ -441,8 +441,30 @@ namespace Festival.Tests
                     offer.onClick.Invoke();yield return null;
                     var sale=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
                     if(sale?.Kind!="Sale"||sale.TargetId!=buyer.Id)failures.Add("Esc, then the offer: it starts "+(sale?.Kind??"nothing")+" ("+session.Message+")");
+                    if(session.MenuOpen)failures.Add("Esc, then the offer: the menu stays open over the sale");
                     session.Command("Cancel");
                 }
+                // K1: a dance chosen there takes your arrow keys. By day it is the list's only way to the dance How to Play asks for;
+                // left open, the menu dropped every press and the pass offered only CANCEL ACTION, which costs suspicion.
+                session.MenuOpen=false;yield return null;
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                Button dance=null;foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="Action:Dance with festivalgoer")dance=b;
+                if(dance==null)failures.Add("Esc: the menu's list doesn't show the dance (listed: \""+Listed()+"\")");
+                else
+                {
+                    dance.onClick.Invoke();yield return null;
+                    var danced=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                    Assert.That(danced?.Kind,Is.EqualTo("Dance"),"setup: the dance clicked from the list starts ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                    var first=RhythmChart.For(danced).Notes[0];Key[] arrows={Key.LeftArrow,Key.DownArrow,Key.UpArrow,Key.RightArrow};
+                    while(danced.Status=="Active"&&session.EstimatedSimulationSeconds-danced.StartSeconds<first.TimeSeconds-.02)yield return null;
+                    yield return Tap(arrows[first.Direction]);
+                    if(session.MenuOpen||danced.Inputs.Count!=1)failures.Add("Esc, then the dance: the menu is "+(session.MenuOpen?"still open":"shut")+" and "+danced.Inputs.Count+" of 1 press reached the host");
+                    session.Command("Cancel");
+                }
+                session.MenuOpen=false;yield return null;
+                // Esc opens the menu and Esc again shuts it.
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                if(!session.MenuOpen)failures.Add("Esc after the dance: the menu doesn't open");
                 yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
                 if(session.MenuOpen)failures.Add("Esc again: the menu stays open");
                 // Away from anyone, no strip; TAB still holds the map open.
