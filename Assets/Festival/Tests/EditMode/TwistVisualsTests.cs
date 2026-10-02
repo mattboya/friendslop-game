@@ -9,7 +9,7 @@ using UnityEngine.Rendering;
 namespace Festival.Tests
 {
     // TWISTVIS-1: each festival's twists get stand-ins built from primitives and existing props. They show only on their own
-    // festival, follow the round (influencers' frames, the wheel, the art cars, the burn, the storms), never collide, and keep
+    // festival, follow the round (influencers' phones, the wheel, the art cars, the burn, the storms), never collide, and keep
     // clear of the scenery they stand and drive among.
     public sealed class TwistVisualsTests
     {
@@ -25,7 +25,7 @@ namespace Festival.Tests
                 bool polo=festival==Festivals.PoloFestival;string where=Festivals.Name(festival)+": ";
                 Assert.That(Part(grounds,FestivalTwistVisuals.PoloRootName).gameObject.activeSelf,Is.EqualTo(polo),where+"Palm Mirage's ropes and wheel");
                 Assert.That(Part(grounds,FestivalTwistVisuals.PlayaRootName).gameObject.activeSelf,Is.EqualTo(!polo),where+"Ember Playa's art cars and effigy");
-                Assert.That(Frames(grounds).Count,Is.EqualTo(polo?Festivals.Influencers:0),where+"influencers film only at Palm Mirage");
+                Assert.That(Frames(grounds).Count,Is.Zero,where+"POLO-6: no influencer films through a frame on the ground");
                 Assert.That(grounds.GetComponentsInChildren<Renderer>(true).Length,Is.GreaterThan(20),where+"the stand-ins are built");
                 foreach(var collider in grounds.GetComponentsInChildren<Collider>(true))
                     Assert.That(collider.enabled,Is.False,where+collider.name+" would block sight lines, steps or paths the rules don't know about");
@@ -214,35 +214,64 @@ namespace Festival.Tests
             finally{FestivalCharacter.ViewTransform=previous;}
         }
 
-        [Test]public void InfluencersFilmThroughAFrameShapedLikeTheRules()
+        // POLO-6 (Matt, 2026-10-01: "what is this pink cone in front of someone?"): an influencer no longer films through a frame drawn
+        // on the ground. It holds a phone up beside its face in its "right" hand, screen to itself and camera to the crowd the rules
+        // have it film, and the red light by the camera blinks once a second, glowing so it reads at night. On the screen of a player it
+        // has on camera, the light stays lit and "• REC" floats over its head. The running game's influencers hold theirs, and only
+        // the one filming you shows REC, in TwistVisualsSessionTests.
+        [Test]public void InfluencersHoldUpAPhoneAndDrawNoFrame()
         {
             var view=Wire(Level(Festivals.PoloFestival),"p0");var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);
+            Assert.That(view.Npcs.FindAll(n=>n.Twist==FestivalSimulation.Influencer).Count,Is.EqualTo(Festivals.Influencers),"setup: the view carries every influencer");
             twists.Apply(view,.02f);
-            var influencers=view.Npcs.FindAll(n=>n.Twist==FestivalSimulation.Influencer);
-            Assert.That(influencers.Count,Is.EqualTo(Festivals.Influencers),"setup: the view carries every influencer");
-            foreach(var n in influencers)
-            {
-                var frame=Part(grounds,FestivalTwistVisuals.FramePrefix+n.Id);
-                Assert.That(Vector2.Distance(Flat(frame.position),new Vector2(n.X,n.Z)),Is.LessThan(1e-3f),n.Id+"'s frame starts at them");
-                foreach(float side in new[]{-1f,1f})
-                {
-                    var edge=End(Part(frame,side<0?"Frame edge left":"Frame edge right"))-frame.position;
-                    Assert.That(new Vector2(edge.x,edge.z).magnitude,Is.EqualTo(Festivals.FilmRange).Within(.05f),n.Id+": the frame reaches as far as filming does");
-                    Assert.That(Mathf.DeltaAngle(n.Yaw,Mathf.Atan2(edge.x,edge.z)*Mathf.Rad2Deg),Is.EqualTo(side*Festivals.FilmConeDegrees/2).Within(.5f),n.Id+": the frame is as wide as the phone sees");
-                }
-                // URP lights one ground mesh with only 4 additional lights, so a phone spot light changed 0.5% of pixels by an
-                // invisible 0.2/255: the glowing outline alone carries the frame, without three realtime lights.
-                Assert.That(frame.GetComponentInChildren<Light>(),Is.Null,n.Id+"'s frame reads by its glowing outline, not a light that doesn't show");
-            }
+            Assert.That(Frames(grounds).Count,Is.Zero,"no frame on the ground in front of an influencer");
+            foreach(var r in grounds.GetComponentsInChildren<Renderer>(true))
+                Assert.That(r.name.StartsWith("Frame")||r.name=="Phone",Is.False,"no frame edge, arc or phone floating on the grounds: "+PathOf(r.transform,grounds));
 
-            // Frames follow the view: an influencer walks off and turns, another stops filming.
-            var walker=influencers[0];walker.X+=10;walker.Yaw+=90;var quitter=influencers[1];quitter.Twist="";
-            twists.Apply(view,.02f);
-            var moved=Part(grounds,FestivalTwistVisuals.FramePrefix+walker.Id);
-            Assert.That(Vector2.Distance(Flat(moved.position),new Vector2(walker.X,walker.Z)),Is.LessThan(1e-3f),"a frame follows its influencer across the grounds");
-            Assert.That(Mathf.DeltaAngle(moved.eulerAngles.y,walker.Yaw),Is.EqualTo(0).Within(.5f),"and turns with them");
-            Assert.That(grounds.Find(FestivalTwistVisuals.FramePrefix+quitter.Id),Is.Null,"an influencer who stops filming loses their frame");
-            Assert.That(Frames(grounds).Count,Is.EqualTo(Festivals.Influencers-1),"the others keep filming");
+            var body=FestivalCharacter.Create(Made("Influencer").transform,"wook_7",new Color(.8f,.5f,.3f));var actor=body.transform;
+            Transform Bone(string name){foreach(var t in actor.GetComponentsInChildren<Transform>())if(t.name==name)return t;Assert.Fail(name+" bone");return null;}
+            var shoulder=Bone("ArmR");var hand=Bone("HandR");var head=Bone("Head");
+            // The body as drawn, hat and hair included, and its face.
+            Bounds face=default,look=default;bool drawn=false;
+            foreach(var r in actor.GetComponentsInChildren<Renderer>())if(r.enabled)
+            {
+                if(r.name.StartsWith("Face_"))face=r.bounds;
+                if(!drawn){look=r.bounds;drawn=true;}else look.Encapsulate(r.bounds);
+            }
+            Assert.That(face.size.y,Is.GreaterThan(.1f),"setup: the face is drawn");
+            var phone=new FestivalFilmingPhone(actor,shoulder,Bone("ForearmR"),hand,head);
+            phone.Show(true,false);phone.Hold(.25f,null);
+            var held=Part(hand,FestivalFilmingPhone.PhoneName);
+            Assert.That(held.gameObject.activeInHierarchy,Is.True,"the phone is out");
+            Assert.That(Vector3.Distance(held.position,hand.position),Is.LessThan(.15f),"in the right hand");
+            Assert.That(hand.position.y,Is.GreaterThan(shoulder.position.y),"held up above the shoulder");
+            Assert.That(held.position.y,Is.InRange(face.min.y,face.max.y),"at face height");
+            Assert.That(Vector3.Dot(held.position-face.center,actor.forward),Is.GreaterThan(.12f),"held out ahead of the face");
+            Assert.That(Mathf.Abs(Vector3.Dot(held.position-face.center,actor.right)),Is.GreaterThan(face.extents.x),"beside the face, not over it, so from afar it reads as filming");
+            Assert.That(Vector3.Angle(held.forward,actor.forward),Is.LessThan(20),"its camera faces the way the influencer films");
+            Assert.That(held.GetComponentsInChildren<Collider>(true),Is.Empty,"it blocks no sight line or step");
+            var light=Part(held,FestivalFilmingPhone.LightName).GetComponent<Renderer>();
+            var glow=light.sharedMaterial.GetColor("_EmissionColor");
+            Assert.That(light.sharedMaterial.IsKeywordEnabled("_EMISSION")&&glow.r>.5f&&glow.r>3*glow.g&&glow.r>3*glow.b,Is.True,"the light glows red, so it reads at night: "+glow);
+            var label=Part(actor,FestivalFilmingPhone.LabelName);
+            bool Blinks(out bool labelled)
+            {
+                bool on=false,off=false;labelled=false;
+                for(float t=0;t<1;t+=.1f){phone.Hold(t,null);on|=light.enabled;off|=!light.enabled;labelled|=label.gameObject.activeInHierarchy;}
+                return on&&off;
+            }
+            Assert.That(Blinks(out bool rec),Is.True,"its light blinks within a second");
+            Assert.That(rec,Is.False,"and no REC shows while it doesn't have you on camera");
+
+            phone.Show(true,true);
+            Assert.That(Blinks(out rec),Is.False,"with you on camera the light stays lit");
+            Assert.That(light.enabled&&rec,Is.True,"and REC shows");
+            Assert.That(label.GetComponent<TextMesh>().text,Is.EqualTo("• REC"));
+            Assert.That(label.position.y,Is.GreaterThan(look.max.y),"over its head, hat and all");
+            Assert.That(Vector2.Distance(Flat(label.position),Flat(head.position)),Is.LessThan(.1f),"right over it");
+
+            phone.Show(false,false);phone.Hold(.25f,null);
+            Assert.That(held.gameObject.activeInHierarchy||label.gameObject.activeInHierarchy,Is.False,"no longer an influencer (a new level deals others), the phone and REC go");
         }
 
         [Test]public void ArtCarsRollRoundTheirLoopsWithTheLevelClock()
@@ -449,7 +478,8 @@ namespace Festival.Tests
         }
         private static Transform Rotor(Transform grounds)=>Part(Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel"),"Wheel rotor");
         private static List<Transform> Gondolas(Transform grounds){var gondolas=new List<Transform>();foreach(Transform child in Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel"))if(child.name=="Gondola")gondolas.Add(child);return gondolas;}
-        private static List<Transform> Frames(Transform grounds){var frames=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith(FestivalTwistVisuals.FramePrefix))frames.Add(child);return frames;}
+        // POLO-1's ground frames, which POLO-6 replaced with a phone in the influencer's hand.
+        private static List<Transform> Frames(Transform grounds){var frames=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith("Influencer frame "))frames.Add(child);return frames;}
         private static Bounds Bounds(Transform part){var renderers=part.GetComponentsInChildren<Renderer>();var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);return bounds;}
         // Where the parts of an art prop in one material sit, e.g. the van's "__Cream" headlamps.
         private static Vector3 Centre(Transform prop,string material)
@@ -484,7 +514,7 @@ namespace Festival.Tests
         }
         private static bool StandIn(Transform part)
         {
-            for(;part!=null;part=part.parent)if(part.name==FestivalTwistVisuals.PoloRootName||part.name==FestivalTwistVisuals.PlayaRootName||part.name.StartsWith(FestivalTwistVisuals.FramePrefix))return true;
+            for(;part!=null;part=part.parent)if(part.name==FestivalTwistVisuals.PoloRootName||part.name==FestivalTwistVisuals.PlayaRootName)return true;
             return false;
         }
         private static string PathOf(Transform part,Transform top){var path=part.name;for(part=part.parent;part!=null&&part!=top;part=part.parent)path=part.name+"/"+path;return path;}
@@ -543,7 +573,6 @@ namespace Festival.Tests
             private float Reach(Vector3 axis)=>Extents.x*Mathf.Abs(Vector3.Dot(Axes[0],axis))+Extents.y*Mathf.Abs(Vector3.Dot(Axes[1],axis))+Extents.z*Mathf.Abs(Vector3.Dot(Axes[2],axis));
         }
         // A frame edge is a cube stretched along its forward axis from the influencer's feet; this is its far end.
-        private static Vector3 End(Transform edge)=>edge.position+edge.forward*edge.lossyScale.z*.5f;
         private static Vector2 Flat(Vector3 at)=>new Vector2(at.x,at.z);
         private static void Fog(float start,float end,Color color,string when)
         {

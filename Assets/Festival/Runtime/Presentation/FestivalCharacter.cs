@@ -93,6 +93,7 @@ namespace Festival.Presentation
         /// <summary>GAS-1: on Giggle Gas, so they giggle (FestivalSession sets it from the view's VisualGiggling).</summary>
         public bool Giggling;
         public bool RedEyes { get; private set; }
+        FestivalFilmingPhone phone;
         FestivalPoiRig poiLeft,poiRight;
         // POI-2: how far the wrists have eased onto their poi loops, 0-1.
         float poiSwing;
@@ -279,6 +280,13 @@ namespace Festival.Presentation
             if(RedEyes==value)return;
             RedEyes=value;
             if(scleraMaterial!=null)scleraMaterial.color=value?new Color(1f,.46f,.44f):new Color(.98f,.95f,.88f);
+        }
+        /// <summary>POLO-6: FestivalSession films with this body while the view deals it an influencer: the phone up in its HandR
+        /// hand (FestivalFilmingPhone). Recording: it has the local player on camera (their view's VisualFilmedBy).</summary>
+        public void SetFilming(bool filming,bool recording)
+        {
+            if(filming&&phone==null&&bones.Count==15)phone=new FestivalFilmingPhone(transform,bones["ArmR"],bones["ForearmR"],bones["HandR"],bones["Head"]);
+            phone?.Show(filming,recording);
         }
         /// <summary>A visual response to a rhythm press; it never changes movement or scoring.</summary>
         public void PulseDanceStep(int direction)
@@ -631,7 +639,7 @@ namespace Festival.Presentation
             if(bodyRenderer!=null&&!UsesDistantMesh)
             {
                 if(gripLeft>=0)bodyRenderer.SetBlendShapeWeight(gripLeft,Mathf.Lerp(bodyRenderer.GetBlendShapeWeight(gripLeft),poiShown?100:0,1-Mathf.Exp(-12*animationDelta)));
-                if(gripRight>=0)bodyRenderer.SetBlendShapeWeight(gripRight,Mathf.Lerp(bodyRenderer.GetBlendShapeWeight(gripRight),equippedId!=""||performingPoi?100:0,1-Mathf.Exp(-12*animationDelta)));
+                if(gripRight>=0)bodyRenderer.SetBlendShapeWeight(gripRight,Mathf.Lerp(bodyRenderer.GetBlendShapeWeight(gripRight),equippedId!=""||performingPoi||phone!=null&&phone.Shown?100:0,1-Mathf.Exp(-12*animationDelta)));
             }
             if(faceRenderer!=null&&!UsesDistantMesh)
             {
@@ -689,6 +697,8 @@ namespace Festival.Presentation
                 FestivalDjHandContact.Reach(transform,bones["ArmL"],bones["ForearmL"],bones["HandL"],Vector3.Lerp(bones["HandL"].position,poiLeft.Wrist(),poiSwing),-1);
                 FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],bones["HandR"],Vector3.Lerp(bones["HandR"].position,poiRight.Wrist(),poiSwing),1);
             }
+            // POLO-6: an influencer films all level, whatever else it does, so its phone stays up beside its face.
+            if(phone!=null&&phone.Shown)phone.Hold(Time.time,ViewTransform);
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
             {
                 if(djHandContact==null)

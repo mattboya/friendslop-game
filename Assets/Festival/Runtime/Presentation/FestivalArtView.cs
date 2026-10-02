@@ -30,6 +30,7 @@ namespace Festival.Presentation
             {"StageGlowGold",new Color(1f,.64f,.28f)},
             {"StageGlowMint",new Color(.28f,.92f,.75f)},
             {"StageGlowRose",new Color(1f,.30f,.55f)},
+            {"StageGlowRed",new Color(1f,.10f,.08f)},
             {"Rubber",new Color(.10f,.12f,.16f)},
             {"Glass",new Color(.30f,.73f,.79f)},{"White",new Color(.86f,.90f,.82f)}
             ,{"Frond",new Color(.24f,.55f,.30f)},{"PalmBark",new Color(.55f,.42f,.30f)},{"Sand",new Color(.80f,.62f,.42f)}

@@ -12,8 +12,9 @@ namespace Festival.Tests
 {
     public sealed class TwistVisualsSessionTests:FestivalPlayModeTest
     {
-        // TWISTVIS-1: in a hosted Palm Mirage level the running game raises the festival's twists and films through every
-        // influencer's frame.
+        // TWISTVIS-1: in a hosted Palm Mirage level the running game raises the festival's twists. POLO-6: every influencer holds a
+        // phone up in its right hand, its red light blinking, and draws no frame on the ground. Once you step into one's shot, that
+        // one's light stays lit and "• REC" floats over its head on your screen; the others' don't.
         [UnityTest]public IEnumerator APalmMirageLevelShowsItsTwistsInTheRunningGame()
         {
             var world=new GameObject("Twist world");world.AddComponent<FestivalWorld>();yield return null;
@@ -39,14 +40,47 @@ namespace Festival.Tests
                 Assert.That(grounds.Find(FestivalTwistVisuals.PlayaRootName).gameObject.activeInHierarchy,Is.False,"Ember Playa's art cars and effigy are not here");
                 var influencers=session.State.Npcs.FindAll(n=>n.Twist==FestivalSimulation.Influencer);
                 Assert.That(influencers.Count,Is.EqualTo(Festivals.Influencers),"setup: the host's view carries every influencer");
-                var frames=new List<string>();foreach(Transform child in grounds)if(child.name.StartsWith(FestivalTwistVisuals.FramePrefix)&&child.gameObject.activeInHierarchy)frames.Add(child.name);
-                Assert.That(frames.Count,Is.EqualTo(Festivals.Influencers),"every influencer films through a frame");
-                foreach(var n in influencers)
+                foreach(Transform child in grounds)Assert.That(child.name,Does.Not.StartWith("Influencer frame "),"no frame on the ground");
+                Transform Part(string actor,string name){var body=GameObject.Find(actor);if(body!=null)foreach(var t in body.GetComponentsInChildren<Transform>(true))if(t.name==name)return t;return null;}
+                foreach(var n in session.State.Npcs)
                 {
-                    var frame=grounds.Find(FestivalTwistVisuals.FramePrefix+n.Id);
-                    Assert.That(frame,Is.Not.Null,n.Id+" films through a frame");
-                    Assert.That(Vector2.Distance(new Vector2(frame.position.x,frame.position.z),new Vector2(n.X,n.Z)),Is.LessThan(.5f),n.Id+"'s frame stays with them");
+                    var phone=Part(n.Id,FestivalFilmingPhone.PhoneName);bool influencer=n.Twist==FestivalSimulation.Influencer;
+                    Assert.That(phone!=null&&phone.gameObject.activeInHierarchy,Is.EqualTo(influencer),n.Id+(influencer?" films with a phone":" has no phone out"));
+                    if(!influencer)continue;
+                    Assert.That(phone.parent.name,Is.EqualTo("HandR"),n.Id+" holds it in the right hand");
+                    Assert.That(phone.position.y,Is.GreaterThan(Part(n.Id,"ArmR").position.y),n.Id+" holds it up above the shoulder");
+                    Assert.That(Part(n.Id,FestivalFilmingPhone.LabelName)?.gameObject.activeInHierarchy??false,Is.False,n.Id+" doesn't have you on camera yet");
                 }
+
+                // You step into an influencer's shot, close in front of its phone where nothing stands between you.
+                var me=sim.Player(session.LocalPlayerId);NpcState cam=null;
+                foreach(var n in influencers)foreach(float ahead in new[]{1.5f,2.5f,4f})
+                {
+                    if(cam!=null)break;
+                    float yaw=n.Yaw*Mathf.Deg2Rad;me.X=n.X+Mathf.Sin(yaw)*ahead;me.Z=n.Z+Mathf.Cos(yaw)*ahead;
+                    if(sim.Films(n,me))cam=n;
+                }
+                Assert.That(cam,Is.Not.Null,"setup: you stand in an influencer's shot");
+                var other=influencers.Find(n=>!sim.Films(n,me));
+                Assert.That(other,Is.Not.Null,"setup: another influencer doesn't have you");
+                deadline=Time.realtimeSinceStartup+5;
+                while(!session.LocalPlayer.VisualFilmedBy.Contains(cam.Id)&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer.VisualFilmedBy,Does.Contain(cam.Id),"setup: your view says "+cam.Id+" has you on camera");
+                yield return null;
+                var light=Part(cam.Id,FestivalFilmingPhone.LightName).GetComponent<Renderer>();var otherLight=Part(other.Id,FestivalFilmingPhone.LightName).GetComponent<Renderer>();
+                var label=Part(cam.Id,FestivalFilmingPhone.LabelName);var otherLabel=Part(other.Id,FestivalFilmingPhone.LabelName);
+                bool steady=true,shown=true,otherOn=false,otherOff=false,otherShown=false;
+                for(float until=Time.time+1.2f;Time.time<until;)
+                {
+                    steady&=light.enabled;shown&=label.gameObject.activeInHierarchy;
+                    otherOn|=otherLight.enabled;otherOff|=!otherLight.enabled;otherShown|=otherLabel!=null&&otherLabel.gameObject.activeInHierarchy;
+                    yield return null;
+                }
+                Assert.That(steady,Is.True,cam.Id+"'s light stays lit while it has you on camera");
+                Assert.That(shown,Is.True,"and REC shows over it");
+                Assert.That(label.GetComponent<TextMesh>().text,Is.EqualTo("• REC"));
+                Assert.That(otherOn&&otherOff,Is.True,other.Id+", not filming you, still blinks");
+                Assert.That(otherShown,Is.False,"and shows no REC");
             }
             finally
             {

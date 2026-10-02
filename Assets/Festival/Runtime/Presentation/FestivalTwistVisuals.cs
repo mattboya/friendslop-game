@@ -5,24 +5,18 @@ using UnityEngine;
 namespace Festival.Presentation
 {
     /// <summary>TWISTVIS-1: each festival's twists: Palm Mirage's from ART-1's models, Ember Playa's still from primitives
-    /// until ART-2. Palm Mirage: the influencers' phone frames, the VIP ropes, the VIP stall's sign (POLO-2) and the Ferris
-    /// wheel. Ember Playa: the art cars and the effigy, which burns for Night 2's last three minutes; its dust storms are
-    /// FestivalNightLighting's fog.
+    /// until ART-2. Palm Mirage: the VIP ropes, the VIP stall's sign (POLO-2) and the Ferris wheel; its influencers film with a
+    /// phone in hand (POLO-6, FestivalFilmingPhone). Ember Playa: the art cars and the effigy, which burns for Night 2's last three
+    /// minutes; its dust storms are FestivalNightLighting's fog.
     /// Everything follows the round state with no network calls, and nothing collides, so sight lines, steps and paths stay
     /// exactly the rules'.</summary>
     public sealed class FestivalTwistVisuals
     {
-        public const string PoloRootName="Palm Mirage twists",PlayaRootName="Ember Playa twists",FramePrefix="Influencer frame ",VipSignName="VIP stall sign";
-        // Frames and cars glide to each snapshot the way FestivalSession's actors do (snapping past 5 m), so a rider's body
-        // stays on its car's deck and an influencer's frame stays at their feet. PLAYA-2: a car glides along its loop, by easing
-        // the clock it is drawn at, rather than straight at its next point, which cut each corner a few centimetres toward the
-        // crowd standing beside it.
+        public const string PoloRootName="Palm Mirage twists",PlayaRootName="Ember Playa twists",VipSignName="VIP stall sign";
+        // Cars glide to each snapshot the way FestivalSession's actors do (snapping past 5 m), so a rider's body stays on its car's
+        // deck. PLAYA-2: a car glides along its loop, by easing the clock it is drawn at, rather than straight at its next point,
+        // which cut each corner a few centimetres toward the crowd standing beside it.
         private const float Glide=15,SnapDistance=5;
-        // The phone is held up in the right hand. Edges lie on the ground and glow; there is no phone light, as URP lights the one
-        // ground mesh with only 4 additional lights, so it showed as a 0.2/255 change.
-        private static readonly Vector3 Phone=new Vector3(.28f,1.45f,.32f);
-        private const float EdgeWidth=.07f;
-        private const int ArcSegments=4;
         // VIP ropes: posts no more than this far apart, the rope at waist height.
         private const float PostSpacing=2.2f,RopeHeight=.88f;
         // The wheel turns once a ride (Festivals.WheelRideSeconds), its gondolas hanging level below the rim.
@@ -69,13 +63,11 @@ namespace Festival.Presentation
         // this far in front of that point (the figure faces -z) and the lights pass behind its back.
         private const float FigureAhead=1;
 
-        private readonly Transform grounds,polo,playa,rotor,fire;
+        private readonly Transform polo,playa,rotor,fire;
         private readonly Light fireLight;
         private readonly Renderer vipLettering;
         private readonly Transform[] gondolas=new Transform[Gondolas],cars=new Transform[Festivals.ArtCars];
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
-        private readonly Dictionary<string,Transform> frames=new Dictionary<string,Transform>();
-        private readonly List<string> gone=new List<string>();
         private float clock;
         private double carClock,wheelClock;
         /// <summary>POLO-5: the rules' clock (SimulationSeconds) as this wheel is drawn at it, for Seat.</summary>
@@ -83,7 +75,6 @@ namespace Festival.Presentation
 
         public FestivalTwistVisuals(Transform festival)
         {
-            grounds=festival;
             polo=Group(festival,PoloRootName,Vector3.zero);playa=Group(festival,PlayaRootName,Vector3.zero);
             for(int i=0;i<Festivals.VipZones.Length;i++)Ropes(Group(polo,"VIP rope "+i,Vector3.zero),Festivals.VipZones[i]);
             vipLettering=VipSign(Group(polo,VipSignName,new Vector3(Festivals.VipStallX,0,StallZ)));
@@ -97,7 +88,6 @@ namespace Festival.Presentation
             polo.gameObject.SetActive(state.FestivalIndex==Festivals.PoloFestival);
             playa.gameObject.SetActive(state.FestivalIndex==Festivals.PlayaFestival);
             clock+=deltaTime;
-            Film(state,deltaTime);
             var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
             double behind=state.SimulationSeconds-(wheelClock+deltaTime);
             wheelClock=System.Math.Abs(behind)>WheelSnap?state.SimulationSeconds:wheelClock+deltaTime+behind*(1-System.Math.Exp(-WheelPull*deltaTime));Turn();
@@ -112,33 +102,6 @@ namespace Festival.Presentation
             fire.gameObject.SetActive(FestivalSimulation.Burning(state));
             for(int i=0;i<flames.Count;i++)flames[i].Flame.localScale=Vector3.Scale(flames[i].Size,new Vector3(1,1+FlickerDepth*Mathf.Sin(clock*FlickerHz+i*1.7f),1));
             fireLight.intensity=FireGlow*(1+.15f*Mathf.Sin(clock*13));
-        }
-
-        // Rules deal influencers only at Palm Mirage; a frame goes wherever the view says someone films, as the rules film.
-        private void Film(RoundState state,float deltaTime)
-        {
-            gone.Clear();foreach(var id in frames.Keys)if(!state.Npcs.Exists(n=>n.Id==id&&n.Twist==FestivalSimulation.Influencer))gone.Add(id);
-            foreach(var id in gone){Dispose(frames[id].gameObject);frames.Remove(id);}
-            foreach(var n in state.Npcs)
-            {
-                if(n.Twist!=FestivalSimulation.Influencer)continue;
-                var at=new Vector3(n.X,0,n.Z);
-                if(!frames.TryGetValue(n.Id,out var frame))frames[n.Id]=frame=Frame(n.Id,at);
-                frame.localPosition=Glided(frame.localPosition,at,deltaTime);frame.localRotation=Quaternion.Euler(0,n.Yaw,0);
-            }
-        }
-        private static Vector3 Glided(Vector3 from,Vector3 to,float deltaTime)=>Vector3.Distance(from,to)>SnapDistance?to:Vector3.Lerp(from,to,1-Mathf.Exp(-Glide*deltaTime));
-
-        // The phone's view on the ground: two edges FilmRange long, FilmConeDegrees apart, closed by an arc.
-        private Transform Frame(string npcId,Vector3 at)
-        {
-            var frame=Group(grounds,FramePrefix+npcId,at);float half=Festivals.FilmConeDegrees/2;
-            Vector3 Reach(float degrees)=>Quaternion.Euler(0,degrees,0)*Vector3.forward*Festivals.FilmRange+Vector3.up*EdgeWidth/2;
-            Beam(frame,"Frame edge left",Vector3.up*EdgeWidth/2,Reach(-half),EdgeWidth,"StageGlowRose");
-            Beam(frame,"Frame edge right",Vector3.up*EdgeWidth/2,Reach(half),EdgeWidth,"StageGlowRose");
-            for(int s=0;s<ArcSegments;s++)Beam(frame,"Frame arc",Reach(-half+2*half*s/ArcSegments),Reach(-half+2*half*(s+1)/ArcSegments),EdgeWidth,"StageGlowRose");
-            Block(frame,"Phone",PrimitiveType.Cube,Phone,new Vector3(.08f,.15f,.02f),"White");
-            return frame;
         }
 
         // Brass posts round the zone's edge, a velvet rope between them; the knobs glow so the ropes read at night.
