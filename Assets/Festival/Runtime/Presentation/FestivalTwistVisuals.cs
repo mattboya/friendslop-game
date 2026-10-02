@@ -28,6 +28,15 @@ namespace Festival.Presentation
         // The wheel turns once a ride (Festivals.WheelRideSeconds), its gondolas hanging level below the rim.
         private const float AxleHeight=7.5f,WheelRadius=6,GondolaDrop=.75f;
         private const int Gondolas=8;
+        // POLO-5: the wheel turns on the rules' clock, the one a ride's StartSeconds is on, so every client draws each gondola where
+        // every other does. Between snapshots it runs on with the frame, eased onto each new one at WheelPull, and jumps to one
+        // further out than WheelSnap seconds.
+        private const double WheelPull=2,WheelSnap=1;
+        // POLO-5: a rider sits on the floor of ART-1's gondola, CabinFloor below the point the model hangs from less GondolaDrop, and
+        // their eye is SeatedEyeHeight above that floor: in the open cabin, under the canopy roof .74 m above the floor that a
+        // standing eye poked through, and above the walls' tops (.38 m).
+        public const float SeatedEyeHeight=.56f;
+        private const float CabinFloor=.37f;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
@@ -54,12 +63,11 @@ namespace Festival.Presentation
         private readonly Light fireLight;
         private readonly Renderer vipLettering;
         private readonly Transform[] gondolas=new Transform[Gondolas],cars=new Transform[Festivals.ArtCars];
-        private readonly Vector3[] anchors=new Vector3[Gondolas];
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
         private readonly Dictionary<string,Transform> frames=new Dictionary<string,Transform>();
         private readonly List<string> gone=new List<string>();
-        private float turn,clock;
-        private double carClock;
+        private float clock;
+        private double carClock,wheelClock;
 
         public FestivalTwistVisuals(Transform festival)
         {
@@ -79,7 +87,8 @@ namespace Festival.Presentation
             clock+=deltaTime;
             Film(state,deltaTime);
             var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
-            turn=Mathf.Repeat(turn+deltaTime*360/(float)Festivals.WheelRideSeconds,360);Turn();
+            double behind=state.SimulationSeconds-(wheelClock+deltaTime);
+            wheelClock=System.Math.Abs(behind)>WheelSnap?state.SimulationSeconds:wheelClock+deltaTime+behind*(1-System.Math.Exp(-WheelPull*deltaTime));Turn();
             double lag=state.ElapsedSeconds-carClock;
             carClock=System.Math.Abs(lag)*Festivals.ArtCarSpeed>SnapDistance?state.ElapsedSeconds:carClock+lag*(1-System.Math.Exp(-Glide*deltaTime));
             for(int k=0;k<cars.Length;k++)
@@ -155,12 +164,7 @@ namespace Festival.Presentation
         {
             Art(wheel,"FestivalWheelBase",null);
             var hub=Group(wheel,"Wheel rotor",Vector3.up*AxleHeight);Art(hub,"FestivalWheelRotor",null);
-            Vector3 Rim(float degrees)=>new Vector3(0,WheelRadius*Mathf.Sin(degrees*Mathf.Deg2Rad),WheelRadius*Mathf.Cos(degrees*Mathf.Deg2Rad));
-            for(int k=0;k<Gondolas;k++)
-            {
-                anchors[k]=Rim(360f*k/Gondolas);
-                gondolas[k]=Group(wheel,"Gondola",Vector3.zero);Art(gondolas[k],"FestivalWheelGondola",k%3==0?"Rose":k%3==1?"Mint":"Gold");
-            }
+            for(int k=0;k<Gondolas;k++){gondolas[k]=Group(wheel,"Gondola",Vector3.zero);Art(gondolas[k],"FestivalWheelGondola",k%3==0?"Rose":k%3==1?"Mint":"Gold");}
             return hub;
         }
         // A model under parent; if body is given, the model's Rose parts take that colour instead.
@@ -171,9 +175,22 @@ namespace Festival.Presentation
         }
         private void Turn()
         {
-            rotor.localRotation=Quaternion.Euler(turn,0,0);
-            for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=rotor.localPosition+rotor.localRotation*anchors[k]-Vector3.up*GondolaDrop;
+            float angle=Angle(wheelClock);rotor.localRotation=Quaternion.Euler(angle,0,0);
+            for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=Hung(k,angle);
         }
+        /// <summary>POLO-5: where a rider who boarded at since (their ride's StartSeconds) sits at now, both on the rules' clock, in the
+        /// world: on the floor of the gondola that hung nearest the platform as they boarded. A ride is exactly one turn, so it brings
+        /// them back round to the platform, and riders who board together share the gondola.</summary>
+        public static Vector3 Seat(double since,double now)
+        {
+            float boarding=Angle(since);int nearest=0;
+            for(int k=1;k<Gondolas;k++)if(Hung(k,boarding).y<Hung(nearest,boarding).y)nearest=k;
+            return new Vector3(Festivals.WheelX,0,Festivals.WheelZ)+Hung(nearest,Angle(now))+Vector3.down*CabinFloor;
+        }
+        // Where gondola k hangs from the wheel's base with the wheel turned angle degrees, and the angle it turns to at a clock reading.
+        private static Vector3 Hung(int k,float angle)=>Vector3.up*AxleHeight+Quaternion.Euler(angle,0,0)*Rim(360f*k/Gondolas)-Vector3.up*GondolaDrop;
+        private static Vector3 Rim(float degrees)=>new Vector3(0,WheelRadius*Mathf.Sin(degrees*Mathf.Deg2Rad),WheelRadius*Mathf.Cos(degrees*Mathf.Deg2Rad));
+        private static float Angle(double seconds)=>(float)(seconds%Festivals.WheelRideSeconds/Festivals.WheelRideSeconds*360);
 
         // The camp van (existing vehicle art, its front at the model's -z) pulls a neon-railed party deck.
         private static Transform ArtCar(Transform car,int k)

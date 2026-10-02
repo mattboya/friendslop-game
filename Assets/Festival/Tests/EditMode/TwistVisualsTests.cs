@@ -55,11 +55,73 @@ namespace Festival.Tests
             }
             Assert.That(gondolas,Is.EqualTo(8),"eight gondolas hang from the rim");
             Assert.That(Painted(wheel,"StageGlowMint"),Is.Not.Null,"the rim glows mint and rose, as before");
-            var start=rotor.rotation;float quarter=(float)Festivals.WheelRideSeconds/4;
-            twists.Apply(round,quarter);
-            Assert.That(Quaternion.Angle(start,rotor.rotation),Is.EqualTo(90).Within(.5f),"a quarter of a ride turns it a quarter");
-            for(int k=0;k<3;k++)twists.Apply(round,quarter);
+            // POLO-5: it turns on the rules' clock, not each client's frames.
+            var start=rotor.rotation;round.SimulationSeconds=Festivals.WheelRideSeconds/4;
+            twists.Apply(round,.02f);
+            Assert.That(Quaternion.Angle(start,rotor.rotation),Is.EqualTo(90).Within(.5f),"a quarter of a ride on the rules' clock turns it a quarter");
+            round.SimulationSeconds=Festivals.WheelRideSeconds;twists.Apply(round,.02f);
             Assert.That(Quaternion.Angle(start,rotor.rotation),Is.LessThan(.5f),"one ride is one full turn");
+        }
+
+        // POLO-5: each client turned the wheel on its own frames, so no two drew a gondola at the same angle and none could seat a
+        // rider. It turns on the rules' clock: a client that has watched it for a while and one that has just joined draw every
+        // gondola alike, at the clock's angle. Between snapshots (10 a second) it turns on with the frame rather than stopping dead.
+        [Test]public void EveryClientDrawsTheWheelAtTheSameAngle()
+        {
+            var round=Round(Festivals.PoloFestival);var first=Grounds();var watching=new FestivalTwistVisuals(first);var early=Rotor(first);
+            for(int frame=0;frame<90;frame++){round.SimulationSeconds=3+frame/6*.1;watching.Apply(round,1/60f);}
+            var second=Grounds();var joined=new FestivalTwistVisuals(second);var late=Rotor(second);
+            round.SimulationSeconds=13.37;watching.Apply(round,.02f);joined.Apply(round,.02f);
+            Assert.That(Quaternion.Angle(early.rotation,late.rotation),Is.LessThan(.01f),"both clients draw the wheel at the same angle");
+            Assert.That(Quaternion.Angle(late.localRotation,Quaternion.Euler((float)(13.37/Festivals.WheelRideSeconds*360),0,0)),Is.LessThan(.05f),"the angle the rules' clock says");
+            var hung=Gondolas(first);var alike=Gondolas(second);
+            for(int k=0;k<hung.Count;k++)Assert.That(Vector3.Distance(hung[k].position,alike[k].position),Is.LessThan(1e-3f),"gondola "+k+" hangs in the same place on both");
+            var before=late.localRotation;
+            for(int frame=0;frame<3;frame++)joined.Apply(round,1/60f);
+            Assert.That(Quaternion.Angle(before,late.localRotation),Is.InRange(.6f,1.2f),"between snapshots the wheel turns on with the frame (18° a second)");
+            before=late.localRotation;round.SimulationSeconds+=.1;joined.Apply(round,1/60f);
+            Assert.That(Quaternion.Angle(before,late.localRotation),Is.LessThan(1f),"and eases onto the next snapshot rather than jumping to it");
+        }
+
+        // POLO-5: boarding seats the rider in the gondola nearest the platform, and Seat keeps them in it all the way round: the eye
+        // in its open cabin under the roof, more than 10 m up at the top, and back by the platform when the turn comes round. A
+        // head's room round the eye stays clear of the rotor model and of the gondola itself. The rotor's rims, spokes, hangers, hub
+        // and bulbs are merged into one renderer per colour, so its meshes, not its renderers' boxes, are what is measured.
+        [Test]public void ARiderSitsInTheGondolaTheyBoardedAllTheWayRound()
+        {
+            var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var round=Round(Festivals.PoloFestival);
+            var wheel=Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel");var rotor=Rotor(grounds);var gondolas=Gondolas(grounds);
+            // The models' meshes made solid, for this test alone.
+            foreach(var part in new List<Transform>(gondolas){rotor})foreach(var mesh in part.GetComponentsInChildren<MeshFilter>())mesh.gameObject.AddComponent<MeshCollider>().sharedMesh=mesh.sharedMesh;
+            Assert.That(rotor.GetComponentsInChildren<MeshCollider>().Length,Is.GreaterThan(0),"setup: the rotor model's meshes are measured");
+            const float Head=.15f;var touching=new Collider[8];
+            foreach(double since in new[]{0,3.7,11.2})
+            {
+                int boarded=-1;
+                foreach(double part in new[]{0,.25,.5,.75,1})
+                {
+                    double now=since+part*Festivals.WheelRideSeconds;round.SimulationSeconds=now;twists.Apply(round,0);Physics.SyncTransforms();
+                    var eye=FestivalTwistVisuals.Seat(since,now)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight;string when="boarded "+since+" s, "+part*100+"% round: ";
+                    int inside=gondolas.FindIndex(g=>Bounds(g).Contains(eye));
+                    Assert.That(inside,Is.GreaterThanOrEqualTo(0),when+"the eye "+eye+" is in a gondola");
+                    if(part==0)
+                    {
+                        boarded=inside;
+                        foreach(var g in gondolas)Assert.That(gondolas[boarded].position.y,Is.LessThanOrEqualTo(g.position.y+1e-4f),when+"the rider boards the gondola nearest the platform");
+                    }
+                    else Assert.That(inside,Is.EqualTo(boarded),when+"the rider stays in the gondola they boarded");
+                    int hits=Physics.OverlapSphereNonAlloc(eye,Head,touching);var hit=new List<string>();
+                    for(int h=0;h<hits;h++)if(touching[h].transform.IsChildOf(wheel))hit.Add(touching[h].transform.parent.name+"/"+touching[h].name);
+                    Assert.That(hit,Is.Empty,when+"a head's room round the eye is clear of the wheel's rims, spokes and hangers and the gondola's walls");
+                    Assert.That(Physics.Raycast(eye,Vector3.up,out var roof,.5f)&&roof.transform.IsChildOf(gondolas[boarded]),Is.True,when+"the eye sits under the gondola's roof");
+                    if(part==.5)Assert.That(eye.y,Is.GreaterThan(10f),when+"the top of the turn is more than 10 m up");
+                    if(part==1)
+                    {
+                        Assert.That(Vector2.Distance(Flat(eye),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThanOrEqualTo(Festivals.WheelReach),when+"the turn ends back by the platform");
+                        Assert.That(eye.y,Is.LessThan(2.5f),when+"down at the platform");
+                    }
+                }
+            }
         }
 
         // POLO-2: a gold-trimmed sign over the night market's stock stall says where the rules sell wristbands, and for how much.
@@ -327,6 +389,8 @@ namespace Festival.Tests
             foreach(var r in root.GetComponentsInChildren<Renderer>(true))if(r.name.EndsWith("__"+key,System.StringComparison.Ordinal))return r;
             Assert.Fail("no __"+key+" renderer under "+root.name);return null;
         }
+        private static Transform Rotor(Transform grounds)=>Part(Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel"),"Wheel rotor");
+        private static List<Transform> Gondolas(Transform grounds){var gondolas=new List<Transform>();foreach(Transform child in Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel"))if(child.name=="Gondola")gondolas.Add(child);return gondolas;}
         private static List<Transform> Frames(Transform grounds){var frames=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith(FestivalTwistVisuals.FramePrefix))frames.Add(child);return frames;}
         private static Bounds Bounds(Transform part){var renderers=part.GetComponentsInChildren<Renderer>();var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);return bounds;}
         // Where the parts of an art prop in one material sit, e.g. the van's "__Cream" headlamps.
