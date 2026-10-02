@@ -14,6 +14,7 @@ namespace Festival.Presentation
     /// picks one (Pick), and one already picked dims. A line of theirs waits behind a "…" bubble for TypingSeconds, then types out at
     /// LettersPerSecond, DIALOG-2's pace (reduced motion shows it whole). The thread keeps the last MaxBubbles bubbles and fades
     /// older ones out. It lives here on the client, so it outlasts the interaction that fed it: a view carries only Active ones.
+    /// DIALOG-6: so once the conversation ends the window stays up, read-only, until its last line has been read (Linger).
     /// Time is handed in (Begin, Advance), so tests read the thread at exact moments.
     /// </summary>
     public sealed class FestivalChatWindow : MonoBehaviour
@@ -21,6 +22,10 @@ namespace Festival.Presentation
         public const int MaxBubbles=6,MaxReplies=3;
         public const float TypingSeconds=.5f,LettersPerSecond=30,FadeSeconds=.35f;
         public const string Ellipsis="…";
+        // DIALOG-6: an ended conversation's last line stays at least ShortestLinger once whole, under OverHeader. Past LeaveReach
+        // from them the host ends a chat (TaskStillValid), and an ended one stops lingering.
+        public const float ShortestLinger=2.5f,LeaveReach=4;
+        public const string OverHeader="CHAT OVER  •  G CLOSE";
         // The HUD's palette (FestivalHud): a paper card with an orange accent, ink text, their bubbles sage, yours orange.
         static readonly Color Paper=new Color(.948f,.928f,.852f,1),Ink=new Color(.035f,.065f,.075f,1),Orange=new Color(.99f,.465f,.255f,1),Hairline=new Color(.51f,.56f,.50f,.35f);
         static readonly Color TheirBubble=new Color(.83f,.87f,.80f,1),TheirMark=new Color(.12f,.45f,.39f,1),ReplyColor=new Color(.84f,.85f,.76f,1),Dimmed=new Color(.035f,.065f,.075f,.4f);
@@ -31,15 +36,17 @@ namespace Festival.Presentation
         // Their typed line's hidden rest keeps its place, so the bubble doesn't grow as the letters come.
         const string Hidden="<color=#00000000>";
 
-        sealed class Bubble{public GameObject Root;public RectTransform Back,Mark;public Image BackImage,MarkImage;public Text Line,MarkText;public CanvasGroup Group;public string Said="";public bool Theirs,Whole;public float At,FadeFrom;public int Letters;}
+        // At: when the bubble came; WholeAt: when all of its line first showed.
+        sealed class Bubble{public GameObject Root;public RectTransform Back,Mark;public Image BackImage,MarkImage;public Text Line,MarkText;public CanvasGroup Group;public string Said="";public bool Theirs,Whole;public float At,WholeAt,FadeFrom;public int Letters;}
         readonly List<Bubble> thread=new List<Bubble>(),fading=new List<Bubble>(),spare=new List<Bubble>();
         readonly Button[] replies=new Button[MaxReplies];
         readonly Text[] replyTexts=new Text[MaxReplies],replyKeys=new Text[MaxReplies];
         readonly TextGenerator measure=new TextGenerator();
-        Font font;Sprite rounded;Text header;RectTransform bar,viewport,content;
+        Font font;Sprite rounded;Text header;RectTransform bar,viewport,content;CanvasGroup group;
         Action<int> onPick;int offered;
-        string threadId="",mark="";double followedStart=-1;
-        float clock,laidWidth=-1;bool dirty,reduced;
+        // DIALOG-6: the followed chat's festivalgoer; whether the conversation may still linger once over, and whether it is over.
+        string threadId="",mark="",target="";double followedStart=-1;
+        float clock,laidWidth=-1;bool dirty,reduced,lingers,over;
 
         /// <summary>Builds the window, hidden, on the HUD's canvas where the chat card was: right of centre, between the crew card
         /// and the gear bar (FestivalHud moves it beside the pass while the menu is open).</summary>
@@ -48,7 +55,7 @@ namespace Festival.Presentation
             var root=Panel(parent,"Chat window",Paper,rounded);root.GetComponent<Image>().raycastTarget=true;
             var shadow=root.gameObject.AddComponent<Shadow>();shadow.effectColor=new Color(0,.015f,.02f,.46f);shadow.effectDistance=new Vector2(0,-8);shadow.useGraphicAlpha=true;
             Place(root,.60f,.155f,.975f,.652f);
-            var window=root.gameObject.AddComponent<FestivalChatWindow>();window.font=font;window.rounded=rounded;
+            var window=root.gameObject.AddComponent<FestivalChatWindow>();window.font=font;window.rounded=rounded;window.group=root.gameObject.AddComponent<CanvasGroup>();
             Place(Panel(root,"Accent rule",Orange,null),.025f,.974f,.975f,.982f);
             window.header=window.Label(root,"Chat header",21,TextAnchor.MiddleLeft,Ink);Place(window.header.rectTransform,.05f,.895f,.95f,.968f);
             var track=Panel(root,"Time left track",Hairline,null);Place(track,.05f,.879f,.95f,.887f);
@@ -80,6 +87,11 @@ namespace Festival.Presentation
 
         /// <summary>Seconds from when they start saying a line (the "…" bubble) until all of it shows.</summary>
         public static float Typed(string line)=>TypingSeconds+line.Length/LettersPerSecond;
+        /// <summary>DIALOG-6: seconds to read a line: 1.5 s, and .05 s a letter. Every line said to you gets at least this on screen.</summary>
+        public static float ReadingSeconds(string line)=>1.5f+.05f*line.Length;
+        /// <summary>How long a conversation's last line stays up, once whole, after the conversation ends: its reading time, at least
+        /// ShortestLinger.</summary>
+        public static float Lingers(string line)=>Mathf.Max(ShortestLinger,ReadingSeconds(line));
         /// <summary>The chat check (or VIP rope chat) p is in right now; null without one. A view carries only its own player's
         /// interactions, and only Active ones, so no other client can read it.</summary>
         public static InteractionState LiveChat(RoundState s,PlayerState p){foreach(var i in s.Interactions)if(i.Id==p.InteractionId&&i.Kind=="ConfirmChat"&&i.Status=="Active")return i;return null;}
@@ -111,24 +123,26 @@ namespace Festival.Presentation
         public string ReplyKey(int i)=>replyKeys[i].text;
         public string ReplyLabel(int i)=>replyTexts[i].text;
         public bool CanReply(int i)=>i>=0&&i<offered&&replies[i].interactable;
+        /// <summary>Whether it shows a conversation that is over (Linger).</summary>
+        public bool Lingering=>over&&Open;
 
         /// <summary>Shows the window on a conversation at `now`. A new thread id clears the thread and the replies; the same one
         /// shows the thread as it was, so a conversation survives a frame or two without its interaction in the view.</summary>
         public void Begin(string threadId,string header,string mark,float now)
         {
-            clock=now;gameObject.SetActive(true);this.header.text=header;
+            clock=now;gameObject.SetActive(true);this.header.text=header;group.alpha=1;
             if(threadId==this.threadId)return;
-            this.threadId=threadId;this.mark=mark;
+            this.threadId=threadId;this.mark=mark;lingers=true;over=false;
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();
             Offer(null,null);dirty=true;
         }
         /// <summary>Their line, on the left: whole at once, or typed, after the "…" bubble, at LettersPerSecond.</summary>
-        public void TheySay(string line,bool typed){var b=Take(true,line);b.Whole=!typed;Show(b);Add(b);}
+        public void TheySay(string line,bool typed){var b=Take(true,line);b.Whole=!typed;b.WholeAt=clock;Show(b);Add(b);}
         /// <summary>Your line, on the right. Whatever they were still typing shows whole first, so the thread reads in order.</summary>
         public void YouSay(string line)
         {
-            foreach(var b in thread)if(b.Theirs&&!b.Whole){b.Whole=true;Show(b);}
-            var yours=Take(false,line);yours.Whole=true;Show(yours);Add(yours);
+            foreach(var b in thread)if(b.Theirs&&!b.Whole){b.Whole=true;b.WholeAt=clock;Show(b);}
+            var yours=Take(false,line);yours.Whole=true;yours.WholeAt=clock;Show(yours);Add(yours);
         }
         /// <summary>The replies under the thread, up to MaxReplies, all pickable; null or none hides them. `pick` runs with the
         /// reply's index when 1-3 or a click picks it.</summary>
@@ -147,10 +161,10 @@ namespace Festival.Presentation
         public bool Pick(int index)
         {
             if(!CanReply(index))return false;
-            replies[index].interactable=false;replyTexts[index].color=Dimmed;replyKeys[index].color=Dimmed;
-            onPick?.Invoke(index);
+            Dim(index);onPick?.Invoke(index);
             return true;
         }
+        void Dim(int i){replies[i].interactable=false;replyTexts[i].color=Dimmed;replyKeys[i].color=Dimmed;}
         /// <summary>Each frame: types their lines on, fades out bubbles past the last MaxBubbles, fills the time bar (0-1) and lays
         /// the thread out from the foot up when it changed. Allocates only as a typed line gains a letter.</summary>
         public void Advance(float now,float timeLeft,bool reducedMotion)
@@ -169,20 +183,41 @@ namespace Festival.Presentation
         }
         /// <summary>Hides the window. The thread stays, so the same conversation shows again as it was.</summary>
         public void Close()=>gameObject.SetActive(false);
+        /// <summary>
+        /// DIALOG-6: each frame once the conversation is over (complete or cancelled), at `now`: the window stays up read-only, headed
+        /// OverHeader with every reply dimmed, until its last line has been whole on screen for Lingers(line) (one still typing types
+        /// on), then fades out over FadeSeconds and hides. `leave` (they walked off or started something else) hides it at once.
+        /// False once hidden; an ended conversation, once hidden, stays hidden.
+        /// </summary>
+        public bool Linger(float now,bool reducedMotion,bool leave)
+        {
+            if(!lingers||leave){Dismiss();return false;}
+            if(!over){over=true;header.text=OverHeader;for(int i=0;i<offered;i++)Dim(i);}
+            gameObject.SetActive(true);Advance(now,0,reducedMotion);
+            float left=ReadBy()-clock;
+            if(left<=-FadeSeconds){Dismiss();return false;}
+            group.alpha=Mathf.Clamp01(1+left/FadeSeconds);
+            return true;
+        }
+        /// <summary>Hides an ended conversation for good (G): only a new one opens the window again.</summary>
+        public void Dismiss(){lingers=false;Close();}
 
         /// <summary>
         /// Follows p's chat check (or VIP rope chat) in their view: their opener, then the three questions as replies; picking one
         /// says it on your side and types their answer to it. A rope chat is the guard's opener and doorman line with nothing to
-        /// ask. The bar runs down the chat's time at `simulationSeconds`. Hides the window and returns false with no chat.
+        /// ask. The bar runs down the chat's time at `simulationSeconds`. With no chat it returns false, and the chat it followed
+        /// lingers (Linger) unless p is past LeaveReach from them, in anything else, or out of the level.
         /// </summary>
         public bool Follow(RoundState s,PlayerState p,double simulationSeconds,float now,bool reducedMotion)
         {
             var live=LiveChat(s,p);
-            if(live==null){Close();return false;}
+            // DIALOG-6: the chat followed till now is over, so it lingers until read, unless p walks off, starts anything else or
+            // the level is over.
+            if(live==null){Linger(now,reducedMotion,p.InteractionId!=""||s.Phase!="Playing"||!Beside(s,p));return false;}
             // Keyed on the start time too: interaction ids start over in a new session, but this window may outlive one.
             if(live.Id!=threadId||live.StartSeconds!=followedStart)
             {
-                var chat=live.Chat;followedStart=live.StartSeconds;threadId="";
+                var chat=live.Chat;followedStart=live.StartSeconds;threadId="";target=live.TargetId;
                 Begin(live.Id,HeaderFor(s,live),Speaker(s,live).Substring(0,1),now);
                 TheySay(chat.Opener,false);
                 if(chat.Questions.Length==0)TheySay(chat.Doorman,true);
@@ -192,6 +227,13 @@ namespace Festival.Presentation
             Advance(now,live.DurationSeconds>0?(float)(1-(simulationSeconds-live.StartSeconds)/live.DurationSeconds):0,reducedMotion);
             return true;
         }
+
+        // Whether p is within LeaveReach of the followed chat's festivalgoer.
+        bool Beside(RoundState s,PlayerState p){foreach(var n in s.Npcs)if(n.Id==target){float x=n.X-p.X,z=n.Z-p.Z;return x*x+z*z<=LeaveReach*LeaveReach;}return false;}
+        // When the last line will have been whole on screen for its Lingers time; one still typing counts from when it will be whole.
+        float ReadBy(){float by=float.NegativeInfinity;foreach(var b in thread)by=Mathf.Max(by,(b.Whole?b.WholeAt:WholeAt(b))+Lingers(b.Said));return by;}
+        // When their typed line b shows whole: after the "…", typed out at LettersPerSecond, or at once with reduced motion.
+        float WholeAt(Bubble b)=>b.At+(reduced?TypingSeconds:Typed(b.Said));
 
         void Add(Bubble b)
         {
@@ -207,7 +249,7 @@ namespace Festival.Presentation
             {
                 if(clock<b.At+TypingSeconds)letters=-1;
                 else if(!reduced&&clock<b.At+Typed(b.Said))letters=Mathf.Min(b.Said.Length,(int)((clock-b.At-TypingSeconds)*LettersPerSecond));
-                else b.Whole=true;
+                else{b.Whole=true;b.WholeAt=WholeAt(b);}
             }
             if(letters==b.Letters)return;
             if(b.Letters<0||letters<0)dirty=true;

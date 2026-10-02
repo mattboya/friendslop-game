@@ -214,11 +214,102 @@ namespace Festival.Tests
             }
             game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
             mine=FestivalSession.ViewFor(game,tripper.Id);
-            Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,9,false)||window.Open,Is.False,"the window closes with the chat");
+            // DIALOG-6: an ended chat stays up only until its last answer is read (below), long before 30 s.
+            Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,30,false)||window.Open,Is.False,"the window closes after the chat");
             var dance=game.Execute(tripper.Id,new GameCommand{Id="hud_dance",Kind="Dance",TargetId=npc.Id});
             Assert.That(dance.Accepted,Is.True,"setup: the tripper dances with them: "+dance.Reason);
             mine=FestivalSession.ViewFor(game,tripper.Id);
-            Assert.That(FestivalChatWindow.TakesReplies(mine,Me(mine,tripper.Id))||window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,10,false),Is.False,"a dance has no questions to pick");
+            Assert.That(FestivalChatWindow.TakesReplies(mine,Me(mine,tripper.Id))||window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,31,false),Is.False,"a dance has no questions to pick");
+        }
+
+        // DIALOG-6: what they say stays up long enough to read. Matt, 2026-10-01: "when talking to people, sometimes their text
+        // disappears immediately." The window follows the tripper's own view (FestivalSession.ViewFor), which drops a chat the
+        // moment it ends, on the HUD's clock (`now`).
+        static bool Follow(FestivalChatWindow window,FestivalSimulation game,PlayerState tripper,float now){var view=FestivalSession.ViewFor(game,tripper.Id);return window.Follow(view,Me(view,tripper.Id),view.SimulationSeconds,now,false);}
+        // The tripper chats with npc and asks question 1 at `now`: their answer.
+        static string Ask(FestivalSimulation game,PlayerState tripper,NpcState npc,FestivalChatWindow window,float now,string id)
+        {
+            var started=game.Execute(tripper.Id,new GameCommand{Id=id,Kind="ConfirmChat",TargetId=npc.Id});
+            Assert.That(started.Accepted,Is.True,"setup: the tripper chats to check: "+started.Reason);
+            var said=game.Interaction(tripper.InteractionId).Chat;
+            Assert.That(Follow(window,game,tripper,now),Is.True,"setup: the chat window follows the chat");
+            Assert.That(window.Pick(0),Is.True,"setup: 1 asks the first question");
+            return said.Answers[0];
+        }
+        static void Leave(FestivalSimulation game,PlayerState tripper,string id)=>Assert.That(game.Execute(tripper.Id,new GameCommand{Id=id,Kind="Cancel"}).Accepted,Is.True,"setup: the tripper walks off the chat");
+        // After the chat ended, the window from `over` on: up read-only, headed CHAT OVER, while 1-3 equip, until `answer` (asked
+        // at `asked`) has been whole on screen for its reading time; then it fades out and hides for good.
+        void ExpectItStaysUntilRead(FestivalSimulation game,PlayerState tripper,FestivalChatWindow window,string answer,float asked,float over)
+        {
+            var view=FestivalSession.ViewFor(game,tripper.Id);var me=Me(view,tripper.Id);
+            Assert.That(FestivalChatWindow.LiveChat(view,me),Is.Null,"setup: the tripper's view has no chat");
+            Assert.That(window.Follow(view,me,view.SimulationSeconds,over,false),Is.False,"the chat is over");
+            Assert.That(window.Open,Is.True,"but the window stays up");
+            Assert.That(window.Header,Does.StartWith("CHAT OVER"),"headed as over");
+            Assert.That(window.Replies==3&&!window.CanReply(1)&&!window.CanReply(2),Is.True,"read-only: no question left to ask");
+            Assert.That(window.Pick(1)||window.Pick(2),Is.False,"so 2 and 3 pick nothing");
+            Assert.That(FestivalChatWindow.TakesReplies(view,me),Is.False,"and 1-3 equip again");
+            float read=asked+FestivalChatWindow.Typed(answer)+FestivalChatWindow.Lingers(answer);
+            window.Follow(view,me,view.SimulationSeconds,read-.05f,false);
+            Assert.That(window.Open&&window.Shown(window.Bubbles-1)==answer,Is.True,"their answer is up, whole, until it has been for its reading time");
+            window.Follow(view,me,view.SimulationSeconds,read+FestivalChatWindow.FadeSeconds/2,false);
+            var fade=window.GetComponent<UnityEngine.CanvasGroup>();
+            Assert.That(window.Open&&fade!=null&&fade.alpha>.1f&&fade.alpha<.9f,Is.True,"then the window fades");
+            window.Follow(view,me,view.SimulationSeconds,read+FestivalChatWindow.FadeSeconds+.01f,false);
+            Assert.That(window.Open,Is.False,"and hides");
+            window.Follow(view,me,view.SimulationSeconds,read+10,false);
+            Assert.That(window.Open,Is.False,"for good");
+        }
+
+        // A chat check that completes .1 s after a question was asked leaves the answer up to read.
+        [Test] public void AChatThatEndsStaysUpUntilItsLastAnswerIsRead()
+        {
+            var game=Day();var npc=Beside(game,out var tripper,out _);var window=ChatWindow();
+            var started=game.Execute(tripper.Id,new GameCommand{Id="hud_linger",Kind="ConfirmChat",TargetId=npc.Id});
+            Assert.That(started.Accepted,Is.True,"setup: the tripper chats to check: "+started.Reason);
+            string id=tripper.InteractionId;var said=game.Interaction(id).Chat;
+            game.Tick(FestivalSimulation.ConfirmChatSeconds-.1);
+            Assert.That(Follow(window,game,tripper,20),Is.True,"setup: .1 s before the chat ends");
+            Assert.That(window.Pick(0),Is.True,"setup: 1 asks the first question");
+            game.Tick(.12);
+            Assert.That(game.Interaction(id).Status,Is.EqualTo("Complete"),"setup: the chat ended .1 s after the question");
+            ExpectItStaysUntilRead(game,tripper,window,said.Answers[0],20,20.1f);
+        }
+
+        [Test] public void ACancelledChatStaysUpTheSameWay()
+        {
+            var game=Day();var npc=Beside(game,out var tripper,out _);var window=ChatWindow();
+            string answer=Ask(game,tripper,npc,window,20,"hud_linger_cancel");
+            game.Tick(.1);Leave(game,tripper,"hud_linger_leave");
+            ExpectItStaysUntilRead(game,tripper,window,answer,20,20.1f);
+        }
+
+        // Walking more than 4 m from them (as the host ends a chat), starting anything else, or G (FestivalHud) closes it at once.
+        [Test] public void WalkingAwayOrDoingAnythingElseClosesAnEndedChat()
+        {
+            var game=Day();var npc=Beside(game,out var tripper,out _);var window=ChatWindow();
+            Ask(game,tripper,npc,window,20,"hud_walk");Leave(game,tripper,"hud_walk_leave");
+            tripper.X=npc.X+3.9f;tripper.Z=npc.Z;Follow(window,game,tripper,20.2f);
+            Assert.That(window.Open,Is.True,"setup: the ended chat is up, 3.9 m from them");
+            tripper.X=npc.X+4.1f;Follow(window,game,tripper,20.3f);
+            Assert.That(window.Open,Is.False,"4.1 m from them, it closes");
+            tripper.X=npc.X+.3f;Follow(window,game,tripper,20.4f);
+            Assert.That(window.Open,Is.False,"and stays closed when you step back");
+
+            Ask(game,tripper,npc,window,30,"hud_next");Leave(game,tripper,"hud_next_leave");Follow(window,game,tripper,30.1f);
+            Assert.That(window.Open,Is.True,"setup: the next ended chat is up");
+            var dance=game.Execute(tripper.Id,new GameCommand{Id="hud_next_dance",Kind="Dance",TargetId=npc.Id});
+            Assert.That(dance.Accepted,Is.True,"setup: the tripper dances with them: "+dance.Reason);
+            Follow(window,game,tripper,30.2f);
+            Assert.That(window.Open,Is.False,"starting a dance closes it");
+            Leave(game,tripper,"hud_next_dance_leave");
+
+            tripper.X=npc.X+.3f;tripper.Z=npc.Z;Ask(game,tripper,npc,window,40,"hud_last");Leave(game,tripper,"hud_last_leave");Follow(window,game,tripper,40.1f);
+            Assert.That(window.Open&&window.Lingering,Is.True,"setup: the last ended chat is up");
+            window.Dismiss();
+            Assert.That(window.Open||window.Lingering,Is.False,"G closes it");
+            Follow(window,game,tripper,40.2f);
+            Assert.That(window.Open,Is.False,"for good");
         }
 
         // POLO-4: talking your way past the VIP rope is its own chat, the guard's opener and doorman line with nothing to ask, so

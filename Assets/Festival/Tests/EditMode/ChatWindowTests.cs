@@ -153,7 +153,8 @@ namespace Festival.Tests
             game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
             view=View(game,tripper.Id);
             Assert.That(FestivalChatWindow.TakesReplies(view,Me(view,tripper.Id)),Is.False,"the chat is over: 1-3 equip again, on the frame the view says so");
-            Assert.That(Follow(window,game,tripper.Id,9),Is.False,"no chat, no window");
+            // DIALOG-6: an ended chat lingers until its last line is read (HudTripperTests), long before 30 s.
+            Assert.That(Follow(window,game,tripper.Id,30),Is.False,"no chat, no window");
             Assert.That(window.Open,Is.False);
         }
 
@@ -163,11 +164,11 @@ namespace Festival.Tests
         {
             var game=Day(out var tripper);var said=Chat(game,tripper);var window=Window();
             Follow(window,game,tripper.Id,0);window.Pick(0);Follow(window,game,tripper.Id,FestivalChatWindow.Typed(said.Answers[0])+.01f);
-            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);Follow(window,game,tripper.Id,9);
-            Assert.That(window.Open,Is.False,"setup: the chat is over");
+            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);Follow(window,game,tripper.Id,30);
+            Assert.That(window.Open,Is.False,"setup: the chat is over, and its last line long read (DIALOG-6)");
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+said.Opener,"> "+said.Questions[0],"< "+said.Answers[0]}),"the thread is still on this client");
             var next=Chat(game,tripper,"next_chat");
-            Follow(window,game,tripper.Id,10);
+            Follow(window,game,tripper.Id,31);
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+next.Opener}),"a new chat opens on its own opener");
             for(int i=0;i<3;i++)Assert.That(window.CanReply(i)&&window.ReplyLabel(i)==next.Questions[i],Is.True,"with all three of its questions to ask");
         }
@@ -180,6 +181,13 @@ namespace Festival.Tests
             Assert.That(window.Shown(2),Is.EqualTo(FestivalChatWindow.Ellipsis),"the typing bubble stays");
             Follow(window,game,tripper.Id,FestivalChatWindow.TypingSeconds+.01f,true);
             Assert.That(window.Shown(2),Is.EqualTo(said.Answers[2]),"then their answer appears whole");
+        }
+
+        // DIALOG-6: once whole on screen, a conversation's last line stays 1.5 s plus .05 s a letter, at least 2.5 s, after it ends.
+        [Test] public void AChatsLastLineStaysLongEnoughToRead()
+        {
+            Assert.That(FestivalChatWindow.Lingers(new string('a',40)),Is.EqualTo(3.5f).Within(1e-4),"1.5 s and .05 s a letter");
+            Assert.That(FestivalChatWindow.Lingers("Sure."),Is.EqualTo(2.5f),"at least 2.5 s");
         }
 
         // At 1920x1080 every question the chat grammar can ask fits its reply button uncut.

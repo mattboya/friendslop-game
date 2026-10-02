@@ -227,7 +227,9 @@ namespace Festival.Tests
                         if(window.Bubbles<2||window.Shown(window.Bubbles-2)!=said.Questions[1])failures.Add("chat check, menu open: clicking reply 2 doesn't ask question 2");
                     }
                     session.MenuOpen=false;
-                    yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds);
+                    // DIALOG-6: once the chat is over, the window stays only until its last answer has been read.
+                    float gone=Time.realtimeSinceStartup+(float)FestivalSimulation.ConfirmChatSeconds+15;
+                    while(window!=null&&window.Open&&Time.realtimeSinceStartup<gone)yield return null;
                     if(window!=null&&window.Open)failures.Add("chat check done: the chat window still shows");
                     Expect("chat check done","Equipment heading",GearKeys);
                     // With no chat under way, 1 equips slot 1 again (and shows the keyboard reaches the HUD).
@@ -260,6 +262,33 @@ namespace Festival.Tests
                     yield return new WaitForSeconds(.6f);
                     ExpectThread("second chat check","< "+said.Opener);
                     ExpectReplies("second chat check",said.Questions,true,true,true);
+                    // DIALOG-6: 1 asked .2 s before the chat ends leaves their answer readable 1.5 s after it ended, in the window headed
+                    // CHAT OVER with nothing left to ask, while 2 equips; once it is whole, G closes the window and drops nothing.
+                    double end=again.StartSeconds+again.DurationSeconds;string answer=said.Answers[0];
+                    while(sim.State.SimulationSeconds<end-.2)yield return null;
+                    yield return Press(Key.Digit1);
+                    while(sim.State.SimulationSeconds<end+1.5)yield return null;
+                    string where="1.5 s after a chat ended .2 s after 1 asked";
+                    if(again.Status=="Active")failures.Add(where+": the chat is still on");
+                    if(window==null||!window.Open)failures.Add(where+": the chat window is hidden");
+                    else
+                    {
+                        string last=window.Bubbles<3?"":window.Shown(window.Bubbles-1);
+                        if(!window.Header.StartsWith("CHAT OVER"))failures.Add(where+": the chat window is headed \""+window.Header+"\"");
+                        if(window.Bubbles!=3||window.Shown(1)!=said.Questions[0]||!window.IsTheirs(2)||!last.StartsWith(answer.Substring(0,Mathf.Min(8,answer.Length))))failures.Add(where+": their answer isn't there to read: \""+last+"\"");
+                        if(window.CanReply(1)||window.CanReply(2))failures.Add(where+": questions are still on offer");
+                        yield return Press(Key.Digit2);
+                        if(player.EquippedItemId!="map"||window.Bubbles!=3)failures.Add(where+": 2 didn't equip slot 2 ("+player.EquippedItemId+", "+window.Bubbles+" bubbles)");
+                        float typed=Time.realtimeSinceStartup+FestivalChatWindow.Typed(answer);
+                        while(window.Open&&window.Shown(window.Bubbles-1)!=answer&&Time.realtimeSinceStartup<typed)yield return null;
+                        if(!window.Open||window.Shown(window.Bubbles-1)!=answer)failures.Add(where+": their whole answer never shows");
+                        int carried=player.Inventory.Sum(i=>i.Count),dropped=sim.State.Drops.Count;
+                        yield return Press(Key.G);
+                        if(window.Open)failures.Add(where+": G doesn't close the chat window");
+                        if(player.Inventory.Sum(i=>i.Count)!=carried||sim.State.Drops.Count!=dropped)failures.Add(where+": G closing the chat window dropped something");
+                    }
+                    // That chat ran its course and checked them, so you get a new vision about them to check.
+                    sim.State.Visions.Add(new VisionState{Id="hud_vision_again",Kind="Buyer",NpcId=npc.Id});
                 }
 
                 // VISION-3: Sam dances with that festivalgoer, so the host would refuse your check: the HUD says they're busy, and
@@ -272,6 +301,29 @@ namespace Festival.Tests
                 PressE();PressF();yield return null;
                 if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("tripper beside a busy vision: E or F starts a check ("+session.Message+")");
                 sim.Execute(mate.Id,new GameCommand{Id="hud_mate_stop",Kind="Cancel"});mate.X=30;mate.Z=0;
+
+                // DIALOG-6: a festivalgoer's line stays up long enough to read. Talked to and danced with at once, their line is still
+                // the dance's dialogue 2 s in; once read, the dance's own line takes over.
+                session.Command("Cancel");player.X=npc.X+.6f;player.Z=npc.Z;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.LastTalkSeconds=-10;
+                session.Command("Talk",npc.Id);string spoke=player.NpcSpeech;
+                session.Command("Dance",npc.Id);var talkDance=sim.Interaction(player.InteractionId);
+                if(spoke==""||talkDance?.Kind!="Dance")failures.Add("setup: a Talk then a Dance with the festivalgoer ("+session.Message+")");
+                else
+                {
+                    talkDance.DurationSeconds=60;
+                    yield return new WaitForSeconds(2);
+                    Expect("2 s into a dance begun as they spoke","Speaker","FESTIVALGOER");Expect("2 s into a dance begun as they spoke","Dialogue line",spoke);
+                    yield return new WaitForSeconds(FestivalTalkLine.ReadFor(spoke)-2+.4f);
+                    Expect("their line read, mid-dance","Dialogue line",talkDance.DialogueText);
+                }
+                // Nor does the menu lose one: open as they speak and closed after the host has dropped the line, it is there to read.
+                session.Command("Cancel");npc.Suspicion=0;npc.LastTalkSeconds=-10;
+                session.Command("Talk",npc.Id);spoke=player.NpcSpeech;session.MenuOpen=true;
+                float hostDrops=Time.realtimeSinceStartup+10;
+                while(sim.State.SimulationSeconds<player.NpcSpeechUntil+.1&&Time.realtimeSinceStartup<hostDrops)yield return null;
+                Expect("the menu open as they spoke","Dialogue line","(hidden)");
+                session.MenuOpen=false;yield return new WaitForSeconds(.3f);
+                Expect("the menu closed after the host dropped their line","Dialogue line",spoke);
 
                 // Night 2 doses everyone: the crew reads every dose, and what each friend took.
                 session.Command("Cancel");Trip(mate,3,"lsd");sim.State.LevelIndex=3;sim.State.DurationSeconds=600;
