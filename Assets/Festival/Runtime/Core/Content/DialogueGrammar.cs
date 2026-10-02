@@ -3,9 +3,10 @@ using System.Collections.Generic;
 
 namespace Festival.Core
 {
-    [Serializable] public sealed class Conversation { public string Opener=""; public string[] Questions=new string[3],Answers=new string[3]; }
+    [Serializable] public sealed class Conversation { public string Opener=""; public string[] Questions=new string[3],Answers=new string[3]; public string Doorman=""; }
     // A chat is an opener (persona), three questions the tripper asks (small talk, the sales pitch, the lost friend)
-    // and one answer to each: a persona interjection plus a line for the NPC's role. A line tagged "0:" is
+    // and one answer to each: a persona interjection plus a line for the NPC's role. A rope chat with the VIP guard (Rope)
+    // is the opener and a Doorman line instead, with no questions and no answers. A line tagged "0:" is
     // Palm Mirage only and "1:" is Ember Playa only; untagged lines suit both. {ground} names the festival's
     // grounds and {where} a landmark on its map. Only fictional goods (Tongue Stamps, Fun Guys) are ever named.
     public static class DialogueGrammar
@@ -30,6 +31,15 @@ namespace Festival.Core
             var interjections=Draw(Interjections[p],festival,random,3); int plain=random.Next(3);
             for(int i=0;i<3;i++) result.Answers[i]=(i==plain?"":interjections[i]+" ")+Draw(Answers[r][i],festival,random,1)[0];
             return result;
+        }
+        // POLO-4: Palm Mirage's VIP guard talking someone past the rope who isn't checking a vision about them. Their persona's
+        // opener and one doorman line, and nothing to ask: no role goes in, so nothing in it can hint at one.
+        public static Conversation Rope(string persona,int festival,int seed)
+        {
+            int p=Array.IndexOf(Personas,persona);
+            if(p<0||festival<0||festival>=Ground.Length) throw new ArgumentException("Unknown dialogue persona or festival: "+persona+", "+festival);
+            var random=new ContentRandom(seed);
+            return new Conversation { Opener=Draw(Openers[p],festival,random,1)[0], Doorman=Draw(Doorman,festival,random,1)[0], Questions=Array.Empty<string>(), Answers=Array.Empty<string>() };
         }
         private static List<string> Draw(string[] pool,int festival,ContentRandom random,int count)
         {
@@ -133,6 +143,20 @@ namespace Festival.Core
                 "1:Hello. I was told there'd be a 'burn', so I brought aloe.",
                 "1:A stranger gifted me a grilled cheese. Is that a trap? It was delicious.",
                 "1:Hey, sport. The playa's great, but I've been shaking sand out of my wallet since Tuesday."}
+        };
+        // The VIP guard waving someone through, whatever their role. The chat hands over the wristband once it runs its 5 s.
+        private static readonly string[] Doorman={
+            "Wristbands only past this rope. Hold out your arm. There. Now you're a wristband person.",
+            "You're not on the list. Nobody's on the list. I lost the list. Arm, please.",
+            "I'm meant to say no. Give me five seconds to forget how.",
+            "Sure, why not. Look important and don't make eye contact with anyone in a lanyard.",
+            "The rope's mostly decorative. The wristband's real, though. Hold still.",
+            "I've turned away nine people today. You're ten. Ten gets in. New rule.",
+            "0:VIP is the same polo field with nicer toilets. Still, here's your wristband.",
+            "0:Best view of the headliner is past this rope. You didn't get it from me.",
+            "0:They pay me in iced matcha. You look like you tip in vibes. Arm out.",
+            "1:This rope was a gift, and so is the wristband. Welcome home.",
+            "1:VIP on the playa is one shade structure and a cooler. Come on through."
         };
         private static readonly string[][] Questions={
             new[]{ // Small talk

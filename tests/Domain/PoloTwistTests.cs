@@ -247,6 +247,11 @@ public static class PoloTwistTests
         Check(!Act(s,friend.Id,"ConfirmDance",guard.Id).Accepted&&friend.InteractionId=="","the guard doesn't dance anyone in");
         var chat=Act(s,friend.Id,"ConfirmChat",guard.Id);
         Check(chat.Accepted&&friend.InteractionId!="","a sober friend can talk to the VIP guard: "+chat.Reason);
+        // POLO-4: and it is no check. The guard's opener, as their persona talks, then one doorman line, and nothing to ask.
+        var said=s.Interaction(friend.InteractionId).Chat;
+        Check(said.Questions.Length==0&&said.Answers.Length==0,"a sober friend's chat with the guard asks nothing and hears no answers, got "+said.Questions.Length+" questions");
+        Check(OpenersOf(DialogueGrammar.PersonaFor(guard.Id,guard.Twist),0).Contains(said.Opener),"it opens as the guard's persona does: "+said.Opener);
+        Check(said.Doorman!=""&&!DialogueGrammar.HasNarcTell(said.Opener+" "+said.Doorman),"then one doorman line: "+said.Doorman);
         s.Tick(4.9);Check(Bands(friend)==0,"not in yet after 4.9 s");
         s.Tick(.2);Check(Bands(friend)==1,"after the 5 s chat they wear a VIP wristband");
         Check(!planted.Confirmed,"the friend's chat checks none of the tripper's visions");
@@ -255,6 +260,7 @@ public static class PoloTwistTests
         friend.X=-7.9f;friend.Z=22;Check(s.TryMove(friend.Id,-8.2f,22,0,.1),"the wristband gets them past the rope");
 
         Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper talks to the guard too");
+        Check(s.Interaction(tripper.InteractionId).Chat.Questions.Length==3,"the tripper's chat checks their vision of the guard, so it asks the three questions");
         s.Tick(2);tripper.X=guard.X+5;s.Tick(.1);Check(tripper.InteractionId==""&&Bands(tripper)==0,"walking off mid-chat gets nothing");
         Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper tries again");s.Tick(5.1);
         Check(Bands(tripper)==1&&planted.Confirmed,"the tripper talks their way in, and their chat checks their vision of the guard");
@@ -266,6 +272,34 @@ public static class PoloTwistTests
         var dancer=crowded.Player(crowded.State.TripperId);crowded.State.Visions.Add(new VisionState{Id="planted",Kind="Narc",NpcId=doorman.Id,Tell=true});
         Beside(dancer,doorman);Check(Act(crowded,dancer.Id,"ConfirmDance",doorman.Id).Accepted,"setup: the tripper checks a vision of the guard by dancing");
         crowded.Tick(6);Check(dancer.InteractionId==""&&Bands(dancer)==0,"a dance with the guard checks the vision but gets nobody in");
+
+        // POLO-4: a chat that checks nothing never hints at the guard's role. Whatever they are, the same seed says the same.
+        var regular=RopeChat("Regular",false);
+        foreach(var role in new[]{"Buyer","Narc"})
+        {
+            var c=RopeChat(role,false);
+            Check(c.Opener==regular.Opener&&c.Doorman==regular.Doorman&&c.Questions.Length==0&&c.Answers.Length==0,"a "+role+" guard says just what a regular one would: "+c.Opener+" / "+c.Doorman);
+        }
+        var uncheckedChat=RopeChat("Narc",true);
+        Check(uncheckedChat.Questions.Length==0&&uncheckedChat.Opener==regular.Opener&&uncheckedChat.Doorman==regular.Doorman,"the tripper with no vision of the guard is only talking their way in too");
+        foreach(var persona in DialogueGrammar.Personas)for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<60;seed++)
+        {
+            var rope=DialogueGrammar.Rope(persona,festival,seed);
+            Check(rope.Questions.Length==0&&rope.Answers.Length==0,"a rope chat asks nothing on festival "+festival);
+            foreach(var line in new[]{rope.Opener,rope.Doorman})
+                Check(line!=""&&line.IndexOf('{')<0&&!line.StartsWith(festival+":")&&!DialogueGrammar.HasNarcTell(line),persona+" on festival "+festival+", seed "+seed+": a filled-in line with no narc tell: "+line);
+        }
+    }
+    // Every Palm Mirage or Ember Playa opener a persona has: a few hundred check chats draw each at least once.
+    static HashSet<string> OpenersOf(string persona,int festival){var lines=new HashSet<string>();for(int seed=0;seed<400;seed++)lines.Add(DialogueGrammar.Build("Regular",persona,festival,seed).Opener);return lines;}
+    // A fresh Palm Mirage Day 1 (seed 2) where the guard's role is set to `role`, then a sober friend (or the tripper, with no
+    // vision of the guard) talks to them. The conversation they get.
+    static Conversation RopeChat(string role,bool tripper)
+    {
+        var s=Start(2,0,0);var guard=Tagged(s,FestivalSimulation.VipGuard)[0];guard.Role=role;s.State.Visions.RemoveAll(v=>v.NpcId==guard.Id);
+        var p=tripper?s.Player(s.State.TripperId):s.State.Players.Find(x=>x.Id!=s.State.TripperId);Beside(p,guard);
+        Check(Act(s,p.Id,"ConfirmChat",guard.Id).Accepted,"setup: "+p.Id+" talks to a "+role+" guard");
+        return s.Interaction(p.InteractionId).Chat;
     }
 
     // Stand p at the Ferris wheel's base and get on.

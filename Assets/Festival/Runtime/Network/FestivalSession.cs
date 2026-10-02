@@ -30,6 +30,7 @@ namespace Festival.Network
         // 3: wave 2026-09-30 (2): clients build DANCE-5's busier rhythm charts from the same ChartSeed, and the spin runs longer.
         // 4: wave 2026-10-01 (2): snapshots carry when each Ferris wheel rider boarded (POLO-5), and clients paint and land the
         // 30/30/30/10 dose wheel (TRIP-12). ECON-2: shelves sell gear only, and festivalgoers sell stock through StartBuy.
+        // POLO-4: a chat with the VIP guard that checks no vision carries a Doorman line and no questions or answers.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";

@@ -34,7 +34,9 @@ namespace Festival.Core
             if(c.Kind=="ConfirmChat")
             {
                 var chat=NewInteraction(p,c.Kind,npc.Id,ConfirmChatSeconds);
-                chat.Chat=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id,npc.Twist),State.FestivalIndex,chat.ChartSeed);
+                // POLO-4: a chat that checks no vision is the VIP guard talking p past the rope, built without their role.
+                string persona=DialogueGrammar.PersonaFor(npc.Id,npc.Twist);
+                chat.Chat=CanCheckVision(State,p,npc)?DialogueGrammar.Build(npc.Role,persona,State.FestivalIndex,chat.ChartSeed):DialogueGrammar.Rope(persona,State.FestivalIndex,chat.ChartSeed);
                 return Ok();
             }
             GiveDanceRoom(p,npc,c.Kind);
