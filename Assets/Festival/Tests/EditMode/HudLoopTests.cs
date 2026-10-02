@@ -237,7 +237,89 @@ namespace Festival.Tests
             s.LevelIndex=0;
             Assert.That(FestivalHudText.ReviewOutcome(s),Is.EqualTo("WEEKEND CLEARED"),"a win that lands on Day 1 cleared Night 2");
             s.ReviewResult="Missed the quota";
-            Assert.That(FestivalHudText.ReviewOutcome(s),Is.EqualTo("A GLORIOUS DISASTER"));
+            Assert.That(FestivalHudText.ReviewOutcome(s),Is.EqualTo("A GLORIOUS DISASTER  •  BACK TO DAY 1"),"a loss says what it cost (LOOP-5)");
+        }
+
+        // LOOP-5: the last minute of a day with the quota unmet warns that sundown restarts the weekend: once at a minute (as the
+        // clock turns 1:00) and again at 15 s, in the viewer's money, and the objective card says so for that whole minute.
+        [Test] public void SundownWarnsInTheLastMinuteOfADayWithTheQuotaUnmet()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You");s.LevelSales=3;
+            s.ElapsedSeconds=419.5;
+            Assert.That(FestivalHudText.Clock(s),Is.EqualTo("1:01"));
+            Assert.That(FestivalHudText.SundownWarning(s,you),Is.Empty,"60.5 s left: no warning yet");
+            Assert.That(FestivalHudText.QuotaHint(s,you),Is.EqualTo("Sell $12 more before sundown."));
+            s.ElapsedSeconds=420;
+            Assert.That(FestivalHudText.Clock(s),Is.EqualTo("1:00"));
+            Assert.That(FestivalHudText.SundownWarning(s,you),Is.EqualTo("1 MINUTE TO SUNDOWN: sell $12 more or the weekend restarts at Day 1"));
+            Assert.That(FestivalHudText.QuotaHint(s,you),Is.EqualTo("Sell $12 more before sundown or the weekend restarts."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Does.StartWith("Sell $12 more before sundown or the weekend restarts."),"the objective card says it for the whole last minute");
+            s.ElapsedSeconds=464.9;
+            Assert.That(FestivalHudText.SundownWarning(s,you),Is.EqualTo("1 MINUTE TO SUNDOWN: sell $12 more or the weekend restarts at Day 1"),"15.1 s left");
+            s.ElapsedSeconds=465;
+            Assert.That(FestivalHudText.SundownWarning(s,you),Is.EqualTo("15 SECONDS: sell $12 more or back to Day 1"));
+            Assert.That(FestivalHudText.QuotaHint(s,you),Is.EqualTo("Sell $12 more before sundown or the weekend restarts."));
+            s.LevelSales=15;
+            Assert.That(FestivalHudText.SundownWarning(s,you),Is.Empty,"nothing once the quota is met");
+            Assert.That(FestivalHudText.QuotaHint(s,you),Is.EqualTo("Anyone can end the day at the way back to camp, or keep selling until sundown."));
+            s.LevelSales=3;s.Phase="Results";s.ElapsedSeconds=480;
+            Assert.That(FestivalHudText.SundownWarning(s,you),Is.Empty,"at results the banner says what happened instead");
+            var night=Level(0,1);var rescuer=Crew(night,"you","You");night.ElapsedSeconds=night.DurationSeconds-10;
+            Assert.That(FestivalHudText.SundownWarning(night,rescuer),Is.Empty,"a night has no quota to miss");
+            var playa=Level(1,0);var ash=new PlayerState{Id="ash",Name="Ash",Ordinal=0};playa.Players.Add(ash);playa.ElapsedSeconds=playa.DurationSeconds-30;
+            Assert.That(FestivalHudText.SundownWarning(playa,ash),Is.EqualTo("1 MINUTE TO SUNDOWN: sell 22 buttons more or the weekend restarts at Day 1"),"in the viewer's own odd objects");
+        }
+
+        // LOOP-5: results take the middle of the screen. A loss says why, what the crew sold of its quota on a day, and that the
+        // festival restarts at Day 1; a win says what was cleared and what comes next. The objective card keeps its own lines.
+        [Test] public void TheResultsBannerSaysTheWeekendRestartsOrWhatComesNext()
+        {
+            var missed=Level(0,0,"Results");var you=Crew(missed,"you","You");missed.Result="Missed the quota";
+            Assert.That(FestivalHudText.ResultsBannerTitle(missed),Is.EqualTo("MISSED THE QUOTA"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(missed,you),Is.EqualTo("You sold $0 of $15\nPALM MIRAGE RESTARTS AT DAY 1  •  FRESH CASH"));
+            Assert.That(FestivalHudText.ObjectiveTitle(missed,you),Is.EqualTo("WEEKEND OVER  •  BACK TO DAY 1"),"the objective card keeps its lines");
+            Crew(missed,"sam","Sam");missed.LevelSales=9;
+            Assert.That(FestivalHudText.ResultsBannerDetail(missed,you),Does.StartWith("You sold $9 of $30\n"),"the whole crew's sales against its quota");
+            var playaDay=Level(1,0,"Results");var sam=new PlayerState{Id="sam",Name="Sam",Ordinal=1};playaDay.Players.Add(sam);playaDay.Result="Missed the quota";playaDay.LevelSales=4;
+            Assert.That(FestivalHudText.ResultsBannerDetail(playaDay,sam),Is.EqualTo("You sold 4 ramen packets of 22 ramen packets\nEMBER PLAYA RESTARTS AT DAY 1  •  FRESH CASH"),"in the viewer's money");
+            var night=Level(1,1,"Results");Crew(night,"you","You");night.Result="Time expired";
+            Assert.That(FestivalHudText.ResultsBannerTitle(night),Is.EqualTo("TIME EXPIRED"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(night,night.Players[0]),Is.EqualTo("EMBER PLAYA RESTARTS AT DAY 1  •  FRESH CASH"),"a night has no sales to count");
+            night.Result=FestivalSimulation.WipedOut;
+            Assert.That(FestivalHudText.ResultsBannerTitle(night),Is.EqualTo("THE CREW WAS WIPED OUT"));
+
+            var day=Level(0,0,"Results");Crew(day,"you","You");day.Result="Success";
+            Assert.That(FestivalHudText.ResultsBannerTitle(day),Is.EqualTo("DAY 1 CLEARED"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(day,day.Players[0]),Is.EqualTo("NEXT: NIGHT 1"));
+            var finale=Level(0,3,"Results");Crew(finale,"you","You");finale.Result="Success";
+            Assert.That(FestivalHudText.ResultsBannerTitle(finale),Is.EqualTo("PALM MIRAGE CLEARED"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(finale,finale.Players[0]),Is.EqualTo("NEXT: EMBER PLAYA"));
+            var last=Level(1,3,"Results");Crew(last,"you","You");last.Result="Success";
+            Assert.That(FestivalHudText.ResultsBannerDetail(last,last.Players[0]),Is.EqualTo("NEXT: AN ENCORE AT PALM MIRAGE"));
+
+            var playing=Level(0,0);Crew(playing,"you","You");
+            Assert.That(FestivalHudText.ResultsBannerTitle(playing),Is.Empty,"only at results");
+            Assert.That(FestivalHudText.ResultsBannerDetail(playing,playing.Players[0]),Is.Empty);
+        }
+
+        // LOOP-5: back at camp after a lost level, the debrief and the level banner say the weekend went back to Day 1, until the
+        // crew readies. A camp after a win, or a new crew's first, names the level up next.
+        [Test] public void CampAfterALostLevelSaysBackToDayOne()
+        {
+            var lost=Level(0,0,"CampReview");lost.ReviewResult="Missed the quota";
+            Assert.That(FestivalHudText.ReviewOutcome(lost),Is.EqualTo("A GLORIOUS DISASTER  •  BACK TO DAY 1"));
+            Assert.That(FestivalHudText.LevelBanner(lost),Is.EqualTo("BACK TO DAY 1  •  PALM MIRAGE"));
+            lost.Phase="Shopping";
+            Assert.That(FestivalHudText.LevelBanner(lost),Is.EqualTo("BACK TO DAY 1  •  PALM MIRAGE"),"still at camp, shopping");
+            lost.Phase="Spinning";
+            Assert.That(FestivalHudText.LevelBanner(lost),Is.EqualTo("PALM MIRAGE  •  DAY 1"),"once the crew readies, the level itself");
+            var encore=Level(1,0,"Shopping",encore:1);encore.ReviewResult="Time expired";
+            Assert.That(FestivalHudText.LevelBanner(encore),Is.EqualTo("BACK TO DAY 1  •  EMBER PLAYA  •  ENCORE 1"));
+
+            var won=Level(0,1,"CampReview");won.ReviewResult="Success";
+            Assert.That(FestivalHudText.ReviewOutcome(won),Is.EqualTo("DAY 1 CLEARED"));
+            Assert.That(FestivalHudText.LevelBanner(won),Is.EqualTo("UP NEXT  •  PALM MIRAGE  •  NIGHT 1"));
+            Assert.That(FestivalHudText.LevelBanner(Level(0,0,"Shopping")),Is.EqualTo("UP NEXT  •  PALM MIRAGE  •  DAY 1"),"a new crew's first camp is a fresh start, not a restart");
         }
 
         // HUD-4: players act at camp and at the festival, nowhere else. The host refuses anything else and the HUD offers nothing

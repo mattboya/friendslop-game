@@ -25,6 +25,27 @@ namespace Festival.Tests
                 }
         }
 
+        // LOOP-5: a cleared Day 1 leads to Night 1, and the lighting reads night once it plays. It goes through the host's real
+        // steps (NEXT CAMP at results, the debrief, the ready-up, the spin and loading), so a day that came round again after a win
+        // would fail here; a day after a missed quota is the weekend restarting (Weekend.cs), which the HUD now says out loud.
+        [Test]public void AClearedDayOneLeadsToNightOneLitForNight()
+        {
+            var game=new FestivalSimulation(11);game.AddPlayer("me","Me");
+            CommandResult Act(string kind)=>game.Execute("me",new GameCommand{Id="loop5-"+kind,Kind=kind});
+            Assert.That(Festivals.For(game.State).Name,Is.EqualTo("Day 1"),"setup: a new crew starts on Day 1");
+            game.State.Phase="Results";game.State.Result="Success";
+            Assert.That(Act("Reset").Accepted,Is.True,"the host brings the crew back to camp");
+            Assert.That(Act("FinishReview").Accepted,Is.True,"solo practice draws no awards, so the host opens the shop");
+            var me=game.Player("me");me.X=0;me.Z=19;
+            Assert.That(Act("Ready").Accepted,Is.True,"ready at the trailhead");
+            game.Tick(5.2+FestivalSimulation.SpinSeconds+.1);
+            Assert.That(Act("MapReady").Accepted,Is.True,"the map loads");
+            Assert.That(game.State.Phase,Is.EqualTo("Playing"),"the level opens");
+            Assert.That(game.State.LevelIndex,Is.EqualTo(1),"a cleared Day 1 moves on");
+            Assert.That(Festivals.For(game.State).Name,Is.EqualTo("Night 1"));
+            Assert.That(FestivalNightLighting.IsNight(game.State),Is.True,"Night 1 is lit for night");
+        }
+
         [Test]public void DoseBrightensOnlyTheLocalPlayersViewCappedForReadability()
         {
             var perDose=new[]{0f,.15f,.30f,.45f,.60f};

@@ -105,6 +105,15 @@ namespace Festival.Presentation
         private float nextActionRefresh;
         private string lastNotice="";
         private float noticeUntil;
+        // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
+        // it, and the results banner. Each warning, a round's SundownStage, stays SundownNoticeSeconds on screen; its seconds run only
+        // while it shows, so a dance, the map or the menu hiding it never uses them up.
+        public const float SundownNoticeSeconds=6;
+        private GameObject sundownPanel,resultsPanel;
+        private Text sundownText,resultsTitle,resultsDetail;
+        private string sundownRound="";
+        private int sundownStage;
+        private float sundownShown;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -196,6 +205,8 @@ namespace Festival.Presentation
             // Ember Playa's quota names its odd objects twice ("12 FRIENDSHIP BRACELETS / 44 FRIENDSHIP BRACELETS"), so it may shrink.
             ShrinkToFit(objectiveTitle,14);
             objective=Label(objectivePanel.transform,"Objective detail",18,TextAnchor.MiddleLeft);objective.color=MutedPaper;Place(objective.rectTransform,.06f,.01f,.96f,.46f);
+            // LOOP-5: a day's last minute adds "or the weekend restarts" to the quota's line and its next step, so it may shrink.
+            ShrinkToFit(objective,14);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
             timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);
             // Who trips this level and on how many doses, under the clock for the whole crew (UpdateTrippingLayout sizes it).
@@ -242,6 +253,10 @@ namespace Festival.Presentation
             noticePanel=Card(root.transform,"Session notice",new Vector2(.368f,.785f),new Vector2(.695f,.849f),true);
             Accent(noticePanel.transform,Orange);
             notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);ShrinkToFit(notice,14);noticePanel.SetActive(false);
+            // LOOP-5: the sundown warning, just under the session notice and clear of the prompt and the price confirmation.
+            sundownPanel=Card(root.transform,"Sundown warning",new Vector2(.30f,.71f),new Vector2(.70f,.775f),true);
+            Accent(sundownPanel.transform,Orange);
+            sundownText=Label(sundownPanel.transform,"Sundown",22,TextAnchor.MiddleCenter);sundownText.fontStyle=FontStyle.Normal;sundownText.color=Orange;Fill(sundownText.rectTransform,12);ShrinkToFit(sundownText,14);sundownPanel.SetActive(false);
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
             inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text="GEAR   /   1–3 EQUIP     Q USE     G DROP";
             Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);
@@ -259,6 +274,13 @@ namespace Festival.Presentation
             // The tripper's one hint, quiet and brief, just under the aim dot as each level starts.
             trustLine=Label(root.transform,"Trust line",20,TextAnchor.MiddleCenter);trustLine.color=MutedPaper;Place(trustLine.rectTransform,.30f,.405f,.70f,.455f);
             trustLine.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.8f);trustLine.gameObject.SetActive(false);
+            // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
+            // built before the map and the menus so they draw over it, and it catches no clicks.
+            resultsPanel=Card(root.transform,"Results banner",new Vector2(.25f,.37f),new Vector2(.75f,.63f),true);resultsPanel.GetComponent<Image>().raycastTarget=false;
+            Accent(resultsPanel.transform,Orange);
+            resultsTitle=Label(resultsPanel.transform,"Results title",46,TextAnchor.MiddleCenter);resultsTitle.fontStyle=FontStyle.Normal;Place(resultsTitle.rectTransform,.05f,.55f,.95f,.93f);ShrinkToFit(resultsTitle,24);
+            resultsDetail=Label(resultsPanel.transform,"Results detail",22,TextAnchor.MiddleCenter);Place(resultsDetail.rectTransform,.05f,.07f,.95f,.53f);ShrinkToFit(resultsDetail,14);
+            resultsPanel.SetActive(false);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             diagnostics=Label(root.transform,"Development diagnostics",14,TextAnchor.UpperLeft);
             SetRect(diagnostics.rectTransform,new Vector2(0,.48f),new Vector2(.38f,.9f),new Vector2(18,0),Vector2.zero);
@@ -507,7 +529,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -547,6 +569,7 @@ namespace Festival.Presentation
                 objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);
             }
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
+            UpdateSundownAndResults(state,player,showMenu);
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
@@ -629,6 +652,19 @@ namespace Festival.Presentation
             UpdateRosterLayout(checklist==""?0:checklist.Split('\n').Length);
             menuRoster.text=state.Players.Count+" / 8 FRIENDS\n"+string.Join("   •   ",state.Players.ConvertAll(p=>(p.Id==player.Id?"YOU":p.Name)+(p.Ready?" READY":"")));
             menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"LAST SHUTTLE":"GATHERING";
+        }
+
+        // LOOP-5: the results banner, and the sundown warning once per stage (see SundownNoticeSeconds).
+        private void UpdateSundownAndResults(RoundState state,PlayerState player,bool showMenu)
+        {
+            resultsTitle.text=FestivalHudText.ResultsBannerTitle(state);resultsTitle.color=state.Result=="Success"?Mint:Orange;
+            resultsDetail.text=FestivalHudText.ResultsBannerDetail(state,player);
+            resultsPanel.SetActive(resultsTitle.text!="");
+            int stage=FestivalHudText.SundownStage(state);
+            if(stage!=sundownStage||state.RoundId!=sundownRound){sundownStage=stage;sundownRound=state.RoundId;sundownShown=0;}
+            sundownPanel.SetActive(stage>0&&sundownShown<SundownNoticeSeconds&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
+            if(!sundownPanel.activeSelf)return;
+            sundownText.text=FestivalHudText.SundownWarning(state,player);sundownShown+=Time.unscaledDeltaTime;
         }
 
         private void UpdateKeyboard(RoundState state,PlayerState player)

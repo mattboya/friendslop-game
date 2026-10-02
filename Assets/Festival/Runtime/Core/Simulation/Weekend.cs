@@ -13,9 +13,11 @@ namespace Festival.Core
             if(State.ElapsedSeconds>=State.DurationSeconds)return DayLevel?SundownResult():"Time expired";
             var connected=State.Players.FindAll(p=>p.Connected);
             bool soloCanRecover=connected.Count==1&&(connected[0].Life=="Downed"||connected[0].Life=="Spirit"&&connected[0].RevivalCount<2);
-            if(!connected.Exists(p=>p.Life=="Alive"||p.Life=="Detained")&&!soloCanRecover)return "No living free teammate can complete a rescue";
+            if(!connected.Exists(p=>p.Life=="Alive"||p.Life=="Detained")&&!soloCanRecover)return WipedOut;
             return "";
         }
+        /// <summary>The result a level ends on when nobody living and free is left to finish it; the HUD calls it a wipe (LOOP-5).</summary>
+        public const string WipedOut="No living free teammate can complete a rescue";
         // Gate for starting and completing Extract at the camp gate; finishing it while this holds ends the level with Success.
         // A night needs every lost friend back (SplitObjective.cs). Night 2 is all-or-nothing: every connected player must be
         // home, the dead carried inside the gate radius.

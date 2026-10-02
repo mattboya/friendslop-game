@@ -13,11 +13,14 @@ namespace Festival.Presentation
     {
         const string Dot="  •  ";
 
-        /// <summary>"PALM MIRAGE  •  DAY 1", plus the encore lap once there is one. At camp it names the level coming up.</summary>
+        /// <summary>"PALM MIRAGE  •  DAY 1", plus the encore lap once there is one. At camp it names the level coming up, or, after a
+        /// lost level (LOOP-5), that the weekend went back to Day 1: "BACK TO DAY 1  •  PALM MIRAGE", until the crew readies.</summary>
         public static string LevelBanner(RoundState s)
         {
-            string banner=Festivals.Name(s.FestivalIndex).ToUpperInvariant()+Dot+Festivals.For(s).Name.ToUpperInvariant()+(s.EncoreTier>0?Dot+"ENCORE "+s.EncoreTier:"");
-            return s.Phase=="Shopping"||s.Phase=="CampReview"?"UP NEXT"+Dot+banner:banner;
+            string festival=Festivals.Name(s.FestivalIndex).ToUpperInvariant(),encore=s.EncoreTier>0?Dot+"ENCORE "+s.EncoreTier:"",banner=festival+Dot+Festivals.For(s).Name.ToUpperInvariant()+encore;
+            if(s.Phase!="Shopping"&&s.Phase!="CampReview")return banner;
+            // A new crew's first camp has no round behind it, so it reads as the fresh start it is.
+            return s.ReviewResult!=""&&s.ReviewResult!="Success"?"BACK TO DAY 1"+Dot+festival+encore:"UP NEXT"+Dot+banner;
         }
 
         /// <summary>Time left while playing, in whole seconds rounded up so 0:00 means the level is over; one word in every other phase.</summary>
@@ -35,11 +38,29 @@ namespace Festival.Presentation
             return FestivalSimulation.DayQuotaMet(s)?"QUOTA MET — HEAD BACK TO CAMP":("DAY QUOTA  "+Money(s,viewer,s.LevelSales)+" / "+Money(s,viewer,FestivalSimulation.DayQuota(s))).ToUpperInvariant();
         }
 
-        /// <summary>The line under the quota: how much is left to sell, or that anyone may now end the day.</summary>
+        /// <summary>The line under the quota: how much is left to sell, or that anyone may now end the day. In the last minute
+        /// (LOOP-5) it says what missing it costs.</summary>
         public static string QuotaHint(RoundState s,PlayerState viewer)
         {
             if(Festivals.For(s).Night)return "";
-            return FestivalSimulation.DayQuotaMet(s)?"Anyone can end the day at the way back to camp, or keep selling until sundown.":"Sell "+Money(s,viewer,FestivalSimulation.DayQuota(s)-s.LevelSales)+" more before sundown.";
+            return FestivalSimulation.DayQuotaMet(s)?"Anyone can end the day at the way back to camp, or keep selling until sundown.":"Sell "+Money(s,viewer,FestivalSimulation.DayQuota(s)-s.LevelSales)+" more before sundown"+(SundownStage(s)>0?" or the weekend restarts":"")+".";
+        }
+
+        /// <summary>LOOP-5: how close a day with the quota unmet is to sundown, which restarts the weekend at Day 1: 1 in its last
+        /// minute (as the clock turns 1:00), 2 in its last 15 s, otherwise 0 (and on nights, once the quota is met, and off the
+        /// festival). The HUD pops each stage's warning once.</summary>
+        public static int SundownStage(RoundState s)
+        {
+            if(s.Phase!="Playing"||Festivals.For(s).Night||FestivalSimulation.DayQuotaMet(s))return 0;
+            double left=s.DurationSeconds-s.ElapsedSeconds;
+            return left<=15?2:left<=60?1:0;
+        }
+        /// <summary>LOOP-5: the warning for SundownStage, with what the crew still has to sell in the viewer's money; "" at stage 0.</summary>
+        public static string SundownWarning(RoundState s,PlayerState viewer)
+        {
+            int stage=SundownStage(s);if(stage==0)return "";
+            string more=Money(s,viewer,FestivalSimulation.DayQuota(s)-s.LevelSales);
+            return stage==1?"1 MINUTE TO SUNDOWN: sell "+more+" more or the weekend restarts at Day 1":"15 SECONDS: sell "+more+" more or back to Day 1";
         }
 
         /// <summary>Objective card heading: the outcome at results, the quota for a free player on a day, otherwise the guidance headline.</summary>
@@ -149,25 +170,47 @@ namespace Festival.Presentation
         public static string OutcomeTitle(RoundState s)
         {
             if(s.Result!="Success")return "WEEKEND OVER"+Dot+"BACK TO DAY 1";
-            var level=Festivals.For(s);bool finale=s.LevelIndex==Festivals.LevelCount-1;
-            return (!level.Night?"QUOTA MET":finale?"EVERYONE HOME":s.SecondFriend.Active?"FRIENDS RESCUED":"FRIEND RESCUED")+Dot+(finale?Festivals.Name(s.FestivalIndex):level.Name).ToUpperInvariant()+" CLEARED";
+            return (!Festivals.For(s).Night?"QUOTA MET":s.LevelIndex==Festivals.LevelCount-1?"EVERYONE HOME":s.SecondFriend.Active?"FRIENDS RESCUED":"FRIEND RESCUED")+Dot+Cleared(s);
         }
+        // A win's "DAY 1 CLEARED", or the whole festival's once Night 2 is.
+        static string Cleared(RoundState s)=>(s.LevelIndex==Festivals.LevelCount-1?Festivals.Name(s.FestivalIndex):Festivals.For(s).Name).ToUpperInvariant()+" CLEARED";
+        // What a win leads to: the next level, the next festival, or the encore lap after the last.
+        static string NextUp(RoundState s)=>s.LevelIndex<Festivals.LevelCount-1?Festivals.Level(s.FestivalIndex,s.LevelIndex+1,s.EncoreTier).Name:s.FestivalIndex+1<Festivals.Count?Festivals.Name(s.FestivalIndex+1):"an encore at "+Festivals.Name(0);
 
         /// <summary>Results detail: why the weekend ended, or what comes next and what the crew keeps.</summary>
         public static string OutcomeDetail(RoundState s)
         {
             if(s.Result!="Success")return s.Result+". "+Festivals.Name(s.FestivalIndex)+" restarts at Day 1 with fresh cash.";
-            if(s.LevelIndex<Festivals.LevelCount-1)return "Next up: "+Festivals.Level(s.FestivalIndex,s.LevelIndex+1,s.EncoreTier).Name+". Cash and gear carry over.";
-            return (s.FestivalIndex+1<Festivals.Count?"Next up: "+Festivals.Name(s.FestivalIndex+1):"Next up: an encore at "+Festivals.Name(0)+", harder")+". A new weekend starts with fresh cash.";
+            if(s.LevelIndex<Festivals.LevelCount-1)return "Next up: "+NextUp(s)+". Cash and gear carry over.";
+            return "Next up: "+NextUp(s)+(s.FestivalIndex+1<Festivals.Count?"":", harder")+". A new weekend starts with fresh cash.";
+        }
+
+        /// <summary>LOOP-5: the results banner's heading, in the middle of the screen for the whole results: why the weekend is over
+        /// ("MISSED THE QUOTA", "TIME EXPIRED", "THE CREW WAS WIPED OUT"), or the level or festival cleared. "" until results.</summary>
+        public static string ResultsBannerTitle(RoundState s)
+        {
+            if(s.Phase!="Results")return "";
+            if(s.Result=="Success")return Cleared(s);
+            return (s.Result==FestivalSimulation.WipedOut?"The crew was wiped out":s.Result).ToUpperInvariant();
+        }
+        /// <summary>LOOP-5: under the banner's heading, a loss says what a day sold of its quota in the viewer's money and that the
+        /// festival restarts at Day 1; a win names what comes next.</summary>
+        public static string ResultsBannerDetail(RoundState s,PlayerState viewer)
+        {
+            if(s.Phase!="Results")return "";
+            if(s.Result=="Success")return ("Next: "+NextUp(s)).ToUpperInvariant();
+            string sold=Festivals.For(s).Night?"":"You sold "+Money(s,viewer,s.LevelSales)+" of "+Money(s,viewer,FestivalSimulation.DayQuota(s))+"\n";
+            return sold+(Festivals.Name(s.FestivalIndex)+" restarts at Day 1"+Dot+"fresh cash").ToUpperInvariant();
         }
 
         /// <summary>The prompt at results: only the host can bring the crew back to camp.</summary>
         public static string ResultsPrompt(RoundState s,string localId)=>s.HostPlayerId==localId?"ESC MENU  •  NEXT CAMP":"WAITING FOR THE HOST";
 
-        /// <summary>The debrief's verdict. The campfire already holds the next round, so a win names the level before this one.</summary>
+        /// <summary>The debrief's verdict. The campfire already holds the next round, so a win names the level before this one; a loss
+        /// says it cost the weekend (LOOP-5).</summary>
         public static string ReviewOutcome(RoundState s)
         {
-            if(s.ReviewResult!="Success")return "A GLORIOUS DISASTER";
+            if(s.ReviewResult!="Success")return "A GLORIOUS DISASTER"+Dot+"BACK TO DAY 1";
             return s.LevelIndex==0?"WEEKEND CLEARED":Festivals.Level(s.FestivalIndex,s.LevelIndex-1,s.EncoreTier).Name.ToUpperInvariant()+" CLEARED";
         }
 
