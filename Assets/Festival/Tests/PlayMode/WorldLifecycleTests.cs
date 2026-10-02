@@ -658,6 +658,33 @@ namespace Festival.Tests
             finally{Object.Destroy(root);}
             yield return null;
         }
+        // HUD-6: once a level starts on either festival, no text in the world says shuttle, and the sign over the bus at the camp
+        // gate reads BACK TO CAMP. Camp's signs are read too, hidden as they are while the festival plays.
+        [UnityTest]public IEnumerator NoWorldTextSaysShuttleOnEitherFestival()
+        {
+            for(int festival=0;festival<Festival.Core.Festivals.Count;festival++)
+            {
+                var world=new GameObject("No shuttle world");world.AddComponent<FestivalWorld>();yield return null;
+                var host=new GameObject("No shuttle session");var session=host.AddComponent<Festival.Network.FestivalSession>();yield return null;
+                try
+                {
+                    session.Host("Tester",HostPort);
+                    float deadline=Time.realtimeSinceStartup+30;
+                    while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                    Assert.That(session.LocalPlayer,Is.Not.Null,"setup: host has a local player: "+session.Message);
+                    Simulation(session).State.FestivalIndex=festival;
+                    yield return StartLevel(session);
+                    string name=Festival.Core.Festivals.Name(festival);
+                    Assert.That(session.State.FestivalIndex,Is.EqualTo(festival),"setup: the level is on "+name);
+                    var texts=new List<string>();
+                    foreach(var text in Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None))texts.Add(text.text);
+                    Assert.That(texts.FindAll(t=>t.ToLowerInvariant().Contains("shuttle")),Is.Empty,name+": world text says shuttle");
+                    Assert.That(texts,Does.Contain("BACK TO CAMP"),name+": no sign reads BACK TO CAMP among "+string.Join(" | ",texts));
+                }
+                finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
+                yield return null;
+            }
+        }
         [UnityTest]public IEnumerator AwakeBuildsWorldAndCrowdWalksWithoutBlockingNavigation()
         {
             var root=new GameObject("Play test world");

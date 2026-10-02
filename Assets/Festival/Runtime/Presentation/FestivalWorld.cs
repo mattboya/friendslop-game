@@ -181,7 +181,7 @@ namespace Festival.Presentation
             ProxyBox("Shuttle doorway west",new Vector3(-2.65f,1.55f,-34.5f),new Vector3(2.7f,3,.2f),dark);
             ProxyBox("Shuttle doorway east",new Vector3(2.65f,1.55f,-34.5f),new Vector3(2.7f,3,.2f),dark);
             Visual("FestivalShuttle",new Vector3(0,0,-36));
-            Sign("LAST SHUTTLE",new Vector3(0,2.72f,-34.4f),dark,.14f,180);
+            Sign("BACK TO CAMP",new Vector3(0,2.72f,-34.4f),dark,.14f,180);
             for (int i=0;i<8;i++)
             {
                 float x = i%2==0 ? -33 : 33; float z=-28+(i/2)*17;
