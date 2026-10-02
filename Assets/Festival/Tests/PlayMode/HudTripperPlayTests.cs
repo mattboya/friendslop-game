@@ -339,6 +339,7 @@ namespace Festival.Tests
             yield return null;
             var failures=new List<string>();
             var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
+            var refresh=typeof(FestivalHud).GetField("nextActionRefresh",BindingFlags.NonPublic|BindingFlags.Instance);
             T Shown<T>(string name) where T:Component{foreach(var c in hud.GetComponentsInChildren<T>(false))if(c.name==name)return c;return null;}
             IEnumerator Tap(Key key)
             {
@@ -356,8 +357,9 @@ namespace Festival.Tests
                 var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
-                // A festivalgoer who sells, right beside you; confetti in hand and Sam in reach, so E would otherwise offer it.
-                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");sim.State.Npcs.RemoveAll(n=>n!=npc);
+                // A festivalgoer who sells, right beside you; confetti in hand and Sam in reach, so E would otherwise offer it (with no
+                // vision to check, whoever trips, or E would check by dancing instead).
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");sim.State.Npcs.RemoveAll(n=>n!=npc);sim.State.Visions.Clear();
                 npc.X=0;npc.Z=0;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.Role="Regular";npc.StockSold=0;
                 player.X=.6f;player.Z=0;player.Cash=50;mate.X=.6f;mate.Z=1.5f;
                 player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});player.EquippedItemId="confetti";
@@ -380,9 +382,18 @@ namespace Festival.Tests
                 }
 
                 // A dance: a stray E and a tap of G leave it going, and nothing is bought, offered or dropped.
+                // Even an E the moment it starts, while the action list still holds the offer to Sam: on a joined client the snapshot
+                // that starts it lands up to .2 s before the list next refreshes, and beside a night-market shelf it never does.
+                yield return new WaitForSeconds(.4f);
+                Assert.That(Shown<Text>("Prompt")?.text,Does.StartWith("Offer"),"setup: E offers Sam your confetti");
+                refresh.SetValue(view,float.MaxValue);
                 session.Command("Dance",npc.Id);
                 var dance=Doing();
                 Assert.That(dance?.Kind,Is.EqualTo("Dance"),"setup: you dance with the festivalgoer: "+session.Message);
+                yield return Tap(Key.E);
+                refresh.SetValue(view,0f);
+                if(Doing()?.Id!=dance.Id)failures.Add("dancing, E as it starts: it ended the dance ("+session.Message+")");
+                if(sim.State.Transfers.Count>0)failures.Add("dancing, E as it starts: E offered Sam your confetti");
                 yield return new WaitForSeconds(.4f);
                 if(primary.GetValue(view)!=null)failures.Add("dancing: E still runs an action");
                 var stop=Shown<Text>("Stop hold");
@@ -391,9 +402,12 @@ namespace Festival.Tests
                 yield return Tap(Key.E);
                 if(Doing()?.Id!=dance.Id)failures.Add("dancing: a stray E ended the dance ("+session.Message+")");
                 if(sim.State.Transfers.Count>0)failures.Add("dancing: a stray E offered Sam your confetti");
+                // The host refuses a drop mid-dance anyway; the HUD never asks, so no refusal pops up either.
+                string notice=session.Message;
                 yield return Tap(Key.G);
                 if(Doing()?.Id!=dance.Id)failures.Add("dancing: a tap of G ended the dance ("+session.Message+")");
                 if(!Confetti())failures.Add("dancing: a tap of G dropped your confetti");
+                if(session.Message!=notice)failures.Add("dancing: a tap of G asked to drop your confetti (\""+session.Message+"\")");
                 if(Doing()?.Id==dance.Id)yield return HoldG("dancing",dance);
 
                 // A buy: held for a second it stops, and the price held for it comes back.
