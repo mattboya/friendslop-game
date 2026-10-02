@@ -135,6 +135,9 @@ ART-2 (the playa map and per-festival layout in Core), the lying-down pose, char
 ## Hand-off: steps that may fall to Matt
 
 These are reported at the end, confirmed or struck out:
-- OK the merge of `art/festival-art` (into `claude/fun-loop`, then `main`) and the push.
-- Sign off on the look in a playthrough. This is part of PLAYTEST-1, and no automated check can stand in for it.
-- After the wave, the queue update: ART-1 done, the art freeze lifted. Entries specced around the freeze (for example CROWD-4 option B, VISION-4's primitive goblin shadow, POLO-5's primitive gondolas) can then be re-specced with real art.
+- **Confirmed.** OK the merge of `art/festival-art` (into `claude/fun-loop`, then `main`) and the push. Pushing uses the mattboya account.
+- **Confirmed.** Sign off on the look in a playthrough. This is part of PLAYTEST-1, and no automated check can stand in for it.
+- **Confirmed.** After the wave, the queue update: ART-1 done, the art freeze lifted. Entries specced around the freeze (for example CROWD-4 option B, VISION-4's primitive goblin shadow, POLO-5's primitive gondolas) can then be re-specced with real art.
+- **Note.** The night-market stall has no banner in the game, so `GOOD TIMES SUPPLY` (modelled in the source) isn't shown anywhere. Showing it needs a new in-game sign.
+
+Branch `art/festival-art` is ready to merge into `claude/fun-loop` (fast-forward). Task 14's gates all exit 0: domain, EditMode 201/201, PlayMode 69/69, `build-mac-development`, `native-smoke.mjs` and `native-solo-smoke.mjs`. The smoke's rhythm frame p95 is 17.2 ms, against 17.5 ms before the art.
