@@ -382,6 +382,97 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"Q on your stock:\n"+string.Join("\n",failures));
         }
 
+        // ECON-3 (Matt, 2026-10-01: "there is no button to actually sell to people"; the offer sat behind Esc and then CREW + NEARBY):
+        // beside a festivalgoer the prompt is what E does, and a strip under it lists everything else there, each on Esc. Esc opens the
+        // menu on that list, so one click sells, unless a chat is under way: its replies keep that spot. TAB is still the map. Hosts a
+        // real round at 1080p; the keys go through the HUD's own input handling on a virtual keyboard.
+        [UnityTest]public IEnumerator EverythingYouCanDoBesideSomeoneIsOnScreenOrOneEscAway()
+        {
+            UseAVirtualKeyboard("HUD nearby keyboard");
+            var world=new GameObject("HUD nearby world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD nearby");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            Text Find(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
+            string Read(string name)=>Find(name)?.text??"(hidden)";
+            void Expect(string where,string label,string expected){string shown=Read(label);if(shown!=expected)failures.Add(where+": "+label+" reads \""+shown.Replace("\n"," | ")+"\", expected \""+expected.Replace("\n"," | ")+"\"");}
+            void Fits(string where,string label)
+            {
+                var text=Find(label);if(text==null){failures.Add(where+": "+label+" is hidden");return;}
+                Canvas.ForceUpdateCanvases();
+                int shown=text.cachedTextGenerator.characterCountVisible;
+                if(shown<text.text.Length)failures.Add(where+": "+label+" box "+text.rectTransform.rect.size+" cuts \""+text.text.Replace("\n"," | ")+"\" after \""+text.text.Substring(0,shown).Replace("\n"," | ")+"\"");
+            }
+            bool Shows(string name,string parent=""){foreach(var t in hud.GetComponentsInChildren<Transform>(false))if(t.name==name&&(parent==""||t.parent.name==parent))return true;return false;}
+            string Listed(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name.StartsWith("Action:"))listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);
+                // Day 1, a Tongue Stamp in hand, a buyer in front of you on the open lawn (so lying down is listed last), nobody else about.
+                sim.State.Npcs.Clear();sim.State.Visions.Clear();
+                var buyer=new NpcState{Id="nearby_buyer_2",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true};sim.State.Npcs.Add(buyer);
+                player.X=0;player.Z=0;player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");
+                player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
+                yield return new WaitForSeconds(.6f);
+                const string Offer="Offer Tongue Stamps  •  F CHAT";
+                Expect("beside a buyer, holding stock","Prompt",Offer);
+                if(!Shows("E key","Action prompt"))failures.Add("beside a buyer, holding stock: the prompt shows no E key");
+                Expect("beside a buyer, holding stock","Nearby","ESC  Dance with festivalgoer\nESC  Chat with festivalgoer\nESC  Talk and keep the beat\nESC  "+FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"\nESC  "+FestivalHudText.LieDownAction);
+                Fits("beside a buyer, holding stock","Nearby");
+                // In the last minute of a day the sundown card (LOOP-5) comes up beside it, never over it.
+                RectTransform Card(string name){foreach(var r in hud.GetComponentsInChildren<RectTransform>(true))if(r.name==name)return r;return null;}
+                var strip=Card("Nearby actions");var sundown=Card("Sundown warning");
+                if(strip==null||sundown==null||strip.anchorMax.x>sundown.anchorMin.x&&strip.anchorMin.y<sundown.anchorMax.y)failures.Add("the strip overlaps the sundown card");
+                // Esc opens the menu on the list, and a click there sells.
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                if(!session.MenuOpen)failures.Add("Esc: the menu doesn't open");
+                Button offer=null;foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="Action:"+Offer)offer=b;
+                if(offer==null)failures.Add("Esc: the menu's list doesn't show \""+Offer+"\" (listed: \""+Listed()+"\")");
+                else
+                {
+                    offer.onClick.Invoke();yield return null;
+                    var sale=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                    if(sale?.Kind!="Sale"||sale.TargetId!=buyer.Id)failures.Add("Esc, then the offer: it starts "+(sale?.Kind??"nothing")+" ("+session.Message+")");
+                    session.Command("Cancel");
+                }
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                if(session.MenuOpen)failures.Add("Esc again: the menu stays open");
+                // Away from anyone, no strip; TAB still holds the map open.
+                player.X=10;
+                yield return new WaitForSeconds(.6f);
+                Expect("away from anyone","Nearby","(hidden)");
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.Tab));yield return null;yield return null;
+                if(!Shows("Map"))failures.Add("holding TAB: no map");
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+                // You trip, and chat to check your vision about the buyer: Esc opens the menu beside the chat, its replies clickable.
+                player.X=0;buyer.X=0;buyer.Z=1.5f;buyer.Suspicion=0;buyer.Mode="Blending";
+                sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="nearby_vision",Kind="Buyer",NpcId=buyer.Id});
+                session.Command("ConfirmChat",buyer.Id);
+                Assert.That(sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active")?.Kind,Is.EqualTo("ConfirmChat"),"setup: you chat to check your vision ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                yield return new WaitForSeconds(.4f);
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                if(!session.MenuOpen||window==null||!window.Open||Shows("Actions"))failures.Add("Esc mid-chat: menu "+(session.MenuOpen?"open":"shut")+", chat window "+(window!=null&&window.Open?"open":"shut")+", action list "+(Shows("Actions")?"over it":"hidden"));
+                session.MenuOpen=false;
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Beside someone:\n"+string.Join("\n",failures));
+        }
+
         // HUD-4: a menu left open at camp closes as the wheels start, so the spin is seen. While the wheels spin and the festival
         // loads, the host refuses every action, so the HUD offers none and 1, Q and G send nothing. A key being rebound keeps the
         // menu open as the festival opens. Hosts a real two-player round; the keys are pressed on a virtual keyboard, so they go

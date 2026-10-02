@@ -113,6 +113,12 @@ namespace Festival.Presentation
         // ECON-3: the stock the last Q asked about taking (TakesOnQ), and when; "" when none.
         private string qAsked="";
         private float qAskedAt;
+        // ECON-3: beside a festivalgoer or a cop, the strip under the prompt with what else you can do there, its line count as laid
+        // out, and the labels it is built from (kept, so the 5 Hz refresh reuses one list).
+        private GameObject nearbyPanel;
+        private Text nearby;
+        private int nearbyLines=-1;
+        private readonly List<string> nearbyLabels=new List<string>();
         // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice).
         private bool stopNoticed;
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
@@ -239,6 +245,10 @@ namespace Festival.Presentation
             prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
             // A shelf item's prompt carries its price and description, longer on Ember Playa.
             ShrinkToFit(prompt,14);
+            // ECON-3: beside a festivalgoer or a cop, what else you can do there, under the prompt; UpdateNearbyLayout sizes it. It stops
+            // short of the prompt's width, clear of LOOP-5's centred sundown card (x from .30, y .71-.775).
+            nearbyPanel=Card(root.transform,"Nearby actions",new Vector2(.022f,.70f),new Vector2(.295f,.769f),true);
+            nearby=Label(nearbyPanel.transform,"Nearby",16,TextAnchor.MiddleLeft);nearby.color=MutedPaper;Place(nearby.rectTransform,.04f,0,.97f,1);ShrinkToFit(nearby,12);nearbyPanel.SetActive(false);
             // The campfire debrief: the verdict on the round, a ballot row per award to click a friend on, who has voted, then
             // the verdict read out award by award where the ballot was.
             reviewPanel=Card(root.transform,"Camp round review",new Vector2(.25f,.20f),new Vector2(.75f,.84f),true);
@@ -542,7 +552,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -572,6 +582,7 @@ namespace Festival.Presentation
             viewValue.text=session.Profile.Data.ThirdPerson?"THIRD PERSON":"FIRST PERSON";
             promptPanel.SetActive(!showMenu&&!string.IsNullOrEmpty(prompt.text));
             promptKeycap.SetActive(primaryAction!=null);
+            nearbyPanel.SetActive(promptPanel.activeSelf&&nearby.text!="");
             UpdateKeyboard(state,player);
             UpdateRhythm(state,player);
             UpdateChat(state,player,showMenu);
@@ -579,7 +590,7 @@ namespace Festival.Presentation
             if(mapPanel.activeSelf){rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();}
             if(rhythmPanel.activeSelf&&!showMenu&&!mapPanel.activeSelf)
             {
-                objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);
+                objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);
             }
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
@@ -632,6 +643,14 @@ namespace Festival.Presentation
             // Night 2's everyone-home checklist grows the crew card downward, one row per line plus the card's padding,
             // so a one-row checklist (a solo crew) still shows its row under the header at 1080p.
             Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.876f-.024f*checklistLines:.846f,.978f,.882f);
+        }
+
+        // ECON-3: the strip hangs under the prompt, a line per action it lists.
+        private void UpdateNearbyLayout(int lines)
+        {
+            if(nearbyLines==lines)return;
+            nearbyLines=lines;
+            Place(Rect(nearbyPanel),.022f,.769f-.014f-.022f*lines,.295f,.769f);
         }
 
         private void UpdateTrippingLayout(int lines)
@@ -687,6 +706,8 @@ namespace Festival.Presentation
 
         private void UpdateKeyboard(RoundState state,PlayerState player)
         {
+            // ECON-3: Esc opens the menu on the action list, not behind CREW + NEARBY, unless a chat is under way: its replies take that spot.
+            if(session.Controls.Menu.WasPressedThisFrame()&&!session.Controls.Rebinding)crewOpen=state.Phase=="Playing"&&FestivalChatWindow.LiveChat(state,player)==null;
             if(state.Phase=="CampReview"&&!session.MenuOpen)
             {
                 int award=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
@@ -972,7 +993,7 @@ namespace Festival.Presentation
             shown|=DevelopmentMapVisible&&!session.MenuOpen;
 #endif
             mapShade.SetActive(shown);mapPanel.SetActive(shown);if(!shown)return;
-            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();
+            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();
             bool camp=state.Phase=="Shopping"||state.Phase=="Spinning";campMap.SetActive(camp);festivalMap.SetActive(!camp);
             mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";
             float x=camp?Mathf.InverseLerp(-30,30,player.X):Mathf.InverseLerp(-35,35,player.X);
@@ -1015,7 +1036,7 @@ namespace Festival.Presentation
         {
             if(Time.unscaledTime<nextActionRefresh)return;
             nextActionRefresh=Time.unscaledTime+.2f;
-            activeActionCount=0;primaryAction=null;
+            activeActionCount=0;primaryAction=null;nearby.text="";
             float y=.89f;
             if(player.CampVisitId!="")
             {
@@ -1216,6 +1237,10 @@ namespace Festival.Presentation
             string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
             if(riding!=""){prompt.text=riding;primaryAction=null;}
             else prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
+            // ECON-3: beside a festivalgoer or a cop, the strip lists what else there is, each a click away in the Esc menu's list.
+            nearbyLabels.Clear();
+            if(npc!=null&&primaryAction!=null)for(int i=0;i<activeActionCount;i++)nearbyLabels.Add(dynamicActions[i].name.Substring(7));
+            nearby.text=MoreActions(nearbyLabels);UpdateNearbyLayout(Mathf.Max(0,nearbyLabels.Count-1));
             FinishActions();
         }
         private void AddTwistActions(RoundState state,PlayerState player,ref float y){foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);}
@@ -1266,6 +1291,10 @@ namespace Festival.Presentation
         public static bool TakesOnQ(string item,string armed,float armedAt,float now)=>Catalog.FindItem(item)?.Category!="Stock"||item==armed&&now-armedAt<=TakeStockSeconds;
         public const float TakeStockSeconds=3;
         public const string TakeStockAgain="Q again to take it yourself (it's stock for selling)";
+        /// <summary>ECON-3 (Matt: "there is no button to actually sell to people"): the strip under the prompt beside a festivalgoer or a
+        /// cop. The prompt is the first action listed, on E; the strip lists the rest, each marked ESC, the key that opens the menu on
+        /// that list to click one. "" with nothing else to do there.</summary>
+        public static string MoreActions(List<string> actions){string lines="";for(int i=1;i<actions.Count;i++)lines+=(i>1?"\n":"")+"ESC  "+actions[i];return lines;}
         private void FinishActions(){for(int i=activeActionCount;i<dynamicActions.Count;i++)dynamicActions[i].SetActive(false);}
         private void SetPromptAction(string label,Action action){prompt.text=label.StartsWith("E  ")?label.Substring(3):label;primaryAction=action;}
         private string FocusedOffer(RoundState state,PlayerState player)

@@ -117,6 +117,16 @@ namespace Festival.Tests
             Assert.That(FestivalHud.TakeStockAgain,Is.EqualTo("Q again to take it yourself (it's stock for selling)"));
         }
 
+        // ECON-3 (Matt: "there is no button to actually sell to people"): beside someone, the prompt is the first action, on E, and
+        // the strip under it lists the rest, each on Esc, which opens the menu on the list. With nothing else to do there, no strip.
+        [Test] public void TheStripUnderThePromptListsTheRestOnEsc()
+        {
+            var actions=new List<string>{"Offer Tongue Stamps  •  F CHAT","Dance with festivalgoer","Buy Fun Guys  •  $5"};
+            Assert.That(FestivalHud.MoreActions(actions),Is.EqualTo("ESC  Dance with festivalgoer\nESC  Buy Fun Guys  •  $5"));
+            Assert.That(FestivalHud.MoreActions(new List<string>{"Talk to security"}),Is.Empty,"the prompt says it all");
+            Assert.That(FestivalHud.MoreActions(new List<string>()),Is.Empty);
+        }
+
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
         {
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.
