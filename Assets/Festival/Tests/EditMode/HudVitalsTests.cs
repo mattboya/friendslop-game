@@ -60,5 +60,28 @@ namespace Festival.Tests
             you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,RemainingSeconds=431});
             Assert.That(FestivalHudText.Condition(s,you),Does.StartWith("CROWD 90 / SWARMING").And.Contain("DOSE 431S"),"the effects still follow the warning");
         }
+
+        // PLAYA-3: in an Ember Playa dust storm everyone, security too, sees only 5 m, so the card says so where it would read
+        // CROWD CLEAR. A client works the storm out from its own view (festival, spin seed and clock), as the host does. Any real
+        // warning still outranks it, and effects still trail it.
+        [Test] public void ADustStormTakesThePlaceOfCrowdClear()
+        {
+            var s=new RoundState{Phase="Playing",FestivalIndex=Festivals.PlayaFestival,SpinSeed=12345};var you=new PlayerState{Id="you",Name="You"};s.Players.Add(you);
+            double storm=-1;for(double t=0;t<Festivals.NightSeconds&&storm<0;t++){s.ElapsedSeconds=t;if(FestivalSimulation.DustStorm(s))storm=t;}
+            Assert.That(storm,Is.GreaterThan(0),"setup: this level calms at first, then a storm rolls in");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("DUST STORM: SEEN ONLY WITHIN 5 M"),"a storm with nothing else to report");
+            s.ElapsedSeconds=0;
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"calm air is clear");
+            s.ElapsedSeconds=storm;var arrester=new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",TargetId="you"};s.Npcs.Add(arrester);
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ARREST WARNING"),"a cop about to detain you outranks the storm");
+            s.Npcs.Remove(arrester);var wook=new NpcState{Id="wook",Kind="Wook",Mode="Blending",Suspicion=3};s.Npcs.Add(wook);
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 3 / BLENDING"),"so does any suspicion in the crowd");
+            s.Npcs.Remove(wook);you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,RemainingSeconds=431});
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("DUST STORM: SEEN ONLY WITHIN 5 M  •  DOSE 431S"),"a dosed player's effects follow the storm line");
+            you.Effects.Clear();s.Phase="CampReview";
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"back at camp the storm stays at the festival");
+            s.Phase="Playing";s.FestivalIndex=Festivals.PoloFestival;
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"Palm Mirage has no dust at the same moment");
+        }
     }
 }
