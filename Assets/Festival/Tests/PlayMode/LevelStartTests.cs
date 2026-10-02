@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -84,12 +83,6 @@ namespace Festival.Tests
                 Assert.That(phases,Is.EqualTo(EveryStep),"the friend's view passes through the spin and loading, in order");
                 Assert.That(friend.State.TripperId,Is.EqualTo(sim.State.TripperId),"and shows who the spin picked");
                 Assert.That(sim.Player(friendId).MapReady,Is.True,"the friend's own client reported its map loaded");
-                // FestivalSession.Leave asks NGO to shut down, which it does on its next update, and destroys the transport at once,
-                // so a client's late disconnect reaches a disposed driver and logs an exception. Let the friend's shutdown finish first.
-                var manager=typeof(FestivalSession).GetField("manager",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(friend);
-                manager.GetType().GetMethod("Shutdown").Invoke(manager,new object[]{false});
-                var listening=manager.GetType().GetProperty("IsListening");
-                for(deadline=Time.realtimeSinceStartup+10;(bool)listening.GetValue(manager)&&Time.realtimeSinceStartup<deadline;)yield return null;
             }
             finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
             yield return null;

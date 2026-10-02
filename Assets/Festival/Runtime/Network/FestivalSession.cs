@@ -706,10 +706,20 @@ namespace Festival.Network
         private void TransportFailed(){if(!closing)Fail("Network transport failed. Leave and try another port or host address.");}
         private void Fail(string message){Leave();Message=message;}
         public void SetMessage(string message){Message=message;}
+        // NET-3: NGO shuts a manager down on its next network update (a host first waits up to 5 s for its friends to drop). Destroyed
+        // before then, the transport went first and the manager's own shutdown sent a friend's disconnect through the disposed driver,
+        // logging an ObjectDisposedException. So the manager's GameObject goes once NGO reports it stopped. That hangs on the manager,
+        // not this session, so it still runs if this session is destroyed first; and manager is let go at once so Host or Join work
+        // straight away. ponytail: OnClientStopped alone, as a session is always a host or a client, never a dedicated server.
         public void Leave()
         {
             closing=true;Connecting=false;Voice.Leave();
-            if(manager!=null){manager.OnClientConnectedCallback-=PeerConnected;manager.OnClientDisconnectCallback-=PeerDisconnected;manager.OnTransportFailure-=TransportFailed;manager.Shutdown();Destroy(manager.gameObject);manager=null;}
+            if(manager!=null)
+            {
+                var stopping=manager;manager=null;
+                stopping.OnClientConnectedCallback-=PeerConnected;stopping.OnClientDisconnectCallback-=PeerDisconnected;stopping.OnTransportFailure-=TransportFailed;stopping.Shutdown();
+                if(stopping.IsListening)stopping.OnClientStopped+=_=>Destroy(stopping.gameObject);else Destroy(stopping.gameObject);
+            }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
             if(firstPersonHands!=null){Destroy(firstPersonHands.gameObject);firstPersonHands=null;}
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
