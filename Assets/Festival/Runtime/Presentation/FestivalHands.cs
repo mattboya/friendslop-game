@@ -33,6 +33,13 @@ namespace Festival.Presentation
         string unpaidId="",equippedId="";
         int previousCash=-1;
         float handoffAt=-10;
+        // POI-2: in a poi performance both hands ride one loop round, in step with the right hand's poi, this far across and up
+        // each way (camera metres). They are one mesh, so they cannot mirror the way the two heads do.
+        const float LoopAcross=.03f,LoopUp=.04f;
+        /// <summary>POI-2: the player's reduced-motion setting, which halves the hands' poi loop.</summary>
+        public bool ReducedMotion;
+        bool performing;
+        float swing;
         public static FestivalHands Create(Camera camera,string playerId)
         {
             var prefab=Resources.Load<GameObject>("FestivalHands");
@@ -155,7 +162,7 @@ namespace Festival.Presentation
             bool showPoi=wanted!=""&&(alive||poi);
             foreach(var rig in new[]{leftPoi,rightPoi})
                 if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi;}
-            carryPoi=!poi;
+            carryPoi=!poi;performing=poi;
             if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !showPoi && held=="");
             if(unpaidProp!=null)unpaidProp.SetActive(alive&&!poi);
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&alive);
@@ -210,6 +217,9 @@ namespace Festival.Presentation
             float present=Mathf.Sin(handoff*Mathf.PI)*.12f+(presenting?.06f:0);
             var motion=new Vector3(turnSway+Mathf.Sin(walkPhase)*movement*.014f,
                 Mathf.Sin(Time.time*2.1f)*.004f+Mathf.Sin(walkPhase*2)*movement*.009f,present);
+            // POI-2: performing, the hands swing the poi round on the right poi's own orbit, easing in and out with the raise.
+            swing=Mathf.Lerp(swing,performing?(ReducedMotion?.5f:1f):0,blendPose);
+            if(rightPoi!=null){var loop=rightPoi.HandLoop;motion+=new Vector3(loop.x*LoopAcross,loop.y*LoopUp,0)*swing;}
             transform.localPosition=rest+motion;
             // Attachment offsets use the same Blender Rest morph displacement.
             if(attachments!=null)attachments.localPosition=motion+LoweredGrip*restRight;

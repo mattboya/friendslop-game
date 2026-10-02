@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -168,6 +169,149 @@ namespace Festival.Tests
                 Assert.That(low,Is.LessThan(-.5f));Assert.That(high,Is.GreaterThan(.5f));
             }
             finally{Object.Destroy(root);}
+        }
+        // The circular mean of a run of angle differences in degrees, and how far apart its extremes lie.
+        static (float Mean,float Spread) Steadiness(List<float> differences)
+        {
+            float sin=0,cos=0;
+            foreach(var d in differences){sin+=Mathf.Sin(d*Mathf.Deg2Rad);cos+=Mathf.Cos(d*Mathf.Deg2Rad);}
+            float mean=Mathf.Atan2(sin,cos)*Mathf.Rad2Deg,low=0,high=0;
+            foreach(var d in differences){float off=Mathf.DeltaAngle(mean,d);low=Mathf.Min(low,off);high=Mathf.Max(high,off);}
+            return (mean,high-low);
+        }
+        // Where a point sits on its loop, in degrees: across its own sweep (x) and up it (y), each scaled to the sweep's size.
+        static float LoopAngle(Vector3 point,Bounds sweep)
+        {
+            var p=point-sweep.center;
+            return Mathf.Atan2(p.x/Mathf.Max(.0001f,sweep.extents.x),p.y/Mathf.Max(.0001f,sweep.extents.y))*Mathf.Rad2Deg;
+        }
+        // POI-2: Matt saw the heads whirl while the arms never drove them. In a performance each hand swings round a loop of its
+        // own, about 15-25 cm across, a steady step ahead of its head, so the arms read as swinging the poi.
+        [UnityTest]public IEnumerator PoiPerformanceHandsLeadTheirHeads()
+        {
+            var root=new GameObject("Poi hands test");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var actor=FestivalCharacter.Create(root.transform,"Poi hands performer",Color.white);
+                actor.Pose="Poi";yield return new WaitForSeconds(.5f);
+                var rigs=actor.GetComponentsInChildren<FestivalPoiRig>();
+                Assert.That(rigs.Length,Is.EqualTo(2));
+                var hands=new[]{new List<Vector3>(),new List<Vector3>()};var heads=new[]{new List<float>(),new List<float>()};
+                for(float start=Time.time;Time.time-start<2f;)
+                {
+                    yield return null;
+                    for(int i=0;i<2;i++)
+                    {
+                        // Each rig hangs from the hand bone that holds it.
+                        hands[i].Add(actor.transform.InverseTransformPoint(rigs[i].transform.parent.position));
+                        var rope=rigs[i].GetComponent<LineRenderer>();var cord=rope.GetPosition(1)-rope.GetPosition(0);
+                        heads[i].Add(Mathf.Atan2(Vector3.Dot(cord,actor.transform.right),Vector3.Dot(cord,actor.transform.up))*Mathf.Rad2Deg);
+                    }
+                }
+                for(int i=0;i<2;i++)
+                {
+                    string hand=rigs[i].transform.parent.name;
+                    var sweep=new Bounds(hands[i][0],Vector3.zero);foreach(var p in hands[i])sweep.Encapsulate(p);
+                    var leads=new List<float>();float turning=0;
+                    for(int k=0;k<hands[i].Count;k++)
+                    {
+                        leads.Add(Mathf.DeltaAngle(heads[i][k],LoopAngle(hands[i][k],sweep)));
+                        if(k>0)turning+=Mathf.DeltaAngle(heads[i][k-1],heads[i][k]);
+                    }
+                    var (lead,spread)=Steadiness(leads);
+                    Debug.Log($"[Festival.Test] {hand} poi hand sweep={sweep.size.x:F3}/{sweep.size.y:F3}/{sweep.size.z:F3} centre={sweep.center} lead={lead*Mathf.Sign(turning):F0}deg spread={spread:F0}deg");
+                    int directions=(sweep.size.x>=.12f?1:0)+(sweep.size.y>=.12f?1:0)+(sweep.size.z>=.12f?1:0);
+                    Assert.That(directions,Is.GreaterThanOrEqualTo(2),hand+" should swing round a loop, not sit still: "+sweep.size.ToString("F3"));
+                    Assert.That(Mathf.Max(sweep.size.x,sweep.size.y,sweep.size.z),Is.LessThan(.3f),hand+" should work its poi close in front, not flail: "+sweep.size.ToString("F3"));
+                    Assert.That(spread,Is.LessThan(45f),hand+" should keep a steady step on its own head");
+                    // Ahead by under a quarter turn: the hand pulls its head round. Half a turn out, it fights it.
+                    Assert.That(lead*Mathf.Sign(turning),Is.InRange(0f,90f),hand+" should lead its head round, not trail or fight it");
+                }
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(root);}
+        }
+        static Vector3[] Baked(SkinnedMeshRenderer skin,Mesh baked)
+        {
+            skin.BakeMesh(baked,true);var points=baked.vertices;
+            for(int i=0;i<points.Length;i++)points[i]=skin.transform.TransformPoint(points[i]);
+            return points;
+        }
+        // POI-2: in first person your own hands swing round with the poi too, each rope still starting at the palm that holds it,
+        // and they settle back to rest when the performance ends.
+        [UnityTest]public IEnumerator FirstPersonPoiHandsMoveWithTheSpin()
+        {
+            var root=new GameObject("First-person poi performance camera");var baked=new Mesh();Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(root.AddComponent<Camera>(),"poi_performance_hands");
+                var rest=hands.transform.localPosition;
+                hands.SetState(new Festival.Core.PlayerState{Id="poi_performance_hands",Life="Alive",VisualPose="Poi"});
+                yield return new WaitForSeconds(.8f);
+                var skin=System.Array.Find(hands.GetComponentsInChildren<SkinnedMeshRenderer>(),r=>r.enabled&&r.name.StartsWith("HandsSkin_"));
+                Assert.That(skin,Is.Not.Null);
+                var rigs=root.GetComponentsInChildren<FestivalPoiRig>();
+                Assert.That(rigs.Length,Is.EqualTo(2));
+                // Left hand's poi first, then the right's.
+                System.Array.Sort(rigs,(a,b)=>root.transform.InverseTransformPoint(a.transform.position).x.CompareTo(root.transform.InverseTransformPoint(b.transform.position).x));
+                var cords=System.Array.ConvertAll(rigs,r=>r.GetComponent<LineRenderer>());
+                // Each rope starts beside a point of the hand holding it, and has to ride along with that point.
+                var mesh=Baked(skin,baked);var palms=new int[2];var grips=new Vector3[2];
+                for(int i=0;i<2;i++)
+                {
+                    var start=cords[i].GetPosition(0);float nearest=float.MaxValue;
+                    for(int v=0;v<mesh.Length;v++){float d=(mesh[v]-start).sqrMagnitude;if(d<nearest){nearest=d;palms[i]=v;}}
+                    grips[i]=start-mesh[palms[i]];
+                }
+                var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);var heads=new List<float>();var loop=new List<Vector3>();
+                float drift=0;
+                for(float start=Time.time;Time.time-start<2f;)
+                {
+                    yield return null;
+                    sweep.Encapsulate(hands.transform.localPosition);loop.Add(hands.transform.localPosition);
+                    // The camera hands ride one loop together, in step with the right hand's poi.
+                    var cord=cords[1].GetPosition(1)-cords[1].GetPosition(0);
+                    heads.Add(Mathf.Atan2(Vector3.Dot(cord,root.transform.right),Vector3.Dot(cord,root.transform.up))*Mathf.Rad2Deg);
+                    mesh=Baked(skin,baked);
+                    for(int i=0;i<2;i++)drift=Mathf.Max(drift,Vector3.Distance(cords[i].GetPosition(0)-mesh[palms[i]],grips[i]));
+                }
+                var leads=new List<float>();for(int k=0;k<loop.Count;k++)leads.Add(Mathf.DeltaAngle(heads[k],LoopAngle(loop[k],sweep)));
+                var (lead,spread)=Steadiness(leads);
+                Debug.Log($"[Festival.Test] first-person poi hands sweep={sweep.size.x:F3}/{sweep.size.y:F3}/{sweep.size.z:F3} lead={lead:F0}deg spread={spread:F0}deg grip drift={drift:F4}");
+                Assert.That(Mathf.Max(sweep.size.x,sweep.size.y,sweep.size.z),Is.GreaterThanOrEqualTo(.05f),"The hands should swing round with the poi: "+sweep.size.ToString("F3"));
+                Assert.That(drift,Is.LessThan(.01f),"Each rope should still start at its palm");
+                Assert.That(spread,Is.LessThan(45f),"The hands should keep a steady step on the right hand's poi");
+                hands.SetState(new Festival.Core.PlayerState{Id="poi_performance_hands",Life="Alive"});
+                yield return new WaitForSeconds(.8f);
+                Assert.That(Vector3.Distance(hands.transform.localPosition,rest),Is.LessThan(.01f),"The hands settle back once the performance ends");
+                for(int i=0;i<skin.sharedMesh.blendShapeCount;i++)
+                    if(skin.sharedMesh.GetBlendShapeName(i).EndsWith("RestL")||skin.sharedMesh.GetBlendShapeName(i).EndsWith("RestR"))
+                        Assert.That(skin.GetBlendShapeWeight(i),Is.GreaterThan(99),"Both arms lower once the performance ends");
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(baked);Object.Destroy(root);}
+        }
+        // How far the camera hands travel over two seconds, along their widest direction.
+        static IEnumerator HandSweep(FestivalHands hands,float[] result)
+        {
+            var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);
+            for(float start=Time.time;Time.time-start<2f;){yield return null;sweep.Encapsulate(hands.transform.localPosition);}
+            result[0]=Mathf.Max(sweep.size.x,sweep.size.y,sweep.size.z);
+        }
+        // POI-2: reduced motion keeps the first-person poi loop but halves it.
+        [UnityTest]public IEnumerator ReducedMotionHalvesTheFirstPersonPoiLoop()
+        {
+            var root=new GameObject("Reduced-motion poi camera");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(root.AddComponent<Camera>(),"poi_reduced_hands");
+                hands.SetState(new Festival.Core.PlayerState{Id="poi_reduced_hands",Life="Alive",VisualPose="Poi"});
+                var full=new float[1];var reduced=new float[1];
+                yield return new WaitForSeconds(.8f);yield return HandSweep(hands,full);
+                hands.ReducedMotion=true;
+                yield return new WaitForSeconds(.8f);yield return HandSweep(hands,reduced);
+                Debug.Log($"[Festival.Test] first-person poi loop full={full[0]:F3} reduced={reduced[0]:F3}");
+                Assert.That(reduced[0],Is.InRange(full[0]*.4f,full[0]*.6f),"Reduced motion should halve the hands' loop, not stop it");
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(root);}
         }
         [UnityTest]public IEnumerator DanceMovesShinsAsWellAsArmsWithoutMovingGameplayRoot()
         {

@@ -88,6 +88,8 @@ namespace Festival.Presentation
         public bool Giggling;
         public bool RedEyes { get; private set; }
         FestivalPoiRig poiLeft,poiRight;
+        // POI-2: how far the wrists have eased onto their poi loops, 0-1.
+        float poiSwing;
         string carriedPoi="",poiPairItem="";
         GameObject equippedProp;
         string equippedId="",requestedItem="",offeredItem="",receivedItem="";
@@ -668,6 +670,14 @@ namespace Festival.Presentation
                 var hand=bones["HandR"];
                 var target=Vector3.Lerp(hand.position,exchangeTarget+hand.up*.05f,exchangeWeight);
                 FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],hand,target,1);
+            }
+            // POI-2: performing poi, or dancing with them, each wrist swings round its own loop in step with its head, and the
+            // shoulder and elbow follow it (elbows down and in, as at the DJ deck). It eases in and out over a quarter second.
+            poiSwing=Mathf.MoveTowards(poiSwing,performingPoi||dancingPoi?1:0,animationDelta*4);
+            if(poiSwing>.001f&&bones.Count==15&&poiLeft!=null&&poiRight!=null)
+            {
+                FestivalDjHandContact.Reach(transform,bones["ArmL"],bones["ForearmL"],bones["HandL"],Vector3.Lerp(bones["HandL"].position,poiLeft.Wrist(),poiSwing),-1);
+                FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],bones["HandR"],Vector3.Lerp(bones["HandR"].position,poiRight.Wrist(),poiSwing),1);
             }
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
             {

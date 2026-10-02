@@ -643,7 +643,7 @@ namespace Festival.Network
                 else pitch=preLiePitch;
                 wasLying=lying;
             }
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying);firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed a glide (1/20 s, the eye's)
             // ahead of the seat so the glide keeps it there as it turns; the mouse still aims it, and the turn ends back by the base.

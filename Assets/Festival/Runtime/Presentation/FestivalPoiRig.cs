@@ -23,6 +23,29 @@ namespace Festival.Presentation
         /// <summary>Butterfly speed in radians per second; a dance sets its own beat.</summary>
         public float SpinRate=9f;
         float carryAngle,spinUp;
+        // POI-2: the hand holding a poi runs this far (radians) ahead of its head's orbit round its own loop. With the head's own
+        // lag behind that orbit, the hand leads the head by about 50 degrees, so it reads as pulling the head round, not chasing it.
+        const float HandLead=.5f;
+        /// <summary>POI-2: the angle this poi's head is swung round at in a butterfly, in radians. The hands follow it in both views.</summary>
+        public float OrbitAngle=>Time.time*SpinRate+motionPhase;
+        /// <summary>POI-2: where the hand holding this poi sits on its loop, as a unit circle across (the performer's right, mirrored
+        /// for the left hand as its head is) and up, a step ahead of the head.</summary>
+        public Vector2 HandLoop
+        {
+            get{float angle=OrbitAngle+HandLead;return new Vector2((side==0?-1f:1f)*Mathf.Sin(angle),Mathf.Cos(angle));}
+        }
+        // POI-2: a performer works each poi round a loop in front of the chest: its centre in the performer's own space for the
+        // left hand, which sits on the performer's +X side (the right hand's mirrors it), and its radius, both at the performer's scale.
+        static readonly Vector3 WristLoopCentre=new Vector3(.18f,1.32f,.45f);
+        const float WristLoopRadius=.1f;
+        /// <summary>POI-2: where the performer's wrist holding this poi belongs right now, in world space: round its loop, in step
+        /// with its head. Camera hands ride a loop of their own.</summary>
+        public Vector3 Wrist()
+        {
+            var loop=HandLoop;
+            return performer.TransformPoint(new Vector3((side==0?1:-1)*WristLoopCentre.x+loop.x*WristLoopRadius,
+                WristLoopCentre.y+loop.y*WristLoopRadius,WristLoopCentre.z));
+        }
 
         public static FestivalPoiRig Create(Transform parent,Vector3 grip,int side,bool led,bool firstPerson=false)
         {
@@ -78,7 +101,7 @@ namespace Festival.Presentation
                     // through the same high/low beat, while their lateral
                     // travel mirrors across the performer's center line.
                     // Smooth following supplies lag without stretching the cord.
-                    float angle=Time.time*SpinRate+motionPhase;spinUp=0;
+                    float angle=OrbitAngle;spinUp=0;
                     float mirroredSide=side==0?-1f:1f;
                     // A small outward bias keeps the two weighted heads from
                     // occupying the same point at the top of the circle.
