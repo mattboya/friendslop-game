@@ -732,7 +732,9 @@ namespace Festival.Presentation
                 case "Detained":return ("DetainedEscort",true,false,1);
                 case "Extract":return ("Cheer",true,false,1);
                 case "Watching":return ("WookStare",false,false,1);
-                case "Questioning":return ("Talk",true,false,1);
+                // DIALOG-3: a player in a sale, a buy, a chat or a talk with security (FestivalSimulation.Talks) talks, as a
+                // questioning festivalgoer does.
+                case "Questioning":case "Sale":case "Buy":case "Conversation":case "Police":return ("Talk",true,false,1);
                 case "Accusing":return ("WookLockedOn",true,false,1);
                 case "Swarming":return ("SwarmLunge",true,false,1);
                 case "Exchange":return ("Handoff",false,false,1);

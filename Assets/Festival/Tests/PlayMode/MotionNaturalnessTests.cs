@@ -232,6 +232,32 @@ namespace Festival.Tests
             finally{Object.Destroy(root);}
         }
 
+        // DIALOG-3: a player selling, buying, chatting or talking to security talks: FestivalSession.ViewFor shows them in their talk's
+        // own kind, and their upper body plays the Talk clip a questioning festivalgoer uses, never the bare standing pose. Actors of
+        // one name share their phase, so the same clip shows the same frame on each.
+        [UnityTest]public IEnumerator ATalkerPlaysTheTalkClip()
+        {
+            var root=new GameObject("Talk pose test");
+            try
+            {
+                var questioning=Walker(root,"Talker");questioning.Pose="Questioning";
+                var talkers=new Dictionary<string,FestivalCharacter>();int index=1;
+                foreach(var kind in new[]{"Sale","Buy","Conversation","Police"})
+                {
+                    Assert.That(FestivalSimulation.Talks(kind),Is.True,"setup: a "+kind+" is a talk");
+                    var talker=Walker(root,"Talker");talker.transform.position=Vector3.right*(2.5f*index++);talker.Pose=kind;talkers[kind]=talker;
+                }
+                yield return new WaitForSeconds(1);
+                foreach(var pair in talkers)
+                {
+                    float off=0;
+                    for(int i=1;i<=8;i++){string bone=FestivalMotionLibrary.Bones[i];off=Mathf.Max(off,Quaternion.Angle(Bone(questioning,bone).localRotation,Bone(pair.Value,bone).localRotation));}
+                    Assert.That(off,Is.LessThan(2f),"a "+pair.Key+" talks with the Talk clip: its upper body is "+off.ToString("F1")+" degrees off it");
+                }
+            }
+            finally{Object.Destroy(root);}
+        }
+
         // Largest angle any cord swings away from straight down, sampled over a window.
         static IEnumerator HangSwing(LineRenderer[] cords,float seconds,float[] result)
         {
