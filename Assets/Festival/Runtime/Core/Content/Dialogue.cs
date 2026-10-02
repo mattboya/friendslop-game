@@ -9,109 +9,33 @@ namespace Festival.Core
         public string Speaker = "Wook", Tone = "Playful", Prerequisites = "Context eligible", Locale = "en", Status = "Draft";
         public int Difficulty = 1, ContentRevision = 1;
     }
+    // DIALOG-4: a challenge's line is built by FestivalLines' grammar from its context's kind, and its awkward twin (what the player
+    // blurts instead while affected) from the context's "_awkward" kind. Thousands of each, so DialogueHistory picks a fresh one.
     public static class DialogueCatalog
     {
-        public static readonly DialogueLine[] Lines = Build();
-        public static DialogueLine Find(string id) { foreach(var line in Lines) if(line.Id==id) return line; return null; }
-        private static DialogueLine[] Build()
-        {
-            var result=new List<DialogueLine>();
-            Add(result,"greeting",new[] {
-                "Your hat looks like it knows the next set.|My hat has declined to comment.",
-                "We saved a patch of grass for good company.|I brought a company. It sells grass.",
-                "You made it! The entrance keeps moving in my memory.|I entered through the concept of a fence.",
-                "Excellent wristband energy. Very convincing wrist.|I practiced this wrist all week.",
-                "Are you with the people carrying the enormous pear?|I represent several smaller pears.",
-                "Welcome to our extremely unofficial meeting spot.|I have prepared unofficial minutes.",
-                "That bass just rearranged my afternoon.|My afternoon is now in alphabetical order.",
-                "You look like you could recommend a good cloud.|I only review indoor clouds."
-            });
-            Add(result,"dance",new[] {
-                "Follow my feet; ignore my elbows.|My elbows have started a separate project.",
-                "This move is called finding your tent at midnight.|Mine is called apologizing to the wrong tent.",
-                "Small steps, enormous confidence.|I ordered those sizes the other way around.",
-                "Catch the beat before it wanders off.|I caught a nearby administrative rhythm.",
-                "Give the speakers a respectful little nod.|I bowed to a bin by mistake.",
-                "Let's make a circle with an excellent exit plan.|I have made a rectangle of concern.",
-                "The next four beats belong to us.|I leased the wrong four beats.",
-                "Match this shuffle and we'll call it choreography.|I call mine a footwear inspection."
-            });
-            Add(result,"suspicion",new[] {
-                "You keep counting us. Is it a dance thing?|Yes. This dance requires an accurate census.",
-                "Why are your pockets standing at attention?|They were promoted this morning.",
-                "That's a very official way to hold a lemonade.|I have a permit for this elbow.",
-                "You asked where the exits were before the stages.|I am a passionate exit enthusiast.",
-                "Nobody here calls it a recreational gathering.|My recreational vocabulary is buffering.",
-                "Relax your shoulders; they look like they're taking notes.|They insist these are only minutes.",
-                "Who exactly sent you to our little dance patch?|A committee of extremely relaxed people.",
-                "You nodded on the silence. Explain the confidence.|I was following the premium invisible beat."
-            });
-            Add(result,"sale",new[] {
-                "One little festival curiosity, at the price we agreed.|I have forgotten which end of a deal this is.",
-                "Keep it simple: one unit, one exchange.|I prepared a thirty-slide explanation.",
-                "You have the stock? I've got the agreed cash.|I brought a receipt for my confidence.",
-                "Let's finish before my friends relocate again.|My friends relocated my ability to count.",
-                "No rush. Just keep your hands where we can see them.|These are my presentation hands.",
-                "Same terms as the sign, no surprise extras.|The surprise is my sudden formal accent.",
-                "We can trade after this beat lands.|I believe the beat missed its connecting flight.",
-                "That's the one. Nice and straightforward.|I have made it diagonally complicated."
-            });
-            // ECON-2: a festivalgoer selling to you, so none of the sale pool's "I've got the agreed cash".
-            Add(result,"buy",new[] {
-                "Cash first, then the little curiosity. House rules.|I brought cash and a strong opinion about rules.",
-                "One unit, one exchange, nobody makes a speech.|I have prepared a short speech about exchanges.",
-                "You want the usual? I only carry the usual.|I would like the unusual, but casually.",
-                "Keep the money low and the eye contact friendly.|My eye contact has gone fully corporate.",
-                "Dance like we're old friends and nobody looks twice.|We have been friends since the start of this sentence.",
-                "The price is on the sign. The sign is in my head.|I read the sign in your head. It said hello.",
-                "Quick and quiet. The bass will cover us.|I have asked the bass to keep a secret.",
-                "Just the one? Easy. Hold it like a souvenir.|I am holding it like a very small trophy."
-            });
-            Add(result,"police",new[] {
-                "Let's step aside and clear up what I observed.|Certainly. Which side is the clearing-up side?",
-                "Please keep the walkway clear while we talk.|I was supervising its walkability.",
-                "I need a straight answer about that exchange.|My answer has one small roundabout.",
-                "Your dance score doesn't change what I witnessed.|Could it at least improve the paperwork font?",
-                "Stay here while I explain the next step.|I have several unrelated steps prepared.",
-                "That merchandise bag isn't an exemption from a search.|The bag will be disappointed in its career.",
-                "We'll handle this calmly. Listen to the instructions.|My calm is arriving on the next shuttle.",
-                "Your friends can help through the release desk.|Can they bring my less suspicious shoulders?"
-            });
-            Add(result,"medical",new[] {
-                "Take a breath. We'll handle one problem at a time.|I numbered my problems with confetti.",
-                "A wristband tells us which friend needs help.|Good. My description was mostly hat noises.",
-                "The voucher clears an effect; revival is separate.|I filed those under one very large feeling.",
-                "No cash? There is a recovery task you can do.|At last, a task priced in effort.",
-                "Stay near the tent until we finish helping.|I will be aggressively stationary.",
-                "Your friend gets another chance, not another wallet.|Their wallet has chosen a solo career.",
-                "The release marker goes to the holding desk.|I nearly gave it to a very official tree.",
-                "You're back on your feet. Give yourself a moment.|These feet and I are renegotiating terms."
-            });
-            return result.ToArray();
-        }
-        private static void Add(List<DialogueLine> target,string context,string[] texts)
-        {
-            for(int i=0;i<texts.Length;i++) { var pair=texts[i].Split('|'); target.Add(new DialogueLine { Id=context+"_"+(i+1).ToString("D2"),Context=context,Text=pair[0],AwkwardText=pair[1],Speaker=context=="police"?"Cop":context=="medical"?"Medic":"Wook",Difficulty=context=="suspicion"||context=="police"?2:1 }); }
-        }
+        public static readonly string[] Contexts={"greeting","dance","suspicion","sale","buy","police","medical"};
     }
     [Serializable] public sealed class DialogueHistory
     {
         // Oldest first. Selection never changes history; only acknowledged displayed lines do.
         public List<string> Seen=new List<string>();
         public List<string> AcknowledgedDeliveries=new List<string>();
-        public DialogueLine Select(string context,int seed) => Select(context,seed,null);
-        public DialogueLine Select(string context,int seed,ICollection<string> reserved)
+        // DIALOG-4: a draw this player has seen (Seen holds the last 512 lines shown to them), or that another live challenge holds
+        // (reserved), is drawn again from the same stream, up to Redraws more times; then the last draw stands.
+        public const int Redraws=5;
+        // A line's key: its kind and an FNV-1a hash of its words, short enough for the profile and the session's 64-letter limit.
+        public static string Key(string kind,string text) { ulong hash=14695981039346656037UL; foreach(char c in text??"") hash=unchecked((hash^c)*1099511628211UL); return kind+"_"+hash.ToString("x16"); }
+        public string Fresh(LineGrammar grammar,string kind,int festival,ContentRandom random,ICollection<string> reserved=null)
         {
-            var eligible=new List<DialogueLine>();
-            foreach(var line in DialogueCatalog.Lines) if(line.Context==context) eligible.Add(line);
-            if(eligible.Count==0) return null;
-            var available=eligible.FindAll(line=>reserved==null||!reserved.Contains(line.Id));
-            if(available.Count==0) available=eligible;
-            var unseen=available.FindAll(line=>Seen==null||!Seen.Contains(line.Id));
-            if(unseen.Count>0) return unseen[new ContentRandom(seed).Next(unseen.Count)];
-            DialogueLine oldest=available[0]; int index=Seen.IndexOf(oldest.Id);
-            foreach(var line in available) { int position=Seen.IndexOf(line.Id); if(position<index) { oldest=line; index=position; } }
-            return oldest;
+            string line="";
+            for(int draw=0;draw<=Redraws;draw++) { line=grammar.Line(kind,festival,random); string key=Key(kind,line); if((Seen==null||!Seen.Contains(key))&&(reserved==null||!reserved.Contains(key))) break; }
+            return line;
+        }
+        public DialogueLine Select(string context,int festival,int seed,ICollection<string> reserved=null)
+        {
+            if(Array.IndexOf(DialogueCatalog.Contexts,context)<0) return null;
+            var random=new ContentRandom(seed); string text=Fresh(FestivalLines.Grammar,context,festival,random,reserved);
+            return new DialogueLine { Id=Key(context,text),Context=context,Text=text,AwkwardText=FestivalLines.Grammar.Line(context+"_awkward",festival,random),Speaker=context=="police"?"Cop":context=="medical"?"Medic":"Wook",Difficulty=context=="suspicion"||context=="police"?2:1 };
         }
         public void Acknowledge(string id)
         {

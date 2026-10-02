@@ -37,7 +37,11 @@ public static class ThemeTests
         var texts=new List<string>();
         foreach(var item in Catalog.Items) { texts.Add(item.Name); texts.Add(item.Description); texts.Add(Catalog.ShopTag(item.Id)); }
         foreach(var effect in Catalog.Effects) { texts.Add(effect.Name); texts.Add(effect.PresentationContract); }
-        foreach(var line in DialogueCatalog.Lines) { texts.Add(line.Text); texts.Add(line.AwkwardText); }
+        // DIALOG-4: festivalgoers' lines are built from parts. Every part is read, and 10,000 built lines of every kind.
+        int parts=texts.Count;
+        foreach(var field in typeof(FestivalLines).GetFields(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)) Collect(field.GetValue(null),texts);
+        Check(texts.Count-parts>=300,"every FestivalLines part is read, got "+(texts.Count-parts)+" strings");
+        foreach(var kind in FestivalLines.Kinds) for(int festival=0;festival<Festivals.Count;festival++) for(int seed=0;seed<5000;seed++) texts.Add(FestivalLines.Grammar.Line(kind,festival,seed));
         int before=texts.Count;
         foreach(var field in typeof(DialogueGrammar).GetFields(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)) Collect(field.GetValue(null),texts);
         Check(texts.Count-before>=400,"every DialogueGrammar pool is read, got "+(texts.Count-before)+" strings");
@@ -74,6 +78,7 @@ public static class ThemeTests
     private static void Collect(object value,List<string> into)
     {
         if(value is string text) into.Add(text);
+        else if(value is IDictionary map) foreach(var x in map.Values) Collect(x,into);
         else if(value is IEnumerable list) foreach(var x in list) Collect(x,into);
     }
     // String literals in C# 9 source (no raw strings). An escape reads as a space. Ceiling: a nested string inside an

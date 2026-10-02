@@ -3,19 +3,7 @@ namespace Festival.Core {
 public sealed partial class FestivalSimulation {
     InteractionState NewInteraction(PlayerState p,string kind,string target,double duration){var i=new InteractionState{Id=Id("interaction"),PlayerId=p.Id,TargetId=target,Kind=kind,StartSeconds=State.SimulationSeconds,DurationSeconds=duration,ChartSeed=State.Seed+(int)State.EntitySequence,ChartDifficulty=State.LevelIndex};State.Interactions.Add(i);p.InteractionId=i.Id;return i;}
     CommandResult BeginTask(PlayerState p,string kind,string target,double duration){NewInteraction(p,kind,target,duration);return Ok();}
-    CommandResult BeginChallenge(PlayerState p,GameCommand c,string kind){var npc=State.Npcs.Find(n=>n.Id==c.TargetId);if(npc==null||!Near(p,npc.X,npc.Z)||((kind=="Police")!=(npc.Kind=="Cop")))return Reject("Choose a nearby appropriate NPC");if(kind=="Conversation"&&!npc.CanTalk)return Reject("This person is keeping to themselves");if(kind=="Sale"&&(!Stock(c.ItemId)||Count(p,c.ItemId)<1||npc.Sales>=SalesPerBuyer(State)))return Reject("Stock required; a buyer takes "+SalesPerBuyer(State)+" sales per round");if(State.Interactions.Exists(x=>x.TargetId==npc.Id&&x.Status=="Active"))return Reject("NPC is busy");if(kind=="Sale"&&!Buys(npc))return RefuseSale(p,npc);if(kind=="Buy"){var refused=RefuseBuy(p,c,npc);if(refused!=null)return refused;}GiveDanceRoom(p,npc,kind);var i=NewInteraction(p,kind,npc.Id,0);i.StartSeconds+=ChallengeLeadIn;i.NoteCount=kind=="Conversation"&&npc.Suspicion>=70?16:8;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;var reserved=new System.Collections.Generic.List<string>();foreach(var active in State.Interactions)if(active.Status=="Active"&&active.DialogueId!="")reserved.Add(active.DialogueId);var line=p.Dialogue.Select(kind=="Sale"?"sale":kind=="Buy"?"buy":kind=="Police"?"police":kind=="Dance"?"dance":"suspicion",i.ChartSeed,reserved);i.DialogueId=line.Id;i.DialogueText=p.Effects.Count==0?line.Text:line.AwkwardText;foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}if(kind=="Buy")HoldPrice(p,i);if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);return Ok();}
-    static readonly string[] FestivalBarks={
-        "I came for one set and somehow found three sunrises.",
-        "My friends said meet by the moon. There are four moons here.",
-        "The bass sounds better when you stop looking for the stage.",
-        "Someone traded me a glow stick for a life-changing sandwich.",
-        "If you see a blue cooler, tell it I miss it.",
-        "That shuttle driver knows everybody's name. How?",
-        "I was saving this spot for a friend, but you're a friend now.",
-        "The poi circle is friendly. Just mind the spinning lights.",
-        "I think the left speaker is telling a different story.",
-        "Did you see the sunrise mural behind the tents?"
-    };
+    CommandResult BeginChallenge(PlayerState p,GameCommand c,string kind){var npc=State.Npcs.Find(n=>n.Id==c.TargetId);if(npc==null||!Near(p,npc.X,npc.Z)||((kind=="Police")!=(npc.Kind=="Cop")))return Reject("Choose a nearby appropriate NPC");if(kind=="Conversation"&&!npc.CanTalk)return Reject("This person is keeping to themselves");if(kind=="Sale"&&(!Stock(c.ItemId)||Count(p,c.ItemId)<1||npc.Sales>=SalesPerBuyer(State)))return Reject("Stock required; a buyer takes "+SalesPerBuyer(State)+" sales per round");if(State.Interactions.Exists(x=>x.TargetId==npc.Id&&x.Status=="Active"))return Reject("NPC is busy");if(kind=="Sale"&&!Buys(npc))return RefuseSale(p,npc);if(kind=="Buy"){var refused=RefuseBuy(p,c,npc);if(refused!=null)return refused;}GiveDanceRoom(p,npc,kind);var i=NewInteraction(p,kind,npc.Id,0);i.StartSeconds+=ChallengeLeadIn;i.NoteCount=kind=="Conversation"&&npc.Suspicion>=70?16:8;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;var reserved=new System.Collections.Generic.List<string>();foreach(var active in State.Interactions)if(active.Status=="Active"&&active.DialogueId!="")reserved.Add(active.DialogueId);var line=p.Dialogue.Select(kind=="Sale"?"sale":kind=="Buy"?"buy":kind=="Police"?"police":kind=="Dance"?"dance":"suspicion",State.FestivalIndex,i.ChartSeed,reserved);i.DialogueId=line.Id;i.DialogueText=p.Effects.Count==0?line.Text:line.AwkwardText;foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}if(kind=="Buy")HoldPrice(p,i);if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);return Ok();}
     CommandResult Talk(PlayerState p,GameCommand c)
     {
         var npc=State.Npcs.Find(n=>n.Id==c.TargetId);
@@ -24,9 +12,12 @@ public sealed partial class FestivalSimulation {
         if(State.SimulationSeconds-npc.LastTalkSeconds<2)return Reject("Give them a moment");
         npc.LastTalkSeconds=State.SimulationSeconds;
         int hash=17;foreach(char ch in npc.Id)hash=unchecked(hash*31+ch);
-        int index=(int)(((long)State.Seed*31+hash+npc.TalkCount*7)&0x7fffffff)%FestivalBarks.Length;
+        // DIALOG-4: a bark built by FestivalLines' grammar, seeded by the round, the festivalgoer and their talk count, and drawn
+        // again past any line this player has heard lately.
+        string line=p.Dialogue.Fresh(FestivalLines.Grammar,"bark",State.FestivalIndex,new ContentRandom((int)(((long)State.Seed*31+hash+npc.TalkCount*7)&0x7fffffff)));
+        p.Dialogue.Acknowledge(DialogueHistory.Key("bark",line));
         npc.TalkCount++;
-        p.NpcSpeaker="FESTIVALGOER";p.NpcSpeech=FestivalBarks[index];p.NpcSpeechUntil=State.SimulationSeconds+7;
+        p.NpcSpeaker="FESTIVALGOER";p.NpcSpeech=line;p.NpcSpeechUntil=State.SimulationSeconds+7;
         return Ok();
     }
     CommandResult BeginPoi(PlayerState p,GameCommand c){string item=c.ItemId==""?"poi_practice":c.ItemId;if((item!="poi_practice"&&item!="poi_led")||Count(p,item)<1)return Reject("Owned poi required");var i=NewInteraction(p,"Poi",p.Id,0);i.ReservedItemId=item;foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);i.StartSeconds+=2;i.NoteCount=12;i.BeatSeconds=.4;i.GoodWindowSeconds=item=="poi_practice"?.1725:.15;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;var partner=Player(c.TargetId);var other=partner==null?null:Interaction(partner.InteractionId);if(partner!=null&&partner!=p&&partner.Life=="Alive"&&Near(p,partner.X,partner.Z,4)&&other!=null&&other.Kind=="Poi"&&other.Status=="Active"&&other.PartnerId==""&&State.SimulationSeconds<other.StartSeconds){i.PartnerId=partner.Id;other.PartnerId=p.Id;i.StartSeconds=other.StartSeconds;i.ChartSeed=other.ChartSeed;i.DurationSeconds=other.DurationSeconds;}return Ok();}

@@ -178,8 +178,10 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.4f);
                 Expect("chat","Challenge title","CONVERSATION  /  FOUR-LANE");
                 Dancing("chat","YOU  /  CHATTING","(hidden)");
+                // DIALOG-4: the lines are built from parts, so 400 of every four-lane context's lines and awkward twins on each festival.
                 var lines=new List<string>();
-                foreach(var line in DialogueCatalog.Lines)if(System.Array.IndexOf(new[]{"dance","sale","suspicion","police"},line.Context)>=0){lines.Add(line.Text);lines.Add(line.AwkwardText);}
+                foreach(var context in new[]{"dance","sale","buy","suspicion","police"})for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<400;seed++)
+                {var line=new DialogueHistory().Select(context,festival,seed);lines.Add(line.Text);lines.Add(line.AwkwardText);}
                 FitsAll("chat","Dialogue line",lines);
                 FitsAll("chat","Dancer heading",FourLaneKinds.Select(FestivalHudText.DancerHeading));
                 session.Command("Cancel");npc.Suspicion=0;

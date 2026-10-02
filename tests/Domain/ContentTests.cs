@@ -51,21 +51,20 @@ public static class ContentTests
             }
             Check(judge.Score==1,"every effect preserves score");
         }
-        Check(DialogueCatalog.Lines.Length>=48,"dialogue count"); var texts=new HashSet<string>(); var lineIds=new HashSet<string>();
-        foreach(var line in DialogueCatalog.Lines) { Check(texts.Add(line.Text)&&lineIds.Add(line.Id),"original distinct lines"); Check(line.Status=="Draft"&&!string.IsNullOrWhiteSpace(line.AwkwardText),"draft metadata and awkward variant"); }
-        foreach(var context in new[]{"greeting","dance","suspicion","sale","police","medical"})
+        // DIALOG-4: every challenge line is built from parts (FestivalLinesTests), so a context has thousands, not 8. A player's
+        // history still steers the draw: a line they've seen is drawn again from the same stream, five times at most.
+        foreach(var context in DialogueCatalog.Contexts) for(int festival=0;festival<Festivals.Count;festival++)
         {
-            var history=new DialogueHistory(); var drawn=new HashSet<string>(); string oldest=null;
-            for(int i=0;i<8;i++) { var line=history.Select(context,7); Check(drawn.Add(line.Id),"unseen preference"); if(i==0) oldest=line.Id; Check(history.Seen.Count==i,"selection has no mutation"); history.Acknowledge(line.Id); history.Acknowledge(line.Id); Check(history.Seen.Count==i+1,"ack deduplication"); }
-            Check(history.Select(context,7).Id==oldest,"least recently seen fallback");
-            var restored=new DialogueHistory { Seen=new List<string>(history.Seen) }; Check(restored.Select(context,7).Id==oldest,"restored history");
-            var reserved=new HashSet<string>{oldest}; Check(history.Select(context,7,reserved).Id!=oldest,"group reservation avoids duplicate");
-            history.Acknowledge(oldest,"new-delivery");
-            Check(history.Seen[history.Seen.Count-1]==oldest,"new delivery updates LRU");
-            string next=history.Select(context,7).Id; Check(next!=oldest,"exhausted pool rotates");
-            history.Acknowledge(oldest,"new-delivery"); Check(history.Select(context,7).Id==next,"duplicate delivery is idempotent");
+            var history=new DialogueHistory(); var drawn=new HashSet<string>(); string first=null,last=null;
+            for(int i=0;i<=DialogueHistory.Redraws;i++) { var line=history.Select(context,festival,7); Check(drawn.Add(line.Id),"unseen preference, from one seed"); if(i==0) first=line.Id; last=line.Id; Check(line.Status=="Draft"&&!string.IsNullOrWhiteSpace(line.AwkwardText),"draft metadata and awkward variant"); Check(history.Seen.Count==i,"selection has no mutation"); history.Acknowledge(line.Id); history.Acknowledge(line.Id); Check(history.Seen.Count==i+1,"ack deduplication"); }
+            Check(history.Select(context,festival,7).Id==last,"after five redraws the last draw stands, seen or not");
+            var restored=new DialogueHistory { Seen=new List<string>(history.Seen) }; Check(restored.Select(context,festival,7).Id==last,"restored history");
+            var reserved=new HashSet<string>{first}; Check(new DialogueHistory().Select(context,festival,7,reserved).Id!=first,"group reservation avoids duplicate");
+            history.Acknowledge(first,"new-delivery");
+            Check(history.Seen[history.Seen.Count-1]==first,"new delivery updates LRU");
+            var before=string.Join(",",history.Seen); history.Acknowledge(first,"new-delivery"); Check(string.Join(",",history.Seen)==before,"duplicate delivery is idempotent");
         }
         var bounded=new DialogueHistory(); for(int i=0;i<600;i++) bounded.Acknowledge("future_"+i); Check(bounded.Seen.Count==512&&bounded.Seen[0]=="future_88","bounded history supports revision IDs");
-        Check(bounded.Select("invalid",0)==null,"unknown context explicit");
+        Check(bounded.Select("invalid",0,0)==null,"unknown context explicit");
     }
 }
