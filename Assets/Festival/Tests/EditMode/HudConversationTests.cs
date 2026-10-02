@@ -197,6 +197,32 @@ namespace Festival.Tests
             foreach(var kind in new[]{null,"","ConfirmChat","FindFriend","Medical",FestivalSimulation.LieDownKind,FestivalSimulation.RideWheelKind})Assert.That(FestivalInput.Roots(kind),Is.False,"a "+(kind??"null")+" doesn't");
         }
 
+        // K2 (batch call 9: "you can walk away (E-hold, or moving off)"): a talk holds you still, and walking out of it (Cancel) puts
+        // every watcher on edge, so a tap of E must not end it: not a second E just after the one that offered, nor one pressed to go
+        // on. While you talk (FestivalHudText.WalksOutByHold) a tap of E runs nothing, and holding it HoldToStopSeconds walks out, as
+        // the prompt says (WalkAway); a talk's trust dance stops by holding G instead (StopsByHold). HudTripperPlayTests presses
+        // the keys.
+        [Test] public void YouWalkOutOfATalkByHoldingE()
+        {
+            var game=Day(out var you,out var them);
+            bool Walks(string id){var view=View(game,id);return FestivalHudText.WalksOutByHold(view,Me(view,id));}
+            bool Stops(string id){var view=View(game,id);return FestivalHudText.StopsByHold(view,Me(view,id));}
+            Assert.That(Walks(you.Id),Is.False,"doing nothing, E runs the action listed first");
+            Talk(game,you,them);
+            Assert.That(Walks(you.Id),Is.True,"talking, a tap of E runs nothing: holding it walks out");
+            Assert.That(Stops(you.Id),Is.False,"and holding G doesn't");
+            Assert.That(Walks("friend"),Is.False,"a friend's E is their own");
+            Assert.That(FestivalHudText.WalkAway,Is.EqualTo("HOLD E TO WALK AWAY"),"the prompt says so");
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="walk_away",Kind="Cancel"}).Accepted,Is.True,"setup: you walk out");
+            Assert.That(Walks(you.Id),Is.False,"a talk over holds nothing back");
+            var seen=them.Observers.Find(o=>o.PlayerId==you.Id);if(seen==null)them.Observers.Add(seen=new ObserverState{PlayerId=you.Id});
+            seen.Suspicion=FestivalSimulation.TrustDanceSuspicion;
+            var wary=game.Execute(you.Id,new GameCommand{Id="walk_wary",Kind="Conversation",TargetId=them.Id});
+            Assert.That(wary.Accepted&&game.Interaction(you.InteractionId).TrustDance,Is.True,"setup: wary of you now, they ask for a dance first: "+wary.Reason);
+            Assert.That(Walks(you.Id),Is.False,"dancing for their trust, E holds nothing back");
+            Assert.That(Stops(you.Id),Is.True,"holding G stops the dance, as any dance");
+        }
+
         // At 1920x1080 every reply a talk can deal fits its button uncut, garbled or not, on every festival.
         [Test] public void EveryReplyFitsItsButton()
         {

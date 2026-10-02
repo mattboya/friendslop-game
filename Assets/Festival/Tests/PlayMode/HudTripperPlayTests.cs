@@ -427,7 +427,8 @@ namespace Festival.Tests
         // DANCE-12: E sits between the W and D lanes, so a slip onto it mid-dance must never walk you out. In a hosted dance beside
         // a festivalgoer you could buy from, with gear in hand and a friend to offer it to, a stray E does nothing and a tap of G
         // drops nothing; holding G for a second stops the dance, as the lane's bottom line says. DIALOG-3: a buy is a talk, replied
-        // to on 1-3, so E walks out of it; only the dance a wary seller asks for first is on the lanes and held, and a buy stopped
+        // to on 1-3. K2 (batch call 9): a tap of E never walks out of it either, even the moment it starts; the prompt says to hold E,
+        // and holding it a second walks out. The dance a wary seller asks for first is on the lanes and held by G, and a buy stopped
         // either way hands its held price back. The Escape menu's CANCEL ACTION still stops a dance. E and G go through the HUD's
         // own input handling (FestivalHud.UpdateKeyboard) on a virtual keyboard.
         [UnityTest]public IEnumerator AStrayEOrATapOfGNeverEndsADance()
@@ -482,6 +483,19 @@ namespace Festival.Tests
                     if(!Confetti())failures.Add(where+": holding G dropped your confetti");
                     npc.Suspicion=0;
                 }
+                // Holds E for 1.1 s, checking halfway that the talk goes on with the fill across the prompt grown.
+                IEnumerator HoldE(string where,InteractionState doing)
+                {
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.E));
+                    yield return new WaitForSeconds(.5f);
+                    if(Doing()?.Id!=doing.Id)failures.Add(where+": half a second into holding E, it already ended");
+                    var fill=Shown<Image>("Walk hold fill");var card=Shown<RectTransform>("Action prompt");
+                    float filled=fill==null||card==null?0:fill.rectTransform.rect.width/card.rect.width;
+                    if(filled<.2f||filled>.9f)failures.Add(where+": half a second into holding E, the fill across the prompt is "+(fill==null?"hidden":filled.ToString("0.00")+" full"));
+                    yield return new WaitForSeconds(.6f);yield return null;yield return null;
+                    if(Doing()!=null||sim.State.Interactions.Find(i=>i.Id==doing.Id)?.Status!="Cancelled")failures.Add(where+": holding E for 1.1 s doesn't walk out ("+session.Message+")");
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+                }
 
                 // A dance: a stray E and a tap of G leave it going, and nothing is bought, offered or dropped.
                 // Even an E the moment it starts, while the action list still leads with the buy: on a joined client the snapshot
@@ -514,16 +528,28 @@ namespace Festival.Tests
                 if(session.Message!=notice)failures.Add("dancing: a tap of G asked to drop your confetti (\""+session.Message+"\")");
                 if(Doing()?.Id==dance.Id)yield return HoldG("dancing",dance);
 
-                // A buy is a talk: E walks out of it, and the price held for it comes back.
+                // A buy is a talk. A tap of E never walks out of it, not even the moment it starts, while the list still leads with
+                // the buy (a second E just after the one that asked); the prompt says to hold E, and a second's hold walks out, the
+                // price held for it back.
                 int cash=player.Cash;
+                refresh.SetValue(view,float.MaxValue);
                 session.Command("StartBuy",npc.Id,FestivalSimulation.SellerStock(npc.Id));
                 var buy=Doing();
                 Assert.That(buy?.Kind,Is.EqualTo("Buy"),"setup: you ask the festivalgoer to sell: "+session.Message);
                 Assert.That(buy.TrustDance,Is.False,"setup: they talk straight away");
-                yield return new WaitForSeconds(.4f);
+                string asked=session.Message;
                 yield return Tap(Key.E);
-                if(Doing()!=null)failures.Add("buying: E doesn't walk out of the talk ("+session.Message+")");
-                if(player.Cash!=cash)failures.Add("buying, walked out with E: you hold $"+player.Cash+", not the $"+cash+" you had");
+                refresh.SetValue(view,0f);
+                if(Doing()?.Id!=buy.Id)failures.Add("buying, E as it starts: it walked out of the talk ("+session.Message+")");
+                if(session.Message!=asked)failures.Add("buying, E as it starts: E asked the host for something (\""+session.Message+"\")");
+                yield return new WaitForSeconds(.4f);
+                if(primary.GetValue(view)!=null)failures.Add("buying: E still runs an action");
+                var walk=Shown<Text>("Prompt");
+                if(walk?.text!=FestivalHudText.WalkAway)failures.Add("buying: the prompt reads \""+(walk?.text??"(hidden)")+"\", not "+FestivalHudText.WalkAway);
+                yield return Tap(Key.E);
+                if(Doing()?.Id!=buy.Id)failures.Add("buying: a tap of E walked out of the talk ("+session.Message+")");
+                if(Doing()?.Id==buy.Id)yield return HoldE("buying",buy);
+                if(player.Cash!=cash)failures.Add("buying, walked out by holding E: you hold $"+player.Cash+", not the $"+cash+" you had");
                 // A seller wary of you asks for a dance first, on the lanes: there a stray E does nothing, and holding G for a second
                 // stops it, the price back.
                 npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});

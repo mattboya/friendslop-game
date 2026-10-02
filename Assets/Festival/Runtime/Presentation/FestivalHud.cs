@@ -52,7 +52,7 @@ namespace Festival.Presentation
         private readonly Text[] rhythmKeys=new Text[4];
         private readonly float[] rhythmFlashUntil=new float[4];
         private bool[] rhythmConsumed=Array.Empty<bool>();
-        private Image rhythmProgressFill,stopHoldFill;
+        private Image rhythmProgressFill,stopHoldFill,walkHoldFill;
         // When G went down mid-dance (Time.unscaledTime), or -1 while it isn't held.
         private float stopHeldSince=-1;
         private RhythmChart displayedChart;
@@ -263,6 +263,8 @@ namespace Festival.Presentation
             // The upper-left information rail keeps both palms, held props and
             // the ground immediately ahead visible during close interactions.
             promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.777f),new Vector2(.355f,.844f),true);
+            // K2: mid-talk the prompt says to hold E to walk away, and this fill grows across it while E is held (ShowStopHold).
+            walkHoldFill=Panel(promptPanel.transform,"Walk hold fill",new Color(Orange.r,Orange.g,Orange.b,.35f),Vector2.zero,new Vector2(0,1)).GetComponent<Image>();walkHoldFill.raycastTarget=false;walkHoldFill.gameObject.SetActive(false);
             promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
             prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
             // A shelf item's prompt carries its price and description, longer on Ember Playa.
@@ -853,10 +855,11 @@ namespace Festival.Presentation
             }
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             // DANCE-12: E sits between the W and D lanes, so mid-dance it runs nothing, even in the moment before UpdateActions
-            // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop).
-            bool dancing=FestivalHudText.StopsByHold(state,player);
-            if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen&&!dancing)primaryAction?.Invoke();
-            HoldToStop(dancing);
+            // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop). K2: mid-talk a
+            // tap of E runs nothing either, and holding E walks out of it.
+            bool dancing=FestivalHudText.StopsByHold(state,player),talking=FestivalHudText.WalksOutByHold(state,player);
+            if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen&&!dancing&&!talking)primaryAction?.Invoke();
+            HoldToStop(dancing?session.Controls.Drop:talking?session.Controls.Interact:null);
             // DIALOG-6: G closes a chat left up after it ended, as its header says, and drops nothing.
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&chatWindow.Lingering){chatWindow.Dismiss();return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
@@ -874,12 +877,12 @@ namespace Festival.Presentation
             }
         }
 
-        // DANCE-12: G pressed mid-dance and held FestivalHudText.HoldToStopSeconds stops it, once; the fill shows how far along.
-        // A G already down as the dance began, or the menu opening, starts the hold over.
-        private void HoldToStop(bool dancing)
+        // DANCE-12: G pressed mid-dance (`key`; K2: E mid-talk; null otherwise) and held FestivalHudText.HoldToStopSeconds stops it,
+        // once; the fill shows how far along. A key already down as it began, or the menu opening, starts the hold over.
+        private void HoldToStop(InputAction key)
         {
-            if(!dancing||session.MenuOpen||!session.Controls.Drop.IsPressed())stopHeldSince=-1;
-            else if(session.Controls.Drop.WasPressedThisFrame())stopHeldSince=Time.unscaledTime;
+            if(key==null||session.MenuOpen||!key.IsPressed())stopHeldSince=-1;
+            else if(key.WasPressedThisFrame())stopHeldSince=Time.unscaledTime;
             float held=stopHeldSince<0?0:(Time.unscaledTime-stopHeldSince)/FestivalHudText.HoldToStopSeconds;
             if(held>=1){stopHeldSince=-1;held=0;session.Command("Cancel");}
             ShowStopHold(held);
@@ -1045,11 +1048,12 @@ namespace Festival.Presentation
             noteViews.Add(note);note.gameObject.SetActive(false);
         }
 
-        // DANCE-12: the fill under "HOLD G TO STOP DANCING", `held` of the way to the stop; none at 0.
+        // DANCE-12: the fill under "HOLD G TO STOP DANCING", `held` of the way to the stop; none at 0. K2: and the one across the
+        // prompt's "HOLD E TO WALK AWAY". Only one shows: the lanes are up for a dance, the prompt for a talk.
         public void ShowStopHold(float held)
         {
-            stopHoldFill.gameObject.SetActive(held>0);
-            if(held>0)Place(stopHoldFill.rectTransform,StopHoldLeft,.008f,StopHoldLeft+(StopHoldRight-StopHoldLeft)*Mathf.Min(held,1),.046f);
+            stopHoldFill.gameObject.SetActive(held>0);walkHoldFill.gameObject.SetActive(held>0);
+            if(held>0){Place(stopHoldFill.rectTransform,StopHoldLeft,.008f,StopHoldLeft+(StopHoldRight-StopHoldLeft)*Mathf.Min(held,1),.046f);Place(walkHoldFill.rectTransform,0,0,Mathf.Min(held,1),1);}
         }
         // Labels each receptor well with its lane's WASD key as bound now, so a rebound key shows its new name. Read once per challenge.
         public void ShowRhythmKeys(FestivalInput controls){for(int lane=0;lane<4;lane++)rhythmKeys[lane].text=controls.NoteKey(lane);}
@@ -1349,10 +1353,13 @@ namespace Festival.Presentation
             if(FestivalSimulation.CanLieDown(state,player))AddAction(FestivalHudText.LieDownAction,()=>session.Command(FestivalSimulation.LieDownKind),ref y);
             // DANCE-12: mid-dance E runs nothing, not even the cancel listed first, so a stray E can't stop it or start a buy, a
             // dance or a gear offer from the list; the lane's bottom line says to hold G (UpdateKeyboard). The list stays clickable.
-            if(FestivalHudText.StopsByHold(state,player))primaryAction=null;
+            // K2: mid-talk too, and the prompt says to hold E to walk away.
+            bool talking=FestivalHudText.WalksOutByHold(state,player);
+            if(FestivalHudText.StopsByHold(state,player)||talking)primaryAction=null;
             // POLO-2: up on the Ferris wheel nothing is worth E; the prompt counts the turn down instead.
             string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
             if(riding!=""){prompt.text=riding;primaryAction=null;}
+            else if(talking)prompt.text=FestivalHudText.WalkAway;
             else prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
             // ECON-3: beside a festivalgoer or a cop, the strip lists what else there is, each a click away in the Esc menu's list.
             nearbyLabels.Clear();
