@@ -33,6 +33,8 @@ namespace Festival.Core
         /// <summary>Visions reach only the tripper, as copies. A vision's truth leaves the host only once it is confirmed; its tell always does.</summary>
         public static List<VisionState> VisibleVisions(RoundState s,string viewer)=>s.TripperId==""||viewer!=s.TripperId?new List<VisionState>():
             s.Visions.ConvertAll(v=>new VisionState{Id=v.Id,Kind=v.Kind,NpcId=v.NpcId,X=v.X,Z=v.Z,IsTrue=v.Confirmed&&v.IsTrue,Tell=v.Tell,Confirmed=v.Confirmed});
+        // MINI-4: the share of the tripper's visions that are true at their spun dose, which their Mystery Cups hint shares.
+        internal static double VisionReliability(RoundState s)=>Reliability[TripperDose(s)-1];
         // The tripper's dose from the public spin result, 1-4; a round with no spin counts as dose 1.
         public static int TripperDose(RoundState s)=>Math.Min(Reliability.Length,Math.Max(1,s.Doses.Find(d=>d.PlayerId==s.TripperId)?.Dose??1));
 

@@ -15,6 +15,15 @@ namespace Festival.Core
         public double RingSeconds,Seconds,ScoredAt=-1,ClockChange;
         // Who plays: the connected living players as the game began. Spirits and the detained watch.
         public List<string> PlayerIds=new List<string>();
+        // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
+        // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
+        // clock. Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
+        // nobody. Spiked: which cup is, -1 before; it never leaves the host. Hint: the cup the tripper is shown as spiked, sent to them
+        // alone, -1 in everyone else's view (FestivalSimulation.VisibleBooth).
+        public int Cups,Turn,Pot,Spiked=-1,Hint=-1; public double TurnAt; public string SpikedBy="";
+        public List<int> Drunk=new List<int>(); public List<string> Turns=new List<string>();
+        // A copy for a view to filter: its lists are shared, as a view never changes them.
+        internal MinigameState Copy()=>(MinigameState)MemberwiseClone();
     }
 
     /// <summary>MINI-1 (docs/MINIGAMES_2026-09-30.md): each level has one booth, a stranger with a sign at one of
@@ -69,13 +78,14 @@ namespace Festival.Core
             if(State.Booth.RingSeconds<MinigameRingSeconds)return;
             State.Booth.RingSeconds=0;State.Booth.Seconds=0;State.Booth.ScoredAt=-1;State.Booth.ClockChange=0;State.Booth.PlayerIds=crew.ConvertAll(p=>p.Id);
             State.Phase=MinigamePhase;
+            if(State.Booth.Kind==MysteryCupsGame)PourCups();
         }
         // Each step of the game, in place of everything else Step does: the game's own clock, the cap, then the banner and the end.
         void MinigameTick(double dt)
         {
             var b=State.Booth;b.Seconds+=dt;
-            // ponytail: the stub has nothing to score at the cap; each MINI-2..4 game scores what's in here.
-            if(b.ScoredAt<0){if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
+            // A game's own tick scores it when it ends, at the cap too (Mystery Cups calls it); any other (the stub) scores +0 s there.
+            if(b.ScoredAt<0){if(b.Kind==MysteryCupsGame)CupsTick();if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
             if(b.Seconds<b.ScoredAt+MinigameBannerSeconds)return;
             ShiftClock(b.Seconds);b.Spent=true;State.Phase="Playing";
         }
@@ -89,6 +99,7 @@ namespace Festival.Core
             switch(b.Kind)
             {
                 case StubGame:ScoreMinigame(0);return Ok("Done");
+                case MysteryCupsGame:return PlayCups(p,c);
                 default:return Reject("Unknown minigame");
             }
         }

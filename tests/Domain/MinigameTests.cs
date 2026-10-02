@@ -221,6 +221,7 @@ public static class MinigameTests
         {"RhythmInput.TimeSeconds","seconds into its interaction"},
         {"MinigameState.RingSeconds","the ring's own countdown"},{"MinigameState.Seconds","the game's own clock, the pause's length"},
         {"MinigameState.ScoredAt","on the game's own clock"},{"MinigameState.ClockChange","seconds paid to the level's length"},
+        {"MinigameState.TurnAt","Mystery Cups: on the game's own clock"},
     };
     static bool StateType(Type t)=>t.Namespace=="Festival.Core"&&t.IsClass&&t.IsSerializable;
     // Every double field reachable from o, filling each empty list of state with one fresh entry so that its fields are reached.

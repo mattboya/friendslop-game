@@ -74,11 +74,13 @@ namespace Festival.Core
         }
         static bool Tripping(PlayerState p)=>p!=null&&p.Connected&&p.Life!="Spirit"&&DoseOf(p)>0;
         static int DoseOf(PlayerState p)=>p.Effects.Find(e=>e.Id==DoseEffect)?.Intensity??0;
-        // The dose lasts the whole level; effects only tick down while Playing.
+        // The spinners' dose: its effect, and the spin's result in State.Doses, which visions and the payout read.
         void TakeDose(PlayerState p,int dose,string substance)
         {
-            p.Effects.Add(new ActiveEffect{Id=DoseEffect,InstanceId=Id("effect"),Intensity=dose,Substance=substance,StartSeconds=State.SimulationSeconds,RemainingSeconds=State.DurationSeconds});
+            AddDose(p,dose,substance);
             var entry=State.Doses.Find(d=>d.PlayerId==p.Id);if(entry==null)State.Doses.Add(new PlayerDose{PlayerId=p.Id,Dose=dose,Substance=substance});else{entry.Dose=dose;entry.Substance=substance;}
         }
+        // The dose effect alone, which MINI-4's spiked cup gives too. It lasts the whole level; effects only tick down while Playing.
+        void AddDose(PlayerState p,int dose,string substance)=>p.Effects.Add(new ActiveEffect{Id=DoseEffect,InstanceId=Id("effect"),Intensity=dose,Substance=substance,StartSeconds=State.SimulationSeconds,RemainingSeconds=State.DurationSeconds});
     }
 }
