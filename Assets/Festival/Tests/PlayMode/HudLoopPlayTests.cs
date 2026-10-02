@@ -154,6 +154,74 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"HUD text a player reads:\n"+string.Join("\n",failures));
         }
 
+        // ECON-3 (Matt, three times on 2026-10-01: "there is no button to actually sell to people"): beside a festivalgoer the prompt
+        // and E are your next step to a sale. Hosts a real two-player round on Palm Mirage Day 1, with Sam tripping beside you as the
+        // crew's day card tells you to stay, and E runs the HUD's primary action (FestivalHud.UpdateKeyboard).
+        [UnityTest]public IEnumerator BesideAFestivalgoerEIsYourNextStepToASale()
+        {
+            var world=new GameObject("HUD sale world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD sale");
+            var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            string Prompt(){foreach(var text in hud.GetComponentsInChildren<Text>(true))if(text.name=="Prompt")return text.text;return "(no prompt)";}
+            void Expect(string where,string expected){if(Prompt()!=expected)failures.Add(where+": the prompt reads \""+Prompt()+"\", expected \""+expected+"\"");}
+            var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("sale_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                sim.State.TripperId=mate.Id;sim.State.Npcs.Clear();
+                var buyer=new NpcState{Id="sale_buyer_2",Role="Buyer",CanTalk=true};sim.State.Npcs.Add(buyer);
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
+                // E runs the primary action; what it started, with whom, is cancelled again.
+                IEnumerator PressE(string where,string kind)
+                {
+                    ((System.Action)primary.GetValue(view))?.Invoke();yield return null;
+                    var started=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                    if(started?.Kind!=kind||started.TargetId!=buyer.Id)failures.Add(where+": E starts "+(started==null?"nothing":started.Kind+" with "+started.TargetId)+", not a "+kind+" with them ("+session.Message+")");
+                    session.Command("Cancel");yield return null;
+                }
+                // You and the festivalgoer face each other, calm (each cancel above put them on edge), Sam at your side.
+                IEnumerator Stand(){player.X=0;player.Z=0;buyer.X=0;buyer.Z=1.5f;buyer.Yaw=180;buyer.Suspicion=0;buyer.Mode="Blending";mate.X=1.2f;mate.Z=0;yield return new WaitForSeconds(.6f);}
+
+                // By day with no stock, E buys from them (a seller this once: a buyer turns the ask down).
+                buyer.Role="Regular";
+                yield return Stand();
+                Expect("by day, no stock",FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"  •  F CHAT");
+                yield return PressE("by day, no stock","Buy");
+                // Holding stock, E offers it to the buyer, not to Sam beside you.
+                buyer.Role="Buyer";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
+                yield return Stand();
+                Expect("by day, holding stock, Sam in reach","Offer Tongue Stamps  •  F CHAT");
+                yield return PressE("by day, holding stock, Sam in reach","Sale");
+                // The tripper beside someone they have an unchecked vision about still checks first.
+                sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="sale_vision",Kind="Buyer",NpcId=buyer.Id});
+                yield return Stand();
+                Expect("the tripper beside a vision, holding stock",FestivalHudText.CheckDanceAction);
+                yield return PressE("the tripper beside a vision, holding stock","ConfirmDance");
+                sim.State.TripperId=mate.Id;sim.State.Visions.Clear();
+                // At night E dances, stock or not.
+                sim.State.LevelIndex=1;
+                yield return Stand();
+                Expect("night, holding stock","Dance with festivalgoer  •  F CHAT");
+                yield return PressE("night, holding stock","Dance");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Beside a festivalgoer:\n"+string.Join("\n",failures));
+        }
+
         // HUD-4: a menu left open at camp closes as the wheels start, so the spin is seen. While the wheels spin and the festival
         // loads, the host refuses every action, so the HUD offers none and 1, Q and G send nothing. A key being rebound keeps the
         // menu open as the festival opens. Hosts a real two-player round; the keys are pressed on a virtual keyboard, so they go

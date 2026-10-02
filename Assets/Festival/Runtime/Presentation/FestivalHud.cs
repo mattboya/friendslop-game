@@ -1118,27 +1118,19 @@ namespace Festival.Presentation
                 // The festival's twists where they stand: the Ferris wheel, the VIP stall, a passing art car.
                 AddTwistActions(state,player,ref y);
             }
-            // Offering your gear to a friend in reach follows the errands above and the checks: the sober crew sticks by the
-            // tripper, so a friend is often in reach, and E must not hand them your gear instead of checking.
-            if(handGear.Count>0)
-            {
-                string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
-                foreach(var mate in state.Players)if(mate.Id!=player.Id&&FestivalSimulation.CanHandoff(player,mate))AddAction("Offer "+ItemName(item)+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);
-            }
             var npc=state.Phase=="Playing"&&player.Life=="Alive"?Nearest(state.Npcs,player.X,player.Z,2.5f):null;
             if(npc!=null)
             {
                 if(npc.Kind=="Cop")AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);
-                else
-                {
-                    AddAction(npc.CanTalk&&check==null?"Dance with festivalgoer  •  F CHAT":"Dance with festivalgoer",()=>session.Command("Dance",npc.Id),ref y);
-                    if(npc.CanTalk){AddAction("Chat with festivalgoer",()=>session.Command("Talk",npc.Id),ref y);AddAction("Talk and keep the beat",()=>session.Command("Conversation",npc.Id),ref y);}
-                    var stock=player.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");
-                    if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
-                    // ECON-2: anyone in the crowd might sell, so every festivalgoer offers their kind, after the offer so E still dances.
-                    string kind=FestivalSimulation.SellerStock(npc.Id);
-                    AddAction(FestivalHudText.BuyAction(state,player,npc.Id),()=>session.Command("StartBuy",npc.Id,kind),ref y);
-                }
+                else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
+            }
+            // Offering your gear to a friend in reach follows the errands above, the checks and the festivalgoer beside you: the sober
+            // crew sticks by the tripper, so a friend is often in reach, and E must not hand them your gear (your stock, ECON-3)
+            // instead of checking or selling.
+            if(handGear.Count>0)
+            {
+                string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
+                foreach(var mate in state.Players)if(mate.Id!=player.Id&&FestivalSimulation.CanHandoff(player,mate))AddAction("Offer "+ItemName(item)+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);
             }
             // TRIP-4: lying down comes last of all, after the festivalgoer beside you, so E never lies you down instead of dancing,
             // chatting or selling.

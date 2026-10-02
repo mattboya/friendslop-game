@@ -16,8 +16,8 @@ namespace Festival.Tests
     {
         const string LieDown="Lie down and watch the clouds",GetUp="Get up";
 
-        // TRIP-4 on a real hosted Day 1: lying down is the last thing the HUD lists, so beside a festivalgoer E still dances with
-        // them; with nothing else about E lies you down. Lying there, E gets you up before anything else, the view drops to the
+        // TRIP-4 on a real hosted Day 1: lying down is the last thing the HUD lists, so beside a festivalgoer E is still theirs (by
+        // day with empty hands, buying from them: ECON-3); with nothing else about E lies you down. Lying there, E gets you up before anything else, the view drops to the
         // grass and looks up at the sky, and getting up puts your view back where it was. A friend lying down lies on their back.
         [UnityTest]public IEnumerator EListsLyingDownLastAndGetsYouUpFirst()
         {
@@ -49,12 +49,12 @@ namespace Festival.Tests
                 player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
                 foreach(var n in sim.State.Npcs)n.Twist="";
 
-                // On the open lawn beside a festivalgoer, nobody else about: E dances with them, and lying down is listed last.
+                // On the open lawn beside a festivalgoer, nobody else about: E buys from them, and lying down is listed last.
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");sim.State.Npcs.RemoveAll(n=>n!=npc);
                 npc.Mode="Blending";npc.X=-20;npc.Z=-2;player.X=npc.X+.8f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
                 var listed=Actions();
-                if(listed.Count<2||!listed[0].StartsWith("Dance with festivalgoer")||listed[listed.Count-1]!=LieDown)failures.Add("beside a festivalgoer: listed \""+string.Join(" | ",listed)+"\", not the dance first and lying down last");
+                if(listed.Count<2||!listed[0].StartsWith(FestivalHudText.BuyAction(sim.State,player,npc.Id))||listed[listed.Count-1]!=LieDown)failures.Add("beside a festivalgoer: listed \""+string.Join(" | ",listed)+"\", not the buy first and lying down last");
 
                 // Once they wander off: E lies you down, looking up at the sky from the grass.
                 sim.State.Npcs.Clear();

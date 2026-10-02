@@ -343,6 +343,21 @@ namespace Festival.Presentation
         public static string DancerCaption(string kind)=>kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX","Sale"=>"YOUR LOOK • YOUR PITCH",
             "Buy"=>"YOUR LOOK • YOUR HAGGLE","Conversation"=>"YOUR LOOK • YOUR VIBE","Police"=>"YOUR LOOK • YOUR ALIBI",_=>"YOUR LOOK • YOUR MOVES"};
 
+        /// <summary>What p can do beside festivalgoer n, as the HUD lists them; E runs the first. ECON-3 (Matt: "there is no button to
+        /// actually sell to people"): by day that is p's next step to a sale, the offer while holding stock and otherwise a buy from
+        /// them (FestivalGuidance.NeedsStock). The dance follows either way, and still leads at night. The first says "F CHAT" while
+        /// F chats with them, not while it checks a vision (CheckTarget).</summary>
+        public static List<(string Label,GameCommand Command)> FestivalgoerActions(RoundState s,PlayerState p,NpcState n)
+        {
+            var actions=new List<(string Label,GameCommand Command)>{("Dance with festivalgoer",new GameCommand{Kind="Dance",TargetId=n.Id})};
+            if(n.CanTalk){actions.Add(("Chat with festivalgoer",new GameCommand{Kind="Talk",TargetId=n.Id}));actions.Add(("Talk and keep the beat",new GameCommand{Kind="Conversation",TargetId=n.Id}));}
+            var stock=p.Inventory.Find(i=>Catalog.FindItem(i.ItemId)?.Category=="Stock");
+            if(stock!=null)actions.Insert(Festivals.For(s).Night?actions.Count:0,("Offer "+Catalog.FindItem(stock.ItemId).Name,new GameCommand{Kind="StartSale",TargetId=n.Id,ItemId=stock.ItemId}));
+            actions.Insert(FestivalGuidance.NeedsStock(s,p)?0:actions.Count,(BuyAction(s,p,n.Id),new GameCommand{Kind="StartBuy",TargetId=n.Id,ItemId=FestivalSimulation.SellerStock(n.Id)}));
+            if(n.CanTalk&&CheckTarget(s,p)==null)actions[0]=(actions[0].Label+Dot+"F CHAT",actions[0].Command);
+            return actions;
+        }
+
         /// <summary>ECON-2: beside any festivalgoer, "Buy Tongue Stamps  •  $5": the one kind they would sell, read off their id alone
         /// (FestivalSimulation.SellerStock) so the label gives no role away, at its price in the viewer's money.</summary>
         public static string BuyAction(RoundState s,PlayerState viewer,string npcId){var item=Catalog.FindItem(FestivalSimulation.SellerStock(npcId));return "Buy "+item.Name+Dot+Money(s,viewer,item.Price);}

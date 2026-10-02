@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Network;
@@ -71,6 +72,35 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Met));
             you.Inventory.Clear();
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Met),"quota met with no stock left: nothing more to buy for");
+        }
+
+        // ECON-3 (Matt, three times on 2026-10-01: "there is no button to actually sell to people"): beside a festivalgoer E runs the
+        // HUD's first action, so by day it is your next step to a sale. Holding stock, the offer ("E  Offer Tongue Stamps  •  F CHAT");
+        // holding none, a buy from them. The dance follows either way, and leads at night as before. While F checks a vision about
+        // them (the tripper's CheckTarget), no action says F chats.
+        [Test] public void BesideAFestivalgoerEIsYourNextStepToASale()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You");Crew(s,"sam","Sam");s.TripperId="sam";
+            var goer=new NpcState{Id="goer_2",CanTalk=true};s.Npcs.Add(goer);
+            string Listed(RoundState state){var labels=new List<string>();foreach(var (label,_) in FestivalHudText.FestivalgoerActions(state,you,goer))labels.Add(label);return string.Join(" | ",labels);}
+            const string Buy="Buy Tongue Stamps  •  $5",Talk="Chat with festivalgoer | Talk and keep the beat",Chat="  •  F CHAT";
+            Assert.That(Listed(s),Is.EqualTo(Buy+Chat+" | Dance with festivalgoer | "+Talk),"by day with no stock, E buys from them");
+            var buy=FestivalHudText.FestivalgoerActions(s,you,goer)[0].Command;
+            Assert.That(new[]{buy.Kind,buy.TargetId,buy.ItemId},Is.EqualTo(new[]{"StartBuy","goer_2",FestivalSimulation.SellerStock("goer_2")}),"the buy asks them for the kind they sell");
+            you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
+            Assert.That(Listed(s),Does.StartWith(Buy+Chat),"gear is not stock");
+            you.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys"+Chat+" | Dance with festivalgoer | "+Talk+" | "+Buy),"holding stock by day, E offers it; buying more stays listed");
+            var offer=FestivalHudText.FestivalgoerActions(s,you,goer)[0].Command;
+            Assert.That(new[]{offer.Kind,offer.TargetId,offer.ItemId},Is.EqualTo(new[]{"StartSale","goer_2","stock_mushrooms"}),"E starts the sale of what you hold, with them");
+            goer.CanTalk=false;
+            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys | Dance with festivalgoer | "+Buy),"someone keeping to themselves has no chat");
+            goer.CanTalk=true;s.TripperId="you";s.Visions.Add(new VisionState{Id="goer_vision",Kind="Buyer",NpcId=goer.Id});
+            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys | Dance with festivalgoer | "+Talk+" | "+Buy),"F checks the tripper's vision about them, so nothing says F chats");
+            var night=Level(0,1);night.Players.AddRange(s.Players);night.Npcs.Add(goer);
+            Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | Offer Fun Guys | "+Buy),"at night E dances, stock or not");
+            you.Inventory.Clear();
+            Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | "+Buy));
         }
 
         [Test] public void ASpiritSeesTheWholeCrewsQuota()

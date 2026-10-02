@@ -77,7 +77,7 @@ namespace Festival.Tests
             }
             // The actions the HUD lists (NEARBY / CREW), first to last; E runs the first.
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
-            const string CheckDance="Check by dancing  •  F CHECK BY CHAT (8 s)",CheckChat="Check by chatting (8 s, safe)",DanceAndChat="Dance with festivalgoer  •  F CHAT";
+            const string CheckDance="Check by dancing  •  F CHECK BY CHAT (8 s)",CheckChat="Check by chatting (8 s, safe)",FChats="  •  F CHAT";
             const string GearKeys="GEAR   /   1–3 EQUIP     Q USE     G DROP",GearKeysInChat="GEAR   /   Q USE     G DROP";
             // DIALOG-5: the chat window and its thread as drawn, oldest first: "< " their bubbles, "> " yours.
             var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
@@ -139,9 +139,9 @@ namespace Festival.Tests
                 mate.X=.6f;mate.Z=1.5f;
                 yield return new WaitForSeconds(.6f);
                 Expect("tripper beside a vision, gear in hand, Sam in reach","Prompt",CheckDance);
-                // F checks here, so the ordinary dance no longer offers F as a chat.
+                // F checks here, so no festivalgoer action offers F as a chat.
                 string listed=Actions();
-                if(!listed.StartsWith(CheckDance+" | "+CheckChat)||listed.Contains(DanceAndChat))failures.Add("tripper beside a vision: the actions read \""+listed+"\"");
+                if(!listed.StartsWith(CheckDance+" | "+CheckChat)||listed.Contains(FChats))failures.Add("tripper beside a vision: the actions read \""+listed+"\"");
                 PressE();yield return null;
                 if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmDance"&&i.Status=="Active"))failures.Add("tripper beside a vision: E starts no check dance ("+session.Message+")");
                 yield return new WaitForSeconds(.4f);
@@ -236,12 +236,13 @@ namespace Festival.Tests
                     if(Read("Prompt")==CheckDance)failures.Add("chat check done: a checked vision is offered again");
                 }
 
-                // Sam trips: you are sober beside a festivalgoer Sam has an unchecked vision about, and have nothing to check.
+                // Sam trips: you are sober beside a festivalgoer Sam has an unchecked vision about, and have nothing to check. F chats,
+                // as their first action says: by day with no stock that is buying from them (ECON-3).
                 mate.X=30;mate.Z=0;Trip(mate,3);sim.State.Visions.Add(new VisionState{Id="hud_vision",Kind="Buyer",NpcId=npc.Id});
                 player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
                 listed=Actions();
-                if(listed.Contains("Check by")||!listed.Contains(DanceAndChat))failures.Add("sober beside Sam's vision: the actions read \""+listed+"\"");
+                if(listed.Contains("Check by")||!listed.Contains(FestivalHudText.BuyAction(sim.State,player,npc.Id)+FChats))failures.Add("sober beside Sam's vision: the actions read \""+listed+"\"");
                 PressF();yield return null;
                 if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("sober beside Sam's vision: F starts a check");
 
@@ -357,8 +358,9 @@ namespace Festival.Tests
                 var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
-                // A festivalgoer who sells, right beside you; confetti in hand and Sam in reach, so E would otherwise offer it (with no
-                // vision to check, whoever trips, or E would check by dancing instead).
+                // A festivalgoer who sells, right beside you, so by day E would otherwise buy from them (ECON-3: you hold no stock); with
+                // confetti in hand and Sam in reach, offering it to Sam is listed too (with no vision to check, whoever trips, or E would
+                // check by dancing instead).
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");sim.State.Npcs.RemoveAll(n=>n!=npc);sim.State.Visions.Clear();
                 npc.X=0;npc.Z=0;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.Role="Regular";npc.StockSold=0;
                 player.X=.6f;player.Z=0;player.Cash=50;mate.X=.6f;mate.Z=1.5f;
@@ -382,17 +384,19 @@ namespace Festival.Tests
                 }
 
                 // A dance: a stray E and a tap of G leave it going, and nothing is bought, offered or dropped.
-                // Even an E the moment it starts, while the action list still holds the offer to Sam: on a joined client the snapshot
+                // Even an E the moment it starts, while the action list still leads with the buy: on a joined client the snapshot
                 // that starts it lands up to .2 s before the list next refreshes, and beside a night-market shelf it never does.
                 yield return new WaitForSeconds(.4f);
-                Assert.That(Shown<Text>("Prompt")?.text,Does.StartWith("Offer"),"setup: E offers Sam your confetti");
+                Assert.That(Shown<Text>("Prompt")?.text,Does.StartWith("Buy "),"setup: E buys from the festivalgoer");
                 refresh.SetValue(view,float.MaxValue);
                 session.Command("Dance",npc.Id);
                 var dance=Doing();
                 Assert.That(dance?.Kind,Is.EqualTo("Dance"),"setup: you dance with the festivalgoer: "+session.Message);
+                string danced=session.Message;
                 yield return Tap(Key.E);
                 refresh.SetValue(view,0f);
                 if(Doing()?.Id!=dance.Id)failures.Add("dancing, E as it starts: it ended the dance ("+session.Message+")");
+                if(session.Message!=danced)failures.Add("dancing, E as it starts: E asked the host for something (\""+session.Message+"\")");
                 if(sim.State.Transfers.Count>0)failures.Add("dancing, E as it starts: E offered Sam your confetti");
                 yield return new WaitForSeconds(.4f);
                 if(primary.GetValue(view)!=null)failures.Add("dancing: E still runs an action");

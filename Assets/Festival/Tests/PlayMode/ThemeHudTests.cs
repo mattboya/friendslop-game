@@ -44,14 +44,15 @@ namespace Festival.Tests
 
                 yield return StartLevel(session);
 
-                // Festival: take a Tongue Stamp, then a dropped stamp lies at your feet with a festivalgoer to sell to.
+                // Festival: take a Tongue Stamp, then a dropped stamp lies at your feet with a festivalgoer to sell to. By day the
+                // offer leads their actions and says F chats (ECON-3).
                 sim.State.Npcs.Clear();mate.X=player.X+30;mate.Z=player.Z;
                 session.Command("Use",item:"stock_lsd");
                 Assert.That(player.Effects.Exists(e=>e.Id=="lsd"),"took a Tongue Stamp: "+session.Message);
                 sim.State.Drops.Add(new DropState{Id="theme_drop",ItemId="stock_lsd",Count=1,X=player.X,Z=player.Z});
                 sim.State.Npcs.Add(new NpcState{Id="theme_goer",Kind="Wook",X=player.X,Z=player.Z+1,Yaw=180,CanTalk=true});
                 yield return new WaitForSeconds(.8f);
-                Check(hud,failures,"festival","Pick up Tongue Stamps","TONGUE STAMPS","Pick up Tongue Stamps","Offer Tongue Stamps");
+                Check(hud,failures,"festival","Pick up Tongue Stamps","TONGUE STAMPS","Pick up Tongue Stamps","Offer Tongue Stamps  •  F CHAT");
 
                 // Then a shared stash holding Fun Guys, and the friend beside you offering Fun Guys again.
                 sim.State.Stashes.Add(new StashState{Id="theme_stash",X=player.X,Z=player.Z,Items=new List<ItemStack>{new ItemStack{ItemId="stock_mushrooms",Count=1}}});
