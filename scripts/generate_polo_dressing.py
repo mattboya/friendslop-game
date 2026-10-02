@@ -1,11 +1,11 @@
 CONFIG={"out":"Assets/Festival/Art/Resources","src":"ArtSource/PoloDressing.blend","man":"ArtSource/polo-dressing-manifest.json","rev":"artifacts/polo-dressing",
 "palm":{"tall":(10.2,0,.27,.17,11),"lean":(9.0,2.2,.26,.16,10),"fronds":9,"frond":((1.3,.34,.74),(1.4,-.2,.62),(1.2,-.85,.38)),"crown":.46,"nut":(.22,-.2,.15)},
 "wheel":{"axle":7.5,"r":6,"inner":4.2,"legs":(1.1,3.2),"leg_r":.14,"plat":(3.2,.25,2.4),"rim":16,"spokes":8,"gond":(1.2,.9,1.0),"drop":.75,"rim_x":.8,"roof":.04},
-"stage":{"screen":(10,4.2,-1.0,1.9,3.2),"arch":(8.8,7.2,3.9,4.4,.16,.35),"pylon":(1.0,.5),"sign":(7.2,1.3,"PALM MIRAGE",.85),
+"stage":{"screen":(10,4.2,-1.6,1.9,3.2),"arch":(8.8,7.2,3.9,4.4,.16,.35),"pylon":(1.0,.5),"sign":(7.2,1.3,"PALM MIRAGE",.85),
 "crowd":((-16,0,-14),(16,6,-4.7)),"dj":((-3.2,1.4,-2.4),(3.2,3.7,.2))},
 "canopy":{"mast":(10,-1,11.2,.25),"cap":.55,"width":2.8,"thick":.35,"sag":.6,"petals":((-.78,-.62,9,12,"CanvasRose"),(-.35,-.94,10,18,"CanvasGold"),(.25,-.97,7,22,"CanvasMint")),"floor":6.0},
-"tower":{"h":20,"base":4.0,"top":6.0,"levels":8,"post_r":.12,"panels":40,"panel":(1.5,1.1,.08),"cols":("Rose","PaintRose","Gold","Cream","Mint","Glass","Blue")},
-"astro":{"torso":((0,5.4,0),(2.2,2.1,3.5)),"helmet":((0,7.6,4.4),2.3),"visor":((0,7.5,6.25),(1.5,1.1,.5)),"pack":((0,8.1,-.6),(3.4,2.4,3.8)),
+"tower":{"h":20,"base":4.0,"top":6.0,"levels":8,"post_r":.12,"panels":40,"panel":(1.5,1.1,.08),"cols":("Rose","Gold","Cream","Mint","Glass","Blue")},
+"astro":{"torso":((0,5.4,0),(2.2,2.1,3.5)),"helmet":((0,7.6,4.4),2.3),"visor":((0,7.5,6.5),(1.5,1.1,.5)),"pack":((0,8.1,-.6),(3.4,2.4,3.8)),
 "armL":((-1.5,6.2,2.0),(-3.0,3.4,4.6),(-3.1,1.15,5.8)),"armR":((1.5,6.2,2.0),(3.5,6.4,5.8),(2.6,8.6,7.4)),"arm_r":.95,"glove":1.15,
 "leg":((1.3,4.6,-2.2),(1.9,1.15,-3.6),(1.9,1.15,-7.4)),"leg_r":1.15,"boot":((1.9,1.2,-8.4),(2.2,2.4,2.8)),
 "phone":((2.4,9.6,8.4),(2.6,5.0,.35)),"lens":((3.2,11.4,8.62),.35),"rec":((1.8,11.6,8.6),.15),"panel":((0,4.3,3.0),(2.0,1.2,.5))},
@@ -79,7 +79,7 @@ def stage_bounds():
     if SB:return SB[0]
     old=set(bpy.data.objects);bpy.ops.import_scene.fbx(filepath=os.path.join(R0,G["out"],"FestivalStage.fbx"))
     new=[o for o in bpy.data.objects if o not in old]
-    for o in new:o["ctx"]=1;o["temp"]=1
+    for o in new:o["ctx"]=1
     bpy.context.view_layer.update();P=[U(o.matrix_world@v.co) for o in new if o.type=="MESH" for v in o.data.vertices]
     SB.append((V([min(p[i] for p in P) for i in range(3)]),V([max(p[i] for p in P) for i in range(3)])));return SB[0]
 def stage_mirage(k):
@@ -107,7 +107,7 @@ def petal(n,m,root,dx,dz,L,pitch):
     Tm=M.Translation(A(*root))@d.to_track_quat("Y","Z").to_matrix().to_4x4()
     return loft(n,m,rings,T=Tm)
 def petal_canopy(k):
-    C_=G["canopy"];mx,mz,mh,mr=C_["mast"];kit(k,[("Ground","Stone",(0,-.05,0),(24,.1,12),0)])
+    stage_bounds();C_=G["canopy"];mx,mz,mh,mr=C_["mast"];kit(k,[("Ground","Stone",(0,-.05,0),(24,.1,12),0)])
     for s in (-1,1):
         x=s*mx;cyl("Mast"+str(s),"Metal",(x,0,mz),(x,mh,mz),mr,8);ico("Cap"+str(s),"Gold",(x,mh,mz),C_["cap"],2)
         for i,(dx,dz,L,pitch,m) in enumerate(C_["petals"]):petal("Petal"+str(s)+str(i),m,(x,mh,mz),dx*s,dz,L,pitch)
@@ -134,7 +134,7 @@ def rainbow_tower(k):
     for i in range(T["panels"]):
         y=.8+i/T["panels"]*(h-2.2);f=i%4;nx,nz=((0,-1),(1,0),(0,1),(-1,0))[f];along=((i//4)%3-1)*.45;s=half(y)
         c=(nx*s+(along if nz else 0),y,nz*s+(along if nx else 0))
-        box("Panel"+str(i),T["cols"][i%len(T["cols"])],c,(pw,ph,pt) if nz else (pt,ph,pw))
+        box("Panel"+str(i),T["cols"][i*len(T["cols"])//T["panels"]],c,(pw,ph,pt) if nz else (pt,ph,pw))
     s=half(h);slab("TopX1","Metal",(-s,h,-s),(s,h,s),.08,.08);slab("TopX2","Metal",(s,h,-s),(-s,h,s),.08,.08)
     cyl("Crown mast","Metal",(0,h,0),(0,h+1.2,0),.06,6);ico("Star","StageGlowGold",(0,h+1.4,0),.6,1)
 def astronaut(k):
@@ -180,7 +180,7 @@ def eyes(y,z,dx,r=.012):
     for s in (-1,1):ico("Eye"+str(s),"P10",(s*dx,y,z),r,1)
 def gnome(k):
     kit(k);lathe("Coat","P0",[(.02,0),(.12,.005),(.13,.06),(.11,.16),(.07,.22),(.02,.23)],k=10)
-    for s in (-1,1):ico("Boot"+str(s),"P8",(s*.05,.024,.03),.04,1,s=(1,.6,1.4))
+    for s in (-1,1):ico("Boot"+str(s),"P8",(s*.05,.024,.09),.04,1,s=(1,.6,1.4))
     ico("Head","P2",(0,.28,0),.075,2,smooth=True);ico("Nose","P2",(0,.28,.075),.025,1)
     cyl("Beard","P3",(0,.27,.05),(0,.17,.07),.065,8,r2=.01);cyl("Hat","P1",(0,.33,0),(.02,.47,-.02),.08,8,r2=.005);eyes(.3,.065,.028)
 def pixie(k):
@@ -201,7 +201,7 @@ def dragon(k):
 def mushroom_sprite(k):
     kit(k);lathe("Stem","P3",[(.03,0),(.06,.01),(.055,.1),(.05,.18),(.045,.2)],k=10)
     lathe("Cap","P1",[(.04,.17),(.14,.18),(.15,.21),(.12,.26),(.06,.29),(.01,.3)],k=12,smooth=True)
-    for i,p in enumerate(((.07,.27,.05),(-.08,.26,.04),(0,.28,-.08),(.1,.235,-.06),(-.03,.29,0))):ico("Spot"+str(i),"P3",p,.022,1)
+    for i,p in enumerate(((.07,.27,.05),(-.08,.26,.04),(0,.28,-.08),(.1,.265,-.06),(-.03,.29,0))):ico("Spot"+str(i),"P3",p,.022,1)
     for s in (-1,1):tube("Arm"+str(s),"P3",[(s*.05,.1,0),(s*.09,.06,.02)],.01,4)
     eyes(.12,.05,.022)
 def jackalope(k):

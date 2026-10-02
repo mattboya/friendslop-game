@@ -54,7 +54,7 @@
     "FestivalRainbowTower": {
       "floating": [],
       "blocking": [],
-      "renderers": 9,
+      "renderers": 8,
       "triangles": 1392,
       "separate": []
     },
