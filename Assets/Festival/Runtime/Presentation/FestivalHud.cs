@@ -445,7 +445,7 @@ namespace Festival.Presentation
             Accent(connectionPanel.transform,Orange);
             var eyebrow=Label(connectionPanel.transform,"Invitation label",18,TextAnchor.MiddleCenter);eyebrow.text="SUN + MOON FESTIVAL  /  CREW ENTRY";eyebrow.fontStyle=FontStyle.Normal;eyebrow.color=new Color(.30f,.38f,.33f);Place(eyebrow.rectTransform,.08f,.89f,.92f,.95f);
             var title=Label(connectionPanel.transform,"Title",59,TextAnchor.MiddleCenter);title.font=displayFont;title.text="AFTER HOURS";title.color=Ink;Place(title.rectTransform,.06f,.76f,.94f,.89f);
-            var subtitle=Label(connectionPanel.transform,"Subtitle",20,TextAnchor.MiddleCenter);subtitle.text="Find your friend. Catch the last shuttle.";subtitle.color=new Color(.28f,.38f,.35f);Place(subtitle.rectTransform,.08f,.705f,.92f,.765f);
+            var subtitle=Label(connectionPanel.transform,"Subtitle",20,TextAnchor.MiddleCenter);subtitle.text="Find your friend. Get back to camp.";subtitle.color=new Color(.28f,.38f,.35f);Place(subtitle.rectTransform,.08f,.705f,.92f,.765f);
             Rule(connectionPanel.transform,.687f);
             nameField=Field(connectionPanel.transform,"YOUR NAME","Friend",.63f);
             addressField=Field(connectionPanel.transform,"HOST ADDRESS","127.0.0.1",.48f);
@@ -466,7 +466,7 @@ namespace Festival.Presentation
             Disc(menuPanel.transform,"Moon mark",new Vector2(.87f,.86f),new Vector2(.933f,.93f),new Color(.12f,.45f,.39f));
             Disc(menuPanel.transform,"Moon cutout",new Vector2(.887f,.876f),new Vector2(.950f,.946f),Paper);
             var menuTitle=Label(menuPanel.transform,"Menu title",58,TextAnchor.MiddleCenter);menuTitle.font=displayFont;menuTitle.text="AFTER HOURS";menuTitle.color=Ink;Place(menuTitle.rectTransform,.14f,.845f,.86f,.95f);
-            var serial=Label(menuPanel.transform,"Pass serial",17,TextAnchor.MiddleCenter);serial.text="FESTIVAL PASS   /   LAST SHUTTLE CREW";serial.fontStyle=FontStyle.Normal;serial.color=new Color(.32f,.40f,.35f);Place(serial.rectTransform,.08f,.79f,.92f,.85f);
+            var serial=Label(menuPanel.transform,"Pass serial",17,TextAnchor.MiddleCenter);serial.text="FESTIVAL PASS   /   CAMP CREW";serial.fontStyle=FontStyle.Normal;serial.color=new Color(.32f,.40f,.35f);Place(serial.rectTransform,.08f,.79f,.92f,.85f);
             Rule(menuPanel.transform,.782f);
             menuHome=Panel(menuPanel.transform,"Pass home",Color.clear,new Vector2(.055f,.025f),new Vector2(.945f,.76f));menuHome.GetComponent<Image>().raycastTarget=false;
             var crewHeading=Label(menuHome.transform,"Crew heading",17,TextAnchor.MiddleLeft);crewHeading.text="YOUR CREW";crewHeading.fontStyle=FontStyle.Normal;crewHeading.color=new Color(.31f,.42f,.38f);Place(crewHeading.rectTransform,.045f,.90f,.56f,.98f);
@@ -766,7 +766,7 @@ namespace Festival.Presentation
             roster.text=checklist!=""?checklist:state.Players.Count+" CREW"+(state.Phase=="Shopping"?"  •  "+ready+" READY":"  •  TAB MAP");
             UpdateRosterLayout(checklist==""?0:checklist.Split('\n').Length);
             menuRoster.text=state.Players.Count+" / 8 FRIENDS\n"+string.Join("   •   ",state.Players.ConvertAll(p=>(p.Id==player.Id?"YOU":p.Name)+(p.Ready?" READY":"")));
-            menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"LAST SHUTTLE":"GATHERING";
+            menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"BACK TO CAMP":"GATHERING";
         }
 
         // LOOP-5: the results banner, and the sundown warning once per stage (see SundownNoticeSeconds).

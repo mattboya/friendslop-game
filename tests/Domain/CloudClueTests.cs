@@ -253,8 +253,8 @@ public static class CloudClueTests
     // reaching it is a choice. (EditMode's CloudClueWorldTests checks each has standing room among the walls.)
     static void TheStashSpotsAreOffTheBeatenPath()
     {
-        Check(CloudShapes.Landmarks.Length==7,"seven landmarks: the stage, the night market, the medical tent, security, the shuttle, lost property and the Ferris wheel, got "+CloudShapes.Landmarks.Length);
-        var named=new[]{"stage","night market","medical tent","security","shuttle","lost property","Ferris wheel"};
+        Check(CloudShapes.Landmarks.Length==7,"seven landmarks: the stage, the night market, the medical tent, security, the way back to camp, lost property and the Ferris wheel, got "+CloudShapes.Landmarks.Length);
+        var named=new[]{"stage","night market","medical tent","security","way back to camp","lost property","Ferris wheel"};
         Check(CloudShapes.Landmarks.Select(l=>l.Name).SequenceEqual(named),"named "+string.Join(", ",CloudShapes.Landmarks.Select(l=>l.Name)));
         var at=new[]{(0f,32f),(-18f,-22f),(24f,-20f),(27f,5f),(0f,-36f),(-28f,16f),(Festivals.WheelX,Festivals.WheelZ)};
         // The festival's walked paths (FestivalWorld), with a metre's margin: x from, x to, z from, z to.

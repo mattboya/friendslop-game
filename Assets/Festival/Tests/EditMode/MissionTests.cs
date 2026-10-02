@@ -98,7 +98,7 @@ public static class MissionTests
         solo.X=game.State.FriendPosition.X;solo.Z=game.State.FriendPosition.Z;
         Check(Act(game,solo.Id,"FindFriend").Accepted,"solo recruits friend");game.Tick(2.1);
         solo.X=0;solo.Z=-32;game.State.FriendPosition=new WorldPoint(0,-32);
-        Check(Act(game,solo.Id,"Extract").Accepted,"solo starts shuttle extraction");game.Tick(3.1);
+        Check(Act(game,solo.Id,"Extract").Accepted,"solo starts the trip back to camp");game.Tick(3.1);
         Check(game.State.Phase=="Results"&&game.State.Result=="Success","solo wins the timed night rescue");
     }
 }

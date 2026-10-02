@@ -15,7 +15,8 @@ public static class ThemeTests
     private static readonly string[][] EffectNames={new[]{"lsd","Tongue Stamps"},new[]{"mushrooms","Fun Guys"},new[]{"ecstasy","Rolly Pollies"},new[]{"ketamine","Pony Dust"},new[]{"alcohol","Shot"},new[]{"weed",WeedName}};
     // THEME-1's stand-ins that THEME-2 retired, matched like the real-drug words. "Couch Lock" moved from ketamine to weed, so
     // only the weed effect's own name may read it. Never bare "moon": the MOON totem, its map pin and MOONLIT DISCO stay.
-    private static readonly string[] Retired={"prism","moon cap","hug drop","snack leaf","couch lock"};
+    // HUD-6: there is no shuttle, only the way back to camp.
+    private static readonly string[] Retired={"prism","moon cap","hug drop","snack leaf","couch lock","shuttle"};
     private const string WeedName="Couch Lock";
     // Every source of HUD text: FestivalHud, any FestivalHud* helper it moves strings into, and the Core guidance lines it shows. Paths are from the repo root, the runner's working directory.
     private static List<string> HudSources()
@@ -69,11 +70,19 @@ public static class ThemeTests
             if(!ids.Contains(literal)) Check(Offence(literal)==null,"real-drug or retired word '"+Offence(literal)+"' in "+path+": \""+literal+"\"");
         }
         Check(literals>=300,"HUD string literals are read, got "+literals);
+        // HUD-6: the session's notices and the interactions' lines are player text too, but these files also name effects by
+        // their ids ("lsd"), so only "shuttle" is looked for there. The Extract target "shuttle" (FestivalSimulation.cs) is a kept id.
+        foreach(var path in new[]{"Assets/Festival/Runtime/Core/Simulation/Interactions.cs","Assets/Festival/Runtime/Network/FestivalSession.cs"})
+        {
+            var found=Literals(File.ReadAllText(path));
+            Check(found.Count>0,"string literals are read from "+path);
+            foreach(var literal in found) Check(!literal.ToLowerInvariant().Contains("shuttle"),"'shuttle' in "+path+": \""+literal+"\"");
+        }
         // The scanner itself: it finds a real word in text, and skips comments, char literals and escapes.
         var sample=Literals("a=\"Weed 5s\"; // \"lsd\"\n/* \"acid\" */ c='\"'; d=@\"say \"\"hi\"\"\"; e=\"x\\\"y\";");
         Check(string.Join("|",sample)=="Weed 5s|say \"hi\"|x y"&&Offence(sample[0])=="weed","the literal scanner reads strings only, got "+string.Join("|",sample));
         // Retired names fail in any case and inside a line; only the weed effect's own name may read "Couch Lock".
-        Check(Offence("PRISM 42S")=="prism"&&Offence("one Moon cap short")=="moon cap"&&Offence("a Hug Drop")=="hug drop"&&Offence("Snack Leaf 9s")=="snack leaf","the scanner finds retired names");
+        Check(Offence("PRISM 42S")=="prism"&&Offence("one Moon cap short")=="moon cap"&&Offence("a Hug Drop")=="hug drop"&&Offence("Snack Leaf 9s")=="snack leaf"&&Offence("LAST SHUTTLE")=="shuttle","the scanner finds retired names");
         Check(Offence(WeedName)==null&&Offence("Got Couch Lock?")=="couch lock"&&Offence("MOONLIT DISCO")==null,"only the weed effect is Couch Lock, and bare moon stays");
     }
     private static string Offence(string text)

@@ -117,6 +117,7 @@ namespace Festival.Core
                 case "Poi":return BeginPoi(p,c);
                 case "Dj":return BeginDj(p,c);
                 case "FindFriend":return FindFriend(p);
+                // ponytail: the Extract task's target "shuttle" is an id in snapshots that nothing reads (HUD-6 kept it); players read "back to camp".
                 case "Extract":if(!CanExtractNow(p))return Reject(DayLevel?DayExtractRefusal():NightExtractRefusal());return BeginTask(p,"Extract","shuttle",3);
                 case "LostProperty":if(!Near(p,-28,16))return Reject("Find lost property marker");return BeginTask(p,"LostProperty",State.LostPropertyTask.ToString(),5);
                 case "Drag":return Drag(p,c);

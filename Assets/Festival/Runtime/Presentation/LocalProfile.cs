@@ -46,6 +46,7 @@ namespace Festival.Presentation
             Data.MouseSensitivity=FiniteClamp(Data.MouseSensitivity,0.02f,0.5f,0.12f);
             Data.MusicVolume=FiniteClamp(Data.MusicVolume,0,0.7f,0.35f);
             Data.UnlockedFestivalCount=Mathf.Clamp(Data.UnlockedFestivalCount,1,Festivals.Count);
+            // ponytail: "first_shuttle" is a saved award id nobody sees (HUD-6 kept it): renamed, this would wipe old profiles' award.
             Data.Cosmetics.RemoveAll(x=>x!="first_shuttle");
         }
         private static float FiniteClamp(float v,float min,float max,float fallback) => float.IsNaN(v)||float.IsInfinity(v)?fallback:Mathf.Clamp(v,min,max);

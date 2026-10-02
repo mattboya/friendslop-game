@@ -1,8 +1,8 @@
 using System;
 using Festival.Core;
 
-// HUD-4: a night's escort is headed for the way back to camp, as the rest of the HUD calls it; "the shuttle" is only the old
-// stop's sign. The directions keep the openings other tests and players know them by.
+// HUD-4: a night's escort is headed for the way back to camp, as the rest of the HUD calls it, and (HUD-6) so is the sign over
+// it. The directions keep the openings other tests and players know them by.
 public static class WayBackToCampTests
 {
     static void Check(bool pass,string message){if(!pass)throw new Exception("WayBackToCamp: "+message);}

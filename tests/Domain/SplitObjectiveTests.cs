@@ -272,7 +272,7 @@ public static class SplitObjectiveTests
         Check(FestivalGuidance.Hint(view,mate).StartsWith("Search the north"),"with neither in sight, the crew searches: "+FestivalGuidance.Hint(view,mate));
         Check(Recruit(s,mate.Id,second.Position),"setup: the second friend is recruited");Place(s,mate.Id,Gate);
         Check(Headline(mate)=="TWO FRIENDS LOST • 1 / 2 FOUND","one found, one to go: "+Headline(mate));
-        Check(Hint(tripper).StartsWith("Your visions mark the next clue holder")&&!Hint(mate).Contains("shuttle"),"with the first friend still lost nobody is sent home yet: "+Hint(tripper)+" / "+Hint(mate));
+        Check(Hint(tripper).StartsWith("Your visions mark the next clue holder")&&!Hint(mate).Contains("back to camp"),"with the first friend still lost nobody is sent home yet: "+Hint(tripper)+" / "+Hint(mate));
         FollowTrail(s,0);Check(Recruit(s,tripper.Id,s.State.FriendPosition),"setup: the first friend is recruited");
         Check(Headline(mate)=="ESCORT BOTH FRIENDS BACK TO CAMP","both found: take them home: "+Headline(mate));
         Check(Hint(tripper).StartsWith("Lead your friend"),"and their escort leads the way: "+Hint(tripper));

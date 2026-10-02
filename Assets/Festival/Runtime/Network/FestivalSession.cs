@@ -49,7 +49,7 @@ namespace Festival.Network
         public bool IsHost => manager!=null && manager.IsHost;
         public bool Connected => manager!=null && manager.IsConnectedClient;
         public bool Connecting {get;private set;}
-        public string Message {get;private set;}="Gather your friends. Make the last shuttle.";
+        public string Message {get;private set;}="Gather your friends. Make it back to camp.";
         public FestivalInput Controls {get;private set;}
         public LocalProfile Profile {get;private set;}
         public IVoiceSession Voice {get;}=new UnavailableVoiceSession();
