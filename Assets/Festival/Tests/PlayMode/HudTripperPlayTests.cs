@@ -79,6 +79,20 @@ namespace Festival.Tests
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
             const string CheckDance="Check by dancing  •  F CHECK BY CHAT (8 s)",CheckChat="Check by chatting (8 s, safe)",DanceAndChat="Dance with festivalgoer  •  F CHAT";
             const string GearKeys="GEAR   /   1–3 EQUIP     Q USE     G DROP",GearKeysInChat="GEAR   /   Q USE     G DROP";
+            // DIALOG-5: the chat window and its thread as drawn, oldest first: "< " their bubbles, "> " yours.
+            var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+            void ExpectThread(string where,params string[] lines)
+            {
+                if(window==null||!window.Open){failures.Add(where+": the chat window is hidden");return;}
+                var shown=new List<string>();for(int i=0;i<window.Bubbles;i++)shown.Add((window.IsTheirs(i)?"< ":"> ")+window.Shown(i));
+                if(!shown.SequenceEqual(lines))failures.Add(where+": the chat thread reads \""+string.Join(" | ",shown)+"\", expected \""+string.Join(" | ",lines)+"\"");
+            }
+            void ExpectReplies(string where,string[] questions,params bool[] open)
+            {
+                if(window==null||!window.Open)return;
+                for(int i=0;i<3;i++)if(window.ReplyKey(i)!=(i+1).ToString()||window.ReplyLabel(i)!=questions[i]||window.CanReply(i)!=open[i])
+                    failures.Add(where+": reply "+(i+1)+" reads \""+window.ReplyKey(i)+"  "+window.ReplyLabel(i)+"\" and can"+(window.CanReply(i)?"":"'t")+" be picked");
+            }
             try
             {
                 session.Host("Tester",HostPort);
@@ -179,24 +193,45 @@ namespace Festival.Tests
                 if(chat==null)failures.Add("tripper beside a vision: F starts no chat check ("+session.Message+")");
                 else
                 {
-                    var said=chat.Chat;string asking="CHECKING BY CHAT  •  1–3 ASK\n\""+said.Opener+"\"\n1  "+said.Questions[0]+"\n2  "+said.Questions[1];
+                    // DIALOG-5: the chat window opens on their opener, the three questions as reply buttons on 1-3.
+                    var said=chat.Chat;
                     yield return new WaitForSeconds(.6f);
-                    Expect("chat check","Chat check",asking+"\n3  "+said.Questions[2]);
-                    Fits("chat check","Chat check");
-                    // 1-3 ask while the chat runs, so the gear bar stops offering them.
+                    ExpectThread("chat check","< "+said.Opener);
+                    ExpectReplies("chat check",said.Questions,true,true,true);
+                    Fits("chat check","Chat header");
+                    // 1-3 ask while the chat runs, so the gear bar stops offering them; holding the map, 1 would equip the confetti.
                     Expect("chat check","Equipment heading",GearKeysInChat);
-                    yield return Press(Key.Digit2);
-                    yield return new WaitForSeconds(.3f);
-                    Expect("chat check, 2 asked","Chat check",asking+"\n      \""+said.Answers[1]+"\"\n3  "+said.Questions[2]);
-                    Fits("chat check, 2 asked","Chat check");
-                    if(player.EquippedItemId!="confetti")failures.Add("chat check, 2 asked: 2 equipped slot 2 ("+player.EquippedItemId+")");
+                    player.EquippedItemId="map";
+                    // 1, then 3 while they still type their answer to 1: that answer shows whole, then theirs to 3 types out.
+                    yield return Press(Key.Digit1);
+                    yield return Press(Key.Digit3);
+                    yield return new WaitForSeconds(FestivalChatWindow.Typed(said.Answers[2])+.2f);
+                    ExpectThread("chat check, 1 then 3 asked","< "+said.Opener,"> "+said.Questions[0],"< "+said.Answers[0],"> "+said.Questions[2],"< "+said.Answers[2]);
+                    ExpectReplies("chat check, 1 then 3 asked",said.Questions,false,true,false);
+                    Canvas.ForceUpdateCanvases();
+                    foreach(var text in window.GetComponentsInChildren<Text>(false))
+                        if((text.name=="Line"||text.name=="Question")&&text.cachedTextGenerator.characterCountVisible<text.text.Length)failures.Add("chat check, 1 then 3 asked: a "+text.name+" box "+text.rectTransform.rect.size+" cuts \""+text.text+"\"");
+                    if(player.EquippedItemId!="map")failures.Add("chat check, 1 then 3 asked: 1 or 3 equipped a slot ("+player.EquippedItemId+")");
+                    // With the menu open the pointer is free: the window sits beside the pass, over its dimmer, and a click asks 2.
+                    session.MenuOpen=true;yield return null;yield return null;
+                    var pass=hud.GetComponentsInChildren<Image>(false).FirstOrDefault(i=>i.name=="Festival pass");var dimmer=hud.GetComponentsInChildren<Image>(false).FirstOrDefault(i=>i.name=="Festival pass dimmer");
+                    if(window==null||!window.Open||pass==null||dimmer==null)failures.Add("chat check, menu open: the chat window or the pass is hidden");
+                    else
+                    {
+                        Rect Box(RectTransform r){var c=new Vector3[4];r.GetWorldCorners(c);return Rect.MinMaxRect(c[0].x,c[0].y,c[2].x,c[2].y);}
+                        if(Box((RectTransform)window.transform).Overlaps(Box(pass.rectTransform)))failures.Add("chat check, menu open: the chat window covers the pass");
+                        if(window.transform.GetSiblingIndex()<dimmer.transform.GetSiblingIndex())failures.Add("chat check, menu open: the chat window is under the pass's dimmer");
+                        window.GetComponentsInChildren<Button>().First(b=>b.name=="Reply 2").onClick.Invoke();yield return null;
+                        if(window.Bubbles<2||window.Shown(window.Bubbles-2)!=said.Questions[1])failures.Add("chat check, menu open: clicking reply 2 doesn't ask question 2");
+                    }
+                    session.MenuOpen=false;
                     yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds);
-                    Expect("chat check done","Chat check","(hidden)");
+                    if(window!=null&&window.Open)failures.Add("chat check done: the chat window still shows");
                     Expect("chat check done","Equipment heading",GearKeys);
-                    // With no chat under way, 2 equips slot 2 again (and shows the keyboard reaches the HUD).
-                    yield return Press(Key.Digit2);
+                    // With no chat under way, 1 equips slot 1 again (and shows the keyboard reaches the HUD).
+                    yield return Press(Key.Digit1);
                     yield return new WaitForSeconds(.3f);
-                    if(player.EquippedItemId!="map")failures.Add("chat check done: 2 did not equip slot 2 ("+player.EquippedItemId+")");
+                    if(player.EquippedItemId!="confetti")failures.Add("chat check done: 1 did not equip slot 1 ("+player.EquippedItemId+")");
                     if(!seen.Confirmed)failures.Add("chat check done: the vision is still unchecked ("+session.Message+")");
                     if(Read("Prompt")==CheckDance)failures.Add("chat check done: a checked vision is offered again");
                 }
@@ -220,7 +255,8 @@ namespace Festival.Tests
                 {
                     var said=again.Chat;
                     yield return new WaitForSeconds(.6f);
-                    Expect("second chat check","Chat check","CHECKING BY CHAT  •  1–3 ASK\n\""+said.Opener+"\"\n1  "+said.Questions[0]+"\n2  "+said.Questions[1]+"\n3  "+said.Questions[2]);
+                    ExpectThread("second chat check","< "+said.Opener);
+                    ExpectReplies("second chat check",said.Questions,true,true,true);
                 }
 
                 // VISION-3: Sam dances with that festivalgoer, so the host would refuse your check: the HUD says they're busy, and
@@ -392,7 +428,7 @@ namespace Festival.Tests
         }
 
         // Every HUD card a player can see at once; none may cover another.
-        private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat check card","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};
+        private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat window","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};
 
         // HUD-2 on Night 2 with a full crew of 8, the busiest the HUD gets: the tripper checks by chat while the everyone-home
         // checklist lists all 8 (its lowest), the dose card lists everyone's dose and substance (TRIP-5: two to a line, so 5
@@ -445,7 +481,7 @@ namespace Festival.Tests
                     var min=canvas.transform.InverseTransformPoint(corners[0]);var max=canvas.transform.InverseTransformPoint(corners[2]);
                     shown.Add((image.name,Rect.MinMaxRect(min.x,min.y,max.x,max.y)));
                 }
-                foreach(var card in new[]{"Chat check card","Crew card","Session notice","Tripper card"})if(!shown.Exists(c=>c.name==card))failures.Add("setup: the "+card+" is hidden");
+                foreach(var card in new[]{"Chat window","Crew card","Session notice","Tripper card"})if(!shown.Exists(c=>c.name==card))failures.Add("setup: the "+card+" is hidden");
                 string roster="",tripping="";
                 foreach(var text in hud.GetComponentsInChildren<Text>(false))
                 {

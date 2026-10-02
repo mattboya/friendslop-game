@@ -32,13 +32,13 @@ namespace Festival.Presentation
         private Canvas canvas;
         private Font font;
         private Font displayFont;
-        private GameObject connectionPanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, chatPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
+        private GameObject connectionPanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping,trustLine,chatText;
+        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping,trustLine;
         private Text musicValue,lookValue,motionValue,contrastValue,viewValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -92,9 +92,11 @@ namespace Festival.Presentation
         // The verdict plays from when this client first sees every vote in (FestivalHudText.ReviewReveal).
         private string revealRound="";
         private float revealAt;
-        // The chat check under way and the question 1-3 asked in it (-1 until one is).
-        private string chatInteractionId="";
-        private int chatQuestion=-1;
+        // DIALOG-5: the chat window, the reply 1-3 picked this frame for it to take once it has followed the chat (-1: none), and
+        // whether it sits beside the pass (the menu is open) rather than in play's spot.
+        private FestivalChatWindow chatWindow;
+        private int chatReply=-1;
+        private bool? chatBesidePass;
         // ECON-2: the buy from a festivalgoer under way, the kind it buys and how many of that kind were held as it began.
         private string buyInteractionId="",buyItem="";
         private int heldBeforeBuy;
@@ -323,12 +325,6 @@ namespace Festival.Presentation
             dialogueSpeaker=Label(dialoguePanel.transform,"Speaker",17,TextAnchor.MiddleLeft);dialogueSpeaker.fontStyle=FontStyle.Normal;dialogueSpeaker.color=new Color(.17f,.47f,.40f);Place(dialogueSpeaker.rectTransform,.045f,.56f,.95f,.90f);
             dialogueLine=Label(dialoguePanel.transform,"Dialogue line",24,TextAnchor.MiddleLeft);dialogueLine.color=Ink;Place(dialogueLine.rectTransform,.045f,.09f,.95f,.62f);
             dialoguePanel.SetActive(false);
-            // The tripper's chat check: the festivalgoer's opener and three questions on 1-3, the asked one answered.
-            // Its top stays under Night 2's lowest crew card (.660, a crew of 8) and the notice it pushes down (.714); its foot above the gear bar (.148).
-            chatPanel=Card(root.transform,"Chat check card",new Vector2(.60f,.18f),new Vector2(.975f,.64f),false);
-            Accent(chatPanel.transform,Orange);
-            chatText=Label(chatPanel.transform,"Chat check",20,TextAnchor.UpperLeft);chatText.color=Ink;Place(chatText.rectTransform,.05f,.04f,.95f,.93f);chatPanel.SetActive(false);
-
             BuildConnection(root.transform);
             BuildPass(root.transform);
 
@@ -356,6 +352,8 @@ namespace Festival.Presentation
             heldDetailText=Label(heldDetailPanel.transform,"Held item details",22,TextAnchor.MiddleLeft);heldDetailText.color=new Color(.15f,.25f,.22f);Place(heldDetailText.rectTransform,.06f,.11f,.94f,.54f);
             // A stock item's description runs to three lines, so it shrinks to fit its two.
             ShrinkToFit(heldDetailText,14);
+            // DIALOG-5: the chat window, built last so that with the menu open it draws over the pass's dimmer (UpdateChat).
+            chatWindow=FestivalChatWindow.Build(root.transform,font,roundedSprite);
         }
 
         private void BuildConnection(Transform root)
@@ -509,7 +507,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatPanel.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -653,8 +651,9 @@ namespace Festival.Presentation
                 session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state));return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
-            // While a chat check runs, 1-3 ask its questions instead of equipping.
-            if(equipSlot>=0&&!session.MenuOpen&&chatText.text!=""){chatQuestion=equipSlot;equipSlot=-1;}
+            // DIALOG-5: while the chat window has questions to ask this frame, 1-3 ask them instead of equipping (never in a rope chat,
+            // which has none, nor once the chat is over).
+            if(equipSlot>=0&&!session.MenuOpen&&FestivalChatWindow.TakesReplies(state,player)){chatReply=equipSlot;equipSlot=-1;}
             // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
             bool gearKeys=FestivalSimulation.Interactive(state.Phase);
             if(equipSlot>=0&&!session.MenuOpen&&gearKeys){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
@@ -727,15 +726,20 @@ namespace Festival.Presentation
         // Seconds since this client saw the verdict come in; 0 while the vote is open.
         private double RevealSeconds(RoundState state)=>FestivalHudText.VoteOpen(state)||revealRound!=state.RoundId?0:Time.unscaledTime-revealAt;
 
-        // The chat picker shows while the local player's chat check runs; a new chat starts with no question asked.
+        // DIALOG-5: the chat window follows the local player's chat check or VIP rope chat, then takes the reply 1-3 picked this frame
+        // (a click picks one itself). In play its top stays under Night 2's lowest crew card (.660, a crew of 8) and the notice it
+        // pushes down, its foot above the gear bar (.148). With the menu open it moves beside the pass, over the dimmer, so the freed
+        // pointer can click a reply, unless the crew list holds that spot.
         private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
         {
-            if(player.InteractionId!=chatInteractionId){chatInteractionId=player.InteractionId;chatQuestion=-1;}
-            chatText.text=FestivalHudText.ChatPicker(state,player,chatQuestion);
-            chatPanel.SetActive(!showMenu&&chatText.text!="");
-            if(chatPanel.activeSelf)dialoguePanel.SetActive(false);
+            if(chatBesidePass!=showMenu){chatBesidePass=showMenu;Place(Rect(chatWindow.gameObject),showMenu?.735f:.60f,.155f,showMenu?.985f:.975f,.652f);}
+            bool covered=showMenu&&crewOpen;
+            bool live=!covered&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion);
+            if(covered)chatWindow.Close();
+            if(chatReply>=0){if(live)chatWindow.Pick(chatReply);chatReply=-1;}
+            if(live)dialoguePanel.SetActive(false);
             // 1-3 ask the chat's questions while it runs (UpdateKeyboard), so the gear bar stops offering them to equip.
-            inventoryHeading.text="GEAR   /   "+(chatPanel.activeSelf?"":"1–3 EQUIP     ")+"Q USE     G DROP";
+            inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)?"":"1–3 EQUIP     ")+"Q USE     G DROP";
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)
@@ -898,7 +902,7 @@ namespace Festival.Presentation
             shown|=DevelopmentMapVisible&&!session.MenuOpen;
 #endif
             mapShade.SetActive(shown);mapPanel.SetActive(shown);if(!shown)return;
-            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatPanel.SetActive(false);
+            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();
             bool camp=state.Phase=="Shopping"||state.Phase=="Spinning";campMap.SetActive(camp);festivalMap.SetActive(!camp);
             mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";
             float x=camp?Mathf.InverseLerp(-30,30,player.X):Mathf.InverseLerp(-35,35,player.X);

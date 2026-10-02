@@ -72,11 +72,24 @@ namespace Festival.Tests
                 if(Actions().Contains(DanceAndChat))failures.Add("sober beside the VIP guard: the dance still offers F as a plain chat: \""+Actions()+"\"");
                 PressF();yield return null;
                 if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.TargetId==guard.Id&&i.Status=="Active"))failures.Add("sober beside the VIP guard: F starts no chat with them ("+session.Message+")");
-                // POLO-4: and the chat panel is the rope card, not a check: the guard's opener and doorman line, nothing to ask.
+                // POLO-4: and the chat is the rope chat, not a check. DIALOG-5: the chat window, headed for the rope, shows the guard's
+                // opener and then their doorman line, typed out, with no replies to pick.
                 var rope=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.Status=="Active")?.Chat;
-                yield return new WaitForSeconds(.2f);
-                if(rope!=null){Expect("talking to the VIP guard","Chat check","TALKING YOUR WAY IN  •  VIP ROPE\n\""+rope.Opener+"\"\n\""+rope.Doorman+"\"");Fits("talking to the VIP guard","Chat check");}
-                yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds+.4f);
+                float reading=rope==null?0:FestivalChatWindow.Typed(rope.Doorman)+.2f;
+                yield return new WaitForSeconds(reading);
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                if(rope!=null)
+                {
+                    if(window==null||!window.Open)failures.Add("talking to the VIP guard: the chat window is hidden");
+                    else
+                    {
+                        Expect("talking to the VIP guard","Chat header","VIP GUARD  •  TALKING YOUR WAY IN");Fits("talking to the VIP guard","Chat header");
+                        string thread="";for(int i=0;i<window.Bubbles;i++)thread+=(window.IsTheirs(i)?"< ":"> ")+window.Shown(i)+" | ";
+                        if(thread!="< "+rope.Opener+" | < "+rope.Doorman+" | ")failures.Add("talking to the VIP guard: the chat thread reads \""+thread+"\"");
+                        if(window.Replies!=0)failures.Add("talking to the VIP guard: the rope chat offers "+window.Replies+" replies");
+                    }
+                }
+                yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds+.4f-reading);
                 if(!Banded())failures.Add("the guard's chat is over and there is no VIP wristband ("+session.Message+")");
 
                 // POLO-2: at the VIP stall's end of the night market's shelves, eyeing the nearest shelf: E stays the shelf's, and

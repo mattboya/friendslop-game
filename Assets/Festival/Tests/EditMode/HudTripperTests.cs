@@ -34,6 +34,16 @@ namespace Festival.Tests
             return npc;
         }
         static PlayerState Me(RoundState view,string id)=>view.Players.Find(p=>p.Id==id);
+        // DIALOG-5: the chat window on the HUD's 1920x1080 canvas, and its thread as drawn ("< " theirs, "> " yours), oldest first.
+        UnityEngine.GameObject canvas;
+        [TearDown] public void TakeTheCanvasDown(){if(canvas!=null)UnityEngine.Object.DestroyImmediate(canvas);}
+        FestivalChatWindow ChatWindow()
+        {
+            canvas=new UnityEngine.GameObject("HUD tripper canvas",typeof(UnityEngine.RectTransform),typeof(UnityEngine.Canvas));canvas.GetComponent<UnityEngine.Canvas>().renderMode=UnityEngine.RenderMode.WorldSpace;
+            ((UnityEngine.RectTransform)canvas.transform).sizeDelta=new UnityEngine.Vector2(1920,1080);
+            return FestivalChatWindow.Build(canvas.transform,UnityEngine.Resources.Load<UnityEngine.Font>("FestivalDisplay"),null);
+        }
+        static string[] Thread(FestivalChatWindow window){var lines=new System.Collections.Generic.List<string>();for(int i=0;i<window.Bubbles;i++)lines.Add((window.IsTheirs(i)?"< ":"> ")+window.Shown(i));return lines.ToArray();}
 
         // TRIP-5: and what they took, as the substance wheel named it.
         [Test] public void EveryoneSeesWhoTripsAndOnHowManyDoses()
@@ -180,34 +190,40 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.CheckTarget(s,you),Is.SameAs(target),"then the nearest free one");
         }
 
-        [Test] public void TheChatPickerAsksTheTrippersQuestions()
+        // DIALOG-5: the chat check is a thread in the chat window: their opener, then the three questions as replies on 1-3.
+        [Test] public void TheChatWindowAsksTheTrippersQuestions()
         {
             var game=Day();var npc=Beside(game,out var tripper,out _);
             var started=game.Execute(tripper.Id,new GameCommand{Id="hud_chat",Kind="ConfirmChat",TargetId=npc.Id});
             Assert.That(started.Accepted,Is.True,"setup: the tripper chats to check: "+started.Reason);
             var said=game.Interaction(tripper.InteractionId).Chat;
-            var mine=FestivalSession.ViewFor(game,tripper.Id);var me=Me(mine,tripper.Id);
-            string asking="CHECKING BY CHAT  •  1–3 ASK\n\""+said.Opener+"\"\n1  "+said.Questions[0]+"\n2  "+said.Questions[1]+"\n3  "+said.Questions[2];
-            Assert.That(FestivalHudText.ChatPicker(mine,me,-1),Is.EqualTo(asking),"their opener, then the three questions on 1-3");
-            Assert.That(FestivalHudText.ChatPicker(mine,me,1),Is.EqualTo("CHECKING BY CHAT  •  1–3 ASK\n\""+said.Opener+"\"\n1  "+said.Questions[0]+"\n2  "+said.Questions[1]+"\n      \""+said.Answers[1]+"\"\n3  "+said.Questions[2]),
-                "the picked question gets their answer");
+            var mine=FestivalSession.ViewFor(game,tripper.Id);var me=Me(mine,tripper.Id);var window=ChatWindow();
+            Assert.That(window.Follow(mine,me,mine.SimulationSeconds,0,false),Is.True,"the tripper's chat check opens the window");
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+said.Opener}),"their opener");
+            Assert.That(window.Replies,Is.EqualTo(3),"then the three questions, as buttons");
+            for(int i=0;i<3;i++)Assert.That(window.ReplyKey(i)+"  "+window.ReplyLabel(i),Is.EqualTo((i+1)+"  "+said.Questions[i]),"on 1-3");
+            Assert.That(FestivalChatWindow.TakesReplies(mine,me),Is.True,"so 1-3 ask them");
+            window.Pick(1);window.Follow(mine,me,mine.SimulationSeconds,FestivalChatWindow.Typed(said.Answers[1])+.01f,false);
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+said.Opener,"> "+said.Questions[1],"< "+said.Answers[1]}),"the picked question gets their answer");
             foreach(var viewer in game.State.Players)
             {
                 if(viewer.Id==tripper.Id)continue;
                 var view=FestivalSession.ViewFor(game,viewer.Id);
-                Assert.That(FestivalHudText.ChatPicker(view,Me(view,viewer.Id),0),Is.Empty,viewer.Id+" has no chat to read");
+                Assert.That(FestivalChatWindow.LiveChat(view,Me(view,viewer.Id)),Is.Null,viewer.Id+" has no chat to read");
+                Assert.That(FestivalChatWindow.TakesReplies(view,Me(view,viewer.Id)),Is.False,viewer.Id+"'s 1-3 still equip");
             }
             game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
             mine=FestivalSession.ViewFor(game,tripper.Id);
-            Assert.That(FestivalHudText.ChatPicker(mine,Me(mine,tripper.Id),1),Is.Empty,"the picker closes with the chat");
+            Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,9,false)||window.Open,Is.False,"the window closes with the chat");
             var dance=game.Execute(tripper.Id,new GameCommand{Id="hud_dance",Kind="Dance",TargetId=npc.Id});
             Assert.That(dance.Accepted,Is.True,"setup: the tripper dances with them: "+dance.Reason);
             mine=FestivalSession.ViewFor(game,tripper.Id);
-            Assert.That(FestivalHudText.ChatPicker(mine,Me(mine,tripper.Id),0),Is.Empty,"a dance has no questions to pick");
+            Assert.That(FestivalChatWindow.TakesReplies(mine,Me(mine,tripper.Id))||window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,10,false),Is.False,"a dance has no questions to pick");
         }
 
-        // POLO-4: talking your way past the VIP rope is its own card, the guard's opener and doorman line with nothing to ask, so
-        // it never reads like a check. The tripper checking a vision of the guard still reads the check card.
+        // POLO-4: talking your way past the VIP rope is its own chat, the guard's opener and doorman line with nothing to ask, so
+        // it never reads like a check. DIALOG-5: in the chat window, headed for the rope, with no reply buttons, and 1-3 still
+        // equip. The tripper checking a vision of the guard still gets the check's questions.
         [Test] public void ASoberChatWithTheGuardIsItsOwnCard()
         {
             var game=Day();var guard=game.State.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);
@@ -219,10 +235,15 @@ namespace Festival.Tests
             var said=game.Interaction(sober.InteractionId).Chat;Assert.That(said.Doorman,Is.Not.Empty,"setup: the guard has a doorman line");
             // Through a snapshot, as the sober player's client gets it.
             var view=UnityEngine.JsonUtility.FromJson<RoundState>(UnityEngine.JsonUtility.ToJson(FestivalSession.ViewFor(game,sober.Id)));var me=Me(view,sober.Id);
-            string card=FestivalHudText.ChatPicker(view,me,-1);
-            Assert.That(card,Is.EqualTo("TALKING YOUR WAY IN  •  VIP ROPE\n\""+said.Opener+"\"\n\""+said.Doorman+"\""),"the guard's opener, then their doorman line");
-            Assert.That(card,Does.Not.Contain("CHECKING BY CHAT").And.Not.Contain("1–3"),"nothing to ask, so no check and no 1-3");
-            Assert.That(FestivalHudText.ChatPicker(view,me,1),Is.EqualTo(card),"and 1-3 pick nothing");
+            var window=ChatWindow();
+            Assert.That(window.Follow(view,me,view.SimulationSeconds,0,false),Is.True,"the rope chat opens the chat window");
+            Assert.That(window.Header,Is.EqualTo("VIP GUARD  •  TALKING YOUR WAY IN"),"headed as the rope chat");
+            window.Follow(view,me,view.SimulationSeconds,FestivalChatWindow.Typed(said.Doorman)+.01f,false);
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+said.Opener,"< "+said.Doorman}),"the guard's opener, then their doorman line");
+            Assert.That(window.Replies,Is.Zero,"nothing to ask, so no reply buttons");
+            Assert.That(FestivalChatWindow.TakesReplies(view,me),Is.False,"and 1-3 still equip");
+            Assert.That(window.Pick(0)||window.Pick(1)||window.Pick(2),Is.False,"1-3 pick nothing");
+            Assert.That(window.Bubbles,Is.EqualTo(2));
 
             game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
             game.State.Visions.Add(new VisionState{Id="planted",Kind="Buyer",NpcId=guard.Id,Tell=true});
@@ -230,7 +251,8 @@ namespace Festival.Tests
             started=game.Execute(tripper.Id,new GameCommand{Id="rope_check",Kind="ConfirmChat",TargetId=guard.Id});
             Assert.That(started.Accepted,Is.True,"setup: the tripper chats to check their vision of the guard: "+started.Reason);
             var mine=FestivalSession.ViewFor(game,tripper.Id);
-            Assert.That(FestivalHudText.ChatPicker(mine,Me(mine,tripper.Id),-1),Does.StartWith("CHECKING BY CHAT  •  1–3 ASK\n"),"a chat that checks a vision is still a check");
+            Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,10,false),Is.True);
+            Assert.That(window.Header+" / "+window.Replies,Is.EqualTo("VIP GUARD / 3"),"a chat that checks a vision is still a check");
         }
 
         [Test] public void ACheckDanceSaysItIsACheck()
