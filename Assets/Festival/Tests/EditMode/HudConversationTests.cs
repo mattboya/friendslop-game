@@ -137,7 +137,10 @@ namespace Festival.Tests
             Assert.That(talk.Hunch,Does.Not.Contain("TRUE").And.Not.Contain("FALSE"),"a hunch, not a verdict");
             Follow(window,game,you.Id,over+FestivalChatWindow.Lingers(talk.Hunch)-.05f);
             Assert.That(window.Open,Is.True,"the hunch stays until read");
-            Follow(window,game,you.Id,over+FestivalChatWindow.Lingers(talk.Hunch)+FestivalChatWindow.FadeSeconds+.01f);
+            // It goes once every line in it has been up its reading time (DIALOG-6): the hunch, or a longer line said a turn before.
+            float readBy=over+FestivalChatWindow.Lingers(talk.Hunch);
+            for(int t=0;t<FestivalSimulation.ConversationTurns;t++){var turn=talk.Turns[t];foreach(var line in new[]{turn.Reaction,turn.Line,turn.Replies[Smooth(turn)]})readBy=Mathf.Max(readBy,t+FestivalChatWindow.Lingers(line));}
+            Follow(window,game,you.Id,readBy+FestivalChatWindow.FadeSeconds+.01f);
             Assert.That(window.Open,Is.False,"then the window goes");
         }
 
