@@ -339,6 +339,49 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"Sundown and the restart, as a player reads them:\n"+string.Join("\n",failures));
         }
 
+        // ECON-3: Q uses what you hold, and on stock that is taking it yourself. The first Q leaves your stock and says how to take
+        // it; a second within 3 s takes it. Hosts a real round; Q goes through the HUD's own input handling (FestivalHud.UpdateKeyboard)
+        // on a virtual keyboard.
+        [UnityTest]public IEnumerator QAsksBeforeYouTakeYourOwnStock()
+        {
+            UseAVirtualKeyboard("HUD stock keyboard");
+            var world=new GameObject("HUD stock world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD stock");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            string Notice(){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Notice")return text.text;return "(hidden)";}
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);
+                sim.State.Npcs.Clear();
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.Effects.Clear();
+                player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});player.EquippedItemId="stock_lsd";
+                int Stock()=>player.Inventory.Find(i=>i.ItemId=="stock_lsd")?.Count??0;
+                yield return new WaitForSeconds(.4f);
+                yield return Tap(Key.Q);
+                yield return new WaitForSeconds(.2f);
+                if(Stock()!=2||player.Effects.Exists(e=>e.Id=="lsd"))failures.Add("one Q on your stock: you took it ("+Stock()+" left)");
+                if(Notice()!=FestivalHud.TakeStockAgain)failures.Add("one Q on your stock: the notice reads \""+Notice()+"\"");
+                yield return Tap(Key.Q);
+                yield return new WaitForSeconds(.2f);
+                if(Stock()!=1||!player.Effects.Exists(e=>e.Id=="lsd"))failures.Add("a second Q within 3 s: you didn't take one ("+Stock()+" left, "+session.Message+")");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Q on your stock:\n"+string.Join("\n",failures));
+        }
+
         // HUD-4: a menu left open at camp closes as the wheels start, so the spin is seen. While the wheels spin and the festival
         // loads, the host refuses every action, so the HUD offers none and 1, Q and G send nothing. A key being rebound keeps the
         // menu open as the festival opens. Hosts a real two-player round; the keys are pressed on a virtual keyboard, so they go
@@ -421,6 +464,21 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"The spin a player sees:\n"+string.Join("\n",failures));
+        }
+
+        // A virtual keyboard whose keys reach the HUD's own input handling, even unfocused in the editor; RestoreTheKeyboard removes it.
+        private void UseAVirtualKeyboard(string name)
+        {
+            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
+            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            keyboard=InputSystem.AddDevice<Keyboard>(name);
+        }
+        // A key pressed and let go, a couple of frames each.
+        private IEnumerator Tap(Key key)
+        {
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
         }
 
         // The virtual keyboard and the input settings go back however the test ended (an error log skips its own finally).

@@ -105,6 +105,9 @@ namespace Festival.Presentation
         private float nextActionRefresh;
         private string lastNotice="";
         private float noticeUntil;
+        // ECON-3: the stock the last Q asked about taking (TakesOnQ), and when; "" when none.
+        private string qAsked="";
+        private float qAskedAt;
         // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice).
         private bool stopNoticed;
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
@@ -710,7 +713,12 @@ namespace Festival.Presentation
             if(handGear.Count>0&&gearKeys)
             {
                 selectedSlot=Mathf.Clamp(selectedSlot,0,handGear.Count-1);string item=player.EquippedItemId!=""?player.EquippedItemId:handGear[selectedSlot].ItemId;
-                if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Use",item:item);
+                if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)
+                {
+                    if(TakesOnQ(item,qAsked,qAskedAt,Time.unscaledTime)){qAsked="";session.Command("Use",item:item);}
+                    // ECON-3: the first Q on stock asks; the notice stays up as long as a second Q would take it.
+                    else{qAsked=item;qAskedAt=Time.unscaledTime;session.SetMessage(TakeStockAgain);lastNotice=session.Message;noticeUntil=qAskedAt+TakeStockSeconds;}
+                }
                 if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&!dancing)session.Command("Drop",item:item);
             }
         }
@@ -1231,6 +1239,13 @@ namespace Festival.Presentation
         }
         // Players read an item's display name, never its internal id (THEME-2: "Tongue Stamps", not "stock_lsd").
         private static string ItemName(string id)=>Catalog.FindItem(id)?.Name??id;
+        /// <summary>ECON-3: whether Q (Use) on item, pressed at `now` (the HUD's clock), takes it. Using stock is taking it yourself (the
+        /// unit gone and a minute's trip), and a new player presses Q beside a buyer to "use" their stock on them. So on stock Q takes it
+        /// only when the Q before, at armedAt, asked about that same stock (armed) no more than TakeStockSeconds ago; otherwise this Q
+        /// asks, and the HUD says TakeStockAgain. Every other item's Q is unchanged.</summary>
+        public static bool TakesOnQ(string item,string armed,float armedAt,float now)=>Catalog.FindItem(item)?.Category!="Stock"||item==armed&&now-armedAt<=TakeStockSeconds;
+        public const float TakeStockSeconds=3;
+        public const string TakeStockAgain="Q again to take it yourself (it's stock for selling)";
         private void FinishActions(){for(int i=activeActionCount;i<dynamicActions.Count;i++)dynamicActions[i].SetActive(false);}
         private void SetPromptAction(string label,Action action){prompt.text=label.StartsWith("E  ")?label.Substring(3):label;primaryAction=action;}
         private string FocusedOffer(RoundState state,PlayerState player)

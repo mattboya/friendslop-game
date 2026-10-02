@@ -103,6 +103,20 @@ namespace Festival.Tests
             Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | "+Buy));
         }
 
+        // ECON-3: Q uses what you hold, and using stock is taking it yourself: the unit is gone and you trip for a minute. A new player
+        // presses Q beside a buyer to "use" their stock on them, so on stock the first Q asks and only a second Q within
+        // TakeStockSeconds of it takes the stock. Every other item's Q is as before.
+        [Test] public void QTakesStockOnlyOnASecondPress()
+        {
+            Assert.That(FestivalHud.TakesOnQ("confetti","",0,10),Is.True,"gear: one Q, as ever");
+            Assert.That(FestivalHud.TakesOnQ("stock_lsd","",0,10),Is.False,"the first Q on stock asks");
+            Assert.That(FestivalHud.TakesOnQ("stock_lsd","stock_lsd",10,10+FestivalHud.TakeStockSeconds-.1f),Is.True,"a second Q in time takes it");
+            Assert.That(FestivalHud.TakesOnQ("stock_lsd","stock_lsd",10,10+FestivalHud.TakeStockSeconds+.1f),Is.False,"too late: it asks again");
+            Assert.That(FestivalHud.TakesOnQ("stock_mushrooms","stock_lsd",10,11),Is.False,"a Q on the other kind asks about that one");
+            Assert.That(FestivalHud.TakeStockSeconds,Is.EqualTo(3),"within 3 s");
+            Assert.That(FestivalHud.TakeStockAgain,Is.EqualTo("Q again to take it yourself (it's stock for selling)"));
+        }
+
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
         {
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.
