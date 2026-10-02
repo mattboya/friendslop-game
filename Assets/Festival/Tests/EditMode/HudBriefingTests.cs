@@ -1,6 +1,8 @@
+using System;
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Presentation;
+using UnityEngine.InputSystem;
 using UnityEngine.TestTools.Constraints;
 using Is = UnityEngine.TestTools.Constraints.Is;
 
@@ -69,6 +71,66 @@ namespace Festival.Tests
             var spirit=Start(0,1);spirit.Players[0].Life="Spirit";
             Assert.That(FestivalHudText.Briefing(spirit,"you"),Is.Empty,"a spirit sees no card");
             Assert.That(FestivalHudText.Briefing(spirit,"nobody"),Is.Empty,"nor does a viewer the view doesn't hold");
+        }
+
+        // How to Play: the panel the main menu and the Escape menu open, as titled blocks.
+        static string Block(FestivalInput input,string title){foreach(var (t,text) in FestivalHudText.HowToPlay(input))if(t==title)return text;Assert.Fail("How to Play has no "+title+" block");return "";}
+
+        [Test] public void HowToPlayIsSixShortBlocks()
+        {
+            using(var input=new FestivalInput("hud-briefing-test"))
+            {
+                var blocks=FestivalHudText.HowToPlay(input);
+                Assert.That(Array.ConvertAll(blocks,b=>b.Title),Is.EqualTo(new[]{"THE WEEKEND","THE TRIPPER","EVERYONE ELSE","DANGER","CAMP","KEYS"}));
+                foreach(var b in blocks)Assert.That(b.Text,Is.Not.Empty,b.Title);
+            }
+        }
+
+        // Every action with its key as bound right now, so a rebind shows. The mouse look reads "Mouse": its binding is the mouse's
+        // movement, which the Input System calls "Delta".
+        [Test] public void HowToPlayListsEveryActionWithItsKeyAsBoundNow()
+        {
+            using(var input=new FestivalInput("hud-briefing-test"))
+            {
+                var lines=Block(input,"KEYS").Split('\n');
+                Assert.That(lines.Length,Is.EqualTo(input.Map.actions.Count),"one line per action");
+                foreach(var action in input.Map.actions)
+                {
+                    string key=action==input.Look?"Mouse":input.Label(action);
+                    var line=Array.Find(lines,l=>l.StartsWith(key+"  "));
+                    Assert.That(line,Is.Not.Null,action.name+" reads with its key, "+key);
+                    Assert.That(line.Length,Is.GreaterThan(key.Length+2),action.name+" says what it does");
+                }
+                input.Interact.ApplyBindingOverride(0,"<Keyboard>/r");
+                string rebound=input.Label(input.Interact);
+                Assert.That(rebound,Is.Not.EqualTo("E"),"setup: the new key reads differently");
+                lines=Block(input,"KEYS").Split('\n');
+                Assert.That(lines,Has.Some.StartsWith(rebound+"  "),"rebinding Interact changes its line");
+                Assert.That(lines,Has.None.StartsWith("E  "),"and the old key is gone");
+                Assert.That(Block(input,"DANGER"),Does.Contain("talk ("+rebound+")"),"the other blocks read the rebound key too");
+            }
+        }
+
+        [Test] public void HowToPlayDescribesWhatShipped()
+        {
+            using(var input=new FestivalInput("hud-briefing-test"))
+            {
+                string weekend=Block(input,"THE WEEKEND"),tripper=Block(input,"THE TRIPPER"),crew=Block(input,"EVERYONE ELSE"),danger=Block(input,"DANGER"),camp=Block(input,"CAMP");
+                Assert.That(weekend,Does.Contain("Day 1, Night 1, Day 2, Night 2").And.Contain("starts over at Day 1"));
+                // VISION-5's own words: the legend of what each shape claims, and what a check says it found.
+                foreach(var shape in new[]{"green ball","red cube","blue pill","gold drum"})Assert.That(tripper,Does.Contain(shape),"the legend has the "+shape);
+                foreach(var kind in new[]{"Buyer","Narc","Clue","DoubleBuyer","Stash"})Assert.That(tripper,Does.Contain(FestivalVisionMarkers.ClaimText(kind)),"the legend has "+kind);
+                Assert.That(tripper,Does.Contain("green ring").And.Contain("red one").And.Contain(FestivalVisionMarkers.VerdictText("Narc",false)),"a check rings it and says what it found");
+                Assert.That(crew,Does.Contain("from festivalgoers"),"stock comes from festivalgoers (ECON-2)");
+                Assert.That(danger,Does.Contain("narcs").And.Contain("busted"),"and some of them are narcs");
+                Assert.That(danger,Does.Contain("zombie-green"),"CROWD-4's suspicious festivalgoers");
+                Assert.That(danger,Does.Contain("SWARMING"),"HUD-5's swarm on the card");
+                Assert.That(danger,Does.Contain("dust storm").And.Contain(Festivals.DustStormSightRange+" m"),"PLAYA-3");
+                Assert.That(camp,Does.Contain("gear only"),"shelves sell no stock");
+                Assert.That(Block(input,"KEYS"),Does.Contain(input.Label(input.View)+"  first or third person"),"CAM-1's view key");
+                // The design's one hint about fakes is "Trust, but verify.": How to Play never gives their tells away.
+                foreach(var b in FestivalHudText.HowToPlay(input))Assert.That(b.Text.ToLowerInvariant(),Does.Not.Contain("shadow").And.Not.Contain("shimmer"),b.Title);
+            }
         }
     }
 }
