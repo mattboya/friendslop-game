@@ -827,13 +827,13 @@ namespace Festival.Presentation
             sundownText.text=FestivalHudText.SundownWarning(state,player);sundownShown+=Time.unscaledDeltaTime;
         }
 
-        // MINI-1: the minigame card while nothing covers it (clear: no menu, map or dance); a gain or no change shows mint, a loss orange.
+        // MINI-1: the minigame card while nothing covers it (clear: no menu, map or dance); a win shows mint (MinigameWon), else orange.
         private void UpdateMinigame(RoundState state,PlayerState player,bool clear)
         {
             var (title,detail)=FestivalHudText.MinigameCard(state,player);
             minigamePanel.SetActive(clear&&title!="");if(!minigamePanel.activeSelf)return;
             minigameTitle.text=title;minigameDetail.text=detail;
-            minigameTitle.color=state.Phase==FestivalSimulation.MinigamePhase&&state.Booth.ScoredAt>=0&&state.Booth.ClockChange>=0?Mint:Orange;
+            minigameTitle.color=FestivalHudText.MinigameWon(state)?Mint:Orange;
         }
 
         // HUD-7: the level briefing for its window, unless a key put it away this level; only while nothing covers it (clear: no
@@ -915,6 +915,8 @@ namespace Festival.Presentation
                 string toast=FestivalHudGear.Toast(player,handGear,equipSlot);if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
                 if(FestivalHudGear.Blocked(player)==""){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
             }
+            // MINI-4: F calls Mystery Cups for the player who is up (MinigamePrompt says so).
+            if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&FestivalSimulation.CupsTurn(state)==player.Id){session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);return;}
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             // DANCE-12: E sits between the W and D lanes, so mid-dance it runs nothing, even in the moment before UpdateActions
             // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop). K2: mid-talk a
@@ -1247,11 +1249,17 @@ namespace Festival.Presentation
                 SetPromptAction(FestivalHudText.ResultsPrompt(state,player.Id),null);
                 FinishActions();return;
             }
-            // MINI-1: while a minigame runs the host takes only its own command, so E plays it for those in it, and nothing else is offered.
+            // MINI-1: while a minigame runs the host takes only its own command, so its keys are all that is offered. MINI-4: in
+            // Mystery Cups E drinks the cup under the aim dot as E is pressed, for the player who is up (F calls it, UpdateKeyboard).
             if(state.Phase==FestivalSimulation.MinigamePhase)
             {
-                string play=FestivalHudText.MinigamePrompt(state,player);
-                SetPromptAction(play,play==""?null:(Action)(()=>session.Command(FestivalSimulation.MinigameKind)));
+                int cup=FestivalMinigameView.AimedCup(state,FestivalCharacter.ViewTransform);
+                string play=FestivalHudText.MinigamePrompt(state,player,cup);
+                SetPromptAction(play,cup<0||play==""?null:(Action)(()=>
+                {
+                    int aimed=FestivalMinigameView.AimedCup(session.State,FestivalCharacter.ViewTransform);
+                    if(aimed>=0)session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.DrinkCup,amount:aimed);
+                }));
                 FinishActions();return;
             }
             // HUD-4: while the wheels spin and the festival loads the host refuses every action, so none is offered.

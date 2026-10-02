@@ -12,7 +12,8 @@ namespace Festival.Tests
 {
     // MINI-1 in a running game: the level's booth stands in its ring on the festival grounds. The crew (the host alone) stands in the
     // ring and 3 s later its game starts: the festival holds as a slightly desaturated freeze-frame, its festivalgoers still drawn
-    // where they stood, everything on frame time and the Ferris wheel still, the level clock stopped. The game's result shows for 4 s
+    // where they stood, everything on frame time and the Ferris wheel still, the level clock stopped. MINI-4: the booth deals Mystery
+    // Cups, its four cups for a crew of one standing on the table before the game and while it runs. The game's result shows for 4 s
     // with the world still stopped; then play resumes in full colour, the wheel turning on from where it stopped, and the booth is gone.
     public sealed class MinigamePlayTests:FestivalPlayModeTest
     {
@@ -44,6 +45,10 @@ namespace Festival.Tests
                 float vivid=grade.saturation.value;
                 string festivalgoer=session.State.Npcs.Find(n=>n.Kind!="Cop").Id;
 
+                var cups=booth.transform.Find(FestivalMinigameView.CupsName);
+                Assert.That(session.State.Booth.Kind,Is.EqualTo(FestivalSimulation.MysteryCupsGame),"the booth deals Mystery Cups");
+                Assert.That(cups.gameObject.activeInHierarchy&&CupsShown(cups)==4,Is.True,"its 4 cups for a crew of one wait on the table, shown "+CupsShown(cups));
+
                 // The crew stands in the ring, and 3 s later the game starts.
                 var me=sim.Player(session.LocalPlayerId);me.X=at.X+1;me.Z=at.Z;
                 deadline=Time.realtimeSinceStartup+6;
@@ -56,6 +61,7 @@ namespace Festival.Tests
                 Assert.That(grounds.gameObject.activeInHierarchy,Is.True,"the festival stays on screen, not camp");
                 Assert.That(GameObject.Find(festivalgoer)?.activeInHierarchy??false,Is.True,"festivalgoers are still drawn where they stood");
                 Assert.That(booth.activeInHierarchy,Is.True,"and the booth, its game under way");
+                Assert.That(session.State.Booth.Cups==4&&CupsShown(cups)==4,Is.True,"the 4 poured cups stand on the table");
                 Assert.That(grade.saturation.value,Is.EqualTo(vivid+FestivalNightLighting.FreezeSaturation).Within(1e-3f),"the frame is slightly desaturated");
                 var wheel=rotor.localRotation;double level=session.State.ElapsedSeconds,rules=session.State.SimulationSeconds;
                 for(float until=Time.realtimeSinceStartup+.5f;Time.realtimeSinceStartup<until;)yield return null;
@@ -63,8 +69,8 @@ namespace Festival.Tests
                 Assert.That(Quaternion.Angle(wheel,rotor.localRotation),Is.LessThan(.01f),"the Ferris wheel holds still");
                 Assert.That(session.State.ElapsedSeconds,Is.EqualTo(level),"the level clock stops");
 
-                // The stub game ends at once for any player in it, for +0 s; its result shows for 4 s, the world still stopped.
-                session.Command(FestivalSimulation.MinigameKind);yield return null;
+                // Calling Mystery Cups ends it at once, for +0 s; its result shows for 4 s, the world still stopped.
+                session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);yield return null;
                 Assert.That(session.State.Booth.ScoredAt,Is.GreaterThanOrEqualTo(0),"the game is scored: "+session.Message);
                 for(float until=Time.realtimeSinceStartup+3;Time.realtimeSinceStartup<until;)yield return null;
                 Assert.That(session.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"its result shows with the world still stopped");
@@ -89,5 +95,7 @@ namespace Festival.Tests
             yield return null;
             Assert.That(Time.timeScale,Is.EqualTo(1),"leaving gives time back");
         }
+
+        private static int CupsShown(Transform cups){int shown=0;foreach(Transform cup in cups)if(cup.gameObject.activeSelf&&cup.name.StartsWith("Cup ")&&cup.name!="Cup table")shown++;return shown;}
     }
 }

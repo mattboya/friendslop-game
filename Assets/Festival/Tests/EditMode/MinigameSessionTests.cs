@@ -12,9 +12,9 @@ namespace Festival.Tests
         [Test] public void EveryClientSeesTheBoothAndTheGameUnderWay()
         {
             var game=new FestivalSimulation(5);game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");
-            game.State.Phase="Playing";game.State.Booth=new MinigameState{Kind=FestivalSimulation.StubGame,Spot=1,RingSeconds=1.5};game.State.MinigameBag.Add("Later");
+            game.State.Phase="Playing";game.State.Booth=new MinigameState{Kind=FestivalSimulation.MysteryCupsGame,Spot=1,RingSeconds=1.5};game.State.MinigameBag.Add("Later");
             var living=Wire(game,"p1");
-            Assert.That(new object[]{living.Booth.Kind,living.Booth.Spot,living.Booth.RingSeconds},Is.EqualTo(new object[]{FestivalSimulation.StubGame,1,1.5}),"a living player's view carries the booth, its game and the ring's countdown");
+            Assert.That(new object[]{living.Booth.Kind,living.Booth.Spot,living.Booth.RingSeconds},Is.EqualTo(new object[]{FestivalSimulation.MysteryCupsGame,1,1.5}),"a living player's view carries the booth, its game and the ring's countdown");
             Assert.That(FestivalSimulation.BoothAt(living),Is.Not.Null,"so their client shows it where it stands");
             Assert.That(living.MinigameBag,Is.Empty,"the weekend's bag of games stays on the host");
             game.State.Phase=FestivalSimulation.MinigamePhase;game.State.Booth.Seconds=12;game.State.Booth.ScoredAt=10;game.State.Booth.ClockChange=-25;game.State.Booth.PlayerIds.Add("p0");

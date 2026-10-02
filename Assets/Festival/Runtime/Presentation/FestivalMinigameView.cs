@@ -9,7 +9,9 @@ namespace Festival.Presentation
     /// collides, so only the rules decide who stands in the ring. While its game runs the festival holds as a freeze-frame: time
     /// stops for everything drawn on frame time (people, the crowd, the stage's lights), the Ferris wheel holds on the world's clock
     /// (FestivalTwistVisuals) and FestivalNightLighting drains a little colour. So whatever a game draws while it runs (MINI-2..4)
-    /// runs on unscaled time, as the HUD does. ponytail: a people rig and primitives, as no booth model exists and the art is frozen.</summary>
+    /// runs on unscaled time, as the HUD does. ponytail: a people rig and primitives, as no booth model exists and the art is frozen.
+    /// MINI-4: a Mystery Cups booth sets its cups out in a numbered row on a table in front of the stranger (ShowCups); the cup under
+    /// the aim dot is the one its player drinks (AimedCup), and in the tripper's view the cup their hunch marks glows.</summary>
     public sealed class FestivalMinigameView : MonoBehaviour
     {
         public const string BoothName="Minigame booth",RingName="Minigame ring",SignText="MINIGAME\nALL IN THE RING";
@@ -17,6 +19,12 @@ namespace Festival.Presentation
         // SignHeight up, over their head, its letters readable from the front within SignRange.
         private const int Dashes=24;
         private const float Dash=.6f,SignBehind=.7f,SignHeight=2.45f,LetterSize=.065f,SignRange=18;
+        // MINI-4: the cups, CupGap m apart in a row on a TableTop m high table TableAhead m in front of the stranger, each CupWidth
+        // across and CupHeight tall, its number NumberAbove m over its middle. The cup the player up looks at lifts AimLift m; the
+        // aim picks the cup nearest its line within AimDegrees. Built for a full crew of eight's cups; ShowCups shows those played.
+        public const string CupsName="Mystery cups",CupLook="Cream",HunchLook="StageGlowRed";
+        private const float CupGap=.3f,TableTop=.82f,TableAhead=.95f,CupWidth=.16f,CupHeight=.2f,NumberAbove=.24f,AimLift=.08f,AimDegrees=6;
+        private static readonly int MaxCups=FestivalSimulation.CupsFor(8);
         private FestivalSession session;
         private Transform booth;
         private Renderer lettering;
@@ -29,6 +37,7 @@ namespace Festival.Presentation
             if(booth==null){booth=Build(null);lettering=booth.GetComponentInChildren<TextMesh>(true).GetComponent<Renderer>();}
             var state=session.State;Show(booth,state);
             var view=FestivalCharacter.ViewTransform;if(view!=null&&booth.gameObject.activeSelf)lettering.enabled=FestivalWorld.Readable(view,lettering.transform,SignRange*SignRange);
+            ShowCups(booth,state,state!=null&&FestivalSimulation.CupsTurn(state)==session.LocalPlayerId?AimedCup(state,view):-1,view);
             bool freeze=state!=null&&state.Phase==FestivalSimulation.MinigamePhase;
             if(freeze!=frozen){frozen=freeze;Time.timeScale=freeze?0:1;}
         }
@@ -60,9 +69,23 @@ namespace Festival.Presentation
                 var round=Quaternion.Euler(0,360f*i/Dashes,0);
                 Part(ring,"Ring dash",PrimitiveType.Cube,round*Vector3.forward*FestivalSimulation.MinigameRingRadius+Vector3.up*.02f,new Vector3(Dash,.03f,.12f),"StageGlowMint").localRotation=round;
             }
+            // MINI-4: the cups' table and a full crew's cups, each a body under its number, which turns to face the view (ShowCups).
+            var cups=new GameObject(CupsName).transform;cups.SetParent(booth,false);
+            Part(cups,"Cup table",PrimitiveType.Cube,new Vector3(0,TableTop/2,TableAhead),new Vector3(TableWidth(MaxCups),TableTop,.5f),"Wood");
+            for(int i=0;i<MaxCups;i++)
+            {
+                var cup=new GameObject(CupName(i)).transform;cup.SetParent(cups,false);cup.localPosition=CupLocal(i,MaxCups);
+                Part(cup,"Cup body",PrimitiveType.Cylinder,Vector3.zero,new Vector3(CupWidth,CupHeight/2,CupWidth),CupLook);
+                var number=new GameObject("Cup number");number.transform.SetParent(cup,false);number.transform.localPosition=Vector3.up*NumberAbove;
+                var digits=number.AddComponent<TextMesh>();digits.text=(i+1).ToString();digits.anchor=TextAnchor.MiddleCenter;digits.alignment=TextAlignment.Center;
+                digits.characterSize=LetterSize;digits.fontSize=48;digits.color=new Color(.96f,.94f,.84f);
+                if(font!=null){digits.font=font;number.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+            }
             booth.gameObject.SetActive(false);
             return booth;
         }
+        /// <summary>MINI-4: the name of cup i's object under the booth's cups (CupsName); the HUD and the cups number it i + 1.</summary>
+        public static string CupName(int i)=>"Cup "+(i+1);
 
         /// <summary>Every frame: the booth stands on the view's booth spot, facing the festival's middle, while the festival shows
         /// (its game under way too), and is hidden at camp, once played and where the level has none. It allocates nothing.</summary>
@@ -70,8 +93,49 @@ namespace Festival.Presentation
         {
             var at=state!=null&&FestivalWorld.ShowsFestival(state.Phase)?FestivalSimulation.BoothAt(state):null;bool shown=at!=null;
             if(booth.gameObject.activeSelf!=shown)booth.gameObject.SetActive(shown);
-            if(shown)booth.SetPositionAndRotation(new Vector3(at.X,0,at.Z),Quaternion.LookRotation(new Vector3(-at.X,0,-at.Z)));
+            if(shown)booth.SetPositionAndRotation(new Vector3(at.X,0,at.Z),Facing(at));
         }
+
+        /// <summary>MINI-4, every frame: a Mystery Cups booth's cups, as many as the crew will play before its game (FestivalSimulation.
+        /// CupsFor the living crew) and as were poured once it runs, every drunk one gone. The cup the hint marks, which only the
+        /// tripper's view carries, glows; `aimed`, the cup the player up looks at, lifts; numbers turn to face the view. Another game's
+        /// booth hides them. It allocates nothing.</summary>
+        public static void ShowCups(Transform booth,RoundState state,int aimed,Transform view)
+        {
+            if(!booth.gameObject.activeSelf)return;
+            var cups=booth.Find(CupsName);var b=state.Booth;
+            bool shown=b.Kind==FestivalSimulation.MysteryCupsGame;if(cups.gameObject.activeSelf!=shown)cups.gameObject.SetActive(shown);
+            if(!shown)return;
+            int crew=0;foreach(var p in state.Players)if(p.Connected&&p.Life=="Alive")crew++;
+            int count=state.Phase==FestivalSimulation.MinigamePhase?b.Cups:FestivalSimulation.CupsFor(crew);
+            cups.GetChild(0).localScale=new Vector3(TableWidth(count),TableTop,.5f);
+            for(int i=0;i<MaxCups;i++)
+            {
+                var cup=cups.GetChild(i+1);bool on=i<count&&!b.Drunk.Contains(i);
+                if(cup.gameObject.activeSelf!=on)cup.gameObject.SetActive(on);
+                if(!on)continue;
+                cup.localPosition=CupLocal(i,count)+(i==aimed?Vector3.up*AimLift:Vector3.zero);
+                cup.GetChild(0).GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor(i==b.Hint?HunchLook:CupLook);
+                if(view!=null){var number=cup.GetChild(1);number.rotation=Quaternion.LookRotation(number.position-view.position);}
+            }
+        }
+        /// <summary>MINI-4: where the middle of cup i of `cups` stands, on the table of the booth at `at`, which the aim is taken to.</summary>
+        public static Vector3 CupAt(WorldPoint at,int i,int cups)=>new Vector3(at.X,0,at.Z)+Facing(at)*CupLocal(i,cups);
+        /// <summary>MINI-4: the cup on the table that view looks most nearly at, within AimDegrees of its line, for the Mystery Cups game
+        /// under way; -1 for none, and for a gap where a cup was drunk, so the aim never slides onto the cup beside it.</summary>
+        public static int AimedCup(RoundState state,Transform view)
+        {
+            var b=state?.Booth;var at=state==null?null:FestivalSimulation.BoothAt(state);
+            if(view==null||at==null||state.Phase!=FestivalSimulation.MinigamePhase||b.Kind!=FestivalSimulation.MysteryCupsGame||b.ScoredAt>=0)return -1;
+            int best=-1;float nearest=AimDegrees;
+            for(int i=0;i<b.Cups;i++){float off=Vector3.Angle(view.forward,CupAt(at,i,b.Cups)-view.position);if(off<nearest){nearest=off;best=i;}}
+            return best>=0&&b.Drunk.Contains(best)?-1:best;
+        }
+        // The booth faces the festival's middle; its cups stand in a row across its front, the middle of the row before the stranger.
+        private static Quaternion Facing(WorldPoint at)=>Quaternion.LookRotation(new Vector3(-at.X,0,-at.Z));
+        // The table is as long as the row of cups on it, with a hand's width spare at each end.
+        private static float TableWidth(int cups)=>Mathf.Max(1,cups)*CupGap+.3f;
+        private static Vector3 CupLocal(int i,int cups)=>new Vector3((i-(cups-1)*.5f)*CupGap,TableTop+CupHeight/2,TableAhead);
 
         private static Transform Part(Transform parent,string name,PrimitiveType shape,Vector3 at,Vector3 size,string look)
         {

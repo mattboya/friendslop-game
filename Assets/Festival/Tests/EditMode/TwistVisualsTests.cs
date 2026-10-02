@@ -94,7 +94,7 @@ namespace Festival.Tests
             // A frame on the host: the rules step on, and the game's own clock with them while one runs (MinigameTick).
             void Step(){round.SimulationSeconds+=Frame;if(round.Phase==FestivalSimulation.MinigamePhase)round.Booth.Seconds+=Frame;twists.Apply(round,Frame);}
             round.SimulationSeconds=7;twists.Apply(round,Frame);for(int f=0;f<60;f++)Step();
-            round.Phase=FestivalSimulation.MinigamePhase;round.Booth=new MinigameState{Kind=FestivalSimulation.StubGame,Spot=0};
+            round.Phase=FestivalSimulation.MinigamePhase;round.Booth=new MinigameState{Kind=FestivalSimulation.MysteryCupsGame,Spot=0};
             var stopped=rotor.localRotation;float drift=0;
             for(int f=0;f<600;f++){Step();drift=Mathf.Max(drift,Quaternion.Angle(stopped,rotor.localRotation));}
             Assert.That(drift,Is.LessThan(.01f),"the wheel holds still through a 10 s game, though the rules' clock runs on");

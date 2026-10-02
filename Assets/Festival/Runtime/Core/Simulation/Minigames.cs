@@ -36,11 +36,12 @@ namespace Festival.Core
     /// resumes and the booth is spent. Unplayed, it is gone with the level.</summary>
     public sealed partial class FestivalSimulation
     {
-        public const string MinigamePhase="Minigame",MinigameKind="Minigame",StubGame="Stub";
+        public const string MinigamePhase="Minigame",MinigameKind="Minigame";
         public const float MinigameRingRadius=4;
         public const double MinigameRingSeconds=3,MinigameMaxSeconds=90,MinigameBannerSeconds=4,MinigameFloorSeconds=15;
-        // ponytail: only a no-op stub until MINI-2..4 land; any player in it ends it at once (PlayMinigame), for +0 s.
-        public static readonly IReadOnlyList<string> MinigameKinds=new[]{StubGame};
+        // The games a booth deals: MINI-4's Mystery Cups, which took over from MINI-1's no-op stub, until MINI-2's Drum Circle and
+        // MINI-3's Light Show join it.
+        public static readonly IReadOnlyList<string> MinigameKinds=new[]{MysteryCupsGame};
 
         /// <summary>Where this level's booth stands, or null: none (camp, an older snapshot) or spent. It reads only public state,
         /// so the HUD and the world show it from any client's view.</summary>
@@ -84,7 +85,8 @@ namespace Festival.Core
         void MinigameTick(double dt)
         {
             var b=State.Booth;b.Seconds+=dt;
-            // A game's own tick scores it when it ends, at the cap too (Mystery Cups calls it); any other (the stub) scores +0 s there.
+            // A game's own tick scores it when it ends, at the cap too (Mystery Cups calls it). One this build doesn't know (a snapshot
+            // from a build with other games) has no moves here, so the cap scores it +0 s.
             if(b.ScoredAt<0){if(b.Kind==MysteryCupsGame)CupsTick();if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
             if(b.Seconds<b.ScoredAt+MinigameBannerSeconds)return;
             ShiftClock(b.Seconds);b.Spent=true;State.Phase="Playing";
@@ -98,7 +100,6 @@ namespace Festival.Core
             if(!b.PlayerIds.Contains(p.Id))return Reject("You're watching this one");
             switch(b.Kind)
             {
-                case StubGame:ScoreMinigame(0);return Ok("Done");
                 case MysteryCupsGame:return PlayCups(p,c);
                 default:return Reject("Unknown minigame");
             }

@@ -11,7 +11,8 @@ using Festival.Core;
 // anyone is downed or busy. The round's phase is then "Minigame": the level clock and every danger timer stop, nobody moves,
 // and only the game's own commands go through. It runs at most 90 s, its result shows for 4 s, and then every deadline on the
 // simulation clock moves on by the pause, the result's time is paid (a loss never leaves under 15 s) and the booth is spent.
-// Until MINI-2 lands the bag holds a no-op stub: any player in it ends it with a Minigame command, for +0 s.
+// The bag deals MINI-4's Mystery Cups (MysteryCupsTests), the one game so far: the player up calls it at once for +0 s. The
+// pause's own tests that need a game nobody ends turn it into one this build doesn't know (Endless), which only the cap ends.
 public static class MinigameTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -20,6 +21,11 @@ public static class MinigameTests
     static bool Same(double a,double b)=>Math.Abs(a-b)<1e-6;
     static CommandResult Act(FestivalSimulation s,string id,string kind,string target="",string item="",int amount=0)=>s.Execute(id,new GameCommand{Id="mini"+(sequence++),Kind=kind,TargetId=target,ItemId=item,Amount=amount});
     static bool Running(FestivalSimulation s)=>s.State.Phase==FestivalSimulation.MinigamePhase;
+    // The player up in the Mystery Cups game under way calls it, ending it at once for +0 s.
+    static CommandResult CallIt(FestivalSimulation s)=>Act(s,FestivalSimulation.CupsTurn(s.State),FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);
+    // The game under way becomes one no move ends, as a game from a build that knows other games reads here: only the 90 s cap,
+    // or scoring it outright, ends it. A turn of Mystery Cups runs out in 10 s, and the pause's tests need longer.
+    static void Endless(FestivalSimulation s)=>s.State.Booth.Kind="Endless";
 
     // Every scenario runs, so one red run shows each missing rule.
     public static void Run()
@@ -75,6 +81,7 @@ public static class MinigameTests
             var s=Leave(seed,1,seed%Festivals.Count);var b=s.State.Booth;var at=FestivalSimulation.BoothAt(s.State);
             Check(b.Spot>=0&&b.Spot<Festivals.BoothSpots.Length&&at!=null&&at.X==Festivals.BoothSpots[b.Spot].X&&at.Z==Festivals.BoothSpots[b.Spot].Z,"seed "+seed+"'s booth stands on a listed spot, got spot "+b.Spot);
             Check(FestivalSimulation.MinigameKinds.Contains(b.Kind)&&!b.Spent,"seed "+seed+"'s booth plays a listed game, unplayed, got '"+b.Kind+"'");
+            Check(b.Kind==FestivalSimulation.MysteryCupsGame,"for now that is Mystery Cups, no stub, got '"+b.Kind+"'");
             used[b.Spot]++;
         }
         Check(Array.IndexOf(used,0)<0,"every spot turns up: "+string.Join(", ",used));
@@ -169,7 +176,7 @@ public static class MinigameTests
     {
         var s=Play(51,4);var watcher=s.Player("p2");watcher.Life="Spirit";watcher.X=24;watcher.Z=-20;
         var down=s.Player("p3");down.Life="Downed";down.DownedRemaining=30;s.Disconnect(down.Id);
-        Ring(s,"p0","p1");Check(StartsWithin(s,3.5),"setup: the game starts, a spirit watching and a friend who left bleeding out");
+        Ring(s,"p0","p1");Check(StartsWithin(s,3.5),"setup: the game starts, a spirit watching and a friend who left bleeding out");Endless(s);
         var tripper=s.Player(s.State.TripperId);var dose=tripper.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
         var p=s.Player("p0");
         // Questioning p0 from 8 m away and out of sight of them for 6 s: in play it would walk over and cool off.
@@ -196,11 +203,11 @@ public static class MinigameTests
     {
         var s=Play(61,2);s.Player("p0").Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
         Check(Act(s,"p0","Transfer","p1","poi_practice",1).Accepted,"setup: p0 offers p1 their poi where the crew arrived");
-        s.Tick(2);Ring(s,"p0","p1");Check(StartsWithin(s,3.5),"setup: the game starts");
+        s.Tick(2);Ring(s,"p0","p1");Check(StartsWithin(s,3.5),"setup: the game starts");Endless(s);
         var offer=s.State.Transfers[0];double left=offer.ExpiresAt-s.State.SimulationSeconds;
         Check(left>9.5&&left<10.5,"setup: the offer has about 10 s left, got "+left);
         s.Tick(60);Check(Running(s)&&s.State.Transfers.Contains(offer),"a minute in, the game runs and the offer is still open");
-        Check(Act(s,"p0",FestivalSimulation.MinigameKind).Accepted,"a player ends the stub game");
+        s.ScoreMinigame(0);Check(s.State.Booth.ScoredAt>=0,"the game ends, for +0 s");
         Check(ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"play resumes once the result has shown");
         Check(s.State.Transfers.Contains(offer)&&Same(offer.ExpiresAt-s.State.SimulationSeconds,left),"the offer still has its "+left.ToString("F2")+" s, got "+(offer.ExpiresAt-s.State.SimulationSeconds).ToString("F2"));
         s.Tick(left-.3);Check(s.State.Transfers.Contains(offer),"so it is still open just before they run out");
@@ -242,7 +249,7 @@ public static class MinigameTests
         var s=Started(71,2);var found=new List<(object Owner,FieldInfo Field)>();Doubles(s.State,found);
         var times=found.FindAll(x=>!NotSimulationTimes.ContainsKey(Name(x.Field)));
         foreach(var x in times)x.Field.SetValue(x.Owner,at);
-        s.Tick(6);Check(Act(s,"p0",FestivalSimulation.MinigameKind).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends and play resumes");
+        s.Tick(6);Check(CallIt(s).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends and play resumes");
         return times.ConvertAll(x=>(Name(x.Field),(double)x.Field.GetValue(x.Owner),s.State.Booth.Seconds));
     }
     static void EveryClockDeadlineMovesOnByThePause()
@@ -259,22 +266,22 @@ public static class MinigameTests
         }
     }
 
-    // A game nobody ends is scored at 90 s and its result shows for 4 s before play resumes. The stub, ended by a player, scores
-    // +0 s the same way.
+    // A game nobody ends is scored at 90 s and its result shows for 4 s before play resumes. Mystery Cups, called by the player
+    // up, scores +0 s the same way.
     static void TheGameEndsAtNinetySecondsAndItsResultShowsForFour()
     {
-        var s=Started(81,2);double left=Left(s);
+        var s=Started(81,2);Endless(s);double left=Left(s);
         s.Tick(60);s.Tick(FestivalSimulation.MinigameMaxSeconds-60.2);Check(Running(s)&&s.State.Booth.ScoredAt<0,"just before 90 s the game still runs, unscored");
         s.Tick(.3);Check(Running(s)&&s.State.Booth.ScoredAt>=FestivalSimulation.MinigameMaxSeconds-1e-6&&s.State.Booth.ScoredAt<FestivalSimulation.MinigameMaxSeconds+.15,"at 90 s the host ends it and scores what's in, at "+s.State.Booth.ScoredAt);
-        Check(!Act(s,"p0",FestivalSimulation.MinigameKind).Accepted,"a scored game takes no more moves");
+        Check(!Act(s,"p0",FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups).Accepted,"a scored game takes no more moves");
         s.Tick(FestivalSimulation.MinigameBannerSeconds-.3);Check(Running(s),"its result shows for 4 s, the world still stopped");
         Check(ResumesWithin(s,.5),"then play resumes");
-        Check(Same(Left(s),left)&&s.State.Booth.ClockChange==0,"the stub pays +0 s, left "+Left(s)+" of "+left);
-        var t=Started(82,2);t.Tick(5);
-        Check(Act(t,"p1",FestivalSimulation.MinigameKind).Accepted&&Same(t.State.Booth.ScoredAt,t.State.Booth.Seconds),"any player in the stub ends it at once");
-        Check(!Act(t,"p0",FestivalSimulation.MinigameKind).Accepted,"only once");
+        Check(Same(Left(s),left)&&s.State.Booth.ClockChange==0,"the cap pays +0 s, left "+Left(s)+" of "+left);
+        var t=Started(82,2);t.Tick(5);string up=FestivalSimulation.CupsTurn(t.State);
+        Check(CallIt(t).Accepted&&Same(t.State.Booth.ScoredAt,t.State.Booth.Seconds),"the player up calls Mystery Cups at once");
+        Check(!Act(t,up,FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups).Accepted,"only once");
         Check(!ResumesWithin(t,FestivalSimulation.MinigameBannerSeconds-.3)&&ResumesWithin(t,.5),"its result shows for 4 s, then play resumes");
-        var u=Play(83,1);Check(!Act(u,"p0",FestivalSimulation.MinigameKind).Accepted,"with no game running there is nothing to play");
+        var u=Play(83,1);Check(!Act(u,"p0",FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups).Accepted,"with no game running there is nothing to play");
     }
 
     // A game's result changes the level's length: a gain in full (and the tripper's dose, which lasts the level, with it), a loss
@@ -298,7 +305,7 @@ public static class MinigameTests
     static void ThePlayedBoothIsSpent()
     {
         var s=Started(101,2);var at=FestivalSimulation.BoothAt(s.State);
-        Check(Act(s,"p0",FestivalSimulation.MinigameKind).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends");
+        Check(CallIt(s).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends");
         Check(s.State.Booth.Spent&&FestivalSimulation.BoothAt(s.State)==null,"the booth is spent and gone");
         foreach(var p in s.State.Players){p.X=at.X;p.Z=at.Z;}
         Check(!StartsWithin(s,10),"the crew standing where it was starts nothing more");
@@ -307,10 +314,10 @@ public static class MinigameTests
     // A snapshot keeps the booth, and one taken mid-game resumes it; one from before booths has none, so nothing starts.
     static void SnapshotsKeepTheBoothAndOlderOnesHaveNone()
     {
-        var s=Started(111,2);s.Tick(10);var json=JsonSerializer.SerializeToNode(s.State,Json).AsObject();
+        var s=Started(111,2);s.Tick(5);var json=JsonSerializer.SerializeToNode(s.State,Json).AsObject();
         var saved=new FestivalSimulation();saved.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),Json));
         Check(saved.State.Phase==FestivalSimulation.MinigamePhase&&saved.State.Booth.Spot==s.State.Booth.Spot&&saved.State.Booth.Kind==s.State.Booth.Kind&&Same(saved.State.Booth.Seconds,s.State.Booth.Seconds)&&saved.State.Booth.PlayerIds.Count==2,"a snapshot keeps the game under way");
-        Check(Act(saved,"p0",FestivalSimulation.MinigameKind).Accepted&&ResumesWithin(saved,FestivalSimulation.MinigameBannerSeconds+.5)&&saved.State.Booth.Spent,"and it plays on to the end");
+        Check(CallIt(saved).Accepted&&ResumesWithin(saved,FestivalSimulation.MinigameBannerSeconds+.5)&&saved.State.Booth.Spent,"and it plays on to the end");
         var p=Play(112,2);var spots=Festivals.BoothSpots;var legacy=JsonSerializer.SerializeToNode(p.State,Json).AsObject();legacy.Remove("Booth");legacy.Remove("MinigameBag");
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));
         Check(old.State.Booth!=null&&old.State.Booth.Spot==-1&&FestivalSimulation.BoothAt(old.State)==null&&old.State.MinigameBag!=null,"a snapshot from before booths restores with none");
@@ -330,7 +337,7 @@ public static class MinigameTests
         s.Tick(7);
         Check(Same(FestivalSimulation.WorldSeconds(s.State),stopped),"it stands still while the game runs, moved "+(FestivalSimulation.WorldSeconds(s.State)-stopped));
         Check(Same(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil),sprint),"a time stamped before the game reads the same during it, got "+(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil)-sprint)+" off");
-        Check(Act(s,"p0",FestivalSimulation.MinigameKind).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends and play resumes");
+        Check(CallIt(s).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends and play resumes");
         Check(Same(FestivalSimulation.WorldSeconds(s.State),stopped),"play resumes on it where the game stopped it, "+(FestivalSimulation.WorldSeconds(s.State)-stopped)+" off");
         Check(Same(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil),sprint),"a time stamped before the game, moved on by the pause, reads the same after it, got "+(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil)-sprint)+" off");
         s.Tick(2);

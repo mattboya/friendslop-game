@@ -1,7 +1,8 @@
 # Minigames: booths that stop the clock (proposed 2026-09-30)
 
 Status: approved 2026-10-01, every open decision taken as (A). MINI-1 is built: its rules (`Core/Simulation/Minigames.cs`)
-and its screen (`Presentation/FestivalMinigameView.cs`, the HUD's minigame card). MINI-2 to MINI-4 are queue entries in
+and its screen (`Presentation/FestivalMinigameView.cs`, the HUD's minigame card). MINI-4, Mystery Cups, is built
+(`Core/Simulation/MysteryCups.cs`) and is the game every booth deals for now. MINI-2 and MINI-3 are queue entries in
 `WORK_QUEUE.md`.
 This design builds on [GAME_DESIGN_2026-09-30.md](GAME_DESIGN_2026-09-30.md) (the tripper, doses, visions and their
 tells, the group dance, the debrief). Where the two conflict, that document wins, except on one point: the minigame
@@ -36,16 +37,16 @@ A minigame lasts at most 90 seconds. At that point the host ends it and scores w
 
 As built (MINI-1): the booths stand at `Festivals.BoothSpots`, three crowd-edge spots whose rings keep clear of every route
 players routinely take. Players in the game send its own `Minigame` command; `Rhythm` also goes through, for the Drum
-Circle. The result banner shows while the world is still stopped, so the pause is the game plus its banner. Until MINI-2
-lands, the bag holds a no-op stub that any player in it ends at once, for +0 s.
+Circle. The result banner shows while the world is still stopped, so the pause is the game plus its banner. The bag held a
+no-op stub until MINI-4's Mystery Cups replaced it; the Drum Circle and the Light Show join the bag as they are built.
 
 On screen (MINI-1): the booth is a festivalgoer rig under a MINIGAME sign, in a glowing mint ring the size of the rules'.
 Standing alive in it, the HUD's minigame card counts who of the crew is in, names whoever keeps it from starting (down or
 busy, anywhere), then counts the 3 s down. While the game runs the festival stays on screen, frozen: `Time.timeScale` is 0, so
 everything drawn on frame time holds still (a game's own visuals must run on unscaled time), the Ferris wheel stops on the
 world's clock (`FestivalSimulation.WorldSeconds`: the simulation clock less the pause), the colour grade loses 30 saturation
-and the HUD's clock stands at the time left. The card says the festival is paused (E finishes the stub), then shows the
-result, such as "+45 s" or "−30 s", until play resumes.
+and the HUD's clock stands at the time left. The card says the festival is paused, or shows the game's own lines (Mystery
+Cups: below), then shows the result, such as "+45 s" or "−30 s", until play resumes.
 
 **Resuming.** Many timers store an absolute time on the simulation clock:
 - handoff offers (`ExpiresAt`)
@@ -131,6 +132,16 @@ A shady bartender sets out cups. One is spiked. It's push-your-luck with a share
 - **The tripper's hint:** the tripper alone sees one cup glowing as "spiked". It's right with the tripper's vision
   reliability (75 / 50 / 25 / 10% by dose); otherwise it marks a safe cup. They relay it over voice, and the crew
   decides how much to trust it.
+
+As built (MINI-4): the cups, which one is spiked, the turn order and the hint come from one stream that mixes in the host's
+secret deal seed, so no client can work them out; the spiked cup never leaves the host, and the hint reaches only the
+tripper's game (`FestivalSimulation.VisibleBooth`). The game leaves the clock unchanged (+0 s): the pot is the stake. A
+spiked dose raises only the drinker's dose effect, never the spin's result, so the tripper's visions and the sale payout
+stay as rolled; its substance comes from a stream of its own. The pot counts as sales by night too, banked to the stash; by
+day it is split across the players in the game, any odd dollars to the stash. A turn holder who has left the game simply
+runs out of time, which calls it. On screen the cups stand in a numbered row on a table in front of the booth's stranger;
+the player up drinks the cup under the aim dot with E and calls it with F; the tripper's hunch cup glows red in their view
+alone; the card shows the pot, whose turn it is and their seconds, then what became of the pot.
 
 ## Rejected ideas
 

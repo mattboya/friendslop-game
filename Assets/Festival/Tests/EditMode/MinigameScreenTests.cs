@@ -30,7 +30,7 @@ namespace Festival.Tests
                 Assert.That(dash.GetComponent<Renderer>().sharedMaterial,Is.EqualTo(FestivalArtView.MaterialFor("StageGlowMint")),"and glows, so the ring reads at night");
             }
 
-            var state=new RoundState{Phase="Playing",Booth=new MinigameState{Kind=FestivalSimulation.StubGame,Spot=1}};var at=Festivals.BoothSpots[1];
+            var state=new RoundState{Phase="Playing",Booth=new MinigameState{Kind=FestivalSimulation.MysteryCupsGame,Spot=1}};var at=Festivals.BoothSpots[1];
             FestivalMinigameView.Show(booth,state);
             Assert.That(booth.gameObject.activeSelf,Is.True,"the level's booth shows");
             Assert.That(Vector2.Distance(new Vector2(booth.position.x,booth.position.z),new Vector2(at.X,at.Z)),Is.LessThan(1e-4f),"on its spot");
@@ -43,5 +43,71 @@ namespace Festival.Tests
                 Assert.That(booth.gameObject.activeSelf,Is.False,where+" shows no booth");
             }
         }
+
+        // MINI-4: Mystery Cups' cups stand in a numbered row on a table in front of the stranger, as many as the crew will play
+        // before the game and as were poured once it runs, each drunk one gone. In the tripper's view (the only one carrying the
+        // hint) the cup their hunch marks glows; in anyone else's none does. The cup the player up looks at lifts off the table.
+        [Test]public void TheCupsStandOnTheTableAndOnlyTheTrippersHunchGlows()
+        {
+            root=new GameObject("Cups test");var booth=FestivalMinigameView.Build(root.transform);var at=Festivals.BoothSpots[1];
+            var state=new RoundState{Phase="Playing",Booth=new MinigameState{Kind=FestivalSimulation.MysteryCupsGame,Spot=1}};
+            for(int k=0;k<3;k++)state.Players.Add(new PlayerState{Id="p"+k,Name="P"+k});
+            state.Players.Add(new PlayerState{Id="ghost",Life="Spirit"});
+            var cups=booth.Find(FestivalMinigameView.CupsName);Assert.That(cups,Is.Not.Null,"the booth has its cups");
+            FestivalMinigameView.Show(booth,state);FestivalMinigameView.ShowCups(booth,state,-1,null);
+            Assert.That(Shown(cups),Is.EqualTo(new[]{0,1,2,3,4}),"before the game, the 5 cups three living players will play");
+            Assert.That(cups.Find(FestivalMinigameView.CupName(0)).GetComponentInChildren<TextMesh>().text,Is.EqualTo("1"),"numbered from 1, as the HUD names them");
+            for(int i=0;i<5;i++)Assert.That(Vector3.Distance(cups.Find(FestivalMinigameView.CupName(i)).position,FestivalMinigameView.CupAt(at,i,5)),Is.LessThan(1e-4f),"cup "+(i+1)+" stands where it is aimed at");
+            Assert.That(FestivalMinigameView.CupAt(at,0,5).y,Is.InRange(.7f,1.2f),"on a table, about waist high");
+            Assert.That(Vector3.Dot(FestivalMinigameView.CupAt(at,2,5)-new Vector3(at.X,0,at.Z),booth.forward),Is.GreaterThan(.5f),"in front of the stranger");
+
+            state.Phase=FestivalSimulation.MinigamePhase;var b=state.Booth;b.Cups=6;b.Drunk.Add(1);b.Hint=3;
+            FestivalMinigameView.Show(booth,state);FestivalMinigameView.ShowCups(booth,state,-1,null);
+            Assert.That(Shown(cups),Is.EqualTo(new[]{0,2,3,4,5}),"the game's 6 cups, the drunk one gone");
+            var table=cups.Find("Cup table");var under=Vector3.up*.15f;var gap=FestivalMinigameView.CupAt(at,1,6)-FestivalMinigameView.CupAt(at,0,6);
+            bool OnTable(Vector3 point){var local=table.InverseTransformPoint(point);return Mathf.Abs(local.x)<=.5f&&Mathf.Abs(local.y)<=.5f&&Mathf.Abs(local.z)<=.5f;}
+            Assert.That(OnTable(FestivalMinigameView.CupAt(at,0,6)-under)&&OnTable(FestivalMinigameView.CupAt(at,5,6)-under),Is.True,"on a table as long as their row");
+            Assert.That(OnTable(FestivalMinigameView.CupAt(at,0,6)-under-gap*2)||OnTable(FestivalMinigameView.CupAt(at,5,6)-under+gap*2),Is.False,"and no longer");
+            for(int i=0;i<6;i++)if(i!=1)Assert.That(Look(cups,i),Is.EqualTo(FestivalArtView.MaterialFor(i==3?FestivalMinigameView.HunchLook:FestivalMinigameView.CupLook)),"in the tripper's view only cup 4 glows, cup "+(i+1));
+            b.Hint=-1;FestivalMinigameView.ShowCups(booth,state,-1,null);
+            for(int i=0;i<6;i++)if(i!=1)Assert.That(Look(cups,i),Is.EqualTo(FestivalArtView.MaterialFor(FestivalMinigameView.CupLook)),"in anyone else's none does, cup "+(i+1));
+            FestivalMinigameView.ShowCups(booth,state,4,null);
+            Assert.That(cups.Find(FestivalMinigameView.CupName(4)).position.y,Is.GreaterThan(FestivalMinigameView.CupAt(at,4,6).y+.03f),"the cup looked at lifts");
+            Assert.That(cups.Find(FestivalMinigameView.CupName(3)).position.y,Is.EqualTo(FestivalMinigameView.CupAt(at,3,6).y).Within(1e-4f),"the others stay down");
+            state.Booth.Kind="AnotherGame";FestivalMinigameView.ShowCups(booth,state,-1,null);
+            Assert.That(cups.gameObject.activeSelf,Is.False,"another game's booth has no cups");
+        }
+
+        // MINI-4: the cup under the aim dot is the one the view looks most nearly at, within a few degrees of it; looking at a gap
+        // where a cup was drunk, away from the table, or with no Mystery Cups under way picks none.
+        [Test]public void TheCupUnderTheAimDotIsTheOneDrunk()
+        {
+            root=new GameObject("Aim test");var at=Festivals.BoothSpots[1];var view=new GameObject("View").transform;view.SetParent(root.transform,false);
+            var state=new RoundState{Phase=FestivalSimulation.MinigamePhase,Booth=new MinigameState{Kind=FestivalSimulation.MysteryCupsGame,Spot=1,Cups=6}};state.Booth.Drunk.Add(1);
+            var middle=FestivalMinigameView.CupAt(at,2,6);var toward=(middle-new Vector3(at.X,0,at.Z));toward.y=0;
+            foreach(float far in new[]{1.2f,3.5f})
+            {
+                view.position=middle+toward.normalized*far+Vector3.up*.75f;
+                for(int i=0;i<6;i++)
+                {
+                    view.rotation=Quaternion.LookRotation(FestivalMinigameView.CupAt(at,i,6)-view.position);
+                    Assert.That(FestivalMinigameView.AimedCup(state,view),Is.EqualTo(i==1?-1:i),far+" m away, looking at cup "+(i+1));
+                }
+                view.rotation=Quaternion.LookRotation(Quaternion.Euler(0,60,0)*(middle-view.position));
+                Assert.That(FestivalMinigameView.AimedCup(state,view),Is.EqualTo(-1),far+" m away, looking off the table");
+            }
+            view.rotation=Quaternion.LookRotation(middle-view.position);
+            Assert.That(FestivalMinigameView.AimedCup(state,null),Is.EqualTo(-1),"no view, no cup");
+            state.Booth.ScoredAt=4;Assert.That(FestivalMinigameView.AimedCup(state,view),Is.EqualTo(-1),"none once the game is scored");
+            state.Booth.ScoredAt=-1;state.Phase="Playing";Assert.That(FestivalMinigameView.AimedCup(state,view),Is.EqualTo(-1),"none before it runs");
+        }
+
+        private static int[] Shown(Transform cups)
+        {
+            var shown=new System.Collections.Generic.List<int>();
+            for(int i=0;i<FestivalSimulation.CupsFor(8);i++)if(cups.Find(FestivalMinigameView.CupName(i)).gameObject.activeSelf)shown.Add(i);
+            return shown.ToArray();
+        }
+        private static Material Look(Transform cups,int i)=>cups.Find(FestivalMinigameView.CupName(i)).GetComponentInChildren<MeshRenderer>().sharedMaterial;
     }
 }
