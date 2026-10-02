@@ -140,12 +140,18 @@ public static class FestivalLinesTests
             }
         }
     }
-    // The body of a line Select drew from `seed`: whichever of the stream's draws it is.
+    // The body of a line Select drew from `seed`: whichever of the stream's draws it is. An awkward twin is drawn off the same
+    // stream after the line's own one to six draws.
     static string Body(string kind,int festival,int seed,string text)
     {
-        var random=new ContentRandom(seed);
-        for(int draw=0;draw<=DialogueHistory.Redraws;draw++) if(FestivalLines.Grammar.Line(kind,festival,random,out var body)==text) return body;
-        throw new Exception("FestivalLines: setup: \""+text+"\" is none of seed "+seed+"'s draws");
+        bool twin=kind.EndsWith("_awkward",StringComparison.Ordinal);
+        for(int before=twin?1:0;before<=(twin?DialogueHistory.Redraws+1:0);before++)
+        {
+            var random=new ContentRandom(seed);
+            for(int i=0;i<before;i++)FestivalLines.Grammar.Line(kind.Substring(0,kind.Length-8),festival,random,out _);
+            for(int draw=0;draw<=DialogueHistory.Redraws;draw++) if(FestivalLines.Grammar.Line(kind,festival,random,out var body)==text) return body;
+        }
+        throw new Exception("FestivalLines: setup: \""+text+"\" is none of seed "+seed+"'s "+kind+" draws");
     }
 
     // The memory goes by the body. A sentence heard behind one hello is drawn again when it comes up behind another.
@@ -167,8 +173,9 @@ public static class FestivalLinesTests
     }
 
     // An affected player blurts the awkward twin instead (the tripper all level, everyone on the last level). What's shown is what's
-    // remembered, so the twin doesn't come back within 30 either. Driven as the HUD does it: start, acknowledge, walk away. And the
-    // level's festival picks the words, so Ember Playa's dances never mention the Ferris wheel.
+    // remembered: the dance acknowledges the shown line's own key, so its sentence doesn't come back within 30, not even behind
+    // another hello or tail. Driven as the HUD does it: start, acknowledge, walk away. And the level's festival picks the words,
+    // so Ember Playa's dances never mention the Ferris wheel.
     static void AnAffectedPlayersAwkwardLineIsNotRepeatedWithinThirty()
     {
         foreach(bool affected in new[]{false,true}) for(int festival=0;festival<Festivals.Count;festival++)
@@ -181,10 +188,12 @@ public static class FestivalLinesTests
             {
                 var start=s.Execute(p.Id,new GameCommand{Id="dance"+i,Kind="Dance",TargetId="wook"});
                 Check(start.Accepted,who+", dance "+i+": "+start.Reason);
-                var dance=s.Interaction(p.InteractionId);string text=dance.DialogueText;int last=shown.LastIndexOf(text);
-                Check(last<0||shown.Count-last>=30,who+": \""+text+"\" came back "+(shown.Count-last)+" dances after it was shown");
+                var dance=s.Interaction(p.InteractionId);string text=dance.DialogueText,kind=affected?"dance_awkward":"dance",body=Body(kind,festival,dance.ChartSeed,text);
+                Check(dance.DialogueId==DialogueHistory.Key(kind,body),who+", dance "+i+": shows \""+text+"\" but acknowledges "+dance.DialogueId+", not its key "+DialogueHistory.Key(kind,body));
+                int last=shown.LastIndexOf(body);
+                Check(last<0||shown.Count-last>=30,who+": \""+text+"\" says \""+body+"\" again, "+(shown.Count-last)+" dances after it was shown");
                 Check(!Places[1-festival].Any(text.Contains),who+" names only its own places: "+text);
-                shown.Add(text);
+                shown.Add(body);
                 Check(s.Execute(p.Id,new GameCommand{Id="ack"+i,Kind="DialogueAck",TargetId=dance.DialogueId}).Accepted&&s.Execute(p.Id,new GameCommand{Id="stop"+i,Kind="Cancel"}).Accepted,who+", dance "+i+": acknowledged and walked away");
                 s.Tick(.1);
             }
