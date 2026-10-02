@@ -23,7 +23,8 @@ public static class ConversationTests
         foreach(var test in new Action[]{EachTalkIsThreeTurnsOfThreeReplies,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
             AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
-            ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts})
+            ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
+            AWorkedUpFestivalgoerWontTalk})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -80,6 +81,23 @@ public static class ConversationTests
             Check(Live(i).Reaction!=""&&Live(i).Line!="","the second turn opens on their reaction and a line ("+Text(Live(i))+")");
             Check(Say(s,i,Smooth).Accepted&&i.Turns.Count==3,"the second reply brings the third turn");
             Check(Say(s,i,Smooth).Accepted&&i.Status=="Complete"&&i.Turns.Count==3&&s.Player("p0").InteractionId=="","the third reply ends the "+kind+" ("+i.Status+")");
+        }
+    }
+
+    // K2: someone worked up about you (accusing you, or swarming you) is too agitated to chat, sell or buy, as Talk's bark and the
+    // chat check already said: a talk roots you, and they would hit you while you stand in it. Nothing is taken or held.
+    static void AWorkedUpFestivalgoerWontTalk()
+    {
+        foreach(var kind in new[]{"Conversation","Sale","Buy"})foreach(bool swarming in new[]{false,true})
+        {
+            var s=Pair(kind);var npc=Partner(s);var p=s.Player("p0");p.Cash=20;
+            npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=0});
+            s.Tick(.1);if(swarming)s.Tick(4.5);
+            string mode=npc.Mode;Check(mode==(swarming?"Swarming":"Accusing"),"setup: they are "+(swarming?"swarming":"accusing")+" p0 (mode "+mode+")");
+            int cash=p.Cash,stock=p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0;
+            var started=Act(s,"p0",kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");
+            Check(!started.Accepted&&started.Reason=="They're too agitated to chat","a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
+            Check(p.InteractionId==""&&p.Cash==cash&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==stock,"and nothing starts, held or taken ("+p.InteractionId+", $"+p.Cash+")");
         }
     }
 

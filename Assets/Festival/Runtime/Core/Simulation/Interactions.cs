@@ -3,15 +3,18 @@ namespace Festival.Core {
 public sealed partial class FestivalSimulation {
     InteractionState NewInteraction(PlayerState p,string kind,string target,double duration){var i=new InteractionState{Id=Id("interaction"),PlayerId=p.Id,TargetId=target,Kind=kind,StartSeconds=State.SimulationSeconds,DurationSeconds=duration,ChartSeed=State.Seed+(int)State.EntitySequence,ChartDifficulty=State.LevelIndex};State.Interactions.Add(i);p.InteractionId=i.Id;return i;}
     CommandResult BeginTask(PlayerState p,string kind,string target,double duration){NewInteraction(p,kind,target,duration);return Ok();}
-    CommandResult BeginChallenge(PlayerState p,GameCommand c,string kind){var npc=State.Npcs.Find(n=>n.Id==c.TargetId);if(npc==null||!Near(p,npc.X,npc.Z)||((kind=="Police")!=(npc.Kind=="Cop")))return Reject("Choose a nearby appropriate NPC");if(kind=="Conversation"&&!npc.CanTalk)return Reject("This person is keeping to themselves");if(kind=="Sale"&&(!Stock(c.ItemId)||Count(p,c.ItemId)<1||npc.Sales>=SalesPerBuyer(State)))return Reject("Stock required; a buyer takes "+SalesPerBuyer(State)+" sales per round");if(State.Interactions.Exists(x=>x.TargetId==npc.Id&&x.Status=="Active"))return Reject("NPC is busy");if(kind=="Sale"&&!Buys(npc))return RefuseSale(p,npc);if(kind=="Buy"){var refused=RefuseBuy(p,c,npc);if(refused!=null)return refused;}
+    CommandResult BeginChallenge(PlayerState p,GameCommand c,string kind){var npc=State.Npcs.Find(n=>n.Id==c.TargetId);if(npc==null||!Near(p,npc.X,npc.Z)||((kind=="Police")!=(npc.Kind=="Cop")))return Reject("Choose a nearby appropriate NPC");if(kind=="Conversation"&&!npc.CanTalk)return Reject("This person is keeping to themselves");if(kind=="Sale"&&(!Stock(c.ItemId)||Count(p,c.ItemId)<1||npc.Sales>=SalesPerBuyer(State)))return Reject("Stock required; a buyer takes "+SalesPerBuyer(State)+" sales per round");if(State.Interactions.Exists(x=>x.TargetId==npc.Id&&x.Status=="Active"))return Reject("NPC is busy");if(Talks(kind)&&WorkedUp(npc))return Reject(TooAgitated);if(kind=="Sale"&&!Buys(npc))return RefuseSale(p,npc);if(kind=="Buy"){var refused=RefuseBuy(p,c,npc);if(refused!=null)return refused;}
         // DIALOG-3: a sale, a buy, a chat and a talk with security are conversations (Conversations.cs); only a Dance dances here.
+        // K2: a talk roots you, so none starts with someone worked up (WorkedUp: accusing or swarming anyone), as Talk and the chat
+        // check refuse them too; refused above, before a refused sale or buy could draw their look or a narc's bust.
         if(Talks(kind))return BeginTalk(p,c,npc,kind);
         GiveDanceRoom(p,npc);var i=NewInteraction(p,kind,npc.Id,0);i.StartSeconds+=ChallengeLeadIn;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;var reserved=new System.Collections.Generic.List<string>();foreach(var active in State.Interactions)if(active.Status=="Active"&&active.DialogueId!="")reserved.Add(active.DialogueId);var line=p.Dialogue.Select("dance",State.FestivalIndex,i.ChartSeed,reserved);bool sober=p.Effects.Count==0;i.DialogueId=sober?line.Id:line.AwkwardId;i.DialogueText=sober?line.Text:line.AwkwardText;foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);return Ok();}
+    const string TooAgitated="They're too agitated to chat";
     CommandResult Talk(PlayerState p,GameCommand c)
     {
         var npc=State.Npcs.Find(n=>n.Id==c.TargetId);
         if(npc==null||npc.Kind!="Wook"||!npc.CanTalk||!Near(p,npc.X,npc.Z))return Reject("Find someone who wants to chat nearby");
-        if(npc.Mode=="Swarming"||npc.Mode=="Accusing")return Reject("They're too agitated to chat");
+        if(WorkedUp(npc))return Reject(TooAgitated);
         if(State.SimulationSeconds-npc.LastTalkSeconds<2)return Reject("Give them a moment");
         npc.LastTalkSeconds=State.SimulationSeconds;
         int hash=17;foreach(char ch in npc.Id)hash=unchecked(hash*31+ch);
