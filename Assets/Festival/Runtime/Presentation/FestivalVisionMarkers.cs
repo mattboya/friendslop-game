@@ -11,10 +11,10 @@ namespace Festival.Presentation
     /// <summary>VISION-1: draws the tripper's visions over festivalgoers and places. Only the tripper's view carries visions
     /// (FestivalSimulation.VisibleVisions), so every other client draws nothing. A fake's tells come from the host's Tell flag,
     /// never from its truth: it casts no shadow, is slightly off in colour and shimmers while the camera moves. A checked
-    /// vision drops its tells and is ringed in green (a truth) or red (a fake), and it says TRUE or FALSE while the aim dot is on
-    /// it (VISION-5). The shadow is a pool on the ground right under the marker, at the festivalgoer's feet (the festival sun is
-    /// only 14 degrees up, so a real one would land about 10 m away): dark by day, and by night, when the ground is too dark for
-    /// any shadow to show, a faint pale glow.</summary>
+    /// vision drops its tells and is ringed in green (a truth) or red (a fake), and it says what it found (NOT A NARC, PAYS
+    /// DOUBLE...) while the aim dot is on it (VISION-5). The shadow is a pool on the ground right under the marker, at the
+    /// festivalgoer's feet (the festival sun is only 14 degrees up, so a real one would land about 10 m away): dark by day, and
+    /// by night, when the ground is too dark for any shadow to show, a faint pale glow.</summary>
     public sealed class FestivalVisionMarkers : MonoBehaviour
     {
         // Over a festivalgoer's head (stacked when two visions share one), or over a spot on the grounds.
@@ -27,7 +27,6 @@ namespace Festival.Presentation
         private const float ShadowWidth=1.4f,ShadowThickness=.01f,ShadowLift=.05f;
         private static readonly Color NightGlow=new Color(.03f,.03f,.04f);
         private static readonly Color CheckedFalse=new Color(.52f,.52f,.55f);
-        private const string TrueVerdict="TRUE",FalseVerdict="FALSE";
         // A checked vision's ring: the glyph's own shape a little larger, its front faces culled so only a band around the glyph
         // shows. Bright neon, so it never reads as the dark, muted green of a suspicious wook's skin (CROWD-4).
         private const float RingScale=1.3f,Glow=.6f;
@@ -112,9 +111,22 @@ namespace Festival.Presentation
             {
                 var vision=visions[i];var marker=markers[vision.Id];
                 bool said=marker.Aimed<float.PositiveInfinity&&(i==aimed||vision.NpcId!=""&&vision.NpcId==visions[aimed].NpcId);
-                marker.Verdict.text=!said?"":vision.IsTrue?TrueVerdict:FalseVerdict;
+                marker.Verdict.text=!said?"":VerdictText(vision.Kind,vision.IsTrue);
             }
         }
+
+        /// <summary>What a checked vision of kind says it found: the claim it settles, never a bare TRUE or FALSE (VISION-5).</summary>
+        public static string VerdictText(string kind,bool isTrue){var words=Words(kind);return isTrue?words.True:words.False;}
+        // One table, shared with HUD-7's How to Play. A stash and a double buyer are always true in play (SecretSights), so their
+        // fake words only show in hand-built states; every kind has both all the same.
+        private static (string True,string False) Words(string kind)=>kind switch
+        {
+            "Buyer"=>("BUYER","NOT BUYING"),
+            "Narc"=>("NARC!","NOT A NARC"),
+            "Clue"=>("REAL CLUE","FAKE CLUE"),
+            "DoubleBuyer"=>("PAYS DOUBLE","PAYS NORMAL"),
+            _=>("STASH HERE","NOTHING HERE"),
+        };
 
         // How far along the aim (from eye, along forward) it passes within AimReach of the upright line from ground up to top;
         // infinity when it never does. The closest points of a ray and a segment: from the lines' closest points, clamp the ray to

@@ -13,7 +13,7 @@ using Object = UnityEngine.Object;
 namespace Festival.Tests
 {
     // VISION-1: only the tripper's client draws vision markers. Fakes carry learnable tells (no shadow, a shimmer while the camera
-    // moves, a slightly shifted hue) read from the view's Tell flag; truths are solid; a checked vision plainly shows true or false.
+    // moves, a slightly shifted hue) read from the view's Tell flag; truths are solid; a checked vision plainly says what it found.
     public sealed class VisionMarkerTests
     {
         private readonly List<GameObject> made=new List<GameObject>();
@@ -121,10 +121,10 @@ namespace Festival.Tests
             Assert.That(snaps,Is.Zero,"frames where a turning camera's fake snapped back to solid");
         }
 
-        // VISION-5: a checked vision says TRUE or FALSE only while the aim dot (the centre of the view) is on it: on its festivalgoer
-        // or its spot, from the feet up to the top of its marker. Three festivalgoers 4 m apart, 10 m ahead of the view, so the view
-        // can aim at one at a time.
-        [Test]public void CheckedVisionsPlainlyShowTrueOrFalse()
+        // VISION-5: a checked vision says what it found (BUYER, NOT BUYING...) only while the aim dot (the centre of the view) is on
+        // it: on its festivalgoer or its spot, from the feet up to the top of its marker. Three festivalgoers 4 m apart, 10 m ahead of
+        // the view, so the view can aim at one at a time.
+        [Test]public void CheckedVisionsPlainlySayWhatTheyFound()
         {
             var state=Round();var bodies=new Dictionary<string,Transform>();
             foreach(var (id,x) in new[]{("a",-4f),("b",0f),("c",4f)}){var body=Made(id).transform;body.position=new Vector3(x,0,0);bodies[id]=body;}
@@ -137,26 +137,26 @@ namespace Festival.Tests
             view.rotation=Quaternion.LookRotation(Vector3.back);markers.Apply(state,view,actorFor,0,.02f);
             foreach(var id in new[]{"open","true","false"})Assert.That(Label(markers,id),Is.Empty,id+": with the view aimed away, no verdict shows");
             var feet=bodies["b"].position;
-            Assert.That(Aimed(feet+Vector3.up,"true"),Is.EqualTo("TRUE"),"aimed at a checked truth, it says so");
+            Assert.That(Aimed(feet+Vector3.up,"true"),Is.EqualTo("BUYER"),"aimed at a checked truth, it says what is true");
             Assert.That(Label(markers,"false"),Is.Empty,"while the checked fake it is not aimed at stays blank");
-            Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo("FALSE"),"aimed at a checked fake, it says so");
+            Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo("NOT BUYING"),"aimed at a checked fake, it says what is true");
             Assert.That(Label(markers,"true"),Is.Empty,"while the checked truth it is no longer aimed at goes blank");
             Assert.That(Aimed(bodies["a"].position+Vector3.up,"open"),Is.Empty,"an unchecked vision aimed at makes no claim");
 
             // On it means within about half a metre of the upright line from the feet to the top of the marker.
-            float top=Glyph(markers,"true").bounds.max.y;
-            Assert.That(Aimed(feet,"true"),Is.EqualTo("TRUE"),"aimed at the feet");
-            Assert.That(Aimed(feet+new Vector3(.3f,1,0),"true"),Is.EqualTo("TRUE"),"aimed .3 m beside the body");
-            Assert.That(Aimed(feet+new Vector3(0,top+.3f,0),"true"),Is.EqualTo("TRUE"),"aimed .3 m over the marker");
+            float top=Glyph(markers,"true").bounds.max.y;string truth=FestivalVisionMarkers.VerdictText("Buyer",true),fake=FestivalVisionMarkers.VerdictText("Buyer",false);
+            Assert.That(Aimed(feet,"true"),Is.EqualTo(truth),"aimed at the feet");
+            Assert.That(Aimed(feet+new Vector3(.3f,1,0),"true"),Is.EqualTo(truth),"aimed .3 m beside the body");
+            Assert.That(Aimed(feet+new Vector3(0,top+.3f,0),"true"),Is.EqualTo(truth),"aimed .3 m over the marker");
             Assert.That(Aimed(feet+new Vector3(.8f,1,0),"true"),Is.Empty,"aimed .8 m beside the body, the aim is off it");
             Assert.That(Aimed(feet+new Vector3(0,top+.8f,0),"true"),Is.Empty,"aimed .8 m over the marker, the aim is off it");
 
             // Two checked festivalgoers on one line of sight: only the nearer says what it is, from either side.
             bodies["c"].position=new Vector3(0,0,6);
-            Assert.That(Aimed(feet+Vector3.up,"true"),Is.EqualTo("TRUE"),"the nearer of two in a line shows its verdict");
+            Assert.That(Aimed(feet+Vector3.up,"true"),Is.EqualTo(truth),"the nearer of two in a line shows its verdict");
             Assert.That(Label(markers,"false"),Is.Empty,"the one behind it stays blank");
             view.position=new Vector3(0,1.65f,16);
-            Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo("FALSE"),"from the far side, the other one is the nearer");
+            Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo(fake),"from the far side, the other one is the nearer");
             Assert.That(Label(markers,"true"),Is.Empty,"and the first one is now behind it");
             view.position=new Vector3(0,1.65f,-10);bodies["c"].position=new Vector3(4,0,0);
 
@@ -179,9 +179,9 @@ namespace Festival.Tests
             // Two checked visions over one festivalgoer (a buyer who also pays double) both answer the aim, and so does a checked spot.
             state.Visions.Add(new VisionState{Id="double",Kind="DoubleBuyer",NpcId="b",IsTrue=true,Confirmed=true});
             state.Visions.Add(new VisionState{Id="stash",Kind="Stash",X=-8,Z=0,IsTrue=false,Confirmed=true});
-            Assert.That(Aimed(feet+Vector3.up,"double"),Is.EqualTo("TRUE"),"the second vision over the festivalgoer aimed at says so");
-            Assert.That(Label(markers,"true"),Is.EqualTo("TRUE"),"and so does the first");
-            Assert.That(Aimed(new Vector3(-8,.7f,0),"stash"),Is.EqualTo("FALSE"),"aimed at a checked spot on the ground, it says so");
+            Assert.That(Aimed(feet+Vector3.up,"double"),Is.EqualTo("PAYS DOUBLE"),"the second vision over the festivalgoer aimed at says what it found");
+            Assert.That(Label(markers,"true"),Is.EqualTo("BUYER"),"and so does the first");
+            Assert.That(Aimed(new Vector3(-8,.7f,0),"stash"),Is.EqualTo("NOTHING HERE"),"aimed at a checked spot on the ground, it says what it found");
         }
 
         // VISION-5: the aim dot is on a festivalgoer anywhere from their feet to the top of their whole stack of visions, so
@@ -203,11 +203,37 @@ namespace Festival.Tests
                 {
                     Aim(view,body.position+Vector3.up*y);markers.Apply(state,view,actorFor,0,.02f);
                     string at=" (aimed "+y.ToString("0.00")+" m up the festivalgoer"+(checkedLater?", both checked)":", the upper one unchecked)");
-                    Assert.That(Label(markers,"narc"),Is.EqualTo("FALSE"),"the lower checked fake says so"+at);
-                    Assert.That(Label(markers,"double"),Is.EqualTo(checkedLater?"TRUE":""),"the buyer who pays double"+(checkedLater?" says TRUE":" makes no claim until checked")+at);
+                    Assert.That(Label(markers,"narc"),Is.EqualTo("NOT A NARC"),"the lower checked fake says what is true"+at);
+                    Assert.That(Label(markers,"double"),Is.EqualTo(checkedLater?"PAYS DOUBLE":""),"the buyer who pays double"+(checkedLater?" says so":" makes no claim until checked")+at);
                     Assert.That(Label(markers,"open"),Is.Empty,"the unchecked one on top makes no claim"+at);
                 }
             }
+        }
+
+        // VISION-5: a checked vision names the claim it settles, never a bare TRUE or FALSE: Matt read "FALSE" over a festivalgoer
+        // and could not tell what was false. Every kind, checked true and checked fake, aimed at, says its own words from the one
+        // table (VerdictText), which HUD-7's How to Play shares. A stash is a spot on the ground; the rest float over a festivalgoer.
+        [Test]public void EveryKindSaysWhatItFound()
+        {
+            var said=new Dictionary<string,string>();
+            foreach(var kind in new[]{"Buyer","Narc","Clue","DoubleBuyer","Stash"})
+                foreach(bool truth in new[]{true,false})
+                {
+                    var state=Round();var body=Made(kind).transform;bool place=kind=="Stash";
+                    state.Visions.Add(new VisionState{Id="seen",Kind=kind,NpcId=place?"":kind,IsTrue=truth,Confirmed=true});
+                    var markers=Markers();var view=View();Aim(view,Vector3.up);markers.Apply(state,view,id=>id==kind?body:null,0,.02f);
+                    string label=Label(markers,"seen");said[kind+(truth?" truth":" fake")]=label;
+                    Assert.That(label,Is.EqualTo(FestivalVisionMarkers.VerdictText(kind,truth)),kind+(truth?" checked true":" checked fake")+" says its own words when aimed at");
+                    Assert.That(label,Is.Not.EqualTo("TRUE").And.Not.EqualTo("FALSE"),kind+": never a bare TRUE or FALSE");
+                }
+            Assert.That(said,Is.EquivalentTo(new Dictionary<string,string>
+            {
+                {"Buyer truth","BUYER"},{"Buyer fake","NOT BUYING"},
+                {"Narc truth","NARC!"},{"Narc fake","NOT A NARC"},
+                {"Clue truth","REAL CLUE"},{"Clue fake","FAKE CLUE"},
+                {"DoubleBuyer truth","PAYS DOUBLE"},{"DoubleBuyer fake","PAYS NORMAL"},
+                {"Stash truth","STASH HERE"},{"Stash fake","NOTHING HERE"},
+            }),"each kind's words name the claim it settles");
         }
 
         // CAM-1: over the shoulder the camera hangs 2.4 m behind and .45 m right of your eye, and the aim dot (the camera's centre)
@@ -224,10 +250,10 @@ namespace Festival.Tests
             Assert.That(boom,Is.GreaterThan(2.4f),"setup: the camera is over your shoulder");
             var under=view.position+view.forward*1.2f;c.position=new Vector3(under.x,0,under.z);
             markers.Apply(state,view,actorFor,0,.02f,eye);
-            Assert.That(Label(markers,"on a"),Is.EqualTo("FALSE"),"the dot on a's left side reads a");
+            Assert.That(Label(markers,"on a"),Is.EqualTo(FestivalVisionMarkers.VerdictText("Narc",false)),"the dot on a's left side reads a");
             Assert.That(Label(markers,"on c"),Is.Empty,"c, between the camera and you, does not answer");
             markers.Apply(state,view,actorFor,0,.02f);
-            Assert.That(Label(markers,"on c"),Is.EqualTo("TRUE"),"setup: from the camera's own spot the aim would be on c");
+            Assert.That(Label(markers,"on c"),Is.EqualTo(FestivalVisionMarkers.VerdictText("Buyer",true)),"setup: from the camera's own spot the aim would be on c");
             c.position=new Vector3(0,0,-30);
             DotOn(view,eye,new Vector3(.85f,1,0),out boom);markers.Apply(state,view,actorFor,0,.02f,eye);
             Assert.That(Label(markers,"on a"),Is.Empty,"the dot in the air .85 m right of a reads nobody");
