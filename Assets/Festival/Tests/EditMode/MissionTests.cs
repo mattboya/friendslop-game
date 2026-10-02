@@ -70,9 +70,15 @@ public static class MissionTests
         game.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
         var seller=game.State.Npcs.Find(n=>n.Role=="Regular"&&n.Twist==""&&FestivalSimulation.SellerStock(n.Id)=="stock_mushrooms");solo.X=seller.X;solo.Z=seller.Z-1;
         Check(Act(game,solo.Id,"StartBuy",seller.Id,"stock_mushrooms").Accepted,"solo asks a festivalgoer for Fun Guys");
+        // DIALOG-3: the buy is a talk: a dance first if the seller asks for one, then the smooth reply each turn.
         var buy=game.Interaction(solo.InteractionId);
-        foreach(var note in RhythmChart.For(buy).Notes)buy.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        game.Tick(10);Check(buy.Status=="Complete"&&solo.Inventory.Exists(i=>i.ItemId=="stock_mushrooms"),"solo dances the buy and gets the Fun Guys");
+        if(buy.TrustDance)foreach(var note in RhythmChart.For(buy).Notes)buy.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        for(int guard=0;buy.Status=="Active"&&guard<200;guard++)
+        {
+            if(buy.Turns.Count==0){game.Tick(.1);continue;}
+            var turn=buy.Turns[buy.Turns.Count-1];Check(game.Execute(solo.Id,new GameCommand{Id="mission"+(sequence++),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=buy.Turns.Count-1}).Accepted,"solo replies");
+        }
+        Check(buy.Status=="Complete"&&solo.Inventory.Exists(i=>i.ItemId=="stock_mushrooms"),"solo talks the buy through and gets the Fun Guys");
         game.State.Npcs.Clear();game.State.LevelIndex=1;solo.X=-18;solo.Z=-22;
         Check(FestivalSimulation.VisibleVisions(game.State,solo.Id).Count>0,"the solo tripper sees the visions");
         Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Fun Guys a festivalgoer sold them");

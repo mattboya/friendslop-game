@@ -38,14 +38,19 @@ public static class VisionTests
     }
     // The first level from `seed` on whose spin the tripper takes exactly `dose`; `seed` moves past it.
     static FestivalSimulation Dosed(int dose,int level,ref int seed){for(;seed<5000;seed++){var s=Start(seed,level);if(Dose(Tripper(s))==dose){seed++;return s;}}throw new Exception("no seed spins dose "+dose);}
-    // Sell one stock to npc, hitting every note, with no cops around. Returns the cash it paid.
+    // Sell one stock to npc, played perfectly (DIALOG-3: every note of a trust dance if they ask for one, then the smooth reply
+    // each turn), with no cops around. Returns the cash it paid.
     static int Sell(FestivalSimulation s,string id,NpcState npc)
     {
         var p=s.Player(id);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int before=p.Cash;
         Check(Act(s,id,"StartSale",npc.Id,"stock_lsd").Accepted,"setup: "+id+" starts a sale to buyer "+npc.Id);
         var sale=s.Interaction(p.InteractionId);
-        foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        for(int guard=0;sale.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+        if(sale.TrustDance)foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        for(int guard=0;sale.Status=="Active"&&guard<200;guard++)
+        {
+            if(sale.Turns.Count==0){s.Tick(.1);continue;}
+            var t=sale.Turns[sale.Turns.Count-1];Check(s.Execute(id,new GameCommand{Id="vision"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=sale.Turns.Count-1}).Accepted,"setup: a smooth reply");
+        }
         Check(sale.Status=="Complete","setup: the sale to "+npc.Id+" settles ("+sale.Status+")");return p.Cash-before;
     }
 

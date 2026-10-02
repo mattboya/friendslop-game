@@ -1,0 +1,95 @@
+using System;
+namespace Festival.Core
+{
+    /// <summary>DIALOG-3: selling (Sale), buying (Buy, ECON-2), chatting (Conversation) and talking to security (Police) are talks,
+    /// not dances. A talk is ConversationTurns turns: they say a line (their reaction to your last reply first), and you pick one
+    /// of three replies with the Reply command (Amount the reply 0-2, Direction the turn) before ReplySeconds run out, or say
+    /// nothing. One reply is smooth, one so-so and one awkward by the taste of whoever you're talking to (ConversationLines),
+    /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
+    /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
+    /// watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
+    /// first asks for a dance (TrustAsk): eight notes on the talk's own chart, danced and watched like any dance. TrustScore or
+    /// better wins their trust and the talk follows; less and they walk off, the talk over at 0.</summary>
+    public sealed partial class FestivalSimulation
+    {
+        public const int ConversationTurns=3;
+        public const double ReplySeconds=4,TrustDanceSuspicion=40,TrustScore=.6;
+        public const string TrustAsk="Dance with me first, then we talk.";
+        public static bool Talks(string kind)=>kind=="Sale"||kind=="Buy"||kind=="Conversation"||kind=="Police";
+        /// <summary>Whether talk i is still in the dance a wary festivalgoer asked for, before its first turn.</summary>
+        public static bool TrustDancing(InteractionState i)=>Talks(i.Kind)&&i.TrustDance&&i.Turns.Count==0;
+        /// <summary>Whether i shows its player dancing with a partner: a dance, a check dance or a talk's trust dance.</summary>
+        public static bool Dancing(InteractionState i)=>DancesVisibly(i.Kind)||TrustDancing(i);
+
+        // BeginChallenge's talks, once the person has agreed to one: the stock or the price is held, a cop who sees a deal start
+        // records it, as for a dance, and the first turn (or the trust dance) begins.
+        CommandResult BeginTalk(PlayerState p,GameCommand c,NpcState npc,string kind)
+        {
+            bool wary=Wary(npc,p);if(wary)GiveDanceRoom(p,npc);
+            var i=NewInteraction(p,kind,npc.Id,0);
+            foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);
+            if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}
+            if(kind=="Buy")HoldPrice(p,i);
+            if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
+            if(wary){i.TrustDance=true;i.DialogueText=TrustAsk;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;}else AddTurn(i,p);
+            return Ok();
+        }
+        // A festivalgoer this wary of p, or one of the 1 in 4 ravers and burners who always want a dance first (by their id and the
+        // round's seed, from bits of the id's FNV-1a hash that don't pick its persona).
+        bool Wary(NpcState n,PlayerState p)
+        {
+            if(n.Kind!="Wook")return false;
+            if((n.Observers.Find(o=>o.PlayerId==p.Id)?.Suspicion??0)>=TrustDanceSuspicion)return true;
+            string persona=DialogueGrammar.PersonaFor(n.Id,n.Twist);if(persona!="Raver"&&persona!="Burner")return false;
+            uint hash=2166136261;foreach(char ch in n.Id)hash=unchecked((hash^ch)*16777619);
+            return ((hash>>16)^(uint)State.Seed)%4==0;
+        }
+        CommandResult Reply(PlayerState p,GameCommand c)
+        {
+            var i=Interaction(p.InteractionId);
+            if(i==null||i.Status!="Active"||!Talks(i.Kind)||i.Turns.Count==0)return Reject("No conversation to reply in");
+            var turn=i.Turns[i.Turns.Count-1];
+            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject("Too late: that moment has passed");
+            if(c.Amount<0||c.Amount>2)return Reject("Pick reply 1, 2 or 3");
+            turn.Pick=c.Amount;
+            if(i.Turns.Count<ConversationTurns)AddTurn(i,p);else FinishInteraction(i,p);
+            return Ok();
+        }
+        // The next turn, drawn from its own stream of the talk's seed, due ReplySeconds after the last ended: at its reply, or
+        // when its time ran out (so silent turns keep a steady beat whatever the tick).
+        void AddTurn(InteractionState i,PlayerState p)
+        {
+            int t=i.Turns.Count;var npc=State.Npcs.Find(n=>n.Id==i.TargetId);
+            string persona=i.Kind=="Police"?ConversationLines.Security:DialogueGrammar.PersonaFor(i.TargetId,npc?.Twist??"");
+            int dose=DoseOf(p);
+            i.Turns.Add(ConversationLines.Turn(ConversationLines.Topic(i.Kind),persona,State.FestivalIndex,t,t==0?-1:Graded(i.Turns[t-1]),dose>=3?2:dose>=1?1:0,new ContentRandom(unchecked(i.ChartSeed*31+t)),p.Dialogue));
+            i.DurationSeconds=Math.Min(State.SimulationSeconds,i.StartSeconds+i.DurationSeconds)+ReplySeconds-i.StartSeconds;
+        }
+        static int Graded(ConversationTurn t)=>t.Pick<0?ConversationLines.Silence:t.Grades[t.Pick];
+        // FinishInteraction calls this each time the talk's clock runs out (a trust dance's verdict, or a turn left silent) and
+        // after its last reply. True once the talk is over, its Score set and its watchers moved.
+        bool TalkEnds(InteractionState i,PlayerState p)
+        {
+            if(TrustDancing(i))
+            {
+                double danced=Judge(i);int delta=RhythmDelta(danced);
+                foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,delta);
+                if(danced<TrustScore){i.Score=0;p.LastRhythmScore=0;p.Performances++;return true;}
+                i.DialogueText="";i.DurationSeconds=State.SimulationSeconds-i.StartSeconds;AddTurn(i,p);return false;
+            }
+            if(i.Turns.Count<ConversationTurns){AddTurn(i,p);return false;}
+            double total=0;foreach(var turn in i.Turns){int grade=Graded(turn);total+=grade==ConversationLines.Smooth?1:grade==ConversationLines.SoSo?.5:0;}
+            i.Score=total/ConversationTurns;p.LastRhythmScore=i.Score;p.Performances++;
+            int moved=RhythmDelta(i.Score);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id))Adjust(n,p,moved);
+            return true;
+        }
+        // What a finished talk settles on its Score: a sale pays in full at .75 and half at .4, and its stock comes back below;
+        // a buy (StockBuys.cs); and security at .75 waves off its stop.
+        void SettleTalk(InteractionState i,PlayerState p)
+        {
+            if(i.Kind=="Sale"){var npc=State.Npcs.Find(n=>n.Id==i.TargetId);if(i.Score>=.4){int payout=SalePayout(npc,(i.Score>=.75?PerfectSalePay:5)*VipPayout(p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;}else if(i.ReservedItemId!=""){if(CanAdd(p,i.ReservedItemId,1))Add(p,i.ReservedItemId,1);else State.Drops.Add(new DropState{Id=Id("drop"),ItemId=i.ReservedItemId,Count=1,X=p.X,Z=p.Z});}i.ReservedItemId="";}
+            if(i.Kind=="Buy")SettleBuy(i,p);
+            if(i.Kind=="Police"&&i.Score>=.75)WaveOn(i.TargetId,p);
+        }
+    }
+}

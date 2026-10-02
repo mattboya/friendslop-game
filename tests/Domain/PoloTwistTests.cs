@@ -147,19 +147,13 @@ public static class PoloTwistTests
     }
     // p0 steps from (x,22) to (to,22) in a tenth of a second.
     static bool Step(FestivalSimulation s,float x,float to){Place(s,0,x,22);return s.TryMove("p0",to,22,0,.1);}
-    // p sells a Tongue Stamp to n, hitting every note on the beat; returns the cash it made.
+    // p sells a Tongue Stamp to n, giving the smooth reply every turn (DIALOG-3); returns the cash it made.
     static int Sell(FestivalSimulation s,PlayerState p,NpcState n)
     {
         p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int before=p.Cash;
         var started=Act(s,p.Id,"StartSale",n.Id,"stock_lsd");Check(started.Accepted,"setup: the sale starts: "+started.Reason);
-        var sale=s.Interaction(p.InteractionId);var notes=RhythmChart.For(sale).Notes;int next=0;
-        for(int guard=0;sale.Status=="Active"&&guard<400;guard++)
-        {
-            double now=s.State.SimulationSeconds-sale.StartSeconds;
-            for(;next<notes.Count&&notes[next].TimeSeconds<=now;next++)
-                Check(s.Execute(p.Id,new GameCommand{Id="polo"+(sequence++),Kind="Rhythm",Direction=notes[next].Direction,TimeSeconds=notes[next].TimeSeconds}).Accepted,"setup: note "+next+" lands");
-            s.Tick(.1);
-        }
+        var sale=s.Interaction(p.InteractionId);Check(!sale.TrustDance,"setup: the buyer just talks");
+        while(sale.Status=="Active"){var t=sale.Turns[sale.Turns.Count-1];Check(s.Execute(p.Id,new GameCommand{Id="polo"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=sale.Turns.Count-1}).Accepted,"setup: a smooth reply lands");}
         Check(sale.Status=="Complete"&&sale.Score>=.75,"setup: a perfect sale");
         return p.Cash-before;
     }

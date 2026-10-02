@@ -27,9 +27,12 @@ public static class SimulationTests {
   var localSuspicion=witness.Observers.Find(o=>o.PlayerId==p.Id);var remoteSuspicion=nonWitness.Observers.Find(o=>o.PlayerId==p.Id);
   Assert(localSuspicion!=null&&localSuspicion.Suspicion>0&&remoteSuspicion!=null&&remoteSuspicion.Suspicion==0,"suspicion is observer-local");
   s=Game();p=s.Player("a");s.State.Npcs.Clear();p.X=0;p.Z=0;var listener=new NpcState{Id="listener",X=0,Z=1,Yaw=180,CanTalk=true};listener.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});s.State.Npcs.Add(listener);
-  Assert(s.Execute("a",C("Conversation",target:listener.Id)).Accepted,"start NPC conversation");var talk=s.Interaction(p.InteractionId);Assert(!string.IsNullOrWhiteSpace(talk.DialogueText),"NPC responds with dialogue");
+  // DIALOG-3: wary at 40, the listener asks for a dance before they talk; danced well, the talk follows, each reply smooth.
+  Assert(s.Execute("a",C("Conversation",target:listener.Id)).Accepted,"start NPC conversation");var talk=s.Interaction(p.InteractionId);Assert(talk.TrustDance&&talk.DialogueText==FestivalSimulation.TrustAsk,"a wary NPC asks for a dance first");
   foreach(var note in RhythmChart.For(talk).Notes)talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-  s.Tick(10);Assert(p.LastRhythmScore>.99&&listener.Observers[0].Suspicion<40,"conversation improves local trust");
+  for(int guard=0;talk.Turns.Count==0&&guard<100;guard++)s.Tick(.1);Assert(talk.Turns.Count==1&&!string.IsNullOrWhiteSpace(talk.Turns[0].Line),"NPC responds with dialogue");
+  while(talk.Status=="Active"){var turn=talk.Turns[talk.Turns.Count-1];Assert(s.Execute("a",new GameCommand{Id="test_"+(++sequence),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=talk.Turns.Count-1}).Accepted,"a smooth reply");}
+  Assert(p.LastRhythmScore>.99&&listener.Observers[0].Suspicion<40,"conversation improves local trust");
   p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});Assert(s.Execute("a",C("Use","confetti")).Accepted,"confetti works");
   Assert(p.Inventory.Find(x=>x.ItemId=="confetti")==null&&listener.DistractedUntil>s.State.SimulationSeconds,"item consumed and wook distracted");s.Tick(.1);Assert(listener.Mode=="Distracted","wook visibly changes mode");
   s=Game();p=s.Player("a");p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});var npc=s.State.Npcs[0];npc.Role="Buyer";npc.X=p.X;npc.Z=p.Z+1;npc.Yaw=180;var distant=s.State.Npcs[10];distant.X=35;distant.Z=35;var cop=s.State.Npcs.Find(n=>n.Kind=="Cop");cop.X=p.X;cop.Z=p.Z+2;cop.Yaw=180;Assert(s.Execute("a",C("StartSale","stock_lsd",npc.Id)).Accepted,"sale reserve");s.Tick(4.1);Assert(p.Life=="Detained"&&p.Inventory.Count==0&&s.State.GrossSales==0&&p.Cash==10,"bust precedes settlement");

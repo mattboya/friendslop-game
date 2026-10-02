@@ -106,17 +106,19 @@ public static class CrowdTests
     static InteractionState Start(FestivalSimulation s,string kind){Check(s.Execute("p0",new GameCommand{Id="crowd"+(sequence++),Kind=kind,TargetId="partner"}).Accepted,"p0 starts "+kind);return s.Interaction(s.Player("p0").InteractionId);}
     static void Hit(InteractionState i){foreach(var n in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
     static void Finish(FestivalSimulation s,InteractionState i){for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);Check(i.Status=="Complete",i.Kind+" completes");}
+    // DIALOG-3: p0 gives the smooth reply on every turn of a chat.
+    static void Smooth(FestivalSimulation s,InteractionState i){while(i.Status=="Active"&&i.Turns.Count>0){var t=i.Turns[i.Turns.Count-1];Check(s.Execute("p0",new GameCommand{Id="crowd"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=i.Turns.Count-1}).Accepted,"p0 replies smoothly");}}
 
-    // A missed chat (+20) counts x1.7 in a pack of four.
+    // A chat left silent (+20) counts x1.7 in a pack of four.
     static void MissedChatScales()
     {
         double Missed(int crew){var s=Pack(crew);Finish(s,Start(s,"Conversation"));return Heat(s,0)-20;}
-        Check(Missed(1)==20&&Missed(2)==20&&Same(Missed(4),34),"a missed chat: +20 alone or in a pair, +34 in a pack of four (got "+Missed(1)+", "+Missed(2)+", "+Missed(4)+")");
+        Check(Missed(1)==20&&Missed(2)==20&&Same(Missed(4),34),"a silent chat: +20 alone or in a pair, +34 in a pack of four (got "+Missed(1)+", "+Missed(2)+", "+Missed(4)+")");
     }
-    // A good chat (-15) is not a gain, so a pack does not change it.
+    // A smooth chat (-15) is not a gain, so a pack does not change it.
     static void GoodChatIsNotScaled()
     {
-        double Good(int crew){var s=Pack(crew);var chat=Start(s,"Conversation");Hit(chat);Finish(s,chat);return Heat(s,0)-20;}
+        double Good(int crew){var s=Pack(crew);var chat=Start(s,"Conversation");Smooth(s,chat);Finish(s,chat);return Heat(s,0)-20;}
         Check(Good(1)==-15&&Good(4)==-15,"a good chat: -15 alone and in a pack of four (got "+Good(1)+", "+Good(4)+")");
     }
     // Quitting a chat (+20) counts x1.7 in a pack of four.

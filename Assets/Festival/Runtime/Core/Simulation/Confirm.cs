@@ -41,7 +41,7 @@ namespace Festival.Core
                 chat.Chat=CanCheckVision(State,p,npc)?DialogueGrammar.Build(npc.Role,persona,State.FestivalIndex,chat.ChartSeed,p.Dialogue):DialogueGrammar.Rope(persona,State.FestivalIndex,chat.ChartSeed,p.Dialogue);
                 return Ok();
             }
-            GiveDanceRoom(p,npc,c.Kind);
+            GiveDanceRoom(p,npc);
             var dance=NewInteraction(p,c.Kind,npc.Id,0);dance.NoteCount=ConfirmDanceNotes;dance.BeatSeconds=ConfirmDanceBeat;
             dance.DurationSeconds=RhythmChart.For(dance).DurationSeconds;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))dance.WitnessIds.Add(n.Id);

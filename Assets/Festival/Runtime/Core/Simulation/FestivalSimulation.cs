@@ -78,6 +78,7 @@ namespace Festival.Core
             if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");p.Dialogue.Acknowledge(c.TargetId,current.Id);return Ok();}
             if(c.Kind=="Cancel") {if(OnWheel(State,p.Id))return Reject("You're stuck until the wheel comes round");Cancel(p,"Cancelled");return Ok();}
             if(c.Kind=="Rhythm")return Submit(p,c);
+            if(c.Kind=="Reply")return Reply(p,c);
             if(c.Kind=="Chime") {if(p.Life!="Spirit"||!Near(p,24,-20)||State.SimulationSeconds<p.ChimeUntil)return Reject("Chime requires medical memorial and cooldown");p.ChimeUntil=State.SimulationSeconds+10;return Ok("Memorial chime");}
             if(c.Kind=="HelpSelf")return HelpSelf(p);
             if(c.Kind=="BeginRevival"&&p.Life=="Spirit")return Revive(p,c);

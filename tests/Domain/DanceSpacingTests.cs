@@ -6,29 +6,32 @@ using Festival.Core;
 // them, so the two don't overlap in the dancer view. The step is checked like a move (the navigator, the grounds' edge, the VIP
 // ropes, a carried body's reach); a blocked spot leaves the dancer where they stood. The partner never turns, and the dancer
 // keeps facing them through the dance whatever the camera does.
-// DANCE-2: a sale, a chat and a talk with security are danced too (the live dancer view shows every four-lane challenge), so
-// they keep the same space and facing, and every note played shows as a step. DANCE-9: no challenge's step carries the player
-// over a VIP rope, wristband or not, or into or out of a cop's sight; it only fixes the dancer view, so it never decides a
-// sale's pay or a stop.
+// DIALOG-3: a sale, a buy, a chat and a talk with security are conversations again (reversing DANCE-2): the player stays where
+// they stood, looking where they like. The dance a wary festivalgoer asks for first (a trust dance) is a dance: the same space,
+// the same facing, and every note a step. DANCE-9: no dance's step carries the player over a VIP rope, wristband or not, or
+// into or out of a cop's sight; it only fixes the dancer view, so it never decides a sale's pay or a stop.
 public static class DanceSpacingTests
 {
     static int sequence;
     static void Check(bool pass,string message){if(!pass)throw new Exception("DanceSpacing: "+message);}
     const float PartnerX=2,PartnerZ=3,PartnerYaw=200,DancerYaw=10;
     // p0 stands `metres` from a lone partner, on the given compass bearing from them, looking off at DancerYaw. For a check
-    // dance p0 is the tripper with a vision of the partner still to check; for a sale p0 holds stock; security is a cop.
+    // dance p0 is the tripper with a vision of the partner still to check; for a sale p0 holds stock; security is a cop. A
+    // "Trust" kind is a chat with a partner wary of p0 (suspicion 40), so it opens with a trust dance; a "TrustSale" a sale to
+    // one. Seed 6: the partner, a burner, is not one who always dances first, so without the suspicion they just talk.
     static FestivalSimulation Pair(double metres,double bearing=60,string kind="Dance",float x=PartnerX,float z=PartnerZ)
     {
-        var s=new FestivalSimulation(5);s.AddPlayer("p0","P0");s.State.Phase="Playing";s.State.Npcs.Clear();
-        s.State.Npcs.Add(new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",X=x,Z=z,Yaw=PartnerYaw,CanTalk=true});
+        var s=new FestivalSimulation(6);s.AddPlayer("p0","P0");s.State.Phase="Playing";s.State.Npcs.Clear();
+        var partner=new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",X=x,Z=z,Yaw=PartnerYaw,CanTalk=true};s.State.Npcs.Add(partner);
+        if(kind.StartsWith("Trust"))partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
         var p=s.Player("p0");double b=bearing*Math.PI/180;p.X=x+(float)(metres*Math.Sin(b));p.Z=z+(float)(metres*Math.Cos(b));p.Yaw=DancerYaw;
         if(kind=="ConfirmDance"){s.State.TripperId="p0";s.State.Visions.Add(new VisionState{Id="vision",Kind="Buyer",NpcId="partner"});}
-        if(kind=="Sale")p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        if(kind.EndsWith("Sale"))p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         return s;
     }
     static PlayerState Dancer(FestivalSimulation s)=>s.Player("p0");
     static NpcState Partner(FestivalSimulation s)=>s.State.Npcs.Find(n=>n.Id=="partner");
-    static CommandResult Start(FestivalSimulation s,string kind="Dance")=>s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind=kind=="Sale"?"StartSale":kind,TargetId="partner",ItemId=kind=="Sale"?"stock_lsd":""});
+    static CommandResult Start(FestivalSimulation s,string kind="Dance")=>s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind=kind.EndsWith("Sale")?"StartSale":kind=="Trust"?"Conversation":kind,TargetId="partner",ItemId=kind.EndsWith("Sale")?"stock_lsd":""});
     static void Starts(FestivalSimulation s,string kind="Dance"){var started=Start(s,kind);Check(started.Accepted,"setup: the "+kind+" starts: "+started.Reason);}
     static double Gap(FestivalSimulation s){var p=Dancer(s);var n=Partner(s);return Math.Sqrt((p.X-n.X)*(p.X-n.X)+(p.Z-n.Z)*(p.Z-n.Z));}
     // Degrees between where the dancer faces and the line to their partner (0 = facing them).
@@ -49,7 +52,7 @@ public static class DanceSpacingTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{OnlyPartnerChallengesKeepTheirDistance,ASaleAChatAndSecurityAreDancedToo,ACloseDancerStepsBackFacingTheirPartner,ADancerFurtherOffStaysPut,
+        foreach(var test in new Action[]{OnlyPartnerChallengesKeepTheirDistance,ATalkIsNoDanceButItsTrustDanceIs,ACloseDancerStepsBackFacingTheirPartner,ADancerFurtherOffStaysPut,
             OnTopOfThePartnerTheyStepBackFromTheirFacing,AWallBehindKeepsTheDancerPut,TheNavigatorMustReachTheSpot,
             TheGroundsEdgeAndTheRopesKeepTheDancerPut,ACarrierKeepsTheBodyInReach,ACheckDanceKeepsTheSameSpace,
             TheWatchersSeeTheDancerWhereTheyDance,TheFacingHoldsUntilTheDanceEnds,ARefusedDanceMovesNobody,
@@ -63,26 +66,36 @@ public static class DanceSpacingTests
     {
         Check(FestivalSimulation.DanceSpacing==1.4,"dancers keep 1.4 m from their partner");
         foreach(var kind in PartnerKinds)Check(FestivalSimulation.DancesVisibly(kind),"a "+kind+" shows the player dancing with their partner");
-        foreach(var kind in new[]{"Poi","Dj","ConfirmChat","FindFriend",""})Check(!FestivalSimulation.DancesVisibly(kind),kind+" is not a partner dance");
+        foreach(var kind in new[]{"Poi","Dj","ConfirmChat","FindFriend","","Sale","Buy","Conversation","Police"})Check(!FestivalSimulation.DancesVisibly(kind),kind+" is not a partner dance");
     }
 
-    static readonly string[] PartnerKinds={"Dance","ConfirmDance","Sale","Conversation","Police"};
+    static readonly string[] PartnerKinds={"Dance","ConfirmDance"};
 
-    // DANCE-2: whoever the player sells to, chats with or answers to, they dance it: 1.4 m back, facing them, held there, and
-    // each note they play shows as a step.
-    static void ASaleAChatAndSecurityAreDancedToo()
+    // DIALOG-3: whoever the player sells to, chats with or answers to, they talk: they stay where they stood, the camera still
+    // turns them, and there are no notes to play. Only the dance a wary festivalgoer asks for first is danced: 1.4 m back,
+    // facing them, held there, and each note a step.
+    static void ATalkIsNoDanceButItsTrustDanceIs()
     {
         foreach(var kind in new[]{"Sale","Conversation","Police"})
         {
+            var s=Pair(.3,kind:kind);var p=Dancer(s);float x=p.X,z=p.Z;Starts(s,kind);
+            Check(!s.Interaction(p.InteractionId).TrustDance&&p.X==x&&p.Z==z&&p.Yaw==DancerYaw,"a "+kind+" started at 0.3 m leaves the player where they stood, looking where they looked (now "+p.X+", "+p.Z+", yaw "+p.Yaw+")");
+            Check(s.TryMove("p0",p.X,p.Z,250,.1)&&p.Yaw==250,"the camera turns them during the "+kind);
+            s.Tick(2.1);
+            Check(!s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind="Rhythm",Direction=3,TimeSeconds=.1}).Accepted&&p.VisualDanceStepSequence==0,"a "+kind+" takes no notes and shows no steps");
+        }
+        foreach(var kind in new[]{"Trust","TrustSale"})
+        {
             var s=Pair(.3,kind:kind);Starts(s,kind);var p=Dancer(s);
-            Check(Math.Abs(Gap(s)-FestivalSimulation.DanceSpacing)<1e-3&&OffFacing(s)<.5,"a "+kind+" started at 0.3 m leaves the player 1.4 m away, facing their partner (gap "+Gap(s).ToString("0.###")+" m, "+OffFacing(s).ToString("0.#")+"° off)");
-            Check(Partner(s).Yaw==PartnerYaw,"the "+kind+"'s partner doesn't turn");
+            Check(s.Interaction(p.InteractionId).TrustDance,"setup: the wary partner asks for a dance first");
+            Check(Math.Abs(Gap(s)-FestivalSimulation.DanceSpacing)<1e-3&&OffFacing(s)<.5,"a trust dance started at 0.3 m leaves the player 1.4 m away, facing their partner (gap "+Gap(s).ToString("0.###")+" m, "+OffFacing(s).ToString("0.#")+"° off)");
+            Check(Partner(s).Yaw==PartnerYaw,"the trust dance's partner doesn't turn");
             float yaw=p.Yaw;
-            Check(s.TryMove("p0",p.X,p.Z,250,.1)&&p.Yaw==yaw,"the camera's yaw doesn't turn them away during the "+kind);
-            s.Tick(2.1);int steps=p.VisualDanceStepSequence;
-            var played=s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind="Rhythm",Direction=3,TimeSeconds=.1});
-            Check(played.Accepted,"setup: the "+kind+" takes a note: "+played.Reason);
-            Check(p.VisualDanceStepSequence==steps+1&&p.VisualDanceStepDirection==3,"a note played in the "+kind+" shows as a dance step");
+            Check(s.TryMove("p0",p.X,p.Z,250,.1)&&p.Yaw==yaw,"the camera's yaw doesn't turn them away during the trust dance");
+            s.Tick(2);int steps=p.VisualDanceStepSequence;
+            var played=s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind="Rhythm",Direction=3,TimeSeconds=1.9});
+            Check(played.Accepted,"setup: the trust dance takes a note: "+played.Reason);
+            Check(p.VisualDanceStepSequence==steps+1&&p.VisualDanceStepDirection==3,"a note played in the trust dance shows as a dance step");
         }
     }
 
@@ -165,7 +178,7 @@ public static class DanceSpacingTests
     // A watcher who can't see the spot the dance starts from, only the one it steps back to, witnesses the dance.
     static void TheWatchersSeeTheDancerWhereTheyDance()
     {
-        foreach(var kind in PartnerKinds)
+        foreach(var kind in Unsold)
         {
             var s=Pair(.3,0,kind);s.State.Npcs.Add(new NpcState{Id="watcher",X=PartnerX,Z=PartnerZ+6,Yaw=180});
             s.HasLineOfSight=(x,z,tx,tz)=>tz>PartnerZ+1;Starts(s,kind);
@@ -190,42 +203,54 @@ public static class DanceSpacingTests
         Check(p.X==x&&p.Z==z&&p.Yaw==DancerYaw,"a refused dance neither moves nor turns the player");
     }
 
-    // Starts a sale and plays every note on time; returns what it paid.
-    static int SoldFor(FestivalSimulation s)
+    // Starts a sale (a TrustSale dances its trust dance perfectly first) and gives the smooth reply every turn; returns what it paid.
+    static int SoldFor(FestivalSimulation s,string kind="Sale")
     {
-        var p=Dancer(s);int cash=p.Cash;Starts(s,"Sale");var i=s.Interaction(p.InteractionId);
-        foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);
-        Check(i.Status=="Complete","setup: the sale finishes");return p.Cash-cash;
+        var p=Dancer(s);int cash=p.Cash;Starts(s,kind);var i=s.Interaction(p.InteractionId);
+        foreach(var note in RhythmChart.For(i).Notes)if(i.TrustDance)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        for(int guard=0;i.Status=="Active"&&guard<300;guard++)
+        {
+            if(i.Turns.Count>0){var t=i.Turns[i.Turns.Count-1];Check(s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=i.Turns.Count-1}).Accepted,"setup: a smooth reply");}
+            else s.Tick(.1);
+        }
+        Check(i.Status=="Complete"&&i.Score==1,"setup: the sale finishes perfectly");return p.Cash-cash;
     }
 
     // Palm Mirage's west VIP zone ends at x = -8, and the buyer stands 0.6 m inside it. A seller 0.5 m from them, with the rope
-    // behind, would step back over it and lose the VIP pay.
+    // behind, stays where they stood and is paid as inside: a sale never steps, and the step back a wary buyer's trust dance
+    // would take over the rope is refused.
     static void ASaleIsPaidWhereTheSellerStood()
     {
         int inside=SoldFor(Pair(1.4,270,"Sale",-8.6f,22)),over=SoldFor(Pair(1.4,90,"Sale",-8.6f,22));
         Check(inside>over,"setup: a sale inside the ropes pays more than one over them ($"+inside+" vs $"+over+")");
-        var s=Pair(.5,90,"Sale",-8.6f,22);var p=Dancer(s);float x=p.X,z=p.Z;int paid=SoldFor(s);
-        Check(p.X==x&&p.Z==z,"the seller stays inside, where they stood (now "+p.X+", "+p.Z+")");
-        Check(paid==inside,"and is paid as inside the ropes ($"+paid+", not $"+inside+")");
-        Check(OffFacing(s)<.5,"still facing the buyer");
+        foreach(var kind in new[]{"Sale","TrustSale"})
+        {
+            var s=Pair(.5,90,kind,-8.6f,22);var p=Dancer(s);float x=p.X,z=p.Z;int paid=SoldFor(s,kind);
+            Check(p.X==x&&p.Z==z,"the "+kind+"'s seller stays inside, where they stood (now "+p.X+", "+p.Z+")");
+            Check(paid==inside,"and is paid as inside the ropes ($"+paid+", not $"+inside+")");
+        }
     }
 
-    // The cop at the origin looks along +z. A seller 0.15 m from the buyer, just out of its sight, would step back into it and be
-    // busted; one just in its sight would step back out of it and get away with the deal.
+    // The cop at the origin looks along +z. A seller 0.15 m from the buyer, just out of its sight, would step back into it with a
+    // wary buyer's trust dance and be busted; one just in its sight would step back out of it and get away with the deal. A sale
+    // never steps, and a trust dance's step that would change the cop's view is refused.
     static void ACopJudgesASaleWhereTheSellerStood()
     {
-        var s=Pair(.15,315,"Sale",4,2);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});var p=Dancer(s);float x=p.X,z=p.Z;
-        Starts(s,"Sale");var cop=s.State.Npcs.Find(n=>n.Id=="cop");
-        Check(p.X==x&&p.Z==z&&cop.Evidence.Count==0,"a seller out of the cop's sight stays there unseen (now "+p.X+", "+p.Z+", "+cop.Evidence.Count+" evidence)");
-        for(int t=0;t<60;t++)s.Tick(.1);
-        Check(p.Life=="Alive","and isn't busted ("+p.Life+")");
-        s=Pair(.15,135,"Sale",3,2.3f);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});p=Dancer(s);x=p.X;z=p.Z;
-        Starts(s,"Sale");cop=s.State.Npcs.Find(n=>n.Id=="cop");
-        Check(p.X==x&&p.Z==z&&cop.Evidence.Exists(e=>e.Kind=="WitnessedDeal"),"a seller in the cop's sight stays there, and the deal is witnessed (now "+p.X+", "+p.Z+")");
+        foreach(var kind in new[]{"Sale","TrustSale"})
+        {
+            var s=Pair(.15,315,kind,4,2);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});var p=Dancer(s);float x=p.X,z=p.Z;
+            Starts(s,kind);var cop=s.State.Npcs.Find(n=>n.Id=="cop");
+            Check(p.X==x&&p.Z==z&&cop.Evidence.Count==0,"a "+kind+"'s seller out of the cop's sight stays there unseen (now "+p.X+", "+p.Z+", "+cop.Evidence.Count+" evidence)");
+            for(int t=0;t<60;t++)s.Tick(.1);
+            Check(p.Life=="Alive","and isn't busted ("+p.Life+")");
+            s=Pair(.15,135,kind,3,2.3f);s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=0,Z=0,Yaw=0});p=Dancer(s);x=p.X;z=p.Z;
+            Starts(s,kind);cop=s.State.Npcs.Find(n=>n.Id=="cop");
+            Check(p.X==x&&p.Z==z&&cop.Evidence.Exists(e=>e.Kind=="WitnessedDeal"),"a "+kind+"'s seller in the cop's sight stays there, and the deal is witnessed (now "+p.X+", "+p.Z+")");
+        }
     }
 
-    static readonly string[] Unsold={"Dance","ConfirmDance","Conversation","Police"};
+    // Every dance with a partner: a dance, a check dance and a wary festivalgoer's trust dance before a chat.
+    static readonly string[] Unsold={"Dance","ConfirmDance","Trust"};
 
     // DANCE-9: Palm Mirage's west VIP rope runs along x = -8 (the zone is west of it). A wristband-holder 0.5 m east of a partner
     // 0.6 m inside would step back out over it; one 0.3 m west of a partner 0.6 m outside would step back in over it. Either way

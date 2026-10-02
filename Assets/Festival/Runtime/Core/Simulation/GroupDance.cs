@@ -4,21 +4,22 @@ namespace Festival.Core {
 public sealed partial class FestivalSimulation {
     // DANCE-1: a finished Dance's witnesses judge every connected crew member within GroupDanceRadius
     // they can see by the group's worst score; a member with no overlapping danced challenge of their own counts as 0.
-    // DANCE-8: danced means DancesVisibly, so a friend's Sale, Conversation or Police talk counts like a Dance (everyone sees them dancing, DANCE-2).
+    // DIALOG-3: a friend talking (a sale, a buy, a chat or security, Talks) is neither dancing nor idle: the group leaves them out,
+    // as it does the tripper's check dance. Their own watchers settle their talk, trust dance and all (Conversations.cs).
     // Members who are dancing settle when their own challenge finishes, through its own witnesses, so each dancer changes once per dance;
     // one still in the lead-in before their first note is dancing but not scored yet, so they do not set the worst.
     // A member standing idle beside several overlapping Dances takes the verdict once, from the first to finish, like each dancer:
     // each witness notes the Dance that last charged that bystander (ObserverState.BystanderDanceId) and skips them while it overlaps.
     const double GroupDanceRadius=6;
     static int RhythmDelta(double score)=>(int)Math.Round(20-35*score,MidpointRounding.AwayFromZero);
-    void JudgeGroupDance(InteractionState i,PlayerState dancer){double worst=i.Score;var judged=new List<PlayerState>{dancer};foreach(var q in State.Players){if(q==dancer||!q.Connected||Distance(q.X,q.Z,dancer.X,dancer.Z)>GroupDanceRadius||!State.Npcs.Exists(n=>i.WitnessIds.Contains(n.Id)&&Sees(n,q)))continue;if(!OverlappingDance(q,i,out double? own)){judged.Add(q);worst=0;}else if(own!=null)worst=Math.Min(worst,own.Value);}int delta=RhythmDelta(worst);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id))foreach(var q in judged){if(q!=dancer){var o=Observe(n,q);var prior=Interaction(o.BystanderDanceId);if(prior!=null&&Overlap(prior,i))continue;o.BystanderDanceId=i.Id;}Adjust(n,q,delta);}}
+    void JudgeGroupDance(InteractionState i,PlayerState dancer){double worst=i.Score;var judged=new List<PlayerState>{dancer};foreach(var q in State.Players){if(q==dancer||!q.Connected||Distance(q.X,q.Z,dancer.X,dancer.Z)>GroupDanceRadius||!State.Npcs.Exists(n=>i.WitnessIds.Contains(n.Id)&&Sees(n,q))||Talking(q))continue;if(!OverlappingDance(q,i,out double? own)){judged.Add(q);worst=0;}else if(own!=null)worst=Math.Min(worst,own.Value);}int delta=RhythmDelta(worst);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id))foreach(var q in judged){if(q!=dancer){var o=Observe(n,q);var prior=Interaction(o.BystanderDanceId);if(prior!=null&&Overlap(prior,i))continue;o.BystanderDanceId=i.Id;}Adjust(n,q,delta);}}
     // The tripper's check dance (TRIP-3 ConfirmDance) counts as dancing here, so the tripper is never an idle 0, but its score is
     // the tripper's own: it never sets a friend's worst, just as a friend's Dance never judges the check dance (FinishInteraction).
-    // A sale, chat or security talk is scored by its own chart, like a Dance: only a Dance's finish judges the group.
     // Overlap means the windows players see intersect: from the press, ChallengeLeadIn before the first beat (a check dance has none,
     // BeginConfirm), to the verdict .75 s after the chart (Danger.cs). A challenge still running is judged on the notes due so far;
     // worst stays null while every overlapping one is still before its first note.
     bool OverlappingDance(PlayerState q,InteractionState i,out double? worst){worst=null;bool dancing=false;foreach(var x in State.Interactions){if(x==i||!DancesVisibly(x.Kind)||x.PlayerId!=q.Id||(x.Status!="Active"&&x.Status!="Complete")||!Overlap(x,i))continue;dancing=true;double? score=x.Kind=="ConfirmDance"?null:x.Status=="Complete"?x.Score:ScoreSoFar(x);if(score!=null)worst=worst==null?score:Math.Min(worst.Value,score.Value);}return dancing;}
+    bool Talking(PlayerState q){var x=Interaction(q.InteractionId);return x!=null&&x.Status=="Active"&&Talks(x.Kind);}
     const double ChallengeLeadIn=2;
     static double PressedAt(InteractionState x)=>x.StartSeconds-(x.Kind=="ConfirmDance"?0:ChallengeLeadIn);
     static double VerdictAt(InteractionState x)=>x.StartSeconds+x.DurationSeconds+.75;

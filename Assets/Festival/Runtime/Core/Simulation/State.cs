@@ -62,6 +62,9 @@ namespace Festival.Core
         public List<RhythmInput> Inputs=new List<RhythmInput>(); public List<string> WitnessIds=new List<string>();
         // TRIP-3: a ConfirmChat's conversation (DialogueGrammar). A view carries only its own player's interactions, so only the tripper reads it.
         public Conversation Chat=new Conversation();
+        // DIALOG-3: a talk's turns (Conversations.cs), the last one live until StartSeconds+DurationSeconds; TrustDance, a wary
+        // festivalgoer asked for a dance first, on this interaction's chart. Empty and false in older snapshots.
+        public List<ConversationTurn> Turns=new List<ConversationTurn>(); public bool TrustDance;
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).

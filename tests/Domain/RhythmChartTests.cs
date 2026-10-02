@@ -200,9 +200,12 @@ public static class RhythmChartTests
 
     static void AChallengePlaysTheMixOfTheLevelItBeganOn()
     {
+        // DIALOG-3: a chat is a conversation, danced only when a wary festivalgoer asks for a dance first; that trust dance plays
+        // the level's mix like any dance.
         for(int level=0;level<Festivals.LevelCount;level++)foreach(var kind in new[]{"Dance","Conversation"})
         {
-            var s=Floor(level);var i=Start(s,kind);
+            var s=Floor(level);if(kind=="Conversation")s.State.Npcs[0].Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+            var i=Start(s,kind);Check(kind=="Dance"||i.TrustDance,"setup: the wary festivalgoer asks for a dance before the chat");
             Check(i.ChartDifficulty==level,kind+" begun on level "+level+" keeps that level's chart difficulty (got "+i.ChartDifficulty+")");
             Check(Shape(RhythmChart.For(i))==Shape(RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,level)),kind+" plays level "+level+"'s mix from its seed");
             Check(Math.Abs(i.DurationSeconds-(2+i.NoteCount*i.BeatSeconds))<1e-9,kind+" lasts the lead-in and its beats");

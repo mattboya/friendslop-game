@@ -126,9 +126,19 @@ namespace Festival.Tests
                     var dance=sim.Interaction(player.InteractionId);
                     Assert.That(dance?.Kind,Is.EqualTo("Buy"),"setup: the Buy action starts a buy ("+session.Message+"), after:\n"+string.Join("\n",failures));
                     Expect("buying","Dancer heading","YOU  /  MAKING A BUY");
-                    // Danced perfectly, and over by the next tick.
-                    foreach(var note in RhythmChart.For(dance).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-                    dance.StartSeconds=sim.State.SimulationSeconds-dance.DurationSeconds-1;
+                    // DIALOG-3: talked through with the smooth reply every turn, after a perfect dance (over by the next tick) if the
+                    // seller asks for one first.
+                    if(dance.TrustDance)
+                    {
+                        foreach(var note in RhythmChart.For(dance).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+                        dance.StartSeconds=sim.State.SimulationSeconds-dance.DurationSeconds-1;
+                        yield return new WaitForSeconds(.4f);
+                    }
+                    while(dance.Status=="Active"&&dance.Turns.Count>0)
+                    {
+                        var turn=dance.Turns[dance.Turns.Count-1];
+                        Assert.That(sim.Execute(player.Id,new GameCommand{Id="money_reply_"+dance.Turns.Count,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=dance.Turns.Count-1}).Accepted,Is.True,"setup: a smooth reply");
+                    }
                     yield return new WaitForSeconds(.4f);
                     Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: the buy hands over a Tongue Stamp ("+session.Message+")");
                     Expect("bought","Notice","Bought Tongue Stamps for 5 friendship bracelets");

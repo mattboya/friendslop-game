@@ -35,6 +35,8 @@ namespace Festival.Network
         // ESC-2: a security stop ignored for 20 s becomes an arrest warning, and G ditches stock first during one; drops carry
         // the cop who claimed ditched stock (DropState.ClaimedBy), and the host's evidence its start (EvidenceState.StartSeconds).
         // MUSIC-2: CampMusicTrack picks SILENCE or one of five recorded tracks (track 2 is DISCO HOUSE, no longer MOONLIT DISCO).
+        // DIALOG-3: sales, buys, chats and security talks are conversations, not charts: a Reply command (Amount the reply,
+        // Direction the turn), and talks carry their Turns and whether a TrustDance came first.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -506,7 +508,7 @@ namespace Festival.Network
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
-                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")?.Kind switch{null=>p.Effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect)?"Intoxicated":"Idle",var kind when FestivalSimulation.DancesVisibly(kind)=>"Dance",var kind=>kind};
+                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active") switch{null=>p.Effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect)?"Intoxicated":"Idle",var doing when FestivalSimulation.Dancing(doing)=>"Dance",var doing=>doing.Kind};
                 var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
                 copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
                 copy.WearingLittleSpoon=p.Inventory.Exists(item=>item.ItemId=="little_spoon"&&item.Count>0);

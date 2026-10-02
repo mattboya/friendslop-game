@@ -172,8 +172,10 @@ namespace Festival.Tests
                 if(preview.IsVisible)failures.Add("check dance, menu open: the live dancer view still renders");
                 session.MenuOpen=false;
                 session.Command("Cancel");
-                // A chat with them is danced too, and its line moves into the dancer panel: at 1920x1080 every line a four-lane
-                // challenge can say fits there, as does every heading.
+                // DIALOG-3: a chat is a conversation, danced only when a wary festivalgoer asks for a dance first. That trust dance
+                // is danced like any other, and its line moves into the dancer panel: at 1920x1080 every line a four-lane challenge
+                // can say fits there, as does every heading.
+                npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
                 session.Command("Conversation",npc.Id);
                 if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="Conversation"&&i.Status=="Active"))failures.Add("chat: no chat with the festivalgoer starts ("+session.Message+")");
                 yield return new WaitForSeconds(.4f);
@@ -185,7 +187,7 @@ namespace Festival.Tests
                 {var line=new DialogueHistory().Select(context,festival,seed);lines.Add(line.Text);lines.Add(line.AwkwardText);}
                 FitsAll("chat","Dialogue line",lines);
                 FitsAll("chat","Dancer heading",FourLaneKinds.Select(FestivalHudText.DancerHeading));
-                session.Command("Cancel");npc.Suspicion=0;
+                session.Command("Cancel");npc.Suspicion=0;npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);
                 player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
                 Expect("no challenge","Challenge title","(hidden)");

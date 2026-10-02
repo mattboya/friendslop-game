@@ -70,8 +70,14 @@ namespace Festival.Tests
             game.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
             var asker=game.State.Players[0];var seller=game.State.Npcs.Find(n=>n.Role=="Regular"&&n.Twist=="");asker.X=seller.X;asker.Z=seller.Z-1;
             Assert.That(game.Execute(asker.Id,new GameCommand{Id="buy",Kind="StartBuy",TargetId=seller.Id,ItemId=FestivalSimulation.SellerStock(seller.Id)}).Accepted,Is.True,"setup: a buy starts");
-            var buy=game.Interaction(asker.InteractionId);foreach(var note in RhythmChart.For(buy).Notes)buy.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-            for(int guard=0;guard<300&&buy.Status=="Active";guard++)game.Tick(.1);
+            // DIALOG-3: the buy is talked through, after a dance if the seller asks for one first.
+            var buy=game.Interaction(asker.InteractionId);if(buy.TrustDance)foreach(var note in RhythmChart.For(buy).Notes)buy.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int guard=0;guard<300&&buy.Status=="Active";guard++)
+            {
+                if(buy.Turns.Count==0){game.Tick(.1);continue;}
+                var turn=buy.Turns[buy.Turns.Count-1];
+                Assert.That(game.Execute(asker.Id,new GameCommand{Id="reply"+guard,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=buy.Turns.Count-1}).Accepted,Is.True,"setup: a smooth reply");
+            }
             Assert.That(seller.StockSold,Is.EqualTo(1),"setup: the host counts the unit sold");
             foreach(var viewer in game.State.Players)
             {

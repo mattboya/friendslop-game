@@ -272,20 +272,25 @@ namespace Festival.Tests
 
         private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation","Police"};
 
-        // A sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are danced (FestivalSimulation.DancesVisibly),
-        // so every client, the dancer's own live view included, shows the player dancing with whoever they're talking to. The buy
-        // starts the way the HUD's Buy action starts it: StartBuy for the one kind the festivalgoer sells.
-        [Test]public void EveryoneSeesASaleABuyAChatAndSecurityDanced()
+        // DIALOG-3: a sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are talks again, not dances, so every
+        // client, the talker's own view included, sees the player in that talk's pose, never dancing. Only the dance a wary
+        // festivalgoer asks for before a talk (FestivalSimulation.TrustDancing) shows them dancing. The buy starts the way the HUD's
+        // Buy action starts it: StartBuy for the one kind the festivalgoer sells.
+        [Test]public void EveryoneSeesATalkAsATalkAndOnlyItsTrustDanceDanced()
         {
-            foreach(var kind in new[]{"Sale","Buy","Conversation","Police"})
+            foreach(var kind in new[]{"Sale","Buy","Conversation","Police"})foreach(bool wary in new[]{false,true})
             {
-                var game=new FestivalSimulation(5);var dancer=game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");game.State.Phase="Playing";game.State.Npcs.Clear();
-                game.State.Npcs.Add(new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",Role=kind=="Buy"?"Regular":"",X=0,Z=2,Yaw=180,CanTalk=true});
+                if(wary&&kind=="Police")continue;
+                // Seed 6: the partner, a burner, is not one who always dances first, so only suspicion makes them wary.
+                var game=new FestivalSimulation(6);var dancer=game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");game.State.Phase="Playing";game.State.Npcs.Clear();
+                var partner=new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",Role=kind=="Buy"?"Regular":"",X=0,Z=2,Yaw=180,CanTalk=true};game.State.Npcs.Add(partner);
+                if(wary)partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
                 dancer.X=0;dancer.Z=0;dancer.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
                 var started=game.Execute("p0",new GameCommand{Id="dance2_"+kind,Kind=kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,TargetId="partner",ItemId=kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock("partner"):""});
                 Assert.That(started.Accepted,Is.True,"setup: the "+kind+" starts: "+started.Reason);
+                Assert.That(game.Interaction(dancer.InteractionId).TrustDance,Is.EqualTo(wary),"setup: only a wary partner asks for a dance first");
                 foreach(var viewer in game.State.Players)
-                    Assert.That(FestivalSession.ViewFor(game,viewer.Id).Players.Find(p=>p.Id=="p0").VisualPose,Is.EqualTo("Dance"),viewer.Id+" sees P0 dance through the "+kind);
+                    Assert.That(FestivalSession.ViewFor(game,viewer.Id).Players.Find(p=>p.Id=="p0").VisualPose,Is.EqualTo(wary?"Dance":kind),viewer.Id+" sees P0 "+(wary?"dance before":"in")+" the "+kind);
             }
         }
 

@@ -21,15 +21,24 @@ public static class DayQuotaTests
     }
     static void AtGate(PlayerState p){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
     static void Sundown(FestivalSimulation s){s.State.ElapsedSeconds=s.State.DurationSeconds-.05;s.Tick(.1);}
-    // Sell one stock to a buyer, hitting every note (inputs are optional: none botches the sale). Returns the cash it paid.
+    // Sell one stock to a buyer, played perfectly (perform false leaves every turn silent, a botched sale). Returns the cash it paid.
     static int Sell(FestivalSimulation s,string id,string buyer,bool perform=true)
     {
         var p=s.Player(id);var npc=s.State.Npcs.Find(n=>n.Id==buyer);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         int before=p.Cash;Check(Act(s,id,"StartSale",buyer,"stock_lsd").Accepted,id+" starts a sale to "+buyer);
         var sale=s.Interaction(p.InteractionId);
-        if(perform)foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        for(int guard=0;sale.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+        for(int guard=0;sale.Status=="Active"&&guard<200;guard++){if(perform)Perfectly(s,sale);s.Tick(.1);}
         Check(sale.Status=="Complete","the sale to "+buyer+" settles");return p.Cash-before;
+    }
+    // DIALOG-3: plays a live talk perfectly as far as it has got: every note of a trust dance, then the smooth reply each turn.
+    static void Perfectly(FestivalSimulation s,InteractionState i)
+    {
+        if(i.Status=="Active"&&i.TrustDance&&i.Turns.Count==0&&i.Inputs.Count==0)foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        while(i.Status=="Active"&&i.Turns.Count>0)
+        {
+            var t=i.Turns[i.Turns.Count-1];
+            Check(s.Execute(i.PlayerId,new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=i.Turns.Count-1}).Accepted,"a smooth reply");
+        }
     }
 
     public static void Run()
@@ -221,16 +230,11 @@ public static class DayQuotaTests
             Settle(s,sales,"sale");
         }
     }
-    // p's challenge, every note to be hit.
-    static InteractionState Perfect(FestivalSimulation s,PlayerState p)
-    {
-        var i=s.Interaction(p.InteractionId);
-        foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-        return i;
-    }
+    // p's talk, to be played perfectly.
+    static InteractionState Perfect(FestivalSimulation s,PlayerState p)=>s.Interaction(p.InteractionId);
     static void Settle(FestivalSimulation s,List<InteractionState> challenges,string what)
     {
-        for(int guard=0;challenges.Exists(x=>x.Status=="Active")&&guard<200;guard++)s.Tick(.1);
+        for(int guard=0;challenges.Exists(x=>x.Status=="Active")&&guard<200;guard++){foreach(var x in challenges)Perfectly(s,x);s.Tick(.1);}
         Check(!challenges.Exists(x=>x.Status!="Complete"),"every perfect "+what+" settles");
     }
 }

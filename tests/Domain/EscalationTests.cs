@@ -174,14 +174,17 @@ public static class EscalationTests
         while(!FestivalSimulation.DustStorm(s.State))s.State.ElapsedSeconds+=1;
         s.State.ElapsedSeconds+=1;Check(FestivalSimulation.DustStorm(s.State),"setup: a dust storm blows");
     }
-    // a talks to the guard, hitting at least the first `share` of the notes; the talk then runs on its own.
-    static InteractionState Talk(FestivalSimulation s,PlayerState a,NpcState cop,double share)
+    // DIALOG-3: a talks to the guard, giving a reply of each grade as its turn comes; from the first Silence on, the turns are
+    // left to run out on their own.
+    static InteractionState Talk(FestivalSimulation s,PlayerState a,NpcState cop,params int[] grades)
     {
         var started=s.Execute("a",Command("Police",cop.Id));Check(started.Accepted,"setup: a talks to security (\""+started.Reason+"\")");
-        var i=s.Interaction(a.InteractionId);var notes=RhythmChart.For(i).Notes;
-        for(int n=0;n<(int)Math.Ceiling(share*notes.Count);n++)i.Inputs.Add(new RhythmInput{Direction=notes[n].Direction,TimeSeconds=notes[n].TimeSeconds});
+        var i=s.Interaction(a.InteractionId);
+        foreach(int grade in grades){if(grade==ConversationLines.Silence)break;Reply(s,a,i,grade);}
         return i;
     }
+    static void Reply(FestivalSimulation s,PlayerState a,InteractionState i,int grade){var t=i.Turns[i.Turns.Count-1];Check(s.Execute(a.Id,new GameCommand{Id="escalation_"+(++commands),Kind="Reply",Amount=Array.IndexOf(t.Grades,grade),Direction=i.Turns.Count-1}).Accepted,"setup: "+a.Id+" replies");}
+    const int Smooth=ConversationLines.Smooth,SoSo=ConversationLines.SoSo,Awkward=ConversationLines.Awkward,Silence=ConversationLines.Silence;
     static void Finish(FestivalSimulation s,InteractionState i){for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);}
 
     // A cop who sees stock calls the player out and stops them, and the stop holds while they stay in sight with it.
@@ -269,7 +272,7 @@ public static class EscalationTests
     static void TalkingYourWayOut()
     {
         bool open=true;var s=Stopped(out var cop,out var a,()=>open);s.Tick(1);
-        var talk=Talk(s,a,cop,.75);Finish(s,talk);
+        var talk=Talk(s,a,cop,Smooth,Smooth,SoSo);Finish(s,talk);
         Check(talk.Status=="Complete"&&talk.Score>=.75&&talk.Score<.85,"setup: the talk scores .75 or a little more (got "+talk.Score+")");
         for(int tick=0;tick<20;tick++){InFront(cop,a,3);s.Tick(.1);}
         Check(cop.Mode=="Patrol"&&cop.TargetId==""&&!cop.Evidence.Exists(e=>e.Kind=="VisibleStock"),"a talk scoring .75 clears the stop: 2 s on, stock right in front of the guard, it lets them be (mode "+cop.Mode+")");
@@ -277,14 +280,14 @@ public static class EscalationTests
         Check(cop.Mode=="Stop","once the guard has lost sight of them, stock in view starts a fresh stop (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);double began=s.State.SimulationSeconds;s.Tick(1);
-        talk=Talk(s,a,cop,.5);Finish(s,talk);
+        talk=Talk(s,a,cop,Smooth,SoSo,Awkward);Finish(s,talk);
         Check(talk.Status=="Complete"&&talk.Score>=.5&&talk.Score<.75,"setup: the talk scores .5 or a little more, under .75 (got "+talk.Score+")");
         s.Tick(.1);Check(cop.Mode=="Stop","a talk scoring .5 keeps the stop (mode "+cop.Mode+")");
         s.Tick(19.85-(s.State.SimulationSeconds-began));Check(cop.Mode=="Stop","its clock runs on: a stop until 20 s (mode "+cop.Mode+")");
         s.Tick(.3);Check(cop.Mode=="ArrestWarning","and an arrest warning at 20 s (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);began=s.State.SimulationSeconds;s.Tick(17);
-        talk=Talk(s,a,cop,.5);bool warned=false;
+        talk=Talk(s,a,cop,Silence);bool warned=false;
         for(int guard=0;talk.Status=="Active"&&guard<300;guard++){s.Tick(.1);warned|=cop.Mode=="ArrestWarning";}
         Check(s.State.SimulationSeconds-began>20.5&&!warned,"a talk running past 20 s holds the arrest warning (talk over at "+(s.State.SimulationSeconds-began)+" s, warned "+warned+")");
         s.Tick(.1);Check(cop.Mode=="ArrestWarning","then the poor talk is over and it comes (mode "+cop.Mode+")");
@@ -296,8 +299,9 @@ public static class EscalationTests
         bool open=true;var s=Stopped(out var cop,out var a,()=>open);
         s.State.Npcs.Add(new NpcState{Id="buyer",X=a.X+1,Z=a.Z,Yaw=-90});
         open=false;var sold=s.Execute("a",Command("StartSale","buyer","stock_lsd"));Check(sold.Accepted,"setup: a sells out of the guard's sight (\""+sold.Reason+"\")");
-        var sale=s.Interaction(a.InteractionId);foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        var sale=s.Interaction(a.InteractionId);
         s.Tick(.1);Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0&&!Says(a,"Fine. Move along."),"with no stock on them and out of the guard's sight, the stop is over within a tick, unremarked (mode "+cop.Mode+", "+cop.Evidence.Count+" evidence, \""+a.NpcSpeech+"\")");
+        for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)Reply(s,a,sale,Smooth);
         Finish(s,sale);Check(sale.Status=="Complete"&&sale.Score>=.4&&Count(a,"stock_lsd")==0,"setup: the sale goes through (score "+sale.Score+")");
         open=true;InFront(cop,a,3);s.Tick(.1);
         Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0,"walking past the guard with nothing on them starts nothing (mode "+cop.Mode+")");

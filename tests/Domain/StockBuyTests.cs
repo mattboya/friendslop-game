@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using Festival.Core;
 
-// ECON-2: the camp and night-market shelves sell gear only. Tongue Stamps and Fun Guys come from festivalgoers through a danced buy. Regulars (and clue holders at night) sell one
-// kind each, a few units a level; anyone else turns the ask down the same way, and asking a narc is a bust.
+// ECON-2: the camp and night-market shelves sell gear only. Tongue Stamps and Fun Guys come from festivalgoers through a buy, talked
+// through (DIALOG-3). Regulars (and clue holders at night) sell one kind each, a few units a level; anyone else turns the ask down the
+// same way, and asking a narc is a bust.
 public static class StockBuyTests
 {
     static int sequence;
@@ -33,11 +34,20 @@ public static class StockBuyTests
     static double Suspicion(NpcState n,PlayerState p)=>n.Observers.Find(o=>o.PlayerId==p.Id)?.Suspicion??0;
     // p asks npc for the kind it sells (or `item`), standing a metre in front of it and looking off to the side.
     static CommandResult Ask(FestivalSimulation s,PlayerState p,NpcState npc,string item=null){p.X=npc.X;p.Z=npc.Z-1;p.Yaw=90;return Act(s,p.Id,"StartBuy",npc.Id,item??FestivalSimulation.SellerStock(npc.Id));}
-    // Dances p's buy, hitting the first `share` of its notes (every one by default), and waits for it to settle.
-    static InteractionState Dance(FestivalSimulation s,PlayerState p,double share=1)
+    const int Smooth=ConversationLines.Smooth,SoSo=ConversationLines.SoSo,Silence=ConversationLines.Silence;
+    // DIALOG-3: talks p's buy through, dancing every note first if the seller asks for a trust dance, then giving a reply of each
+    // grade as its turn comes (Silence lets the turn run out), and waits for it to settle.
+    static InteractionState Talk(FestivalSimulation s,PlayerState p,params int[] grades)
     {
-        var i=s.Interaction(p.InteractionId);var notes=RhythmChart.For(i).Notes;
-        for(int n=0;n<Math.Ceiling(share*notes.Count);n++)i.Inputs.Add(new RhythmInput{Direction=notes[n].Direction,TimeSeconds=notes[n].TimeSeconds});
+        var i=s.Interaction(p.InteractionId);
+        if(i.TrustDance)foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        foreach(int grade in grades)
+        {
+            for(int guard=0;i.Status=="Active"&&i.Turns.Count==0&&guard<100;guard++)s.Tick(.1);
+            int turn=i.Turns.Count;
+            if(grade==Silence){for(int guard=0;i.Status=="Active"&&i.Turns.Count==turn&&guard<100;guard++)s.Tick(.1);continue;}
+            var t=i.Turns[turn-1];Check(s.Execute(p.Id,new GameCommand{Id="stockbuy"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,grade),Direction=turn-1}).Accepted,"setup: "+p.Id+" replies");
+        }
         for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);
         return i;
     }
@@ -81,8 +91,9 @@ public static class StockBuyTests
         return offers;
     }
 
-    // A regular by day and a clue holder by night each sell one unit of their kind for $5, danced well or sloppily. A missed
-    // buy, a cancelled one and one walked away from cost nothing. None of it is a sale, and a seller stops after StockCopies(crew).
+    // A regular by day and a clue holder by night each sell one unit of their kind for $5, talked through well or sloppily. A
+    // botched buy, a cancelled one and one walked away from cost nothing. None of it is a sale, and a seller stops after
+    // StockCopies(crew).
     static void ASellerSells()
     {
         Check(FestivalSimulation.SellerStock("wook_4")=="stock_lsd"&&FestivalSimulation.SellerStock("wook_7")=="stock_mushrooms","the number in a festivalgoer's id sets their kind: even Tongue Stamps, odd Fun Guys");
@@ -93,18 +104,20 @@ public static class StockBuyTests
             string kind=FestivalSimulation.SellerStock(seller.Id),who=Festivals.For(s.State).Name+"'s "+role+" "+seller.Id;
             Check(p.Cash==20&&Count(p,kind)==0,"setup: "+who+"'s customer has $20 and no stock");
 
-            // A perfect buy: the dancer faces the seller, the $5 is held while they dance, then spent on one unit, in hand.
+            // A perfect buy: the $5 is held while they talk, then spent on one unit, in hand. The buyer talks where they stand,
+            // looking off to the side, unless the seller asks for a dance first: then they face them, as any dancer.
             var asked=Ask(s,p,seller);Check(asked.Accepted,who+" starts a buy: "+asked.Reason);
-            Check(p.Yaw==0,who+": the buyer dances facing the seller, got yaw "+p.Yaw);
-            Check(s.Interaction(p.InteractionId).DialogueId.StartsWith("buy_"),who+": the seller speaks a line from the buy pool, got "+s.Interaction(p.InteractionId).DialogueId);
-            Check(p.Cash==15&&s.Interaction(p.InteractionId).ReservedCash==5,who+": the $5 is held while they dance, cash $"+p.Cash);
-            var perfect=Dance(s,p);
+            var buy=s.Interaction(p.InteractionId);
+            Check(p.Yaw==(buy.TrustDance?0:90),who+": the buyer "+(buy.TrustDance?"dances facing the seller":"talks looking where they looked")+", got yaw "+p.Yaw);
+            Check(p.Cash==15&&buy.ReservedCash==5,who+": the $5 is held while they talk, cash $"+p.Cash);
+            var perfect=Talk(s,p,Smooth,Smooth,Smooth);
             Check(perfect.Status=="Complete"&&perfect.Score>.99,"setup: "+who+": a perfect buy, score "+perfect.Score);
+            Check(p.Dialogue.Seen.Exists(key=>key.StartsWith("buy_")),who+": the seller speaks lines from the buy pool");
             Check(Count(p,kind)==1&&p.Cash==15&&p.EquippedItemId==kind&&seller.StockSold==1,who+": a perfect buy hands over one unit, in hand, for $5 (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
-            // A missed buy, a cancelled one and one walked away from all give the $5 back and no unit.
-            Check(Ask(s,p,seller).Accepted,who+": a second buy starts");var missed=Dance(s,p,0);
-            Check(missed.Score<.4&&Count(p,kind)==1&&p.Cash==15&&seller.StockSold==1,who+": a missed buy refunds the $5 (cash $"+p.Cash+")");
+            // A botched buy, a cancelled one and one walked away from all give the $5 back and no unit.
+            Check(Ask(s,p,seller).Accepted,who+": a second buy starts");var missed=Talk(s,p,Silence,Silence,Silence);
+            Check(missed.Score<.4&&Count(p,kind)==1&&p.Cash==15&&seller.StockSold==1,who+": a botched buy refunds the $5 (cash $"+p.Cash+")");
             Check(Ask(s,p,seller).Accepted&&p.Cash==10,who+": a third buy holds the $5");
             Check(Act(s,p.Id,"Cancel").Accepted&&p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": cancelling refunds it (cash $"+p.Cash+")");
             Check(Ask(s,p,seller).Accepted&&p.Cash==10,who+": a fourth buy holds the $5");
@@ -112,14 +125,14 @@ public static class StockBuyTests
             Check(p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": walking off refunds it (cash $"+p.Cash+")");
 
             // A sloppy buy that lands still buys.
-            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Dance(s,p,.5);
-            Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": half the notes is a sloppy buy, score "+sloppy.Score);
+            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,SoSo,Silence);
+            Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": smooth, so-so and a silence is a sloppy buy, score "+sloppy.Score);
             Check(Count(p,kind)==2&&p.Cash==10&&seller.StockSold==2,who+": a sloppy buy hands over a unit too (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
             // Hands filled mid-buy: the unit lands at the buyer's feet.
             var friend=s.Player("p2");Check(Ask(s,friend,seller).Accepted,who+": a friend starts a buy");
             foreach(var gear in new[]{"confetti","merch_bag","poi_practice"})friend.Inventory.Add(new ItemStack{ItemId=gear,Count=1});
-            Dance(s,friend);
+            Talk(s,friend,Smooth,Smooth,Smooth);
             Check(Count(friend,kind)==0&&friend.Cash==15&&s.State.Drops.Exists(d=>d.ItemId==kind&&d.Count==1&&d.X==friend.X&&d.Z==friend.Z),who+": with full hands the friend's unit drops at their feet (cash $"+friend.Cash+")");
 
             // That was the seller's last unit for a crew of three: they turn the next ask down.

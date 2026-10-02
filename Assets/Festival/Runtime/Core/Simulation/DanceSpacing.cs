@@ -11,16 +11,15 @@ namespace Festival.Core
     {
         public const double DanceSpacing=1.4;
         /// <summary>Whether a challenge of this kind shows the player dancing with a partner: spaced from them, facing them, and
-        /// stepping on each note (Submit). DANCE-2: a sale, a chat and a talk with security are danced too, so the live dancer
-        /// view beside their four lanes shows the player dancing. ECON-2: and so is a buy from a festivalgoer.</summary>
-        public static bool DancesVisibly(string kind)=>kind=="Dance"||kind=="ConfirmDance"||kind=="Sale"||kind=="Buy"||kind=="Conversation"||kind=="Police";
+        /// stepping on each note (Submit). DIALOG-3: a sale, a buy, a chat and a talk with security are conversations again, not
+        /// dances (reversing DANCE-2), save for the trust dance a wary festivalgoer asks for first (Dancing).</summary>
+        public static bool DancesVisibly(string kind)=>kind=="Dance"||kind=="ConfirmDance";
         // TryMove leaves p's yaw alone while this holds, so the camera can't turn a dancer away from their partner. TRIP-4: nor
         // spin someone lying on the grass round on their back as they look about.
-        bool HoldsFacing(PlayerState p){var i=p.InteractionId==""?null:Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&(DancesVisibly(i.Kind)||i.Kind==LieDownKind);}
+        bool HoldsFacing(PlayerState p){var i=p.InteractionId==""?null:Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&(Dancing(i)||i.Kind==LieDownKind);}
         // Called once a dance is accepted and before its witnesses are counted, so they judge the dancer where they dance.
-        void GiveDanceRoom(PlayerState p,NpcState partner,string kind)
+        void GiveDanceRoom(PlayerState p,NpcState partner)
         {
-            if(!DancesVisibly(kind))return;
             double gap=Distance(partner.X,partner.Z,p.X,p.Z);
             if(gap<DanceSpacing)
             {

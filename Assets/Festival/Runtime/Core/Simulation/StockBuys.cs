@@ -1,7 +1,7 @@
 namespace Festival.Core
 {
     /// <summary>ECON-2: Tongue Stamps and Fun Guys come from festivalgoers. A player asks one with StartBuy (TargetId the festivalgoer,
-    /// ItemId the stock) and dances the buy like a sale (BeginChallenge). Regulars, and clue holders at night, sell one kind each,
+    /// ItemId the stock) and talks the buy through like a sale (DIALOG-3, Conversations.cs). Regulars, and clue holders at night, sell one kind each,
     /// Festivals.StockCopies a level; the VIP guard never does. A buyer, the guard or a seller who has run out turn the ask down
     /// exactly alike, and a narc busts the asker. Sellers never buy, so a buy is never a sale.</summary>
     public sealed partial class FestivalSimulation
@@ -22,10 +22,10 @@ namespace Festival.Core
             if(!Sells(npc)||npc.StockSold>=Festivals.StockCopies(QuotaCrew(State))){Adjust(npc,p,RefusedSaleSuspicion,packed:false);return Reject("Not selling. They give you a funny look.");}
             return null;
         }
-        // The price is held while they dance; Cancel gives it back (a cancel, walking off, a disconnect or a bust).
+        // The price is held while they talk; Cancel gives it back (a cancel, walking off, a disconnect or a bust).
         static void HoldPrice(PlayerState p,InteractionState i){int price=Catalog.FindItem(SellerStock(i.TargetId)).Price;p.Cash-=price;i.ReservedCash=price;}
-        // Settled on the score alone, so DIALOG-3 can turn the buy into a conversation: .4 or more spends the held price on one
-        // unit, equipped as a shop purchase is (at the buyer's feet if their hands filled meanwhile); below that it comes back.
+        // Settled on the talk's score alone: .4 or more spends the held price on one unit, equipped as a shop purchase is (at the
+        // buyer's feet if their hands filled meanwhile); below that it comes back.
         void SettleBuy(InteractionState i,PlayerState p)
         {
             if(i.Score<.4){p.Cash+=i.ReservedCash;return;}

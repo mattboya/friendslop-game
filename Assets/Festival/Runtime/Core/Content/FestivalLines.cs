@@ -16,7 +16,8 @@ namespace Festival.Core
     //   stays within 80 characters for DIALOG-2's bubbles.
     public static class FestivalLines
     {
-        private static readonly Dictionary<string,string[]> Parts=new Dictionary<string,string[]>{
+        // DIALOG-3: ConversationLines builds its grammar on these parts too.
+        internal static readonly Dictionary<string,string[]> Parts=new Dictionary<string,string[]>{
             // Shared parts.
             ["landmark"]=new[]{"0:the Ferris wheel","0:the VIP deck","0:the VIP rope","0:the matcha cart","0:the polo field","0:the VIP gate","1:the Man","1:the art car","1:the gifting tent","1:the drum circle","1:the deep playa","1:the pancake camp","the left speaker","the water tent","the merch tent","the main stage"},
             ["ground"]=new[]{"0:polo field","1:playa"},
