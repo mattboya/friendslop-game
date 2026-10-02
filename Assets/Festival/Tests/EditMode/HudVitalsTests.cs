@@ -39,5 +39,26 @@ namespace Festival.Tests
             s.Npcs.Remove(wook);
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"and a patrol alone is nothing to report");
         }
+
+        // HUD-5: a festivalgoer swarming you lunges for 20 HP a hit, so it outranks a cop stopping you over visible stock; a cop about
+        // to detain you still wins. Only a swarm on you counts (a view shows a festivalgoer's real mode only to the player it targets):
+        // one on a friend, or one a distraction has broken off, leaves the card to the stop.
+        [Test] public void SwarmOnYouOutranksASecurityStop()
+        {
+            var s=new RoundState{Phase="Playing"};var you=new PlayerState{Id="you",Name="You"};s.Players.Add(you);s.Players.Add(new PlayerState{Id="friend",Name="Friend"});
+            var swarm=new NpcState{Id="wook_0",Kind="Wook",Mode="Swarming",TargetId="you",Suspicion=90};var arrester=new NpcState{Id="cop_1",Kind="Cop",Mode="ArrestWarning",TargetId="you"};
+            s.Npcs.Add(new NpcState{Id="cop_0",Kind="Cop",Mode="Stop",TargetId="you"});s.Npcs.Add(swarm);
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 90 / SWARMING"),"a swarm on you shows over a cop stopping you");
+            s.Npcs.Add(arrester);
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ARREST WARNING"),"a cop about to detain you still wins");
+            s.Npcs.Remove(arrester);swarm.TargetId="friend";
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP"),"a swarm on a friend doesn't outrank a stop on you");
+            swarm.TargetId="you";swarm.Mode="Distracted";
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP"),"a distracted festivalgoer is no longer swarming");
+            swarm.Mode="Swarming";s.Npcs.Add(new NpcState{Id="wook_1",Kind="Wook",Mode="Blending",Suspicion=95});
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 90 / SWARMING"),"the swarm on you shows its own suspicion, not the crowd's worst");
+            you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,RemainingSeconds=431});
+            Assert.That(FestivalHudText.Condition(s,you),Does.StartWith("CROWD 90 / SWARMING").And.Contain("DOSE 431S"),"the effects still follow the warning");
+        }
     }
 }
