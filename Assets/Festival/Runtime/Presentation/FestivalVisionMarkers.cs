@@ -32,11 +32,11 @@ namespace Festival.Presentation
         // shows. Bright neon, so it never reads as the dark, muted green of a suspicious wook's skin (CROWD-4).
         private const float RingScale=1.3f,Glow=.6f;
         private static readonly Color TrueRing=new Color(.45f,1f,.55f),FalseRing=new Color(1f,.3f,.3f);
-        // The aim dot is on a vision when the view's ray passes this close to the upright line from its festivalgoer's feet (or
-        // its spot on the ground) up to the top of its marker.
+        // The aim dot is on a vision when the view's ray passes this close to the upright line from its festivalgoer's feet up to
+        // the top of their whole stack of markers (or from its spot on the ground up to the top of its marker).
         private const float AimReach=.5f;
 
-        private sealed class Marker { public Transform Root,Label,Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; }
+        private sealed class Marker { public Transform Root,Label,Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; }
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
@@ -63,7 +63,6 @@ namespace Festival.Presentation
             foreach(var id in markers.Keys){bool kept=false;foreach(var v in visions)if(v.Id==id){kept=true;break;}if(!kept)gone.Add(id);}
             foreach(var id in gone){Dispose(markers[id].Root.gameObject);Dispose(markers[id].Material);Dispose(markers[id].RingMaterial);markers.Remove(id);}
             float shimmer=motion.Step(view,deltaTime);Shown=0;
-            int aimed=-1;float nearest=float.PositiveInfinity;
             for(int i=0;i<visions.Count;i++)
             {
                 var vision=visions[i];if(!markers.TryGetValue(vision.Id,out var marker))markers[vision.Id]=marker=Create(vision,FestivalNightLighting.IsNight(state));
@@ -74,7 +73,7 @@ namespace Festival.Presentation
                 if(!drawn)continue;
                 Shown++;
                 int stacked=0;for(int j=0;j<i;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)stacked++;
-                var ground=body!=null?body.position:new Vector3(vision.X,0,vision.Z);
+                var ground=marker.Ground=body!=null?body.position:new Vector3(vision.X,0,vision.Z);
                 marker.Root.position=ground+Vector3.up*(body!=null?OverHead+StackStep*stacked:OverPlace);
                 // Once checked the verdict is plain; until then only the host's Tell flag says which tells to show.
                 bool tells=vision.Tell&&!vision.Confirmed;
@@ -89,12 +88,22 @@ namespace Festival.Presentation
                 {
                     var ring=marker.RingMaterial;ring.color=vision.IsTrue?TrueRing:FalseRing;
                     if(ring.HasProperty("_EmissionColor"))ring.SetColor("_EmissionColor",ring.color*Glow);
-                    if(view!=null)marker.Aimed=Aim(view.position,view.forward,ground,marker.Glyph.bounds.max.y);
-                    if(marker.Aimed<nearest){nearest=marker.Aimed;aimed=i;}
                 }
                 if(view!=null)marker.Label.rotation=view.rotation;
             }
-            // Only the checked target nearest the camera along the aim says what it is; every vision over that festivalgoer does.
+            // Once every marker is placed: a festivalgoer is aimed at up to the top of their whole stack, so every vision over them
+            // answers the aim alike and the lower verdict stays up while the dot moves up to read the upper one.
+            int aimed=-1;float nearest=float.PositiveInfinity;
+            for(int i=0;i<visions.Count&&view!=null;i++)
+            {
+                var vision=visions[i];var marker=markers[vision.Id];
+                if(!vision.Confirmed||!marker.Root.gameObject.activeSelf)continue;
+                float top=marker.Glyph.bounds.max.y;
+                for(int j=i+1;j<visions.Count;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)top=Mathf.Max(top,markers[visions[j].Id].Glyph.bounds.max.y);
+                marker.Aimed=Aim(view.position,view.forward,marker.Ground,top);
+                if(marker.Aimed<nearest){nearest=marker.Aimed;aimed=i;}
+            }
+            // Only the checked target nearest the camera along the aim says what it is; every checked vision over that festivalgoer does.
             for(int i=0;i<visions.Count;i++)
             {
                 var vision=visions[i];var marker=markers[vision.Id];

@@ -184,6 +184,32 @@ namespace Festival.Tests
             Assert.That(Aimed(new Vector3(-8,.7f,0),"stash"),Is.EqualTo("FALSE"),"aimed at a checked spot on the ground, it says so");
         }
 
+        // VISION-5: the aim dot is on a festivalgoer anywhere from their feet to the top of their whole stack of visions, so
+        // every checked vision over them answers together and none flickers off as the dot moves up the stack to read the upper
+        // one. Matt's case: a checked fake Narc under a buyer who pays double, checked later; a third, unchecked, stays blank.
+        [Test]public void EveryCheckedVisionOverTheAimedFestivalgoerAnswers()
+        {
+            var state=Round();var body=Made("b").transform;Func<string,Transform> actorFor=id=>id=="b"?body:null;
+            state.Visions.Add(new VisionState{Id="narc",Kind="Narc",NpcId="b",IsTrue=false,Confirmed=true});
+            var paysDouble=new VisionState{Id="double",Kind="DoubleBuyer",NpcId="b",IsTrue=true};state.Visions.Add(paysDouble);
+            state.Visions.Add(new VisionState{Id="open",Kind="Buyer",NpcId="b",Tell=true});
+            var markers=Markers();var view=View();markers.Apply(state,view,actorFor,0,.02f);
+            var heights=new List<float>{Marker(markers,"double").Find("Label").position.y,Glyph(markers,"double").bounds.max.y,Glyph(markers,"open").bounds.max.y};
+            for(float y=0;y<heights[2];y+=.1f)heights.Add(y);
+            foreach(bool checkedLater in new[]{false,true})
+            {
+                paysDouble.Confirmed=checkedLater;
+                foreach(float y in heights)
+                {
+                    Aim(view,body.position+Vector3.up*y);markers.Apply(state,view,actorFor,0,.02f);
+                    string at=" (aimed "+y.ToString("0.00")+" m up the festivalgoer"+(checkedLater?", both checked)":", the upper one unchecked)");
+                    Assert.That(Label(markers,"narc"),Is.EqualTo("FALSE"),"the lower checked fake says so"+at);
+                    Assert.That(Label(markers,"double"),Is.EqualTo(checkedLater?"TRUE":""),"the buyer who pays double"+(checkedLater?" says TRUE":" makes no claim until checked")+at);
+                    Assert.That(Label(markers,"open"),Is.Empty,"the unchecked one on top makes no claim"+at);
+                }
+            }
+        }
+
         // VISION-5: once checked, a vision's marker is ringed by a thin bright outline, neon green for a truth and red for a fake,
         // whatever the kind's own colour. The ring is on the floating marker, never on the festivalgoer. The read without colour
         // stays: a checked fake's glyph is grey, and a checked truth's keeps its kind's colour.
