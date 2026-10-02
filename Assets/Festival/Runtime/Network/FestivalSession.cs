@@ -39,6 +39,7 @@ namespace Festival.Network
         // Direction the turn), and talks carry their Turns, whether a TrustDance came first and a chat's or a buy's Hunch. A narc
         // asked to sell talks instead of busting at the ask; finishing the buy busts.
         // POLO-6: a player's own copy in their snapshot names the influencers filming them (PlayerState.VisualFilmedBy).
+        // CROWD-3: every client sees a festivalgoer scattering from an arrest (Mode "Scattering"), never whom it suspects.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -528,8 +529,9 @@ namespace Festival.Network
             {
                 foreach(var npc in source.Npcs)
                 {
-                    bool targetsViewer=npc.TargetId==viewer;
-                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
+                    // CROWD-3: a festivalgoer scattering from an arrest does so in every client's view; whom it suspects stays masked.
+                    bool scattering=npc.Mode==FestivalSimulation.Scattering,targetsViewer=!scattering&&npc.TargetId==viewer;
+                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer||scattering?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
@@ -543,6 +545,8 @@ namespace Festival.Network
             // the Ferris wheel (POLO-3, WheelFriendAreas above).
             WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
         }
+        /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
+        public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
         private void UpdateActors()
         {
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();
@@ -586,7 +590,7 @@ namespace Festival.Network
             }
             if(!spirit && (State.Phase=="Playing"||State.Phase=="Results"))
             {
-                foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,n.Mode=="Blending"?n.IdlePose:n.Mode,n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false);seen.Add(n.Id);}
+                foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,NpcPose(n),n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false);seen.Add(n.Id);}
                 // A lost friend (a big crew's two, CROWD-2) shows once found, or once the view knows their spot and they are within 12 m.
                 // The Ferris wheel draws nobody (POLO-3): its rider reads only a rough area on the objective card.
                 void LostFriend(string id,WorldPoint at,bool found){if(at!=null && (at.X!=0||at.Z!=0) && (found||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12)){Actor(id,"MISSING FRIEND",at.X,at.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add(id);}}

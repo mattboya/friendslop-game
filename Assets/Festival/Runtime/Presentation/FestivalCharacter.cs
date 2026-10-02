@@ -740,6 +740,8 @@ namespace Festival.Presentation
                 case "Exchange":return ("Handoff",false,false,1);
                 case "TakeDose":return ("Consume",false,false,1);
                 case "DoseReaction":return ("Panic",true,false,.6f+.8f*BeatStrength);
+                // CROWD-3: a festivalgoer scattering from an arrest panics on its upper body; its legs run at its speed.
+                case FestivalSimulation.Scattering:return ("Panic",true,false,1);
                 case "Idle":case "Walk":case "":
                     if(equippedProp!=null||carriedPoi!="")return (null,false,false,0);
                     return ("Idle",true,false,.8f+phase%.3f);

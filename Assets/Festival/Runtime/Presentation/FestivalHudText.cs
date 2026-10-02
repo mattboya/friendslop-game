@@ -360,7 +360,8 @@ namespace Festival.Presentation
         public static string Condition(RoundState s,PlayerState p)
         {
             double suspicion=0,swarm=-1;string mode="clear";
-            foreach(var npc in s.Npcs)if(npc.Kind=="Wook"){if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;mode=npc.Mode;}if(npc.Mode=="Swarming"&&npc.TargetId==p.Id&&npc.Suspicion>swarm)swarm=npc.Suspicion;}
+            // CROWD-3: a festivalgoer scattering from an arrest isn't after you while it flees, so it never shows here.
+            foreach(var npc in s.Npcs)if(npc.Kind=="Wook"&&npc.Mode!=FestivalSimulation.Scattering){if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;mode=npc.Mode;}if(npc.Mode=="Swarming"&&npc.TargetId==p.Id&&npc.Suspicion>swarm)swarm=npc.Suspicion;}
             // An arrest warning detains you in seconds, so it always wins. HUD-5: next, a festivalgoer swarming you lunges for 20 HP a
             // hit, so it shows over a cop stopping you over visible stock; a swarm on a friend, or one a distraction broke off, doesn't.
             // Security on you then outranks the crowd: after a deal in view some festivalgoer nearly always holds a little suspicion.
