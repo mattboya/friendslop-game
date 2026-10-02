@@ -46,8 +46,12 @@ namespace Festival.Presentation
                 yield return new WaitForSeconds(.7f);
                 if(!File.Exists(connectionPath)){Fail("connection render");yield break;}
                 Debug.Log("FESTIVAL SMOKE CONNECTION RENDER PASSED: "+connectionPath);
-                transform.Find("Festival HUD/Connection/PORT").GetComponent<InputField>().text="0";
-                transform.Find("Festival HUD/Connection/JOIN GAME").GetComponent<Button>().onClick.Invoke();
+                // MENU-1: the capture above is the title; the game is joined and hosted through PLAY's card.
+                var title=transform.Find("Festival HUD/Title screen");
+                title.Find("Title menu/PLAY").GetComponent<Button>().onClick.Invoke();
+                title.Find("Play/Play choices/JOIN A FRIEND").GetComponent<Button>().onClick.Invoke();
+                title.Find("Play/Join a friend/PORT").GetComponent<InputField>().text="0";
+                title.Find("Play/Join a friend/JOIN").GetComponent<Button>().onClick.Invoke();
                 yield return new WaitForSeconds(.15f);
                 string connectionErrorPath=Path.Combine(interfaceDir,"connection-error.png");
                 if(File.Exists(connectionErrorPath))File.Delete(connectionErrorPath);
@@ -55,8 +59,10 @@ namespace Festival.Presentation
                 yield return new WaitForSeconds(.6f);
                 if(!File.Exists(connectionErrorPath)){Fail("connection error render");yield break;}
                 Debug.Log("FESTIVAL SMOKE CONNECTION ERROR RENDER PASSED: "+connectionErrorPath);
-                transform.Find("Festival HUD/Connection/PORT").GetComponent<InputField>().text="17781";
-                transform.Find("Festival HUD/Connection/CREATE GAME").GetComponent<Button>().onClick.Invoke();
+                title.Find("Play/BACK").GetComponent<Button>().onClick.Invoke();
+                title.Find("Play/Play choices/ADVANCED").GetComponent<Button>().onClick.Invoke();
+                title.Find("Play/Play choices/Advanced/PORT").GetComponent<InputField>().text="17781";
+                title.Find("Play/Play choices/HOST A GAME").GetComponent<Button>().onClick.Invoke();
                 float createDeadline=Time.realtimeSinceStartup+12;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<createDeadline)yield return null;
                 if(session.LocalPlayer==null||session.State.Phase!="Shopping"||session.MenuOpen){Fail("menu create enters campsite");yield break;}

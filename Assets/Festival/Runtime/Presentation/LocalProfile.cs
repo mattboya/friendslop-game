@@ -21,6 +21,11 @@ namespace Festival.Presentation
         public bool ThirdPerson;
         // HUD-7: the first-time tips this machine has shown (FestivalHudText.Tip). Older profiles load it empty.
         public List<string> SeenTips=new List<string>();
+        // MENU-1: what PLAY fills in, as HOST A GAME or JOIN A FRIEND last used it: your name and the host you last joined. Older
+        // profiles load the defaults.
+        public string PlayerName=DefaultName;
+        public string LastHost=DefaultHost;
+        public const string DefaultName="Friend",DefaultHost="127.0.0.1";
     }
     public sealed class LocalProfile
     {
@@ -48,6 +53,9 @@ namespace Festival.Presentation
             Data.UnlockedFestivalCount=Mathf.Clamp(Data.UnlockedFestivalCount,1,Festivals.Count);
             // ponytail: "first_shuttle" is a saved award id nobody sees (HUD-6 kept it): renamed, this would wipe old profiles' award.
             Data.Cosmetics.RemoveAll(x=>x!="first_shuttle");
+            // A blank name, or an address Join would turn away (FestivalSession.Join takes up to 128 characters), loads the default.
+            if(string.IsNullOrWhiteSpace(Data.PlayerName))Data.PlayerName=ProfileData.DefaultName;
+            if(string.IsNullOrWhiteSpace(Data.LastHost)||Data.LastHost.Length>128)Data.LastHost=ProfileData.DefaultHost;
         }
         private static float FiniteClamp(float v,float min,float max,float fallback) => float.IsNaN(v)||float.IsInfinity(v)?fallback:Mathf.Clamp(v,min,max);
         public string Save()

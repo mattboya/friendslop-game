@@ -1,8 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace Festival.Tests
 {
@@ -431,6 +435,83 @@ namespace Festival.Tests
             Assert.That(FestivalHudGear.Cycles(s,you,3),Is.False,"nor while 1-3 ask a chat's questions");
             chat.Chat.Questions=new string[0];
             Assert.That(FestivalHudGear.Cycles(s,you,3),Is.True,"a VIP rope chat has none, so the wheel switches there, as 1-3 do");
+        }
+
+        // MENU-1 (Matt, 2026-10-01: "we need a real main menu screen ... and we need to tell players what the goal of the game actually
+        // is"): the game opens on its title, AFTER HOURS (no SUN + MOON FESTIVAL over it), with a tagline that says what you do and
+        // PLAY, HOW TO PLAY, SETTINGS and QUIT. The old connection card's fields wait behind PLAY: YOUR NAME, then HOST A GAME, its
+        // port under ADVANCED, or JOIN A FRIEND, the one page with the host's address and port. BACK steps out a page at a time.
+        // The HUD is built in EditMode as HudRhythmTests builds it (Awake by hand); the title's own buttons move between its pages.
+        [Test] public void TheGameOpensOnItsTitleAndTheAddressWaitsForJoinAFriend()
+        {
+            Assert.That(FestivalTitleScreen.GameName,Is.EqualTo("AFTER HOURS"));
+            Assert.That(FestivalTitleScreen.Tagline,Is.EqualTo("Sell by day. Rescue by night. Get the whole crew home."));
+            Assert.That(FestivalTitleScreen.Tagline.ToLowerInvariant(),Does.Not.Contain("shuttle"),"there's no shuttle now");
+            var go=new GameObject("Title under test");
+            try
+            {
+                var hud=go.AddComponent<FestivalHud>();
+                typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+                var title=hud.transform.Find("Festival HUD/Title screen");
+                Assert.That(title,Is.Not.Null,"the HUD has a title screen");
+                string Shown<T>() where T:Component{var names=new List<string>();foreach(var c in title.GetComponentsInChildren<T>(false))names.Add(c.name);names.Sort();return string.Join(" | ",names);}
+                bool Reads(string line){foreach(var t in title.GetComponentsInChildren<Text>(false))if(t.text==line)return true;return false;}
+                void Press(string label){Button pressed=null;foreach(var b in title.GetComponentsInChildren<Button>(false))if(b.name==label)pressed=b;Assert.That(pressed,Is.Not.Null,"a "+label+" button shows");pressed.onClick.Invoke();}
+                const string Home="HOW TO PLAY | PLAY | QUIT | SETTINGS",Play="ADVANCED | BACK | HOST A GAME | JOIN A FRIEND";
+
+                Assert.That(Reads(FestivalTitleScreen.GameName)&&Reads(FestivalTitleScreen.Tagline),Is.True,"the title shows the name and the tagline");
+                foreach(var t in title.GetComponentsInChildren<Text>(false))Assert.That(t.text,Does.Not.Contain("SUN + MOON"),"the eyebrow over the name is gone");
+                Assert.That(Shown<Button>(),Is.EqualTo(Home),"the title's four buttons, and nothing else to press");
+                Assert.That(Shown<InputField>(),Is.Empty,"no name, address or port field on the title");
+
+                Press("PLAY");
+                Assert.That(Shown<InputField>(),Is.EqualTo("YOUR NAME"),"PLAY asks your name, and no address or port yet");
+                Assert.That(Shown<Button>(),Is.EqualTo(Play),"then host or join");
+                Assert.That(Reads(FestivalTitleScreen.GameName),Is.True,"the name stays up over PLAY");
+                Press("ADVANCED");
+                Assert.That(Shown<InputField>(),Is.EqualTo("PORT | YOUR NAME"),"ADVANCED shows the port to host on");
+                Press("ADVANCED");
+                Assert.That(Shown<InputField>(),Is.EqualTo("YOUR NAME"),"and hides it again");
+
+                Press("JOIN A FRIEND");
+                Assert.That(Shown<InputField>(),Is.EqualTo("HOST ADDRESS | PORT | YOUR NAME"),"JOIN A FRIEND asks the host's address and port");
+                Assert.That(Shown<Button>(),Is.EqualTo("BACK | JOIN"),"then joins");
+                Press("BACK");
+                Assert.That(Shown<Button>(),Is.EqualTo(Play),"BACK steps out to host or join");
+                Assert.That(Shown<InputField>(),Is.EqualTo("YOUR NAME"),"with the address put away");
+                Press("BACK");
+                Assert.That(Shown<Button>(),Is.EqualTo(Home),"and BACK again to the title");
+                Assert.That(Shown<InputField>(),Is.Empty);
+            }
+            finally{Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+
+        // MENU-1: PLAY fills in your name and the last host you joined, as this machine last saved them. A profile saved before
+        // MENU-1 loads "Friend" and "127.0.0.1"; so does a blank name, and an address longer than Join takes (128 characters).
+        [Test] public void YourNameAndTheLastHostAreRememberedAndAnOldProfileLoadsTheDefaults()
+        {
+            const string id="menu-test";
+            string file=Path.Combine(Application.persistentDataPath,"profiles",id+".json");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                File.WriteAllText(file,"{\"SchemaVersion\":1,\"Cosmetics\":[],\"SeenDialogue\":[],\"MouseSensitivity\":0.2,\"SeenTips\":[]}");
+                var old=new LocalProfile(id);
+                Assert.That(old.Data.MouseSensitivity,Is.EqualTo(.2f).Within(1e-4f),"setup: the old profile loaded");
+                Assert.That(old.Data.PlayerName,Is.EqualTo("Friend"),"a profile saved before MENU-1 names you Friend");
+                Assert.That(old.Data.LastHost,Is.EqualTo("127.0.0.1"),"and joins this machine");
+                old.Data.PlayerName="Sam";old.Data.LastHost="192.168.1.20";
+                Assert.That(old.Save(),Is.Empty,"setup: saved");
+                var again=new LocalProfile(id);
+                Assert.That(again.Data.PlayerName,Is.EqualTo("Sam"),"your name comes back");
+                Assert.That(again.Data.LastHost,Is.EqualTo("192.168.1.20"),"so does the last host");
+                again.Data.PlayerName="   ";again.Data.LastHost=new string('9',129);
+                Assert.That(again.Save(),Is.Empty,"setup: saved");
+                var tampered=new LocalProfile(id);
+                Assert.That(tampered.Data.PlayerName,Is.EqualTo("Friend"),"a blank name loads as Friend");
+                Assert.That(tampered.Data.LastHost,Is.EqualTo("127.0.0.1"),"an address Join would turn away loads this machine");
+            }
+            finally{if(File.Exists(file))File.Delete(file);}
         }
     }
 }

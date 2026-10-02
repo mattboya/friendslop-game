@@ -32,7 +32,7 @@ namespace Festival.Presentation
         private Canvas canvas;
         private Font font;
         private Font displayFont;
-        private GameObject connectionPanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
+        private GameObject titlePanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
         private RectTransform actionsContent;
@@ -44,7 +44,10 @@ namespace Festival.Presentation
         private GameObject campMap,festivalMap;
         private readonly Image[] slotFrames=new Image[3];
         private readonly Text[] slotTexts=new Text[3];
-        private InputField nameField, addressField, portField;
+        private InputField nameField, addressField, portField, hostPortField;
+        // MENU-1: the title screen, where the connection card was, and the settings' way out, which says BACK there.
+        private FestivalTitleScreen titleScreen;
+        private Text settingsBack;
         private readonly List<Image> noteViews = new List<Image>();
         private Transform noteContainer;
         private readonly Image[] rhythmReceptors=new Image[4];
@@ -409,7 +412,7 @@ namespace Festival.Presentation
             dialogueSpeaker=Label(dialoguePanel.transform,"Speaker",17,TextAnchor.MiddleLeft);dialogueSpeaker.fontStyle=FontStyle.Normal;dialogueSpeaker.color=new Color(.17f,.47f,.40f);Place(dialogueSpeaker.rectTransform,.045f,.56f,.95f,.90f);
             dialogueLine=Label(dialoguePanel.transform,"Dialogue line",24,TextAnchor.MiddleLeft);dialogueLine.color=Ink;Place(dialogueLine.rectTransform,.045f,.09f,.95f,.62f);
             dialoguePanel.SetActive(false);
-            BuildConnection(root.transform);
+            BuildTitle(root.transform);
             BuildPass(root.transform);
 
             actionsPanel=Card(root.transform,"Actions",new Vector2(.73f,.20f),new Vector2(.975f,.78f),true);
@@ -443,22 +446,39 @@ namespace Festival.Presentation
             BuildHowToPlay(root.transform);
         }
 
-        private void BuildConnection(Transform root)
+        // MENU-1: the title screen (FestivalTitleScreen) over the campsite, where the connection card was: the name and the tagline
+        // over a shade darkest at the left edge, PLAY, HOW TO PLAY, SETTINGS and QUIT under them, and PLAY's card in their place.
+        private void BuildTitle(Transform root)
         {
-            connectionPanel=Card(root,"Connection",new Vector2(.285f,.115f),new Vector2(.715f,.885f),false);
-            Accent(connectionPanel.transform,Orange);
-            var eyebrow=Label(connectionPanel.transform,"Invitation label",18,TextAnchor.MiddleCenter);eyebrow.text="SUN + MOON FESTIVAL  /  CREW ENTRY";eyebrow.fontStyle=FontStyle.Normal;eyebrow.color=new Color(.30f,.38f,.33f);Place(eyebrow.rectTransform,.08f,.89f,.92f,.95f);
-            var title=Label(connectionPanel.transform,"Title",59,TextAnchor.MiddleCenter);title.font=displayFont;title.text="AFTER HOURS";title.color=Ink;Place(title.rectTransform,.06f,.76f,.94f,.89f);
-            var subtitle=Label(connectionPanel.transform,"Subtitle",20,TextAnchor.MiddleCenter);subtitle.text="Find your friend. Get back to camp.";subtitle.color=new Color(.28f,.38f,.35f);Place(subtitle.rectTransform,.08f,.705f,.92f,.765f);
-            Rule(connectionPanel.transform,.687f);
-            nameField=Field(connectionPanel.transform,"YOUR NAME","Friend",.63f);
-            addressField=Field(connectionPanel.transform,"HOST ADDRESS","127.0.0.1",.48f);
-            portField=Field(connectionPanel.transform,"PORT","7777",.33f);
-            portField.onValueChanged.AddListener(_=>connectionError="");
-            Button(connectionPanel.transform,"CREATE GAME",new Vector2(.075f,.10f),new Vector2(.36f,.20f),()=>StartHost());
-            Button(connectionPanel.transform,"JOIN GAME",new Vector2(.37f,.10f),new Vector2(.645f,.20f),()=>StartJoin());
-            Button(connectionPanel.transform,"HOW TO PLAY",new Vector2(.655f,.10f),new Vector2(.925f,.20f),OpenHowToPlay);
-            status=Label(connectionPanel.transform,"Status",18,TextAnchor.MiddleCenter);status.color=new Color(.25f,.35f,.32f);Place(status.rectTransform,.08f,.025f,.92f,.09f);
+            titlePanel=Panel(root,"Title screen",Color.clear,Vector2.zero,Vector2.one);titlePanel.GetComponent<Image>().raycastTarget=false;
+            var shade=Panel(titlePanel.transform,"Title shade",new Color(.01f,.025f,.03f,.82f),Vector2.zero,new Vector2(.68f,1)).GetComponent<Image>();shade.raycastTarget=false;
+            var wordmark=Label(titlePanel.transform,"Game name",150,TextAnchor.LowerLeft);wordmark.font=displayFont;wordmark.text=FestivalTitleScreen.GameName;Place(wordmark.rectTransform,.05f,.70f,.62f,.925f);ShrinkToFit(wordmark,90);
+            var lift=wordmark.gameObject.AddComponent<Shadow>();lift.effectColor=new Color(0,.015f,.02f,.6f);lift.effectDistance=new Vector2(0,-6);
+            Panel(titlePanel.transform,"Tagline accent",Orange,new Vector2(.057f,.688f),new Vector2(.12f,.695f)).GetComponent<Image>().raycastTarget=false;
+            var tagline=Label(titlePanel.transform,"Tagline",30,TextAnchor.MiddleLeft);tagline.text=FestivalTitleScreen.Tagline;Place(tagline.rectTransform,.057f,.615f,.62f,.675f);ShrinkToFit(tagline,20);
+            var home=Panel(titlePanel.transform,"Title menu",Color.clear,new Vector2(.055f,.215f),new Vector2(.30f,.56f));home.GetComponent<Image>().raycastTarget=false;
+            Button(home.transform,"PLAY",new Vector2(0,.783f),Vector2.one,()=>titleScreen.Open(FestivalTitleScreen.Page.Play));
+            Button(home.transform,"HOW TO PLAY",new Vector2(0,.522f),new Vector2(1,.739f),OpenHowToPlay);
+            Button(home.transform,"SETTINGS",new Vector2(0,.261f),new Vector2(1,.478f),()=>settingsOpen=true);
+            Button(home.transform,"QUIT",Vector2.zero,new Vector2(1,.217f),FestivalTitleScreen.Quit);
+            var play=Card(titlePanel.transform,"Play",new Vector2(.055f,.05f),new Vector2(.37f,.595f),false);
+            Accent(play.transform,Orange);
+            var heading=Label(play.transform,"Play heading",36,TextAnchor.MiddleLeft);heading.font=displayFont;heading.text="PLAY";heading.color=Ink;Place(heading.rectTransform,.08f,.865f,.92f,.955f);
+            nameField=Field(play.transform,"YOUR NAME","Friend",.80f);
+            var choices=Panel(play.transform,"Play choices",Color.clear,Vector2.zero,Vector2.one);choices.GetComponent<Image>().raycastTarget=false;
+            Button(choices.transform,"HOST A GAME",new Vector2(.08f,.53f),new Vector2(.92f,.645f),StartHost);
+            Button(choices.transform,"JOIN A FRIEND",new Vector2(.08f,.395f),new Vector2(.92f,.51f),()=>titleScreen.Open(FestivalTitleScreen.Page.Join));
+            Button(choices.transform,"ADVANCED",new Vector2(.60f,.285f),new Vector2(.92f,.37f),()=>titleScreen.ToggleAdvanced());
+            var advanced=Panel(choices.transform,"Advanced",Color.clear,Vector2.zero,Vector2.one);advanced.GetComponent<Image>().raycastTarget=false;
+            hostPortField=Field(advanced.transform,"PORT","7777",.27f);
+            var join=Panel(play.transform,"Join a friend",Color.clear,Vector2.zero,Vector2.one);join.GetComponent<Image>().raycastTarget=false;
+            addressField=Field(join.transform,"HOST ADDRESS","127.0.0.1",.64f);
+            portField=Field(join.transform,"PORT","7777",.48f);
+            Button(join.transform,"JOIN",new Vector2(.08f,.205f),new Vector2(.92f,.32f),StartJoin);
+            Button(play.transform,"BACK",new Vector2(.08f,.035f),new Vector2(.36f,.13f),()=>titleScreen.Back());
+            status=Label(play.transform,"Status",16,TextAnchor.MiddleLeft);status.color=new Color(.25f,.35f,.32f);Place(status.rectTransform,.39f,.02f,.93f,.145f);ShrinkToFit(status,12);
+            hostPortField.onValueChanged.AddListener(_=>connectionError="");portField.onValueChanged.AddListener(_=>connectionError="");
+            titleScreen=titlePanel.AddComponent<FestivalTitleScreen>();titleScreen.Configure(shade,home,play,choices,advanced,join);
         }
 
         private void BuildPass(Transform root)
@@ -487,7 +507,7 @@ namespace Festival.Presentation
             Button(menuHome.transform,"CREW + NEARBY",new Vector2(.045f,.26f),new Vector2(.955f,.375f),()=>{crewOpen=!crewOpen;});
             Button(menuHome.transform,"SETTINGS",new Vector2(.045f,.135f),new Vector2(.495f,.25f),()=>{settingsOpen=true;});
             Button(menuHome.transform,"HOW TO PLAY",new Vector2(.505f,.135f),new Vector2(.955f,.25f),OpenHowToPlay);
-            Button(menuHome.transform,"LEAVE SESSION",new Vector2(.045f,.01f),new Vector2(.955f,.125f),()=>session.Leave());
+            Button(menuHome.transform,"LEAVE SESSION",new Vector2(.045f,.01f),new Vector2(.955f,.125f),()=>{session.Leave();titleScreen.Open(FestivalTitleScreen.Page.Home);});
             settingsPanel=Panel(menuPanel.transform,"Pass settings",Color.clear,new Vector2(.055f,.025f),new Vector2(.945f,.76f));settingsPanel.GetComponent<Image>().raycastTarget=false;
             var settingsHeading=Label(settingsPanel.transform,"Settings heading",32,TextAnchor.MiddleLeft);settingsHeading.text="LOCAL SETTINGS";settingsHeading.fontStyle=FontStyle.Normal;settingsHeading.color=Ink;Place(settingsHeading.rectTransform,.04f,.88f,.96f,.98f);
             settingsText=Label(settingsPanel.transform,"Settings values",18,TextAnchor.MiddleLeft);settingsText.text="Saved on this machine. Changes apply immediately.";settingsText.color=new Color(.32f,.40f,.36f);Place(settingsText.rectTransform,.04f,.78f,.96f,.88f);
@@ -506,7 +526,7 @@ namespace Festival.Presentation
             Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.15f),new Vector2(.94f,.23f),()=>ChangeSetting("view",1));
             // HUD-7: every first-time tip this machine has shown comes back.
             Button(settingsPanel.transform,"SHOW TIPS AGAIN",new Vector2(.04f,.015f),new Vector2(.49f,.105f),()=>{string error=session.Profile.ShowTipsAgain();settingsText.text=error!=""?error:"First-time tips will show again.";});
-            Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.51f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false);
+            settingsBack=Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.51f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false).GetComponentInChildren<Text>();
         }
 
         // HUD-7: How to Play, built last so it covers the main menu, the pass and whatever is open beside them; its dimmer takes the
@@ -617,19 +637,30 @@ namespace Festival.Presentation
             if(session.Message!=lastNotice){lastNotice=session.Message;noticeUntil=Time.unscaledTime+5;}
             notice.text=message;
             noticePanel.SetActive(session.Connected&&!session.MenuOpen&&!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<noticeUntil&&session.Message!="Accepted");
-            connectionPanel.SetActive(!session.Connected);
+            titlePanel.SetActive(!session.Connected&&!settingsOpen);
             bool showMenu=session.Connected&&session.MenuOpen;
+            // MENU-1: SETTINGS on the title opens the pass's own settings, on the pass's card.
+            bool passUp=showMenu||!session.Connected&&settingsOpen;
             objectivePanel.SetActive(session.Connected&&!showMenu);
             timerPanel.SetActive(session.Connected&&!showMenu);
             vitalPanel.SetActive(session.Connected&&!showMenu);
             voice.gameObject.SetActive(session.Connected&&!showMenu);
-            menuShade.SetActive(showMenu);
-            menuPanel.SetActive(showMenu);
+            menuShade.SetActive(passUp);
+            menuPanel.SetActive(passUp);
             menuHome.SetActive(!settingsOpen);
             settingsPanel.SetActive(settingsOpen);
             // HUD-7: How to Play stays up over the main menu or the pass until BACK, Esc or the pass closing.
             if(session.Connected&&!showMenu||session.Controls.Menu.WasPressedThisFrame())howToPlayOpen=false;
             howToPlayPanel.SetActive(howToPlayOpen);
+            // MENU-1: the session reads no keys until it connects, so on the title Esc is the HUD's: it puts the settings away, or
+            // steps back a page.
+            if(!session.Connected&&session.Controls.Menu.WasPressedThisFrame()&&!session.Controls.Rebinding){if(settingsOpen)settingsOpen=false;else titleScreen.Back();}
+            musicValue.text=Mathf.RoundToInt(session.Profile.Data.MusicVolume*100)+"%";
+            lookValue.text=session.Profile.Data.MouseSensitivity.ToString("0.00");
+            motionValue.text=session.Profile.Data.ReducedMotion?"ON":"OFF";
+            contrastValue.text=session.Profile.Data.HighContrast?"ON":"OFF";
+            viewValue.text=session.Profile.Data.ThirdPerson?"THIRD PERSON":"FIRST PERSON";
+            settingsBack.text=session.Connected?"BACK TO PASS":"BACK";
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
@@ -655,11 +686,6 @@ namespace Festival.Presentation
             var checkoutDefinition=Catalog.FindItem(checkoutItem);
             checkoutPanel.SetActive(!showMenu&&checkoutDefinition!=null);
             if(checkoutDefinition!=null)checkoutText.text="E  PAY "+FestivalHudText.Money(state,player,checkoutDefinition.Price).ToUpperInvariant()+"  •  "+checkoutDefinition.Name.ToUpperInvariant()+"    G CANCEL";
-            musicValue.text=Mathf.RoundToInt(session.Profile.Data.MusicVolume*100)+"%";
-            lookValue.text=session.Profile.Data.MouseSensitivity.ToString("0.00");
-            motionValue.text=session.Profile.Data.ReducedMotion?"ON":"OFF";
-            contrastValue.text=session.Profile.Data.HighContrast?"ON":"OFF";
-            viewValue.text=session.Profile.Data.ThirdPerson?"THIRD PERSON":"FIRST PERSON";
             promptPanel.SetActive(!showMenu&&!string.IsNullOrEmpty(prompt.text));
             promptKeycap.SetActive(primaryAction!=null);
             nearbyPanel.SetActive(promptPanel.activeSelf&&nearby.text!="");
@@ -1505,8 +1531,12 @@ namespace Festival.Presentation
         }
         private void OnDestroy(){if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
-        private void StartHost(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";session.Host(nameField.text,port);}
-        private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";session.Join(nameField.text,addressField.text,port);}
+        private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(null);session.Host(nameField.text,port);}
+        private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(addressField.text);session.Join(nameField.text,addressField.text,port);}
+        // MENU-1: PLAY fills in what was last used here (Start): your name, and the host you last joined.
+        // ponytail: a failed save only costs that prefill, so it isn't reported over the connection's own status.
+        private void Remember(string host){session.Profile.Data.PlayerName=nameField.text;if(host!=null)session.Profile.Data.LastHost=host;session.Profile.Save();}
+        private void Start(){if(session==null)return;nameField.text=session.Profile.Data.PlayerName;addressField.text=session.Profile.Data.LastHost;}
         // The ballot's keyboard path beside clicking: each press of an award's key moves your pick to the next connected friend
         // (starting after you). The vote that completes the crew's ballot is final.
         private static string NextReviewPick(RoundState state,PlayerState player,int award)
@@ -1565,8 +1595,8 @@ namespace Festival.Presentation
         private static void ShrinkToFit(Text text,int min){text.resizeTextForBestFit=true;text.resizeTextMinSize=min;text.resizeTextMaxSize=text.fontSize;}
         private GameObject Button(Transform parent,string label,Vector2 min,Vector2 max,Action action)
         {
-            bool primary=label=="RESUME FESTIVAL"||label=="CREATE GAME"||label=="JOIN GAME"||label=="NEXT CAMP";
-            bool danger=label=="LEAVE SESSION";
+            bool primary=label=="RESUME FESTIVAL"||label=="PLAY"||label=="HOST A GAME"||label=="JOIN A FRIEND"||label=="JOIN"||label=="NEXT CAMP";
+            bool danger=label=="LEAVE SESSION"||label=="QUIT";
             var go=Card(parent,label,min,max,primary);
             var graphic=go.GetComponent<Image>();graphic.color=primary?new Color(.065f,.37f,.32f,1):danger?new Color(.91f,.85f,.78f,1):new Color(.84f,.85f,.76f,1);
             var button=go.AddComponent<Button>();button.targetGraphic=go.GetComponent<Image>();button.onClick.AddListener(()=>action());
@@ -1585,8 +1615,9 @@ namespace Festival.Presentation
             var fieldObject=Card(parent,label,new Vector2(.08f,top-.095f),new Vector2(.92f,top),false);fieldObject.GetComponent<Image>().color=new Color(.99f,.985f,.94f,1);var input=fieldObject.AddComponent<InputField>();
             var focus=fieldObject.AddComponent<Outline>();focus.effectColor=new Color(.08f,.22f,.19f,.16f);focus.effectDistance=new Vector2(1,-1);
             fieldObject.AddComponent<FestivalFocusFrame>().Configure(focus,new Color(.13f,.55f,.46f,1),focus.effectColor);
-            var text=Label(fieldObject.transform,"Text",24,TextAnchor.MiddleLeft);Fill(text.rectTransform,18);text.color=Ink;text.text=value;input.textComponent=text;input.text=value;input.characterLimit=128;
-            var placeholder=Label(fieldObject.transform,"Placeholder",22,TextAnchor.MiddleLeft);Fill(placeholder.rectTransform,18);placeholder.text=label;placeholder.color=new Color(.35f,.45f,.40f,.6f);input.placeholder=placeholder;
+            // MENU-1: a thin top and bottom inset, so a field as short as the title card's still shows its line.
+            var text=Label(fieldObject.transform,"Text",24,TextAnchor.MiddleLeft);SetRect(text.rectTransform,Vector2.zero,Vector2.one,new Vector2(18,2),new Vector2(-18,-2));text.color=Ink;text.text=value;input.textComponent=text;input.text=value;input.characterLimit=128;
+            var placeholder=Label(fieldObject.transform,"Placeholder",22,TextAnchor.MiddleLeft);SetRect(placeholder.rectTransform,Vector2.zero,Vector2.one,new Vector2(18,2),new Vector2(-18,-2));placeholder.text=label;placeholder.color=new Color(.35f,.45f,.40f,.6f);input.placeholder=placeholder;
             var selected=input.selectionColor;selected=new Color(.35f,.80f,.69f,.45f);input.selectionColor=selected;
             return input;
         }

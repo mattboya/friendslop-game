@@ -605,9 +605,10 @@ namespace Festival.Tests
         }
 
         // HUD-7 (Matt, 2026-10-01: "if i had never played the game, it would be very unclear what i am supposed to do and what the
-        // objective is"): HOW TO PLAY sits beside CREATE GAME and JOIN GAME on the main menu and on the Escape menu's home. It opens
-        // FestivalHudText.HowToPlay's six blocks, as this machine's keys are bound, each drawn whole at 1080p; BACK or Esc puts it
-        // away. Hosts a real round; Esc goes through the HUD's own input handling on a virtual keyboard.
+        // objective is"): HOW TO PLAY sits on the title, between PLAY and SETTINGS (MENU-1: the title replaced the connection card
+        // with its CREATE GAME and JOIN GAME), and on the Escape menu's home. It opens FestivalHudText.HowToPlay's six blocks, as this
+        // machine's keys are bound, each drawn whole at 1080p; BACK or Esc puts it away. Hosts a real round; Esc goes through the
+        // HUD's own input handling on a virtual keyboard.
         [UnityTest]public IEnumerator HowToPlayOpensFromTheMainMenuAndTheEscapeMenu()
         {
             UseAVirtualKeyboard("HUD how to play keyboard");
@@ -639,9 +640,9 @@ namespace Festival.Tests
             }
             try
             {
-                // The main menu, before joining anyone.
-                var open=Labelled("HOW TO PLAY","Connection");
-                if(open==null||Labelled("CREATE GAME","Connection")==null||Labelled("JOIN GAME","Connection")==null)failures.Add("main menu: no HOW TO PLAY beside CREATE GAME and JOIN GAME");
+                // The title, before joining anyone.
+                var open=Labelled("HOW TO PLAY","Title menu");
+                if(open==null||Labelled("PLAY","Title menu")==null||Labelled("SETTINGS","Title menu")==null)failures.Add("main menu: no HOW TO PLAY between PLAY and SETTINGS on the title");
                 else
                 {
                     open.onClick.Invoke();yield return null;
@@ -680,6 +681,185 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"How to Play:\n"+string.Join("\n",failures));
+        }
+
+        // MENU-1 (Matt, 2026-10-01: "we need a real main menu screen, and actual game settings ... and we need to tell players what
+        // the goal of the game actually is"): unconnected, the HUD is the title, each line and each field's text drawn whole at
+        // 1080p. SETTINGS opens the settings before you join anyone: the rows read this machine's values, a change shows at once,
+        // and its way out says BACK. Esc puts the settings away, steps out of PLAY's pages one at a time, and on the title itself
+        // does nothing. PLAY fills in the name and the last host this machine saved; HOST A GAME hosts under the name typed, on the
+        // port under ADVANCED, as CREATE GAME did, and saves the name. LEAVE SESSION comes back to the title. Esc goes through the
+        // HUD's own input handling on a virtual keyboard. This machine's profile is put back as it was.
+        [UnityTest]public IEnumerator TheGameOpensOnTheTitleAndLeavingComesBackToIt()
+        {
+            UseAVirtualKeyboard("HUD title keyboard");
+            var world=new GameObject("HUD title world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD title");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            string saved=JsonUtility.ToJson(session.Profile.Data);
+            // What PLAY fills in, as this machine saved it; the HUD reads it as it starts.
+            session.Profile.Data.PlayerName="Saved Name";session.Profile.Data.LastHost="10.0.0.7";session.Profile.Data.MusicVolume=.35f;
+            yield return null;
+            var failures=new List<string>();
+            var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+            var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+            bool Shows(string name){foreach(var t in hud.GetComponentsInChildren<Transform>(false))if(t.name==name)return true;return false;}
+            T Named<T>(string name,string on) where T:Component{foreach(var c in hud.GetComponentsInChildren<T>(false))if(c.name==name&&c.transform.parent.name==on)return c;return null;}
+            string Buttons(string on){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.transform.parent.name==on)listed.Add(b.name);return string.Join(" | ",listed);}
+            Text Line(string text){foreach(var t in hud.GetComponentsInChildren<Text>(false))if(t.text==text)return t;return null;}
+            string Value(string row){foreach(var t in hud.GetComponentsInChildren<Text>(false))if(t.name==row+" value")return t.text;return "(hidden)";}
+            void Whole(string where,Text label)
+            {
+                Canvas.ForceUpdateCanvases();int shown=Mathf.Max(0,label.cachedTextGenerator.characterCountVisible);
+                if(shown<label.text.Length)failures.Add(where+": "+label.transform.parent.name+"'s "+label.name+" box "+label.rectTransform.rect.size+" cuts \""+label.text+"\" after \""+label.text.Substring(0,shown)+"\"");
+            }
+            // Every button the title shows, its label drawn whole.
+            void Labels(string where){foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.transform.IsChildOf(hud.transform.Find("Festival HUD/Title screen")))Whole(where,b.GetComponentInChildren<Text>());}
+            const string Home="PLAY | HOW TO PLAY | SETTINGS | QUIT";
+            try
+            {
+                // The title, before anyone connects: the name and the tagline, and the four buttons, all drawn whole.
+                foreach(var line in new[]{FestivalTitleScreen.GameName,FestivalTitleScreen.Tagline})
+                {
+                    var label=Line(line);
+                    if(label==null)failures.Add("title: \""+line+"\" is not on screen");else Whole("title",label);
+                }
+                if(Buttons("Title menu")!=Home)failures.Add("title: the buttons are \""+Buttons("Title menu")+"\", expected \""+Home+"\"");
+                Labels("title");
+                yield return Tap(Key.Escape);
+                if(Buttons("Title menu")!=Home||Shows("Play"))failures.Add("title: Esc on the title moves off it");
+
+                // SETTINGS, before connecting.
+                var settings=Named<Button>("SETTINGS","Title menu");
+                if(settings==null)failures.Add("title: no SETTINGS");
+                else
+                {
+                    settings.onClick.Invoke();yield return null;
+                    if(!Shows("Pass settings"))failures.Add("settings: SETTINGS opens no settings while unconnected");
+                    else
+                    {
+                        if(Value("MUSIC VOLUME")!="35%")failures.Add("settings: MUSIC VOLUME reads \""+Value("MUSIC VOLUME")+"\", expected this machine's 35%");
+                        // The first + is the music's.
+                        Named<Button>("+","Pass settings").onClick.Invoke();yield return null;
+                        if(Value("MUSIC VOLUME")!="40%"||Mathf.Abs(session.Profile.Data.MusicVolume-.4f)>1e-4f)failures.Add("settings: after + MUSIC VOLUME reads \""+Value("MUSIC VOLUME")+"\" at a volume of "+session.Profile.Data.MusicVolume+", expected 40%");
+                        var back=Named<Button>("BACK TO PASS","Pass settings");
+                        string backLabel=back==null?"(none)":back.GetComponentInChildren<Text>().text;
+                        if(backLabel!="BACK")failures.Add("settings: its way out reads \""+backLabel+"\" before connecting, expected \"BACK\"");
+                        if(Shows("Title menu"))failures.Add("settings: the title's buttons stay up under the settings");
+                    }
+                    yield return Tap(Key.Escape);
+                    if(Shows("Pass settings")||Buttons("Title menu")!=Home)failures.Add("settings: Esc doesn't put the settings away, back to the title");
+                }
+
+                // PLAY fills in the saved name, JOIN A FRIEND the saved host; Esc steps back a page at a time.
+                var play=Named<Button>("PLAY","Title menu");
+                Assert.That(play,Is.Not.Null,"the title has PLAY, after:\n"+string.Join("\n",failures));
+                play.onClick.Invoke();yield return null;
+                var name=Named<InputField>("YOUR NAME","Play");
+                if(name==null||name.text!="Saved Name")failures.Add("PLAY: YOUR NAME reads \""+(name==null?"(none)":name.text)+"\", expected the saved \"Saved Name\"");
+                else Whole("PLAY",name.textComponent);
+                Named<Button>("ADVANCED","Play choices").onClick.Invoke();yield return null;
+                var hostPort=Named<InputField>("PORT","Advanced");
+                if(hostPort==null)failures.Add("PLAY: ADVANCED shows no port");else Whole("PLAY, ADVANCED",hostPort.textComponent);
+                Labels("PLAY, ADVANCED");
+                Named<Button>("ADVANCED","Play choices").onClick.Invoke();
+                Named<Button>("JOIN A FRIEND","Play choices").onClick.Invoke();yield return null;
+                var address=Named<InputField>("HOST ADDRESS","Join a friend");
+                if(address==null||address.text!="10.0.0.7")failures.Add("JOIN A FRIEND: HOST ADDRESS reads \""+(address==null?"(none)":address.text)+"\", expected the saved \"10.0.0.7\"");
+                else Whole("JOIN A FRIEND",address.textComponent);
+                var port=Named<InputField>("PORT","Join a friend");
+                if(port==null)failures.Add("JOIN A FRIEND: no port");else Whole("JOIN A FRIEND",port.textComponent);
+                Labels("JOIN A FRIEND");
+                yield return Tap(Key.Escape);
+                if(Shows("Join a friend")||!Shows("Play choices"))failures.Add("JOIN A FRIEND: Esc doesn't step back to host or join");
+                yield return Tap(Key.Escape);
+                if(Shows("Play")||Buttons("Title menu")!=Home)failures.Add("PLAY: Esc doesn't step back to the title");
+
+                // HOST A GAME hosts under the name typed, on the port under ADVANCED, and saves the name.
+                play.onClick.Invoke();yield return null;
+                Named<InputField>("YOUR NAME","Play").text="Title Tester";
+                Named<Button>("ADVANCED","Play choices").onClick.Invoke();yield return null;
+                Named<InputField>("PORT","Advanced").text=FreePort().ToString();
+                Named<Button>("HOST A GAME","Play choices").onClick.Invoke();
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"HOST A GAME hosts: "+session.Message+" "+failures.Count+" failures:\n"+string.Join("\n",failures));
+                yield return null;
+                if(session.LocalPlayer.Name!="Title Tester")failures.Add("host: playing as \""+session.LocalPlayer.Name+"\", not the name typed");
+                if(session.State.Phase!="Shopping"||session.MenuOpen)failures.Add("host: in "+session.State.Phase+(session.MenuOpen?" with the menu open":"")+", not at camp, playing");
+                if(Shows("Title screen"))failures.Add("host: the title stays up in the game");
+                if(session.Profile.Data.PlayerName!="Title Tester")failures.Add("host: the profile saves \""+session.Profile.Data.PlayerName+"\" as your name");
+
+                // LEAVE SESSION, from the Escape menu, comes back to the title itself.
+                yield return Tap(Key.Escape);
+                var leave=Named<Button>("LEAVE SESSION","Pass home");
+                if(!session.MenuOpen||leave==null)failures.Add("in game: Esc opens no LEAVE SESSION");
+                else
+                {
+                    leave.onClick.Invoke();yield return null;
+                    if(session.Connected||Buttons("Title menu")!=Home||Shows("Play"))failures.Add("LEAVE SESSION: "+(session.Connected?"still connected":"the buttons are \""+Buttons("Title menu")+"\"")+", not the title");
+                }
+            }
+            finally
+            {
+                session.Leave();
+                JsonUtility.FromJsonOverwrite(saved,session.Profile.Data);session.Profile.Save();
+                foreach(var leftover in new[]{"First-person camera","Authoritative actor presentation"}){var found=GameObject.Find(leftover);if(found!=null)Object.Destroy(found);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"The title:\n"+string.Join("\n",failures));
+        }
+
+        // MENU-1: the native smokes' two ways in, through the title's buttons by the paths DevelopmentSmoke presses. A JOIN with
+        // port 0 says so and joins nobody. HOST A GAME hosts on the port under ADVANCED, and a friend's JOIN A FRIEND joins that
+        // host by its address and port, under the name typed, and saves the address for next time. Two HUDs in one scene, each
+        // with its own session; this machine's profile is put back as it was.
+        [UnityTest]public IEnumerator JoinAFriendJoinsTheGameHostAGameOpens()
+        {
+            var world=new GameObject("HUD join world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("HUD join host");var host=hostObject.AddComponent<FestivalSession>();hostObject.AddComponent<FestivalHud>();
+            var friendObject=new GameObject("HUD join friend");var friend=friendObject.AddComponent<FestivalSession>();friendObject.AddComponent<FestivalHud>();
+            string saved=JsonUtility.ToJson(friend.Profile.Data);
+            yield return null;
+            var failures=new List<string>();
+            T At<T>(GameObject hud,string path) where T:Component{var found=hud.transform.Find("Festival HUD/Title screen/"+path);return found==null?null:found.GetComponent<T>();}
+            void Press(GameObject hud,string path){var button=At<Button>(hud,path);Assert.That(button,Is.Not.Null,path+" is a button");button.onClick.Invoke();}
+            try
+            {
+                ushort port=FreePort();
+                Press(hostObject,"Title menu/PLAY");
+                Press(hostObject,"Play/Play choices/ADVANCED");
+                At<InputField>(hostObject,"Play/Play choices/Advanced/PORT").text=port.ToString();
+                Press(hostObject,"Play/Play choices/HOST A GAME");
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,"HOST A GAME hosts on port "+port+": "+host.Message);
+
+                Press(friendObject,"Title menu/PLAY");
+                At<InputField>(friendObject,"Play/YOUR NAME").text="Sam";
+                Press(friendObject,"Play/Play choices/JOIN A FRIEND");
+                At<InputField>(friendObject,"Play/Join a friend/HOST ADDRESS").text="127.0.0.1";
+                At<InputField>(friendObject,"Play/Join a friend/PORT").text="0";
+                Press(friendObject,"Play/Join a friend/JOIN");yield return null;
+                string status=At<Text>(friendObject,"Play/Status")?.text;
+                if(status!="Port must be 1–65535."||friend.Connecting)failures.Add("JOIN on port 0: "+(friend.Connecting?"connects":"the status reads \""+status+"\""));
+                At<InputField>(friendObject,"Play/Join a friend/PORT").text=port.ToString();
+                Press(friendObject,"Play/Join a friend/JOIN");
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,"JOIN A FRIEND joins the host on port "+port+": "+friend.Message);
+                if(friend.LocalPlayer.Name!="Sam")failures.Add("the friend plays as \""+friend.LocalPlayer.Name+"\", not the name typed");
+                if(Simulation(host).State.Players.Count!=2)failures.Add("the host has "+Simulation(host).State.Players.Count+" players, not the two");
+                if(friend.Profile.Data.LastHost!="127.0.0.1")failures.Add("the friend's profile saves \""+friend.Profile.Data.LastHost+"\" as the last host");
+            }
+            finally
+            {
+                friend.Leave();host.Leave();
+                JsonUtility.FromJsonOverwrite(saved,friend.Profile.Data);friend.Profile.Save();
+                Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"The title's ways in:\n"+string.Join("\n",failures));
         }
 
         // HUD-7: as each level opens, a card under the aim dot says what it asks, your job and how the crew loses
