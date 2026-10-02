@@ -348,6 +348,9 @@ namespace Festival.Presentation
         public static NpcState StoppedBy(RoundState s,PlayerState p)=>s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="Stop");
         /// <summary>ESC-2: the session notice as security stops you: why, the three ways out, and what ignoring it costs.</summary>
         public static readonly string StopNotice="SECURITY SAW YOUR STOCK: talk, ditch it or walk away within "+FestivalSimulation.StopArrestSeconds+" s, or you're arrested";
+        /// <summary>ESC-2: E during a stop while the guard is still walking over, out of talking reach (the host's 2.5 m): said, not
+        /// offered, so until the talk is in reach E does nothing, never a sale or a buy in the guard's sight, which is an arrest.</summary>
+        public const string StopApproachAction="Security is coming over";
 
         /// <summary>
         /// The player card's warning: security about to detain p, else a festivalgoer swarming p, else security stopping p (with the

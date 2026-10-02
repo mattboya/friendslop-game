@@ -84,8 +84,9 @@ namespace Festival.Tests
 
         // ESC-2: a security stop on screen, at 1080p. The guard who sees your stock calls you out, the notice says why and what to
         // do about it, and the card's warning names the three ways out. Every stop gets its notice: one after a stop that was the
-        // last message, and one that starts mid-dance once the dance is over. E talks to the guard, as the card says, with a
-        // festivalgoer nearer than the guard and a Tongue Stamp you just ditched (G) at your feet.
+        // last message, and one that starts mid-dance, under the map or under the menu once that is closed. E talks to the guard,
+        // as the card says, with a festivalgoer nearer than the guard and a Tongue Stamp you just ditched (G) at your feet. A guard
+        // still walking over is out of talking reach: E says so and does nothing, never offering the festivalgoer your stock.
         [UnityTest]public IEnumerator AStopSaysWhyAndETalksToTheGuard()
         {
             var world=new GameObject("HUD stop world");world.AddComponent<FestivalWorld>();yield return null;
@@ -113,7 +114,7 @@ namespace Festival.Tests
 
                 // You carry two Tongue Stamps past security, 2 m off and facing you, with a festivalgoer at arm's length.
                 sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");player.X=0;player.Z=0;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});
-                sim.State.Npcs.Add(new NpcState{Id="stop_festivalgoer",X=-1,Z=0,Yaw=90});
+                var festivalgoer=new NpcState{Id="stop_festivalgoer",X=-1,Z=0,Yaw=90};sim.State.Npcs.Add(festivalgoer);
                 var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.Evidence.Clear();cop.X=2;cop.Z=0;cop.Yaw=-90;
                 yield return new WaitForSeconds(.4f);
                 Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: security stops you over the stock ("+session.Message+")");
@@ -126,7 +127,8 @@ namespace Festival.Tests
                 // back to you. The first notice's 5 s run out with nothing said since, so it is still the session's last message.
                 void StopAgain(){cop.X=player.X+2;cop.Z=player.Z;cop.Yaw=-90;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});}
                 player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");yield return new WaitForSeconds(5.2f);
-                Assert.That(cop.Mode!="Stop"&&Find("Notice")==null&&session.Message==StopNotice,Is.True,"setup: the stop is over, its notice gone and still the last message ("+cop.Mode+", \""+session.Message+"\")");
+                // A failure, not a setup Assert: without the first notice, "stopped" above has already said why.
+                if(cop.Mode=="Stop"||Find("Notice")!=null||session.Message!=StopNotice)failures.Add("setup: the stop is over, its notice gone and still the last message ("+cop.Mode+", \""+session.Message+"\")");
                 StopAgain();yield return new WaitForSeconds(.4f);
                 Expect("stopped again","Notice",StopNotice);
                 // The next starts as you dance, over 5 s before the dance ends: a notice shown then would be gone by the end.
@@ -139,6 +141,17 @@ namespace Festival.Tests
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="stop_dance_over",Kind="Cancel"}).Accepted,Is.True,"setup: the dance ends");
                 yield return new WaitForSeconds(.4f);
                 Expect("stopped mid-dance, the dance over","Notice",StopNotice);
+                // The next starts under the map, then the one after under the menu, each held open over 5 s.
+                player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");yield return new WaitForSeconds(.4f);
+                view.DevelopmentMapVisible=true;StopAgain();yield return new WaitForSeconds(5.5f);
+                Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: security stops you under the map");
+                view.DevelopmentMapVisible=false;yield return new WaitForSeconds(.4f);
+                Expect("stopped under the map, the map closed","Notice",StopNotice);
+                player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");yield return new WaitForSeconds(.4f);
+                session.MenuOpen=true;StopAgain();yield return new WaitForSeconds(5.5f);
+                Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: security stops you under the menu");
+                session.MenuOpen=false;yield return new WaitForSeconds(.4f);
+                Expect("stopped under the menu, the menu closed","Notice",StopNotice);
 
                 // G ditches one at your feet; the stop holds over the other, and E still talks.
                 session.Command("Drop",item:"stock_lsd");yield return new WaitForSeconds(.4f);
@@ -147,6 +160,21 @@ namespace Festival.Tests
                 ((System.Action)primary.GetValue(view))?.Invoke();yield return new WaitForSeconds(.4f);
                 var talk=sim.Interaction(player.InteractionId);
                 if(talk?.Kind!="Police"||talk.TargetId!=cop.Id)failures.Add("E starts "+(talk==null?"nothing":talk.Kind+" with "+talk.TargetId)+" ("+session.Message+"), not a talk with "+cop.Id);
+
+                // Last, a stop from 8 m, a festivalgoer at arm's length: the guard takes about 2 s to walk over. Until then E says so
+                // and does nothing, for a sale (the first thing E does beside them with stock by day) in the guard's sight is an arrest.
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="stop_talk_over",Kind="Cancel"}).Accepted,Is.True,"setup: the talk ends");
+                sim.State.Drops.RemoveAll(d=>d.ItemId=="stock_lsd");player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");yield return new WaitForSeconds(.4f);
+                Assert.That(cop.Mode,Is.Not.EqualTo("Stop"),"setup: with the stock gone the stop ends");
+                festivalgoer.X=player.X-1;festivalgoer.Z=player.Z;StopAgain();cop.X=player.X+8;yield return new WaitForSeconds(.3f);
+                Expect("stopped from 8 m, the guard walking over","Prompt",FestivalHudText.StopApproachAction);
+                ((System.Action)primary.GetValue(view))?.Invoke();yield return new WaitForSeconds(.4f);
+                var started=sim.Interaction(player.InteractionId);
+                if(started!=null)failures.Add("E with the guard walking over starts "+started.Kind+" with "+started.TargetId+" ("+session.Message+")");
+                if(!cop.Evidence.Exists(e=>e.PlayerId==player.Id&&e.Kind=="VisibleStock"))failures.Add("E with the guard walking over turns the stop into "+string.Join(",",cop.Evidence.ConvertAll(e=>e.Kind)));
+                yield return new WaitForSeconds(4.1f);
+                if(player.Life!="Alive")failures.Add("4.5 s after that E you are "+player.Life);
+                Expect("the guard walked over","Prompt","Talk to security");
             }
             finally
             {

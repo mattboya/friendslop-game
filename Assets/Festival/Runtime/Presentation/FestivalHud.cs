@@ -1152,10 +1152,11 @@ namespace Festival.Presentation
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
             if(!lying&&FestivalHudText.CanCancel(state,player))AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
-            // ESC-2: security stopping you, in reach (the host's 2.5 m), comes next, so E talks to them as the card says (TALK (E)),
-            // even with a festivalgoer nearer or the stock you just ditched at your feet.
+            // ESC-2: security stopping you comes next, so E talks to them as the card says (TALK (E)), even with a festivalgoer nearer
+            // or the stock you just ditched at your feet. Until the guard has walked into reach (the host's 2.5 m), E says so and does
+            // nothing: what E would do instead, a sale or a buy beside a festivalgoer, is a deal in the guard's sight, an arrest.
             var stopper=FestivalHudText.StoppedBy(state,player);
-            if(stopper!=null&&Near(player,stopper.X,stopper.Z,2.5f))AddAction("Talk to security",()=>session.Command("Police",stopper.Id),ref y);
+            if(stopper!=null){if(Near(player,stopper.X,stopper.Z,2.5f))AddAction("Talk to security",()=>session.Command("Police",stopper.Id),ref y);else AddAction(FestivalHudText.StopApproachAction,()=>{},ref y);}
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+ItemName(drop.ItemId),()=>session.Command("Pickup",drop.Id),ref y);
