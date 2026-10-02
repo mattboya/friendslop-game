@@ -188,6 +188,7 @@ namespace Festival.Tests
                 Assert.That(body.GetComponentsInChildren<Collider>(true),Is.Empty,body.name+" carries no colliders");
                 foreach(var part in body.GetComponentsInChildren<Renderer>(true))
                 {
+                    Assert.That(part.name.Contains("__P"),Is.True,body.name+"/"+part.name+" is a part of ART-1's creature model");
                     Assert.That(part.shadowCastingMode,Is.EqualTo(ShadowCastingMode.Off),body.name+"/"+part.name+" casts no shadow");
                     var color=part.sharedMaterial.color;bool tinted=false;
                     foreach(var paint in FestivalCreatures.Palette)

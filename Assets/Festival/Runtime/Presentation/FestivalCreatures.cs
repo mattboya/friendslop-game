@@ -14,7 +14,7 @@ namespace Festival.Presentation
     /// (ElapsedSeconds), so they come only while Playing, seeded by the round seed, the level and the player. Each creature's own
     /// life runs on frame time, so it finishes fading while the clock stands still at Results. The dose invents them, so they
     /// carry the fake-vision tells (FestivalVisionMarkers): no shadow, a shimmer while the camera moves, a slightly shifted hue.
-    /// Placeholders built from primitives until the art pass.</summary>
+    /// ART-1: each is a Blender model, its parts painted from the palette.</summary>
     public sealed class FestivalCreatures : MonoBehaviour
     {
         // Doses 1-4: the mean gap between arrivals (each gap randomised by +-50%) and how many may be on screen at once.
@@ -39,17 +39,9 @@ namespace Festival.Presentation
             new Color(1f,.45f,.8f),new Color(.45f,.95f,1f),new Color(.3f,.8f,.3f),new Color(.15f,.55f,.35f),         // pink, wing, green, dark green
             new Color(.72f,.52f,.32f),new Color(.85f,.72f,.5f),new Color(.3f,.12f,.4f)};                               // tan, antler, eyes
         public static IReadOnlyList<Color> Palette=>Paints;
-        private const PrimitiveType Ball=PrimitiveType.Sphere,Pill=PrimitiveType.Capsule,Can=PrimitiveType.Cylinder,Block=PrimitiveType.Cube;
-        // Each look faces +z from its feet: shape, paint, position, size and tilt (pitch, roll).
-        private static readonly (string Name,(PrimitiveType Shape,int Paint,Vector3 At,Vector3 Size,Vector3 Turn)[] Parts)[] Looks={
-            ("Gnome",new[]{Part(Pill,0,0,.1f,0,.16f,.1f,.16f),Part(Ball,2,0,.25f,0,.12f,.12f,.12f),Part(Ball,3,0,.21f,.05f,.1f,.09f,.05f),Part(Pill,1,0,.35f,0,.09f,.07f,.09f)}),
-            ("Pixie",new[]{Part(Pill,4,0,.17f,0,.09f,.08f,.09f),Part(Ball,2,0,.3f,0,.1f,.1f,.1f),Part(Block,5,.07f,.22f,-.03f,.1f,.15f,.01f,0,-20),Part(Block,5,-.07f,.22f,-.03f,.1f,.15f,.01f,0,20)}),
-            ("Dragon",new[]{Part(Pill,6,0,.12f,0,.12f,.12f,.12f,90),Part(Ball,6,0,.23f,.13f,.1f,.09f,.11f),Part(Block,7,.1f,.2f,0,.16f,.01f,.1f,0,30),Part(Block,7,-.1f,.2f,0,.16f,.01f,.1f,0,-30),Part(Block,7,0,.08f,-.17f,.04f,.04f,.14f,-20)}),
-            ("Mushroom sprite",new[]{Part(Can,3,0,.1f,0,.1f,.1f,.1f),Part(Ball,1,0,.22f,0,.26f,.14f,.26f),Part(Ball,10,.03f,.12f,.05f,.025f,.03f,.02f),Part(Ball,10,-.03f,.12f,.05f,.025f,.03f,.02f)}),
-            ("Jackalope",new[]{Part(Ball,8,0,.1f,0,.14f,.14f,.2f),Part(Ball,8,0,.2f,.09f,.1f,.1f,.1f),Part(Pill,8,.03f,.3f,.08f,.03f,.06f,.03f,0,-10),Part(Pill,8,-.03f,.3f,.08f,.03f,.06f,.03f,0,10),Part(Can,9,.05f,.34f,.09f,.015f,.06f,.015f,0,-30),Part(Can,9,-.05f,.34f,.09f,.015f,.06f,.015f,0,30)}),
-        };
-        private static (PrimitiveType Shape,int Paint,Vector3 At,Vector3 Size,Vector3 Turn) Part(PrimitiveType shape,int paint,float x,float y,float z,float width,float height,float depth,float pitch=0,float roll=0)
-            =>(shape,paint,new Vector3(x,y,z),new Vector3(width,height,depth),new Vector3(pitch,0,roll));
+        // ART-1: each look is a model whose parts end __P<n>, painted from Paints[n].
+        private static readonly (string Name,string Model)[] Looks={("Gnome","FestivalCreatureGnome"),("Pixie","FestivalCreaturePixie"),
+            ("Dragon","FestivalCreatureDragon"),("Mushroom sprite","FestivalCreatureMushroomSprite"),("Jackalope","FestivalCreatureJackalope")};
 
         /// <summary>When creatures arrive and what each one is: a pure function of the seed and the clock it is stepped with.</summary>
         public sealed class Schedule
@@ -177,12 +169,11 @@ namespace Festival.Presentation
         private Creature Build(int look)
         {
             var root=new GameObject("Creature "+Looks[look].Name).transform;root.SetParent(transform,false);
-            foreach(var part in Looks[look].Parts)
+            var model=FestivalArtView.Create(root,Looks[look].Model);
+            if(model!=null)foreach(var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
             {
-                var piece=GameObject.CreatePrimitive(part.Shape);piece.name=part.Shape.ToString();piece.transform.SetParent(root,false);
-                piece.transform.localPosition=part.At;piece.transform.localScale=part.Size;piece.transform.localRotation=Quaternion.Euler(part.Turn);
-                var collider=piece.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
-                var renderer=piece.GetComponent<MeshRenderer>();renderer.sharedMaterial=Paint(part.Paint);renderer.shadowCastingMode=ShadowCastingMode.Off;
+                int mark=renderer.name.LastIndexOf("__P",StringComparison.Ordinal);
+                if(mark>=0&&int.TryParse(renderer.name.Substring(mark+3).Split('.')[0],out int paint)&&paint<Paints.Length)renderer.sharedMaterial=Paint(paint);
             }
             return new Creature{Root=root,Look=look};
         }
