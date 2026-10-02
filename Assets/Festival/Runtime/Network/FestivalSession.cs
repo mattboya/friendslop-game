@@ -108,6 +108,7 @@ namespace Festival.Network
             Profile=new LocalProfile(profileId);Controls=new FestivalInput(profileId);
             gameObject.AddComponent<FestivalRhythmAudio>();
             gameObject.AddComponent<FestivalCampAudio>();
+            gameObject.AddComponent<FestivalStageAudio>();
             var cameraObject=new GameObject("First-person camera");ViewCamera=cameraObject.AddComponent<Camera>();cameraObject.AddComponent<AudioListener>();
             ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=130;ViewCamera.fieldOfView=75;
             FestivalCharacter.ViewTransform=ViewCamera.transform;
