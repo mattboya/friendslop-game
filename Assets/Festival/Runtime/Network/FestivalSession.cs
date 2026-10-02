@@ -40,6 +40,8 @@ namespace Festival.Network
         // asked to sell talks instead of busting at the ask; finishing the buy busts.
         // POLO-6: a player's own copy in their snapshot names the influencers filming them (PlayerState.VisualFilmedBy).
         // CROWD-3: every client sees a festivalgoer scattering from an arrest (Mode "Scattering"), never whom it suspects.
+        // MINI-1: snapshots carry the level's minigame booth (RoundState.Booth), a game under way is the "Minigame" phase, and
+        // the players in it send its own Minigame command.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -508,7 +510,9 @@ namespace Festival.Network
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
-                CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1};
+                CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
+                // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here.
+                Booth=source.Booth};
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
