@@ -39,7 +39,7 @@ namespace Festival.Core
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion<1||state.SchemaVersion>RoundState.CurrentSchemaVersion||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
             var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.Booth==null||state.Booth.PlayerIds==null||state.MinigameBag==null||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=state.UnlockedFestivalCount||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             // A round saved before weekends restores at Day 1 of the first festival. One that had left camp was a rescue: it resumes
             // as Night 1, the night it was, with the way to its friend open, as it holds no tripper's clue trail. Either way it is
@@ -61,6 +61,7 @@ namespace Festival.Core
         /// action as "Round is not interactive", and the HUD offers none then (the wheels spinning, the festival loading).</summary>
         public static bool Interactive(string phase)=>phase=="Playing"||phase=="Shopping";
         CommandResult Apply(PlayerState p,GameCommand c) {
+            if(State.Phase==MinigamePhase)return Paused(p,c);
             if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
             if(c.Kind=="Start") {
                 if(p.Id!=State.HostPlayerId)return Reject("Only host starts rounds");
@@ -176,7 +177,7 @@ namespace Festival.Core
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             // The level runs the table's length whatever the round was saved with (a snapshot from before weekends held 600 s).
-            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;ClearGiggleGas();Spin(connected);DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();
+            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;ClearGiggleGas();Spin(connected);DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();PlaceBooth();
         }
         void BeginCampReview()
         {

@@ -1,6 +1,7 @@
 # Minigames: booths that stop the clock (proposed 2026-09-30)
 
-Status: proposed. Nothing here is built. The queue entries are MINI-1 to MINI-4 in `WORK_QUEUE.md` under `## Later`.
+Status: approved 2026-10-01, every open decision taken as (A). MINI-1's rules are built (`Core/Simulation/Minigames.cs`); its
+screen, and MINI-2 to MINI-4, are queue entries in `WORK_QUEUE.md`.
 This design builds on [GAME_DESIGN_2026-09-30.md](GAME_DESIGN_2026-09-30.md) (the tripper, doses, visions and their
 tells, the group dance, the debrief). Where the two conflict, that document wins, except on one point: the minigame
 pause is a deliberate exception to "the clock keeps running" in
@@ -32,6 +33,11 @@ crew draws suspicion (CROWD-1) while it waits. Solo play works: the ring holds o
 
 A minigame lasts at most 90 seconds. At that point the host ends it and scores what's in.
 
+As built (MINI-1): the booths stand at `Festivals.BoothSpots`, three crowd-edge spots whose rings keep clear of every route
+players routinely take. Players in the game send its own `Minigame` command; `Rhythm` also goes through, for the Drum
+Circle. The result banner shows while the world is still stopped, so the pause is the game plus its banner. Until MINI-2
+lands, the bag holds a no-op stub that any player in it ends at once, for +0 s.
+
 **Resuming.** Many timers store an absolute time on the simulation clock:
 - handoff offers (`ExpiresAt`)
 - interaction start times
@@ -43,8 +49,9 @@ length before play resumes. A test enumerates these fields, so a new deadline fi
 cover makes the test fail.
 
 **What's at stake.** The main stake is time on the level clock:
-- Each game adds or removes seconds, shown in a result banner such as "+45 s" or "−30 s" for 4 seconds.
-- A loss never leaves fewer than 15 seconds on the clock.
+- Each game adds or removes seconds, shown in a result banner such as "+45 s" or "−30 s" for 4 seconds. It changes the
+  level's length, and a gain lengthens the spinner's dose with it, since a dose lasts the level.
+- A loss never leaves fewer than 15 seconds on the clock, nor takes any when 15 or fewer are left.
 - Each game also has one side effect of its own: suspicion, cash or a dose.
 
 **Networking.** Minigame state is public round state, copied by `FestivalSession.ViewFor`. Private parts are
@@ -122,10 +129,9 @@ A shady bartender sets out cups. One is spiked. It's push-your-luck with a share
   symbols. Neither was chosen for the first batch. They can be revived later: each fits the same framework.
 - **An unpaused minigame.** It would compete with the level's objective instead of offering a timeout gamble.
 
-## Open decisions
+## Decisions
 
-The entries are specced with the recommended answer (A). Each question is also recorded as a `🔴 Decision open`
-on its queue entry, so the batch page can ask it.
+All six were taken as (A) on 2026-10-01.
 
 1. **Opt-in:** (A) everyone Alive stands in the ring, or (B) a majority vote from anywhere pulls the crew in.
 2. **The main stake:** (A) time plus one side effect per game, or (B) cash only.

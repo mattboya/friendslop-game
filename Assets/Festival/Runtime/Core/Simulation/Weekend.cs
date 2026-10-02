@@ -42,7 +42,7 @@ namespace Festival.Core
             }
             next.DurationSeconds=Festivals.For(next).DurationSeconds;
             if(!continuing)return;
-            next.StashCash=old.StashCash;next.TripperBag=old.TripperBag;next.Stashes=old.Stashes;next.EntitySequence=Math.Max(next.EntitySequence,old.EntitySequence);
+            next.StashCash=old.StashCash;next.TripperBag=old.TripperBag;next.MinigameBag=old.MinigameBag;next.Stashes=old.Stashes;next.EntitySequence=Math.Max(next.EntitySequence,old.EntitySequence);
             foreach(var before in old.Players){var after=Player(before.Id);after.Cash=before.Cash;after.Inventory=before.Inventory;after.EquippedItemId=before.EquippedItemId;}
         }
         // Clearing Night 2 of festival k unlocks k+1. End runs this on the win itself, so the host's profile saves the unlock

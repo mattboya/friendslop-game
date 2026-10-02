@@ -102,6 +102,9 @@ namespace Festival.Core
         // GAS-2: this level's Giggle Tank (GiggleTanks.cs), public like the spin: its place in Festivals.GiggleTankSpots, or -1 for
         // none (as in a snapshot from before tanks); found once someone has grabbed it.
         public int GiggleTankSpot=-1; public bool GiggleTankFound;
+        // MINI-1: this level's minigame booth and its game (Minigames.cs), public like the tank; Spot -1, none (camp, and snapshots
+        // from before booths). MinigameBag: the games this weekend still has to offer, carried like TripperBag; host-only.
+        public MinigameState Booth=new MinigameState(); public List<string> MinigameBag=new List<string>();
         // TRIP-4: a day's clue cloud (CloudClue.cs), up for CloudShapes.ClueSeconds from CloudClueStart on the level clock, or -1 for
         // none (a night, or a snapshot from before it); every view has it, as everyone sees the cloud. It pictures landmark
         // CloudClueLandmark (CloudShapes.Landmarks), which leaves the host only for the tripper once they read it at CloudClueReadAt

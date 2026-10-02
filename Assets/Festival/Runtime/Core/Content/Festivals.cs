@@ -90,6 +90,11 @@ namespace Festival.Core
         public static readonly WorldPoint[] GiggleTankSpots={new WorldPoint(11,37.5f),new WorldPoint(27,-12.5f),new WorldPoint(30,14),new WorldPoint(-31,31),new WorldPoint(-34,15),new WorldPoint(29,-1)};
         public const int GiggleTankPercent=20,GiggleTankCash=25;
         public const float GiggleTankReach=1.5f;
+        // MINI-1: each level's minigame booth stands at one of these, the same on every festival: the far end of the west crosspath
+        // by the picnic table, the far end of the east crosspath, and south of the bunting by the east footpath. Each is on a crowd's
+        // edge, its 4 m ring clear of anywhere players routinely stand, south of the backstage line and off the art cars' loops
+        // (MinigameTests checks), so nobody starts a game just by going about the level.
+        public static readonly WorldPoint[] BoothSpots={new WorldPoint(-30,3),new WorldPoint(24,-4),new WorldPoint(12,-18)};
         /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
         public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}

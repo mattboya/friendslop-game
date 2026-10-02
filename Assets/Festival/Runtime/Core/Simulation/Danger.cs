@@ -5,6 +5,8 @@ public sealed partial class FestivalSimulation {
     public Func<float,float,float,float,double,WorldPoint> Navigate;
     public void Tick(double deltaSeconds){if(!Finite(deltaSeconds)||deltaSeconds<0||deltaSeconds>60)throw new ArgumentOutOfRangeException(nameof(deltaSeconds));while(deltaSeconds>0){double dt=Math.Min(.1,deltaSeconds);Step(dt);deltaSeconds-=dt;}}
     void Step(double dt){State.SimulationSeconds+=dt;State.Tick++;
+        // MINI-1: a minigame stops the level, handoff expiry included (Minigames.cs).
+        if(State.Phase==MinigamePhase){MinigameTick(dt);return;}
         foreach(var offer in State.Transfers.ToArray())if(offer.ExpiresAt<=State.SimulationSeconds)ReturnOffer(offer);
         if(State.Phase=="Shopping")
         {
@@ -22,7 +24,7 @@ public sealed partial class FestivalSimulation {
         RideArtCars();foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);Film(dt);GatherAtBurn(dt);
         foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0))FinishInteraction(i,p);}
         Escort(State.FriendFound,State.FriendPosition,ref State.FriendLeaderId,dt);Escort(State.SecondFriend.Found,State.SecondFriend.Position,ref State.SecondFriend.LeaderId,dt);
-        FindStashes();WatchClouds();DropFoundClues();BodiesTick();if(State.Phase=="Playing")EndIfLevelOver();
+        FindStashes();WatchClouds();DropFoundClues();BodiesTick();if(State.Phase=="Playing"&&!EndIfLevelOver())WatchBooth(dt);
     }
     // PLAYA-1: a dust storm cuts everyone's sight (PLAYA-3: cops' too), and festivalgoers never see an art car's rider
     // (FestivalTwists.cs). Suspicion of someone in the burn's crush cools faster (Calm), and an accusation made there carries
