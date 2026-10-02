@@ -7,9 +7,10 @@ namespace Festival.Presentation
 {
     /// <summary>LIGHT-1: night levels dim the sky and light neon on the stage, stalls and paths; the local player's
     /// dose brightens and saturates only their own view. TWISTVIS-1: an Ember Playa dust storm closes the fog in. TRIP-5: the
-    /// dose's substance adds its own lift to the grade (FestivalTrip's Saturation and Brightness: Rolly Pollies). Driven
-    /// from the round state, with no network calls. This is the only writer of the scene's fog and colour grade, so night,
-    /// storm and trip never fight over them.</summary>
+    /// dose's substance adds its own lift to the grade (FestivalTrip's Saturation and Brightness: Rolly Pollies). MINI-1: a
+    /// minigame's freeze-frame drains a little colour while it runs (FreezeSaturation). Driven from the round state, with no
+    /// network calls. This is the only writer of the scene's fog and colour grade, so night, storm, trip and freeze never fight
+    /// over them.</summary>
     public sealed class FestivalNightLighting
     {
         // Wave 2026-09-30 L9-L11: night sky and ambient at about a fifth of day; exposure +.15 per dose, capped at +.6.
@@ -20,6 +21,9 @@ namespace Festival.Presentation
         // Saturation rides the exposure boost (+6 per dose), so a dose reads more vivid, not only brighter.
         private const float SaturationPerExposure=40;
         private const float NeonRange=7,NeonIntensity=2.5f;
+        /// <summary>MINI-1: how much colour the festival's freeze-frame loses while a minigame runs: slightly, as the crew is pulled
+        /// into a moment (a Giggle Balloon drains up to 55).</summary>
+        public const float FreezeSaturation=-30;
         private static readonly Color[] NeonColors={new Color(1f,.1f,.85f),new Color(.1f,.9f,1f),new Color(.55f,1f,.1f)}; // magenta, cyan, lime
         // In front of existing geometry: the stage's emissive frame and lip, the stall fronts and signs, and the
         // main path's glint strips. Lights only; no new art.
@@ -36,7 +40,7 @@ namespace Festival.Presentation
         private readonly Material sky;
         private readonly Color daySky,dayEquator,dayGround,dayFog;
         private readonly float daySun,daySkyExposure,dayExposure,daySaturation,dayFogStart,dayFogEnd;
-        private bool night,storm;
+        private bool night,storm,frozen;
         private float boost,saturation,brightness;
 
         public static bool IsNight(RoundState state)=>FestivalWorld.ShowsFestival(state.Phase)&&Festivals.Night(state.LevelIndex);
@@ -67,17 +71,17 @@ namespace Festival.Presentation
 
         public void Apply(RoundState state,string localPlayerId)
         {
-            bool night=IsNight(state),storm=FestivalWorld.ShowsFestival(state.Phase)&&FestivalSimulation.DustStorm(state);float boost=DoseExposure(state,localPlayerId);
+            bool night=IsNight(state),storm=FestivalWorld.ShowsFestival(state.Phase)&&FestivalSimulation.DustStorm(state),frozen=state.Phase==FestivalSimulation.MinigamePhase;float boost=DoseExposure(state,localPlayerId);
             var trip=FestivalTrip.For(state,localPlayerId,false,0);
-            if(night==this.night&&storm==this.storm&&boost==this.boost&&trip.Saturation==saturation&&trip.Brightness==brightness)return;
-            this.night=night;this.storm=storm;this.boost=boost;saturation=trip.Saturation;brightness=trip.Brightness;
+            if(night==this.night&&storm==this.storm&&frozen==this.frozen&&boost==this.boost&&trip.Saturation==saturation&&trip.Brightness==brightness)return;
+            this.night=night;this.storm=storm;this.frozen=frozen;this.boost=boost;saturation=trip.Saturation;brightness=trip.Brightness;
             float share=night?NightSkyShare:1;
             RenderSettings.ambientSkyColor=Dim(daySky,share);RenderSettings.ambientEquatorColor=Dim(dayEquator,share);
             RenderSettings.ambientGroundColor=Dim(dayGround,share);RenderSettings.fogColor=Dim(storm?StormDust:dayFog,share);
             RenderSettings.fogStartDistance=storm?StormFogStart:dayFogStart;RenderSettings.fogEndDistance=storm?StormFogEnd:dayFogEnd;
             sun.intensity=daySun*share;
             if(sky!=null)sky.SetFloat("_Exposure",daySkyExposure*share);
-            grade.postExposure.Override(dayExposure+boost+brightness);grade.saturation.Override(daySaturation+boost*SaturationPerExposure+saturation);
+            grade.postExposure.Override(dayExposure+boost+brightness);grade.saturation.Override(daySaturation+boost*SaturationPerExposure+saturation+(frozen?FreezeSaturation:0));
             foreach(var light in neon)light.enabled=night;
         }
         private static Color Dim(Color color,float share)=>new Color(color.r*share,color.g*share,color.b*share,color.a);

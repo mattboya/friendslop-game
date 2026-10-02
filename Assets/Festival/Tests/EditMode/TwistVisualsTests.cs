@@ -83,6 +83,31 @@ namespace Festival.Tests
             Assert.That(Quaternion.Angle(before,late.localRotation),Is.LessThan(1f),"and eases onto the next snapshot rather than jumping to it");
         }
 
+        // MINI-1: a minigame holds the festival as a freeze-frame. The rules' clock runs on through the game, but the wheel stands still
+        // all game, frame after frame, and once it ends turns on from where it stopped rather than jumping to where the rules' clock got
+        // to. A rider boarding after a 10 s game (half a turn) takes the gondola hanging at the platform as the wheel is drawn, not the
+        // one at the top.
+        [Test]public void TheWheelStandsStillThroughAMinigameAndTurnsOnFromThere()
+        {
+            var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var round=Round(Festivals.PoloFestival);var rotor=Rotor(grounds);
+            const float Frame=1/60f;
+            // A frame on the host: the rules step on, and the game's own clock with them while one runs (MinigameTick).
+            void Step(){round.SimulationSeconds+=Frame;if(round.Phase==FestivalSimulation.MinigamePhase)round.Booth.Seconds+=Frame;twists.Apply(round,Frame);}
+            round.SimulationSeconds=7;twists.Apply(round,Frame);for(int f=0;f<60;f++)Step();
+            round.Phase=FestivalSimulation.MinigamePhase;round.Booth=new MinigameState{Kind=FestivalSimulation.StubGame,Spot=0};
+            var stopped=rotor.localRotation;float drift=0;
+            for(int f=0;f<600;f++){Step();drift=Mathf.Max(drift,Quaternion.Angle(stopped,rotor.localRotation));}
+            Assert.That(drift,Is.LessThan(.01f),"the wheel holds still through a 10 s game, though the rules' clock runs on");
+            round.Phase="Playing";var before=rotor.localRotation;Step();
+            Assert.That(Quaternion.Angle(before,rotor.localRotation),Is.LessThan(1f),"as play resumes it turns on from where it stopped, with no jump");
+            for(int f=1;f<60;f++)Step();
+            Assert.That(Quaternion.Angle(stopped,rotor.localRotation),Is.EqualTo(18).Within(.5f),"a second of play turns it a second's worth, 18°");
+            var rider=new PlayerState{Id="rider",VisualWheelSince=round.SimulationSeconds};round.Players.Add(rider);
+            var seat=FestivalTwistVisuals.Seat(round,rider,twists.WheelClock);
+            Assert.That(seat.y,Is.LessThan(2.5f),"a rider boarding after the game sits in the gondola down at the platform, at "+seat);
+            Assert.That(Vector2.Distance(Flat(seat),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThanOrEqualTo(Festivals.WheelReach),"beside it");
+        }
+
         // POLO-5: boarding seats the rider in the gondola nearest the platform, and Seat keeps them in it all the way round: the eye
         // in its open cabin under the roof, more than 10 m up at the top, and back by the platform when the turn comes round. A
         // head's room round the eye stays clear of the rotor model and of the gondola itself. The rotor's rims, spokes, hangers, hub

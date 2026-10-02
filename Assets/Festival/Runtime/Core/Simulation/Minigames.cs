@@ -36,6 +36,13 @@ namespace Festival.Core
         /// <summary>Where this level's booth stands, or null: none (camp, an older snapshot) or spent. It reads only public state,
         /// so the HUD and the world show it from any client's view.</summary>
         public static WorldPoint BoothAt(RoundState s)=>!s.Booth.Spent&&s.Booth.Spot>=0&&s.Booth.Spot<Festivals.BoothSpots.Length?Festivals.BoothSpots[s.Booth.Spot]:null;
+        /// <summary>The world's clock: the simulation clock with this level's game taken out, so it stands still while one runs and
+        /// runs on from there after it. What a client draws on the simulation clock (the Ferris wheel) runs on this, so the
+        /// festival holds as a freeze-frame and never jumps once play resumes. at: a time on the simulation clock, read on it.</summary>
+        // The game's own clock is the pause's length (MinigameTick), and the level has one booth, so it is all the level has paused.
+        // A time stamped before the game moves on by the pause only as play resumes (ShiftClock), so until then it reads as it is.
+        public static double WorldSeconds(RoundState s)=>s.SimulationSeconds-s.Booth.Seconds;
+        public static double WorldSeconds(RoundState s,double at)=>s.Phase==MinigamePhase?at:at-s.Booth.Seconds;
 
         // As the crew leaves camp, after the spinners: the booth's game out of the weekend's bag (refilled once empty) and its
         // spot, from their own stream, warmed up with one draw as GiggleTanks.cs does.

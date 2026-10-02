@@ -28,7 +28,7 @@ public static class MinigameTests
         foreach(var test in new Action[]{EveryLevelPlacesOneBoothOnASeededSpot,BoothGamesComeOutOfAWeekendBag,TheBoothSpotsKeepClearOfEveryRoute,
             TheCountdownNeedsEveryLivingPlayerInTheRing,NobodyDownedOrBusyMayStartIt,TheClockStopsForEverything,AHandoffKeepsItsSecondsThroughAMinuteLongGame,
             EveryClockDeadlineMovesOnByThePause,TheGameEndsAtNinetySecondsAndItsResultShowsForFour,ALossNeverLeavesUnderFifteenSeconds,ThePlayedBoothIsSpent,
-            SnapshotsKeepTheBoothAndOlderOnesHaveNone})
+            SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" minigame test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -314,5 +314,27 @@ public static class MinigameTests
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));
         Check(old.State.Booth!=null&&old.State.Booth.Spot==-1&&FestivalSimulation.BoothAt(old.State)==null&&old.State.MinigameBag!=null,"a snapshot from before booths restores with none");
         foreach(var spot in spots){foreach(var q in old.State.Players){q.X=spot.X;q.Z=spot.Z;}Check(!StartsWithin(old,4),"so nothing starts at ("+spot.X+", "+spot.Z+")");}
+    }
+
+    // The world a client draws on the simulation clock (the Ferris wheel) runs on WorldSeconds: the simulation clock until a game,
+    // standing still while one runs, then running on from where it stopped. A time stamped on the simulation clock reads the same
+    // on it before the game, during it (not yet moved on) and after it (moved on by the pause); one stamped later reads as far on.
+    static void TheWorldsClockStandsStillThroughAGame()
+    {
+        var s=Play(121,2);s.Tick(2);var p=s.Player("p0");p.SprintUntil=s.State.SimulationSeconds+4;
+        double sprint=FestivalSimulation.WorldSeconds(s.State,p.SprintUntil);
+        Check(Same(FestivalSimulation.WorldSeconds(s.State),s.State.SimulationSeconds)&&Same(sprint,s.State.SimulationSeconds+4),"before a game it is the simulation clock");
+        Ring(s,"p0","p1");Check(StartsWithin(s,3.5),"setup: the game starts");
+        double stopped=FestivalSimulation.WorldSeconds(s.State);
+        s.Tick(7);
+        Check(Same(FestivalSimulation.WorldSeconds(s.State),stopped),"it stands still while the game runs, moved "+(FestivalSimulation.WorldSeconds(s.State)-stopped));
+        Check(Same(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil),sprint),"a time stamped before the game reads the same during it, got "+(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil)-sprint)+" off");
+        Check(Act(s,"p0",FestivalSimulation.MinigameKind).Accepted&&ResumesWithin(s,FestivalSimulation.MinigameBannerSeconds+.5),"setup: the game ends and play resumes");
+        Check(Same(FestivalSimulation.WorldSeconds(s.State),stopped),"play resumes on it where the game stopped it, "+(FestivalSimulation.WorldSeconds(s.State)-stopped)+" off");
+        Check(Same(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil),sprint),"a time stamped before the game, moved on by the pause, reads the same after it, got "+(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil)-sprint)+" off");
+        s.Tick(2);
+        Check(Same(FestivalSimulation.WorldSeconds(s.State),stopped+2),"then it runs on with play");
+        p.SprintUntil=s.State.SimulationSeconds+4;
+        Check(Same(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil),FestivalSimulation.WorldSeconds(s.State)+4),"a time stamped after the game reads as far on as it is");
     }
 }

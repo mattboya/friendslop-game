@@ -132,6 +132,7 @@ namespace Festival.Network
             gameObject.AddComponent<FestivalCreatures>();
             gameObject.AddComponent<FestivalTrip>();
             gameObject.AddComponent<FestivalSpinner>();
+            gameObject.AddComponent<FestivalMinigameView>();
         }
         // NGO registers its message types after scene Awake and before Start.
         private void Start()
@@ -595,7 +596,8 @@ namespace Festival.Network
                 if(p.VisualPose=="Dance"&&p.VisualDanceStepSequence>previousStep&&actors[p.Id].TryGetComponent<FestivalCharacter>(out var dancer))dancer.PulseDanceStep(p.VisualDanceStepDirection);
                 displayedDanceSteps[p.Id]=p.VisualDanceStepSequence;
             }
-            if(!spirit && (State.Phase=="Playing"||State.Phase=="Results"))
+            // Festivalgoers, lost friends, drops and bodies while the festival shows: MINI-1's freeze-frame too, each where they stood.
+            if(!spirit && FestivalWorld.ShowsFestival(State.Phase))
             {
                 foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,NpcPose(n),n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false,
                     filming:n.Twist==FestivalSimulation.Influencer,recording:local.VisualFilmedBy.Contains(n.Id));seen.Add(n.Id);}

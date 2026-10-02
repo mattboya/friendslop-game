@@ -727,7 +727,8 @@ namespace Festival.Presentation
             DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","phase","space="+(festival?"festival":"campsite")+" camp_navigation="+CampNavigationReady+" festival_navigation="+NavigationReady);
 #endif
         }
-        public static bool ShowsFestival(string phase)=>phase=="Playing"||phase=="Results";
+        // MINI-1: a minigame holds the festival on screen as a freeze-frame.
+        public static bool ShowsFestival(string phase)=>phase=="Playing"||phase==FestivalSimulation.MinigamePhase||phase=="Results";
         // LIGHT-1: night levels and the local player's dose, straight from the round state. LIGHT-2: the day sky's clouds, kept
         // over the local view, and TRIP-4's clue cloud as the local player sees it.
         public void SetLighting(RoundState state,string localPlayerId)

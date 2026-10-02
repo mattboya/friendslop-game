@@ -161,6 +161,24 @@ namespace Festival.Tests
             Assert.That(grade.saturation.value,Is.EqualTo(saturation).Within(1e-5f),"camp saturation");
         }
 
+        // MINI-1: while a minigame runs the festival holds as a slightly desaturated freeze-frame of its own level: a night stays lit for
+        // night, a dose still lifts the view, and some of the colour drains away, which play gives back.
+        [Test]public void AMinigameIsASlightlyDesaturatedFreezeFrameOfItsLevel()
+        {
+            Assert.That(FestivalNightLighting.IsNight(Round(1,FestivalSimulation.MinigamePhase)),Is.True,"a night stays lit for night while a game runs");
+            Assert.That(FestivalNightLighting.DoseExposure(Round(1,FestivalSimulation.MinigamePhase,2),"me"),Is.EqualTo(.3f).Within(1e-5f),"and a dose still lifts the view");
+            Assert.That(FestivalNightLighting.FreezeSaturation,Is.InRange(-40f,-15f),"slightly: less vivid, never grey");
+            root=new GameObject("Minigame world");var world=root.AddComponent<FestivalWorld>();world.Build();
+            Assert.That(root.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True,"world colour grade");
+            world.SetLighting(Round(1,"Playing",2),"me");
+            float exposure=grade.postExposure.value,vivid=grade.saturation.value;
+            world.SetLighting(Round(1,FestivalSimulation.MinigamePhase,2),"me");
+            Assert.That(grade.saturation.value,Is.EqualTo(vivid+FestivalNightLighting.FreezeSaturation).Within(1e-4f),"the game drains some colour from the frame");
+            Assert.That(grade.postExposure.value,Is.EqualTo(exposure).Within(1e-5f),"and keeps its light");
+            world.SetLighting(Round(1,"Playing",2),"me");
+            Assert.That(grade.saturation.value,Is.EqualTo(vivid).Within(1e-4f),"play gives the colour back");
+        }
+
         // A round at the given level and phase. "me" carries the spinner's dose when it is above 0; a friend is always on dose 4.
         private static RoundState Round(int level,string phase,int dose=0)
         {

@@ -70,7 +70,8 @@ namespace Festival.Presentation
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
         private float clock;
         private double carClock,wheelClock;
-        /// <summary>POLO-5: the rules' clock (SimulationSeconds) as this wheel is drawn at it, for Seat.</summary>
+        /// <summary>POLO-5: the world's clock (FestivalSimulation.WorldSeconds: the rules' clock, stopped through a minigame, MINI-1)
+        /// as this wheel is drawn at it, for Seat.</summary>
         public double WheelClock=>wheelClock;
 
         public FestivalTwistVisuals(Transform festival)
@@ -87,10 +88,13 @@ namespace Festival.Presentation
         {
             polo.gameObject.SetActive(state.FestivalIndex==Festivals.PoloFestival);
             playa.gameObject.SetActive(state.FestivalIndex==Festivals.PlayaFestival);
+            // MINI-1: a minigame holds the festival as a freeze-frame. Nothing here runs on with the frame while one does, and the wheel
+            // turns on the world's clock, which stands still through the game and runs on from there after it, as the rules' clock doesn't.
+            if(state.Phase==FestivalSimulation.MinigamePhase)deltaTime=0;
             clock+=deltaTime;
             var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
-            double behind=state.SimulationSeconds-(wheelClock+deltaTime);
-            wheelClock=System.Math.Abs(behind)>WheelSnap?state.SimulationSeconds:wheelClock+deltaTime+behind*(1-System.Math.Exp(-WheelPull*deltaTime));Turn();
+            double now=FestivalSimulation.WorldSeconds(state),behind=now-(wheelClock+deltaTime);
+            wheelClock=System.Math.Abs(behind)>WheelSnap?now:wheelClock+deltaTime+behind*(1-System.Math.Exp(-WheelPull*deltaTime));Turn();
             double lag=state.ElapsedSeconds-carClock;
             carClock=System.Math.Abs(lag)*Festivals.ArtCarSpeed>SnapDistance?state.ElapsedSeconds:carClock+lag*(1-System.Math.Exp(-Glide*deltaTime));
             for(int k=0;k<cars.Length;k++)
@@ -157,7 +161,8 @@ namespace Festival.Presentation
         /// exactly one turn, so it brings them back round to where they boarded. Everyone in state on the wheel is seated in the order
         /// they boarded (their VisualWheelSince, then id, so every client seats them alike), each in the gondola that hung nearest the
         /// platform then; once its Seats are taken, in the next one round to come down to it, the one that has just gone up, the one
-        /// after next, and so on. Those sharing a gondola sit side by side across it.</summary>
+        /// after next, and so on. Those sharing a gondola sit side by side across it. MINI-1: now is on the world's clock (WheelClock), and
+        /// so is the platform each boarded at.</summary>
         public static Vector3 Seat(RoundState state,PlayerState rider,double now)
         {
             var aboard=state.Players.FindAll(p=>p.Id!=rider.Id&&p.VisualWheelSince>=0);aboard.Add(rider);
@@ -165,7 +170,7 @@ namespace Festival.Presentation
             var seated=new int[Gondolas];int gondola=0,place=0;
             foreach(var p in aboard)
             {
-                int boarded=Boarded(p.VisualWheelSince),k=boarded;
+                int boarded=Boarded(FestivalSimulation.WorldSeconds(state,p.VisualWheelSince)),k=boarded;
                 for(int j=1;seated[k]>=Seats&&j<Gondolas;j++)k=(boarded+(j%2==1?(j+1)/2:Gondolas-j/2))%Gondolas;
                 if(p.Id==rider.Id){gondola=k;place=seated[k];}
                 seated[k]++;
