@@ -948,23 +948,15 @@ namespace Festival.Presentation
             if(effectWash==null||effectWash.color.a<=0||!session.LocalPlayer.VisualWideEyes){Fail("solo intoxication first-person and face cues: wash="+(effectWash==null?"missing":effectWash.color.a.ToString("F3"))+" eyes="+session.LocalPlayer.VisualWideEyes);yield break;}
             player.X=0;player.Z=0;
             var npc=new NpcState{Id="solo_wook",X=0,Z=1,Yaw=180,CanTalk=true};sim.State.Npcs.Add(npc);
-            session.Command("Talk",npc.Id);
-            if(string.IsNullOrEmpty(player.NpcSpeech)||player.NpcSpeechUntil<=sim.State.SimulationSeconds){Fail("solo NPC short chat");yield break;}
-            yield return new WaitForSeconds(.2f);
-            string chatCapture=Path.Combine(soloCaptureDir,"solo-npc-chat.png");
-            if(File.Exists(chatCapture))File.Delete(chatCapture);
-            ScreenCapture.CaptureScreenshot(chatCapture);yield return new WaitForSeconds(.65f);
-            if(!File.Exists(chatCapture)){Fail("solo NPC chat render");yield break;}
+            // DIALOG-3: chatting is a talk on the chat window (what F starts): the smoke checks and captures the card on their first
+            // line, then replies smoothly each turn, dancing first if they ask, so the talk scores well.
             session.Command("Conversation",npc.Id);
             var talk=sim.Interaction(player.InteractionId);
-            if(talk==null||talk.Kind!="Conversation"||string.IsNullOrEmpty(talk.DialogueText)){Fail("solo NPC conversation");yield break;}
-            foreach(var note in RhythmChart.For(talk).Notes)
-            {
-                while(sim.State.SimulationSeconds-talk.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
-                session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
-            }
+            if(talk==null||talk.Kind!="Conversation"){Fail("solo NPC conversation: "+session.Message);yield break;}
+            yield return Talk(session,talk.Id,deadline,Path.Combine(soloCaptureDir,"solo-npc-chat.png"));
+            if(failed!=null){Fail("solo "+failed);yield break;}
             while(player.InteractionId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(player.LastRhythmScore<.6){Fail("solo NPC conversation result");yield break;}
+            if(player.LastRhythmScore<.6){Fail("solo NPC conversation result: "+player.LastRhythmScore.ToString("F2"));yield break;}
             player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});session.Command("Use",item:"confetti");
             if(npc.DistractedUntil<=sim.State.SimulationSeconds){Fail("solo wook distraction");yield break;}
             session.Command("Dance",npc.Id);
@@ -1026,8 +1018,8 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, Day 1 quota, Night 1 clue trail and rescue, camp reviews, Day 2 shopping");
             Application.Quit(0);
         }
-        // Starts an interaction with a command, plays its rhythm chart perfectly when it has one, and waits for it to end.
-        // Sets finished to it, or leaves it null when the command was refused.
+        // Starts an interaction with a command, plays its rhythm chart perfectly when it has one, talks a talk through smoothly
+        // (DIALOG-3: a sale or a buy), and waits for it to end. Sets finished to it, or leaves it null when the command was refused.
         IEnumerator Interact(FestivalSession session,string command,string target,string item,float deadline)
         {
             finished=null;string kind=command=="StartSale"?"Sale":command=="StartBuy"?"Buy":command;
@@ -1040,7 +1032,8 @@ namespace Festival.Presentation
                 if(running==null)yield return null;
             }
             if(running==null)yield break;
-            if(FestivalInput.IsRhythmKind(kind))
+            if(FestivalSimulation.Talks(kind))yield return Talk(session,running.Id,deadline);
+            else if(FestivalInput.IsRhythmKind(kind))
                 foreach(var note in RhythmChart.For(running).Notes)
                 {
                     while(session.EstimatedSimulationSeconds-running.StartSeconds<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
@@ -1049,6 +1042,50 @@ namespace Festival.Presentation
             while(session.LocalPlayer.InteractionId==running.Id&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer.InteractionId!=running.Id)finished=running;
         }
+        // DIALOG-3: talk `id` played as a player who reads people well plays it: the dance first, perfectly, if they ask for one,
+        // then the smooth reply (SmoothReply) to each turn as it shows. With `capture`, the chat window must show the first turn (the
+        // talk's title, their line, three replies), and is screenshotted there before the reply. Sets failed when it doesn't.
+        IEnumerator Talk(FestivalSession session,string id,float deadline,string capture=null)
+        {
+            int replied=-1;
+            while(Time.realtimeSinceStartup<deadline)
+            {
+                // A client's view is a new snapshot each time, so the talk is looked up afresh every frame.
+                var talk=session.State.Interactions.Find(i=>i.Id==id&&i.Status=="Active");
+                if(talk==null)yield break;
+                if(FestivalSimulation.TrustDancing(talk))
+                {
+                    double start=talk.StartSeconds;
+                    foreach(var note in RhythmChart.For(talk).Notes)
+                    {
+                        while(session.EstimatedSimulationSeconds-start<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
+                        session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
+                    }
+                    while(session.State.Interactions.Exists(i=>i.Id==id&&i.Status=="Active"&&i.Turns.Count==0)&&Time.realtimeSinceStartup<deadline)yield return null;
+                    continue;
+                }
+                int turn=talk.Turns.Count-1;
+                if(turn>replied)
+                {
+                    if(capture!=null)
+                    {
+                        var window=transform.Find("Festival HUD/Chat window")?.GetComponent<FestivalChatWindow>();
+                        float shown=Time.realtimeSinceStartup+1;
+                        while((window==null||!window.Open||window.Replies<3)&&Time.realtimeSinceStartup<shown)yield return null;
+                        if(window==null||!window.Open||window.Replies!=3||window.Header!=FestivalChatWindow.TalkHeader||window.ReplyLabel(0)!=talk.Turns[turn].Replies[0])
+                        {failed="conversation card: "+(window==null?"missing":window.Header+", "+window.Replies+" replies");yield break;}
+                        if(File.Exists(capture))File.Delete(capture);
+                        ScreenCapture.CaptureScreenshot(capture);yield return new WaitForSeconds(.65f);
+                        if(!File.Exists(capture)){failed="conversation card render";yield break;}
+                        capture=null;
+                    }
+                    replied=turn;session.Command("Reply",amount:SmoothReply(talk.Turns[turn]),direction:turn);
+                }
+                yield return null;
+            }
+        }
+        /// <summary>DIALOG-3: the reply the smokes pick on a talk's turn: the smooth one, as a player who reads the person well would.</summary>
+        public static int SmoothReply(ConversationTurn turn)=>Array.IndexOf(turn.Grades,ConversationLines.Smooth);
         // ECON-2: buys a unit of this kind from the festivalgoer the host stood at (x, z), dancing it perfectly, as a sale is.
         IEnumerator BuyStock(FestivalSession session,string kind,float x,float z,float deadline)
         {

@@ -24,7 +24,7 @@ namespace Festival.Tests
 
         // The solo run buys Fun Guys and a Tongue Stamp; the two-player run a Tongue Stamp each, from two sellers. Each pick sells:
         // a perfect buy, out of the cops' sight, hands over one unit of the kind asked for. DIALOG-3: perfect is a talk with the
-        // smooth reply every turn, after a perfect dance if the seller asks for one first.
+        // reply the smokes pick every turn (DevelopmentSmoke.SmoothReply), after a perfect dance if the seller asks for one first.
         [Test] public void TheSmokesBuyFromFestivalgoersWhoSell()
         {
             for(int seed=1;seed<=100;seed++)for(int crew=1;crew<=2;crew++)
@@ -45,7 +45,7 @@ namespace Festival.Tests
                     {
                         if(buy.Turns.Count==0){s.Tick(.1);continue;}
                         var turn=buy.Turns[buy.Turns.Count-1];
-                        Assert.That(s.Execute(player.Id,new GameCommand{Id="smokestock"+(sequence++),Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=buy.Turns.Count-1}).Accepted,Is.True,"seed "+seed+", crew "+crew+": a smooth reply");
+                        Assert.That(s.Execute(player.Id,new GameCommand{Id="smokestock"+(sequence++),Kind="Reply",Amount=DevelopmentSmoke.SmoothReply(turn),Direction=buy.Turns.Count-1}).Accepted,Is.True,"seed "+seed+", crew "+crew+": the smoke's reply");
                     }
                     Assert.That(player.Inventory.Exists(i=>i.ItemId==kind),Is.True,"seed "+seed+", crew "+crew+": the buy from "+seller.Id+" hands over "+kind);
                 }
