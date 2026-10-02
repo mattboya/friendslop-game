@@ -5,8 +5,8 @@ using System.Text.Json.Nodes;
 using Festival.Core;
 
 // PLAYA-1: Ember Playa (festival 1) has four twists, and Palm Mirage has none of them. Money reads as odd objects, a different
-// set for each player, over the same economy. Dust storms of 20-40 s blow on a seeded schedule and cut festivalgoers' sight
-// from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight. For the
+// set for each player, over the same economy. Dust storms of 20-40 s blow on a seeded schedule and cut everyone's sight, cops'
+// too (PLAYA-3), from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight. For the
 // last three minutes of Night 2 the effigy burns: the crowd gathers round it (a festivalgoer busy with someone first finishes
 // with them), and within 12 m of it every step is x.7 and suspicion of anyone there cools twice as fast.
 public static class PlayaTwistTests
@@ -21,7 +21,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutFestivalgoersSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmLosesARiderItCannotSee,
+            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmLosesARiderItCannotSee,
             TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -128,7 +128,9 @@ public static class PlayaTwistTests
         return ((wook.Observers.Find(o=>o.PlayerId=="p0")?.Suspicion??0)>0,cop.Evidence.Exists(e=>e.PlayerId=="p0"));
     }
 
-    static void StormsCutFestivalgoersSightTo5m()
+    // PLAYA-3: the storm blinds cops as well as festivalgoers. The cop stands a metre east of the festivalgoer, so it is
+    // sqrt(1+metres²) from p0: about 6.1 m at 6, about 4.9 m at 4.8.
+    static void StormsCutEveryonesSightTo5m()
     {
         double storm=MidStorm();
         Check(!FestivalSimulation.DustStorm(Sighting(1,1,6).State)&&FestivalSimulation.DustStorm(Sighting(1,storm,6).State),"setup: calm a second in, a storm at "+storm+" s");
@@ -136,10 +138,14 @@ public static class PlayaTwistTests
         Check(!Spotted(Sighting(1,1,12.1)).wook,"but not 12.1 m away");
         var dusty=Spotted(Sighting(1,storm,6));
         Check(!dusty.wook,"in a storm the festivalgoer loses a sprinter 6 m away");
-        Check(dusty.cop,"cops keep their eyes: the cop 6 m away still spots the stock");
+        Check(!dusty.cop,"and the cop about 6.1 m away loses sight of the stock too");
+        Check(Spotted(Sighting(1,storm,4.8)).cop,"a cop about 4.9 m away still spots the stock in a storm");
+        Check(Spotted(Sighting(1,1,6)).cop,"in calm air the cop about 6.1 m away spots it");
         Check(Spotted(Sighting(1,storm,4.9)).wook,"a sprinter 4.9 m away is still spotted in a storm");
         Check(!Spotted(Sighting(1,storm,5.1)).wook,"5.1 m away is not");
-        Check(Spotted(Sighting(0,storm,6)).wook,"Palm Mirage has no dust, so the same moment there is clear");
+        var mirage=Spotted(Sighting(0,storm,6));
+        Check(mirage.wook,"Palm Mirage has no dust, so the same moment there is clear");
+        Check(mirage.cop,"for its cops too");
     }
 
     static double Dist(WorldPoint a,WorldPoint b)=>Math.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Z-b.Z)*(a.Z-b.Z));

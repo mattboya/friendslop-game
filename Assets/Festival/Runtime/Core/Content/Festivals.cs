@@ -54,7 +54,8 @@ namespace Festival.Core
         // ponytail: every kind pluralises with an "s"; an irregular one would need its own plural.
         static readonly string[] OddObjects={"button","ramen packet","bottle cap","friendship bracelet","rubber duck","glitter sticker","kazoo","odd sock"};
         // Dust storms of StormMin-StormMaxSeconds blow through after calms of CalmMin-CalmMaxSeconds (the first calm opens the
-        // level), on a schedule seeded by the level's spin. Festivalgoers see SightRange, and only DustStormSightRange in a storm.
+        // level), on a schedule seeded by the level's spin. Festivalgoers and cops see SightRange, and only DustStormSightRange
+        // in a storm.
         public const int StormMinSeconds=20,StormMaxSeconds=40,CalmMinSeconds=60,CalmMaxSeconds=120;
         public const float SightRange=12,DustStormSightRange=5;
         // Two art cars crawl round their loops at ArtCarSpeed, one on the lawn each side of the main path, between the bunting and

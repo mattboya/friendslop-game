@@ -7,10 +7,10 @@ namespace Festival.Core
     /// Influencers film the crowd, and a player on camera puts the wooks around them on alert. VIP zones are roped off to anyone
     /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.
     /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.
-    /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers see only 5 m. Two
-    /// art cars crawl round slow loops, and whoever rides one rolls along with it, out of festivalgoers' sight. For the last three
-    /// minutes of Night 2 the effigy burns: the crowd gathers round it, and in the crush there every step is shorter and
-    /// suspicion cools faster.</summary>
+    /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers and cops
+    /// (PLAYA-3) see only 5 m. Two art cars crawl round slow loops, and whoever rides one rolls along with it, out of
+    /// festivalgoers' sight. For the last three minutes of Night 2 the effigy burns: the crowd gathers round it, and in the
+    /// crush there every step is shorter and suspicion cools faster.</summary>
     public sealed partial class FestivalSimulation
     {
         public const string Influencer="Influencer",VipGuard="VipGuard",VipWristband="vip_wristband",RideWheelKind="RideWheel",RideCarKind="RideCar";
@@ -136,8 +136,9 @@ namespace Festival.Core
             }
             return false;
         }
-        // Festivalgoers see SightRange, down to DustStormSightRange in a storm; cops keep their eyes.
-        double SightRange(NpcState n)=>n.Kind=="Wook"&&DustStorm(State)?Festivals.DustStormSightRange:Festivals.SightRange;
+        // Every sighting (Sees) reaches SightRange, down to DustStormSightRange in a storm. PLAYA-3: cops' too, not only
+        // festivalgoers'. A storm cuts new sightings only: a cop already holding evidence on you still chases you (PoliceTick).
+        double SightRange(NpcState n)=>DustStorm(State)?Festivals.DustStormSightRange:Festivals.SightRange;
         /// <summary>Which art car playerId is riding (0 to ArtCars-1), or -1. Reads a client's view too, since a view carries its
         /// own player's interactions; everyone else sees a rider's VisualPose "RideCar".</summary>
         public static int ArtCarOf(RoundState s,string playerId)=>Car(s.Interactions.Find(i=>i.PlayerId==playerId&&i.Kind==RideCarKind&&i.Status=="Active"));
