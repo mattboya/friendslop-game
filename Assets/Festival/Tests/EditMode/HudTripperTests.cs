@@ -93,14 +93,15 @@ namespace Festival.Tests
         [Test] public void TrustButVerifyShowsTheTripperOncePerLevel()
         {
             var s=Level(1);var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.TripperId="sam";Dose(s,"sam",2);
-            Assert.That(FestivalHudText.TrustLine(s,"sam"),Is.EqualTo("Trust, but verify."),"the tripper's one hint as the level starts");
-            Assert.That(FestivalHudText.TrustLine(s,"you"),Is.Empty,"the hint is the tripper's alone");
-            s.ElapsedSeconds=FestivalHudText.TrustSeconds-.1;
-            Assert.That(FestivalHudText.TrustLine(s,"sam"),Is.EqualTo("Trust, but verify."));
-            s.ElapsedSeconds=FestivalHudText.TrustSeconds;
-            Assert.That(FestivalHudText.TrustLine(s,"sam"),Is.Empty,"then it is gone for the rest of the level");
+            // HUD-7: the hint is folded into the tripper's job on the level briefing, which shows for the same window.
+            Assert.That(FestivalHudText.Briefing(s,"sam"),Does.Contain("Trust, but verify"),"the tripper's one hint as the level starts");
+            Assert.That(FestivalHudText.Briefing(s,"you"),Does.Not.Contain("Trust"),"the hint is the tripper's alone");
+            s.ElapsedSeconds=FestivalHudText.BriefingSeconds-.1;
+            Assert.That(FestivalHudText.Briefing(s,"sam"),Does.Contain("Trust, but verify"));
+            s.ElapsedSeconds=FestivalHudText.BriefingSeconds;
+            Assert.That(FestivalHudText.Briefing(s,"sam"),Does.Not.Contain("Trust"),"then it is gone for the rest of the level");
             s.Phase="Loading";s.ElapsedSeconds=0;
-            Assert.That(FestivalHudText.TrustLine(s,"sam"),Is.Empty,"it waits for play to start");
+            Assert.That(FestivalHudText.Briefing(s,"sam"),Does.Not.Contain("Trust"),"it waits for play to start");
             // Once means once: the objective card does not repeat it, by night or by day.
             s.Phase="Playing";s.ElapsedSeconds=30;
             Assert.That(FestivalHudText.ObjectiveTitle(s,sam)+" "+FestivalHudText.ObjectiveDetail(s,sam),Does.Not.Contain("Trust"),"night");

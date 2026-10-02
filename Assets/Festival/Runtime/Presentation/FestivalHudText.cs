@@ -309,11 +309,6 @@ namespace Festival.Presentation
             return text;
         }
 
-        /// <summary>How long the tripper's one hint stays up as each level starts.</summary>
-        public const double TrustSeconds=10;
-        /// <summary>The game's only hint that visions lie, "Trust, but verify.": the tripper's alone, once per level, as play starts.</summary>
-        public static string TrustLine(RoundState s,string localId)=>s.Phase=="Playing"&&s.TripperId==localId&&s.ElapsedSeconds<TrustSeconds?"Trust, but verify.":"";
-
         /// <summary>
         /// The festivalgoer F chats with right now (FestivalHud.ChatKey), among those within FestivalSimulation.ConfirmReach that
         /// FestivalSimulation.MayConfirm lets p chat-check: the tripper's festivalgoers they still have an unchecked vision about, or,

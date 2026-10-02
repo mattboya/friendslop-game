@@ -635,6 +635,87 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"How to Play:\n"+string.Join("\n",failures));
         }
 
+        // HUD-7: as each level opens, a card under the aim dot says what it asks, your job and how the crew loses
+        // (FestivalHudText.Briefing; the tripper's "Trust, but verify." is folded into their job), each line drawn whole at 1080p.
+        // It goes after BriefingSeconds of level clock, or sooner at any key that doesn't move you, for the rest of that level;
+        // walking and running keep it up. The next level opens on its own. Hosts a real round of two through StartLevel; the keys
+        // go through the HUD on a virtual keyboard.
+        [UnityTest]public IEnumerator EachLevelOpensOnABriefingUntilTenSecondsOrAKey()
+        {
+            UseAVirtualKeyboard("HUD briefing keyboard");
+            var world=new GameObject("HUD briefing world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD briefing");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            Text Find(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
+            string Read(string name)=>Find(name)?.text??"(hidden)";
+            void Expect(string where,string label,string expected){string shown=Read(label);if(shown!=expected)failures.Add(where+": "+label+" reads \""+shown.Replace("\n"," | ")+"\", expected \""+expected.Replace("\n"," | ")+"\"");}
+            // The card reads the briefing this player's view holds now, a label a line, each drawn whole.
+            void Briefs(string where)
+            {
+                var lines=FestivalHudText.Briefing(session.State,session.LocalPlayerId).Split('\n');
+                Assert.That(lines.Length,Is.EqualTo(3),"setup, "+where+": a briefing to show, after:\n"+string.Join("\n",failures));
+                Expect(where,"Briefing goal",lines[0]);Expect(where,"Briefing job",lines[1]);Expect(where,"Briefing stakes",lines[2]);
+                Canvas.ForceUpdateCanvases();
+                foreach(var name in new[]{"Briefing goal","Briefing job","Briefing stakes"})
+                {
+                    var text=Find(name);if(text==null)continue;
+                    int shown=text.cachedTextGenerator.characterCountVisible;
+                    if(shown<text.text.Length)failures.Add(where+": "+name+" box "+text.rectTransform.rect.size+" cuts \""+text.text+"\" after \""+text.text.Substring(0,shown)+"\"");
+                }
+            }
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("briefing_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                // Day 1 opens, and you trip: your job carries the one hint.
+                sim.State.TripperId=player.Id;sim.State.ElapsedSeconds=1;
+                yield return new WaitForSeconds(.4f);
+                Briefs("day 1, you trip");
+                if(!Read("Briefing job").Contains("Trust, but verify"))failures.Add("day 1, you trip: your job has no \"Trust, but verify\"");
+                // Sam trips: your job is to stick with them.
+                sim.State.TripperId=mate.Id;
+                yield return new WaitForSeconds(.4f);
+                Briefs("day 1, Sam trips");
+                // Ten seconds of level clock in, it is gone.
+                sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds;
+                yield return new WaitForSeconds(.4f);
+                Expect("ten seconds in","Briefing goal","(hidden)");
+                // Back in the window: walking and running keep it up, and any other key puts it away for the rest of the level.
+                sim.State.ElapsedSeconds=2;
+                yield return new WaitForSeconds(.4f);
+                Briefs("two seconds in");
+                yield return Tap(Key.W);yield return Tap(Key.LeftShift);
+                if(Find("Briefing goal")==null)failures.Add("walking or running put the briefing away");
+                yield return Tap(Key.Space);
+                Expect("Space pressed","Briefing goal","(hidden)");
+                sim.State.ElapsedSeconds=3;
+                yield return new WaitForSeconds(.4f);
+                Expect("Space pressed, still in the window","Briefing goal","(hidden)");
+                // The next level, Night 1, opens on its own briefing.
+                sim.State.RoundId="hud_briefing_night";sim.State.LevelIndex=1;sim.State.ElapsedSeconds=1;
+                yield return new WaitForSeconds(.4f);
+                Briefs("night 1");
+                if(!Read("Briefing goal").StartsWith("NIGHT 1"))failures.Add("night 1: the goal reads \""+Read("Briefing goal")+"\"");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"The level briefing:\n"+string.Join("\n",failures));
+        }
+
         // A virtual keyboard whose keys reach the HUD's own input handling, even unfocused in the editor; RestoreTheKeyboard removes it.
         private void UseAVirtualKeyboard(string name)
         {

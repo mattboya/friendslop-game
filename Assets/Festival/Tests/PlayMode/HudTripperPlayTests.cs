@@ -113,20 +113,21 @@ namespace Festival.Tests
                     sim.State.TripperId=who.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=who.Id,Dose=dose,Substance=substance});
                 }
 
-                // You trip on two doses as Day 1 starts: the crew reads it, and you get the one hint for a while.
+                // You trip on two doses as Day 1 starts: the crew reads it, and you get the one hint for a while, folded into your job on
+                // the level briefing (HUD-7).
                 Trip(player,2);sim.State.ElapsedSeconds=0;mate.X=30;mate.Z=0;player.X=0;player.Z=0;
                 yield return new WaitForSeconds(.6f);
                 Expect("day 1, you trip","Tripping","YOU TRIP  •  2 DOSES");
-                Expect("day 1, you trip, level start","Trust line","Trust, but verify.");
-                Fits("day 1, you trip","Tripping");Fits("day 1, you trip, level start","Trust line");
+                Expect("day 1, you trip, level start","Briefing job","You're tripping: only you can see who's buying. Trust, but verify: some visions lie, so check one with F first.");
+                Fits("day 1, you trip","Tripping");Fits("day 1, you trip, level start","Briefing job");
                 sim.State.ElapsedSeconds=30;
                 yield return new WaitForSeconds(.6f);
-                Expect("day 1, you trip, 30 s in","Trust line","(hidden)");
+                Expect("day 1, you trip, 30 s in","Briefing job","(hidden)");
                 // Sam trips on three Fun Guys: you read who, on what, and the hint is not yours.
                 Trip(mate,3,"mushrooms");sim.State.ElapsedSeconds=0;
                 yield return new WaitForSeconds(.6f);
                 Expect("day 1, Sam trips","Tripping","SAM TRIPS  •  3 DOSES  •  FUN GUYS");
-                Expect("day 1, Sam trips, level start","Trust line","(hidden)");
+                Expect("day 1, Sam trips, level start","Briefing job","Sam is tripping and can see who's buying. Stay close and act on what they call out.");
 
                 // Beside a festivalgoer you have a vision about: E checks by dancing, F by chatting.
                 Trip(player,2);sim.State.ElapsedSeconds=30;

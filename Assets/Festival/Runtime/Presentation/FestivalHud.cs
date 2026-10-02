@@ -38,7 +38,7 @@ namespace Festival.Presentation
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping,trustLine;
+        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping;
         private Text musicValue,lookValue,motionValue,contrastValue,viewValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -136,6 +136,12 @@ namespace Festival.Presentation
         private GameObject howToPlayPanel;
         private readonly Text[] howToPlayTitles=new Text[6],howToPlayTexts=new Text[6];
         private bool howToPlayOpen;
+        // HUD-7: the level briefing (FestivalHudText.Briefing), its fade, its three lines, the briefing they were laid out from, and the
+        // round a key put it away for.
+        private GameObject briefingPanel;
+        private CanvasGroup briefingFade;
+        private Text briefingGoal,briefingJob,briefingStakes;
+        private string shownBriefing="",briefingSkipped="";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -300,9 +306,16 @@ namespace Festival.Presentation
             gearToastText=Label(gearToast.transform,"Gear switch",20,TextAnchor.MiddleCenter);gearToastText.color=new Color(1,.79f,.53f);Fill(gearToastText.rectTransform,6);ShrinkToFit(gearToastText,14);gearToast.SetActive(false);
             reticle=Panel(root.transform,"Aim dot",Paper,new Vector2(.499f,.498f),new Vector2(.501f,.502f));
             reticle.GetComponent<Image>().raycastTarget=false;
-            // The tripper's one hint, quiet and brief, just under the aim dot as each level starts.
-            trustLine=Label(root.transform,"Trust line",20,TextAnchor.MiddleCenter);trustLine.color=MutedPaper;Place(trustLine.rectTransform,.30f,.405f,.70f,.455f);
-            trustLine.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.8f);trustLine.gameObject.SetActive(false);
+            // HUD-7: the level briefing hangs from just under the aim dot, where the tripper's one hint used to sit, for the first
+            // BriefingSeconds of each level: what it asks, your job (the tripper's carries "Trust, but verify.") and how the crew loses.
+            // Built before the results banner, the map and the menus so they draw over it; it catches no clicks.
+            briefingPanel=Card(root.transform,"Level briefing",new Vector2(.25f,.285f),new Vector2(.75f,.455f),true);briefingPanel.GetComponent<Image>().raycastTarget=false;
+            Accent(briefingPanel.transform,Orange);
+            briefingFade=briefingPanel.AddComponent<CanvasGroup>();briefingFade.blocksRaycasts=false;
+            briefingGoal=Label(briefingPanel.transform,"Briefing goal",24,TextAnchor.MiddleCenter);briefingGoal.fontStyle=FontStyle.Normal;briefingGoal.color=Orange;Place(briefingGoal.rectTransform,.04f,.68f,.96f,.93f);ShrinkToFit(briefingGoal,16);
+            briefingJob=Label(briefingPanel.transform,"Briefing job",19,TextAnchor.MiddleCenter);Place(briefingJob.rectTransform,.04f,.29f,.96f,.68f);ShrinkToFit(briefingJob,14);
+            briefingStakes=Label(briefingPanel.transform,"Briefing stakes",17,TextAnchor.MiddleCenter);briefingStakes.color=MutedPaper;Place(briefingStakes.rectTransform,.04f,.06f,.96f,.29f);ShrinkToFit(briefingStakes,12);
+            briefingPanel.SetActive(false);
             // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
             // built before the map and the menus so they draw over it, and it catches no clicks.
             resultsPanel=Card(root.transform,"Results banner",new Vector2(.25f,.37f),new Vector2(.75f,.63f),true);resultsPanel.GetComponent<Image>().raycastTarget=false;
@@ -596,7 +609,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -612,7 +625,6 @@ namespace Festival.Presentation
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             UpdateText(state,player);
             trippingPanel.SetActive(!showMenu&&tripping.text!="");
-            trustLine.gameObject.SetActive(!showMenu&&trustLine.text!="");
             UpdateGearLayout(handGear.Count>0);
             UpdateActions(state,player);
             if(checkoutItem!="" && (Catalog.FindItem(checkoutItem)==null || (state.Phase=="Shopping"?(player.HeldOfferId!=checkoutItem||!Near(player,0,7)):(state.Phase!="Playing"||FocusedOffer(state,player)!=checkoutItem))))checkoutItem="";
@@ -634,11 +646,12 @@ namespace Festival.Presentation
             if(mapPanel.activeSelf){rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();}
             if(rhythmPanel.activeSelf&&!showMenu&&!mapPanel.activeSelf)
             {
-                objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);
+                objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);
             }
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
+            UpdateBriefing(state,player,!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
             if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
@@ -715,7 +728,6 @@ namespace Festival.Presentation
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             UpdateTrippingLayout(tripping.text==""?0:tripping.text.Split('\n').Length);
-            trustLine.text=FestivalHudText.TrustLine(state,player.Id);
             vitals.text=FestivalHudText.Vitals(state,player);
             int equippedIndex=handGear.FindIndex(item=>item.ItemId==player.EquippedItemId);
             if(equippedIndex>=0)selectedSlot=equippedIndex;
@@ -747,6 +759,25 @@ namespace Festival.Presentation
             if(!sundownPanel.activeSelf)return;
             sundownText.text=FestivalHudText.SundownWarning(state,player);sundownShown+=Time.unscaledDeltaTime;
         }
+
+        // HUD-7: the level briefing for its window, unless a key put it away this level; only while nothing covers it (clear: no
+        // menu, map or dance). Laid out again only when its text changes.
+        private void UpdateBriefing(RoundState state,PlayerState player,bool clear)
+        {
+            string briefing=FestivalHudText.Briefing(state,player.Id);
+            if(briefing!=shownBriefing){shownBriefing=briefing;var lines=briefing.Split('\n');briefingGoal.text=lines[0];briefingJob.text=lines.Length>1?lines[1]:"";briefingStakes.text=lines.Length>2?lines[2]:"";}
+            if(briefingPanel.activeSelf&&SkipsBriefing())briefingSkipped=state.RoundId;
+            briefingPanel.SetActive(clear&&briefing!=""&&briefingSkipped!=state.RoundId);
+            briefingFade.alpha=FestivalHudText.BriefingAlpha(state.ElapsedSeconds,session.Profile.Data.ReducedMotion);
+        }
+        // HUD-7: any key that doesn't move you (Move, Sprint) puts the briefing away; walking off keeps it up, to read on the way.
+        private bool SkipsBriefing()
+        {
+            var keys=Keyboard.current;if(keys==null)return false;
+            foreach(var key in keys.allKeys)if(key.wasPressedThisFrame&&!Binds(session.Controls.Move,key)&&!Binds(session.Controls.Sprint,key))return true;
+            return false;
+        }
+        private static bool Binds(InputAction action,InputControl control){foreach(var bound in action.controls)if(bound==control)return true;return false;}
 
         private void UpdateKeyboard(RoundState state,PlayerState player)
         {
@@ -1041,7 +1072,7 @@ namespace Festival.Presentation
             shown|=DevelopmentMapVisible&&!session.MenuOpen;
 #endif
             mapShade.SetActive(shown);mapPanel.SetActive(shown);if(!shown)return;
-            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);chatWindow.Close();
+            objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);chatWindow.Close();
             bool camp=state.Phase=="Shopping"||state.Phase=="Spinning";campMap.SetActive(camp);festivalMap.SetActive(!camp);
             mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";
             float x=camp?Mathf.InverseLerp(-30,30,player.X):Mathf.InverseLerp(-35,35,player.X);

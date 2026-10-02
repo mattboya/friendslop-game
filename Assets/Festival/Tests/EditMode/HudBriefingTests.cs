@@ -76,6 +76,20 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.Briefing(spirit,"nobody"),Is.Empty,"nor does a viewer the view doesn't hold");
         }
 
+        // The card fades in as the level opens and out as its window closes; reduced motion drops the fade, so it is whole throughout.
+        [Test] public void TheBriefingFadesInAndOutUnlessMotionIsReduced()
+        {
+            double fade=FestivalHudText.BriefingFadeSeconds,end=FestivalHudText.BriefingSeconds;
+            Assert.That(fade,Is.GreaterThan(0).And.LessThanOrEqualTo(.5),"a short fade, not a slow one");
+            Assert.That(FestivalHudText.BriefingAlpha(0,false),Is.EqualTo(0),"it fades in as the level opens");
+            Assert.That(FestivalHudText.BriefingAlpha(fade/2,false),Is.EqualTo(.5f).Within(.001f));
+            Assert.That(FestivalHudText.BriefingAlpha(fade,false),Is.EqualTo(1),"then it is whole");
+            Assert.That(FestivalHudText.BriefingAlpha(end/2,false),Is.EqualTo(1),"while it is read");
+            Assert.That(FestivalHudText.BriefingAlpha(end-fade/2,false),Is.EqualTo(.5f).Within(.001f),"and fades out as its window closes");
+            Assert.That(FestivalHudText.BriefingAlpha(end,false),Is.EqualTo(0));
+            foreach(var at in new[]{0,fade/2,end/2,end-fade/2})Assert.That(FestivalHudText.BriefingAlpha(at,true),Is.EqualTo(1),"reduced motion: whole at "+at+" s");
+        }
+
         // How to Play: the panel the main menu and the Escape menu open, as titled blocks.
         static string Block(FestivalInput input,string title){foreach(var (t,text) in FestivalHudText.HowToPlay(input))if(t==title)return text;Assert.Fail("How to Play has no "+title+" block");return "";}
 

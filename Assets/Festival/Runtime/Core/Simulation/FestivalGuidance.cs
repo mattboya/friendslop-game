@@ -80,7 +80,7 @@ namespace Festival.Core
             }
             if(search!="")return search;
             // Only the tripper sees the visions (buyers and narcs by day, the clue trail by night). The game's one hint that they lie
-            // is the HUD's, once per level (FestivalHudText.TrustLine), so it is not repeated here.
+            // is the HUD's, once per level, on the tripper's level briefing (FestivalHudText.Briefing), so it is not repeated here.
             bool night=Festivals.For(state).Night;
             if(player.Id==state.TripperId)return night?"Your visions mark the next clue holder.":"Your visions mark buyers and narcs.";
             var tripper=state.Players.Find(p=>p.Id==state.TripperId);

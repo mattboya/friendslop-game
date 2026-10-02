@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Festival.Core;
 
@@ -8,8 +9,8 @@ namespace Festival.Presentation
     // from the viewer's filtered round state, like the rest of FestivalHudText; FestivalHud puts it on screen.
     public static partial class FestivalHudText
     {
-        /// <summary>How long the level briefing stays up as each level starts, in level clock (a key hides it sooner). The tripper's
-        /// TrustLine window: the briefing folds that line in.</summary>
+        /// <summary>How long the level briefing stays up as each level starts, in level clock (a key hides it sooner). It took over
+        /// the window the tripper's own "Trust, but verify." line had, and folds that line in.</summary>
         public const double BriefingSeconds=10;
 
         /// <summary>
@@ -34,6 +35,11 @@ namespace Festival.Presentation
         // A level is lost at its clock (a day's sundown short of the quota) or once nobody is left standing: a detained friend still
         // counts (FestivalSimulation.LevelEndCheck), so it says "lose the whole crew", never "get caught".
         const string LoseLine="Run out of time or lose the whole crew, and the festival starts over at Day 1.";
+        /// <summary>How long the briefing card takes to fade in as the level opens, and out as its window closes.</summary>
+        public const double BriefingFadeSeconds=.4;
+        /// <summary>The briefing card's opacity at elapsed seconds of level clock: fading in over the first BriefingFadeSeconds, out
+        /// over the window's last, whole between. Always whole with reduced motion, which drops the fade.</summary>
+        public static float BriefingAlpha(double elapsed,bool reducedMotion)=>reducedMotion?1:(float)Math.Max(0,Math.Min(1,Math.Min(elapsed,BriefingSeconds-elapsed)/BriefingFadeSeconds));
 
         /// <summary>
         /// How to Play, the panel the main menu and the Escape menu open: six short titled blocks. Keys read as bound right now
