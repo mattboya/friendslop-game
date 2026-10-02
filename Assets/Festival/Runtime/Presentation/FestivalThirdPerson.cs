@@ -33,6 +33,11 @@ namespace Festival.Presentation
             var camera=pivot+direction*boom;camera.y=Mathf.Max(Floor,camera.y);return camera;
         }
 
+        /// <summary>Where an aim along the view starts (visions, shelves): on the camera's centre line, under the aim dot, level with
+        /// the eye. In first person that is the eye itself. Over the shoulder the dot still picks what it is on, and nothing between
+        /// the camera and your body is picked.</summary>
+        public static Vector3 AimFrom(Vector3 camera,Vector3 forward,Vector3 eye)=>camera+forward*Vector3.Dot(eye-camera,forward);
+
         /// <summary>The view's culling mask for a boom this long (0 in first person): your body shows only on a boom long enough to
         /// see it from outside.</summary>
         public static int Mask(int mask,float boom)=>boom>=InsideHead?mask|Body:mask&~Body;

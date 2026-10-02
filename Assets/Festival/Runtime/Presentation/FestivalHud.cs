@@ -1164,8 +1164,8 @@ namespace Festival.Presentation
         {
             if(state==null||player==null||session.ViewCamera==null||!(state.Phase=="Shopping"||state.Phase=="Playing"))return "";
             bool camp=state.Phase=="Shopping";
-            // CAM-1: from your eye along the view, so over the shoulder you pick the same shelf as in first person.
-            Vector3 origin=session.EyePosition,forward=session.ViewCamera.transform.forward;
+            // CAM-1: along the aim dot's line from level with your eye, so over the shoulder the dot picks the shelf item it is on.
+            var view=session.ViewCamera.transform;Vector3 forward=view.forward,origin=FestivalThirdPerson.AimFrom(view.position,forward,session.EyePosition);
             string best="";float bestScore=.77f;
             for(int i=0;i<state.VendorOffers.Count;i++)
             {

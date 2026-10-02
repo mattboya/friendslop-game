@@ -48,8 +48,8 @@ namespace Festival.Presentation
         /// <summary>How many markers are drawn this frame.</summary>
         public int Shown {get;private set;}
 
-        // After FestivalSession.Update has moved the actors and the camera this frame. CAM-1: the aim runs from your eye, so over the
-        // shoulder you read the festivalgoer you would in first person.
+        // After FestivalSession.Update has moved the actors and the camera this frame. CAM-1: over the shoulder the aim starts level
+        // with your eye, so the aim dot reads what it is on and never a festivalgoer between the camera and you.
         private void LateUpdate()
         {
             if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
@@ -57,7 +57,8 @@ namespace Festival.Presentation
         }
 
         /// <summary>Draws state's visions while the festival is shown; actorFor finds a festivalgoer's drawn body (null when not drawn).
-        /// The aim runs along view's forward from eye (the session's EyePosition, CAM-1), or from view itself without one.</summary>
+        /// The aim runs along view's centre line, the aim dot's, from level with eye (the session's EyePosition, CAM-1:
+        /// FestivalThirdPerson.AimFrom), or from view itself without one.</summary>
         public void Apply(RoundState state,Transform view,Func<string,Transform> actorFor,float time,float deltaTime,Vector3? eye=null)
         {
             var visions=state!=null&&FestivalWorld.ShowsFestival(state.Phase)?state.Visions:None;
@@ -96,13 +97,14 @@ namespace Festival.Presentation
             // Once every marker is placed: a festivalgoer is aimed at up to the top of their whole stack, so every vision over them
             // answers the aim alike and the lower verdict stays up while the dot moves up to read the upper one.
             int aimed=-1;float nearest=float.PositiveInfinity;
+            var from=view==null?Vector3.zero:FestivalThirdPerson.AimFrom(view.position,view.forward,eye??view.position);
             for(int i=0;i<visions.Count&&view!=null;i++)
             {
                 var vision=visions[i];var marker=markers[vision.Id];
                 if(!vision.Confirmed||!marker.Root.gameObject.activeSelf)continue;
                 float top=marker.Glyph.bounds.max.y;
                 for(int j=i+1;j<visions.Count;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)top=Mathf.Max(top,markers[visions[j].Id].Glyph.bounds.max.y);
-                marker.Aimed=Aim(eye??view.position,view.forward,marker.Ground,top);
+                marker.Aimed=Aim(from,view.forward,marker.Ground,top);
                 if(marker.Aimed<nearest){nearest=marker.Aimed;aimed=i;}
             }
             // Only the checked target nearest the camera along the aim says what it is; every checked vision over that festivalgoer does.

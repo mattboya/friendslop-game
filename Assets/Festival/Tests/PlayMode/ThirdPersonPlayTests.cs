@@ -15,8 +15,8 @@ using UnityEngine.UI;
 namespace Festival.Tests
 {
     // CAM-1 on a real hosted festival: V puts the camera over your shoulder and shows your own body, and V again goes back to first
-    // person. Lying down still looks up from the grass, and the view goes back over your shoulder when you get up. The CAMERA VIEW
-    // setting says which view you have and toggles it, and a camp shelf is still picked by where your eye aims, not the camera.
+    // person. Lying down, a camp visit and the Ferris wheel are first person, and the view goes back over your shoulder after each.
+    // The CAMERA VIEW setting says which view you have and toggles it, and over the shoulder the aim dot still picks what it is on.
     // V and the toggle save the machine's own profile, so each test puts the setting back as it found it.
     public sealed class ThirdPersonPlayTests:FestivalPlayModeTest
     {
@@ -71,12 +71,12 @@ namespace Festival.Tests
                     var eye=session.EyePosition;
                     if(Mathf.Abs(eye.y-body.position.y-1.65f)>.05f||Flat(eye,body.position)>.15f)failures.Add(where+": the eye is at "+eye.ToString("0.00")+", not 1.65 m over your body at "+body.position.ToString("0.00"));
                 }
-                void FirstPerson(string where,float height)
+                void FirstPerson(string where,float? height=null)
                 {
                     var at=view.transform.position;
                     if(session.ThirdPersonView)failures.Add(where+": ThirdPersonView is still true");
                     if(Vector3.Distance(at,session.EyePosition)>.01f)failures.Add(where+": the camera at "+at.ToString("0.00")+" is not at the eye "+session.EyePosition.ToString("0.00"));
-                    if(Mathf.Abs(at.y-height)>.1f)failures.Add(where+": the view is "+at.y.ToString("0.00")+" m up, not "+height+" m");
+                    if(height!=null&&Mathf.Abs(at.y-height.Value)>.1f)failures.Add(where+": the view is "+at.y.ToString("0.00")+" m up, not "+height+" m");
                     if((view.cullingMask&Body)!=0)failures.Add(where+": the view shows your own body's layer, from inside your head");
                 }
 
@@ -101,6 +101,16 @@ namespace Festival.Tests
                 Assert.That(FestivalSimulation.LyingDown(sim.State,player.Id),Is.False,"setup: you get up ("+session.Message+"), after:\n"+string.Join("\n",failures));
                 OverTheShoulder("got up");
 
+                // The Ferris wheel is first person from the seat (POLO-5); when the turn ends the view goes back over your shoulder.
+                player.X=Festivals.WheelX;player.Z=Festivals.WheelZ+1.5f;yield return new WaitForSeconds(.6f);
+                session.Command(FestivalSimulation.RideWheelKind);yield return new WaitForSeconds(.6f);
+                Assert.That(FestivalSimulation.OnWheel(sim.State,player.Id),Is.True,"setup: you board the wheel ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                FirstPerson("on the wheel");
+                foreach(var ride in sim.State.Interactions)if(ride.Kind==FestivalSimulation.RideWheelKind&&ride.Status=="Active")ride.StartSeconds=sim.State.SimulationSeconds-Festivals.WheelRideSeconds+.2;
+                yield return new WaitForSeconds(1);
+                Assert.That(FestivalSimulation.OnWheel(sim.State,player.Id),Is.False,"setup: the turn ends, after:\n"+string.Join("\n",failures));
+                OverTheShoulder("off the wheel");
+
                 // V again: first person, the hands back and your body hidden.
                 yield return PressV();
                 if(session.Profile.Data.ThirdPerson)failures.Add("V again does not switch the setting back to first person");
@@ -111,8 +121,9 @@ namespace Festival.Tests
             finally{session.Profile.Data.ThirdPerson=wanted;session.Profile.Save();session.Leave();Object.Destroy(host);Object.Destroy(world);}
         }
 
-        // At camp, before the level: the settings row, then a shelf picked from the eye while the camera hangs over the shoulder.
-        [UnityTest]public IEnumerator TheSettingTogglesTheViewAndShelvesAreStillPickedByTheEye()
+        // At camp, before the level: the settings row; over the shoulder the aim dot picks the shelf item it is on; a camp visit is first
+        // person until you leave it.
+        [UnityTest]public IEnumerator TheSettingTogglesTheViewAndTheDotPicksTheShelfItIsOn()
         {
             var world=new GameObject("Camera setting world");world.AddComponent<FestivalWorld>();yield return null;
             var host=new GameObject("Camera setting");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();
@@ -152,26 +163,39 @@ namespace Festival.Tests
                 Assert.That(session.Profile.Data.ThirdPerson,Is.True,"setup: third person, after:\n"+string.Join("\n",failures));
                 session.MenuOpen=false;
 
-                // At camp's first two shelves, the eye aimed half a metre right of the first one's item. From the eye that is still the
-                // first item; the camera, .45 m further right over your shoulder, looks nearer the second.
+                // In front of camp's first shelf, the aim dot on the second shelf's item, then 60% of the way over to it from the first:
+                // both pick the second. Your eye, .45 m left of the dot's line, would pick the first.
                 var first=Catalog.FindItem(sim.State.VendorOffers[0]);var second=Catalog.FindItem(sim.State.VendorOffers[1]);
-                sim.State.ShopStock.Find(s=>s.ItemId==first.Id).CampAvailable=1;
-                var spot=Catalog.ShopPoint(true,0);player.X=spot.X;player.Z=6.3f;
-                var aim=new Vector3(spot.X+.5f,1.17f,9f)-new Vector3(spot.X,1.65f,6.3f);
-                typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg);
-                typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Asin(aim.normalized.y)*Mathf.Rad2Deg);
+                foreach(var offer in new[]{first,second})sim.State.ShopStock.Find(s=>s.ItemId==offer.Id).CampAvailable=1;
+                var spot=Catalog.ShopPoint(true,0);var next=Catalog.ShopPoint(true,1);player.X=spot.X;player.Z=6.3f;
                 yield return new WaitForSeconds(.6f);
                 if(!session.ThirdPersonView)failures.Add("at the shelves: the view is not over the shoulder");
-                string prompt=Find("Prompt")?.text??"(hidden)";
-                if(!prompt.StartsWith("PICK UP "+first.Name.ToUpperInvariant()+"  "))failures.Add("at the shelves, the eye on the "+first.Name+" beside the "+second.Name+": the prompt reads \""+prompt+"\"");
+                foreach(float over in new[]{1f,.6f})
+                {
+                    var target=new Vector3(Mathf.Lerp(spot.X,next.X,over),1.17f,9f);
+                    DotOn(session,target);yield return new WaitForSeconds(.4f);
+                    Assert.That(FromDot(session,target),Is.LessThan(.01f),"setup: the aim dot is on "+target.ToString("0.00"));
+                    string prompt=Find("Prompt")?.text??"(hidden)";
+                    if(!prompt.StartsWith("PICK UP "+second.Name.ToUpperInvariant()+"  "))failures.Add("at the shelves, the dot "+(over*100)+"% of the way from the "+first.Name+" to the "+second.Name+": the prompt reads \""+prompt+"\"");
+                }
+
+                // A camp visit is first person (its rooms have no walls to stop the boom); leaving it goes back over the shoulder.
+                var site=CampFeatures.Find("tent_1");player.X=site.X;player.Z=site.Z;yield return null;
+                session.Command("EnterCamp","tent_1");yield return new WaitForSeconds(.6f);
+                Assert.That(player.CampVisitId,Is.EqualTo("tent_1"),"setup: you enter the tent ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                if(session.ThirdPersonView||Vector3.Distance(session.ViewCamera.transform.position,session.EyePosition)>.01f)failures.Add("in the tent: the view is not first person, camera at "+session.ViewCamera.transform.position.ToString("0.00")+", eye at "+session.EyePosition.ToString("0.00"));
+                session.Command("ExitCamp");yield return new WaitForSeconds(.6f);
+                Assert.That(player.CampVisitId,Is.Empty,"setup: you leave the tent ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                if(!session.ThirdPersonView||Vector3.Distance(session.ViewCamera.transform.position,session.EyePosition)<1)failures.Add("out of the tent: the view is not back over the shoulder, camera at "+session.ViewCamera.transform.position.ToString("0.00")+", eye at "+session.EyePosition.ToString("0.00"));
                 Assert.That(failures,Is.Empty,string.Join("\n",failures));
             }
             finally{session.Profile.Data.ThirdPerson=wanted;session.Profile.Save();session.Leave();Object.Destroy(host);Object.Destroy(world);}
         }
 
-        // VISION-5 under CAM-1, on a real hosted Day 1 (the solo host trips): over the shoulder, the tripper's eye just right of a
-        // festivalgoer with a checked vision still reads it. The camera's own line, .45 m further right, would pass them by.
-        [UnityTest]public IEnumerator OverTheShoulderTheTripperReadsTheVisionTheirEyeIsOn()
+        // VISION-5 under CAM-1, on a real hosted Day 1 (the solo host trips): over the shoulder, the aim dot on the left side of a
+        // festivalgoer with a checked vision reads it, and the dot in the air .85 m to their right reads nothing, as in first person.
+        // Your eye's own line, .45 m left of the dot's, would do the opposite.
+        [UnityTest]public IEnumerator OverTheShoulderTheAimDotReadsTheVisionItIsOn()
         {
             var world=new GameObject("Camera vision world");world.AddComponent<FestivalWorld>();yield return null;
             var host=new GameObject("Camera vision");var session=host.AddComponent<FestivalSession>();
@@ -193,17 +217,32 @@ namespace Festival.Tests
                 var npc=sim.State.Npcs.Find(n=>n.Id==vision.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);vision.Confirmed=true;
                 player.Effects.Clear();player.X=-20;player.Z=-2;
                 session.Profile.Data.ThirdPerson=true;
-                var aim=new Vector3(-19.6f,1,4)-new Vector3(-20,1.65f,-2);
-                typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg);
-                typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Asin(aim.normalized.y)*Mathf.Rad2Deg);
-                for(deadline=Time.realtimeSinceStartup+.8f;Time.realtimeSinceStartup<deadline;){npc.X=-20;npc.Z=4;npc.Mode="Blending";yield return null;}
+                IEnumerator Hold(float seconds){for(float end=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<end;){npc.X=-20;npc.Z=4;npc.Mode="Blending";yield return null;}}
+                yield return Hold(.6f);
                 Assert.That(session.ThirdPersonView,Is.True,"setup: the view is over your shoulder");
                 var label=host.transform.Find("Vision "+vision.Id+"/Label")?.GetComponent<TextMesh>();
                 Assert.That(label,Is.Not.Null,"setup: the vision is drawn");
-                Assert.That(label.text,Is.Not.Empty,"your eye is .4 m right of the festivalgoer with the checked "+vision.Kind+", so it answers (eye "+session.EyePosition.ToString("0.00")+", camera "+session.ViewCamera.transform.position.ToString("0.00")+")");
+                foreach(float right in new[]{-.1f,.85f})
+                {
+                    var target=new Vector3(-20+right,1,4);DotOn(session,target);yield return Hold(.4f);
+                    Assert.That(FromDot(session,target),Is.LessThan(.01f),"setup: the aim dot is on "+target.ToString("0.00"));
+                    bool on=right<0;
+                    Assert.That(label.text!="",Is.EqualTo(on),"the aim dot "+(on?"on the left side of":".85 m right of")+" the festivalgoer with the checked "+vision.Kind+" "+(on?"reads it":"reads nothing")+" (label \""+label.text+"\", eye "+session.EyePosition.ToString("0.00")+", camera "+session.ViewCamera.transform.position.ToString("0.00")+")");
+                }
             }
             finally{session.Profile.Data.ThirdPerson=wanted;session.Leave();Object.Destroy(host);Object.Destroy(world);}
         }
+
+        // Turns the view so the camera's centre, the aim dot, is on target over the shoulder: the boom turns with the view, so look
+        // again from where it puts the camera until that settles. FromDot says how far off the dot target ended up, as a share of the screen.
+        static void DotOn(FestivalSession session,Vector3 target)
+        {
+            var look=Quaternion.LookRotation(target-session.EyePosition).eulerAngles;
+            for(int i=0;i<30;i++)look=Quaternion.LookRotation(target-FestivalThirdPerson.Place(session.EyePosition,look.y,look.x,out _)).eulerAngles;
+            typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,look.y);
+            typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,Mathf.DeltaAngle(0,look.x));
+        }
+        static float FromDot(FestivalSession session,Vector3 target){var at=session.ViewCamera.WorldToViewportPoint(target);return new Vector2(at.x-.5f,at.y-.5f).magnitude;}
 
         // Whether two of the pass's controls share a row: their anchored spans overlap up the panel.
         static bool Overlaps(RectTransform a,RectTransform b)=>a.anchorMin.y<b.anchorMax.y&&b.anchorMin.y<a.anchorMax.y;

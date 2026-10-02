@@ -210,23 +210,27 @@ namespace Festival.Tests
             }
         }
 
-        // CAM-1: over the shoulder the camera hangs 2.4 m behind and .45 m right of your eye, and the aim still runs from your eye along
-        // the view, so you read the festivalgoer you would read in first person. Your eye is on a; b stands a little closer, .75 m to
-        // their right, where the camera's own line, .45 m right of yours, would find b first.
-        [Test]public void OverTheShoulderTheAimComesFromYourEye()
+        // CAM-1: over the shoulder the camera hangs 2.4 m behind and .45 m right of your eye, and the aim dot (the camera's centre)
+        // still reads what it is on, as in first person. The dot on a's left side reads a; the dot in the air .85 m right of a reads
+        // nobody. c, whom you walked past, stands between the camera and you right under the dot and never answers.
+        [Test]public void OverTheShoulderTheAimDotReadsWhatItIsOn()
         {
-            var state=Round();var a=Made("a").transform;var b=Made("b").transform;b.position=new Vector3(.75f,0,-1);
-            Func<string,Transform> actorFor=id=>id=="a"?a:id=="b"?b:null;
+            var state=Round();var a=Made("a").transform;var c=Made("c").transform;
+            Func<string,Transform> actorFor=id=>id=="a"?a:id=="c"?c:null;
             state.Visions.Add(new VisionState{Id="on a",Kind="Narc",NpcId="a",IsTrue=false,Confirmed=true});
-            state.Visions.Add(new VisionState{Id="on b",Kind="Buyer",NpcId="b",IsTrue=true,Confirmed=true});
-            var eye=new Vector3(0,1.65f,-6);var look=Quaternion.LookRotation(a.position+Vector3.up-eye).eulerAngles;
-            var view=View();view.position=FestivalThirdPerson.Place(eye,look.y,look.x,out float boom);view.rotation=Quaternion.Euler(look.x,look.y,0);
+            state.Visions.Add(new VisionState{Id="on c",Kind="Buyer",NpcId="c",IsTrue=true,Confirmed=true});
+            var eye=new Vector3(0,1.65f,-6);var view=View();var markers=Markers();
+            DotOn(view,eye,new Vector3(-.1f,1,0),out float boom);
             Assert.That(boom,Is.GreaterThan(2.4f),"setup: the camera is over your shoulder");
-            var markers=Markers();markers.Apply(state,view,actorFor,0,.02f,eye);
-            Assert.That(Label(markers,"on a"),Is.EqualTo("FALSE"),"the festivalgoer your eye is on answers");
-            Assert.That(Label(markers,"on b"),Is.Empty,"the one beside them, nearer the camera's line, does not");
+            var under=view.position+view.forward*1.2f;c.position=new Vector3(under.x,0,under.z);
+            markers.Apply(state,view,actorFor,0,.02f,eye);
+            Assert.That(Label(markers,"on a"),Is.EqualTo("FALSE"),"the dot on a's left side reads a");
+            Assert.That(Label(markers,"on c"),Is.Empty,"c, between the camera and you, does not answer");
             markers.Apply(state,view,actorFor,0,.02f);
-            Assert.That(Label(markers,"on b"),Is.EqualTo("TRUE"),"setup: from the camera's own spot the aim would be on b");
+            Assert.That(Label(markers,"on c"),Is.EqualTo("TRUE"),"setup: from the camera's own spot the aim would be on c");
+            c.position=new Vector3(0,0,-30);
+            DotOn(view,eye,new Vector3(.85f,1,0),out boom);markers.Apply(state,view,actorFor,0,.02f,eye);
+            Assert.That(Label(markers,"on a"),Is.Empty,"the dot in the air .85 m right of a reads nobody");
         }
 
         // VISION-5: once checked, a vision's marker is ringed by a thin bright outline, neon green for a truth and red for a fake,
@@ -346,5 +350,13 @@ namespace Festival.Tests
             var outline=Marker(markers,id).Find("Glyph/Outline");Assert.That(outline,Is.Not.Null,"vision "+id+" has an outline");return outline.GetComponent<MeshRenderer>();
         }
         private static void Aim(Transform view,Vector3 at)=>view.rotation=Quaternion.LookRotation(at-view.position);
+        // Hangs view on FestivalThirdPerson's boom from eye, turned so its centre (the aim dot) is on target. The boom turns with the
+        // view, so the turn is found by looking from where the camera was until it settles.
+        private static void DotOn(Transform view,Vector3 eye,Vector3 target,out float boom)
+        {
+            var look=Quaternion.LookRotation(target-eye).eulerAngles;boom=0;
+            for(int i=0;i<30;i++){view.position=FestivalThirdPerson.Place(eye,look.y,look.x,out boom);look=Quaternion.LookRotation(target-view.position).eulerAngles;}
+            view.rotation=Quaternion.Euler(look.x,look.y,0);
+        }
     }
 }
