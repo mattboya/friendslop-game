@@ -56,6 +56,9 @@ public static class ThemeTests
         foreach(var topic in ConversationLines.Topics) foreach(var person in new List<string>(DialogueGrammar.Personas){ConversationLines.Security}) for(int festival=0;festival<Festivals.Count;festival++) for(int seed=0;seed<400;seed++)
         { var turn=ConversationLines.Turn(topic,person,DialogueGrammar.Roles[seed%4],festival,seed%3,seed%4,seed%2==0,0,new ContentRandom(seed)); texts.Add(turn.Reaction); texts.Add(turn.Line); texts.AddRange(turn.Replies); }
         foreach(var text in texts) Check(Offence(text)==null,"real-drug or retired word '"+Offence(text)+"' in: "+text);
+        // LIGHT-3: no player reads a cloud picture's name, but they see the picture, so none is drug-themed: no "mushroom cloud".
+        var pictures=new List<string>(); foreach(var shape in CloudShapes.Shapes) pictures.Add(shape.Name); foreach(var landmark in CloudShapes.Landmarks) pictures.Add(landmark.Name);
+        foreach(var name in pictures) Check(Picture(name)==null,"drug-themed cloud picture '"+Picture(name)+"': "+name);
 
         // Internal ids may stay as they are, so a literal that is exactly a catalog id (e.Id=="lsd") is code, not text.
         // Ceiling: a label that is exactly an id, or an id joined into a label at runtime, passes this scan. The PlayMode
@@ -84,7 +87,10 @@ public static class ThemeTests
         // Retired names fail in any case and inside a line; only the weed effect's own name may read "Couch Lock".
         Check(Offence("PRISM 42S")=="prism"&&Offence("one Moon cap short")=="moon cap"&&Offence("a Hug Drop")=="hug drop"&&Offence("Snack Leaf 9s")=="snack leaf"&&Offence("LAST SHUTTLE")=="shuttle","the scanner finds retired names");
         Check(Offence(WeedName)==null&&Offence("Got Couch Lock?")=="couch lock"&&Offence("MOONLIT DISCO")==null,"only the weed effect is Couch Lock, and bare moon stays");
+        Check(Picture("mushroom cloud")=="mushroom"&&Picture("Maple Leaf")=="leaf"&&Picture("rocket")==null,"the cloud scan finds drug-themed pictures");
     }
+    // A cloud picture fails on any word text does, and on a leaf too, which reads as one with no word at all. Text may say "leaf".
+    private static string Picture(string name)=>Offence(name)??((name??"").ToLowerInvariant().Contains("leaf")?"leaf":null);
     private static string Offence(string text)
     {
         string lower=(text??"").ToLowerInvariant();

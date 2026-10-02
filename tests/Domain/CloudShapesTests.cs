@@ -16,8 +16,8 @@ public static class CloudShapesTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EachLevelHas8To14CloudsOnTheBand,OneWindCarriesEveryCloud,CloudsFadeOutAndBackInWhereTheyWrap,
             TheSameSpinGivesTheSameSky,AShapeShowsEvery60To120SAndHolds15To20S,TheCloudNearestTheZenithTakesTheShape,
-            EveryShapeFitsOneCloud,EveryShapeIsOneBoldCloud,ACloudMorphsIntoItsShapeAndBack,
-            EveryLandmarkIsPicturedAsOneBoldCloudWithADollarSignBesideIt,TheClueCloudDriftsWithTheWindOnTheBandWhileItIsUp})
+            EveryShapeFitsOneCloud,EveryShapeIsOneBoldCloud,ACloudMorphsIntoItsShapeAndBack,ACheekyShapeShowsAboutOneShowInThree,
+            TheRocketStandsUprightOnTwoPods,EveryLandmarkIsPicturedAsOneBoldCloudWithADollarSignBesideIt,TheClueCloudDriftsWithTheWindOnTheBandWhileItIsUp})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" cloud test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -188,11 +188,13 @@ public static class CloudShapesTests
     // How far from straight up a cloud is, seen from the middle of the sky: smaller is nearer the zenith.
     static double Tilt(CloudShapes.Place at)=>Out(at)/at.Y;
 
+    // LIGHT-3: the cheeky shapes. The rocket is the only innuendo, and nothing is drawn explicitly.
+    static readonly string[] Cheeky={"butt","poop swirl","middle finger","rocket"};
     static void EveryShapeFitsOneCloud()
     {
         var names=CloudShapes.Shapes.Select(s=>s.Name).ToList();
         Check(names.Count>=8,"at least eight shapes, got "+names.Count);
-        foreach(var wanted in new[]{"duck","rubber chicken","giant hand","face","dolphin","pizza slice","sneaker","UFO"})
+        foreach(var wanted in new[]{"duck","rubber chicken","giant hand","face","dolphin","pizza slice","sneaker","UFO"}.Concat(Cheeky))
             Check(names.Contains(wanted),"there is a "+wanted+" among "+string.Join(", ",names));
         Check(names.Distinct().Count()==names.Count,"every shape has its own name");
         foreach(var shape in CloudShapes.Shapes)Fits(shape.Puffs,shape.Name);
@@ -328,4 +330,29 @@ public static class CloudShapesTests
             }
     }
     static bool Same(CloudShapes.Puff a,CloudShapes.Puff b)=>a.X==b.X&&a.Y==b.Y&&a.Radius==b.Radius;
+
+    // LIGHT-3: the cheeky shapes join the silly ones' rotation, each picked as often as any other, so with 4 of the 12 about one
+    // show in three is cheeky.
+    static void ACheekyShapeShowsAboutOneShowInThree()
+    {
+        var counts=new int[CloudShapes.Shapes.Length];int shows=0;
+        foreach(int spin in Spins())foreach(var show in CloudShapes.For(spin).Shows){counts[show.Shape]++;shows++;}
+        int cheeky=Enumerable.Range(0,counts.Length).Where(s=>Cheeky.Contains(CloudShapes.Shapes[s].Name)).Sum(s=>counts[s]);
+        Check(cheeky*100>=28*shows&&cheeky*100<=39*shows,"about one show in three is cheeky, got "+cheeky+" of "+shows);
+        double each=(double)shows/counts.Length;
+        for(int s=0;s<counts.Length;s++)Check(counts[s]>=.7*each&&counts[s]<=1.3*each,"the "+CloudShapes.Shapes[s].Name+" shows about as often as any other shape, got "+counts[s]+" of "+shows);
+    }
+
+    // LIGHT-3: clouds are cream and peach only, so the rocket reads from its outline alone: it stands about 26 m tall, a shaft at
+    // most half as wide as its foot, where a pod sticks out on either side.
+    static void TheRocketStandsUprightOnTwoPods()
+    {
+        var rocket=CloudShapes.Shapes.FirstOrDefault(s=>s.Name=="rocket");Check(rocket!=null,"there is a rocket");
+        var puffs=rocket.Puffs;float bottom=puffs.Min(p=>p.Y-p.Radius),top=puffs.Max(p=>p.Y+p.Radius),middle=(bottom+top)/2;
+        Check(top-bottom>=24,"the rocket stands about 26 m tall, got "+(top-bottom));
+        var shaft=puffs.Where(p=>p.Y>middle).ToList();float shaftLeft=shaft.Min(p=>p.X-p.Radius),shaftRight=shaft.Max(p=>p.X+p.Radius),across=(shaftLeft+shaftRight)/2;
+        CloudShapes.Puff left=puffs.OrderBy(p=>p.X-p.Radius).First(),right=puffs.OrderBy(p=>p.X+p.Radius).Last();
+        Check(2*(shaftRight-shaftLeft)<=right.X+right.Radius-(left.X-left.Radius),"the shaft is at most half as wide as the foot, got "+(shaftRight-shaftLeft)+" of "+(right.X+right.Radius-(left.X-left.Radius))+" m");
+        Check(left.Y<middle&&left.X<across&&right.Y<middle&&right.X>across,"a pod sticks out either side of the shaft's foot, got ("+left.X+", "+left.Y+") and ("+right.X+", "+right.Y+")");
+    }
 }

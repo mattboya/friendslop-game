@@ -42,6 +42,8 @@ namespace Festival.Network
         // CROWD-3: every client sees a festivalgoer scattering from an arrest (Mode "Scattering"), never whom it suspects.
         // MINI-1: snapshots carry the level's minigame booth (RoundState.Booth), a game under way is the "Minigame" phase, and
         // the players in it send its own Minigame command.
+        // LIGHT-3: each client works the day sky's shapes out of its own spin seed, now from 12 shapes, not 8 (CloudShapes.Shapes),
+        // so only builds on the same version show the same shape at the same moment.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";

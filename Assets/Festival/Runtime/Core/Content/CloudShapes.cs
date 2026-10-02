@@ -146,7 +146,8 @@ namespace Festival.Core
         }
 
         /// <summary>The funny shapes, as seen from below: x across, y up and radius for each puff, in metres. Their puffs overlap
-        /// as closely as an ordinary cloud's, so each reads as one cloud, not a string of beads.</summary>
+        /// as closely as an ordinary cloud's, so each reads as one cloud, not a string of beads. LIGHT-3: the last four are cheeky.
+        /// Schedule picks them as often as the rest, so about one show in three is cheeky, the same in every player's sky.</summary>
         public static readonly Shape[] Shapes={
             Table("duck",-6,-6,6.5f, 0,-6,7, 6,-5.5f,6.5f, -10.5f,-4,4.5f, -12.3f,-2.5f,4.2f, -14.2f,-1,3.8f, -16,.5f,3.5f, -2,-1.5f,5, 8.5f,-1.5f,4.2f,
                 9.5f,.8f,4.2f, 10.5f,3,4.2f, 11,6.5f,5.5f, 15.3f,6,3.2f, 17.1f,5.6f,3.2f, 18.8f,5.2f,3.2f),
@@ -170,6 +171,18 @@ namespace Festival.Core
             Table("UFO",-18.5f,-1.5f,3.5f, -15.4f,-1.5f,3.5f, -12.3f,-1.5f,3.5f, -9.2f,-1.5f,3.5f, -6.2f,-1.5f,3.5f, -3.1f,-1.5f,3.5f, 0,-1.5f,3.5f,
                 3.1f,-1.5f,3.5f, 6.2f,-1.5f,3.5f, 9.2f,-1.5f,3.5f, 12.3f,-1.5f,3.5f, 15.4f,-1.5f,3.5f, 18.5f,-1.5f,3.5f, -9,-2.5f,4.5f, 0,-3,5, 9,-2.5f,4.5f,
                 0,3,5.5f, -4.5f,2.5f,4, 4.5f,2.5f,4, -8.5f,-6,3, -8.5f,-8,3, 0,-6.5f,3, 0,-9,3, 8.5f,-6,3, 8.5f,-8,3),
+            // LIGHT-3: the cheeky ones. Clouds are cream and peach only, so each reads from its outline alone: two round cheeks with
+            // a crease between them, three stacked tiers under a curled tip, a fist with one finger raised, and an upright rocket on
+            // two round pods, the only innuendo.
+            Table("butt",-7.8f,-3.4f,6.5f, -3.6f,-1.5f,5, -6.8f,1.1f,5, -10.6f,.2f,5, -12.4f,-3.4f,5, -10.6f,-7,5, -6.8f,-7.9f,5, -3.6f,-5.3f,5,
+                7.8f,-3.4f,6.5f, 3.6f,-1.5f,5, 6.8f,1.1f,5, 10.6f,.2f,5, 12.4f,-3.4f,5, 10.6f,-7,5, 6.8f,-7.9f,5, 3.6f,-5.3f,5, 0,1,4.5f,
+                -4.5f,3.5f,4.5f, 0,4,4.5f, 4.5f,3.5f,4.5f),
+            Table("poop swirl",-16,-8,5, -12,-8.5f,4.5f, -8,-8.5f,4.5f, -4,-8.5f,4.5f, 0,-8.5f,4.5f, 4,-8.5f,4.5f, 8,-8.5f,4.5f, 12,-8.5f,4.5f,
+                16,-8,5, -11.5f,-3,5, -7.5f,-4,4.5f, -3.75f,-4,4.5f, 0,-4,4.5f, 3.75f,-4,4.5f, 7.5f,-4,4.5f, 11.5f,-3,5, -7,2,4.5f, -3.5f,.5f,4.5f,
+                0,.5f,4.5f, 3.5f,.5f,4.5f, 7,2,4.5f, -3,4.7f,4, .5f,4.7f,4, 2,7.8f,3.3f, 4.3f,9.8f,3),
+            Table("middle finger",-4.5f,-3,5.5f, 0,-2.5f,5.5f, 4.5f,-3,5.5f, -3,-7.5f,5, 3,-7.5f,5, 0,-10,3, 0,-6,5, -5,1.3f,3.3f, 5,1.3f,3.3f,
+                8.3f,-1.2f,3.2f, 0,1.8f,3.4f, 0,4.6f,3.2f, 0,7.3f,3.1f, 0,10,3, -8.5f,-4.5f,3.5f),
+            Table("rocket",0,-8,4.5f, 0,-4.3f,4.5f, 0,-.6f,4.5f, 0,3.1f,4.3f, 0,6.6f,4, 0,9.8f,3.2f, -4.7f,-8,5, 4.7f,-8,5),
         };
         // TRIP-4: a day level's clue cloud (FestivalSimulation.CloudClueUp) comes up a whole ClueEarliest-ClueLatestSeconds into the
         // level and drifts through the sky for ClueSeconds.
