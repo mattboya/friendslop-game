@@ -17,6 +17,8 @@ namespace Festival.Presentation
         public float MusicVolume=0.35f;
         // Host only: festivals this machine has unlocked by clearing the one before.
         public int UnlockedFestivalCount=1;
+        // CAM-1: the view over your shoulder rather than first person (V, or CAMERA VIEW). Older profiles load it as false.
+        public bool ThirdPerson;
     }
     public sealed class LocalProfile
     {

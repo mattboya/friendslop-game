@@ -42,10 +42,13 @@ namespace Festival.Tests
 
         /// <summary>Once the whole crew has sent Ready, the round starts on the host's next step. The host's own Step arms the
         /// 5 s countdown; this pulls it down to now every frame, as Step re-arms it after any unready moment and every Ready
-        /// resets it.</summary>
+        /// resets it. The level starts in first person (CAM-1).</summary>
         protected static IEnumerator SkipCountdown(FestivalSession session)
         {
             var sim=Simulation(session);
+            // CAM-1: every hosted level starts in first person, whatever this machine's saved profile says; a test that wants the view
+            // over the shoulder turns it on after. Only in memory: the saved profile is left alone.
+            session.Profile.Data.ThirdPerson=false;
             for(float deadline=Time.realtimeSinceStartup+15;session.State.Phase=="Shopping"&&Time.realtimeSinceStartup<deadline;)
             {
                 if(sim.State.Phase=="Shopping"&&sim.State.LaunchAtSeconds>0)sim.State.LaunchAtSeconds=sim.State.SimulationSeconds;

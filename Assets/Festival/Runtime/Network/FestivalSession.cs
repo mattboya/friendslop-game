@@ -48,6 +48,13 @@ namespace Festival.Network
         /// <summary>The pointer is free, and the view holds still, for the menu and for clicking a friend at the debrief (HUD-3).</summary>
         public bool PointerFree=>MenuOpen||State!=null&&FestivalHudText.VoteOpen(State);
         public Camera ViewCamera {get;private set;}
+        /// <summary>CAM-1: where your eyes are, eased after your body as the first-person view always was. Over the shoulder the
+        /// camera hangs from it; whatever aims with the view (shelves, visions) aims from here along the camera's forward, so both
+        /// views pick the same thing.</summary>
+        public Vector3 EyePosition {get;private set;}
+        /// <summary>CAM-1: whether the view is over your shoulder right now: your setting, except lying down, in a camp visit or on the
+        /// Ferris wheel (FestivalThirdPerson.Applies). Your own body is on screen then.</summary>
+        public bool ThirdPersonView {get;private set;}
         public double EstimatedSimulationSeconds => State==null?0:State.SimulationSeconds
             +(State.Phase=="Results"||manager==null?0:Math.Max(0,Math.Min(.4,manager.ServerTime.Time-serverClockAtSnapshot)));
         public double LastSnapshotAge => Time.realtimeSinceStartupAsDouble-snapshotReceivedAt;
@@ -97,7 +104,7 @@ namespace Festival.Network
             FestivalCharacter.ViewTransform=ViewCamera.transform;
             ViewCamera.cullingMask &= ~(1<<31); // Hide the local world body from its first-person camera.
             ViewCamera.clearFlags=CameraClearFlags.Skybox;ViewCamera.backgroundColor=new Color(.13f,.10f,.22f);
-            ViewCamera.transform.position=new Vector3(0,1.65f,-29);
+            ViewCamera.transform.position=EyePosition=new Vector3(0,1.65f,-29);
             // The world owns the single dusk/lighting Volume. The camera only
             // opts into it, avoiding a second, lower-priority bloom override.
             ViewCamera.GetUniversalAdditionalCameraData().renderPostProcessing=true;
@@ -384,6 +391,8 @@ namespace Festival.Network
             if(MenuOpen&&!Controls.Rebinding&&ClosesMenu(State.Phase,lastPhase))MenuOpen=false;
             lastPhase=State.Phase;
             if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)MenuOpen=!MenuOpen;
+            // CAM-1: V flips your view between first person and over the shoulder, and remembers it; never in the menu or mid-rebind.
+            if(Controls.View.WasPressedThisFrame()&&!MenuOpen&&!Controls.Rebinding){Profile.Data.ThirdPerson=!Profile.Data.ThirdPerson;string error=Profile.Save();if(error!="")Message=error;}
             Cursor.lockState=PointerFree?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=PointerFree;
             if(!PointerFree && Application.isFocused)
             {
@@ -643,14 +652,15 @@ namespace Festival.Network
                 else pitch=preLiePitch;
                 wasLying=lying;
             }
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
+            ThirdPersonView=FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed a glide (1/20 s, the eye's)
             // ahead of the seat so the glide keeps it there as it turns; the mouse still aims it, and the turn ends back by the base.
             var target=visit!=null?new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ)
                 :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,1/20f)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
                 :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
-            ViewCamera.transform.position=Vector3.Distance(ViewCamera.transform.position,target)>5?target:Vector3.Lerp(ViewCamera.transform.position,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
+            EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;
             if(!Profile.Data.ReducedMotion)
             {
@@ -664,6 +674,11 @@ namespace Festival.Network
             float lag=FestivalTrip.For(State,LocalPlayerId,Profile.Data.ReducedMotion,0).Lag;
             viewYaw=FestivalTrip.Follow(viewYaw,yaw,lag,Time.unscaledDeltaTime);viewPitch=FestivalTrip.Follow(viewPitch,pitch,lag,Time.unscaledDeltaTime);
             ViewCamera.transform.rotation=Quaternion.Euler(viewPitch,viewYaw,Mathf.Clamp(roll,-3.5f,3.5f));
+            // CAM-1: over the shoulder the camera is set straight on its boom from the eye (no ease of its own, so a switch is a cut), and
+            // shows your body unless a wall has pulled the boom into your head; in first person it is the eye, your body hidden.
+            float boom=0;
+            ViewCamera.transform.position=ThirdPersonView?FestivalThirdPerson.Place(EyePosition,viewYaw,viewPitch,out boom):EyePosition;
+            ViewCamera.cullingMask=FestivalThirdPerson.Mask(ViewCamera.cullingMask,boom);
         }
         private void TransportFailed(){if(!closing)Fail("Network transport failed. Leave and try another port or host address.");}
         private void Fail(string message){Leave();Message=message;}

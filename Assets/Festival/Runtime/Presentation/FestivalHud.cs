@@ -37,7 +37,7 @@ namespace Festival.Presentation
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
         private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping,trustLine,chatText;
-        private Text musicValue,lookValue,motionValue,contrastValue;
+        private Text musicValue,lookValue,motionValue,contrastValue,viewValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
         private readonly Image[] slotFrames=new Image[3];
@@ -397,16 +397,19 @@ namespace Festival.Presentation
             settingsPanel=Panel(menuPanel.transform,"Pass settings",Color.clear,new Vector2(.055f,.025f),new Vector2(.945f,.76f));settingsPanel.GetComponent<Image>().raycastTarget=false;
             var settingsHeading=Label(settingsPanel.transform,"Settings heading",32,TextAnchor.MiddleLeft);settingsHeading.text="LOCAL SETTINGS";settingsHeading.fontStyle=FontStyle.Normal;settingsHeading.color=Ink;Place(settingsHeading.rectTransform,.04f,.88f,.96f,.98f);
             settingsText=Label(settingsPanel.transform,"Settings values",18,TextAnchor.MiddleLeft);settingsText.text="Saved on this machine. Changes apply immediately.";settingsText.color=new Color(.32f,.40f,.36f);Place(settingsText.rectTransform,.04f,.78f,.96f,.88f);
-            SettingRow(settingsPanel.transform,"MUSIC VOLUME",.61f,out musicValue);
-            SettingRow(settingsPanel.transform,"LOOK SPEED",.45f,out lookValue);
-            SettingRow(settingsPanel.transform,"REDUCED MOTION",.29f,out motionValue);
-            SettingRow(settingsPanel.transform,"HIGH CONTRAST",.13f,out contrastValue);
-            Button(settingsPanel.transform,"−",new Vector2(.66f,.64f),new Vector2(.76f,.72f),()=>ChangeSetting("music",-1));
-            Button(settingsPanel.transform,"+",new Vector2(.84f,.64f),new Vector2(.94f,.72f),()=>ChangeSetting("music",1));
-            Button(settingsPanel.transform,"−",new Vector2(.66f,.48f),new Vector2(.76f,.56f),()=>ChangeSetting("look",-1));
-            Button(settingsPanel.transform,"+",new Vector2(.84f,.48f),new Vector2(.94f,.56f),()=>ChangeSetting("look",1));
-            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.32f),new Vector2(.94f,.40f),()=>ChangeSetting("motion",1));
-            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.16f),new Vector2(.94f,.24f),()=>ChangeSetting("contrast",1));
+            SettingRow(settingsPanel.transform,"MUSIC VOLUME",.64f,out musicValue);
+            SettingRow(settingsPanel.transform,"LOOK SPEED",.51f,out lookValue);
+            SettingRow(settingsPanel.transform,"REDUCED MOTION",.38f,out motionValue);
+            SettingRow(settingsPanel.transform,"HIGH CONTRAST",.25f,out contrastValue);
+            // CAM-1: FIRST PERSON or THIRD PERSON, read further left than the short values so the words fit before the TOGGLE.
+            SettingRow(settingsPanel.transform,"CAMERA VIEW",.12f,out viewValue);Place(viewValue.rectTransform,.30f,.13f,.68f,.23f);
+            Button(settingsPanel.transform,"−",new Vector2(.66f,.67f),new Vector2(.76f,.75f),()=>ChangeSetting("music",-1));
+            Button(settingsPanel.transform,"+",new Vector2(.84f,.67f),new Vector2(.94f,.75f),()=>ChangeSetting("music",1));
+            Button(settingsPanel.transform,"−",new Vector2(.66f,.54f),new Vector2(.76f,.62f),()=>ChangeSetting("look",-1));
+            Button(settingsPanel.transform,"+",new Vector2(.84f,.54f),new Vector2(.94f,.62f),()=>ChangeSetting("look",1));
+            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.41f),new Vector2(.94f,.49f),()=>ChangeSetting("motion",1));
+            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.28f),new Vector2(.94f,.36f),()=>ChangeSetting("contrast",1));
+            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.15f),new Vector2(.94f,.23f),()=>ChangeSetting("view",1));
             Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.04f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false);
         }
 
@@ -526,6 +529,7 @@ namespace Festival.Presentation
             lookValue.text=session.Profile.Data.MouseSensitivity.ToString("0.00");
             motionValue.text=session.Profile.Data.ReducedMotion?"ON":"OFF";
             contrastValue.text=session.Profile.Data.HighContrast?"ON":"OFF";
+            viewValue.text=session.Profile.Data.ThirdPerson?"THIRD PERSON":"FIRST PERSON";
             promptPanel.SetActive(!showMenu&&!string.IsNullOrEmpty(prompt.text));
             promptKeycap.SetActive(primaryAction!=null);
             UpdateKeyboard(state,player);
@@ -1160,7 +1164,8 @@ namespace Festival.Presentation
         {
             if(state==null||player==null||session.ViewCamera==null||!(state.Phase=="Shopping"||state.Phase=="Playing"))return "";
             bool camp=state.Phase=="Shopping";
-            Vector3 origin=session.ViewCamera.transform.position,forward=session.ViewCamera.transform.forward;
+            // CAM-1: from your eye along the view, so over the shoulder you pick the same shelf as in first person.
+            Vector3 origin=session.EyePosition,forward=session.ViewCamera.transform.forward;
             string best="";float bestScore=.77f;
             for(int i=0;i<state.VendorOffers.Count;i++)
             {
@@ -1179,6 +1184,7 @@ namespace Festival.Presentation
             if(key=="look")data.MouseSensitivity=Mathf.Clamp(data.MouseSensitivity+direction*.02f,.02f,.5f);
             if(key=="motion")data.ReducedMotion=!data.ReducedMotion;
             if(key=="contrast")data.HighContrast=!data.HighContrast;
+            if(key=="view")data.ThirdPerson=!data.ThirdPerson;
             string error=session.Profile.Save();if(error!="")session.SetMessage(error);
         }
         private void UpdatePurchaseFeedback(RoundState state,PlayerState player)
