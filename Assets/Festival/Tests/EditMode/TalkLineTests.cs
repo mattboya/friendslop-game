@@ -76,6 +76,26 @@ namespace Festival.Tests
             Assert.That(Play(card,p,ref now,Frame,Hello),Is.EqualTo(Frame),"and the next one replaces it at once");
         }
 
+        // K2: a line the host takes back (it empties NpcSpeech: a security stop over, SecurityStops.Hush) goes, even one held unread
+        // behind the chat window, so "Last chance" never shows once the guard has waved you on. Only the newest line can be taken
+        // back: one waiting behind an older line goes, and the older line stays to be read.
+        [Test] public void ALineTheHostTakesBackGoes()
+        {
+            var card=new FestivalTalkLine();var p=new PlayerState();double now=0;Says(p,Psst,5,"SECURITY");
+            Assert.That(Play(card,p,ref now,.5f,Psst),Is.EqualTo(.5f).Within(Frame/2),"setup: the guard's line is up");
+            Assert.That(Play(card,p,ref now,8,Psst,hidden:true),Is.Zero,"setup: the chat window covers it past the host's 5 s");
+            p.NpcSpeech="";
+            Assert.That(Play(card,p,ref now,5,Psst),Is.Zero,"taken back, it never comes up again");
+
+            card=new FestivalTalkLine();p=new PlayerState();now=0;Says(p,Hello,7);
+            Assert.That(Play(card,p,ref now,.5f,Hello),Is.EqualTo(.5f).Within(Frame/2),"setup: a festivalgoer's line is up");
+            Says(p,Psst,now+5,"SECURITY");
+            Assert.That(Play(card,p,ref now,.5f,Hello),Is.EqualTo(.5f).Within(Frame/2),"setup: the guard's line waits behind it");
+            p.NpcSpeech="";
+            Assert.That(Play(card,p,ref now,8,Psst),Is.Zero,"taken back while waiting, it never comes up");
+            Assert.That(card.Line,Is.EqualTo(Hello),"and the festivalgoer's line was left to be read");
+        }
+
         // A line the host has already dropped (a client joining late, a new level) never comes up.
         [Test] public void ALineTheHostHasDroppedNeverShows()
         {

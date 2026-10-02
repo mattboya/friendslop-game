@@ -9,7 +9,8 @@ namespace Festival.Presentation
     /// ReadFor(line), counted only while it shows. So a dance or sale starting at once doesn't cut it short (it takes the challenge
     /// card's dialogue until read, then the challenge's own line does), and the menu or the chat window covering the card doesn't use
     /// it up. A newer line waits until the shown one has been up HoldSeconds. DIALOG-3 retires the bark-only Talk; the guards' barks
-    /// (SecurityStops) still come this way.
+    /// (SecurityStops) still come this way. K2: a line the host takes back (it empties NpcSpeech: a security stop over) goes at
+    /// once, shown or waiting, so "Last chance" never comes up after the guard has waved you on.
     /// </summary>
     public sealed class FestivalTalkLine
     {
@@ -33,7 +34,9 @@ namespace Festival.Presentation
             // The HUD outlives a game: after Leave, a new Host or Join is a new round on a clock from 0, where the last game's
             // line would read as still said.
             if(round!=this.round){this.round=round;Speaker=Line=nextSpeaker=next="";heard=until=0;seen=0;}
-            if(!string.IsNullOrEmpty(p.NpcSpeech)&&p.NpcSpeechUntil>simulationSeconds&&p.NpcSpeechUntil!=heard){heard=p.NpcSpeechUntil;nextSpeaker=p.NpcSpeaker;next=p.NpcSpeech;}
+            // Only the newest line heard can be taken back: the one waiting, or the one shown if none waits.
+            if(string.IsNullOrEmpty(p.NpcSpeech)){if(next!="")next="";else if(until==heard)Line="";}
+            else if(p.NpcSpeechUntil>simulationSeconds&&p.NpcSpeechUntil!=heard){heard=p.NpcSpeechUntil;nextSpeaker=p.NpcSpeaker;next=p.NpcSpeech;}
             bool unread=Line!=""&&seen<ReadFor(Line),said=Line!=""&&simulationSeconds<until;
             if(next!=""&&(!unread&&!said||seen>=HoldSeconds)){Speaker=nextSpeaker;Line=next;until=heard;next="";seen=0;unread=said=true;}
             bool shows=!hidden&&(unread||said&&!challenge);

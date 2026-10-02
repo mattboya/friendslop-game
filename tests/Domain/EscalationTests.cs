@@ -11,7 +11,7 @@ public static class EscalationTests
     {
         var failures=new List<string>();
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
-            AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel})
+            AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -291,6 +291,40 @@ public static class EscalationTests
         for(int guard=0;talk.Status=="Active"&&guard<300;guard++){s.Tick(.1);warned|=cop.Mode=="ArrestWarning";}
         Check(s.State.SimulationSeconds-began>20.5&&!warned,"a talk running past 20 s holds the arrest warning (talk over at "+(s.State.SimulationSeconds-began)+" s, warned "+warned+")");
         s.Tick(.1);Check(cop.Mode=="ArrestWarning","then the poor talk is over and it comes (mode "+cop.Mode+")");
+    }
+
+    // K2: the guard hears a talk out, its 12 s "Last chance" too. A talk running past 12 s that waves them on never says it, and
+    // what the guard said stands no longer: the stop is over. A poor talk ending between 12 and 20 s says it then, the stop still
+    // on; one ending past 20 s goes straight to the arrest warning, too late for a last chance. A stop that ends unseen (bolted,
+    // or ditched out of the guard's sight) also takes back what the guard said.
+    const string LastChance="Last chance. Empty your pockets.";
+    static void TheWarningWaitsForATalk()
+    {
+        var s=Stopped(out var cop,out var a);double began=s.State.SimulationSeconds;double Held()=>s.State.SimulationSeconds-began;
+        s.Tick(8);var talk=Talk(s,a,cop);s.Tick(2);Reply(s,a,talk,Smooth);s.Tick(2.5);
+        Check(Held()>12.4&&talk.Status=="Active"&&!Says(a,LastChance),"mid-talk at "+Held()+" s the guard doesn't warn (\""+a.NpcSpeech+"\")");
+        Reply(s,a,talk,Smooth);Reply(s,a,talk,Smooth);s.Tick(.1);
+        Check(talk.Score>=.75&&cop.Evidence.Exists(e=>e.Kind=="WavedOn"),"setup: the talk waves them on (score "+talk.Score+")");
+        Check(a.NpcSpeech=="","waved on, nothing the guard said stands (\""+a.NpcSpeaker+": "+a.NpcSpeech+"\")");
+
+        s=Stopped(out cop,out a);began=s.State.SimulationSeconds;
+        s.Tick(8);talk=Talk(s,a,cop);s.Tick(2);Reply(s,a,talk,Smooth);s.Tick(2.5);Reply(s,a,talk,Awkward);Reply(s,a,talk,Awkward);
+        Check(talk.Status=="Complete"&&talk.Score<.75,"setup: a poor talk (score "+talk.Score+")");
+        Check(Says(a,LastChance)&&a.NpcSpeechUntil>s.State.SimulationSeconds,"a poor talk over at "+Held()+" s, past 12 s: the guard warns them as it ends (\""+a.NpcSpeech+"\")");
+        s.Tick(.1);Check(cop.Mode=="Stop","and the stop holds (mode "+cop.Mode+")");
+
+        s=Stopped(out cop,out a);began=s.State.SimulationSeconds;
+        s.Tick(11);talk=Talk(s,a,cop,Silence);Finish(s,talk);
+        Check(Held()>20&&!Says(a,LastChance),"a talk from 11 s left to run out past 20 s ("+Held()+" s) never warns (\""+a.NpcSpeech+"\")");
+        s.Tick(.1);Check(cop.Mode=="ArrestWarning","it ends in the arrest warning (mode "+cop.Mode+")");
+
+        bool open=true;s=Stopped(out cop,out a,()=>open);s.Tick(12.2);
+        Check(Says(a,LastChance),"setup: ignored for 12 s, the guard warns them");
+        open=false;s.Tick(6.2);
+        Check(cop.Mode=="Patrol"&&a.NpcSpeech=="","bolted out of sight, the stop is over and the warning taken back (mode "+cop.Mode+", \""+a.NpcSpeech+"\")");
+        open=true;s=Stopped(out cop,out a,()=>open);open=false;
+        Check(s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted,"setup: a ditches the stock out of the guard's sight");s.Tick(.1);
+        Check(cop.Mode=="Patrol"&&a.NpcSpeech=="","ditched unseen, the stop is over and its call-out taken back (mode "+cop.Mode+", \""+a.NpcSpeech+"\")");
     }
 
     // A player who sells their last stock out of the guard's sight is let go, and walking past the guard later starts nothing.

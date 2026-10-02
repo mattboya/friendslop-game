@@ -100,12 +100,12 @@ namespace Festival.Core
             return true;
         }
         // What a finished talk settles on its Score: a sale pays in full at .75 and half at .4, and its stock comes back below;
-        // a buy (StockBuys.cs); and security at .75 waves off its stop.
+        // a buy (StockBuys.cs); and security at .75 waves off its stop, or gives the warning it held back (HeardOut).
         void SettleTalk(InteractionState i,PlayerState p)
         {
             if(i.Kind=="Sale"){var npc=State.Npcs.Find(n=>n.Id==i.TargetId);if(i.Score>=.4){int payout=SalePayout(npc,(i.Score>=.75?PerfectSalePay:5)*VipPayout(p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;}else if(i.ReservedItemId!=""){if(CanAdd(p,i.ReservedItemId,1))Add(p,i.ReservedItemId,1);else State.Drops.Add(new DropState{Id=Id("drop"),ItemId=i.ReservedItemId,Count=1,X=p.X,Z=p.Z});}i.ReservedItemId="";}
             if(i.Kind=="Buy")SettleBuy(i,p);
-            if(i.Kind=="Police"&&i.Score>=.75)WaveOn(i.TargetId,p);
+            if(i.Kind=="Police"){if(i.Score>=.75)WaveOn(i.TargetId,p);else HeardOut(i.TargetId,p);}
         }
     }
 }
