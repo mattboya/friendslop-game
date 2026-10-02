@@ -16,7 +16,7 @@ namespace Festival.Tests
         // POLO-1 and PLAYA-1 (journey J2): a sober player uses every twist from the running HUD on a real hosted Night 1. On Palm
         // Mirage F beside the VIP guard talks them past the rope, E at the night market's VIP stall buys a wristband, and E at the
         // Ferris wheel's base boards it. Up there the objective card says roughly where the lost friend is and exactly where
-        // security is, and (POLO-3) the friend, whose trail is not yet followed and who stands far out of sight, is not drawn;
+        // security is, and (POLO-3) the friend, who stands far out of sight, is not drawn, even for the tripper whose trail is done;
         // by day nobody is lost to spot. On
         // Ember Playa E climbs aboard a passing art car. Labels are laid out on a 1920x1080 canvas, so a cut-off line fails.
         [UnityTest]public IEnumerator ASoberPlayerUsesEveryTwistFromTheHud()
@@ -131,6 +131,13 @@ namespace Festival.Tests
                 Fits("on the wheel at night","Objective detail");
                 var shown=GameObject.Find("mission_friend");
                 if(shown!=null)failures.Add("on the wheel at night: the lost friend is drawn at "+shown.transform.position+", far out of sight, giving their spot away");
+                // The tripper whose trail is done already knows the friend's spot, but the wheel still draws no friend far out of sight.
+                string tripper=sim.State.TripperId;sim.State.TripperId=player.Id;sim.State.GateOpened=true;
+                yield return new WaitForSeconds(.6f);
+                Assert.That(FestivalSimulation.OnWheel(sim.State,player.Id)&&(session.State.FriendPosition.X!=0||session.State.FriendPosition.Z!=0),Is.True,"setup: the tripper with the trail done rides the wheel and knows the friend's spot");
+                shown=GameObject.Find("mission_friend");
+                if(shown!=null)failures.Add("on the wheel at night as the tripper with the trail done: the lost friend is drawn at "+shown.transform.position+", far out of sight");
+                sim.State.TripperId=tripper;sim.State.GateOpened=false;
                 // By day nobody is lost: the rider spots security only, over the quota line.
                 sim.State.LevelIndex=0;
                 yield return new WaitForSeconds(.6f);
