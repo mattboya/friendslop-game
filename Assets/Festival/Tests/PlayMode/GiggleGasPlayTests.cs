@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -16,7 +17,7 @@ namespace Festival.Tests
     // gas reaches the hitter's screen through the single writers: FestivalHud adds the kick to the field of view, FestivalNightLighting
     // drains the colour grade, and FestivalTrip pulses its overlay, closes a low-pass, adds a big reverb (GAS-5) and dips the volume.
     // All of it lets go when the gas ends, when the player leaves the session, and when FestivalTrip is turned off or destroyed.
-    // Friends see the hitter giggle.
+    // Friends see the hitter giggle. GAS-5: it pulses on the camp music's beat, and on a 120 BPM clock with the music off.
     public sealed class GiggleGasPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator EAtTheBalloonsTakesAHitThatPulsesThroughTheSingleWriters()
@@ -37,7 +38,8 @@ namespace Festival.Tests
                 float camp=grade.saturation.value;
                 Text Find(string name){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
                 var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
-                FestivalTrip.Perception Now()=>FestivalTrip.For(session.State,me,session.Profile.Data.ReducedMotion,Time.unscaledTime);
+                var campAudio=host.GetComponent<FestivalCampAudio>();
+                FestivalTrip.Perception Now()=>FestivalTrip.For(session.State,me,session.Profile.Data.ReducedMotion,Time.unscaledTime,campAudio.Beat);
                 var overlay=host.transform.Find("Festival trip");
                 void Sober(string when)
                 {
@@ -66,15 +68,15 @@ namespace Festival.Tests
                 Assert.That(session.WorldCharacter(me).Giggling,Is.False,"while it kicks in: no giggle");
 
                 // Kicked in (the wait skipped), at full motion: each writer moves its own property with the pulse, every frame. A test
-                // resumes after the frame's Updates (the HUD's throb, the session's grade) and before its LateUpdates, so the overlay and
-                // the sound FestivalTrip drew are last frame's moment.
+                // resumes after the frame's Updates (the HUD's kick, the session's grade) and before its LateUpdates, so the overlay and
+                // the sound FestivalTrip drew are last frame's moment, on last frame's beat.
                 gas.StartSeconds=sim.State.SimulationSeconds-5;session.Profile.Data.ReducedMotion=false;
                 yield return null;yield return null;
-                float widest=0,quietest=1,drawnAt=Time.unscaledTime;
+                float widest=0,quietest=1,drawnAt=Time.unscaledTime;float? drawnBeat=campAudio.Beat;
                 for(deadline=Time.realtimeSinceStartup+1.5f;Time.realtimeSinceStartup<deadline;)
                 {
                     yield return null;
-                    var look=Now();var drawn=FestivalTrip.For(session.State,me,false,drawnAt);drawnAt=Time.unscaledTime;var lowPass=view.GetComponent<AudioLowPassFilter>();
+                    var look=Now();var drawn=FestivalTrip.For(session.State,me,false,drawnAt,drawnBeat);drawnAt=Time.unscaledTime;drawnBeat=campAudio.Beat;var lowPass=view.GetComponent<AudioLowPassFilter>();
                     Assert.That(view.fieldOfView,Is.EqualTo(75+look.Fov).Within(.01f),"the HUD adds the gas's kick to the 75 degree view");
                     Assert.That(grade.saturation.value,Is.EqualTo(camp+look.Saturation).Within(1e-3f),"the one grade drains camp's colours");
                     overlay=host.transform.Find("Festival trip");
@@ -92,6 +94,45 @@ namespace Festival.Tests
                 Assert.That(session.WorldCharacter(me).Giggling,Is.True,"the hitter's body giggles, as friends see it");
                 Assert.That(widest,Is.GreaterThan(2),"the view kicks wide on the beat");
                 Assert.That(quietest,Is.LessThan(.8f),"the sound goes wah-wah");
+
+                // GAS-5: on the camp music's beat. A new camp plays TECH HOUSE, about 129 BPM and drifting, not the 120 BPM clock. Each
+                // frame the vignette drawn last frame is read with where the music was then. Its peaks land on the track's kicks (its
+                // measured beat grid, which FestivalMusicTests holds to the onsets heard) within 60 ms, one a kick, beat after beat.
+                var techHouse=FestivalMusic.For(1);
+                Assert.That(campAudio.Music!=null&&campAudio.Music.isPlaying&&campAudio.Music.clip==techHouse.Audio,"setup: TECH HOUSE plays at camp");
+                var vignette=overlay.Find("Trip vignette").GetComponent<RawImage>();
+                var drawnVignette=new List<float>();var heardAt=new List<int>();int was=campAudio.Music.timeSamples;
+                for(deadline=Time.realtimeSinceStartup+2.5f;Time.realtimeSinceStartup<deadline;)
+                {
+                    yield return null;
+                    drawnVignette.Add(vignette.color.a);heardAt.Add(was);was=campAudio.Music.timeSamples;
+                }
+                int kicks=0,peaks=0;var late=new List<string>();
+                for(int i=1;i<drawnVignette.Count-1;i++)
+                {
+                    if(techHouse.BeatPhase(heardAt[i])<techHouse.BeatPhase(heardAt[i-1]))kicks++;
+                    if(!(drawnVignette[i]>drawnVignette[i-1]&&drawnVignette[i]>=drawnVignette[i+1]))continue;
+                    peaks++;float phase=techHouse.BeatPhase(heardAt[i]),off=Mathf.Min(phase,1-phase)*60/(float)techHouse.Bpm;
+                    if(off>.06f)late.Add($"{off*1000:F0} ms");
+                }
+                Assert.That(kicks,Is.GreaterThanOrEqualTo(4),"setup: four beats or more of TECH HOUSE");
+                Assert.That(late,Is.Empty,"the vignette peaks within 60 ms of each of the music's kicks ("+peaks+" peaks, "+kicks+" kicks)");
+                Assert.That(peaks,Is.InRange(kicks-1,kicks+1),"one peak a kick");
+
+                // GAS-5 decision A: with the DJ on SILENCE there is no beat to follow, and the gas keeps pulsing on a 120 BPM clock.
+                sim.State.CampMusicTrack=0;
+                for(deadline=Time.realtimeSinceStartup+2;campAudio.Music!=null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                yield return null;
+                Assert.That(campAudio.Beat,Is.Null,"setup: SILENCE, no beat");
+                float dimmest=1,deepest=0;
+                for(deadline=Time.realtimeSinceStartup+.6f;Time.realtimeSinceStartup<deadline;)
+                {
+                    yield return null;
+                    Assert.That(view.fieldOfView,Is.EqualTo(75+Now().Fov).Within(.01f),"the zoom keeps the clock's beat");
+                    dimmest=Mathf.Min(dimmest,vignette.color.a);deepest=Mathf.Max(deepest,vignette.color.a);
+                }
+                Assert.That(deepest-dimmest,Is.GreaterThan(.2f),"the vignette still pulses with the music off");
+                sim.State.CampMusicTrack=1;
 
                 // Reduced motion: the view holds still; the sound still pulses.
                 session.Profile.Data.ReducedMotion=true;quietest=1;

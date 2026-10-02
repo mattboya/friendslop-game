@@ -1015,7 +1015,9 @@ namespace Festival.Presentation
             bool mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms"),reduced=session.Profile.Data.ReducedMotion;
             effectWash.color=EffectWash(player.Effects,reduced,Time.unscaledTime);
             // TRIP-5: the dose's substance adds its own swell (Fun Guys) on top of a shop-bought one; this stays the one writer.
-            float trip=FestivalTrip.For(session.State,player.Id,reduced,Time.unscaledTime).Fov;
+            // GAS-5: the gas kicks the view on the camp music's beat, this frame's, as FestivalTrip's overlay and sound do.
+            var campAudio=session.GetComponent<FestivalCampAudio>();
+            float trip=FestivalTrip.For(session.State,player.Id,reduced,Time.unscaledTime,campAudio!=null?campAudio.Beat:null).Fov;
             if(session.ViewCamera!=null)session.ViewCamera.fieldOfView=(mushrooms&&!reduced?baseFov+Mathf.Sin(Time.unscaledTime*.8f)*1.2f:baseFov)+trip;
         }
 

@@ -23,9 +23,14 @@ namespace Festival.Presentation
         // When the deck not live takes over, on the audio clock.
         double turnAt;
         int lastAntics;
+        float? beat;
+        int beatFrame=-1;
 
         /// <summary>The deck sounding now (FestivalMusic.BeatPhase reads its beat), or null in silence.</summary>
         public AudioSource Music=>track==null?null:decks[AudioSettings.dspTime<turnAt?live:1-live];
+        /// <summary>GAS-5: the camp music's beat phase this frame (FestivalMusic.BeatPhase of Music), or null in silence. It is read
+        /// once a frame, so the HUD's zoom and FestivalTrip's overlay and sound pulse on the same moment.</summary>
+        public float? Beat{get{if(beatFrame!=Time.frameCount){beatFrame=Time.frameCount;beat=FestivalMusic.BeatPhase(Music);}return beat;}}
 
         void Awake()
         {

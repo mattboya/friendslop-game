@@ -93,7 +93,8 @@ namespace Festival.Presentation
         /// <summary>The local player's trip in state, never for a spirit. A dose shows only while the festival is shown (Playing or
         /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
         /// Giggle Gas shows by its own strength; it lives only at camp (the host clears it as the crew leaves), so never with a dose. It
-        /// pulses on beat, the camp music's beat phase; with no music (null) it keeps a 120 BPM clock, so it never stops.</summary>
+        /// pulses on beat, the camp music's phase (FestivalCampAudio.Beat); with no music (null) it keeps a 120 BPM clock, so it never
+        /// stops.</summary>
         public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time,float? beat=null)
         {
             if(state==null)return default;
@@ -142,6 +143,7 @@ namespace Festival.Presentation
         private static readonly Color HazeColor=new Color(.9f,.97f,.88f);
 
         private FestivalSession session;
+        private FestivalCampAudio campAudio;
         private Func<string,Transform> actorFor;
         private GameObject overlay;
         private Image tint,haze,top,bottom;
@@ -161,17 +163,18 @@ namespace Festival.Presentation
         // After FestivalSession.Update has moved the first-person camera this frame.
         private void LateUpdate()
         {
-            if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
-            Apply(session.State,session.LocalPlayerId,session.ViewCamera!=null?session.ViewCamera.transform:null,actorFor,session.Profile.Data.ReducedMotion,Time.unscaledTime,Time.unscaledDeltaTime);
+            if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;campAudio=GetComponent<FestivalCampAudio>();actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
+            Apply(session.State,session.LocalPlayerId,session.ViewCamera!=null?session.ViewCamera.transform:null,actorFor,session.Profile.Data.ReducedMotion,Time.unscaledTime,Time.unscaledDeltaTime,campAudio!=null?campAudio.Beat:null);
         }
         // Turned off, it draws nothing and lets the sound go.
         private void OnDisable(){if(overlay!=null)Show(default,null,null,null,null,0);}
 
-        /// <summary>Draws localPlayerId's trip in state over view; actorFor finds a person's drawn body (null when not drawn).</summary>
-        public void Apply(RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,bool reducedMotion,float time,float deltaTime)
+        /// <summary>Draws localPlayerId's trip in state over view; actorFor finds a person's drawn body (null when not drawn). The gas
+        /// pulses on beat (For).</summary>
+        public void Apply(RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,bool reducedMotion,float time,float deltaTime,float? beat=null)
         {
             if(overlay==null)Build();
-            Show(For(state,localPlayerId,reducedMotion,time),state,localPlayerId,view,actorFor,deltaTime);
+            Show(For(state,localPlayerId,reducedMotion,time,beat),state,localPlayerId,view,actorFor,deltaTime);
         }
 
         private void Show(Perception look,RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,float deltaTime)
