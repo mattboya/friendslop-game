@@ -44,6 +44,9 @@ namespace Festival.Tests
             var wheel=Part(polo,"Ferris wheel");
             Assert.That(Vector2.Distance(Flat(wheel.position),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThan(1e-3f),"the wheel's base is where the rules board it");
             Assert.That(Bounds(wheel).max.y,Is.GreaterThan(10f),"the wheel stands over the festival");
+            int gondolas=0;foreach(Transform child in wheel)if(child.name=="Gondola"){gondolas++;Assert.That(child.GetComponentInChildren<Renderer>(),Is.Not.Null,"each gondola carries its model");}
+            Assert.That(gondolas,Is.EqualTo(8),"eight gondolas hang from the rim");
+            Assert.That(Painted(wheel,"StageGlowMint"),Is.Not.Null,"the rim glows mint and rose, as before");
             var rotor=Part(wheel,"Wheel rotor");var start=rotor.rotation;float quarter=(float)Festivals.WheelRideSeconds/4;
             twists.Apply(round,quarter);
             Assert.That(Quaternion.Angle(start,rotor.rotation),Is.EqualTo(90).Within(.5f),"a quarter of a ride turns it a quarter");
@@ -60,10 +63,10 @@ namespace Festival.Tests
             var sign=Part(Part(grounds,FestivalTwistVisuals.PoloRootName),FestivalTwistVisuals.VipSignName);
             var text=sign.GetComponentInChildren<TextMesh>(true);
             Assert.That(text!=null?text.text:"(no text)",Is.EqualTo("VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price),"the sign says what the stall sells, for what the rules charge");
-            Assert.That(Part(sign,"Gold trim").GetComponent<Renderer>().sharedMaterial,Is.EqualTo(FestivalArtView.MaterialFor("StageGlowGold")),"its trim is gold, and glows so it reads at night");
+            Assert.That(Painted(sign,"StageGlowGold").sharedMaterial,Is.EqualTo(FestivalArtView.MaterialFor("StageGlowGold")),"its trim is gold, and glows so it reads at night");
             Transform stall=null;foreach(Transform child in grounds)if(child.name=="FestivalStallStock")stall=child;
             Assert.That(stall,Is.Not.Null,"setup: the night market has its stock stall");
-            var under=Bounds(stall);var board=Part(sign,"Board").GetComponent<Renderer>().bounds;
+            var under=Bounds(stall);var board=Painted(sign,"Dark").bounds;
             Assert.That(board.min.y,Is.GreaterThan(under.max.y),"the board hangs over the stall's awning, clear of it");
             Assert.That(board.center.x,Is.InRange(under.min.x,under.max.x),"over the stall, not beside it");
             Assert.That(board.center.z,Is.InRange(under.min.z,under.max.z),"over the stall, not in front of or behind it");
@@ -311,6 +314,11 @@ namespace Festival.Tests
         private GameObject Made(string name){var go=new GameObject(name);made.Add(go);return go;}
         private Transform Grounds()=>Made("Festival grounds").transform;
         private static Transform Part(Transform parent,string name){var part=parent.Find(name);Assert.That(part,Is.Not.Null,name+" is built under "+parent.name);return part;}
+        private static Renderer Painted(Transform root,string key)
+        {
+            foreach(var r in root.GetComponentsInChildren<Renderer>(true))if(r.name.EndsWith("__"+key,System.StringComparison.Ordinal))return r;
+            Assert.Fail("no __"+key+" renderer under "+root.name);return null;
+        }
         private static List<Transform> Frames(Transform grounds){var frames=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith(FestivalTwistVisuals.FramePrefix))frames.Add(child);return frames;}
         private static Bounds Bounds(Transform part){var renderers=part.GetComponentsInChildren<Renderer>();var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);return bounds;}
         // Where the parts of an art prop in one material sit, e.g. the van's "__Cream" headlamps.

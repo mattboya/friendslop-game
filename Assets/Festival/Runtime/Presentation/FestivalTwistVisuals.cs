@@ -4,8 +4,8 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>TWISTVIS-1: stand-ins for each festival's twists, from primitives and existing props, until ART-1 and ART-2
-    /// replace them. Palm Mirage: the influencers' phone frames, the VIP ropes, the VIP stall's sign (POLO-2) and the Ferris
+    /// <summary>TWISTVIS-1: each festival's twists: Palm Mirage's from ART-1's models, Ember Playa's still from primitives
+    /// until ART-2. Palm Mirage: the influencers' phone frames, the VIP ropes, the VIP stall's sign (POLO-2) and the Ferris
     /// wheel. Ember Playa: the art cars and the effigy, which burns for Night 2's last three minutes; its dust storms are
     /// FestivalNightLighting's fog.
     /// Everything follows the round state with no network calls, and nothing collides, so sight lines, steps and paths stay
@@ -27,7 +27,7 @@ namespace Festival.Presentation
         private const float PostSpacing=2.2f,RopeHeight=.88f;
         // The wheel turns once a ride (Festivals.WheelRideSeconds), its gondolas hanging level below the rim.
         private const float AxleHeight=7.5f,WheelRadius=6,GondolaDrop=.75f;
-        private const int Gondolas=8,RimSegments=16;
+        private const int Gondolas=8;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
@@ -136,13 +136,11 @@ namespace Festival.Presentation
             }
         }
 
-        // A dark board in glowing gold trim, as wide as the stall's poles it stands on: "VIP WRISTBANDS $15", at the rules' price.
+        // POLO-2 / ART-1: the modeled board (dark, gold trim, a little crown) on the stall's poles: "VIP WRISTBANDS $15", at the rules' price.
         private static Renderer VipSign(Transform sign)
         {
-            float width=2*PoleX+.3f,height=LetterSize*2.25f+.13f,middle=SignBottom+height/2;
-            foreach(float x in new[]{-PoleX,PoleX})Beam(sign,"Sign post",new Vector3(x,PoleTop,.09f),new Vector3(x,SignBottom+height,.09f),.08f,"Gold");
-            Block(sign,"Gold trim",PrimitiveType.Cube,new Vector3(0,middle,.025f),new Vector3(width+.075f,height+.075f,.045f),"StageGlowGold");
-            Block(sign,"Board",PrimitiveType.Cube,new Vector3(0,middle,-.012f),new Vector3(width,height,.045f),"Dark");
+            float height=LetterSize*2.25f+.13f,middle=SignBottom+height/2;
+            FestivalArtView.Create(sign,"FestivalVipBoard");
             var face=new GameObject("Text");face.transform.SetParent(sign,false);face.transform.localPosition=new Vector3(0,middle,-.05f);
             var text=face.AddComponent<TextMesh>();text.text="VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price;
             text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.characterSize=LetterSize;text.fontSize=48;text.color=new Color(.96f,.94f,.84f);
@@ -150,21 +148,25 @@ namespace Festival.Presentation
             return face.GetComponent<MeshRenderer>();
         }
 
-        // Two A-frames hold the axle over a boarding platform at the rules' base; the rotor carries a glowing rim and its spokes.
+        // ART-1: the modeled A-frame and platform at the rules' base; the rotor (rim, spokes, bulbs) turns at the axle and the gondolas
+        // hang level below its anchors, each in its own colour.
         private Transform Wheel(Transform wheel)
         {
-            Block(wheel,"Boarding platform",PrimitiveType.Cube,new Vector3(0,.125f,0),new Vector3(3.2f,.25f,2.4f),"Wood");
-            foreach(float x in new[]{-1.1f,1.1f})foreach(float z in new[]{-3.2f,3.2f})Beam(wheel,"Wheel leg",new Vector3(x,0,z),new Vector3(x,AxleHeight,0),.22f,"Metal");
-            var hub=Group(wheel,"Wheel rotor",Vector3.up*AxleHeight);
-            Block(hub,"Axle",PrimitiveType.Cylinder,Vector3.zero,new Vector3(.35f,1.3f,.35f),"Metal").localRotation=Quaternion.Euler(0,0,90);
+            Art(wheel,"FestivalWheelBase",null);
+            var hub=Group(wheel,"Wheel rotor",Vector3.up*AxleHeight);Art(hub,"FestivalWheelRotor",null);
             Vector3 Rim(float degrees)=>new Vector3(0,WheelRadius*Mathf.Sin(degrees*Mathf.Deg2Rad),WheelRadius*Mathf.Cos(degrees*Mathf.Deg2Rad));
-            for(int s=0;s<RimSegments;s++)Beam(hub,"Wheel rim",Rim(360f*s/RimSegments),Rim(360f*(s+1)/RimSegments),.18f,s%2==0?"StageGlowMint":"StageGlowRose");
             for(int k=0;k<Gondolas;k++)
             {
-                anchors[k]=Rim(360f*k/Gondolas);Beam(hub,"Wheel spoke",Vector3.zero,anchors[k],.1f,"Metal");
-                gondolas[k]=Block(wheel,"Gondola",PrimitiveType.Cube,Vector3.zero,new Vector3(1.2f,.9f,1f),k%3==0?"Rose":k%3==1?"Mint":"Gold");
+                anchors[k]=Rim(360f*k/Gondolas);
+                gondolas[k]=Group(wheel,"Gondola",Vector3.zero);Art(gondolas[k],"FestivalWheelGondola",k%3==0?"Rose":k%3==1?"Mint":"Gold");
             }
             return hub;
+        }
+        // A model under parent; if body is given, the model's Rose parts take that colour instead.
+        private static void Art(Transform parent,string model,string body)
+        {
+            var go=FestivalArtView.Create(parent,model);if(go==null||body==null)return;
+            foreach(var r in go.GetComponentsInChildren<Renderer>(true))if(r.name.EndsWith("__Rose",System.StringComparison.Ordinal))r.sharedMaterial=FestivalArtView.MaterialFor(body);
         }
         private void Turn()
         {
