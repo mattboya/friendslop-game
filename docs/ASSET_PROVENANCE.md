@@ -113,3 +113,7 @@ All new models are original scripted Blender geometry built on the shared helper
   - `scripts/generate_crew_uniform.py`: `AH04W_CrewUniform.fbx`, a crew role vest, lanyard and cap with the six Fit channels.
 - In-engine review: a development-only `--art-review <dir>` run of the macOS development player renders fixed views of the set dressing. `scripts/verify-release-diagnostics.mjs` checks that release builds exclude it.
 - Runtime motion: `Assets/Festival/Art/Resources/FestivalMotion.fbx` and `FestivalMotionActing.fbx` are unchanged copies of the package 04 and 03 rig-only motion exports (`AH04P_Motion.fbx` and `AH03P_Motion.fbx`). They were authored by `scripts/generate_people_motion_lod.py` and `scripts/upgrade_festival_people.py`, and `FestivalMotionLibrary` bakes them at runtime. No external animation or motion capture was used.
+
+## October 1 Palm Mirage art pass (ART-1)
+
+`scripts/generate_polo_dressing.py` regenerates `ArtSource/PoloDressing.blend`. It also writes the original scripted Blender models for Palm Mirage's palms, Ferris wheel, stage dressing, petal canopy, rainbow tower, astronaut and desert ridges, plus the Giggle Tank, balloon, VIP board and VISION-2's creatures, and their manifest `ArtSource/polo-dressing-manifest.json`. The astronaut is an original design. No third-party assets or references were copied.

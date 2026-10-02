@@ -1314,7 +1314,7 @@ def stock_tin():
     for side in (-1,1):
         # Two-sided printing remains visible in either hand orientation.
         rotation=(math.pi/2,0,0 if side<0 else math.pi)
-        print_text("Tin label name","PRISM",(0,side*.233,.32),.062,"Dark",rotation,surface=lambda p,side=side:(p.x,side*math.sqrt(.233**2-p.x**2),p.z))
+        print_text("Tin label name","STAMPS",(0,side*.233,.32),.062,"Dark",rotation,surface=lambda p,side=side:(p.x,side*math.sqrt(.233**2-p.x**2),p.z))
         print_text("Tin label subtitle","FESTIVAL SUPPLY",(0,side*.234,.245),.027,"Rose",rotation,surface=lambda p,side=side:(p.x,side*math.sqrt(.234**2-p.x**2),p.z))
     for i in range(5):
         box("Lid embossed ribs",(-.10+i*.05,0,.581),(.015,.14,.004),"Metal")

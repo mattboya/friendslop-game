@@ -88,3 +88,4 @@ Before calling a package done, review it in the native Unity build at first-pers
 - Changed: the current four variants now have six fit shapes, revised torso and role shells, flared skirt clearance, and hat-specific hair layers; deterministic selection can reach all four optional variants.
 - Added: original campsite car, shade, porta potty and Little Spoon models plus a wearable spoon mesh in the shared character asset.
 - Explicitly removed: no confirmed game behavior or asset category was removed by this brief.
+- Changed (2026-10-01, ART-1): Palm Mirage, festival 1, now has a polo-field look with palms, a lawn, desert ridges, a Ferris wheel, a dressed main stage and three landmarks. This replaces the temperate-forest target for that festival only.

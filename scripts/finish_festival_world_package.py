@@ -66,7 +66,7 @@ for n in names:
   tube('CeilingGrabRail',[(-3.0,0,2.50),(3.,0,2.50)],.035,'Metal')
   for x in [-2.4,-1.2,0,1.2,2.4]:tube('HangingStrap',[(x,0,2.50),(x,0,2.17),(x+.15,0,2.08),(x+.30,0,2.17),(x+.30,0,2.50)],.018,'Gold')
  elif n in ['StallSupplies','StallStock']:
-  label('ODDS & ENDS' if n=='StallSupplies' else 'PRISM SUPPLY',(0,1.68,2.61),.28,'Cream',True)
+  label('ODDS & ENDS' if n=='StallSupplies' else 'GOOD TIMES SUPPLY',(0,1.68,2.61),.2,'Cream',True)
   for x in [-2.25,2.25]:tube('AwningFrontSupport',[(x,0,2.7),(x,1.5,3.06)],.045,'Wood')
   box('BackShelf',(0,-1.20,1.9),(4.25,.4,.08),'Wood')
  elif n=='CampShop':

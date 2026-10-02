@@ -158,6 +158,8 @@ def prism_tin():
     t=C["tin"];r0,r1,r2,dy=t["emb"];ld,l0,l1=t["label"]
     kit("FestivalStockPrism",[("Ground","Stone",(0,-.04,0),(2.2,.1,1.0),0)])
     olathe("Tin","Metal",t["prism"]);olathe("Label","Cream",[(ld,l0),(ld,l1)]);olathe("LidRim","Gold",t["rim"])
+    for side in (-1,1):  # flat on one octagon face (width .187), in the band above the gem and its sparkles
+        label("Stamps"+("A" if side<0 else "B"),"Dark","STAMPS",(0,l1-.045,side*(ld+.002)),size=.048,depth=.004,R=(rot(180,"y") if side>0 else I)@M.Rotation(math.pi/2,4,"X"))
     R=t["rim"][-1][0]/math.cos(Q);yb=t["rim"][-1][1]
     for j in range(8):
         a,b=Q+j*2*Q,Q+(j+1)*2*Q;bm=bmesh.new()
