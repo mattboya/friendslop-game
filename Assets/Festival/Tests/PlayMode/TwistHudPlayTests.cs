@@ -154,7 +154,7 @@ namespace Festival.Tests
                 // earlier.
                 void Started(double ago){foreach(var i in sim.State.Interactions)if(i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")i.StartSeconds=sim.State.SimulationSeconds-ago;}
                 Started(Festivals.WheelRideSeconds/2);
-                var sam=GameObject.Find(mate.Id);if(sam!=null)foreach(var skin in sam.GetComponentsInChildren<SkinnedMeshRenderer>())skin.updateWhenOffscreen=true;
+                var sam=GameObject.Find(mate.Id);
                 yield return new WaitForSeconds(.5f);
                 var eye=session.ViewCamera.transform.position;
                 if(eye.y<=10)failures.Add("halfway round the wheel: the eye is only "+eye.y.ToString("0.00")+" m up, at "+eye);
@@ -171,18 +171,11 @@ namespace Festival.Tests
                     {
                         if(Vector2.Distance(new Vector2(hips.position.x,hips.position.z),new Vector2(eye.x,eye.z))<.3f)failures.Add("halfway round the wheel: Sam sits in the same place as you ("+hips.position+", your eye "+eye+"), not beside you");
                         // The gondola's floor is .37-.45 m below its middle, and its walls stand .01 m above it. Seated, Sam's hips are
-                        // down behind the walls, and nothing of Sam hangs out under the floor, where friends on the ground look up at it, or
-                        // through its sides. Sam's head (the rig's is .56 m tall) still shows over the roof.
+                        // down behind the walls, and nothing of Sam comes out under the floor, where friends on the ground look up at it, or
+                        // through its walls (TwistVisualsSessionTests.OutsideItsGondola, which every body shape passes). Sam's head (the
+                        // rig's is .56 m tall) still shows over the roof.
                         if(hips.position.y>theirs.position.y)failures.Add("halfway round the wheel: Sam stands rather than sits (hips "+(hips.position.y-theirs.position.y).ToString("0.00")+" m above the gondola's middle)");
-                        var cabin=Encased(theirs);
-                        // An elbow or a hat brim may reach a few centimetres over a side, in the open air between the walls and the roof.
-                        const float Over=.05f;
-                        foreach(var skin in sam.GetComponentsInChildren<SkinnedMeshRenderer>())
-                        {
-                            if(!skin.enabled)continue;var part=skin.bounds;
-                            if(part.min.y<theirs.position.y-.45f)failures.Add("halfway round the wheel: Sam's "+skin.name+" hangs "+(theirs.position.y-.45f-part.min.y).ToString("0.000")+" m out under the gondola's floor");
-                            if(part.min.x<cabin.min.x-Over||part.max.x>cabin.max.x+Over||part.min.z<cabin.min.z-Over||part.max.z>cabin.max.z+Over)failures.Add("halfway round the wheel: Sam's "+skin.name+" ("+part.min.ToString("F2")+" to "+part.max.ToString("F2")+") sticks out through the sides of the gondola ("+cabin.min.ToString("F2")+" to "+cabin.max.ToString("F2")+")");
-                        }
+                        foreach(var part in TwistVisualsSessionTests.OutsideItsGondola(sam,theirs))failures.Add("halfway round the wheel: Sam's "+part);
                     }
                     var posed=sam.GetComponent<FestivalCharacter>().Pose;if(posed!=FestivalSimulation.RideWheelKind)failures.Add("halfway round the wheel: Sam's body is posed "+posed);
                 }

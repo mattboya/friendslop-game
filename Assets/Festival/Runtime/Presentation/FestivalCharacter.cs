@@ -368,10 +368,14 @@ namespace Festival.Presentation
             }
             else if(seated)
             {
-                // POLO-5: seated, thighs forward with the knees a little up (+X pitches legs back, so they swing forward on -X), shins
-                // straight down to the floor and hands on the knees. The hips sink to the bench, as lying down's sink to the grass.
-                Aim("LegL",new Vector3(-105,0,4));Aim("LegR",new Vector3(-105,0,-4));Aim("ShinL",new Vector3(105,0,0));Aim("ShinR",new Vector3(105,0,0));
-                Aim("ArmL",new Vector3(-40,0,-6));Aim("ArmR",new Vector3(-40,0,6));Aim("ForearmL",new Vector3(-35,0,0));Aim("ForearmR",new Vector3(-35,0,0));
+                // POLO-5: seated in a gondola that friends watch from the ground, so every body shape keeps inside its walls (1.26 m
+                // wide and 1.06 m deep outside): thighs forward with the knees a little up (+X pitches legs back, so they swing forward
+                // on -X), shins tucked back under the knees with the feet kept level (straight down, the widest shape's shoes came 12 cm
+                // through the front), elbows in with the hands on the knees, and the back tipped a little forward, which brings a
+                // backpack's bottom 6 cm in from the back wall. The hips sink to the bench, as lying down's sink to the grass.
+                Aim("LegL",new Vector3(-105,0,4));Aim("LegR",new Vector3(-105,0,-4));Aim("ShinL",new Vector3(155,0,0));Aim("ShinR",new Vector3(155,0,0));
+                Aim("FootL",new Vector3(-50,0,0));Aim("FootR",new Vector3(-50,0,0));Aim("Spine",new Vector3(5,0,0));
+                Aim("ArmL",new Vector3(-12,0,-35));Aim("ArmR",new Vector3(-12,0,35));Aim("ForearmL",new Vector3(-75,0,0));Aim("ForearmR",new Vector3(-75,0,0));
             }
             else if(dance)
             {

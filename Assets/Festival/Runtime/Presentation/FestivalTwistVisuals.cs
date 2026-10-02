@@ -32,12 +32,16 @@ namespace Festival.Presentation
         // every other does. Between snapshots it runs on with the frame, eased onto each new one at WheelPull, and jumps to one
         // further out than WheelSnap seconds.
         private const double WheelPull=2,WheelSnap=1;
-        // POLO-5: a rider sits in the middle of ART-1's gondola, over its floor CabinFloor below the model's middle (the point it hangs
-        // from, less GondolaDrop). Their eye is SeatedEyeHeight above that floor: in the open cabin, under the canopy roof .74 m above
-        // the floor that a standing eye poked through, and above the walls' tops (.38 m). Riders sharing a gondola sit side by side
-        // across the middle CabinSpread of its 1.2 m width, which keeps the widest seated body (.93 m) within its sides.
+        // POLO-5: a rider sits in ART-1's gondola, over its floor CabinFloor below the model's middle (the point it hangs from, less
+        // GondolaDrop), and CabinAhead forward of that middle, toward the way they face (-z). That shares out the room between the
+        // front and back walls: the widest body shape's skirt, tutu or hat brim reaches .47-.54 m ahead of its middle, and its
+        // backpack .51-.59 m behind. Their eye is SeatedEyeHeight above that floor: in the open cabin, under the canopy roof .74 m
+        // above the floor that a standing eye poked through, and above the walls' tops (.38 m). Riders sharing a gondola sit side
+        // by side across the middle CabinSpread of its 1.2 m width, .35 m apart for two, which keeps every seated body inside its
+        // sides (.45 m out from its middle at most) except the widest shape's skirt, tutu or crossbody pouch (.49-.55 m), which
+        // shows 3-10 cm past a side beside a friend.
         public const float SeatedEyeHeight=.56f;
-        private const float CabinFloor=.37f,CabinSpread=.7f;
+        private const float CabinFloor=.37f,CabinAhead=.025f,CabinSpread=.7f;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
@@ -189,7 +193,7 @@ namespace Festival.Presentation
         {
             int gondola=Boarded(rider.VisualWheelSince),place=0,riders=1;
             foreach(var p in state.Players)if(p.Id!=rider.Id&&p.VisualWheelSince>=0&&Boarded(p.VisualWheelSince)==gondola){riders++;if(string.CompareOrdinal(p.Id,rider.Id)<0)place++;}
-            return new Vector3(Festivals.WheelX+((place+.5f)/riders-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ)+Hung(gondola,Angle(now));
+            return new Vector3(Festivals.WheelX+((place+.5f)/riders-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
         }
         private static int Boarded(double since)
         {
