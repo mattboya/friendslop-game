@@ -71,7 +71,9 @@ namespace Festival.Presentation
         void Update()
         {
             var state=session.State;
-            int selected=state!=null&&(state.Phase=="Shopping"||state.Phase=="Spinning"||state.Phase=="CampReview")?state.CampMusicTrack:0;
+            // MENU-1: before a game connects, the title plays its own track.
+            int selected=!session.Connected?FestivalTitleScreen.MusicTrack
+                :state!=null&&(state.Phase=="Shopping"||state.Phase=="Spinning"||state.Phase=="CampReview")?state.CampMusicTrack:0;
             if(selected!=playing)
             {
                 Play(selected,0);

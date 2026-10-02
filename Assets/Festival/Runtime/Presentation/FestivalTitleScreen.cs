@@ -43,6 +43,22 @@ namespace Festival.Presentation
         public void ToggleAdvanced(){Advanced=!Advanced;advanced.SetActive(Advanced);}
         /// <summary>Esc and BACK: JOIN A FRIEND steps back to PLAY, PLAY to the title, and the title stays.</summary>
         public void Back(){if(Shown!=Page.Home)Open(Shown==Page.Join?Page.Play:Page.Home);}
+        /// <summary>The title's music: ORGANIC HOUSE in CampFeatures.Tracks (MUSIC-2's decision A), which FestivalCampAudio plays
+        /// until a game connects.</summary>
+        public const int MusicTrack=3;
+        // The title's view of the campsite: from 8 m up over its south end, inside the ring of trees round the camp, DriftDegrees
+        // either way round the gathering mat (Pivot) and back over DriftSeconds, looking over the mat towards the trailhead, turned
+        // AimLeft so the camp sits right of the title's column, through a narrower lens than play's 75°.
+        public const float DriftSeconds=90,DriftDegrees=12,AimLeft=16,Fov=60;
+        private static readonly Vector3 Pivot=new Vector3(0,0,2),Boom=new Vector3(0,8,-17),Aim=new Vector3(0,1.5f,0);
+        /// <summary>Where the title's camera is seconds into the drift and where it looks; still (reduced motion) holds the drift's
+        /// middle. FestivalHud moves the camera here until a game connects: the session drives it only from then.</summary>
+        public static void Shot(float seconds,bool still,out Vector3 position,out Quaternion rotation)
+        {
+            var sway=Quaternion.Euler(0,still?0:Mathf.Sin(seconds*2*Mathf.PI/DriftSeconds)*DriftDegrees,0);
+            position=Pivot+sway*Boom;
+            rotation=Quaternion.Euler(0,-AimLeft,0)*Quaternion.LookRotation(Pivot+Aim-position);
+        }
         /// <summary>QUIT: the game closes; in the editor, play mode stops.</summary>
         public static void Quit()
         {

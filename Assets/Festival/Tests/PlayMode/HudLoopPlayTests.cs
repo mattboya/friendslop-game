@@ -862,6 +862,89 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"The title's ways in:\n"+string.Join("\n",failures));
         }
 
+        // MENU-1: the title is the game from its first frame. All the way round a slow drift (FestivalTitleScreen.Shot) the camera
+        // looks over the campsite from inside it, clear of anything solid and of every tree, tent and prop by 3 m, the camp's
+        // middle right of the title's column; the live camera follows it, and holds still with reduced motion. The camp plays
+        // ORGANIC HOUSE (MUSIC-2's decision A) until a game starts, then the camp's own first track, and ORGANIC HOUSE again once
+        // you leave. This machine's profile is put back as it was.
+        [UnityTest]public IEnumerator TheTitleDriftsOverTheCampsiteToItsOwnMusic()
+        {
+            var world=new GameObject("HUD title camp world");var built=world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD title camp");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            string saved=JsonUtility.ToJson(session.Profile.Data);
+            var failures=new List<string>();
+            var camp=hud.GetComponent<FestivalCampAudio>();
+            string Playing()=>camp.Music==null?"nothing":camp.Music.clip==null?"no clip":camp.Music.clip.name+(camp.Music.isPlaying?"":" (stopped)");
+            var view=session.ViewCamera;
+            Renderer[] scenery=null;
+            // Where a pose leaves the camera, and what's wrong with it as a view of the camp: from inside the camp, over head
+            // height, clear of anything solid and 3 m from anything drawn, with the middle of the gathering mat on screen right of
+            // the title's column.
+            string Framing(Vector3 at,Quaternion turn)
+            {
+                view.transform.SetPositionAndRotation(at,turn);
+                var middle=view.WorldToViewportPoint(new Vector3(0,1,0));
+                if(Mathf.Abs(at.x)>CampFeatures.CampHalfWidth-1||Mathf.Abs(at.z)>CampFeatures.CampHalfDepth-1||at.y<3)return "the camera at "+at+" is not over the campsite";
+                if(Physics.CheckSphere(at,1))return "the camera at "+at+" is within a metre of something solid";
+                // The ground and the far woodland rise reach round the whole camp: only what stands in it counts.
+                foreach(var drawn in scenery)if(drawn!=null&&drawn.bounds.size.x<2*CampFeatures.CampHalfWidth&&drawn.bounds.SqrDistance(at)<9)return "the camera at "+at+" is within 3 m of "+drawn.name;
+                if(middle.z<=0||middle.x<.55f||middle.x>.9f||middle.y<.2f||middle.y>.8f)return "from "+at+" the camp's middle shows at "+middle+", not right of the title";
+                return "";
+            }
+            try
+            {
+                session.Profile.Data.ReducedMotion=false;
+                yield return new WaitForSeconds(.3f);
+                if(!built.IsCampVisible)failures.Add("the campsite isn't the scene behind the title");
+                scenery=built.GetComponentsInChildren<Renderer>(false);
+                // A second at a time round the whole drift: framed as above, wide, and slow.
+                FestivalTitleScreen.Shot(0,false,out var first,out _);
+                float widest=0,fastest=0;var last=first;
+                for(float t=0;t<=FestivalTitleScreen.DriftSeconds;t++)
+                {
+                    FestivalTitleScreen.Shot(t,false,out var at,out var turn);
+                    string wrong=Framing(at,turn);if(wrong!=""&&failures.Count<4)failures.Add(t.ToString("0")+" s into the drift: "+wrong);
+                    widest=Mathf.Max(widest,Vector3.Distance(first,at));fastest=Mathf.Max(fastest,Vector3.Distance(last,at));last=at;
+                }
+                if(widest<2||fastest>1)failures.Add("the drift spans "+widest.ToString("0.0")+" m at up to "+fastest.ToString("0.00")+" m a second, not a slow drift");
+                FestivalTitleScreen.Shot(0,true,out var restAt,out var restTurn);
+                string still=Framing(restAt,restTurn);if(still!="")failures.Add("held still: "+still);
+                // The live camera follows the drift, now and a second later, and holds still with reduced motion. It starts from
+                // somewhere else, so only the title can have put it back.
+                view.transform.SetPositionAndRotation(Vector3.up*100,Quaternion.identity);view.fieldOfView=75;
+                for(int look=0;look<2;look++)
+                {
+                    yield return look==0?null:new WaitForSeconds(1);
+                    FestivalTitleScreen.Shot(Time.unscaledTime,false,out var now,out _);
+                    if(Vector3.Distance(view.transform.position,now)>.05f)failures.Add("the live camera is at "+view.transform.position+", not on the drift at "+now);
+                }
+                if(Mathf.Abs(view.fieldOfView-FestivalTitleScreen.Fov)>.01f)failures.Add("the live camera's view is "+view.fieldOfView+"°, not the title's "+FestivalTitleScreen.Fov+"°");
+                session.Profile.Data.ReducedMotion=true;yield return null;
+                var held=view.transform.position;yield return new WaitForSeconds(.5f);
+                if(view.transform.position!=held||Vector3.Distance(held,restAt)>.001f)failures.Add("with reduced motion the camera is at "+view.transform.position+", not held at "+restAt);
+
+                if(Playing()!="organic-house-loop")failures.Add("the title plays "+Playing()+", not ORGANIC HOUSE");
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                yield return new WaitForSeconds(.3f);
+                if(Playing()!="tech-house-loop")failures.Add("at camp in a game the camp plays "+Playing()+", not its own first track, TECH HOUSE");
+                session.Leave();
+                yield return new WaitForSeconds(.3f);
+                if(Playing()!="organic-house-loop")failures.Add("back on the title the camp plays "+Playing()+", not ORGANIC HOUSE");
+            }
+            finally
+            {
+                session.Leave();
+                JsonUtility.FromJsonOverwrite(saved,session.Profile.Data);session.Profile.Save();
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"The title's campsite and music:\n"+string.Join("\n",failures));
+        }
+
         // HUD-7: as each level opens, a card under the aim dot says what it asks, your job and how the crew loses
         // (FestivalHudText.Briefing; the tripper's "Trust, but verify." is folded into their job), each line drawn whole at 1080p.
         // It goes after BriefingSeconds of level clock, or sooner at any key that doesn't move you, for the rest of that level;

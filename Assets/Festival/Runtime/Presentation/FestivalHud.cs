@@ -664,7 +664,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -1533,6 +1533,13 @@ namespace Festival.Presentation
 
         private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(null);session.Host(nameField.text,port);}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(addressField.text);session.Join(nameField.text,addressField.text,port);}
+        // MENU-1: until a game connects the session moves no camera, so the title drifts it over the campsite (FestivalTitleScreen.Shot).
+        private void FrameTitle()
+        {
+            if(session.ViewCamera==null)return;
+            FestivalTitleScreen.Shot(Time.unscaledTime,session.Profile.Data.ReducedMotion,out var at,out var turn);
+            session.ViewCamera.transform.SetPositionAndRotation(at,turn);session.ViewCamera.fieldOfView=FestivalTitleScreen.Fov;
+        }
         // MENU-1: PLAY fills in what was last used here (Start): your name, and the host you last joined.
         // ponytail: a failed save only costs that prefill, so it isn't reported over the connection's own status.
         private void Remember(string host){session.Profile.Data.PlayerName=nameField.text;if(host!=null)session.Profile.Data.LastHost=host;session.Profile.Save();}
