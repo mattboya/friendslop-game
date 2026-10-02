@@ -56,13 +56,16 @@ namespace Festival.Core
         void Film(double dt)
         {
             double heat=Festivals.For(State).SuspicionMultiplier;
-            foreach(var cam in State.Npcs)if(cam.Twist==Influencer)foreach(var p in State.Players)
+            foreach(var cam in State.Npcs)foreach(var p in State.Players)
             {
-                if(!p.Connected||!InFrame(cam,p))continue;
+                if(!Films(cam,p))continue;
                 double gain=Festivals.FilmSuspicionPerSecond*PassiveGain(p,dt,heat);
                 foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Distance(n.X,n.Z,p.X,p.Z)<=Festivals.FilmWitnessRadius){var o=Observe(n,p);o.Suspicion=Math.Min(100,o.Suspicion+gain);o.LastSeenSeconds=State.SimulationSeconds;}
             }
         }
+        /// <summary>POLO-6: whether influencer cam has p on camera: p is live, connected and in its frame during a level. Film puts
+        /// the crowd round p on alert while it holds, and FestivalSession.ViewFor tells p's client alone who has them.</summary>
+        public bool Films(NpcState cam,PlayerState p)=>State.Phase=="Playing"&&cam.Twist==Influencer&&p.Connected&&InFrame(cam,p);
         // The phone looks along the influencer's facing: FilmRange deep, FilmConeDegrees wide, blocked by walls.
         bool InFrame(NpcState cam,PlayerState p)
         {

@@ -38,6 +38,7 @@ namespace Festival.Network
         // DIALOG-3: sales, buys, chats and security talks are conversations, not charts: a Reply command (Amount the reply,
         // Direction the turn), and talks carry their Turns, whether a TrustDance came first and a chat's or a buy's Hunch. A narc
         // asked to sell talks instead of busting at the ask; finishing the buy busts.
+        // POLO-6: a player's own copy in their snapshot names the influencers filming them (PlayerState.VisualFilmedBy).
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -519,6 +520,8 @@ namespace Festival.Network
                 copy.VisualGiggling=FestivalSimulation.Giggling(p,source.SimulationSeconds);
                 // POLO-5: when their turn on the Ferris wheel began, for every client to seat them in the same gondola; -1 off it.
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
+                // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
+                copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.Films(n,p)).ConvertAll(n=>n.Id):new List<string>();
                 if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;}view.Players.Add(copy);
             }
             if(!spirit)

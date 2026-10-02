@@ -126,6 +126,28 @@ namespace Festival.Tests
             foreach(var viewer in game.State.Players)Assert.That(Wire(game,viewer.Id).Players.Find(p=>p.Id==rider.Id).VisualWheelSince,Is.EqualTo(-1),viewer.Id+"'s client lets "+rider.Id+" off the wheel");
         }
 
+        // POLO-6: an influencer filming you is no secret to you: your card says ON CAMERA, and the phone that has you shows REC. So
+        // your own copy in your own view names every influencer filming you. Nobody else's view says so, and the host never holds it.
+        [Test] public void OnlyThePlayerOnCameraKnowsWhoIsFilmingThem()
+        {
+            var game=Level(0);var me=game.State.Players[0];var cam=game.State.Npcs.Find(n=>n.Twist==FestivalSimulation.Influencer);
+            double yaw=cam.Yaw*System.Math.PI/180;
+            void Stand(PlayerState p,double ahead){p.X=cam.X+(float)(ahead*System.Math.Sin(yaw));p.Z=cam.Z+(float)(ahead*System.Math.Cos(yaw));}
+            // Me two metres in front of the phone, the rest of the crew two metres behind it.
+            Stand(me,2);foreach(var p in game.State.Players)if(p!=me)Stand(p,-2);
+            Assert.That(game.State.Npcs.FindAll(n=>game.Films(n,me)),Is.EqualTo(new[]{cam}),"setup: "+cam.Id+", and only "+cam.Id+", films me");
+            Assert.That(game.State.Players.TrueForAll(p=>p==me||!game.State.Npcs.Exists(n=>game.Films(n,p))),Is.True,"setup: nobody films the rest of the crew");
+            foreach(var viewer in game.State.Players)
+            {
+                var view=Wire(game,viewer.Id);
+                Assert.That(view.Players.Find(p=>p.Id==me.Id).VisualFilmedBy,Is.EqualTo(viewer==me?new[]{cam.Id}:new string[0]),viewer==me?"my client knows "+cam.Id+" has me on camera":viewer.Id+"'s client can't tell I'm on camera");
+                Assert.That(view.Players.TrueForAll(p=>p.Id==me.Id||p.VisualFilmedBy.Count==0),Is.True,viewer.Id+"'s client has nobody else on camera");
+            }
+            Assert.That(me.VisualFilmedBy,Is.Empty,"the host's own state never holds it");
+            Stand(me,-3);
+            Assert.That(Wire(game,me.Id).Players.Find(p=>p.Id==me.Id).VisualFilmedBy,Is.Empty,"behind the phone, I'm off camera");
+        }
+
         [Test] public void ByDayTheWheelShowsNoFriend()
         {
             var game=Level(0);var rider=Ride(game);

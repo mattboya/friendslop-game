@@ -92,9 +92,15 @@ public static class PoloTwistTests
     static void OnlyTheFrameCounts()
     {
         // The influencer is always within 10 m of anyone they could film, so their own suspicion shows whether p0 was on camera.
-        double Cam(Action<FestivalSimulation> arrange){var s=Filming();arrange(s);s.Tick(1);return Heat(s,"cam");}
-        void Nothing(string why,Action<FestivalSimulation> arrange){double gained=Cam(arrange);Check(gained==0,why+": no suspicion, got "+gained);}
-        void Something(string why,Action<FestivalSimulation> arrange){double gained=Cam(arrange);Check(Same(gained,Festivals.FilmSuspicionPerSecond),why+": on camera, got "+gained);}
+        // POLO-6: Films, which tells p0's client it is on camera (FestivalSession.ViewFor), agrees with the rule every time.
+        double Cam(string why,bool filmed,Action<FestivalSimulation> arrange)
+        {
+            var s=Filming();arrange(s);
+            Check(s.Films(Npc(s,"cam"),s.Player("p0"))==filmed,why+": Films says "+(filmed?"off":"on")+" camera");
+            s.Tick(1);return Heat(s,"cam");
+        }
+        void Nothing(string why,Action<FestivalSimulation> arrange){double gained=Cam(why,false,arrange);Check(gained==0,why+": no suspicion, got "+gained);}
+        void Something(string why,Action<FestivalSimulation> arrange){double gained=Cam(why,true,arrange);Check(Same(gained,Festivals.FilmSuspicionPerSecond),why+": on camera, got "+gained);}
         double Rad(double degrees)=>degrees*Math.PI/180;
         Something("7.9 m straight ahead",s=>Place(s,0,0,7.9));
         Nothing("8.1 m straight ahead is out of range",s=>Place(s,0,0,8.1));
@@ -105,6 +111,8 @@ public static class PoloTwistTests
         Nothing("behind a wall",s=>s.HasLineOfSight=(x,z,xx,zz)=>false);
         Nothing("downed",s=>s.Player("p0").Life="Downed");
         Nothing("when nobody is an influencer",s=>Npc(s,"cam").Twist="");
+        Nothing("disconnected",s=>s.Player("p0").Connected=false);
+        Nothing("once the level is over",s=>s.State.Phase="Results");
     }
 
     // L4 Crowd: influencer frames are a passive gain, so they scale with the level's multiplier and the filmed player's pack,
@@ -129,8 +137,11 @@ public static class PoloTwistTests
         Check(string.Join(",",Tagged(restored,FestivalSimulation.Influencer).ConvertAll(n=>n.Id))==cast,"the influencers survive a snapshot");
         var legacy=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
         foreach(var npc in legacy["Npcs"].AsArray())npc.AsObject().Remove("Twist");
+        // POLO-6: and from before a player's view named the influencers filming them.
+        foreach(var p in legacy["Players"].AsArray())Check(p.AsObject().Remove("VisualFilmedBy"),"setup: a snapshot names who films each player");
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));
         Check(old.State.Npcs.TrueForAll(n=>n.Twist==""),"a snapshot from before twists restores with nobody filming");
+        Check(old.State.Players.TrueForAll(p=>p.VisualFilmedBy!=null&&p.VisualFilmedBy.Count==0),"and with nobody on camera");
         old.Tick(1);Check(old.State.Phase=="Playing","and plays on");
     }
 

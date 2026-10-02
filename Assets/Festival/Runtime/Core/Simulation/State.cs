@@ -21,6 +21,10 @@ namespace Festival.Core
         // POLO-5: view-only, never set on the host: FestivalSession.ViewFor sets it to the SimulationSeconds this player boarded
         // the Ferris wheel, so every client seats them in the same gondola; -1 off the wheel and in older snapshots.
         public double VisualWheelSince=-1;
+        // POLO-6: view-only, never set on the host: FestivalSession.ViewFor fills it on the viewer's own copy alone with the
+        // influencers filming them (FestivalSimulation.Films), for their ON CAMERA line and those phones' REC; empty otherwise and in
+        // older snapshots.
+        public List<string> VisualFilmedBy=new List<string>();
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
         public int Performances, CampAntics; public double LastRhythmScore=-1;
