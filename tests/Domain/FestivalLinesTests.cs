@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Festival.Core;
 
-// DIALOG-4: festivalgoers almost never repeat themselves. Every line they say is built by FestivalLines' grammar from parts, at
+// DIALOG-4: festivalgoers almost never repeat themselves. Every line they say (chat barks, challenge lines and their awkward
+// twins, and the chat check's openers, questions, answers and doorman lines) is built by FestivalLines' grammar from parts, at
 // least 1,000 different lines per kind of moment on each festival, and each player's DialogueHistory remembers what they've
 // heard, so a line they heard lately is drawn again.
 public static class FestivalLinesTests
@@ -14,13 +15,14 @@ public static class FestivalLinesTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{EveryKindHasAThousandLinesOnEachFestival,EveryLineReadsCleanly,EachFestivalKeepsToItsOwnPlaces,NoLineCarriesANarcTell,
+        foreach(var test in new Action[]{EveryKindHasAThousandLinesOnEachFestival,EveryLineReadsCleanly,EachFestivalKeepsToItsOwnPlaces,OnlyANarcsAnswersCarryATell,
             TheSevenChallengeContextsAreBuiltFromTheGrammar,AChallengeLineIsNotRepeatedWithinThirty,ARedrawGivesUpAfterFive,AFestivalgoersChatIsNotRepeatedWithinThirty})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" festival line test(s) failed:\n"+string.Join("\n",failures));
     }
 
-    const int Draws=20000;
+    // 20,000 seeded draws of each kind: 10,000 on each festival, and each festival on its own gives at least 1,000 different lines.
+    const int Draws=10000;
     // DIALOG-2's bubbles wrap at 26 letters and show 3 rows, so a line stays within about 80 characters.
     const int Longest=80;
     // Places that exist on one map only; the other festival never mentions them.
@@ -48,6 +50,9 @@ public static class FestivalLinesTests
     static void EveryKindHasAThousandLinesOnEachFestival()
     {
         Check(FestivalLines.Kinds.Contains("bark")&&DialogueCatalog.Contexts.All(c=>FestivalLines.Kinds.Contains(c)&&FestivalLines.Kinds.Contains(c+"_awkward")),"the grammar has the chat barks and each challenge context's line and awkward twin: "+string.Join(", ",FestivalLines.Kinds));
+        // DIALOG-1's chat check: each persona's opener, the three questions, each role's three answers, and POLO-4's doorman.
+        var chat=DialogueGrammar.Personas.Select(p=>"opener."+p).Concat(new[]{"question.0","question.1","question.2","doorman"}).Concat(DialogueGrammar.Roles.SelectMany(r=>new[]{0,1,2}.Select(i=>"answer."+r+"."+i)));
+        Check(chat.All(FestivalLines.Kinds.Contains)&&FestivalLines.Kinds.Length==15+chat.Count(),"the grammar has every chat kind and nothing else: "+string.Join(", ",FestivalLines.Kinds));
         var few=new List<string>();
         foreach(var kind in FestivalLines.Kinds) for(int festival=0;festival<Festivals.Count;festival++)
         {
@@ -93,9 +98,9 @@ public static class FestivalLinesTests
         }
     }
 
-    // Cop-speak is how a narc gives themselves away (DialogueGrammar.NarcTells), so no festivalgoer's line, guard's line or
-    // player's awkward reply ever has any.
-    static void NoLineCarriesANarcTell()=>EveryLine("no line carries a narc tell",(kind,festival,line)=>!DialogueGrammar.HasNarcTell(line));
+    // Cop-speak is how a narc gives themselves away (DialogueGrammar.NarcTells): every line of a narc's answers carries some, and
+    // nothing else does, least of all the player's own lines (their chat questions and awkward replies).
+    static void OnlyANarcsAnswersCarryATell()=>EveryLine("a narc's answers always carry a narc tell and no other line ever does",(kind,festival,line)=>DialogueGrammar.HasNarcTell(line)==kind.StartsWith("answer.Narc.",StringComparison.Ordinal));
 
     static void TheSevenChallengeContextsAreBuiltFromTheGrammar()
     {

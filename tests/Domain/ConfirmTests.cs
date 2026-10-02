@@ -145,11 +145,14 @@ public static class ConfirmTests
             foreach(var npc in new[]{narc,other})
             {
                 string where=Festivals.Name(festival)+" "+npc.Role;
+                // DIALOG-4: the chat steers clear of what the tripper has heard lately, so it is built from their history as it stood.
+                var heard=new DialogueHistory{Seen=new List<string>(Tripper(s).Dialogue.Seen)};
                 Beside(Tripper(s),npc);Check(Act(s,Tripper(s).Id,"ConfirmChat",npc.Id).Accepted,where+": setup: the tripper chats");
                 var chat=s.Interaction(Tripper(s).InteractionId);var said=chat.Chat;
                 Check(said!=null&&said.Opener!=""&&said.Questions.Length==3&&said.Answers.Length==3&&said.Questions.Concat(said.Answers).All(line=>!string.IsNullOrWhiteSpace(line)),where+": an opener, three questions and three answers");
-                var expected=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id,npc.Twist),festival,chat.ChartSeed);
+                var expected=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id,npc.Twist),festival,chat.ChartSeed,heard);
                 Check(said.Opener==expected.Opener&&said.Questions.SequenceEqual(expected.Questions)&&said.Answers.SequenceEqual(expected.Answers),where+": DIALOG-1's conversation for their role, their persona and this festival");
+                Check(heard.Seen.Count==Tripper(s).Dialogue.Seen.Count&&Tripper(s).Dialogue.Seen.SequenceEqual(heard.Seen)&&Tripper(s).Dialogue.Seen.Contains(DialogueHistory.Key("opener."+DialogueGrammar.PersonaFor(npc.Id,npc.Twist),said.Opener)),where+": and the tripper's history now holds what it said, got "+Tripper(s).Dialogue.Seen.Count+" lines");
                 Check(said.Answers.Any(DialogueGrammar.HasNarcTell)==(npc.Role=="Narc"),where+": cop-speak slips out of narcs and nobody else: "+string.Join(" | ",said.Answers));
                 Settle(s,chat);
             }

@@ -250,7 +250,10 @@ public static class PoloTwistTests
         // POLO-4: and it is no check. The guard's opener, as their persona talks, then one doorman line, and nothing to ask.
         var said=s.Interaction(friend.InteractionId).Chat;
         Check(said.Questions.Length==0&&said.Answers.Length==0,"a sober friend's chat with the guard asks nothing and hears no answers, got "+said.Questions.Length+" questions");
-        Check(OpenersOf(DialogueGrammar.PersonaFor(guard.Id,guard.Twist),0).Contains(said.Opener),"it opens as the guard's persona does: "+said.Opener);
+        // DIALOG-4: openers are built from parts, thousands per persona, so it is checked against the persona's own opener for this
+        // chat's seed, which no other persona would say.
+        string guardPersona=DialogueGrammar.PersonaFor(guard.Id,guard.Twist);int chatSeed=s.Interaction(friend.InteractionId).ChartSeed;
+        Check(said.Opener==DialogueGrammar.Build("Regular",guardPersona,0,chatSeed).Opener&&DialogueGrammar.Personas.All(other=>other==guardPersona||DialogueGrammar.Build("Regular",other,0,chatSeed).Opener!=said.Opener),"it opens as the guard's persona ("+guardPersona+") does: "+said.Opener);
         Check(said.Doorman!=""&&!DialogueGrammar.HasNarcTell(said.Opener+" "+said.Doorman),"then one doorman line: "+said.Doorman);
         s.Tick(FestivalSimulation.ConfirmChatSeconds-.1);Check(Bands(friend)==0,"not in yet "+(FestivalSimulation.ConfirmChatSeconds-.1)+" s in");
         s.Tick(.2);Check(Bands(friend)==1,"after the "+FestivalSimulation.ConfirmChatSeconds+" s chat they wear a VIP wristband");
@@ -290,8 +293,6 @@ public static class PoloTwistTests
                 Check(line!=""&&line.IndexOf('{')<0&&!line.StartsWith(festival+":")&&!DialogueGrammar.HasNarcTell(line),persona+" on festival "+festival+", seed "+seed+": a filled-in line with no narc tell: "+line);
         }
     }
-    // Every Palm Mirage or Ember Playa opener a persona has: a few hundred check chats draw each at least once.
-    static HashSet<string> OpenersOf(string persona,int festival){var lines=new HashSet<string>();for(int seed=0;seed<400;seed++)lines.Add(DialogueGrammar.Build("Regular",persona,festival,seed).Opener);return lines;}
     // A fresh Palm Mirage Day 1 (seed 2) where the guard's role is set to `role`, then a sober friend (or the tripper, with no
     // vision of the guard) talks to them. The conversation they get.
     static Conversation RopeChat(string role,bool tripper)

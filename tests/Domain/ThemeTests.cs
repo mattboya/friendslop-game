@@ -44,7 +44,8 @@ public static class ThemeTests
         foreach(var kind in FestivalLines.Kinds) for(int festival=0;festival<Festivals.Count;festival++) for(int seed=0;seed<5000;seed++) texts.Add(FestivalLines.Grammar.Line(kind,festival,seed));
         int before=texts.Count;
         foreach(var field in typeof(DialogueGrammar).GetFields(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)) Collect(field.GetValue(null),texts);
-        Check(texts.Count-before>=400,"every DialogueGrammar pool is read, got "+(texts.Count-before)+" strings");
+        // DIALOG-4: the chat's lines moved into FestivalLines' parts; DialogueGrammar keeps its persona interjections and narc tells.
+        Check(texts.Count-before>=80,"every DialogueGrammar pool is read, got "+(texts.Count-before)+" strings");
         foreach(var text in texts) Check(Offence(text)==null,"real-drug or retired word '"+Offence(text)+"' in: "+text);
 
         // Internal ids may stay as they are, so a literal that is exactly a catalog id (e.Id=="lsd") is code, not text.

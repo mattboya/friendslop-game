@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Festival.Core;
 
 public static class DialogueGrammarTests
@@ -41,6 +42,17 @@ public static class DialogueGrammarTests
             Check(distinct.Count>=2000,"festival "+festival+" has "+distinct.Count+" distinct conversations, want at least 2000");
             Check(used.Count==Vocabulary[festival].Length,"festival "+festival+" uses its whole vocabulary, got "+string.Join(", ",used));
         }
+        // DIALOG-4: over 5,000 chats, a narc's answers always carry a tell, and no other role's line, nor any of the tripper's
+        // own questions, ever does.
+        for(int i=0;i<5000;i++)
+        {
+            string role=DialogueGrammar.Roles[i%4],persona=DialogueGrammar.Personas[i/4%5];int festival=i/20%2;
+            var c=DialogueGrammar.Build(role,persona,festival,1000+i);
+            foreach(var question in c.Questions) Check(!DialogueGrammar.HasNarcTell(question),"the tripper's question carries a narc tell: "+question);
+            Check(!DialogueGrammar.HasNarcTell(c.Opener),role+"'s opener carries a narc tell: "+c.Opener);
+            foreach(var answer in c.Answers) Check(DialogueGrammar.HasNarcTell(answer)==(role=="Narc"),role+(role=="Narc"?" answer without a tell: ":" answer with a narc tell: ")+answer);
+        }
+        ARepeatIsDrawnAgainAndTheDrawOrderHolds();
         Check(DialogueGrammar.HasNarcTell("So what's the STREET VALUE of a hug?")&&!DialogueGrammar.HasNarcTell("Nice hat.")&&!DialogueGrammar.HasNarcTell(null)&&!DialogueGrammar.HasNarcTell(""),"tells match in any case; plain and empty lines have none");
         foreach(var bad in new[]{new object[]{"Cop","Wook",0},new object[]{null,"Wook",0},new object[]{"Buyer","Clown",0},new object[]{"Buyer","Wook",2},new object[]{"Buyer","Wook",-1}})
         { bool refused=false; try { DialogueGrammar.Build((string)bad[0],(string)bad[1],(int)bad[2],1); } catch(ArgumentException) { refused=true; } Check(refused,"unknown role, persona or festival is refused"); }
@@ -57,5 +69,34 @@ public static class DialogueGrammarTests
         Check(crowd.Count==4,"a crowd of 40 has all four other personas, got "+string.Join(", ",crowd));
         // Pinned values: host and clients in different processes must agree, which string.GetHashCode does not promise.
         Check(DialogueGrammar.PersonaFor("wook_0","")=="Raver"&&DialogueGrammar.PersonaFor("wook_1","")=="Burner","persona comes from a fixed hash of the NPC id, got "+DialogueGrammar.PersonaFor("wook_0","")+", "+DialogueGrammar.PersonaFor("wook_1",""));
+    }
+    // DIALOG-4: the tripper's history. A chat built with it remembers what it said, and a line the tripper heard lately is drawn
+    // again; whatever the history, the opener, questions and interjections are still drawn before the role's answers.
+    static void ARepeatIsDrawnAgainAndTheDrawOrderHolds()
+    {
+        for(int seed=0;seed<40;seed++) foreach(var persona in DialogueGrammar.Personas)
+        {
+            int festival=seed%2;var plain=DialogueGrammar.Build("Narc",persona,festival,seed);
+            var heard=new DialogueHistory();var c=DialogueGrammar.Build("Narc",persona,festival,seed,heard);
+            Check(Text(c)==Text(plain),"with nothing heard yet, the seed's own chat");
+            var keys=new List<string>{DialogueHistory.Key("opener."+persona,c.Opener)};
+            for(int i=0;i<3;i++) keys.Add(DialogueHistory.Key("question."+i,c.Questions[i]));
+            Check(keys.TrueForAll(heard.Seen.Contains)&&heard.Seen.Count==7,"the chat remembers its opener, three questions and three answers as heard, got "+heard.Seen.Count);
+            // Heard them all: the same seed now draws a new opener and new questions, and every role still gets the same ones.
+            var again=new Dictionary<string,Conversation>();
+            foreach(var role in DialogueGrammar.Roles) again[role]=DialogueGrammar.Build(role,persona,festival,seed,new DialogueHistory{Seen=new List<string>(heard.Seen)});
+            var buyer=again["Buyer"];
+            Check(buyer.Opener!=c.Opener&&!buyer.Questions.Intersect(c.Questions).Any(),"seed "+seed+": a line heard lately is drawn again, got "+buyer.Opener+" | "+string.Join(" | ",buyer.Questions));
+            foreach(var role in DialogueGrammar.Roles) Check(again[role].Opener==buyer.Opener&&again[role].Questions.SequenceEqual(buyer.Questions),"seed "+seed+": a "+role+" redraws the same opener and questions as a buyer");
+        }
+        // Thirty chats in a row for one tripper never ask the same question or hear the same opener or answer twice.
+        var tripper=new DialogueHistory();var said=new List<string>();
+        for(int i=0;i<30;i++)
+        {
+            var c=DialogueGrammar.Build(DialogueGrammar.Roles[i%4],DialogueGrammar.Personas[i%5],0,500+i,tripper);
+            said.Add(c.Opener);said.AddRange(c.Questions);said.AddRange(c.Answers);
+        }
+        var repeats=said.GroupBy(line=>line).Where(g=>g.Count()>1).Select(g=>g.Key).ToList();
+        Check(repeats.Count==0,"30 chats in a row repeat: "+string.Join(" | ",repeats));
     }
 }
