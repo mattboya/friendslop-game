@@ -45,7 +45,7 @@ namespace Festival.Core
         private static string Line(string kind,int festival,ContentRandom random,DialogueHistory heard)
         {
             if(heard==null) return FestivalLines.Grammar.Line(kind,festival,random);
-            string line=heard.Fresh(FestivalLines.Grammar,kind,festival,random); heard.Acknowledge(DialogueHistory.Key(kind,line)); return line;
+            string line=heard.Fresh(FestivalLines.Grammar,kind,festival,random,out var key); heard.Acknowledge(key); return line;
         }
         // `count` different entries of the pool, by a partial shuffle.
         private static string[] Draw(string[] pool,ContentRandom random,int count)

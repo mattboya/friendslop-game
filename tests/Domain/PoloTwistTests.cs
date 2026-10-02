@@ -245,6 +245,7 @@ public static class PoloTwistTests
         var planted=new VisionState{Id="planted",Kind="Buyer",NpcId=guard.Id,Tell=true};s.State.Visions.Add(planted);
         Beside(friend,guard);
         Check(!Act(s,friend.Id,"ConfirmDance",guard.Id).Accepted&&friend.InteractionId=="","the guard doesn't dance anyone in");
+        var friendHeard=new DialogueHistory{Seen=new List<string>(friend.Dialogue.Seen)};
         var chat=Act(s,friend.Id,"ConfirmChat",guard.Id);
         Check(chat.Accepted&&friend.InteractionId!="","a sober friend can talk to the VIP guard: "+chat.Reason);
         // POLO-4: and it is no check. The guard's opener, as their persona talks, then one doorman line, and nothing to ask.
@@ -255,6 +256,9 @@ public static class PoloTwistTests
         string guardPersona=DialogueGrammar.PersonaFor(guard.Id,guard.Twist);int chatSeed=s.Interaction(friend.InteractionId).ChartSeed;
         Check(said.Opener==DialogueGrammar.Build("Regular",guardPersona,0,chatSeed).Opener&&DialogueGrammar.Personas.All(other=>other==guardPersona||DialogueGrammar.Build("Regular",other,0,chatSeed).Opener!=said.Opener),"it opens as the guard's persona ("+guardPersona+") does: "+said.Opener);
         Check(said.Doorman!=""&&!DialogueGrammar.HasNarcTell(said.Opener+" "+said.Doorman),"then one doorman line: "+said.Doorman);
+        // DIALOG-4: built from the friend's own history, which now remembers the opener and the doorman line, so neither comes back soon.
+        var expected=DialogueGrammar.Rope(guardPersona,0,chatSeed,friendHeard);
+        Check(expected.Opener==said.Opener&&expected.Doorman==said.Doorman&&friendHeard.Seen.Count>0&&friend.Dialogue.Seen.SequenceEqual(friendHeard.Seen),"the friend's history holds what the guard said, got "+string.Join(", ",friend.Dialogue.Seen));
         s.Tick(FestivalSimulation.ConfirmChatSeconds-.1);Check(Bands(friend)==0,"not in yet "+(FestivalSimulation.ConfirmChatSeconds-.1)+" s in");
         s.Tick(.2);Check(Bands(friend)==1,"after the "+FestivalSimulation.ConfirmChatSeconds+" s chat they wear a VIP wristband");
         Check(!planted.Confirmed,"the friend's chat checks none of the tripper's visions");

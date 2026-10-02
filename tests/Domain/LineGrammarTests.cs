@@ -16,7 +16,7 @@ public static class LineGrammarTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EverySlotFillsFromItsOwnTable,AKindDrawsEachOfItsTemplatesAndParts,TheSameSeedGivesTheSameLine,
             EachFestivalUsesOnlyItsOwnTaggedParts,AOrAnFollowsTheSoundOfTheNextWord,VerbsAndNounsAgreeWithThePartBeforeThem,
-            EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,AuthoringMistakesFailLoudly})
+            EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" line grammar test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -132,6 +132,23 @@ public static class LineGrammarTests
     {
         string line=One("  {greet} {who} waved {tail} , then left {tail} !  ",T("greet",""),T("who","my  friend"),T("tail",""));
         Check(line=="My friend waved, then left!","one space between words and none before punctuation, got '"+line+"'");
+    }
+
+    // A slot written {~name} is dressing: a hello or a tail said around what the line is about. The line says it; the line's body
+    // (what the repeat memory and the line counts go by) leaves it out, with every part inside it. "Hey, Sam! My friend waved."
+    // and "Oi! My friend waved." are one body, so a festivalgoer can't pass the same sentence off as new behind a new hello.
+    static void DressingIsSaidButLeftOutOfTheBody()
+    {
+        var g=G(T("line","{~hi} {who} waved{~tail}."),T("hi","Hey, {name}!","Oi!"),T("name","Sam","Kit"),T("who","my friend","+my friends"),T("tail","",", again"));
+        var lines=new HashSet<string>();var bodies=new HashSet<string>();
+        for(int seed=0;seed<300;seed++)
+        {
+            string line=g.Line("line",0,new ContentRandom(seed),out var body);
+            Check(line==g.Line("line",0,seed),"asking for the body changes nothing about the line, seed "+seed);
+            lines.Add(line);bodies.Add(body);
+        }
+        Check(lines.Count>=8&&lines.Contains("Hey, Sam! My friend waved, again.")&&lines.Contains("Oi! My friend waved."),"the line says its dressing: "+string.Join(" / ",lines));
+        Check(bodies.SetEquals(new[]{"My friend waved.","My friends waved."}),"the body is the line without its dressing, nor the dressing's own parts: "+string.Join(" / ",bodies));
     }
 
     static void AuthoringMistakesFailLoudly()

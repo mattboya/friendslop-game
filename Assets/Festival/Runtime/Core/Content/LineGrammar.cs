@@ -13,6 +13,9 @@ namespace Festival.Core
     // - Number: an entry starting "+" (after any tag) is plural, as in "+my friends". A choice {has|have} takes its first form
     //   after a singular part and its second after a plural one, going by the last part filled; a part's own number outlasts
     //   the slots inside it, so "+my friends from {where}" stays plural. "+" means "takes the plural verb", so "+I" and "+you".
+    // - Dressing: a slot written {~name} fills like any other but is left out of the line's body, as are the parts inside it. A
+    //   hello or a tail ("Hey!", "Anyway.") is dressing; the body is what the line is about, so the same sentence behind a new
+    //   hello is the same body. The repeat memory and the line counts go by the body.
     // - The finished line is tidied: single spaces and none before punctuation, a/an by the sound of the next word, and a
     //   capital at the start of every sentence.
     public sealed class LineGrammar
@@ -34,29 +37,31 @@ namespace Festival.Core
             }
         }
         public string Line(string kind,int festival,int seed) => Line(kind,festival,new ContentRandom(seed));
-        public string Line(string kind,int festival,ContentRandom random)
+        public string Line(string kind,int festival,ContentRandom random) => Line(kind,festival,random,out _);
+        public string Line(string kind,int festival,ContentRandom random,out string body)
         {
             if(festival<0||festival>=Festivals.Count) throw new ArgumentException("No festival "+festival);
-            bool plural=false; return Tidy(Fill(kind,festival,random,ref plural,0));
+            bool plural=false; var line=new StringBuilder(); var bare=new StringBuilder(); Fill(kind,festival,random,ref plural,0,line,bare);
+            body=Tidy(bare.ToString()); return Tidy(line.ToString());
         }
-        private string Fill(string table,int festival,ContentRandom random,ref bool plural,int depth)
+        // Appends the part to the line, and to the body unless it is dressing (body null).
+        private void Fill(string table,int festival,ContentRandom random,ref bool plural,int depth,StringBuilder line,StringBuilder body)
         {
             // ponytail: a depth cap, not a cycle check at build time; 8 is far past any real template's nesting.
             if(depth>8) throw new InvalidOperationException("Line grammar parts nest too deep at {"+table+"}: does a part name its own table?");
             if(!tables.TryGetValue(table,out var byFestival)) throw new ArgumentException("Line grammar has no table {"+table+"}");
             var entries=byFestival[festival]; string entry=entries[random.Next(entries.Length)];
             bool own=entry.StartsWith("+",StringComparison.Ordinal); if(own) entry=entry.Substring(1);
-            var text=new StringBuilder();
             for(int i=0;i<entry.Length;i++)
             {
-                if(entry[i]!='{') { text.Append(entry[i]); continue; }
+                if(entry[i]!='{') { line.Append(entry[i]); body?.Append(entry[i]); continue; }
                 int close=entry.IndexOf('}',i); if(close<0) throw new ArgumentException("Line grammar part has an unclosed slot: "+entry);
                 string slot=entry.Substring(i+1,close-i-1); int bar=slot.IndexOf('|');
-                text.Append(bar<0?Fill(slot,festival,random,ref plural,depth+1):plural?slot.Substring(bar+1):slot.Substring(0,bar));
+                if(bar<0) { bool dressing=slot.StartsWith("~",StringComparison.Ordinal); Fill(dressing?slot.Substring(1):slot,festival,random,ref plural,depth+1,line,dressing?null:body); }
+                else { string form=plural?slot.Substring(bar+1):slot.Substring(0,bar); line.Append(form); body?.Append(form); }
                 i=close;
             }
             plural=own;
-            return text.ToString();
         }
         private static string Tidy(string line)
         {

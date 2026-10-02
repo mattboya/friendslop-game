@@ -14,8 +14,8 @@ public sealed partial class FestivalSimulation {
         int hash=17;foreach(char ch in npc.Id)hash=unchecked(hash*31+ch);
         // DIALOG-4: a bark built by FestivalLines' grammar, seeded by the round, the festivalgoer and their talk count, and drawn
         // again past any line this player has heard lately.
-        string line=p.Dialogue.Fresh(FestivalLines.Grammar,"bark",State.FestivalIndex,new ContentRandom((int)(((long)State.Seed*31+hash+npc.TalkCount*7)&0x7fffffff)));
-        p.Dialogue.Acknowledge(DialogueHistory.Key("bark",line));
+        string line=p.Dialogue.Fresh(FestivalLines.Grammar,"bark",State.FestivalIndex,new ContentRandom((int)(((long)State.Seed*31+hash+npc.TalkCount*7)&0x7fffffff)),out var key);
+        p.Dialogue.Acknowledge(key);
         npc.TalkCount++;
         p.NpcSpeaker="FESTIVALGOER";p.NpcSpeech=line;p.NpcSpeechUntil=State.SimulationSeconds+7;
         return Ok();

@@ -79,9 +79,9 @@ public static class DialogueGrammarTests
             int festival=seed%2;var plain=DialogueGrammar.Build("Narc",persona,festival,seed);
             var heard=new DialogueHistory();var c=DialogueGrammar.Build("Narc",persona,festival,seed,heard);
             Check(Text(c)==Text(plain),"with nothing heard yet, the seed's own chat");
-            var keys=new List<string>{DialogueHistory.Key("opener."+persona,c.Opener)};
-            for(int i=0;i<3;i++) keys.Add(DialogueHistory.Key("question."+i,c.Questions[i]));
-            Check(keys.TrueForAll(heard.Seen.Contains)&&heard.Seen.Count==7,"the chat remembers its opener, three questions and three answers as heard, got "+heard.Seen.Count);
+            // In the order drawn, each known by its kind (and its body: the words without a hello or tail, FestivalLinesTests).
+            var kinds=new List<string>{"opener."+persona,"question.0","question.1","question.2","answer.Narc.0","answer.Narc.1","answer.Narc.2"};
+            Check(heard.Seen.Count==7&&kinds.Select((kind,i)=>heard.Seen[i].StartsWith(kind+"_",StringComparison.Ordinal)).All(x=>x),"the chat remembers its opener, three questions and three answers as heard, got "+string.Join(", ",heard.Seen));
             // Heard them all: the same seed now draws a new opener and new questions, and every role still gets the same ones.
             var again=new Dictionary<string,Conversation>();
             foreach(var role in DialogueGrammar.Roles) again[role]=DialogueGrammar.Build(role,persona,festival,seed,new DialogueHistory{Seen=new List<string>(heard.Seen)});

@@ -152,7 +152,7 @@ public static class ConfirmTests
                 Check(said!=null&&said.Opener!=""&&said.Questions.Length==3&&said.Answers.Length==3&&said.Questions.Concat(said.Answers).All(line=>!string.IsNullOrWhiteSpace(line)),where+": an opener, three questions and three answers");
                 var expected=DialogueGrammar.Build(npc.Role,DialogueGrammar.PersonaFor(npc.Id,npc.Twist),festival,chat.ChartSeed,heard);
                 Check(said.Opener==expected.Opener&&said.Questions.SequenceEqual(expected.Questions)&&said.Answers.SequenceEqual(expected.Answers),where+": DIALOG-1's conversation for their role, their persona and this festival");
-                Check(heard.Seen.Count==Tripper(s).Dialogue.Seen.Count&&Tripper(s).Dialogue.Seen.SequenceEqual(heard.Seen)&&Tripper(s).Dialogue.Seen.Contains(DialogueHistory.Key("opener."+DialogueGrammar.PersonaFor(npc.Id,npc.Twist),said.Opener)),where+": and the tripper's history now holds what it said, got "+Tripper(s).Dialogue.Seen.Count+" lines");
+                Check(heard.Seen.Count==Tripper(s).Dialogue.Seen.Count&&Tripper(s).Dialogue.Seen.SequenceEqual(heard.Seen)&&Tripper(s).Dialogue.Seen.Any(key=>key.StartsWith("opener."+DialogueGrammar.PersonaFor(npc.Id,npc.Twist)+"_",StringComparison.Ordinal)),where+": and the tripper's history now holds what it said, got "+Tripper(s).Dialogue.Seen.Count+" lines");
                 Check(said.Answers.Any(DialogueGrammar.HasNarcTell)==(npc.Role=="Narc"),where+": cop-speak slips out of narcs and nobody else: "+string.Join(" | ",said.Answers));
                 Settle(s,chat);
             }

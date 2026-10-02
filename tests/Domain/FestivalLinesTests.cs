@@ -16,24 +16,27 @@ public static class FestivalLinesTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EveryKindHasAThousandLinesOnEachFestival,EveryLineReadsCleanly,EachFestivalKeepsToItsOwnPlaces,OnlyANarcsAnswersCarryATell,
-            TheSevenChallengeContextsAreBuiltFromTheGrammar,AChallengeLineIsNotRepeatedWithinThirty,AnAffectedPlayersAwkwardLineIsNotRepeatedWithinThirty,ARedrawGivesUpAfterFive,AFestivalgoersChatIsNotRepeatedWithinThirty})
+            TheSevenChallengeContextsAreBuiltFromTheGrammar,AChallengeLineIsNotRepeatedWithinThirty,ALineHeardBehindOneHelloIsNotNewBehindAnother,AnAffectedPlayersAwkwardLineIsNotRepeatedWithinThirty,ARedrawGivesUpAfterFive,AFestivalgoersChatIsNotRepeatedWithinThirty})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" festival line test(s) failed:\n"+string.Join("\n",failures));
     }
 
-    // 20,000 seeded draws of each kind: 10,000 on each festival, and each festival on its own gives at least 1,000 different lines.
+    // 20,000 seeded draws of each kind: 10,000 on each festival, and each festival on its own gives at least 1,000 different bodies.
     const int Draws=10000;
     // DIALOG-2's bubbles wrap at 26 letters and show 3 rows, so a line stays within about 80 characters.
     const int Longest=80;
     // Places that exist on one map only; the other festival never mentions them.
     static readonly string[][] Places={new[]{"polo field","Ferris wheel","iced matcha","matcha"},new[]{"playa","art car","the Man","The Man"}};
-    static readonly Dictionary<string,string[]> drawn=new Dictionary<string,string[]>();
+    static readonly Dictionary<string,string[][]> drawn=new Dictionary<string,string[][]>();
     // The first Draws lines of a kind on a festival, seeds 0 up: each seed is a fresh stream, as every draw in the game is.
-    static string[] Lines(string kind,int festival)
+    static string[] Lines(string kind,int festival)=>Drawn(kind,festival)[0];
+    // And their bodies: each line without its dressing (a hello or a tail), what the line is about.
+    static string[] Bodies(string kind,int festival)=>Drawn(kind,festival)[1];
+    static string[][] Drawn(string kind,int festival)
     {
         string key=kind+"@"+festival;
-        if(!drawn.TryGetValue(key,out var lines)){lines=new string[Draws];for(int seed=0;seed<Draws;seed++)lines[seed]=FestivalLines.Grammar.Line(kind,festival,seed);drawn[key]=lines;}
-        return lines;
+        if(!drawn.TryGetValue(key,out var both)){both=new[]{new string[Draws],new string[Draws]};for(int seed=0;seed<Draws;seed++)both[0][seed]=FestivalLines.Grammar.Line(kind,festival,new ContentRandom(seed),out both[1][seed]);drawn[key]=both;}
+        return both;
     }
     // Each kind on each festival, with the first line that breaks `rule` (null when none does).
     static void EveryLine(string what,Func<string,int,string,bool> rule)
@@ -53,13 +56,14 @@ public static class FestivalLinesTests
         // DIALOG-1's chat check: each persona's opener, the three questions, each role's three answers, and POLO-4's doorman.
         var chat=DialogueGrammar.Personas.Select(p=>"opener."+p).Concat(new[]{"question.0","question.1","question.2","doorman"}).Concat(DialogueGrammar.Roles.SelectMany(r=>new[]{0,1,2}.Select(i=>"answer."+r+"."+i)));
         Check(chat.All(FestivalLines.Kinds.Contains)&&FestivalLines.Kinds.Length==15+chat.Count(),"the grammar has every chat kind and nothing else: "+string.Join(", ",FestivalLines.Kinds));
+        // Counted by body: the same sentence behind another "Hey!" or "Anyway." is not a new line.
         var few=new List<string>();
         foreach(var kind in FestivalLines.Kinds) for(int festival=0;festival<Festivals.Count;festival++)
         {
-            int distinct=new HashSet<string>(Lines(kind,festival)).Count;
+            int distinct=new HashSet<string>(Bodies(kind,festival)).Count;
             if(distinct<1000) few.Add(kind+" on festival "+festival+": "+distinct);
         }
-        Check(few.Count==0,"every kind gives at least 1,000 different lines in "+Draws+" draws on each festival, but:\n  "+string.Join("\n  ",few));
+        Check(few.Count==0,"every kind gives at least 1,000 different bodies in "+Draws+" draws on each festival, but:\n  "+string.Join("\n  ",few));
     }
 
     static void EveryLineReadsCleanly()
@@ -110,8 +114,10 @@ public static class FestivalLinesTests
             var line=new DialogueHistory().Select(context,festival,seed);var random=new ContentRandom(seed);
             string where=context+" on festival "+festival+", seed "+seed;
             // With nothing heard yet, the seed's first line stands, and its awkward twin is the next line off the same stream.
-            Check(line.Text==FestivalLines.Grammar.Line(context,festival,random)&&line.AwkwardText==FestivalLines.Grammar.Line(context+"_awkward",festival,random),where+": the line and its awkward twin come from the grammar, got "+line.Text+" / "+line.AwkwardText);
-            Check(line.Id==DialogueHistory.Key(context,line.Text)&&line.Id.StartsWith(context+"_")&&line.Id.Length<=64,where+": the line is known by its context and its words, got "+line.Id);
+            string text=FestivalLines.Grammar.Line(context,festival,random,out var body),awkward=FestivalLines.Grammar.Line(context+"_awkward",festival,random,out var awkwardBody);
+            Check(line.Text==text&&line.AwkwardText==awkward,where+": the line and its awkward twin come from the grammar, got "+line.Text+" / "+line.AwkwardText);
+            // Each is known by its kind and its body, the words without their hello or tail.
+            Check(line.Id==DialogueHistory.Key(context,body)&&line.AwkwardId==DialogueHistory.Key(context+"_awkward",awkwardBody)&&line.Id.StartsWith(context+"_")&&line.Id.Length<=64&&line.AwkwardId.Length<=64,where+": the line and its twin are known by their kind and body, got "+line.Id+" / "+line.AwkwardId);
             Check(line.Context==context&&line.Status=="Draft"&&line.Speaker==(context=="police"?"Cop":context=="medical"?"Medic":"Wook")&&line.Difficulty==(context=="suspicion"||context=="police"?2:1),where+": the context's speaker and difficulty");
         }
         Check(DialogueHistory.Key("sale","Deal?")==DialogueHistory.Key("sale","Deal?")&&DialogueHistory.Key("sale","Deal?")!=DialogueHistory.Key("sale","Deal!")&&DialogueHistory.Key("sale","Deal?")!=DialogueHistory.Key("buy","Deal?"),"a line's key is its kind and its exact words");
@@ -119,7 +125,7 @@ public static class FestivalLinesTests
     }
 
     // Matt: "it kept repeating". 200 challenges in a row, each line shown and acknowledged as the HUD does, on the seeds a level
-    // gives (each interaction's ChartSeed is the next one up).
+    // gives (each interaction's ChartSeed is the next one up). Not even the same sentence behind another hello or tail.
     static void AChallengeLineIsNotRepeatedWithinThirty()
     {
         foreach(var context in DialogueCatalog.Contexts) for(int festival=0;festival<Festivals.Count;festival++)
@@ -127,12 +133,37 @@ public static class FestivalLinesTests
             var history=new DialogueHistory();var shown=new List<string>();
             for(int i=0;i<200;i++)
             {
-                var line=history.Select(context,festival,4100+i);
-                int last=shown.LastIndexOf(line.Text);
-                Check(last<0||shown.Count-last>=30,context+" on festival "+festival+": \""+line.Text+"\" came back "+(shown.Count-last)+" lines after it was shown");
-                shown.Add(line.Text);history.Acknowledge(line.Id,"interaction_"+i);
+                var line=history.Select(context,festival,4100+i);string body=Body(context,festival,4100+i,line.Text);
+                int last=shown.LastIndexOf(body);
+                Check(last<0||shown.Count-last>=30,context+" on festival "+festival+": \""+line.Text+"\" says \""+body+"\" again, "+(shown.Count-last)+" lines after it was shown");
+                shown.Add(body);history.Acknowledge(line.Id,"interaction_"+i);
             }
         }
+    }
+    // The body of a line Select drew from `seed`: whichever of the stream's draws it is.
+    static string Body(string kind,int festival,int seed,string text)
+    {
+        var random=new ContentRandom(seed);
+        for(int draw=0;draw<=DialogueHistory.Redraws;draw++) if(FestivalLines.Grammar.Line(kind,festival,random,out var body)==text) return body;
+        throw new Exception("FestivalLines: setup: \""+text+"\" is none of seed "+seed+"'s draws");
+    }
+
+    // The memory goes by the body. A sentence heard behind one hello is drawn again when it comes up behind another.
+    static void ALineHeardBehindOneHelloIsNotNewBehindAnother()
+    {
+        var firstBody=new Dictionary<string,int>();int pairs=0;
+        for(int seed=0;seed<2000&&pairs<20;seed++)
+        {
+            string text=FestivalLines.Grammar.Line("sale",0,new ContentRandom(seed),out var body);
+            if(!firstBody.TryGetValue(body,out int earlier)){firstBody[body]=seed;continue;}
+            var heardLine=new DialogueHistory().Select("sale",0,earlier);
+            if(heardLine.Text==text)continue;
+            pairs++;
+            var history=new DialogueHistory();history.Acknowledge(heardLine.Id,"interaction_0");
+            string again=history.Select("sale",0,seed).Text;
+            Check(again!=text,"heard \""+heardLine.Text+"\", then seed "+seed+" still says \""+text+"\": the same sentence behind another hello or tail");
+        }
+        Check(pairs==20,"setup: 20 sale draws whose sentence an earlier seed says behind other words, got "+pairs);
     }
 
     // An affected player blurts the awkward twin instead (the tripper all level, everyone on the last level). What's shown is what's
@@ -166,17 +197,17 @@ public static class FestivalLinesTests
         Check(DialogueHistory.Redraws==5,"up to five redraws");
         for(int seed=0;seed<20;seed++)
         {
-            var stream=new ContentRandom(seed);var texts=new List<string>();
-            for(int i=0;i<8;i++)texts.Add(FestivalLines.Grammar.Line("sale",0,stream));
-            if(texts.Distinct().Count()<8)continue;
+            var stream=new ContentRandom(seed);var texts=new List<string>();var bodies=new List<string>();
+            for(int i=0;i<8;i++){texts.Add(FestivalLines.Grammar.Line("sale",0,stream,out var body));bodies.Add(body);}
+            if(bodies.Distinct().Count()<8)continue;
             foreach(int heard in new[]{1,2,5,6,7})
             {
                 var history=new DialogueHistory();
-                foreach(var text in texts.Take(heard))history.Acknowledge(DialogueHistory.Key("sale",text));
+                foreach(var body in bodies.Take(heard))history.Acknowledge(DialogueHistory.Key("sale",body));
                 string got=history.Select("sale",0,seed).Text;
                 Check(got==texts[Math.Min(heard,5)],"seed "+seed+", the first "+heard+" draws heard: the line is draw "+Math.Min(heard,5)+" off the stream, got draw "+texts.IndexOf(got));
             }
-            var reserved=new HashSet<string>{DialogueHistory.Key("sale",texts[0])};
+            var reserved=new HashSet<string>{DialogueHistory.Key("sale",bodies[0])};
             Check(new DialogueHistory().Select("sale",0,seed,reserved).Text==texts[1],"seed "+seed+": a line another player's challenge holds right now is drawn again too");
             return;
         }
