@@ -11,9 +11,10 @@ namespace Festival.Presentation
     /// <summary>VISION-1: draws the tripper's visions over festivalgoers and places. Only the tripper's view carries visions
     /// (FestivalSimulation.VisibleVisions), so every other client draws nothing. A fake's tells come from the host's Tell flag,
     /// never from its truth: it casts no shadow, is slightly off in colour and shimmers while the camera moves. A checked
-    /// vision drops its tells and plainly says TRUE or FALSE. The shadow is a pool on the ground right under the marker, at the
-    /// festivalgoer's feet (the festival sun is only 14 degrees up, so a real one would land about 10 m away): dark by day, and
-    /// by night, when the ground is too dark for any shadow to show, a faint pale glow.</summary>
+    /// vision drops its tells and is ringed in green (a truth) or red (a fake), and it says TRUE or FALSE while the aim dot is on
+    /// it (VISION-5). The shadow is a pool on the ground right under the marker, at the festivalgoer's feet (the festival sun is
+    /// only 14 degrees up, so a real one would land about 10 m away): dark by day, and by night, when the ground is too dark for
+    /// any shadow to show, a faint pale glow.</summary>
     public sealed class FestivalVisionMarkers : MonoBehaviour
     {
         // Over a festivalgoer's head (stacked when two visions share one), or over a spot on the grounds.
@@ -27,8 +28,15 @@ namespace Festival.Presentation
         private static readonly Color NightGlow=new Color(.03f,.03f,.04f);
         private static readonly Color CheckedFalse=new Color(.52f,.52f,.55f);
         private const string TrueVerdict="TRUE",FalseVerdict="FALSE";
+        // A checked vision's ring: the glyph's own shape a little larger, its front faces culled so only a band around the glyph
+        // shows. Bright neon, so it never reads as the dark, muted green of a suspicious wook's skin (CROWD-4).
+        private const float RingScale=1.3f,Glow=.6f;
+        private static readonly Color TrueRing=new Color(.45f,1f,.55f),FalseRing=new Color(1f,.3f,.3f);
+        // The aim dot is on a vision when the view's ray passes this close to the upright line from its festivalgoer's feet (or
+        // its spot on the ground) up to the top of its marker.
+        private const float AimReach=.5f;
 
-        private sealed class Marker { public Transform Root,Label,Shadow; public MeshRenderer Glyph; public TextMesh Verdict; public Material Material; }
+        private sealed class Marker { public Transform Root,Label,Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; }
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
@@ -53,14 +61,16 @@ namespace Festival.Presentation
             var visions=state!=null&&FestivalWorld.ShowsFestival(state.Phase)?state.Visions:None;
             gone.Clear();
             foreach(var id in markers.Keys){bool kept=false;foreach(var v in visions)if(v.Id==id){kept=true;break;}if(!kept)gone.Add(id);}
-            foreach(var id in gone){Dispose(markers[id].Root.gameObject);Dispose(markers[id].Material);markers.Remove(id);}
+            foreach(var id in gone){Dispose(markers[id].Root.gameObject);Dispose(markers[id].Material);Dispose(markers[id].RingMaterial);markers.Remove(id);}
             float shimmer=motion.Step(view,deltaTime);Shown=0;
+            int aimed=-1;float nearest=float.PositiveInfinity;
             for(int i=0;i<visions.Count;i++)
             {
                 var vision=visions[i];if(!markers.TryGetValue(vision.Id,out var marker))markers[vision.Id]=marker=Create(vision,FestivalNightLighting.IsNight(state));
                 var body=vision.NpcId==""?null:actorFor?.Invoke(vision.NpcId);
                 bool drawn=vision.NpcId==""||body!=null&&body.gameObject.activeInHierarchy;
                 if(marker.Root.gameObject.activeSelf!=drawn)marker.Root.gameObject.SetActive(drawn);
+                marker.Aimed=float.PositiveInfinity;
                 if(!drawn)continue;
                 Shown++;
                 int stacked=0;for(int j=0;j<i;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)stacked++;
@@ -70,13 +80,40 @@ namespace Festival.Presentation
                 bool tells=vision.Tell&&!vision.Confirmed;
                 var look=Look(vision.Kind).Color;
                 marker.Material.color=vision.Confirmed&&!vision.IsTrue?CheckedFalse:tells?FakeTint(look):look;
-                if(marker.Material.HasProperty("_EmissionColor"))marker.Material.SetColor("_EmissionColor",marker.Material.color*.6f);
+                if(marker.Material.HasProperty("_EmissionColor"))marker.Material.SetColor("_EmissionColor",marker.Material.color*Glow);
                 if(marker.Shadow.gameObject.activeSelf==tells)marker.Shadow.gameObject.SetActive(!tells);
                 marker.Shadow.position=ground+Vector3.up*ShadowLift;
                 marker.Glyph.transform.localScale=Vector3.one*Size*(tells?ShimmerScale(shimmer,time,i):1);
-                marker.Verdict.text=!vision.Confirmed?"":vision.IsTrue?TrueVerdict:FalseVerdict;
+                if(marker.Ring.activeSelf!=vision.Confirmed)marker.Ring.SetActive(vision.Confirmed);
+                if(vision.Confirmed)
+                {
+                    var ring=marker.RingMaterial;ring.color=vision.IsTrue?TrueRing:FalseRing;
+                    if(ring.HasProperty("_EmissionColor"))ring.SetColor("_EmissionColor",ring.color*Glow);
+                    if(view!=null)marker.Aimed=Aim(view.position,view.forward,ground,marker.Glyph.bounds.max.y);
+                    if(marker.Aimed<nearest){nearest=marker.Aimed;aimed=i;}
+                }
                 if(view!=null)marker.Label.rotation=view.rotation;
             }
+            // Only the checked target nearest the camera along the aim says what it is; every vision over that festivalgoer does.
+            for(int i=0;i<visions.Count;i++)
+            {
+                var vision=visions[i];var marker=markers[vision.Id];
+                bool said=marker.Aimed<float.PositiveInfinity&&(i==aimed||vision.NpcId!=""&&vision.NpcId==visions[aimed].NpcId);
+                marker.Verdict.text=!said?"":vision.IsTrue?TrueVerdict:FalseVerdict;
+            }
+        }
+
+        // How far along the aim (from eye, along forward) it passes within AimReach of the upright line from ground up to top;
+        // infinity when it never does. The closest points of a ray and a segment: from the lines' closest points, clamp the ray to
+        // its start and the line to its ends, and from a clamped end take the ray's nearest point to it.
+        private static float Aim(Vector3 eye,Vector3 forward,Vector3 ground,float top)
+        {
+            var flat=new Vector2(forward.x,forward.z);
+            float along=flat.sqrMagnitude>1e-6f?Mathf.Max(0,Vector2.Dot(new Vector2(ground.x-eye.x,ground.z-eye.z),flat)/flat.sqrMagnitude):0;
+            float height=eye.y+forward.y*along,onLine=Mathf.Clamp(height,ground.y,top);
+            if(onLine!=height)along=Mathf.Max(0,Vector3.Dot(new Vector3(ground.x,onLine,ground.z)-eye,forward));
+            var near=eye+forward*along;
+            return Vector3.Distance(near,new Vector3(ground.x,Mathf.Clamp(near.y,ground.y,top),ground.z))<=AimReach?along:float.PositiveInfinity;
         }
 
         // The tells are shared with everything else the dose invents (VISION-2's creatures), so it all looks fake the same way.
@@ -131,6 +168,12 @@ namespace Festival.Presentation
             if(material.HasProperty("_EmissionColor"))material.EnableKeyword("_EMISSION");
             // The glyph's own shadow would land far off under the low sun; its shadow is the pool below.
             var renderer=glyph.GetComponent<MeshRenderer>();renderer.sharedMaterial=material;renderer.shadowCastingMode=ShadowCastingMode.Off;
+            // VISION-5: the ring is on the floating marker, never on the festivalgoer's body. Off until the vision is checked.
+            var outline=GameObject.CreatePrimitive(Look(vision.Kind).Shape);outline.name="Outline";outline.transform.SetParent(glyph.transform,false);outline.transform.localScale=Vector3.one*RingScale;
+            var outlineCollider=outline.GetComponent<Collider>();outlineCollider.enabled=false;Dispose(outlineCollider);
+            var ring=new Material(Resources.Load<Material>("FestivalLit")){mainTexture=Texture2D.whiteTexture};ring.SetFloat("_Cull",(float)CullMode.Front);
+            if(ring.HasProperty("_EmissionColor"))ring.EnableKeyword("_EMISSION");
+            var ringRenderer=outline.GetComponent<MeshRenderer>();ringRenderer.sharedMaterial=ring;ringRenderer.shadowCastingMode=ShadowCastingMode.Off;outline.SetActive(false);
             var shadow=GameObject.CreatePrimitive(PrimitiveType.Cylinder);shadow.name="Shadow";shadow.transform.SetParent(root,false);
             shadow.transform.localScale=new Vector3(ShadowWidth,ShadowThickness/2,ShadowWidth);
             var shadowCollider=shadow.GetComponent<Collider>();shadowCollider.enabled=false;Dispose(shadowCollider);
@@ -138,10 +181,10 @@ namespace Festival.Presentation
             var label=new GameObject("Label").transform;label.SetParent(root,false);label.localPosition=Vector3.up*LabelRise;
             var verdict=label.gameObject.AddComponent<TextMesh>();verdict.fontSize=64;verdict.characterSize=.03f;verdict.anchor=TextAnchor.MiddleCenter;verdict.alignment=TextAlignment.Center;verdict.color=new Color(.96f,.94f,.84f);
             var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){verdict.font=font;label.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
-            return new Marker{Root=root,Label=label,Shadow=shadow.transform,Glyph=renderer,Verdict=verdict,Material=material};
+            return new Marker{Root=root,Label=label,Shadow=shadow.transform,Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring};
         }
 
-        private void OnDestroy(){foreach(var marker in markers.Values)Dispose(marker.Material);markers.Clear();if(shade!=null)Dispose(shade);if(glow!=null)Dispose(glow);}
+        private void OnDestroy(){foreach(var marker in markers.Values){Dispose(marker.Material);Dispose(marker.RingMaterial);}markers.Clear();if(shade!=null)Dispose(shade);if(glow!=null)Dispose(glow);}
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
     }
 }

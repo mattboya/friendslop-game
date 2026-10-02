@@ -5,6 +5,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.TestTools.Constraints;
 using Is = UnityEngine.TestTools.Constraints.Is;
 using Object = UnityEngine.Object;
@@ -120,17 +121,44 @@ namespace Festival.Tests
             Assert.That(snaps,Is.Zero,"frames where a turning camera's fake snapped back to solid");
         }
 
+        // VISION-5: a checked vision says TRUE or FALSE only while the aim dot (the centre of the view) is on it: on its festivalgoer
+        // or its spot, from the feet up to the top of its marker. Three festivalgoers 4 m apart, 10 m ahead of the view, so the view
+        // can aim at one at a time.
         [Test]public void CheckedVisionsPlainlyShowTrueOrFalse()
         {
-            var state=Round();var bodies=new Dictionary<string,Transform>{{"a",Made("a").transform},{"b",Made("b").transform},{"c",Made("c").transform}};
+            var state=Round();var bodies=new Dictionary<string,Transform>();
+            foreach(var (id,x) in new[]{("a",-4f),("b",0f),("c",4f)}){var body=Made(id).transform;body.position=new Vector3(x,0,0);bodies[id]=body;}
             Func<string,Transform> actorFor=id=>bodies.TryGetValue(id,out var t)?t:null;
             state.Visions.Add(new VisionState{Id="open",Kind="Buyer",NpcId="a",Tell=true});
             state.Visions.Add(new VisionState{Id="true",Kind="Buyer",NpcId="b",Tell=false,IsTrue=true,Confirmed=true});
             state.Visions.Add(new VisionState{Id="false",Kind="Buyer",NpcId="c",Tell=true,IsTrue=false,Confirmed=true});
-            var markers=Markers();var view=View();markers.Apply(state,view,actorFor,0,.02f);
-            Assert.That(Label(markers,"open"),Is.Empty,"an unchecked vision makes no claim");
-            Assert.That(Label(markers,"true"),Is.EqualTo("TRUE"),"a checked truth says so");
-            Assert.That(Label(markers,"false"),Is.EqualTo("FALSE"),"a checked fake says so");
+            var markers=Markers();var view=View();
+            string Aimed(Vector3 at,string id){Aim(view,at);markers.Apply(state,view,actorFor,0,.02f);return Label(markers,id);}
+            view.rotation=Quaternion.LookRotation(Vector3.back);markers.Apply(state,view,actorFor,0,.02f);
+            foreach(var id in new[]{"open","true","false"})Assert.That(Label(markers,id),Is.Empty,id+": with the view aimed away, no verdict shows");
+            var feet=bodies["b"].position;
+            Assert.That(Aimed(feet+Vector3.up,"true"),Is.EqualTo("TRUE"),"aimed at a checked truth, it says so");
+            Assert.That(Label(markers,"false"),Is.Empty,"while the checked fake it is not aimed at stays blank");
+            Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo("FALSE"),"aimed at a checked fake, it says so");
+            Assert.That(Label(markers,"true"),Is.Empty,"while the checked truth it is no longer aimed at goes blank");
+            Assert.That(Aimed(bodies["a"].position+Vector3.up,"open"),Is.Empty,"an unchecked vision aimed at makes no claim");
+
+            // On it means within about half a metre of the upright line from the feet to the top of the marker.
+            float top=Glyph(markers,"true").bounds.max.y;
+            Assert.That(Aimed(feet,"true"),Is.EqualTo("TRUE"),"aimed at the feet");
+            Assert.That(Aimed(feet+new Vector3(.3f,1,0),"true"),Is.EqualTo("TRUE"),"aimed .3 m beside the body");
+            Assert.That(Aimed(feet+new Vector3(0,top+.3f,0),"true"),Is.EqualTo("TRUE"),"aimed .3 m over the marker");
+            Assert.That(Aimed(feet+new Vector3(.8f,1,0),"true"),Is.Empty,"aimed .8 m beside the body, the aim is off it");
+            Assert.That(Aimed(feet+new Vector3(0,top+.8f,0),"true"),Is.Empty,"aimed .8 m over the marker, the aim is off it");
+
+            // Two checked festivalgoers on one line of sight: only the nearer says what it is, from either side.
+            bodies["c"].position=new Vector3(0,0,6);
+            Assert.That(Aimed(feet+Vector3.up,"true"),Is.EqualTo("TRUE"),"the nearer of two in a line shows its verdict");
+            Assert.That(Label(markers,"false"),Is.Empty,"the one behind it stays blank");
+            view.position=new Vector3(0,1.65f,16);
+            Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo("FALSE"),"from the far side, the other one is the nearer");
+            Assert.That(Label(markers,"true"),Is.Empty,"and the first one is now behind it");
+            view.position=new Vector3(0,1.65f,-10);bodies["c"].position=new Vector3(4,0,0);
 
             var plain=Markers();var solid=new RoundState{Phase="Playing"};solid.Visions.Add(new VisionState{Id="true",Kind="Buyer",NpcId="b"});plain.Apply(solid,View(),actorFor,0,.02f);
             Assert.That(Glyph(markers,"true").sharedMaterial.color,Is.EqualTo(Glyph(plain,"true").sharedMaterial.color),"a checked truth keeps its kind's colour");
@@ -139,12 +167,73 @@ namespace Festival.Tests
             Assert.That(Shadow(markers,"false").gameObject.activeSelf,Is.True,"a checked fake is plainly marked, so it drops its tells");
             float still=Glyph(markers,"true").transform.localScale.x;
             for(int frame=1;frame<=20;frame++){view.Rotate(0,4,0);markers.Apply(state,view,actorFor,frame*.02f,.02f);Assert.That(Glyph(markers,"false").transform.localScale.x,Is.EqualTo(still).Within(1e-5f),"a checked fake no longer shimmers");}
+            Aim(view,feet+Vector3.up);markers.Apply(state,view,actorFor,1,.02f);
             Assert.That(Label(markers,"true").Length>0&&Marker(markers,"true").Find("Label").rotation==view.rotation,Is.True,"the verdict faces the camera");
+            Assert.That(()=>markers.Apply(state,view,actorFor,1.02f,.02f),Is.Not.AllocatingGCMemory(),"aiming at a checked vision makes no garbage");
 
             // Night: finding the next clue holder replaces the link's visions; the old link's markers go with them.
             state.Visions.RemoveAll(v=>v.Id=="open");markers.Apply(state,view,actorFor,1,.02f);
             Assert.That(markers.Shown,Is.EqualTo(2),"a vision the host dropped is no longer drawn");
             Assert.That(markers.transform.Find("Vision open"),Is.Null,"and its marker is removed");
+
+            // Two checked visions over one festivalgoer (a buyer who also pays double) both answer the aim, and so does a checked spot.
+            state.Visions.Add(new VisionState{Id="double",Kind="DoubleBuyer",NpcId="b",IsTrue=true,Confirmed=true});
+            state.Visions.Add(new VisionState{Id="stash",Kind="Stash",X=-8,Z=0,IsTrue=false,Confirmed=true});
+            Assert.That(Aimed(feet+Vector3.up,"double"),Is.EqualTo("TRUE"),"the second vision over the festivalgoer aimed at says so");
+            Assert.That(Label(markers,"true"),Is.EqualTo("TRUE"),"and so does the first");
+            Assert.That(Aimed(new Vector3(-8,.7f,0),"stash"),Is.EqualTo("FALSE"),"aimed at a checked spot on the ground, it says so");
+        }
+
+        // VISION-5: once checked, a vision's marker is ringed by a thin bright outline, neon green for a truth and red for a fake,
+        // whatever the kind's own colour. The ring is on the floating marker, never on the festivalgoer. The read without colour
+        // stays: a checked fake's glyph is grey, and a checked truth's keeps its kind's colour.
+        [Test]public void CheckedVisionsGlowGreenOrRed()
+        {
+            var state=Round();var bodies=new Dictionary<string,Transform>();
+            foreach(var kind in new[]{"Buyer","Narc","Clue","Stash"})
+                foreach(var check in new[]{"open","true","false"})
+                {
+                    var id=kind+" "+check;bool place=kind=="Stash";float x=state.Visions.Count*2;
+                    state.Visions.Add(new VisionState{Id=id,Kind=kind,NpcId=place?"":id,X=x,Z=4,IsTrue=check=="true",Confirmed=check!="open"});
+                    if(!place){var body=Made(id).transform;body.position=new Vector3(x,0,4);bodies[id]=body;}
+                }
+            Func<string,Transform> actorFor=id=>bodies.TryGetValue(id,out var t)?t:null;
+            var markers=Markers();markers.Apply(state,View(),actorFor,0,.02f);
+            var materials=new HashSet<Material>();
+            foreach(var vision in state.Visions)
+            {
+                var glyph=Glyph(markers,vision);var ring=Outline(markers,vision.Id);var material=ring.sharedMaterial;
+                Assert.That(ring.gameObject.activeInHierarchy,Is.EqualTo(vision.Confirmed),vision.Id+(vision.Confirmed?" is ringed":" has no ring until it is checked"));
+                Assert.That(ring.GetComponent<MeshFilter>().sharedMesh,Is.EqualTo(glyph.GetComponent<MeshFilter>().sharedMesh),vision.Id+": the ring is the glyph's own shape");
+                Assert.That(ring.GetComponent<Collider>(),Is.Null,vision.Id+": the ring has no collider");
+                Assert.That(ring.shadowCastingMode,Is.EqualTo(ShadowCastingMode.Off),vision.Id+": the ring casts no shadow");
+                Assert.That(materials.Add(material),Is.True,vision.Id+" has its own ring material");
+                Assert.That(material.GetFloat("_Cull"),Is.EqualTo((float)CullMode.Front),vision.Id+": the ring culls its front faces, so only a band around the glyph shows");
+                Assert.That(material.IsKeywordEnabled("_EMISSION"),Is.True,vision.Id+": the ring glows at night like the glyph");
+                if(!vision.Confirmed)continue;
+                float wider=ring.bounds.size.x/glyph.bounds.size.x;
+                Assert.That(wider,Is.InRange(1.2f,1.45f),vision.Id+": the ring is a thin band around the glyph ("+wider+"x as wide)");
+                Assert.That(Vector3.Distance(ring.bounds.center,glyph.bounds.center),Is.LessThan(1e-3f),vision.Id+": the ring is centred on the glyph");
+                Assert.That(ring.transform.IsChildOf(Marker(markers,vision)),Is.True,vision.Id+": the ring is on the floating marker");
+                foreach(var color in new[]{material.color,material.GetColor("_EmissionColor")})
+                    if(vision.IsTrue)Assert.That(color.g,Is.GreaterThan(color.r),vision.Id+": a truth's ring is green ("+color+")");
+                    else Assert.That(color.r,Is.GreaterThan(color.g),vision.Id+": a fake's ring is red ("+color+")");
+                // Bright, so it never reads as the dark, muted green of a suspicious wook's skin (CROWD-4).
+                Color.RGBToHSV(material.color,out _,out _,out float brightness);
+                Assert.That(brightness,Is.GreaterThan(.85f),vision.Id+": the ring is bright");
+            }
+            foreach(var body in bodies.Values)Assert.That(body.childCount,Is.Zero,body.name+": nothing is added to a festivalgoer's body");
+
+            foreach(var kind in new[]{"Buyer","Narc","Clue","Stash"})
+            {
+                Assert.That(Glyph(markers,kind+" true").sharedMaterial.color,Is.EqualTo(Glyph(markers,kind+" open").sharedMaterial.color),kind+": a checked truth keeps its kind's colour");
+                Color.RGBToHSV(Glyph(markers,kind+" false").sharedMaterial.color,out _,out float saturation,out _);
+                Assert.That(saturation,Is.LessThan(.15f),kind+": a checked fake goes grey");
+            }
+
+            var later=state.Visions.Find(v=>v.Id=="Narc open");later.Confirmed=true;later.IsTrue=true;markers.Apply(state,View(),actorFor,.02f,.02f);
+            var checkedLater=Outline(markers,later.Id);
+            Assert.That(checkedLater.gameObject.activeInHierarchy&&checkedLater.sharedMaterial.color.g>checkedLater.sharedMaterial.color.r,Is.True,"a vision checked later is ringed green then");
         }
 
         [Test]public void KindsLookDistinctAndStackOverOnePerson()
@@ -207,5 +296,10 @@ namespace Festival.Tests
             var shadow=Marker(markers,id).Find("Shadow");Assert.That(shadow,Is.Not.Null,"vision "+id+" has a shadow to show");return shadow;
         }
         private static string Label(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMesh>().text;
+        private static MeshRenderer Outline(FestivalVisionMarkers markers,string id)
+        {
+            var outline=Marker(markers,id).Find("Glyph/Outline");Assert.That(outline,Is.Not.Null,"vision "+id+" has an outline");return outline.GetComponent<MeshRenderer>();
+        }
+        private static void Aim(Transform view,Vector3 at)=>view.rotation=Quaternion.LookRotation(at-view.position);
     }
 }
