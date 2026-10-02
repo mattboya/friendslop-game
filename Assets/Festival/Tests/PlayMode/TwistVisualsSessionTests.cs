@@ -136,6 +136,78 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"Riders seen from outside their gondolas:\n"+string.Join("\n",failures));
         }
 
+        // POLO-5: a rider is drawn at FestivalTwistVisuals.RiderScale, and what they hold goes round at their size, whenever it was
+        // made. The rules take Equip on the wheel (the HUD's number keys send it), so a friend equips the map at the base and boards,
+        // then equips their poi and their confetti mid-ride, and after the turn shows the poi again. Each held item is measured
+        // against the body (Size over the body's): the map made on the ground sets the size, and every other reading, on the wheel
+        // and after the turn, must match it.
+        [UnityTest]public IEnumerator HandItemsGoRoundAtTheRidersSizeWheneverTheyAreMade()
+        {
+            var world=new GameObject("Held world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Held session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            var failures=new List<string>();
+            try
+            {
+                Assert.That(Object.FindObjectsByType<FestivalWorld>(FindObjectsSortMode.None),Has.Length.EqualTo(1),"setup: a world leaked from an earlier test");
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);
+                const string id="player_4";
+                sim.AddPlayer(id,id).Ready=true;
+                yield return StartLevel(session);
+                var friend=sim.Player(id);friend.X=Festivals.WheelX;friend.Z=Festivals.WheelZ+1.5f;
+                foreach(var item in new[]{"map","poi_practice","confetti"})friend.Inventory.Add(new ItemStack{ItemId=item,Count=1});
+                IEnumerator Equip(string item)
+                {
+                    Assert.That(sim.Execute(id,new GameCommand{Id=id+" equips "+item+" "+sim.State.SimulationSeconds,Kind="Equip",ItemId=item}).Accepted,Is.True,"setup: "+id+" equips the "+item);
+                    yield return new WaitForSeconds(.6f);
+                }
+                var body=GameObject.Find(id);Assert.That(body,Is.Not.Null,"setup: "+id+" is drawn");
+                Transform Held(string name){foreach(var t in body.GetComponentsInChildren<Transform>(true))if(t.name==name)return t;return null;}
+                float AgainstTheBody(Transform held)=>Size(held)/Size(body.transform);
+                float size=0;
+                void Check(string when,string name)
+                {
+                    var held=Held(name);
+                    if(held==null){failures.Add(when+": no "+name);return;}
+                    float against=AgainstTheBody(held);
+                    if(Mathf.Abs(against/size-1)>.1f)failures.Add(when+": "+name+" is drawn "+(against/size).ToString("0.00")+"x its size against the body (size "+Size(held).ToString("0.000")+" on a body at "+Size(body.transform).ToString("0.000")+")");
+                }
+
+                yield return Equip("map");
+                var map=Held("Held grip map");Assert.That(map,Is.Not.Null,"setup: the map is in "+id+"'s hand");
+                size=AgainstTheBody(map);float standing=body.transform.lossyScale.y;
+                Assert.That(sim.Execute(id,new GameCommand{Id=id+" boards",Kind=FestivalSimulation.RideWheelKind}).Accepted,Is.True,"setup: "+id+" boards the wheel");
+                yield return new WaitForSeconds(1.2f);
+                Assert.That(body.transform.lossyScale.y,Is.LessThan(standing*.6f),"setup: "+id+" is drawn smaller in the gondola");
+                Check("on the wheel, equipped at the base","Held grip map");
+                yield return Equip("poi_practice");
+                Check("on the wheel, equipped mid-ride","Poi grip and tether");
+                yield return Equip("confetti");
+                Check("on the wheel, equipped mid-ride","Held grip confetti");
+                Assert.That(FestivalSimulation.OnWheel(sim.State,id),Is.True,"setup: "+id+" is still on the wheel");
+
+                foreach(var ride in sim.State.Interactions)if(ride.PlayerId==id&&ride.Kind==FestivalSimulation.RideWheelKind&&ride.Status=="Active")ride.StartSeconds=sim.State.SimulationSeconds-Festivals.WheelRideSeconds+.3;
+                yield return new WaitForSeconds(1.5f);
+                Assert.That(FestivalSimulation.OnWheel(sim.State,id),Is.False,"setup: the turn has ended");
+                Check("after the turn, equipped mid-ride","Held grip confetti");
+                // The poi pair made mid-ride is the one that shows again: a pair is remade only for the other kind of poi.
+                yield return Equip("poi_practice");
+                Check("after the turn, equipped mid-ride","Poi grip and tether");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Held items drawn at the wrong size:\n"+string.Join("\n",failures));
+        }
+
         // POLO-5: what of a seated body shows outside its gondola: each skinned part's furthest vertex past ART-1's gondola (its
         // "gond" in generate_polo_dressing.py), from the gondola's middle: the floor's underside .45 m down, the walls' outer faces .63 m
         // either side and .53 m ahead and behind, their tops .01 m up, and the canopy roof's underside .37 m up. Below the wall tops
@@ -161,6 +233,9 @@ namespace Festival.Tests
             Object.Destroy(mesh);
             return outside;
         }
+        // How many times its own size a transform is drawn in the world: the cube root of the volume it scales by. Unlike lossyScale,
+        // the bones' turns leave it alone, so a hand item reads the same in any pose.
+        private static float Size(Transform t)=>Mathf.Pow(Mathf.Abs(t.localToWorldMatrix.determinant),1/3f);
         // Everything a part of the world is drawn with, in one box.
         private static Bounds Encased(Transform part){var renderers=part.GetComponentsInChildren<Renderer>();var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);return bounds;}
     }

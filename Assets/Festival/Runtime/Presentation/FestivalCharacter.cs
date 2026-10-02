@@ -69,6 +69,12 @@ namespace Festival.Presentation
         public FestivalAppearance Appearance { get; private set; }
         public float HeightScale { get; private set; }=1;
         public Vector3 ShapeScale => Appearance.Scale;
+        /// <summary>POLO-5: how many times its own size this body is drawn right now: FestivalTwistVisuals.RiderScale in a Ferris
+        /// wheel gondola, 1 anywhere else. A hand item is sized against the body's own size (FestivalHeldItem.Unscale), so one made
+        /// mid-ride goes round at the rider's size and grows back with them, like one made before they boarded.</summary>
+        public float RideScale { get; private set; }=1;
+        /// <summary>POLO-5: draws this body at <paramref name="scale"/> times the size FestivalSession.Actor has just given it.</summary>
+        public void Ride(float scale){transform.localScale*=scale;RideScale=scale;}
         Material ownedMaterial;
         Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
         float lastAppliedThreat=-1;

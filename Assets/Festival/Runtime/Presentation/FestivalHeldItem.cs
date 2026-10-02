@@ -24,9 +24,7 @@ namespace Festival.Presentation
             }
             var root=new GameObject("Held grip "+item);root.transform.SetParent(parent,false);
             root.layer=parent.gameObject.layer;
-            var inherited=parent.lossyScale;
-            var inverse=new Vector3(1/Mathf.Max(.01f,Mathf.Abs(inherited.x)),
-                1/Mathf.Max(.01f,Mathf.Abs(inherited.y)),1/Mathf.Max(.01f,Mathf.Abs(inherited.z)));
+            var inverse=Unscale(parent);
             root.transform.localScale=inverse;
             root.transform.localPosition=Vector3.Scale(palm,inverse);
             var prop=FestivalArtView.Create(root.transform,resource);
@@ -40,6 +38,15 @@ namespace Festival.Presentation
                 "item="+item+" view="+(firstPerson?"first_person":"world")+" scale="+size+" model_grip="+grip);
 #endif
             return root;
+        }
+        /// <summary>The local scale that cancels what a hand passes on (the imported bones' scale and the body's size), so a prop
+        /// under it keeps its authored metre size. POLO-5: all but a Ferris wheel rider's RideScale, so a prop made mid-ride goes
+        /// round at the rider's size and grows back with them, like one made before they boarded.</summary>
+        public static Vector3 Unscale(Transform parent)
+        {
+            var body=parent.GetComponentInParent<FestivalCharacter>(true);
+            var inherited=parent.lossyScale/(body!=null?body.RideScale:1);
+            return new Vector3(1/Mathf.Max(.01f,Mathf.Abs(inherited.x)),1/Mathf.Max(.01f,Mathf.Abs(inherited.y)),1/Mathf.Max(.01f,Mathf.Abs(inherited.z)));
         }
     }
 }

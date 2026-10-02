@@ -52,12 +52,9 @@ namespace Festival.Presentation
             var root=new GameObject("Poi grip and tether");root.transform.SetParent(parent,false);root.layer=parent.gameObject.layer;
             // Blender hand bones carry an imported scale. Cancel it so the
             // handle and its offset stay hand sized in both camera and world.
-            var inherited=parent.lossyScale;
-            var invX=1/Mathf.Max(.01f,Mathf.Abs(inherited.x));
-            var invY=1/Mathf.Max(.01f,Mathf.Abs(inherited.y));
-            var invZ=1/Mathf.Max(.01f,Mathf.Abs(inherited.z));
-            root.transform.localPosition=new Vector3(grip.x*invX,grip.y*invY,grip.z*invZ);
-            root.transform.localScale=new Vector3(invX,invY,invZ);
+            var inverse=FestivalHeldItem.Unscale(parent);
+            root.transform.localPosition=Vector3.Scale(grip,inverse);
+            root.transform.localScale=inverse;
             var rig=root.AddComponent<FestivalPoiRig>();rig.side=side;rig.firstPerson=firstPerson;
             var actor=parent.GetComponentInParent<FestivalCharacter>();
             // Camera hands have no FestivalCharacter parent. Their own camera

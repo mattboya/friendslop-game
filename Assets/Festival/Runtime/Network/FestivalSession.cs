@@ -551,10 +551,11 @@ namespace Festival.Network
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
                     string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:at.y);
-                if(wheel)actors[p.Id].localScale*=FestivalTwistVisuals.RiderScale;
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)
                 {
+                    // Before anything here can remake a held item, so the body's scale and its RideScale always agree.
+                    exchangeCharacter.Ride(wheel?FestivalTwistVisuals.RiderScale:1);
                     var peer=string.IsNullOrEmpty(p.VisualOfferTarget)?State.Players.Find(other=>other.VisualOfferTarget==p.Id):State.Players.Find(other=>other.Id==p.VisualOfferTarget);
                     bool exchange=peer!=null&&peer.Connected&&p.Life=="Alive"&&peer.Life=="Alive"&&p.CampVisitId==peer.CampVisitId;
                     var contact=exchange?new Vector3(togetherInside?(p.CampInteriorX+peer.CampInteriorX)*.5f:(p.X+peer.X)*.5f,1.08f,togetherInside?(p.CampInteriorZ+peer.CampInteriorZ)*.5f:(p.Z+peer.Z)*.5f):Vector3.zero;
