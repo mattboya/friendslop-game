@@ -113,7 +113,7 @@ namespace Festival.Tests
                 Fits("leaving early","Notice");NoDollars("leaving early");
 
                 // ECON-2: beside a festivalgoer the HUD offers their kind of stock at its price in your bracelets. Bought out of the
-                // cops' sight, the dance says it's a buy, and the reply names the price in bracelets too.
+                // cops' sight, the talk says it's a buy, and the reply names the price in bracelets too.
                 sim.State.Npcs.Remove(cop);
                 var seller=new NpcState{Id="money_seller_2",Role="Regular",X=0,Z=1.5f,Yaw=180};sim.State.Npcs.Add(seller);
                 yield return new WaitForSeconds(.4f);
@@ -125,15 +125,15 @@ namespace Festival.Tests
                     buy.onClick.Invoke();yield return new WaitForSeconds(.4f);
                     var dance=sim.Interaction(player.InteractionId);
                     Assert.That(dance?.Kind,Is.EqualTo("Buy"),"setup: the Buy action starts a buy ("+session.Message+"), after:\n"+string.Join("\n",failures));
-                    Expect("buying","Dancer heading","YOU  /  MAKING A BUY");
                     // DIALOG-3: talked through with the smooth reply every turn, after a perfect dance (over by the next tick) if the
-                    // seller asks for one first.
+                    // seller asks for one first. The talk is on the chat window, which says it's a buy.
                     if(dance.TrustDance)
                     {
                         foreach(var note in RhythmChart.For(dance).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
                         dance.StartSeconds=sim.State.SimulationSeconds-dance.DurationSeconds-1;
                         yield return new WaitForSeconds(.4f);
                     }
+                    Expect("buying","Chat header",FestivalChatWindow.BuyHeader);
                     while(dance.Status=="Active"&&dance.Turns.Count>0)
                     {
                         var turn=dance.Turns[dance.Turns.Count-1];

@@ -408,7 +408,7 @@ namespace Festival.Network
             if(Time.realtimeSinceStartupAsDouble>=nextInput && (IsHost||LastSnapshotAge<5))
             {
                 var active=State.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
-                var move=MenuOpen||!Application.isFocused||FestivalInput.IsRhythmKind(active?.Kind)?Vector2.zero:Controls.Move.ReadValue<Vector2>();
+                var move=MenuOpen||!Application.isFocused||FestivalInput.Roots(active?.Kind)?Vector2.zero:Controls.Move.ReadValue<Vector2>();
                 var intent=new MoveIntent{X=move.x,Z=move.y,Yaw=yaw,Sprint=Controls.Sprint.IsPressed(),Sequence=++movementSequence};
                 if(IsHost)AcceptInput(LocalPlayerId,intent);else SendJson("festival.move",NetworkManager.ServerClientId,intent);
                 nextInput=Time.realtimeSinceStartupAsDouble+.05;
@@ -439,7 +439,7 @@ namespace Festival.Network
                 var active=simulation.Interaction(player.InteractionId);
                 float speed=(input.Sprint?6:4)*Intoxication.MovementMultiplier(player);if(player.InteractionId!="")speed=1;if(player.DragTargetId!="")speed=2;if(player.Life=="Downed")speed=.8f;
                 speed=Mathf.Min(speed,(float)simulation.CarrySpeed(player));
-                var local=active!=null&&active.Status=="Active"&&FestivalInput.IsRhythmKind(active.Kind)?Vector3.zero:Vector3.ClampMagnitude(new Vector3(input.X,0,input.Z),1);
+                var local=active!=null&&active.Status=="Active"&&FestivalInput.Roots(active.Kind)?Vector3.zero:Vector3.ClampMagnitude(new Vector3(input.X,0,input.Z),1);
                 if(local.sqrMagnitude>.0001f)local=Vector3.ClampMagnitude(local+new Vector3(Intoxication.LateralDrift(player,simulation.State.SimulationSeconds)*local.magnitude,0,0),1);
                 var delta=Quaternion.Euler(0,input.Yaw,0)*local*(speed*(float)dt);
                 var origin=player.CampVisitId!=""?new Vector3(player.CampInteriorX,0,player.CampInteriorZ):new Vector3(player.X,0,player.Z);

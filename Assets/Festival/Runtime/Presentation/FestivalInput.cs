@@ -1,11 +1,20 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Festival.Core;
 namespace Festival.Presentation
 {
     public sealed class FestivalInput : IDisposable
     {
-        public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Conversation"||kind=="Sale"||kind=="Buy"||kind=="Police"||kind=="Poi"||kind=="Dj"||kind=="ConfirmDance";
+        // DIALOG-3: the kinds always played on the four lanes. A sale, a buy, a chat and a talk with security are talks
+        // (FestivalSimulation.Talks), on the chat card; they reach the lanes only for a trust dance (IsRhythm).
+        public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Poi"||kind=="Dj"||kind=="ConfirmDance";
+        /// <summary>DIALOG-3: whether i plays on the four lanes now: a dance, the poi circle, the deck, a check dance, or the dance a
+        /// wary festivalgoer asks for before a talk (FestivalSimulation.TrustDancing).</summary>
+        public static bool IsRhythm(InteractionState i) => i!=null&&(IsRhythmKind(i.Kind)||FestivalSimulation.TrustDancing(i));
+        /// <summary>DIALOG-3: whether doing this kind holds you still (FestivalSession freezes your move): anything on the lanes, and a
+        /// talk, face to face until it ends or you walk out of it with Cancel.</summary>
+        public static bool Roots(string kind) => IsRhythmKind(kind)||FestivalSimulation.Talks(kind);
         public readonly InputActionMap Map = new InputActionMap("Festival");
         public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle;
         public readonly InputAction[] Notes = new InputAction[4];

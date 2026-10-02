@@ -450,7 +450,7 @@ namespace Festival.Tests
                 const string Offer="Offer Tongue Stamps  •  F CHAT";
                 Expect("beside a buyer, holding stock","Prompt",Offer);
                 if(!Shows("E key","Action prompt"))failures.Add("beside a buyer, holding stock: the prompt shows no E key");
-                Expect("beside a buyer, holding stock","Nearby","ESC  Dance with festivalgoer\nESC  Chat with festivalgoer\nESC  Talk and keep the beat\nESC  "+FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"\nESC  "+FestivalHudText.LieDownAction);
+                Expect("beside a buyer, holding stock","Nearby","ESC  Dance with festivalgoer\nESC  Talk with festivalgoer\nESC  "+FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"\nESC  "+FestivalHudText.LieDownAction);
                 Fits("beside a buyer, holding stock","Nearby");
                 // In the last minute of a day the sundown card (LOOP-5) comes up beside it, never over it.
                 RectTransform Card(string name){foreach(var r in hud.GetComponentsInChildren<RectTransform>(true))if(r.name==name)return r;return null;}

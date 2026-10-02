@@ -432,6 +432,8 @@ namespace Festival.Presentation
             ShrinkToFit(heldDetailText,14);
             // DIALOG-5: the chat window, built last so that with the menu open it draws over the pass's dimmer (UpdateChat).
             chatWindow=FestivalChatWindow.Build(root.transform,font,roundedSprite);
+            // DIALOG-3: a reply picked in a talk is the host's Reply command.
+            chatWindow.Send=c=>session.Command(c.Kind,c.TargetId,c.ItemId,c.Amount,c.Direction,c.TimeSeconds);
             BuildHowToPlay(root.transform);
         }
 
@@ -832,8 +834,8 @@ namespace Festival.Presentation
                 session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state));return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
-            // DIALOG-5: while the chat window has questions to ask this frame, 1-3 ask them instead of equipping (never in a rope chat,
-            // which has none, nor once the chat is over).
+            // DIALOG-5: while the chat window has questions to ask this frame, or a talk's replies (DIALOG-3), 1-3 pick them instead of
+            // equipping (never in a rope chat, which has none, nor once the conversation is over).
             if(equipSlot>=0&&!session.MenuOpen&&FestivalChatWindow.TakesReplies(state,player)){chatReply=equipSlot;equipSlot=-1;}
             // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
             bool gearKeys=FestivalSimulation.Interactive(state.Phase);
@@ -884,15 +886,15 @@ namespace Festival.Presentation
         }
 
         // F while playing: the tripper checks a vision by chatting when they have one to check within reach, and anyone beside the
-        // VIP guard talks their way past the rope (FestivalHudText.CheckTarget); otherwise F talks. Beside someone busy it does
-        // nothing, as the HUD says (VISION-3).
+        // VIP guard talks their way past the rope (FestivalHudText.CheckTarget); otherwise F talks with the festivalgoer beside you
+        // (DIALOG-3: a talk on the chat window, the one way to chat). Beside someone busy it does nothing, as the HUD says (VISION-3).
         private void ChatKey(RoundState state,PlayerState player)
         {
             if(state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return;
             var check=FestivalHudText.CheckTarget(state,player);
             if(check!=null){if(!FestivalSimulation.Engaged(state,check))session.Command("ConfirmChat",check.Id);return;}
             var speaker=NearestTalker(state.Npcs,player.X,player.Z,2.7f);
-            if(speaker!=null)session.Command("Talk",speaker.Id);
+            if(speaker!=null)session.Command("Conversation",speaker.Id);
         }
 
         // The campfire debrief: click a friend for each award while the vote is open (the session frees the pointer for it),
@@ -925,10 +927,10 @@ namespace Festival.Presentation
         // Seconds since this client saw the verdict come in; 0 while the vote is open.
         private double RevealSeconds(RoundState state)=>FestivalHudText.VoteOpen(state)||revealRound!=state.RoundId?0:Time.unscaledTime-revealAt;
 
-        // DIALOG-5: the chat window follows the local player's chat check or VIP rope chat, then takes the reply 1-3 picked this frame
-        // (a click picks one itself). In play its top stays under Night 2's lowest crew card (.660, a crew of 8) and the notice it
-        // pushes down, its foot above the gear bar (.148). With the menu open it moves beside the pass, over the dimmer, so the freed
-        // pointer can click a reply, unless the crew list holds that spot.
+        // DIALOG-5: the chat window follows the local player's chat check, VIP rope chat or talk (DIALOG-3), then takes the reply 1-3
+        // picked this frame (a click picks one itself). In play its top stays under Night 2's lowest crew card (.660, a crew of 8) and
+        // the notice it pushes down, its foot above the gear bar (.148). With the menu open it moves beside the pass, over the dimmer,
+        // so the freed pointer can click a reply, unless the crew list holds that spot.
         private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
         {
             if(chatBesidePass!=showMenu){chatBesidePass=showMenu;Place(Rect(chatWindow.gameObject),showMenu?.735f:.60f,.155f,showMenu?.985f:.975f,.652f);}
@@ -937,7 +939,8 @@ namespace Festival.Presentation
             if(covered)chatWindow.Close();
             if(chatReply>=0){if(live)chatWindow.Pick(chatReply);chatReply=-1;}
             if(chatWindow.Open)dialoguePanel.SetActive(false);
-            // 1-3 ask the chat's questions while it runs (UpdateKeyboard), so the gear bar stops offering them to equip.
+            // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
+            // equip.
             inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)?"":"1–3 EQUIP     ")+"Q USE     G DROP";
         }
 
@@ -945,10 +948,11 @@ namespace Festival.Presentation
         {
             var interaction=state.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
             TrackBuy(state,interaction,player);
-            bool rhythm=interaction!=null&&FestivalInput.IsRhythmKind(interaction.Kind);
+            // DIALOG-3: a talk is on the chat window (UpdateChat), and on the lanes only for its trust dance.
+            bool rhythm=FestivalInput.IsRhythm(interaction);
             rhythmPanel.SetActive(rhythm);
             // DANCE-2: every four-lane challenge shows the live dancer beside its lanes.
-            bool showDancer=FestivalHudText.ShowsDancer(interaction?.Kind,session.MenuOpen);
+            bool showDancer=FestivalHudText.ShowsDancer(interaction,session.MenuOpen);
             rhythmShade.SetActive(rhythm&&!session.MenuOpen);
             Place(rhythmPanel.GetComponent<RectTransform>(),showDancer ? .015f : .32f,showDancer ? .05f : .06f,showDancer ? .495f : .68f,showDancer ? .95f : .87f);
             dancePanel.SetActive(showDancer);
@@ -980,7 +984,7 @@ namespace Festival.Presentation
             ProcessRhythmFeedback(interaction,now);
             if(dialoguePanel.activeSelf&&!chatter)
             {
-                dialogueSpeaker.text=interaction.Kind=="Police"?"SECURITY":interaction.Kind=="Dj"?"STAGE CREW":"FESTIVALGOER";
+                dialogueSpeaker.text=interaction.Kind=="Dj"?"STAGE CREW":"FESTIVALGOER";
                 dialogueLine.text=interaction.DialogueText;
             }
             if(shownRhythmCombo!=rhythmComboCount){rhythmCombo.text=rhythmComboCount>=2?rhythmComboCount+" COMBO":"";shownRhythmCombo=rhythmComboCount;}

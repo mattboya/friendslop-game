@@ -93,12 +93,11 @@ namespace Festival.Presentation
         /// <summary>POLO-2: whether p's HUD offers Cancel for what they are doing. Nothing cancels a turn on the Ferris wheel (the
         /// host refuses it), so nothing offers to; an Ember Playa art car rider still hops off.</summary>
         public static bool CanCancel(RoundState s,PlayerState p)=>p.InteractionId!=""&&!FestivalSimulation.OnWheel(s,p.Id);
-        /// <summary>DANCE-12: whether p is mid four-lane challenge (FestivalInput.IsRhythmKind: a dance, a check dance, the poi
-        /// circle, the deck, a sale, a buy, a chat or a talk with security). E sits between the W and D lanes, so then E runs
-        /// nothing and a tap of G drops nothing: only holding G for HoldToStopSeconds stops it, as HoldToStop says. Anything else
-        /// keeps its cancel on E, and lying down gets up first. Keyed on IsRhythmKind, so a talk that stops being danced (DIALOG-3)
-        /// stops being held.</summary>
-        public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythmKind(i.Kind);return false;}
+        /// <summary>DANCE-12: whether p is mid four-lane challenge (FestivalInput.IsRhythm: a dance, a check dance, the poi circle, the
+        /// deck, or a talk's trust dance). E sits between the W and D lanes, so then E runs nothing and a tap of G drops nothing: only
+        /// holding G for HoldToStopSeconds stops it, as HoldToStop says. Anything else keeps its cancel on E, and lying down gets up
+        /// first. DIALOG-3: a talk is replied to on 1-3, so E walks out of it.</summary>
+        public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythm(i);return false;}
         public const string HoldToStop="HOLD G TO STOP DANCING";
         public const float HoldToStopSeconds=1;
         /// <summary>POLO-2: a Ferris wheel rider's prompt, in place of an action: what the turn has left at `now` (the view's
@@ -377,28 +376,29 @@ namespace Festival.Presentation
         public static string Vitals(RoundState s,PlayerState p)=>("HP "+p.Health+Dot+Money(s,p,p.Cash)+Dot+"STASH "+Money(s,p,s.StashCash)+"\n"
             +"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+Dot+Condition(s,p);
 
-        /// <summary>The rhythm lane's title, naming a check dance as the check it is.</summary>
-        public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
+        /// <summary>The rhythm lane's title, naming a check dance as the check it is. DIALOG-3: a talk is on the lanes only for the dance
+        /// a wary festivalgoer asks for first, so it reads as that.</summary>
+        public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":FestivalSimulation.Talks(kind)?"TRUST DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
 
-        /// <summary>DANCE-2: every four-lane challenge shows the live dancer beside its lanes, unless the menu covers it.</summary>
-        public static bool ShowsDancer(string kind,bool menuOpen)=>FestivalInput.IsRhythmKind(kind)&&!menuOpen;
-        /// <summary>The live dancer's heading. A check dance reads as a dance; a sale, a buy, a chat and a talk with security say what
-        /// the player is doing.</summary>
-        public static string DancerHeading(string kind)=>kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK","Sale"=>"YOU  /  MAKING A SALE",
-            "Buy"=>"YOU  /  MAKING A BUY","Conversation"=>"YOU  /  CHATTING","Police"=>"YOU  /  TALKING TO SECURITY",_=>"YOU  /  ON THE FLOOR"};
+        /// <summary>DANCE-2: every four-lane challenge (FestivalInput.IsRhythm, a talk's trust dance included) shows the live dancer
+        /// beside its lanes, unless the menu covers it.</summary>
+        public static bool ShowsDancer(InteractionState i,bool menuOpen)=>FestivalInput.IsRhythm(i)&&!menuOpen;
+        /// <summary>The live dancer's heading. A check dance reads as a dance. DIALOG-3: a talk shows the dancer only in its trust dance,
+        /// whatever the talk, so it says what that dance is for.</summary>
+        public static string DancerHeading(string kind)=>FestivalSimulation.Talks(kind)?"YOU  /  DANCING FOR TRUST":kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK",_=>"YOU  /  ON THE FLOOR"};
         /// <summary>The caption under the live dancer, shown while nobody is saying a line.</summary>
-        public static string DancerCaption(string kind)=>kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX","Sale"=>"YOUR LOOK • YOUR PITCH",
-            "Buy"=>"YOUR LOOK • YOUR HAGGLE","Conversation"=>"YOUR LOOK • YOUR VIBE","Police"=>"YOUR LOOK • YOUR ALIBI",_=>"YOUR LOOK • YOUR MOVES"};
+        public static string DancerCaption(string kind)=>FestivalSimulation.Talks(kind)?"YOUR LOOK • THEIR TRUST":kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX",_=>"YOUR LOOK • YOUR MOVES"};
 
         /// <summary>What p can do beside festivalgoer n, as the HUD lists them; E runs the first. ECON-3 (Matt: "there is no button to
         /// actually sell to people"): by day that is p's next step to a sale, the offer while holding stock and otherwise a buy from
         /// them (FestivalGuidance.NeedsStock). The dance follows either way, and still leads at night. The first says "F CHAT" while
-        /// F chats with them, not while it checks a vision (CheckTarget). K1: soldToYou says n has sold you a unit this level, which only
+        /// F chats with them, not while it checks a vision (CheckTarget). DIALOG-3: chatting is a talk ("Talk with festivalgoer", the
+        /// one way to chat now that the bark-only chat is gone), and F starts it. K1: soldToYou says n has sold you a unit this level, which only
         /// your HUD knows; a seller never buys, so by day E buys again from them and the offer, a sure refusal, goes last.</summary>
         public static List<(string Label,GameCommand Command)> FestivalgoerActions(RoundState s,PlayerState p,NpcState n,bool soldToYou=false)
         {
             var actions=new List<(string Label,GameCommand Command)>{("Dance with festivalgoer",new GameCommand{Kind="Dance",TargetId=n.Id})};
-            if(n.CanTalk){actions.Add(("Chat with festivalgoer",new GameCommand{Kind="Talk",TargetId=n.Id}));actions.Add(("Talk and keep the beat",new GameCommand{Kind="Conversation",TargetId=n.Id}));}
+            if(n.CanTalk)actions.Add(("Talk with festivalgoer",new GameCommand{Kind="Conversation",TargetId=n.Id}));
             var stock=p.Inventory.Find(i=>Catalog.FindItem(i.ItemId)?.Category=="Stock");
             bool day=!Festivals.For(s).Night;
             if(stock!=null)actions.Insert(day&&!soldToYou?0:actions.Count,("Offer "+Catalog.FindItem(stock.ItemId).Name,new GameCommand{Kind="StartSale",TargetId=n.Id,ItemId=stock.ItemId}));

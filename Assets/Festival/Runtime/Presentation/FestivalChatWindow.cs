@@ -7,14 +7,15 @@ using UnityEngine.UI;
 namespace Festival.Presentation
 {
     /// <summary>
-    /// DIALOG-5: a conversation as a chat thread, the card every conversation uses: the tripper's chat check and the VIP rope chat
-    /// now (Follow), DIALOG-3's talks and CAMP-1's camp seller next (Begin, TheySay, YouSay, Offer). Under a header naming who you're
-    /// talking to and a thin bar for the time left, their lines sit on the left marked with their initial, and yours on the right
-    /// in the accent orange, marked YOU. Under the thread, the replies you can pick, each a button with its key cap: 1-3 or a click
-    /// picks one (Pick), and one already picked dims. A line of theirs waits behind a "…" bubble for TypingSeconds, then types out at
-    /// LettersPerSecond, DIALOG-2's pace (reduced motion shows it whole). The thread keeps the last MaxBubbles bubbles and fades
-    /// older ones out. It lives here on the client, so it outlasts the interaction that fed it: a view carries only Active ones.
-    /// DIALOG-6: so once the conversation ends the window stays up, read-only, until its last line has been read (Linger).
+    /// DIALOG-5: a conversation as a chat thread, the card every conversation uses: the tripper's chat check, the VIP rope chat and
+    /// DIALOG-3's talks (Follow), CAMP-1's camp seller next (Begin, TheySay, YouSay, Offer). Under a header naming who you're talking
+    /// to (for a talk, what it is for) and a thin bar for the time left, their lines sit on the left marked with their initial, and
+    /// yours on the right in the accent orange, marked YOU. Under the thread, the replies you can pick, each a button with its key
+    /// cap: 1-3 or a click picks one (Pick), and one already picked dims. A line of theirs waits behind a "…" bubble for
+    /// TypingSeconds, then types out at LettersPerSecond, DIALOG-2's pace (reduced motion shows it whole). The thread keeps the last
+    /// MaxBubbles bubbles and fades older ones out. It lives here on the client, so it outlasts the interaction that fed it: a view
+    /// carries only Active ones. DIALOG-6: so once the conversation ends the window stays up, read-only, until its last line has been
+    /// read (Linger).
     /// Time is handed in (Begin, Advance), so tests read the thread at exact moments.
     /// </summary>
     public sealed class FestivalChatWindow : MonoBehaviour
@@ -26,9 +27,16 @@ namespace Festival.Presentation
         // from them the host ends a chat (TaskStillValid), and an ended one stops lingering.
         public const float ShortestLinger=2.5f,LeaveReach=4;
         public const string OverHeader="CHAT OVER  •  G CLOSE";
+        // DIALOG-3: a talk's title line, what it is for: a chat with a festivalgoer, a sale, a buy, a talk with security.
+        public const string TalkHeader="TALK  •  READ THEM AND CALM THEM",SellHeader="SELL  •  CLOSE THE DEAL",BuyHeader="BUY  •  READ THEM BEFORE YOU PAY",SecurityHeader="SECURITY  •  TALK YOUR WAY CLEAR";
+        /// <summary>DIALOG-3: where a reply picked in a talk goes, as the host's Reply command (Amount the reply, Direction the turn).
+        /// FestivalHud sends it through the session.</summary>
+        public Action<GameCommand> Send;
         // The HUD's palette (FestivalHud): a paper card with an orange accent, ink text, their bubbles sage, yours orange.
         static readonly Color Paper=new Color(.948f,.928f,.852f,1),Ink=new Color(.035f,.065f,.075f,1),Orange=new Color(.99f,.465f,.255f,1),Hairline=new Color(.51f,.56f,.50f,.35f);
         static readonly Color TheirBubble=new Color(.83f,.87f,.80f,1),TheirMark=new Color(.12f,.45f,.39f,1),ReplyColor=new Color(.84f,.85f,.76f,1),Dimmed=new Color(.035f,.065f,.075f,.4f);
+        // DIALOG-3: a line of its own (Note), centred and unmarked on the card's own paper, a shade darker.
+        static readonly Color NoteBubble=new Color(.88f,.86f,.78f,1);
         // Bubble geometry in canvas pixels: the mark beside each bubble, the text's padding, and the gap between bubbles.
         const float MarkWidth=36,MarkHeight=26,MarkGap=8,PadX=12,PadY=7,Spacing=7;
         // The thread's foot sits above the replies when there are some, else near the card's foot.
@@ -37,7 +45,7 @@ namespace Festival.Presentation
         const string Hidden="<color=#00000000>";
 
         // At: when the bubble came; WholeAt: when all of its line first showed.
-        sealed class Bubble{public GameObject Root;public RectTransform Back,Mark;public Image BackImage,MarkImage;public Text Line,MarkText;public CanvasGroup Group;public string Said="";public bool Theirs,Whole;public float At,WholeAt,FadeFrom;public int Letters;}
+        sealed class Bubble{public GameObject Root;public RectTransform Back,Mark;public Image BackImage,MarkImage;public Text Line,MarkText;public CanvasGroup Group;public string Said="";public bool Theirs,Note,Whole;public float At,WholeAt,FadeFrom;public int Letters;}
         readonly List<Bubble> thread=new List<Bubble>(),fading=new List<Bubble>(),spare=new List<Bubble>();
         readonly Button[] replies=new Button[MaxReplies];
         readonly Text[] replyTexts=new Text[MaxReplies],replyKeys=new Text[MaxReplies];
@@ -47,6 +55,8 @@ namespace Festival.Presentation
         // DIALOG-6: the followed chat's festivalgoer; whether the conversation may still linger once over, and whether it is over.
         string threadId="",mark="",target="";double followedStart=-1;
         float clock,laidWidth=-1;bool dirty,reduced,lingers,over;
+        // DIALOG-3: in a talk, the turns shown so far and those your reply has been said for; the hunch it will end on (Linger).
+        int turnsShown,turnsSaid;string hunch="";
 
         /// <summary>Builds the window, hidden, on the HUD's canvas where the chat card was: right of centre, between the crew card
         /// and the gear bar (FestivalHud moves it beside the pass while the menu is open).</summary>
@@ -92,15 +102,22 @@ namespace Festival.Presentation
         /// <summary>How long a conversation's last line stays up, once whole, after the conversation ends: its reading time, at least
         /// ShortestLinger.</summary>
         public static float Lingers(string line)=>Mathf.Max(ShortestLinger,ReadingSeconds(line));
-        /// <summary>The chat check (or VIP rope chat) p is in right now; null without one. A view carries only its own player's
-        /// interactions, and only Active ones, so no other client can read it.</summary>
-        public static InteractionState LiveChat(RoundState s,PlayerState p){foreach(var i in s.Interactions)if(i.Id==p.InteractionId&&i.Kind=="ConfirmChat"&&i.Status=="Active")return i;return null;}
-        /// <summary>Whether 1-3 answer the window this frame instead of equipping: only while p's live chat has questions to ask, so a
-        /// rope chat, which has none, never swallows them, nor does a chat that has just ended.</summary>
-        public static bool TakesReplies(RoundState s,PlayerState p){var chat=LiveChat(s,p);return chat!=null&&chat.Chat.Questions.Length>0;}
+        /// <summary>The conversation p is in right now: a chat check (or VIP rope chat), or a talk (DIALOG-3: a sale, a buy, a chat or
+        /// a talk with security) once any dance its partner asked for first is over (FestivalSimulation.TrustDancing: that is on the
+        /// lanes); null without one. A view carries only its own player's interactions, and only Active ones, so no other client can
+        /// read it.</summary>
+        public static InteractionState LiveChat(RoundState s,PlayerState p){foreach(var i in s.Interactions)if(i.Id==p.InteractionId&&i.Status=="Active"&&(i.Kind=="ConfirmChat"||FestivalSimulation.Talks(i.Kind)&&i.Turns.Count>0))return i;return null;}
+        /// <summary>Whether 1-3 answer the window this frame instead of equipping: while p is in a talk, or in a chat that has questions
+        /// to ask, so a rope chat, which has none, never swallows them, nor does a conversation that has just ended.</summary>
+        public static bool TakesReplies(RoundState s,PlayerState p){var chat=LiveChat(s,p);return chat!=null&&(chat.Kind!="ConfirmChat"||chat.Chat.Questions.Length>0);}
         /// <summary>Who you're talking to: "FESTIVALGOER  •  WOOK" by their persona (DialogueGrammar.PersonaFor), "VIP GUARD" for
-        /// Palm Mirage's guard, and "VIP GUARD  •  TALKING YOUR WAY IN" for the rope chat, which checks nothing (POLO-4).</summary>
-        public static string HeaderFor(RoundState s,InteractionState chat){string who=Speaker(s,chat);return who!="VIP GUARD"?"FESTIVALGOER  •  "+who:chat.Chat.Questions.Length==0?who+"  •  TALKING YOUR WAY IN":who;}
+        /// Palm Mirage's guard, and "VIP GUARD  •  TALKING YOUR WAY IN" for the rope chat, which checks nothing (POLO-4). DIALOG-3: a
+        /// talk says what it is for instead, and never names their persona, which is theirs to give away in how they talk.</summary>
+        public static string HeaderFor(RoundState s,InteractionState chat)
+        {
+            switch(chat.Kind){case "Conversation":return TalkHeader;case "Sale":return SellHeader;case "Buy":return BuyHeader;case "Police":return SecurityHeader;}
+            string who=Speaker(s,chat);return who!="VIP GUARD"?"FESTIVALGOER  •  "+who:chat.Chat.Questions.Length==0?who+"  •  TALKING YOUR WAY IN":who;
+        }
         static string Speaker(RoundState s,InteractionState chat)
         {
             NpcState npc=null;foreach(var n in s.Npcs)if(n.Id==chat.TargetId)npc=n;
@@ -117,6 +134,8 @@ namespace Festival.Presentation
         public int Bubbles=>thread.Count;
         public int ShownBubbles=>thread.Count+fading.Count;
         public bool IsTheirs(int i)=>thread[i].Theirs;
+        /// <summary>DIALOG-3: whether bubble i is a line of its own (Note), neither theirs nor yours.</summary>
+        public bool IsNote(int i)=>thread[i].Note;
         /// <summary>What bubble i shows now: their "…", their line typing (its rest hidden), or the whole line.</summary>
         public string Shown(int i)=>thread[i].Line.text;
         public int Replies=>offered;
@@ -132,7 +151,7 @@ namespace Festival.Presentation
         {
             clock=now;gameObject.SetActive(true);this.header.text=header;group.alpha=1;
             if(threadId==this.threadId)return;
-            this.threadId=threadId;this.mark=mark;lingers=true;over=false;
+            this.threadId=threadId;this.mark=mark;lingers=true;over=false;turnsShown=turnsSaid=0;hunch="";
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();
             Offer(null,null);dirty=true;
         }
@@ -144,6 +163,8 @@ namespace Festival.Presentation
             foreach(var b in thread)if(b.Theirs&&!b.Whole){b.Whole=true;b.WholeAt=clock;Show(b);}
             var yours=Take(false,line);yours.Whole=true;yours.WholeAt=clock;Show(yours);Add(yours);
         }
+        /// <summary>DIALOG-3: a line of its own across the thread, unmarked and whole at once: what a talk left you feeling.</summary>
+        public void Note(string line){var b=Take(false,line);b.Note=true;b.Whole=true;b.WholeAt=clock;b.Mark.gameObject.SetActive(false);b.BackImage.color=NoteBubble;Show(b);Add(b);}
         /// <summary>The replies under the thread, up to MaxReplies, all pickable; null or none hides them. `pick` runs with the
         /// reply's index when 1-3 or a click picks it.</summary>
         public void Offer(string[] lines,Action<int> pick)
@@ -187,12 +208,12 @@ namespace Festival.Presentation
         /// DIALOG-6: each frame once the conversation is over (complete or cancelled), at `now`: the window stays up read-only, headed
         /// OverHeader with every reply dimmed, until its last line has been whole on screen for Lingers(line) (one still typing types
         /// on), then fades out over FadeSeconds and hides. `leave` (they walked off or started something else) hides it at once.
-        /// False once hidden; an ended conversation, once hidden, stays hidden.
+        /// False once hidden; an ended conversation, once hidden, stays hidden. DIALOG-3: a talk that left a hunch ends on it (Note).
         /// </summary>
         public bool Linger(float now,bool reducedMotion,bool leave)
         {
             if(!lingers||leave){Dismiss();return false;}
-            if(!over){over=true;header.text=OverHeader;for(int i=0;i<offered;i++)Dim(i);}
+            if(!over){over=true;clock=now;header.text=OverHeader;for(int i=0;i<offered;i++)Dim(i);if(hunch!="")Note(hunch);}
             gameObject.SetActive(true);Advance(now,0,reducedMotion);
             float left=ReadBy()-clock;
             if(left<=-FadeSeconds){Dismiss();return false;}
@@ -203,10 +224,11 @@ namespace Festival.Presentation
         public void Dismiss(){lingers=false;Close();}
 
         /// <summary>
-        /// Follows p's chat check (or VIP rope chat) in their view: their opener, then the three questions as replies; picking one
-        /// says it on your side and types their answer to it. A rope chat is the guard's opener and doorman line with nothing to
-        /// ask. The bar runs down the chat's time at `simulationSeconds`. With no chat it returns false, and the chat it followed
-        /// lingers (Linger) unless p is past LeaveReach from them, in anything else, or out of the level.
+        /// Follows p's conversation (LiveChat) in their view. A chat check is their opener, then the three questions as replies; picking
+        /// one says it on your side and types their answer to it. A rope chat is the guard's opener and doorman line with nothing to
+        /// ask. The bar runs down the chat's time at `simulationSeconds`. A talk (DIALOG-3) is turn by turn (FollowTalk), its bar the
+        /// time left to answer this turn. With none it returns false, and the one it followed lingers (Linger) unless p is past
+        /// LeaveReach from them, in anything else, or out of the level.
         /// </summary>
         public bool Follow(RoundState s,PlayerState p,double simulationSeconds,float now,bool reducedMotion)
         {
@@ -215,17 +237,41 @@ namespace Festival.Presentation
             // the level is over.
             if(live==null){Linger(now,reducedMotion,p.InteractionId!=""||s.Phase!="Playing"||!Beside(s,p));return false;}
             // Keyed on the start time too: interaction ids start over in a new session, but this window may outlive one.
+            bool talk=live.Kind!="ConfirmChat";
             if(live.Id!=threadId||live.StartSeconds!=followedStart)
             {
                 var chat=live.Chat;followedStart=live.StartSeconds;threadId="";target=live.TargetId;
-                Begin(live.Id,HeaderFor(s,live),Speaker(s,live).Substring(0,1),now);
-                TheySay(chat.Opener,false);
-                if(chat.Questions.Length==0)TheySay(chat.Doorman,true);
-                else Offer(chat.Questions,i=>{YouSay(chat.Questions[i]);TheySay(chat.Answers[i],true);});
+                // A talk's mark is who they are, F for a festivalgoer or S for security, never their persona.
+                Begin(live.Id,HeaderFor(s,live),talk?(live.Kind=="Police"?"S":"F"):Speaker(s,live).Substring(0,1),now);
+                if(!talk)
+                {
+                    TheySay(chat.Opener,false);
+                    if(chat.Questions.Length==0)TheySay(chat.Doorman,true);
+                    else Offer(chat.Questions,i=>{YouSay(chat.Questions[i]);TheySay(chat.Answers[i],true);});
+                }
             }
             else Begin(threadId,header.text,mark,now);
-            Advance(now,live.DurationSeconds>0?(float)(1-(simulationSeconds-live.StartSeconds)/live.DurationSeconds):0,reducedMotion);
+            if(talk)FollowTalk(live);
+            float left=talk?(float)((live.StartSeconds+live.DurationSeconds-simulationSeconds)/FestivalSimulation.ReplySeconds)
+                :live.DurationSeconds>0?(float)(1-(simulationSeconds-live.StartSeconds)/live.DurationSeconds):0;
+            Advance(now,left,reducedMotion);
             return true;
+        }
+        // DIALOG-3: each turn of the talk not shown yet: the reply given to the turn before on your side, unless you picked it here
+        // (a turn that ran out says nothing), then their reaction and their line, whole at once (the time to answer already runs on
+        // the host), and the turn's three replies. Picking one dims all three (one reply a turn), says it, and Sends it as that
+        // turn's Reply. The hunch the talk will end on is kept for Linger: the view stops carrying the talk as it ends.
+        void FollowTalk(InteractionState talk)
+        {
+            for(;turnsShown<talk.Turns.Count;turnsShown++)
+            {
+                if(turnsSaid<turnsShown){var heard=talk.Turns[turnsShown-1];if(heard.Pick>=0)YouSay(heard.Replies[heard.Pick]);turnsSaid=turnsShown;}
+                var turn=talk.Turns[turnsShown];int at=turnsShown;
+                if(turn.Reaction!="")TheySay(turn.Reaction,false);
+                TheySay(turn.Line,false);
+                Offer(turn.Replies,i=>{for(int r=0;r<offered;r++)Dim(r);YouSay(turn.Replies[i]);turnsSaid=at+1;Send?.Invoke(new GameCommand{Kind="Reply",Amount=i,Direction=at});});
+            }
+            hunch=talk.Hunch;
         }
 
         // Whether p is within LeaveReach of the followed chat's festivalgoer.
@@ -270,7 +316,7 @@ namespace Festival.Presentation
             float widest=laidWidth-MarkWidth-MarkGap-laidWidth*.14f-2*PadX;
             float textWidth=Mathf.Min(measure.GetPreferredWidth(sizing,b.Line.GetGenerationSettings(Vector2.zero))/units+1,widest);
             float height=measure.GetPreferredHeight(sizing,b.Line.GetGenerationSettings(new Vector2(textWidth,0)))/units+2*PadY;
-            float width=textWidth+2*PadX,x=b.Theirs?MarkWidth+MarkGap:laidWidth-MarkWidth-MarkGap-width;
+            float width=textWidth+2*PadX,x=b.Note?(laidWidth-width)/2:b.Theirs?MarkWidth+MarkGap:laidWidth-MarkWidth-MarkGap-width;
             b.Back.anchoredPosition=new Vector2(x,y);b.Back.sizeDelta=new Vector2(width,height);
             b.Mark.anchoredPosition=new Vector2(b.Theirs?0:laidWidth-MarkWidth,y);b.Mark.sizeDelta=new Vector2(MarkWidth,MarkHeight);
             return y+height;
@@ -288,7 +334,7 @@ namespace Festival.Presentation
                 b.Mark=Panel(b.Root.transform,"Mark",TheirMark,rounded);Corner(b.Mark);b.MarkImage=b.Mark.GetComponent<Image>();
                 b.MarkText=Label(b.Mark,"Who",16,TextAnchor.MiddleCenter,Paper);Place(b.MarkText.rectTransform,0,0,1,1);
             }
-            b.Theirs=theirs;b.Said=line??"";b.At=clock;b.Whole=false;b.Letters=-2;b.FadeFrom=0;b.Group.alpha=1;
+            b.Theirs=theirs;b.Note=false;b.Mark.gameObject.SetActive(true);b.Said=line??"";b.At=clock;b.Whole=false;b.Letters=-2;b.FadeFrom=0;b.Group.alpha=1;
             b.BackImage.color=theirs?TheirBubble:Orange;b.MarkImage.color=theirs?TheirMark:Ink;
             b.MarkText.text=theirs?mark:"YOU";b.MarkText.color=theirs?Paper:Orange;b.MarkText.fontSize=theirs?16:13;
             return b;

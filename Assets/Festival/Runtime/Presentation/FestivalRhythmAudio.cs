@@ -29,7 +29,7 @@ namespace Festival.Presentation
         {
             var p=session.LocalPlayer;
             var i=p==null?null:session.State.Interactions.Find(x=>x.Id==p.InteractionId&&x.Status=="Active");
-            bool rhythm=i!=null&&FestivalInput.IsRhythmKind(i.Kind);
+            bool rhythm=FestivalInput.IsRhythm(i);
             if(!rhythm){beat.Stop();phrase="";return;}
             beat.volume=session.Profile.Data.MusicVolume;
             string key=i.Id+":"+i.Phrase;if(phrase==key)return;phrase=key;

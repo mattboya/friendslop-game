@@ -83,7 +83,7 @@ namespace Festival.Tests
             var s=Level(0,0);var you=Crew(s,"you","You");Crew(s,"sam","Sam");s.TripperId="sam";
             var goer=new NpcState{Id="goer_2",CanTalk=true};s.Npcs.Add(goer);
             string Listed(RoundState state,bool soldToYou=false){var labels=new List<string>();foreach(var (label,_) in FestivalHudText.FestivalgoerActions(state,you,goer,soldToYou))labels.Add(label);return string.Join(" | ",labels);}
-            const string Buy="Buy Tongue Stamps  •  $5",Talk="Chat with festivalgoer | Talk and keep the beat",Chat="  •  F CHAT";
+            const string Buy="Buy Tongue Stamps  •  $5",Talk="Talk with festivalgoer",Chat="  •  F CHAT";
             Assert.That(Listed(s),Is.EqualTo(Buy+Chat+" | Dance with festivalgoer | "+Talk),"by day with no stock, E buys from them");
             var buy=FestivalHudText.FestivalgoerActions(s,you,goer)[0].Command;
             Assert.That(new[]{buy.Kind,buy.TargetId,buy.ItemId},Is.EqualTo(new[]{"StartBuy","goer_2",FestivalSimulation.SellerStock("goer_2")}),"the buy asks them for the kind they sell");

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Festival.Core;
@@ -210,22 +211,33 @@ namespace Festival.Tests
             Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("ketamine"),"a dose's substance still comes first");
         }
 
-        // Every four-lane challenge, and only one, opens the live dancer beside its lanes; the menu covers it. The HUD reads both
-        // panels from these (FestivalHud.UpdateRhythm), and HudTripperPlayTests watches them on a hosted check dance and chat.
+        // Every four-lane challenge, and only one, opens the live dancer beside its lanes; the menu covers it. DIALOG-3: a sale, a buy,
+        // a chat and a talk with security are talks, on the chat card (HudConversationTests), and are on the lanes only while dancing
+        // the dance a wary festivalgoer asks for first (FestivalSimulation.TrustDancing). The HUD reads both panels from these
+        // (FestivalHud.UpdateRhythm), and HudTripperPlayTests watches them on a hosted check dance, trust dance and talk.
         [Test]public void EveryFourLaneChallengeShowsTheDancerUnlessTheMenuIsOpen()
         {
             foreach(var kind in FourLaneKinds)
             {
-                Assert.That(FestivalInput.IsRhythmKind(kind),Is.True,"setup: a "+kind+" plays on the four lanes");
-                Assert.That(FestivalHudText.ShowsDancer(kind,false),Is.True,"a "+kind+" shows the live dancer beside its lanes");
-                Assert.That(FestivalHudText.ShowsDancer(kind,true),Is.False,"the menu hides the dancer during a "+kind);
+                Assert.That(FestivalInput.IsRhythm(Doing(kind)),Is.True,"setup: a "+kind+" plays on the four lanes");
+                Assert.That(FestivalHudText.ShowsDancer(Doing(kind),false),Is.True,"a "+kind+" shows the live dancer beside its lanes");
+                Assert.That(FestivalHudText.ShowsDancer(Doing(kind),true),Is.False,"the menu hides the dancer during a "+kind);
             }
-            foreach(var kind in new[]{null,"","ConfirmChat","FindFriend",FestivalSimulation.LieDownKind})
-                Assert.That(FestivalHudText.ShowsDancer(kind,false),Is.False,"no four-lane challenge ("+(kind??"none")+"), no dancer");
+            foreach(var kind in TalkKinds)
+            {
+                Assert.That(FestivalInput.IsRhythmKind(kind),Is.False,"a "+kind+" is a talk, not a four-lane challenge");
+                Assert.That(FestivalInput.IsRhythm(Doing(kind,turns:1))||FestivalHudText.ShowsDancer(Doing(kind,turns:1),false),Is.False,"talking, a "+kind+" has no lanes and no dancer");
+                Assert.That(FestivalInput.IsRhythm(Doing(kind,trust:true)),Is.True,"its trust dance plays on the lanes");
+                Assert.That(FestivalHudText.ShowsDancer(Doing(kind,trust:true),false),Is.True,"beside the live dancer");
+                Assert.That(FestivalInput.IsRhythm(Doing(kind,trust:true,turns:1)),Is.False,"until the talk that follows it");
+            }
+            foreach(var kind in new[]{"","ConfirmChat","FindFriend",FestivalSimulation.LieDownKind})
+                Assert.That(FestivalHudText.ShowsDancer(Doing(kind),false),Is.False,"no four-lane challenge ("+kind+"), no dancer");
+            Assert.That(FestivalInput.IsRhythm(null)||FestivalHudText.ShowsDancer(null,false),Is.False,"doing nothing, no lanes and no dancer");
         }
 
-        // A check dance reads as a dance; a sale, a buy (ECON-2), a chat and a talk with security each say what the player is doing,
-        // under the lanes' "YOU  /  …" heading with two spaces round the slash.
+        // A check dance reads as a dance. DIALOG-3: a talk is on the lanes only for the dance a wary festivalgoer asks for first, and
+        // that says so, whatever the talk: the lane's title, and the "YOU  /  …" heading with two spaces round the slash.
         [Test]public void EachChallengeHasItsOwnHeadingAndCaption()
         {
             var expected=new Dictionary<string,(string heading,string caption)>
@@ -234,43 +246,57 @@ namespace Festival.Tests
                 {"ConfirmDance",("YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES")},
                 {"Poi",("YOU  /  POI CIRCLE","YOUR POI • YOUR FLOW")},
                 {"Dj",("YOU  /  AT THE DECK","YOUR LOOK • YOUR MIX")},
-                {"Sale",("YOU  /  MAKING A SALE","YOUR LOOK • YOUR PITCH")},
-                {"Buy",("YOU  /  MAKING A BUY","YOUR LOOK • YOUR HAGGLE")},
-                {"Conversation",("YOU  /  CHATTING","YOUR LOOK • YOUR VIBE")},
-                {"Police",("YOU  /  TALKING TO SECURITY","YOUR LOOK • YOUR ALIBI")},
+                {"Sale",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
+                {"Buy",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
+                {"Conversation",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
+                {"Police",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
             };
-            Assert.That(expected.Keys,Is.EquivalentTo(FourLaneKinds),"every four-lane challenge is named here");
+            Assert.That(expected.Keys,Is.EquivalentTo(FourLaneKinds.Concat(TalkKinds)),"every four-lane challenge and every talk is named here");
             foreach(var pair in expected)
             {
                 Assert.That(FestivalHudText.DancerHeading(pair.Key),Is.EqualTo(pair.Value.heading),pair.Key+"'s heading");
                 Assert.That(FestivalHudText.DancerCaption(pair.Key),Is.EqualTo(pair.Value.caption),pair.Key+"'s caption");
             }
+            foreach(var kind in TalkKinds)Assert.That(FestivalHudText.RhythmTitle(kind),Is.EqualTo("TRUST DANCE  /  FOUR-LANE"),"a "+kind+"'s lane title");
         }
 
         // DANCE-12: E sits between the W and D lanes, so a stray E must never end a dance. Every four-lane challenge, and only those,
         // stops by holding G alone: the HUD runs nothing on E then (FestivalHud.UpdateActions, UpdateKeyboard), even beside a
         // festivalgoer to buy from or a friend to hand gear to, and a tap of G drops nothing. Everything else keeps its cancel on
-        // E: lying on the grass still gets up first, and a chat check, a task or a ride still stops. HudTripperPlayTests presses
-        // the keys in a hosted dance and buy.
+        // E: lying on the grass still gets up first, and a chat check, a task or a ride still stops. DIALOG-3: a talk is replied to on
+        // 1-3, far from E, so E walks out of it; its trust dance is on the lanes, so it stops only by holding G. HudTripperPlayTests
+        // presses the keys in a hosted dance and buy.
         [Test]public void OnlyAFourLaneChallengeStopsByHoldingG()
         {
             foreach(var kind in FourLaneKinds)
             {
-                Assert.That(StopsByHold(kind,"Active"),Is.True,"a "+kind+" stops only by holding G: E does nothing");
-                Assert.That(StopsByHold(kind,"Cancelled"),Is.False,"a "+kind+" already over holds nothing back");
+                Assert.That(StopsByHold(Doing(kind)),Is.True,"a "+kind+" stops only by holding G: E does nothing");
+                Assert.That(StopsByHold(Doing(kind,status:"Cancelled")),Is.False,"a "+kind+" already over holds nothing back");
             }
-            Assert.That(StopsByHold(FestivalSimulation.LieDownKind,"Active"),Is.False,"lying on the grass, E still gets you up");
+            foreach(var kind in TalkKinds)
+            {
+                Assert.That(StopsByHold(Doing(kind,turns:1)),Is.False,"talking, E walks out of a "+kind);
+                Assert.That(StopsByHold(Doing(kind,trust:true)),Is.True,"its trust dance stops only by holding G");
+            }
+            Assert.That(StopsByHold(Doing(FestivalSimulation.LieDownKind)),Is.False,"lying on the grass, E still gets you up");
             foreach(var kind in new[]{"ConfirmChat","Medical","Rescue","Revival","Release","FindFriend","LostProperty","Extract",FestivalSimulation.RideWheelKind,FestivalSimulation.RideCarKind})
-                Assert.That(StopsByHold(kind,"Active"),Is.False,"a "+kind+" keeps its cancel on E");
+                Assert.That(StopsByHold(Doing(kind)),Is.False,"a "+kind+" keeps its cancel on E");
             Assert.That(FestivalHudText.StopsByHold(new RoundState(),new PlayerState{Id="me"}),Is.False,"doing nothing, E keeps every action");
         }
-        private static bool StopsByHold(string kind,string status)
+        private static bool StopsByHold(InteractionState doing)
         {
-            var s=new RoundState();s.Interactions.Add(new InteractionState{Id="doing",PlayerId="me",Kind=kind,Status=status});
-            return FestivalHudText.StopsByHold(s,new PlayerState{Id="me",InteractionId="doing"});
+            var s=new RoundState();s.Interactions.Add(doing);
+            return FestivalHudText.StopsByHold(s,new PlayerState{Id="me",InteractionId=doing.Id});
+        }
+        // My interaction of this kind: a talk is in its trust dance until its first turn (FestivalSimulation.TrustDancing).
+        private static InteractionState Doing(string kind,bool trust=false,int turns=0,string status="Active")
+        {
+            var doing=new InteractionState{Id="doing",PlayerId="me",Kind=kind,Status=status,TrustDance=trust};
+            for(int t=0;t<turns;t++)doing.Turns.Add(new ConversationTurn());
+            return doing;
         }
 
-        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation","Police"};
+        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj"},TalkKinds={"Sale","Buy","Conversation","Police"};
 
         // DIALOG-3: a sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are talks again, not dances, so every
         // client, the talker's own view included, sees the player in that talk's pose, never dancing. Only the dance a wary

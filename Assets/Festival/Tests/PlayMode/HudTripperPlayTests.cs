@@ -19,7 +19,8 @@ namespace Festival.Tests
         // HUD-2: the running HUD puts FestivalHudText's tripper lines on screen. Hosts a real two-player Day 1, pins the spin,
         // and reads what a player sees: who trips and on how many doses, the tripper's one hint, the checks beside a festivalgoer
         // they have a vision about (E dances, F chats), the chat picker, and nothing to check for the sober friend.
-        // DANCE-2: the check dance and a chat show the live dancer beside the lanes; the menu and the end of the challenge hide it.
+        // DANCE-2: the check dance and a trust dance show the live dancer beside the lanes; the menu and the end of the challenge
+        // hide it. DIALOG-3: a chat is a talk on the chat window, replied to on 1-3, standing in the talk pose; F starts one.
         // Labels are laid out on a 1920x1080 canvas, so a line its box cuts off fails.
         [UnityTest]public IEnumerator TheCrewSeesTheSpinAndOnlyTheTripperChecks()
         {
@@ -150,7 +151,7 @@ namespace Festival.Tests
                 // DANCE-2: the check dance opens the live dancer beside the lanes, as every four-lane challenge does, showing your
                 // own character dancing; the menu hides it.
                 Dancing("check dance","YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES");
-                FitsAll("check dance","Dancer caption",FourLaneKinds.Select(FestivalHudText.DancerCaption));
+                FitsAll("check dance","Dancer caption",DancerKinds.Select(FestivalHudText.DancerCaption));
                 // DANCE-4: the dancer camera moves with the music: it sits where the camera path puts it this far into the check
                 // dance at its beat, with reduced motion off and on. (Read after the HUD's Update, which places it.)
                 var danceCamera=preview.transform.Find("Live festival dance camera");var onPath=new GameObject("HUD tripper dance camera path").transform;
@@ -173,21 +174,57 @@ namespace Festival.Tests
                 session.MenuOpen=false;
                 session.Command("Cancel");
                 // DIALOG-3: a chat is a conversation, danced only when a wary festivalgoer asks for a dance first. That trust dance
-                // is danced like any other, and its line moves into the dancer panel: at 1920x1080 every line a four-lane challenge
-                // can say fits there, as does every heading.
+                // is danced like any other, under its own title and heading, with its ask in the dancer panel and the chat window
+                // shut: at 1920x1080 every line a four-lane challenge can say fits there, as does every heading.
                 npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
                 session.Command("Conversation",npc.Id);
-                if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="Conversation"&&i.Status=="Active"))failures.Add("chat: no chat with the festivalgoer starts ("+session.Message+")");
+                if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="Conversation"&&i.Status=="Active"))failures.Add("trust dance: no chat with the festivalgoer starts ("+session.Message+")");
                 yield return new WaitForSeconds(.4f);
-                Expect("chat","Challenge title","CONVERSATION  /  FOUR-LANE");
-                Dancing("chat","YOU  /  CHATTING","(hidden)");
+                Expect("trust dance","Challenge title","TRUST DANCE  /  FOUR-LANE");
+                Dancing("trust dance","YOU  /  DANCING FOR TRUST","(hidden)");
+                Expect("trust dance","Dialogue line",FestivalSimulation.TrustAsk);
+                if(window!=null&&window.Open)failures.Add("trust dance: the chat window is open");
                 // DIALOG-4: the lines are built from parts, so 400 of every four-lane context's lines and awkward twins on each festival.
-                var lines=new List<string>();
+                var lines=new List<string>{FestivalSimulation.TrustAsk};
                 foreach(var context in new[]{"dance","sale","buy","suspicion","police"})for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<400;seed++)
                 {var line=new DialogueHistory().Select(context,festival,seed);lines.Add(line.Text);lines.Add(line.AwkwardText);}
-                FitsAll("chat","Dialogue line",lines);
-                FitsAll("chat","Dancer heading",FourLaneKinds.Select(FestivalHudText.DancerHeading));
+                FitsAll("trust dance","Dialogue line",lines);
+                FitsAll("trust dance","Dancer heading",DancerKinds.Select(FestivalHudText.DancerHeading));
                 session.Command("Cancel");npc.Suspicion=0;npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);
+                // A chat with a festivalgoer who trusts you is a talk on the chat window, not the lanes: their line, your three replies,
+                // and you stand talking. 2 replies with the second, as the host hears it, and equips nothing. (Holding you to the spot is
+                // FestivalInput.Roots, in HudConversationTests: in this batch-mode test a held W moves nobody, talking or not.)
+                player.X=npc.X+.6f;player.Z=npc.Z;player.EquippedItemId="confetti";
+                session.Command("Conversation",npc.Id);
+                var talk=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Kind=="Conversation"&&i.Status=="Active");
+                if(talk==null)failures.Add("talk: no chat with the festivalgoer starts ("+session.Message+")");
+                else
+                {
+                    // A raver or burner may want a dance first whoever you are (1 in 4): dance it perfectly, and the talk follows.
+                    if(talk.TrustDance)foreach(var note in RhythmChart.For(talk).Notes)talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+                    float talking=Time.realtimeSinceStartup+15;
+                    while(talk.Turns.Count==0&&talk.Status=="Active"&&Time.realtimeSinceStartup<talking)yield return null;
+                    yield return new WaitForSeconds(.3f);
+                    var turn=talk.Turns.Count>0?talk.Turns[talk.Turns.Count-1]:null;
+                    if(turn==null||talk.Status!="Active")failures.Add("talk: no turn to reply to ("+talk.Status+")");
+                    else
+                    {
+                        ExpectThread("talk","< "+turn.Line);
+                        ExpectReplies("talk",turn.Replies,true,true,true);
+                        Expect("talk","Chat header",FestivalChatWindow.TalkHeader);Fits("talk","Chat header");
+                        Expect("talk","Challenge title","(hidden)");Expect("talk","Dancer heading","(hidden)");
+                        Expect("talk","Equipment heading",GearKeysInChat);
+                        var you=session.LocalWorldCharacter;
+                        if(you==null||you.Pose!="Conversation")failures.Add("talk: your character's pose is "+(you==null?"missing":you.Pose)+", not the talk's");
+                        yield return Press(Key.Digit2);
+                        if(turn.Pick!=1)failures.Add("talk: 2 didn't reply with the second reply (picked "+turn.Pick+"; "+session.Message+")");
+                        if(player.EquippedItemId!="confetti")failures.Add("talk: 2 equipped a slot ("+player.EquippedItemId+")");
+                        bool said=false;for(int i=0;i<window.Bubbles;i++)said|=!window.IsTheirs(i)&&window.Shown(i)==turn.Replies[1];
+                        if(!said)failures.Add("talk: your reply isn't in the thread");
+                    }
+                    session.Command("Cancel");
+                }
+                npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);
                 player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
                 Expect("no challenge","Challenge title","(hidden)");
@@ -244,7 +281,7 @@ namespace Festival.Tests
                 }
 
                 // Sam trips: you are sober beside a festivalgoer Sam has an unchecked vision about, and have nothing to check. F chats,
-                // as their first action says: by day with no stock that is buying from them (ECON-3).
+                // as their first action says (by day with no stock that is buying from them, ECON-3): a talk with them (DIALOG-3).
                 mate.X=30;mate.Z=0;Trip(mate,3);sim.State.Visions.Add(new VisionState{Id="hud_vision",Kind="Buyer",NpcId=npc.Id});
                 player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
@@ -252,9 +289,10 @@ namespace Festival.Tests
                 if(listed.Contains("Check by")||!listed.Contains(FestivalHudText.BuyAction(sim.State,player,npc.Id)+FChats))failures.Add("sober beside Sam's vision: the actions read \""+listed+"\"");
                 PressF();yield return null;
                 if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("sober beside Sam's vision: F starts a check");
+                if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="Conversation"&&i.Status=="Active"))failures.Add("sober beside Sam's vision: F starts no talk with them ("+session.Message+")");
 
                 // You trip again and check the same festivalgoer by chat: the new chat starts with no question asked.
-                session.Command("Cancel");Trip(player,2);player.X=npc.X+.6f;player.Z=npc.Z;
+                session.Command("Cancel");npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);Trip(player,2);player.X=npc.X+.6f;player.Z=npc.Z;
                 yield return new WaitForSeconds(.6f);
                 PressF();yield return null;
                 var again=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.Status=="Active");
@@ -347,7 +385,8 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"Tripper HUD a player reads:\n"+string.Join("\n",failures));
         }
 
-        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Conversation","Police"};
+        // Every challenge the live dancer can head: the four-lane kinds, and (DIALOG-3) a sale's, a buy's and a chat's trust dance.
+        private static readonly string[] DancerKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation"};
 
         // The virtual keyboard a test presses keys on, and the input settings it changed to let the keys through without focus.
         private const string VirtualKeyboard="HUD tripper keyboard";
@@ -387,9 +426,10 @@ namespace Festival.Tests
 
         // DANCE-12: E sits between the W and D lanes, so a slip onto it mid-dance must never walk you out. In a hosted dance beside
         // a festivalgoer you could buy from, with gear in hand and a friend to offer it to, a stray E does nothing and a tap of G
-        // drops nothing; holding G for a second stops the dance, as the lane's bottom line says, and a buy stopped so hands its
-        // held price back. The Escape menu's CANCEL ACTION still stops one. E and G go through the HUD's own input handling
-        // (FestivalHud.UpdateKeyboard) on a virtual keyboard.
+        // drops nothing; holding G for a second stops the dance, as the lane's bottom line says. DIALOG-3: a buy is a talk, replied
+        // to on 1-3, so E walks out of it; only the dance a wary seller asks for first is on the lanes and held, and a buy stopped
+        // either way hands its held price back. The Escape menu's CANCEL ACTION still stops a dance. E and G go through the HUD's
+        // own input handling (FestivalHud.UpdateKeyboard) on a virtual keyboard.
         [UnityTest]public IEnumerator AStrayEOrATapOfGNeverEndsADance()
         {
             UseAVirtualKeyboard();
@@ -420,7 +460,8 @@ namespace Festival.Tests
                 // A festivalgoer who sells, right beside you, so by day E would otherwise buy from them (ECON-3: you hold no stock); with
                 // confetti in hand and Sam in reach, offering it to Sam is listed too (with no vision to check, whoever trips, or E would
                 // check by dancing instead).
-                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");sim.State.Npcs.RemoveAll(n=>n!=npc);sim.State.Visions.Clear();
+                // Not a raver or a burner, who may ask for a dance first whatever you've done (DIALOG-3).
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist==""&&DialogueGrammar.PersonaFor(n.Id,"")!="Raver"&&DialogueGrammar.PersonaFor(n.Id,"")!="Burner");sim.State.Npcs.RemoveAll(n=>n!=npc);sim.State.Visions.Clear();
                 npc.X=0;npc.Z=0;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.Role="Regular";npc.StockSold=0;
                 player.X=.6f;player.Z=0;player.Cash=50;mate.X=.6f;mate.Z=1.5f;
                 player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});player.EquippedItemId="confetti";
@@ -473,16 +514,28 @@ namespace Festival.Tests
                 if(session.Message!=notice)failures.Add("dancing: a tap of G asked to drop your confetti (\""+session.Message+"\")");
                 if(Doing()?.Id==dance.Id)yield return HoldG("dancing",dance);
 
-                // A buy: held for a second it stops, and the price held for it comes back.
+                // A buy is a talk: E walks out of it, and the price held for it comes back.
                 int cash=player.Cash;
                 session.Command("StartBuy",npc.Id,FestivalSimulation.SellerStock(npc.Id));
                 var buy=Doing();
                 Assert.That(buy?.Kind,Is.EqualTo("Buy"),"setup: you ask the festivalgoer to sell: "+session.Message);
+                Assert.That(buy.TrustDance,Is.False,"setup: they talk straight away");
                 yield return new WaitForSeconds(.4f);
                 yield return Tap(Key.E);
-                if(Doing()?.Id!=buy.Id)failures.Add("buying: a stray E ended the buy ("+session.Message+")");
-                if(Doing()?.Id==buy.Id)yield return HoldG("buying",buy);
+                if(Doing()!=null)failures.Add("buying: E doesn't walk out of the talk ("+session.Message+")");
+                if(player.Cash!=cash)failures.Add("buying, walked out with E: you hold $"+player.Cash+", not the $"+cash+" you had");
+                // A seller wary of you asks for a dance first, on the lanes: there a stray E does nothing, and holding G for a second
+                // stops it, the price back.
+                npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
+                session.Command("StartBuy",npc.Id,FestivalSimulation.SellerStock(npc.Id));
+                var wary=Doing();
+                Assert.That(wary?.Kind=="Buy"&&wary.TrustDance,Is.True,"setup: a wary seller asks for a dance first: "+session.Message);
+                yield return new WaitForSeconds(.4f);
+                yield return Tap(Key.E);
+                if(Doing()?.Id!=wary.Id)failures.Add("buying, dancing first: a stray E ended it ("+session.Message+")");
+                if(Doing()?.Id==wary.Id)yield return HoldG("buying, dancing first",wary);
                 if(player.Cash!=cash)failures.Add("buying, stopped by holding G: you hold $"+player.Cash+", not the $"+cash+" you had");
+                npc.Observers.RemoveAll(o=>o.PlayerId==player.Id);
 
                 // The Escape menu's CANCEL ACTION still stops a dance.
                 session.Command("Dance",npc.Id);
