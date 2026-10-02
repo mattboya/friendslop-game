@@ -72,6 +72,14 @@ namespace Festival.Presentation
         /// <summary>POLO-2: whether p's HUD offers Cancel for what they are doing. Nothing cancels a turn on the Ferris wheel (the
         /// host refuses it), so nothing offers to; an Ember Playa art car rider still hops off.</summary>
         public static bool CanCancel(RoundState s,PlayerState p)=>p.InteractionId!=""&&!FestivalSimulation.OnWheel(s,p.Id);
+        /// <summary>DANCE-12: whether p is mid four-lane challenge (FestivalInput.IsRhythmKind: a dance, a check dance, the poi
+        /// circle, the deck, a sale, a buy, a chat or a talk with security). E sits between the W and D lanes, so then E runs
+        /// nothing and a tap of G drops nothing: only holding G for HoldToStopSeconds stops it, as HoldToStop says. Anything else
+        /// keeps its cancel on E, and lying down gets up first. Keyed on IsRhythmKind, so a talk that stops being danced (DIALOG-3)
+        /// stops being held.</summary>
+        public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythmKind(i.Kind);return false;}
+        public const string HoldToStop="HOLD G TO STOP DANCING";
+        public const float HoldToStopSeconds=1;
         /// <summary>POLO-2: a Ferris wheel rider's prompt, in place of an action: what the turn has left at `now` (the view's
         /// simulation clock), in whole seconds rounded up like Clock. "" off the wheel.</summary>
         public static string WheelPrompt(RoundState s,PlayerState p,double now)

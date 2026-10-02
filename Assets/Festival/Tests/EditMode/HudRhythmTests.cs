@@ -139,6 +139,32 @@ namespace Festival.Tests
             Assert.That(Lane().Find("Controls").GetComponent<Text>().text,Is.EqualTo("ARROWS OR WASD"));
         }
 
+        // DANCE-12: beside the lane keys, the bottom line says how to stop, and a fill bar under those words grows while G is held
+        // (FestivalHud.ShowStopHold, from UpdateKeyboard's hold): empty until then, full at the stop.
+        [Test]public void TheBottomLineSaysHoldGToStopAndFillsAsItIsHeld()
+        {
+            var hud=Hud();var lane=LaneOf(hud);
+            var stop=lane.Find("Stop hold")?.GetComponent<Text>();var keys=(RectTransform)lane.Find("Controls");
+            Assert.That(stop,Is.Not.Null,"the lane's bottom line has a stop prompt");
+            Assert.That(stop.text,Is.EqualTo("HOLD G TO STOP DANCING"));
+            Assert.That(Bounds(lane,stop.rectTransform).Overlaps(Bounds(lane,keys)),Is.False,"the stop prompt sits beside \"ARROWS OR WASD\", not over it");
+            var fill=(RectTransform)lane.Find("Stop hold fill");
+            Assert.That(fill,Is.Not.Null,"a fill bar sits on the stop prompt");
+            Assert.That(fill.GetSiblingIndex(),Is.LessThan(stop.transform.GetSiblingIndex()),"the fill draws under the words");
+            Assert.That(fill.gameObject.activeSelf,Is.False,"nothing held, nothing filled");
+            float width=stop.rectTransform.rect.width;
+            Assert.That(width,Is.GreaterThan(0),"setup: the prompt has a measurable width");
+            foreach(float held in new[]{.25f,.5f,1f})
+            {
+                hud.ShowStopHold(held);
+                Assert.That(fill.gameObject.activeSelf,Is.True,held+" of the hold shows the fill");
+                Assert.That(fill.rect.width,Is.EqualTo(held*width).Within(.01f*width),held+" of the hold fills "+held+" of the prompt");
+                Assert.That(Bounds(lane,fill).xMin,Is.EqualTo(Bounds(lane,stop.rectTransform).xMin).Within(.01f*width),"the fill grows from the prompt's left edge");
+            }
+            hud.ShowStopHold(0);
+            Assert.That(fill.gameObject.activeSelf,Is.False,"let go, the fill empties");
+        }
+
         // A 16-beat chart of nothing but sixteenth runs is 64 notes, twice the lane's first pool of note views.
         [Test]public void TheLaneShowsEveryNoteOfAChartOfSixteenthRuns()
         {
@@ -221,6 +247,29 @@ namespace Festival.Tests
             }
         }
 
+        // DANCE-12: E sits between the W and D lanes, so a stray E must never end a dance. Every four-lane challenge, and only those,
+        // stops by holding G alone: the HUD runs nothing on E then (FestivalHud.UpdateActions, UpdateKeyboard), even beside a
+        // festivalgoer to buy from or a friend to hand gear to, and a tap of G drops nothing. Everything else keeps its cancel on
+        // E: lying on the grass still gets up first, and a chat check, a task or a ride still stops. HudTripperPlayTests presses
+        // the keys in a hosted dance and buy.
+        [Test]public void OnlyAFourLaneChallengeStopsByHoldingG()
+        {
+            foreach(var kind in FourLaneKinds)
+            {
+                Assert.That(StopsByHold(kind,"Active"),Is.True,"a "+kind+" stops only by holding G: E does nothing");
+                Assert.That(StopsByHold(kind,"Cancelled"),Is.False,"a "+kind+" already over holds nothing back");
+            }
+            Assert.That(StopsByHold(FestivalSimulation.LieDownKind,"Active"),Is.False,"lying on the grass, E still gets you up");
+            foreach(var kind in new[]{"ConfirmChat","Medical","Rescue","Revival","Release","FindFriend","LostProperty","Extract",FestivalSimulation.RideWheelKind,FestivalSimulation.RideCarKind})
+                Assert.That(StopsByHold(kind,"Active"),Is.False,"a "+kind+" keeps its cancel on E");
+            Assert.That(FestivalHudText.StopsByHold(new RoundState(),new PlayerState{Id="me"}),Is.False,"doing nothing, E keeps every action");
+        }
+        private static bool StopsByHold(string kind,string status)
+        {
+            var s=new RoundState();s.Interactions.Add(new InteractionState{Id="doing",PlayerId="me",Kind=kind,Status=status});
+            return FestivalHudText.StopsByHold(s,new PlayerState{Id="me",InteractionId="doing"});
+        }
+
         private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation","Police"};
 
         // A sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are danced (FestivalSimulation.DancesVisibly),
@@ -249,6 +298,7 @@ namespace Festival.Tests
         private static Image NoteView(RectTransform lane)=>DepthFirst(lane).Find(IsNote).GetComponent<Image>();
         // A rect's centre in the lane's own space, so lane-relative distances hold at any canvas size.
         private static Vector2 Centre(RectTransform lane,RectTransform rect)=>lane.InverseTransformPoint(rect.TransformPoint(rect.rect.center));
+        private static Rect Bounds(RectTransform lane,RectTransform rect){Vector2 min=lane.InverseTransformPoint(rect.TransformPoint(rect.rect.min)),max=lane.InverseTransformPoint(rect.TransformPoint(rect.rect.max));return Rect.MinMaxRect(min.x,min.y,max.x,max.y);}
         private static List<Transform> DepthFirst(Transform root){var order=new List<Transform>();Walk(root,order);return order;}
         // uGUI draws a canvas's graphics in depth-first hierarchy order, so a later transform draws over an earlier one.
         private static void Walk(Transform t,List<Transform> into){into.Add(t);foreach(Transform child in t)Walk(child,into);}

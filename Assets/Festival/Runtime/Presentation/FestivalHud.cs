@@ -26,6 +26,8 @@ namespace Festival.Presentation
         // is on time at NoteHitY, the wells' middle. A missed note keeps rising for MissOvershootSeconds past it.
         private const float WellBottom=.766f,WellTop=.895f,NoteStartY=.11f,NoteHitY=(WellBottom+WellTop)/2;
         private const double MissOvershootSeconds=.18;
+        // DANCE-12: the lane's bottom line, "ARROWS OR WASD" left of StopHoldLeft and "HOLD G TO STOP DANCING" from there to StopHoldRight.
+        private const float StopHoldLeft=.52f,StopHoldRight=.94f;
         private FestivalSession session;
         private Canvas canvas;
         private Font font;
@@ -50,7 +52,9 @@ namespace Festival.Presentation
         private readonly Text[] rhythmKeys=new Text[4];
         private readonly float[] rhythmFlashUntil=new float[4];
         private bool[] rhythmConsumed=Array.Empty<bool>();
-        private Image rhythmProgressFill;
+        private Image rhythmProgressFill,stopHoldFill;
+        // When G went down mid-dance (Time.unscaledTime), or -1 while it isn't held.
+        private float stopHeldSince=-1;
         private RhythmChart displayedChart;
         private string displayedInteractionId="";
         private int displayedSeed=-1,displayedNoteCount=-1,displayedPhrase=-1,processedRhythmInputs,rhythmComboCount,rhythmHitCount;
@@ -309,7 +313,10 @@ namespace Festival.Presentation
             rhythmTiming=Label(rhythmPanel.transform,"Timing",20,TextAnchor.MiddleCenter);rhythmTiming.color=MutedPaper;Place(rhythmTiming.rectTransform,.06f,.315f,.94f,.37f);
             var progressTrack=Panel(rhythmPanel.transform,"Step progress track",new Color(.33f,.43f,.44f,1),new Vector2(.08f,.055f),new Vector2(.92f,.071f));progressTrack.GetComponent<Image>().raycastTarget=false;
             rhythmProgressFill=Panel(rhythmPanel.transform,"Step progress",Mint,new Vector2(.08f,.055f),new Vector2(.08f,.071f)).GetComponent<Image>();rhythmProgressFill.raycastTarget=false;
-            var controls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);controls.text="ARROWS OR WASD";controls.color=MutedPaper;Place(controls.rectTransform,.06f,.005f,.94f,.049f);
+            var controls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);controls.text="ARROWS OR WASD";controls.color=MutedPaper;Place(controls.rectTransform,.06f,.005f,StopHoldLeft-.02f,.049f);
+            // DANCE-12: only a held G stops a challenge; the fill under the words grows while it's held (ShowStopHold).
+            stopHoldFill=Panel(rhythmPanel.transform,"Stop hold fill",new Color(Orange.r,Orange.g,Orange.b,.5f),new Vector2(StopHoldLeft,.008f),new Vector2(StopHoldLeft,.046f)).GetComponent<Image>();stopHoldFill.raycastTarget=false;stopHoldFill.gameObject.SetActive(false);
+            var stopHold=Label(rhythmPanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);stopHold.text=FestivalHudText.HoldToStop;Place(stopHold.rectTransform,StopHoldLeft,.005f,StopHoldRight,.049f);
             rhythmPanel.SetActive(false);
             dialoguePanel=Card(root.transform,"Interaction dialogue",new Vector2(.70f,.52f),new Vector2(.96f,.69f),false);
             Accent(dialoguePanel.transform,Orange);
@@ -652,15 +659,30 @@ namespace Festival.Presentation
             bool gearKeys=FestivalSimulation.Interactive(state.Phase);
             if(equipSlot>=0&&!session.MenuOpen&&gearKeys){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
-            if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen)primaryAction?.Invoke();
+            // DANCE-12: E sits between the W and D lanes, so mid-dance it runs nothing, even in the moment before UpdateActions
+            // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop).
+            bool dancing=FestivalHudText.StopsByHold(state,player);
+            if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen&&!dancing)primaryAction?.Invoke();
+            HoldToStop(dancing);
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
             if(handGear.Count>0&&gearKeys)
             {
                 selectedSlot=Mathf.Clamp(selectedSlot,0,handGear.Count-1);string item=player.EquippedItemId!=""?player.EquippedItemId:handGear[selectedSlot].ItemId;
                 if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Use",item:item);
-                if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen)session.Command("Drop",item:item);
+                if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&!dancing)session.Command("Drop",item:item);
             }
+        }
+
+        // DANCE-12: G pressed mid-dance and held FestivalHudText.HoldToStopSeconds stops it, once; the fill shows how far along.
+        // A G already down as the dance began, or the menu opening, starts the hold over.
+        private void HoldToStop(bool dancing)
+        {
+            if(!dancing||session.MenuOpen||!session.Controls.Drop.IsPressed())stopHeldSince=-1;
+            else if(session.Controls.Drop.WasPressedThisFrame())stopHeldSince=Time.unscaledTime;
+            float held=stopHeldSince<0?0:(Time.unscaledTime-stopHeldSince)/FestivalHudText.HoldToStopSeconds;
+            if(held>=1){stopHeldSince=-1;held=0;session.Command("Cancel");}
+            ShowStopHold(held);
         }
 
         // F while playing: the tripper checks a vision by chatting when they have one to check within reach, and anyone beside the
@@ -814,6 +836,12 @@ namespace Festival.Presentation
             noteViews.Add(note);note.gameObject.SetActive(false);
         }
 
+        // DANCE-12: the fill under "HOLD G TO STOP DANCING", `held` of the way to the stop; none at 0.
+        public void ShowStopHold(float held)
+        {
+            stopHoldFill.gameObject.SetActive(held>0);
+            if(held>0)Place(stopHoldFill.rectTransform,StopHoldLeft,.008f,StopHoldLeft+(StopHoldRight-StopHoldLeft)*Mathf.Min(held,1),.046f);
+        }
         // Labels each receptor well with its lane's WASD key as bound now, so a rebound key shows its new name. Read once per challenge.
         public void ShowRhythmKeys(FestivalInput controls){for(int lane=0;lane<4;lane++)rhythmKeys[lane].text=controls.NoteKey(lane);}
 
@@ -1111,6 +1139,9 @@ namespace Festival.Presentation
             // TRIP-4: lying down comes last of all, after the festivalgoer beside you, so E never lies you down instead of dancing,
             // chatting or selling.
             if(FestivalSimulation.CanLieDown(state,player))AddAction(FestivalHudText.LieDownAction,()=>session.Command(FestivalSimulation.LieDownKind),ref y);
+            // DANCE-12: mid-dance E runs nothing, not even the cancel listed first, so a stray E can't stop it or start a buy, a
+            // dance or a gear offer from the list; the lane's bottom line says to hold G (UpdateKeyboard). The list stays clickable.
+            if(FestivalHudText.StopsByHold(state,player))primaryAction=null;
             // POLO-2: up on the Ferris wheel nothing is worth E; the prompt counts the turn down instead.
             string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
             if(riding!=""){prompt.text=riding;primaryAction=null;}

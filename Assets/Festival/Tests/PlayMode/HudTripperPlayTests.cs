@@ -289,6 +289,108 @@ namespace Festival.Tests
             yield break;
         }
 
+        // DANCE-12: E sits between the W and D lanes, so a slip onto it mid-dance must never walk you out. In a hosted dance beside
+        // a festivalgoer you could buy from, with gear in hand and a friend to offer it to, a stray E does nothing and a tap of G
+        // drops nothing; holding G for a second stops the dance, as the lane's bottom line says, and a buy stopped so hands its
+        // held price back. The Escape menu's CANCEL ACTION still stops one. E and G go through the HUD's own input handling
+        // (FestivalHud.UpdateKeyboard) on a virtual keyboard.
+        [UnityTest]public IEnumerator AStrayEOrATapOfGNeverEndsADance()
+        {
+            UseAVirtualKeyboard();
+            var world=new GameObject("HUD dance stop world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD dance stop");
+            var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
+            T Shown<T>(string name) where T:Component{foreach(var c in hud.GetComponentsInChildren<T>(false))if(c.name==name)return c;return null;}
+            IEnumerator Tap(Key key)
+            {
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+            }
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                // A festivalgoer who sells, right beside you; confetti in hand and Sam in reach, so E would otherwise offer it.
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");sim.State.Npcs.RemoveAll(n=>n!=npc);
+                npc.X=0;npc.Z=0;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.Role="Regular";npc.StockSold=0;
+                player.X=.6f;player.Z=0;player.Cash=50;mate.X=.6f;mate.Z=1.5f;
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});player.EquippedItemId="confetti";
+                InteractionState Doing()=>sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                bool Confetti()=>player.Inventory.Exists(i=>i.ItemId=="confetti");
+                // Holds G for 1.1 s, checking halfway that the dance goes on with the fill under the prompt part grown.
+                IEnumerator HoldG(string where,InteractionState doing)
+                {
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.G));
+                    yield return new WaitForSeconds(.5f);
+                    if(Doing()?.Id!=doing.Id)failures.Add(where+": half a second into holding G, it already stopped");
+                    var fill=Shown<Image>("Stop hold fill");var prompt=Shown<Text>("Stop hold");
+                    float filled=fill==null||prompt==null?0:fill.rectTransform.rect.width/prompt.rectTransform.rect.width;
+                    if(filled<.2f||filled>.9f)failures.Add(where+": half a second into holding G, the fill under the prompt is "+(fill==null?"hidden":filled.ToString("0.00")+" full"));
+                    yield return new WaitForSeconds(.6f);yield return null;yield return null;
+                    if(Doing()!=null||sim.State.Interactions.Find(i=>i.Id==doing.Id)?.Status!="Cancelled")failures.Add(where+": holding G for 1.1 s doesn't stop it ("+session.Message+")");
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+                    if(!Confetti())failures.Add(where+": holding G dropped your confetti");
+                    npc.Suspicion=0;
+                }
+
+                // A dance: a stray E and a tap of G leave it going, and nothing is bought, offered or dropped.
+                session.Command("Dance",npc.Id);
+                var dance=Doing();
+                Assert.That(dance?.Kind,Is.EqualTo("Dance"),"setup: you dance with the festivalgoer: "+session.Message);
+                yield return new WaitForSeconds(.4f);
+                if(primary.GetValue(view)!=null)failures.Add("dancing: E still runs an action");
+                var stop=Shown<Text>("Stop hold");
+                if(stop?.text!="HOLD G TO STOP DANCING")failures.Add("dancing: the lane's bottom line reads \""+(stop?.text??"(hidden)")+"\", not HOLD G TO STOP DANCING");
+                else{Canvas.ForceUpdateCanvases();if(stop.cachedTextGenerator.characterCountVisible<stop.text.Length)failures.Add("dancing: the box "+stop.rectTransform.rect.size+" cuts \""+stop.text+"\"");}
+                yield return Tap(Key.E);
+                if(Doing()?.Id!=dance.Id)failures.Add("dancing: a stray E ended the dance ("+session.Message+")");
+                if(sim.State.Transfers.Count>0)failures.Add("dancing: a stray E offered Sam your confetti");
+                yield return Tap(Key.G);
+                if(Doing()?.Id!=dance.Id)failures.Add("dancing: a tap of G ended the dance ("+session.Message+")");
+                if(!Confetti())failures.Add("dancing: a tap of G dropped your confetti");
+                if(Doing()?.Id==dance.Id)yield return HoldG("dancing",dance);
+
+                // A buy: held for a second it stops, and the price held for it comes back.
+                int cash=player.Cash;
+                session.Command("StartBuy",npc.Id,FestivalSimulation.SellerStock(npc.Id));
+                var buy=Doing();
+                Assert.That(buy?.Kind,Is.EqualTo("Buy"),"setup: you ask the festivalgoer to sell: "+session.Message);
+                yield return new WaitForSeconds(.4f);
+                yield return Tap(Key.E);
+                if(Doing()?.Id!=buy.Id)failures.Add("buying: a stray E ended the buy ("+session.Message+")");
+                if(Doing()?.Id==buy.Id)yield return HoldG("buying",buy);
+                if(player.Cash!=cash)failures.Add("buying, stopped by holding G: you hold $"+player.Cash+", not the $"+cash+" you had");
+
+                // The Escape menu's CANCEL ACTION still stops a dance.
+                session.Command("Dance",npc.Id);
+                var again=Doing();
+                Assert.That(again?.Kind,Is.EqualTo("Dance"),"setup: you dance again: "+session.Message);
+                session.MenuOpen=true;yield return null;yield return null;
+                var cancel=Shown<Button>("CANCEL ACTION");
+                if(cancel==null)failures.Add("dancing, menu open: no CANCEL ACTION");
+                else{cancel.onClick.Invoke();yield return null;if(Doing()!=null)failures.Add("dancing, menu open: CANCEL ACTION doesn't stop the dance ("+session.Message+")");}
+                session.MenuOpen=false;
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"A stray E or G mid-dance:\n"+string.Join("\n",failures));
+        }
+
         // Every HUD card a player can see at once; none may cover another.
         private static readonly string[] Cards={"Objective card","Round clock","Tripper card","Player card","Crew card","Action prompt","Session notice","Chat check card","Held item label","Equipment bar","Interaction dialogue","Counter price confirmation"};
 
