@@ -190,6 +190,18 @@ namespace Festival.Tests
             Assert.That(FestivalChatWindow.Lingers("Sure."),Is.EqualTo(2.5f),"at least 2.5 s");
         }
 
+        // DIALOG-6: an ended chat lingers until you're past LeaveReach from them, the reach at which the host ends a live one
+        // (FestivalSimulation.TaskStillValid), so walking off ends a chat at the same distance whether it is on or over.
+        [Test] public void AnEndedChatClosesAtTheReachTheHostEndsALiveOneAt()
+        {
+            var game=Day(out var tripper);Chat(game,tripper);
+            var chat=game.Interaction(tripper.InteractionId);var npc=game.State.Npcs.Find(n=>n.Id==chat.TargetId);
+            tripper.X=npc.X+FestivalChatWindow.LeaveReach-.25f;tripper.Z=npc.Z;game.Tick(.02);
+            Assert.That(chat.Status,Is.EqualTo("Active"),"the host keeps a chat on just inside LeaveReach");
+            tripper.X=npc.X+FestivalChatWindow.LeaveReach+.25f;tripper.Z=npc.Z;game.Tick(.02);
+            Assert.That(chat.Status,Is.Not.EqualTo("Active"),"and ends it just past");
+        }
+
         // At 1920x1080 every question the chat grammar can ask fits its reply button uncut.
         [Test] public void EveryQuestionFitsItsReplyButton()
         {

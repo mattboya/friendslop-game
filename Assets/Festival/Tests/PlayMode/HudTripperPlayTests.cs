@@ -304,18 +304,20 @@ namespace Festival.Tests
                 sim.Execute(mate.Id,new GameCommand{Id="hud_mate_stop",Kind="Cancel"});mate.X=30;mate.Z=0;
 
                 // DIALOG-6: a festivalgoer's line stays up long enough to read. Talked to and danced with at once, their line is still
-                // the dance's dialogue 2 s in; once read, the dance's own line takes over.
+                // the dance's dialogue 2 s in; once read, the dance's own line takes over, and only then counts as seen.
                 session.Command("Cancel");player.X=npc.X+.6f;player.Z=npc.Z;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.LastTalkSeconds=-10;
                 session.Command("Talk",npc.Id);string spoke=player.NpcSpeech;
                 session.Command("Dance",npc.Id);var talkDance=sim.Interaction(player.InteractionId);
-                if(spoke==""||talkDance?.Kind!="Dance")failures.Add("setup: a Talk then a Dance with the festivalgoer ("+session.Message+")");
+                if(spoke==""||talkDance?.Kind!="Dance"||talkDance.DialogueId=="")failures.Add("setup: a Talk then a Dance with the festivalgoer ("+session.Message+")");
                 else
                 {
-                    talkDance.DurationSeconds=60;
+                    talkDance.DurationSeconds=60;session.Profile.Data.SeenDialogue.RemoveAll(id=>id==talkDance.DialogueId);
                     yield return new WaitForSeconds(2);
                     Expect("2 s into a dance begun as they spoke","Speaker","FESTIVALGOER");Expect("2 s into a dance begun as they spoke","Dialogue line",spoke);
+                    if(session.Profile.Data.SeenDialogue.Contains(talkDance.DialogueId))failures.Add("2 s into a dance begun as they spoke: the dance's unshown line counts as seen");
                     yield return new WaitForSeconds(FestivalTalkLine.ReadFor(spoke)-2+.4f);
                     Expect("their line read, mid-dance","Dialogue line",talkDance.DialogueText);
+                    if(!session.Profile.Data.SeenDialogue.Contains(talkDance.DialogueId))failures.Add("their line read, mid-dance: the dance's line on the card doesn't count as seen");
                 }
                 // Nor does the menu lose one: open as they speak and closed after the host has dropped the line, it is there to read.
                 session.Command("Cancel");npc.Suspicion=0;npc.LastTalkSeconds=-10;
