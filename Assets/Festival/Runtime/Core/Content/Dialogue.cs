@@ -5,12 +5,13 @@ namespace Festival.Core
 {
     [Serializable] public sealed class DialogueLine
     {
-        public string Id, Context, Text, AwkwardText;
+        // AwkwardId is the awkward twin's key: an affected player is shown the twin, so that is what they acknowledge.
+        public string Id, Context, Text, AwkwardText, AwkwardId;
         public string Speaker = "Wook", Tone = "Playful", Prerequisites = "Context eligible", Locale = "en", Status = "Draft";
         public int Difficulty = 1, ContentRevision = 1;
     }
     // DIALOG-4: a challenge's line is built by FestivalLines' grammar from its context's kind, and its awkward twin (what the player
-    // blurts instead while affected) from the context's "_awkward" kind. Thousands of each, so DialogueHistory picks a fresh one.
+    // blurts instead while affected) from the context's "_awkward" kind. Thousands of each, and DialogueHistory draws each fresh.
     public static class DialogueCatalog
     {
         public static readonly string[] Contexts={"greeting","dance","suspicion","sale","buy","police","medical"};
@@ -34,8 +35,8 @@ namespace Festival.Core
         public DialogueLine Select(string context,int festival,int seed,ICollection<string> reserved=null)
         {
             if(Array.IndexOf(DialogueCatalog.Contexts,context)<0) return null;
-            var random=new ContentRandom(seed); string text=Fresh(FestivalLines.Grammar,context,festival,random,reserved);
-            return new DialogueLine { Id=Key(context,text),Context=context,Text=text,AwkwardText=FestivalLines.Grammar.Line(context+"_awkward",festival,random),Speaker=context=="police"?"Cop":context=="medical"?"Medic":"Wook",Difficulty=context=="suspicion"||context=="police"?2:1 };
+            var random=new ContentRandom(seed); string text=Fresh(FestivalLines.Grammar,context,festival,random,reserved),awkward=Fresh(FestivalLines.Grammar,context+"_awkward",festival,random,reserved);
+            return new DialogueLine { Id=Key(context,text),Context=context,Text=text,AwkwardText=awkward,AwkwardId=Key(context+"_awkward",awkward),Speaker=context=="police"?"Cop":context=="medical"?"Medic":"Wook",Difficulty=context=="suspicion"||context=="police"?2:1 };
         }
         public void Acknowledge(string id)
         {

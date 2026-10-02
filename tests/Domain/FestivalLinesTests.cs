@@ -16,7 +16,7 @@ public static class FestivalLinesTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EveryKindHasAThousandLinesOnEachFestival,EveryLineReadsCleanly,EachFestivalKeepsToItsOwnPlaces,OnlyANarcsAnswersCarryATell,
-            TheSevenChallengeContextsAreBuiltFromTheGrammar,AChallengeLineIsNotRepeatedWithinThirty,ARedrawGivesUpAfterFive,AFestivalgoersChatIsNotRepeatedWithinThirty})
+            TheSevenChallengeContextsAreBuiltFromTheGrammar,AChallengeLineIsNotRepeatedWithinThirty,AnAffectedPlayersAwkwardLineIsNotRepeatedWithinThirty,ARedrawGivesUpAfterFive,AFestivalgoersChatIsNotRepeatedWithinThirty})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" festival line test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -131,6 +131,31 @@ public static class FestivalLinesTests
                 int last=shown.LastIndexOf(line.Text);
                 Check(last<0||shown.Count-last>=30,context+" on festival "+festival+": \""+line.Text+"\" came back "+(shown.Count-last)+" lines after it was shown");
                 shown.Add(line.Text);history.Acknowledge(line.Id,"interaction_"+i);
+            }
+        }
+    }
+
+    // An affected player blurts the awkward twin instead (the tripper all level, everyone on the last level). What's shown is what's
+    // remembered, so the twin doesn't come back within 30 either. Driven as the HUD does it: start, acknowledge, walk away. And the
+    // level's festival picks the words, so Ember Playa's dances never mention the Ferris wheel.
+    static void AnAffectedPlayersAwkwardLineIsNotRepeatedWithinThirty()
+    {
+        foreach(bool affected in new[]{false,true}) for(int festival=0;festival<Festivals.Count;festival++)
+        {
+            var s=new FestivalSimulation(11);var p=s.AddPlayer("a","A");s.State.Phase="Playing";s.State.FestivalIndex=festival;
+            p.X=0;p.Z=0;s.State.Npcs.Clear();s.State.Npcs.Add(new NpcState{Id="wook",X=0,Z=1,CanTalk=true});
+            if(affected)p.Effects.Add(new ActiveEffect{Id="dose",Intensity=1,RemainingSeconds=1e9});
+            string who=(affected?"an affected":"a sober")+" player on "+Festivals.Name(festival);var shown=new List<string>();
+            for(int i=0;i<200;i++)
+            {
+                var start=s.Execute(p.Id,new GameCommand{Id="dance"+i,Kind="Dance",TargetId="wook"});
+                Check(start.Accepted,who+", dance "+i+": "+start.Reason);
+                var dance=s.Interaction(p.InteractionId);string text=dance.DialogueText;int last=shown.LastIndexOf(text);
+                Check(last<0||shown.Count-last>=30,who+": \""+text+"\" came back "+(shown.Count-last)+" dances after it was shown");
+                Check(!Places[1-festival].Any(text.Contains),who+" names only its own places: "+text);
+                shown.Add(text);
+                Check(s.Execute(p.Id,new GameCommand{Id="ack"+i,Kind="DialogueAck",TargetId=dance.DialogueId}).Accepted&&s.Execute(p.Id,new GameCommand{Id="stop"+i,Kind="Cancel"}).Accepted,who+", dance "+i+": acknowledged and walked away");
+                s.Tick(.1);
             }
         }
     }
