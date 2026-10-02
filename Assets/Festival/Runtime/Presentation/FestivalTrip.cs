@@ -15,7 +15,8 @@ namespace Festival.Presentation
     /// FestivalSession.UpdateCamera trails the mouse by Lag (Follow), and FestivalNightLighting adds Saturation and Brightness to the
     /// colour grade. This component draws the rest: its own overlay canvas under the HUD (tint, haze, vignette, letterbox), pooled
     /// colour trails and glows around other people, and a low-pass on the view's listener. GAS-1: a Giggle Balloon's gas at camp (Gas)
-    /// goes the same way, and adds a tremolo: FestivalTrip is the one writer of AudioListener.volume.</summary>
+    /// goes the same way, and adds a tremolo and (GAS-5) a reverb: FestivalTrip is the one writer of AudioListener.volume and of the
+    /// listener's filters.</summary>
     public sealed class FestivalTrip : MonoBehaviour
     {
         /// <summary>One moment of a trip. Zero everywhere is a sober view.</summary>
@@ -32,8 +33,8 @@ namespace Festival.Presentation
             public float Saturation,Brightness;
             // How strongly people leave colour trails and glow (0-1), and how muffled the sound is (0-1).
             public float Trails,Glow,Muffle;
-            // How far the volume of everything heard dips right now (0-1): GAS-1's tremolo.
-            public float Tremolo;
+            // How far the volume of everything heard dips right now (0-1): GAS-1's tremolo. How much everything heard echoes (0-1): GAS-5.
+            public float Tremolo,Reverb;
         }
 
         /// <summary>Reduced motion (on by default) keeps every colour but cuts camera motion, the swell and the lag, to this share.</summary>
@@ -65,31 +66,35 @@ namespace Festival.Presentation
             return look;
         }
 
-        /// <summary>GAS-1: the wah-wah's beat, in pulses a second.</summary>
-        public const float GasPulseHz=4;
-        // At full strength: the vignette's floor and its pulse on top, the throb in degrees, the colour drained from the grade, the haze,
-        // the low-pass's floor (it pulses up to 1) and how far the tremolo dips the volume.
-        private const float GasVignette=.3f,GasVignettePulse=.3f,GasThrob=1.2f,GasDrain=55,GasHaze=.1f,GasMuffle=.4f,GasTremolo=.4f;
+        // At full strength: the vignette's floor and its pulse on top, the field-of-view kick in degrees, the colour drained from the
+        // grade, the haze, the low-pass's floor (it pulses up to 1) and how far the tremolo dips the volume. GAS-5 set the vignette,
+        // its pulse and the kick (from .3, .3 and a 1.2 degree throb): starting points for PLAYTEST-1.
+        private const float GasVignette=.45f,GasVignettePulse=.4f,GasThrob=4,GasDrain=55,GasHaze=.1f,GasMuffle=.4f,GasTremolo=.4f;
+        // GAS-5's reverb at full strength: its wet level in millibels (6 dB under the dry sound, so the beat stays clear) and a big
+        // hall's decay in seconds.
+        private const float GasReverbRoom=-600,GasReverbDecay=2.5f;
 
-        /// <summary>GAS-1: Giggle Gas at strength 0-1 (FestivalSimulation.GiggleGasStrength, on the simulation clock) at local time t. A
-        /// wah-wah pulse GasPulseHz times a second runs through the sound (a low-pass closing in, and a tremolo) and the view (a pulsing
-        /// vignette and a slight field-of-view throb); colours drain and a pale haze puts the world at a distance. Reduced motion drops
-        /// the throb and halves the vignette's pulse; the sound stays.</summary>
-        public static Perception Gas(float strength,bool reducedMotion,float time)
+        /// <summary>GAS-1: Giggle Gas at strength 0-1 (FestivalSimulation.GiggleGasStrength, on the simulation clock). GAS-5: a wah-wah
+        /// pulse on every beat (beat: the phase, 0 on the kick, rising to 1 at the next), sharp on the kick and easing off to nothing
+        /// by the next, runs through the sound (a low-pass closing in, and a tremolo) and the view (a deep vignette closing in, and a
+        /// strong field-of-view kick); colours drain, a big reverb and a pale haze put the world at a distance. Reduced motion drops
+        /// the kick and halves the vignette's pulse; the sound stays.</summary>
+        public static Perception Gas(float strength,bool reducedMotion,float beat)
         {
             var look=new Perception();if(strength<=0)return look;
-            float wave=Mathf.Sin(time*GasPulseHz*2*Mathf.PI),pulse=.5f+.5f*wave;
+            float pulse=Mathf.Exp(-4*beat)*(1-beat);
             look.Vignette=strength*(GasVignette+GasVignettePulse*(reducedMotion?.5f:1)*pulse);
-            look.Fov=reducedMotion?0:strength*GasThrob*wave;
+            look.Fov=reducedMotion?0:strength*GasThrob*pulse;
             look.Saturation=-GasDrain*strength;look.Haze=GasHaze*strength;
-            look.Muffle=strength*(GasMuffle+(1-GasMuffle)*pulse);look.Tremolo=strength*GasTremolo*pulse;
+            look.Muffle=strength*(GasMuffle+(1-GasMuffle)*pulse);look.Tremolo=strength*GasTremolo*pulse;look.Reverb=strength;
             return look;
         }
 
         /// <summary>The local player's trip in state, never for a spirit. A dose shows only while the festival is shown (Playing or
         /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
-        /// Giggle Gas shows by its own strength; it lives only at camp (the host clears it as the crew leaves), so never with a dose.</summary>
-        public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time)
+        /// Giggle Gas shows by its own strength; it lives only at camp (the host clears it as the crew leaves), so never with a dose. It
+        /// pulses on beat, the camp music's beat phase; with no music (null) it keeps a 120 BPM clock, so it never stops.</summary>
+        public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time,float? beat=null)
         {
             if(state==null)return default;
             foreach(var p in state.Players)
@@ -98,7 +103,7 @@ namespace Festival.Presentation
                 if(p.Life=="Spirit")return default;
                 foreach(var e in p.Effects)
                 {
-                    if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(e,state.SimulationSeconds),reducedMotion,time);
+                    if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(e,state.SimulationSeconds),reducedMotion,beat??Mathf.Repeat(time*2,1));
                     if(e.Id!=FestivalSimulation.DoseEffect||e.Intensity<1||!FestivalWorld.ShowsFestival(state.Phase))continue;
                     var look=Look(e.Substance,e.Intensity,reducedMotion,time);
                     if(FestivalNightLighting.IsNight(state)){look.Tint.a=Mathf.Min(look.Tint.a,NightTint);look.Haze=Mathf.Min(look.Haze,NightTint);}
@@ -111,6 +116,10 @@ namespace Festival.Presentation
 
         /// <summary>The listener's low-pass cutoff for a muffle of 0-1: mild, so the rhythm's beat stays audible.</summary>
         public static float LowPassHz(float muffle)=>muffle<=0?22000:Mathf.Lerp(5000,2200,muffle);
+
+        /// <summary>GAS-5: the listener reverb's wet level (its room, in millibels) for a reverb of 0-1: off at 0, as loud as the reverb
+        /// is strong, and a capped big hall at 1.</summary>
+        public static float ReverbRoom(float reverb)=>reverb<=0?-10000:Mathf.Max(-10000,2000*Mathf.Log10(reverb)+GasReverbRoom);
 
         /// <summary>One frame of a camera angle trailing its target by lag seconds, the short way round; no lag snaps to it.</summary>
         public static float Follow(float current,float target,float lag,float deltaTime)=>lag<=0?target:current+Mathf.DeltaAngle(current,target)*(1-Mathf.Exp(-deltaTime/lag));
@@ -141,6 +150,7 @@ namespace Festival.Presentation
         private Sprite blob;
         private Material sprites;
         private AudioLowPassFilter lowPass;
+        private AudioReverbFilter reverb;
         private readonly SpriteRenderer[] trails=new SpriteRenderer[MaxTrails];
         private readonly float[] trailAge=new float[MaxTrails];
         private readonly SpriteRenderer[] glows=new SpriteRenderer[MaxGlows];
@@ -179,10 +189,13 @@ namespace Festival.Presentation
         {
             // ponytail: a frame-rate tremolo on the global listener volume; an OnAudioFilterRead tremolo if it ever sounds stepped.
             float volume=1-look.Tremolo;if(AudioListener.volume!=volume)AudioListener.volume=volume;
-            // The filter needs the view's AudioListener beside it; a view without one (an EditMode test) is left alone.
-            if(lowPass==null){if(look.Muffle<=0||view==null||view.GetComponent<AudioListener>()==null)return;lowPass=view.gameObject.AddComponent<AudioLowPassFilter>();}
-            lowPass.enabled=look.Muffle>0;lowPass.cutoffFrequency=LowPassHz(look.Muffle);
+            // The filters need the view's AudioListener beside them; a view without one (an EditMode test) is left alone.
+            if(lowPass==null&&look.Muffle>0&&Hears(view))lowPass=view.gameObject.AddComponent<AudioLowPassFilter>();
+            if(lowPass!=null){lowPass.enabled=look.Muffle>0;lowPass.cutoffFrequency=LowPassHz(look.Muffle);}
+            if(reverb==null&&look.Reverb>0&&Hears(view)){reverb=view.gameObject.AddComponent<AudioReverbFilter>();reverb.reverbPreset=AudioReverbPreset.User;reverb.decayTime=GasReverbDecay;}
+            if(reverb!=null){reverb.enabled=look.Reverb>0;reverb.room=ReverbRoom(look.Reverb);}
         }
+        private static bool Hears(Transform view)=>view!=null&&view.GetComponent<AudioListener>()!=null;
 
         private void Trail(RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,float strength,float deltaTime)
         {
@@ -287,6 +300,7 @@ namespace Festival.Presentation
             // The listener's volume is global and outlives this component and its scene.
             AudioListener.volume=1;
             if(lowPass!=null)Dispose(lowPass);
+            if(reverb!=null)Dispose(reverb);
             foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,sprites})if(thing!=null)Dispose(thing);
         }
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}

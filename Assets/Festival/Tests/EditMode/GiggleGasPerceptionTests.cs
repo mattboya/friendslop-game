@@ -11,9 +11,10 @@ using Object = UnityEngine.Object;
 namespace Festival.Tests
 {
     // GAS-1: a Giggle Balloon's gas on the hitter's own screen. Nothing while it kicks in, then a 1 s fade in, full strength and a
-    // 3 s fade out, timed on the simulation clock. A wah-wah pulse about four times a second runs through the sound (a sweeping
-    // low-pass and a tremolo) and the view (a pulsing vignette and a slight field-of-view throb); colours drain and the world
-    // feels far off. Reduced motion drops the throb and halves the vignette's pulse; the sound stays.
+    // 3 s fade out, timed on the simulation clock. GAS-5: a wah-wah pulse on every beat of the camp music (on a 120 BPM clock with
+    // the music off), sharp on the kick, runs through the sound (a sweeping low-pass and a tremolo) and the view (a deep vignette
+    // closing in and a strong field-of-view kick); colours drain, and a big reverb and a pale haze put the world far off. Reduced
+    // motion drops the kick and halves the vignette's pulse; the sound stays.
     public sealed class GiggleGasPerceptionTests
     {
         // The hit kicks in at Kick, simulation time; Full is well into full strength.
@@ -22,12 +23,14 @@ namespace Festival.Tests
         [TearDown]public void Cleanup(){foreach(var go in made)if(go!=null)Object.DestroyImmediate(go);made.Clear();AudioListener.volume=1;}
 
         private static string Describe(FestivalTrip.Perception p)=>
-            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} tremolo {p.Tremolo:F3}";
+            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} tremolo {p.Tremolo:F3} reverb {p.Reverb:F3}";
         private static readonly string Nothing=Describe(default);
-        // The gas at simulation time now and local time t, for "me" at camp.
-        private static FestivalTrip.Perception At(double now,float t=0,bool reduced=false)=>FestivalTrip.For(Camp(now),"me",reduced,t);
+        // The gas at simulation time now and local time t, for "me" at camp, on the music's beat (none: the music is off).
+        private static FestivalTrip.Perception At(double now,float t=0,bool reduced=false,float? beat=null)=>FestivalTrip.For(Camp(now),"me",reduced,t,beat);
         // The amplitude of a setting over one local second.
         private static (float Low,float High) Range(System.Func<float,float> value){float low=float.MaxValue,high=float.MinValue;for(int i=0;i<=400;i++){float v=value(i/400f);low=Mathf.Min(low,v);high=Mathf.Max(high,v);}return (low,high);}
+        // The frames of a second's 200 where a setting peaks: higher than the frame before, and no lower than the next.
+        private static List<int> Peaks(System.Func<int,float> value){var peaks=new List<int>();for(int i=0;i<200;i++)if(value(i)>value(i-1)&&value(i)>=value(i+1))peaks.Add(i);return peaks;}
 
         [Test]public void NothingWhileItKicksInThenASecondInAndThreeSecondsOut()
         {
@@ -41,21 +44,40 @@ namespace Festival.Tests
             foreach(double now in new[]{Kick+30,Kick+35})Assert.That(Describe(At(now,.3f)),Is.EqualTo(Nothing),"nothing once it's over");
         }
 
-        [Test]public void AWahWahPulsesFourTimesASecondInTheSoundAndTheView()
+        // GAS-5: one pulse a beat. Each setting peaks on the frame each kick falls in, wherever the music's beat is (here a drum and
+        // bass track's 174 BPM, its first kick .302 s in, between two frames), and with the music off on a 120 BPM clock: on the
+        // half seconds.
+        [Test]public void AWahWahPulsesOnEveryBeatInTheSoundAndTheView()
         {
-            var vignette=new List<float>();var muffle=new List<float>();var tremolo=new List<float>();var fov=new List<float>();
-            for(int i=0;i<200;i++){var look=At(Full,i/200f);vignette.Add(look.Vignette);muffle.Add(look.Muffle);tremolo.Add(look.Tremolo);fov.Add(look.Fov);}
-            foreach(var (name,values) in new[]{("vignette",vignette),("low-pass",muffle),("tremolo",tremolo),("field of view",fov)})
+            float Music(int frame)=>Mathf.Repeat((frame/200f-.302f)*174.37f/60,1);
+            var kicks=new List<int>();for(int i=0;i<200;i++)if(Music(i)<Music(i-1))kicks.Add(i);
+            Assert.That(kicks,Is.EqualTo(new[]{61,130,199}),"setup: three kicks in the second");
+            foreach(var (name,value) in new (string,System.Func<FestivalTrip.Perception,float>)[]{("vignette",p=>p.Vignette),("low-pass",p=>p.Muffle),("tremolo",p=>p.Tremolo),("field of view",p=>p.Fov)})
             {
-                int peaks=0;for(int i=1;i<values.Count-1;i++)if(values[i]>values[i-1]&&values[i]>=values[i+1])peaks++;
-                Assert.That(peaks,Is.EqualTo(4),"the "+name+" pulses four times a second");
+                Assert.That(Peaks(i=>value(At(Full,i/200f,false,Music(i)))),Is.EqualTo(kicks),"the "+name+" peaks on each of the music's kicks");
+                Assert.That(Peaks(i=>value(At(Full,i/200f))),Is.EqualTo(new[]{0,100}),"with the music off, the "+name+" pulses on a 120 BPM clock");
             }
             Assert.That(Range(t=>At(Full,t).Tremolo).High,Is.InRange(.2f,.6f),"the tremolo dips the sound clearly, never to silence");
-            var throb=Range(t=>At(Full,t).Fov);
-            Assert.That(throb.High,Is.InRange(.5f,2f),"a slight field-of-view throb, under 2 degrees");
+            Assert.That(Range(t=>At(Full,t).Fov).High,Is.InRange(3.5f,4.5f),"a strong field-of-view kick, about 4 degrees");
             Assert.That(FestivalTrip.LowPassHz(Range(t=>At(Full,t).Muffle).High),Is.InRange(1500f,4000f),"the low-pass closes in on each pulse");
         }
 
+        // GAS-5: on the kick the vignette closes in deep and the view kicks wide; both ease off through the beat, so each peaks once.
+        [Test]public void OnTheKickTheViewClosesInAndKicksWideThenEasesOff()
+        {
+            var kick=FestivalTrip.Gas(1,false,0);var half=FestivalTrip.Gas(1,false,.5f);
+            Assert.That(kick.Vignette,Is.GreaterThanOrEqualTo(.8f),"on the kick the vignette closes in deep: "+Describe(kick));
+            Assert.That(kick.Fov,Is.GreaterThanOrEqualTo(3.5f),"and the view kicks wide");
+            Assert.That(half.Vignette,Is.LessThanOrEqualTo(.55f),"half a beat on, the vignette has opened: "+Describe(half));
+            Assert.That(half.Fov,Is.LessThanOrEqualTo(1f),"and the view is nearly back");
+            var before=kick;
+            for(int i=1;i<100;i++)
+            {
+                var look=FestivalTrip.Gas(1,false,i/100f);
+                Assert.That(look.Vignette<before.Vignette&&look.Fov<before.Fov,"they only ease off through the beat, so they peak once, on the kick ("+i+"% of the beat)");
+                before=look;
+            }
+        }
         [Test]public void ColoursDrainAndTheWorldFeelsFarAway()
         {
             var look=At(Full,.1f);
@@ -79,7 +101,23 @@ namespace Festival.Tests
                 Assert.That(b.Tremolo,Is.EqualTo(a.Tremolo),"the tremolo stays at "+t+" s");
                 Assert.That(b.Saturation,Is.EqualTo(a.Saturation),"the colours drain the same");
                 Assert.That(b.Haze,Is.EqualTo(a.Haze),"the haze stays");
+                Assert.That(b.Reverb,Is.EqualTo(a.Reverb),"the reverb stays");
             }
+        }
+
+        // GAS-5: a big reverb as strong as the gas: in with the fade in, full at full strength, gone once it ends. Only the gas reverbs.
+        [Test]public void TheGasAddsABigReverbAsStrongAsItIs()
+        {
+            Assert.That(At(Full).Reverb,Is.EqualTo(1),"full at full strength");
+            Assert.That(At(Kick+.5).Reverb,Is.EqualTo(.5f).Within(1e-3f),"half way through the fade in");
+            Assert.That(At(Kick+28.5).Reverb,Is.EqualTo(.5f).Within(1e-3f),"half way through the fade out");
+            Assert.That(At(Kick+31).Reverb,Is.Zero,"none once it's over");
+            foreach(var substance in new[]{"lsd","mushrooms","ecstasy","ketamine","weed"})Assert.That(FestivalTrip.Look(substance,4,false,.3f).Reverb,Is.Zero,"only the gas reverbs, not "+substance);
+            // The wet mix in millibels: off at 0, louder as the gas grows, and under the dry sound even at full, so the beat stays clear.
+            Assert.That(FestivalTrip.ReverbRoom(0),Is.LessThanOrEqualTo(-10000),"no reverb, nothing wet");
+            Assert.That(FestivalTrip.ReverbRoom(.25f),Is.LessThan(FestivalTrip.ReverbRoom(.5f)),"wetter as it grows");
+            Assert.That(FestivalTrip.ReverbRoom(.5f),Is.LessThan(FestivalTrip.ReverbRoom(1)),"wettest at full");
+            Assert.That(FestivalTrip.ReverbRoom(1),Is.InRange(-1500f,-300f),"a big hall at full, still under the dry sound");
         }
 
         [Test]public void OnlyTheHittersOwnScreen()
@@ -104,7 +142,7 @@ namespace Festival.Tests
             Assert.That(grade.saturation.value,Is.EqualTo(saturation).Within(1e-5f),"and they come back when it ends");
         }
 
-        // The overlay, the low-pass and the tremolo follow the gas, and let go when it ends and when the client leaves (no state).
+        // The overlay, the low-pass, the reverb and the tremolo follow the gas, and let go when it ends and when the client leaves (no state).
         // Turning FestivalTrip off or destroying it lets go too (GiggleGasPlayTests: EditMode sends no OnDisable or OnDestroy).
         [Test]public void TheOverlayAndTheSoundFollowTheGasAndLetGo()
         {
@@ -120,6 +158,10 @@ namespace Festival.Tests
                 Assert.That(Part<Image>(component,"Trip haze").color.a,Is.EqualTo(look.Haze).Within(1e-5f),when+": the haze");
                 Assert.That(lowPass!=null&&lowPass.enabled,when+": a low-pass on the listener");
                 Assert.That(lowPass.cutoffFrequency,Is.EqualTo(FestivalTrip.LowPassHz(look.Muffle)).Within(1),when+": at the pulse's cutoff");
+                var reverb=view.GetComponent<AudioReverbFilter>();
+                Assert.That(reverb!=null&&reverb.enabled,when+": a reverb on the listener");
+                Assert.That(reverb.room,Is.EqualTo(FestivalTrip.ReverbRoom(look.Reverb)).Within(1),when+": as wet as the gas is strong");
+                Assert.That(reverb.decayTime,Is.InRange(2f,3f),when+": a big hall's tail, about 2.5 s");
                 Assert.That(AudioListener.volume,Is.EqualTo(1-look.Tremolo).Within(1e-5f),when+": the tremolo dips everything heard");
                 Assert.That(AudioListener.volume,Is.LessThan(.9f),when+": setup: at the top of a pulse");
             }
@@ -128,6 +170,8 @@ namespace Festival.Tests
                 var lowPass=view.GetComponent<AudioLowPassFilter>();
                 Assert.That(component.GetComponentInChildren<Canvas>(true).gameObject.activeSelf,Is.False,when+": the overlay is down");
                 Assert.That(lowPass==null||!lowPass.enabled,when+": the low-pass is off");
+                var reverb=view.GetComponent<AudioReverbFilter>();
+                Assert.That(reverb==null||!reverb.enabled,when+": the reverb is off");
                 Assert.That(AudioListener.volume,Is.EqualTo(1),when+": the sound is back to full");
             }
             component.Apply(Camp(Full),"me",view.transform,null,false,peak,.02f);Expect("on the gas");

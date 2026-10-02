@@ -13,9 +13,10 @@ using UnityEngine.UI;
 namespace Festival.Tests
 {
     // GAS-1 in a running session: at camp, beside the Giggle Balloons, the prompt offers one and E takes it. Once it kicks in, the
-    // gas reaches the hitter's screen through the single writers: FestivalHud adds the throb to the field of view, FestivalNightLighting
-    // drains the colour grade, and FestivalTrip pulses its overlay, closes a low-pass and dips the volume. All of it lets go when the
-    // gas ends, when the player leaves the session, and when FestivalTrip is turned off or destroyed. Friends see the hitter giggle.
+    // gas reaches the hitter's screen through the single writers: FestivalHud adds the kick to the field of view, FestivalNightLighting
+    // drains the colour grade, and FestivalTrip pulses its overlay, closes a low-pass, adds a big reverb (GAS-5) and dips the volume.
+    // All of it lets go when the gas ends, when the player leaves the session, and when FestivalTrip is turned off or destroyed.
+    // Friends see the hitter giggle.
     public sealed class GiggleGasPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator EAtTheBalloonsTakesAHitThatPulsesThroughTheSingleWriters()
@@ -40,9 +41,10 @@ namespace Festival.Tests
                 var overlay=host.transform.Find("Festival trip");
                 void Sober(string when)
                 {
-                    var lowPass=view.GetComponent<AudioLowPassFilter>();
+                    var lowPass=view.GetComponent<AudioLowPassFilter>();var reverb=view.GetComponent<AudioReverbFilter>();
                     Assert.That(overlay==null||!overlay.gameObject.activeSelf,when+": no overlay");
                     Assert.That(lowPass==null||!lowPass.enabled,when+": no low-pass");
+                    Assert.That(reverb==null||!reverb.enabled,when+": no reverb");
                     Assert.That(AudioListener.volume,Is.EqualTo(1),when+": the sound at full");
                 }
 
@@ -73,7 +75,7 @@ namespace Festival.Tests
                 {
                     yield return null;
                     var look=Now();var drawn=FestivalTrip.For(session.State,me,false,drawnAt);drawnAt=Time.unscaledTime;var lowPass=view.GetComponent<AudioLowPassFilter>();
-                    Assert.That(view.fieldOfView,Is.EqualTo(75+look.Fov).Within(.01f),"the HUD adds the gas's throb to the 75 degree view");
+                    Assert.That(view.fieldOfView,Is.EqualTo(75+look.Fov).Within(.01f),"the HUD adds the gas's kick to the 75 degree view");
                     Assert.That(grade.saturation.value,Is.EqualTo(camp+look.Saturation).Within(1e-3f),"the one grade drains camp's colours");
                     overlay=host.transform.Find("Festival trip");
                     Assert.That(overlay!=null&&overlay.gameObject.activeSelf,"the overlay is up");
@@ -81,11 +83,14 @@ namespace Festival.Tests
                     Assert.That(lowPass!=null&&lowPass.enabled,"the first-person listener is low-passed");
                     Assert.That(lowPass.cutoffFrequency,Is.EqualTo(FestivalTrip.LowPassHz(drawn.Muffle)).Within(1),"on the pulse");
                     Assert.That(AudioListener.volume,Is.EqualTo(1-drawn.Tremolo).Within(1e-4f),"and the tremolo dips it");
+                    var reverb=view.GetComponent<AudioReverbFilter>();
+                    Assert.That(reverb!=null&&reverb.enabled,"a big reverb on the first-person listener");
+                    Assert.That(reverb.room,Is.EqualTo(FestivalTrip.ReverbRoom(drawn.Reverb)).Within(1),"as wet as the gas is strong");
                     widest=Mathf.Max(widest,Mathf.Abs(view.fieldOfView-75));quietest=Mathf.Min(quietest,AudioListener.volume);
                 }
                 Assert.That(grade.saturation.value,Is.LessThan(camp-30),"the colours drain");
                 Assert.That(session.WorldCharacter(me).Giggling,Is.True,"the hitter's body giggles, as friends see it");
-                Assert.That(widest,Is.GreaterThan(.5f),"the view throbs");
+                Assert.That(widest,Is.GreaterThan(2),"the view kicks wide on the beat");
                 Assert.That(quietest,Is.LessThan(.8f),"the sound goes wah-wah");
 
                 // Reduced motion: the view holds still; the sound still pulses.
@@ -123,11 +128,11 @@ namespace Festival.Tests
                 var trip=host.GetComponent<FestivalTrip>();
                 var on=new RoundState{Phase="Shopping",SimulationSeconds=100};var hitter=new PlayerState{Id="me"};
                 hitter.Effects.Add(new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=95,RemainingSeconds=25});on.Players.Add(hitter);
-                trip.Apply(on,"me",view.transform,null,false,.0625f,.02f);
-                Assert.That(AudioListener.volume,Is.LessThan(.8f),"setup: the gas at the top of a pulse");
+                trip.Apply(on,"me",view.transform,null,false,0,.02f);
+                Assert.That(AudioListener.volume,Is.LessThan(.8f),"setup: the gas on a kick");
                 trip.enabled=false;
                 Sober("with the trip layer turned off");
-                trip.enabled=true;trip.Apply(on,"me",view.transform,null,false,.0625f,.02f);
+                trip.enabled=true;trip.Apply(on,"me",view.transform,null,false,0,.02f);
                 Assert.That(AudioListener.volume,Is.LessThan(.8f),"setup: on again");
                 Object.DestroyImmediate(trip);
                 Assert.That(AudioListener.volume,Is.EqualTo(1),"destroyed, it leaves the sound at full");
