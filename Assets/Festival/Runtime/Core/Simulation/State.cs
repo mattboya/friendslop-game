@@ -18,6 +18,9 @@ namespace Festival.Core
         public bool Ready, Connected=true, MapReady, HasCosmetic, WearingLittleSpoon, VisualWideEyes, VisualRedEyes;
         // GAS-1: view-only, never set on the host: FestivalSession.ViewFor sets it while FestivalSimulation.Giggling, so friends see a giggle.
         public bool VisualGiggling;
+        // POLO-5: view-only, never set on the host: FestivalSession.ViewFor sets it to the SimulationSeconds this player boarded
+        // the Ferris wheel, so every client seats them in the same gondola; -1 off the wheel and in older snapshots.
+        public double VisualWheelSince=-1;
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
         public int Performances, CampAntics; public double LastRhythmScore=-1;

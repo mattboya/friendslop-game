@@ -28,7 +28,8 @@ namespace Festival.Network
         // is turned away with "Incompatible game version." rather than joining a game it cannot play.
         // 2: festival weekends (the Spinning phase, the weekend's new commands, and a ReviewVote that names a friend).
         // 3: wave 2026-09-30 (2): clients build DANCE-5's busier rhythm charts from the same ChartSeed, and the spin runs longer.
-        public const int ProtocolVersion=3;
+        // 4: wave 2026-10-01 (2): snapshots carry when each Ferris wheel rider boarded (POLO-5).
+        public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
@@ -491,6 +492,8 @@ namespace Festival.Network
                 copy.VisualRedEyes=p.Effects.Exists(effect=>effect.Id=="weed");
                 // GAS-1: Giggle Gas is no Intoxicated pose (above); friends see a giggle instead, once it has kicked in.
                 copy.VisualGiggling=FestivalSimulation.Giggling(p,source.SimulationSeconds);
+                // POLO-5: when their turn on the Ferris wheel began, for every client to seat them in the same gondola; -1 off it.
+                copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;}view.Players.Add(copy);
             }
             if(!spirit)

@@ -91,6 +91,25 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.CanCancel(playa,aboard),Is.False,"with nothing under way there is nothing to cancel");
         }
 
+        // POLO-5: every client draws a rider in the gondola they boarded (FestivalTwistVisuals), so every client's copy of the
+        // rider, the rider's own included, carries when the turn began, and nobody's does once it is over.
+        [Test] public void EveryClientKnowsWhenTheRiderBoardedTheWheel()
+        {
+            var game=Level(0);
+            foreach(var viewer in game.State.Players)Assert.That(Wire(game,viewer.Id).Players.TrueForAll(p=>p.VisualWheelSince==-1),Is.True,"setup: nobody rides yet, so "+viewer.Id+"'s client seats nobody");
+            var rider=Ride(game);var turn=game.State.Interactions.Find(i=>i.Id==rider.InteractionId);game.Tick(5);
+            foreach(var viewer in game.State.Players)
+            {
+                var view=Wire(game,viewer.Id);
+                Assert.That(view.Players.Find(p=>p.Id==rider.Id).VisualWheelSince,Is.EqualTo(turn.StartSeconds).Within(1e-6),viewer.Id+"'s client knows when "+rider.Id+" boarded, so it seats them in the same gondola as everyone else's");
+                Assert.That(view.Players.FindAll(p=>p.Id!=rider.Id).TrueForAll(p=>p.VisualWheelSince==-1),Is.True,viewer.Id+"'s client seats nobody else");
+            }
+            Assert.That(rider.VisualWheelSince,Is.EqualTo(-1),"the host's own state never carries it");
+            game.Tick(Festivals.WheelRideSeconds);
+            Assert.That(FestivalSimulation.OnWheel(game.State,rider.Id),Is.False,"setup: the turn is over");
+            foreach(var viewer in game.State.Players)Assert.That(Wire(game,viewer.Id).Players.Find(p=>p.Id==rider.Id).VisualWheelSince,Is.EqualTo(-1),viewer.Id+"'s client lets "+rider.Id+" off the wheel");
+        }
+
         [Test] public void ByDayTheWheelShowsNoFriend()
         {
             var game=Level(0);var rider=Ride(game);
