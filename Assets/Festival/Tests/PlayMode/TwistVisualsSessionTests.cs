@@ -30,10 +30,7 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 Assert.That(sim.State.FestivalIndex,Is.EqualTo(Festivals.PoloFestival),"setup: a new game starts at Palm Mirage");
 
-                var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"Day 1 starts: "+session.Message);
+                yield return StartLevel(session);
                 yield return null;yield return null;
 
                 var grounds=world.transform.Find(FestivalWorld.RootName);

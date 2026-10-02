@@ -50,15 +50,7 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    // Sam has no client of their own to report the map loaded.
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="hud_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
 
                 // Day 1 of Palm Mirage asks $15 from each of the two.
                 sim.State.Npcs.Clear();sim.State.LevelSales=12;player.X=0;player.Z=0;mate.X=30;mate.Z=0;
@@ -198,9 +190,7 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.3f);
                 Assert.That(Prompt(),Is.Not.Empty,"setup: at the trailhead the HUD offers something to press");
                 session.MenuOpen=true;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+30;
-                while(session.State.Phase!="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Spinning"),"setup: the ready countdown ends in the spin: "+session.Message);
+                yield return SkipCountdown(session);
                 yield return null;yield return null;
                 if(session.MenuOpen)failures.Add("spinning: the menu left open at camp still covers the wheels");
                 session.MenuOpen=false;yield return null;
@@ -209,6 +199,7 @@ namespace Festival.Tests
                 yield return NothingToPress("spinning");
 
                 // Sam has no client of their own, so the festival stays loading until they are marked ready below.
+                yield return SkipSpin(session);
                 deadline=Time.realtimeSinceStartup+40;
                 while(!(session.State.Phase=="Loading"&&player.MapReady)&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.State.Phase,Is.EqualTo("Loading"),"setup: the spin ends in loading, and this client's map is ready: "+session.Message);

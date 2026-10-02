@@ -21,7 +21,11 @@ public static class GroupDanceTests
     }
     static void Place(FestivalSimulation s,string id,float x,float z){var p=s.Player(id);p.X=x;p.Z=z;}
     static double Heat(FestivalSimulation s,string id)=>s.State.Npcs.Find(n=>n.Id=="watcher").Observers.Find(o=>o.PlayerId==id).Suspicion;
-    static InteractionState Start(FestivalSimulation s,string id,string kind="Dance"){Check(s.Execute(id,new GameCommand{Id="group"+(sequence++),Kind=kind,TargetId="partner_"+id}).Accepted,id+" starts "+kind);return s.Interaction(s.Player(id).InteractionId);}
+    // A sale (command StartSale) carries one stock_lsd; the partner, dealt no role, buys like every festivalgoer. A cop walks its
+    // patrol until someone talks to it, so the player first walks back up to their cop, 1 m south as Crew placed it.
+    static InteractionState Start(FestivalSimulation s,string id,string kind="Dance"){var partner=s.State.Npcs.Find(n=>n.Id=="partner_"+id);if(partner.Kind=="Cop"){partner.X=s.Player(id).X;partner.Z=s.Player(id).Z-1;}string item="";if(kind=="StartSale"){item="stock_lsd";s.Player(id).Inventory.Add(new ItemStack{ItemId=item,Count=1});}var started=s.Execute(id,new GameCommand{Id="group"+(sequence++),Kind=kind,TargetId="partner_"+id,ItemId=item});Check(started.Accepted,id+" starts "+kind+": "+started.Reason);return s.Interaction(s.Player(id).InteractionId);}
+    // b's partner is a cop for a security talk (Police), a festivalgoer otherwise.
+    static FestivalSimulation Crew(string bKind){var s=Crew();if(bKind=="Police")s.State.Npcs.Find(n=>n.Id=="partner_b").Kind="Cop";return s;}
     // Enter the correct input for every note in beats [from,to) of the chart (DANCE-5: a beat can hold up to four notes).
     static void Hit(InteractionState i,int from,int to){foreach(var n in RhythmChart.For(i).Notes)if(n.TimeSeconds>=2+from*i.BeatSeconds-1e-9&&n.TimeSeconds<2+to*i.BeatSeconds-1e-9)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
     // Tick until done, entering each note's correct input through the Rhythm command once the clock reaches it, as a player would.
@@ -109,5 +113,46 @@ public static class GroupDanceTests
             double hitHeat=Heat(s,hit.PlayerId),missHeat=Heat(s,checkHits?"b":"a");
             Check(hit.Score==1&&(checkHits?second:check).Score==0&&hitHeat==solo&&missHeat==40,(checkHits?"a perfect check dance beside a friend's missed Dance":"a missed check dance beside a friend's perfect Dance")+": the perfect one loses as if alone, the missed one gains 20 (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
         }
+
+        // DANCE-8: a friend's sale, chat or security talk is danced (DANCE-2: everyone sees them dancing), so it counts as dancing
+        // here, scored by their own chart: the notes due so far while it runs, its final score once done, nothing yet in its 2 s
+        // lead-in. Its own witnesses settle the friend, so the Dance never charges them on top.
+        foreach(var kind in new[]{"StartSale","Conversation","Police"})
+        {
+            // Reference: the same half-hit challenge with no crew member nearby.
+            s=Crew(kind);Place(s,"a",-20,0);var talk=Start(s,"b",kind);Hit(talk,0,4);Finish(s,talk);double sloppy=Heat(s,"b");
+            Check(talk.Score<1&&sloppy>20,kind+": a half-hit challenge alone raises suspicion");
+
+            // Still running when the Dance finishes: judged on the notes due so far.
+            s=Crew(kind);dance=Start(s,"a");Hit(dance,0,8);s.Tick(2);talk=Start(s,"b",kind);Hit(talk,0,6);Finish(s,dance);
+            Check(talk.Status=="Active"&&Heat(s,"a")==solo&&Heat(s,"b")==20,kind+": a friend's perfect challenge still running counts as perfect dancing and does not charge them (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+            Hit(talk,6,8);Finish(s,talk);Check(Heat(s,"b")==solo&&Heat(s,"a")==solo,kind+": the friend settles once, through their own challenge (a="+Heat(s,"a")+", b="+Heat(s,"b")+")");
+
+            // A sloppy one still sets the worst, and the friend is charged only by their own challenge.
+            s=Crew(kind);dance=Start(s,"a");talk=Start(s,"b",kind);Hit(dance,0,8);Hit(talk,0,4);Finish(s,dance);Finish(s,talk);
+            Check(Heat(s,"a")>solo&&Heat(s,"b")==sloppy,kind+": a friend's half-hit challenge worsens the dancer, and the friend gains only their own result (a="+Heat(s,"a")+", b="+Heat(s,"b")+", alone="+sloppy+")");
+
+            // Finished before the Dance does, but overlapping it: judged on its final score.
+            s=Crew(kind);talk=Start(s,"b",kind);Hit(talk,0,8);s.Tick(3);dance=Start(s,"a");Hit(dance,0,8);Finish(s,talk);Finish(s,dance);
+            Check(talk.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,kind+": a friend's perfect challenge that finished first counts by its score (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+
+            // Pressed 5.5 s after a's Dance, live: still in its lead-in when the Dance finishes, so dancing but not scored yet.
+            s=Crew(kind);dance=Start(s,"a");double press=s.State.SimulationSeconds+5.5;Live(s,()=>s.State.SimulationSeconds>=press-1e-9,dance);
+            talk=Start(s,"b",kind);Live(s,()=>dance.Status!="Active",dance,talk);
+            Check(talk.Status=="Active"&&talk.Inputs.Count==0&&Heat(s,"a")==solo&&Heat(s,"b")==20,kind+": a friend's challenge still in its lead-in is dancing but not scored yet (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+            Live(s,()=>talk.Status!="Active",talk);Check(talk.Score==1&&Heat(s,"b")==solo&&Heat(s,"a")==solo,kind+": the friend then settles once, through their own challenge");
+        }
+
+        // J2: a friend who presses in the last moments before a's verdict is visibly dancing from the press, though their chart only
+        // starts 2 s later, after a's Dance window has closed. Both play perfectly, live: neither is an idle 0, each settles once.
+        foreach(var kind in new[]{"StartSale","Conversation","Police","Dance"})
+            foreach(double early in new[]{2.5,1.5,.5})
+            {
+                s=Crew(kind);dance=Start(s,"a");double press=dance.StartSeconds+dance.DurationSeconds+.75-early;Live(s,()=>s.State.SimulationSeconds>=press-1e-9,dance);
+                var late=Start(s,"b",kind);Live(s,()=>dance.Status!="Active",dance,late);
+                Check(late.Status=="Active"&&Heat(s,"a")==solo&&Heat(s,"b")==20,kind+" pressed "+early+" s before the verdict: the friend is dancing, so the dancer is not charged for them and they are not charged (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+                Live(s,()=>late.Status!="Active",late);
+                Check(late.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,kind+" pressed "+early+" s before the verdict: the friend then settles once, through their own challenge (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+            }
     }
 }

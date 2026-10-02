@@ -18,17 +18,21 @@ namespace Festival.Core
         const double FoundClueSeconds=3;
         // A FindFriend interaction's target: the first friend's is "friend".
         const string SecondFriendTarget="friend_2";
-        // Friends get lost at one of these, picked by the round's seed and the level's DealSeed; a second friend at the next one along.
+        // Friends get lost at one of these: the first at the one the round's seed and the level's DealSeed pick, a second friend at
+        // either other one, 1 or 2 spots along from the first (TRIP-10: drawn from its own DealSeed-mixed stream, so the first no
+        // longer gives it away).
         static readonly WorldPoint[] FriendSpots={new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
-        static WorldPoint FriendSpot(int seed,int friend){var at=FriendSpots[((seed&int.MaxValue)%FriendSpots.Length+friend)%FriendSpots.Length];return new WorldPoint(at.X,at.Z);}
+        static WorldPoint FriendSpot(int seed,int along){var at=FriendSpots[((seed&int.MaxValue)%FriendSpots.Length+along)%FriendSpots.Length];return new WorldPoint(at.X,at.Z);}
 
         // As the crew leaves camp: the friend is lost at the spot the round's seed and the host's DealSeed pick (TRIP-7; with no
         // secret it is CreateRound's spot). A night with TwoFriendCrew or more connected loses the second friend too, counted once,
-        // here, so someone leaving mid-night does not call the search off. Returns how many trails DealRoles lays.
+        // here, so someone leaving mid-night does not call the search off: at either other spot, so finding the first leaves a
+        // guess. Returns how many trails DealRoles lays.
         int LoseFriends()
         {
             var second=State.SecondFriend;second.Active=Festivals.For(State).Night&&State.Players.FindAll(p=>p.Connected).Count>=TwoFriendCrew;
-            int seed=State.Seed^State.DealSeed;State.FriendPosition=FriendSpot(seed,0);if(second.Active)second.Position=FriendSpot(seed,1);
+            int seed=State.Seed^State.DealSeed;State.FriendPosition=FriendSpot(seed,0);
+            if(second.Active){var random=new ContentRandom(unchecked((State.Seed*47+13)^State.DealSeed));random.Next(2);second.Position=FriendSpot(seed,1+random.Next(2));}
             return second.Active?2:1;
         }
         List<string> Chain(int trail)=>trail==0?State.ClueChain:State.SecondFriend.ClueChain;

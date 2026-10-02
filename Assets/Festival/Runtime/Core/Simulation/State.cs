@@ -90,6 +90,9 @@ namespace Festival.Core
         // (SimulationSeconds, -1 unread). Then a cash stash waits by the landmark until someone finds it (CloudStashFound).
         public double CloudClueStart=-1,CloudClueReadAt=-1; public int CloudClueLandmark=-1; public bool CloudStashFound;
         public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
+        // PLAYA-2: the festival the reviewed round was played at, whose money ReviewSales is counted in. The campfire already holds
+        // the next round, so clearing a weekend has moved FestivalIndex on. -1 unknown (a snapshot from before it): read FestivalIndex.
+        public int ReviewFestivalIndex=-1;
         public List<CampReviewVote> ReviewVotes=new List<CampReviewVote>();
         // The debrief's awards (two worst, then one best) and, once every vote is in, each award's winner in the same order.
         public List<string> ReviewAwards=new List<string>(), ReviewWinners=new List<string>();

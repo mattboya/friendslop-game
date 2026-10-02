@@ -16,7 +16,8 @@ namespace Festival.Tests
         // HUD-3: the running HUD's campfire debrief. Hosts a real round for a full crew of eight back at camp after a won Day 1:
         // the host clicks a friend for each award, reads who has voted, watches the verdict play out award by award with the
         // shots, then opens the shop with E only once it has. The winners wear their awards over their heads. Labels are laid
-        // out on a 1920x1080 canvas, so a line its box cuts off fails, down to the longest names on a ballot of eight.
+        // out on a 1920x1080 canvas, so a line its box cuts off fails, down to the longest names on a ballot of eight. Then the
+        // crew clears Palm Mirage's last night, and the review counts that weekend's sales in its dollars (PLAYA-2).
         [UnityTest]public IEnumerator TheCrewVotesByClickingAndWatchesTheVerdictPlayOut()
         {
             var world=new GameObject("HUD debrief world");world.AddComponent<FestivalWorld>();yield return null;
@@ -123,6 +124,14 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.4f);
                 if(sim.State.Phase!="Shopping")failures.Add("the verdict: E does not open the shop ("+session.Message+")");
                 if(Tag(mate.Id)!="Sam  •  "+awards[0]+", "+awards[1])failures.Add("the shop: Sam's tag reads \""+Tag(mate.Id)+"\", expected their awards");
+
+                // PLAYA-2: Palm Mirage's last night won. Camp moves on to Ember Playa, but the review counts the weekend's sales in dollars.
+                sim.State.LevelIndex=Festivals.LevelCount-1;sim.State.Phase="Results";sim.State.Result="Success";sim.State.GrossSales=45;
+                session.Command("Reset");
+                yield return new WaitForSeconds(.6f);
+                if(Festivals.Name(sim.State.FestivalIndex)!="Ember Playa")failures.Add("weekend cleared: camp is at "+Festivals.Name(sim.State.FestivalIndex)+", not Ember Playa ("+session.Message+")");
+                Expect("weekend cleared","Review text","THE VERY OFFICIAL ROUND REVIEW\nWEEKEND CLEARED  •  SALES $45  •  SURVIVORS 0  •  CAMP ANTICS 0");
+                Fits("weekend cleared","Review text");
             }
             finally
             {

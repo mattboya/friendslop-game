@@ -14,7 +14,7 @@ public static class PoloPolishTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{OnlyFilmersTalkLikeInfluencers,AFilmersChatOpensLikeAnInfluencer,StockSaysASaleStartsAtACleanSalesPay})
+        foreach(var test in new Action[]{OnlyFilmersTalkLikeInfluencers,AFilmersChatOpensLikeAnInfluencer,StockSaysCleanSalesStartAtPerfectSalePay})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" polo polish test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -69,13 +69,14 @@ public static class PoloPolishTests
     }
 
     // A clean sale at dose 1 pays PerfectSalePay; a VIP sale pays double that and more with dose, a double buyer and an encore.
+    // ECON-1: a sloppy sale that still lands pays less ($5 at dose 1), so the floor is a clean sale's, and the text says so.
     // The "$N" token stays, so Ember Playa's odd-object money (FestivalHudText.MoneyText) converts it.
-    static void StockSaysASaleStartsAtACleanSalesPay()
+    static void StockSaysCleanSalesStartAtPerfectSalePay()
     {
         foreach(var id in new[]{"stock_lsd","stock_mushrooms"})
         {
             string text=Catalog.FindItem(id).Description;
-            Check(text.StartsWith("Sells for $"+FestivalSimulation.PerfectSalePay+" and up, or take: "),id+" names a clean sale's pay as the floor: "+text);
+            Check(text.StartsWith("Clean sales pay $"+FestivalSimulation.PerfectSalePay+" and up, or take: "),id+" names a clean sale's pay as the floor of clean sales: "+text);
             Check(!text.Contains("up to"),id+" names no ceiling: "+text);
         }
     }

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -137,6 +138,33 @@ namespace Festival.Tests
                 Assert.That(feetMoved,Is.LessThan(.03f),"Weight shifts must not slide planted feet");
             }
             finally{Object.Destroy(root);}
+        }
+
+        // PLAYA-2: an Ember Playa art car carries its rider round at ArtCarSpeed, and the gait read the car's motion as their own,
+        // so they walked in place on the deck. Beside them a walker at the car's pace shows the stride this looks for.
+        [UnityTest]public IEnumerator ARiderStandsStillOnTheArtCarWhileItCarriesThem()
+        {
+            var root=new GameObject("Art car rider test");int rate=Application.targetFrameRate;Application.targetFrameRate=60;
+            try
+            {
+                var rider=Walker(root,"Art car rider");rider.Pose=FestivalSimulation.RideCarKind;
+                var walker=Walker(root,"Art car pace walker");walker.transform.position=Vector3.right*4;
+                var riderFeet=new List<float>[]{new List<float>(),new List<float>()};var walkerFeet=new List<float>[]{new List<float>(),new List<float>()};
+                float start=Time.time;
+                while(Time.time-start<2.2f)
+                {
+                    var roll=Vector3.forward*(Festivals.ArtCarSpeed*Time.deltaTime);rider.transform.position+=roll;walker.transform.position+=roll;
+                    yield return null;
+                    if(Time.time-start<.6f)continue;
+                    for(int f=0;f<2;f++){var foot=f==0?"FootL":"FootR";riderFeet[f].Add(Local(rider,foot,2));walkerFeet[f].Add(Local(walker,foot,2));}
+                }
+                float Swing(List<float>[] feet)=>Mathf.Max(feet[0].Max()-feet[0].Min(),feet[1].Max()-feet[1].Min());
+                float ridden=Swing(riderFeet),walked=Swing(walkerFeet);
+                Debug.Log($"[Festival.Test] art car rider foot swing={ridden:F3} walker at the same pace={walked:F3}");
+                Assert.That(walked,Is.GreaterThan(.2f),"setup: at the car's pace a walker's feet swing back and forth");
+                Assert.That(ridden,Is.LessThan(.04f),"a rider stands on the deck while the car carries them, feet still under them");
+            }
+            finally{Object.Destroy(root);Application.targetFrameRate=rate;}
         }
 
         [UnityTest]public IEnumerator DanceStylesHaveDistinctUpperBodies()

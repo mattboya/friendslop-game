@@ -232,7 +232,7 @@ namespace Festival.Presentation
             reviewPanel.SetActive(false);
             noticePanel=Card(root.transform,"Session notice",new Vector2(.368f,.785f),new Vector2(.695f,.849f),true);
             Accent(noticePanel.transform,Orange);
-            notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);noticePanel.SetActive(false);
+            notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);ShrinkToFit(notice,14);noticePanel.SetActive(false);
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
             inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text="GEAR   /   1–3 EQUIP     Q USE     G DROP";
             Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);
@@ -1138,6 +1138,8 @@ namespace Festival.Presentation
             {
                 item=Button(actionsContent,label,Vector2.zero,Vector2.one,action);item.name="Action:"+label;
                 item.AddComponent<LayoutElement>().preferredHeight=64;
+                // PLAYA-2: Ember Playa's odd-object money and a long crew name shrink to fit the button.
+                ShrinkToFit(item.transform.Find("Text").GetComponent<Text>(),14);
                 dynamicActions.Add(item);
             }
             activeActionCount++;

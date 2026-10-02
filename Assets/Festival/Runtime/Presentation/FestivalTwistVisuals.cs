@@ -14,7 +14,9 @@ namespace Festival.Presentation
     {
         public const string PoloRootName="Palm Mirage twists",PlayaRootName="Ember Playa twists",FramePrefix="Influencer frame ",VipSignName="VIP stall sign";
         // Frames and cars glide to each snapshot the way FestivalSession's actors do (snapping past 5 m), so a rider's body
-        // stays on its car's deck and an influencer's frame stays at their feet.
+        // stays on its car's deck and an influencer's frame stays at their feet. PLAYA-2: a car glides along its loop, by easing
+        // the clock it is drawn at, rather than straight at its next point, which cut each corner a few centimetres toward the
+        // crowd standing beside it.
         private const float Glide=15,SnapDistance=5;
         // The phone is held up in the right hand. Edges lie on the ground and glow; there is no phone light, as URP lights the one
         // ground mesh with only 4 additional lights, so it showed as a 0.2/255 change.
@@ -28,11 +30,14 @@ namespace Festival.Presentation
         private const int Gondolas=8,RimSegments=16;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
-        // Kept this short, the car reaches 3.6 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
-        // ahead, it rounds each corner clear of the totems, poles, trees and crowd the rules route the loop past; and the rider
-        // sees over the van's roof.
+        // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
+        // ahead, it rounds each corner clear of the totems, poles and trees the rules route the loop past; and the rider sees over
+        // the van's roof. PLAYA-2: the loops pass festivalgoers' standing spots within a couple of metres, and a round's seed can
+        // shift each spot up to FestivalCrowdLayout.MaxJitter either way, so the deck is 1.75 m wide and the van .42 of full size
+        // (1.5 m wide), which pass every standing festivalgoer on every lap wherever the jitter puts them; car 1 rounding its
+        // corner at (8, -10) past the one standing south of it is what holds it to that (1.9 m and .44 grazed them).
         private const double TurnLookahead=2.5;
-        private const float DeckWidth=2.8f,DeckBack=1.4f,DeckFront=.45f,VanScale=.55f,VanAhead=DeckFront+.05f+2.81f*VanScale;
+        private const float DeckWidth=1.75f,DeckBack=1.4f,DeckFront=.45f,VanScale=.42f,VanAhead=DeckFront+.05f+2.81f*VanScale;
         // POLO-2: the VIP stall's sign stands on the corner poles of the night market's stock stall, which FestivalWorld raises at
         // (VipStallX, 0, StallZ) beside the rules' stall point; the poles top out at PoleTop, just clear of the awning, and the board
         // clears the stall's banner. It faces the market's footpath to the south, and like FestivalWorld's signs its lettering shows
@@ -53,6 +58,7 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Transform> frames=new Dictionary<string,Transform>();
         private readonly List<string> gone=new List<string>();
         private float turn,clock;
+        private double carClock;
 
         public FestivalTwistVisuals(Transform festival)
         {
@@ -73,10 +79,12 @@ namespace Festival.Presentation
             Film(state,deltaTime);
             var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
             turn=Mathf.Repeat(turn+deltaTime*360/(float)Festivals.WheelRideSeconds,360);Turn();
+            double lag=state.ElapsedSeconds-carClock;
+            carClock=System.Math.Abs(lag)*Festivals.ArtCarSpeed>SnapDistance?state.ElapsedSeconds:carClock+lag*(1-System.Math.Exp(-Glide*deltaTime));
             for(int k=0;k<cars.Length;k++)
             {
-                var at=Festivals.ArtCarAt(k,state.ElapsedSeconds);var ahead=Festivals.ArtCarAt(k,state.ElapsedSeconds+TurnLookahead);
-                cars[k].localPosition=Glided(cars[k].localPosition,new Vector3(at.X,0,at.Z),deltaTime);
+                var at=Festivals.ArtCarAt(k,carClock);var ahead=Festivals.ArtCarAt(k,carClock+TurnLookahead);
+                cars[k].localPosition=new Vector3(at.X,0,at.Z);
                 var heading=new Vector3(ahead.X-at.X,0,ahead.Z-at.Z);if(heading.sqrMagnitude>1e-6f)cars[k].localRotation=Quaternion.LookRotation(heading);
             }
             fire.gameObject.SetActive(FestivalSimulation.Burning(state));

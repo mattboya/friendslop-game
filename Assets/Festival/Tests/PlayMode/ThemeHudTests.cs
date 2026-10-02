@@ -42,15 +42,7 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.6f);
                 Check(hud,failures,"camp",null,null,"Accept Fun Guys ×1","Offer Tongue Stamps to Mate");
 
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    // The friend has no client of its own to report the map loaded.
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="theme_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
 
                 // Festival: take a Tongue Stamp, then a dropped stamp lies at your feet with a festivalgoer to sell to.
                 sim.State.Npcs.Clear();mate.X=player.X+30;mate.Z=player.Z;
@@ -96,10 +88,7 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);
                 player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});
-                player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                yield return StartLevel(session);
 
                 // Drop a Tongue Stamp (G), then step 3 m away, where its tag shows.
                 sim.State.Npcs.Clear();

@@ -219,8 +219,9 @@ public static class PoloTwistTests
         Check(!Act(playa,"p0","Buy",item:band.Id).Accepted&&playa.Player("p0").Cash==20,"and Ember Playa has no VIP stall");
     }
 
-    // A big crew on an encore night deals so many narcs and clue holders (two trails) that no regular is left. The guard post is
-    // still manned, by a buyer, never by a narc or a link in a trail.
+    // TRIP-10: the guard is whoever stood nearest the post, made a regular by trading roles with one (DealSecretTests). A big crew
+    // on an encore night deals so many narcs and clue holders (two trails) that no regular is left. The guard post is still
+    // manned, by a buyer, never by a narc or a link in a trail.
     static void EveryNightHasAVipGuard()
     {
         foreach(int crew in new[]{5,8})foreach(int level in new[]{1,3})for(int encore=0;encore<=4;encore++)

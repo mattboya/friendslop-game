@@ -5,7 +5,8 @@ namespace Festival.Core
     /// closer steps the dancer straight back from the partner to DanceSpacing (from their own facing when they stand on the
     /// partner), and every dance starts with the dancer facing their partner. The step is checked as a move is; a blocked spot
     /// leaves the dancer where they stood. The partner never turns, and TryMove keeps the dancer's facing until the dance ends.
-    /// A sale is judged where the seller stood, so its step is also refused if it would change what the sale pays or who sees it.</summary>
+    /// DANCE-9: the step only fixes the dancer view, so it is also refused if it would cross a VIP rope (wristband or not) or
+    /// change which cops see the player: it never decides a sale's pay or a stop.</summary>
     public sealed partial class FestivalSimulation
     {
         public const double DanceSpacing=1.4;
@@ -27,13 +28,14 @@ namespace Festival.Core
                 double yaw=p.Yaw*Math.PI/180,backX=gap<.01?-Math.Sin(yaw):(p.X-partner.X)/gap,backZ=gap<.01?-Math.Cos(yaw):(p.Z-partner.Z)/gap;
                 float x=partner.X+(float)(backX*DanceSpacing),z=partner.Z+(float)(backZ*DanceSpacing);
                 var reached=Move(p.X,p.Z,x,z,DanceSpacing-gap);
-                if(Distance(reached.X,reached.Z,x,z)<=.05&&InBounds(x,z)&&MayStep(p,x,z)&&(kind!="Sale"||JudgedTheSame(p,x,z))&&CarryTo(p,x,z)){p.X=x;p.Z=z;gap=DanceSpacing;}
+                if(Distance(reached.X,reached.Z,x,z)<=.05&&InBounds(x,z)&&MayStep(p,x,z)&&JudgedTheSame(p,x,z)&&CarryTo(p,x,z)){p.X=x;p.Z=z;gap=DanceSpacing;}
             }
             if(gap>=.01)p.Yaw=(float)((Math.Atan2(partner.X-p.X,partner.Z-p.Z)*180/Math.PI+360)%360);
         }
-        // Whether a seller at (x,z) is judged as where they stand: VipPayout pays by the VIP ropes, a cop who sees the deal busts
-        // them (RecordDeal), and one who sees stock stops them (PoliceTick). p stands at (x,z) only while the cops look.
-        // ponytail: lists the sale's position rules by hand; a new one joins here.
+        // Whether a player at (x,z) is judged as where they stand: VipPayout pays a sale by the VIP ropes, a cop who sees a deal
+        // busts them (RecordDeal), and one who sees stock stops them (PoliceTick), whatever challenge they are in. p stands at
+        // (x,z) only while the cops look.
+        // ponytail: lists the position rules by hand; a new one joins here.
         bool JudgedTheSame(PlayerState p,float x,float z)
         {
             float x0=p.X,z0=p.Z;var seen=State.Npcs.FindAll(n=>n.Kind=="Cop"&&Sees(n,p));

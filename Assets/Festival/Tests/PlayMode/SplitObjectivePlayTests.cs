@@ -34,13 +34,7 @@ namespace Festival.Tests
             player=sim.Player(session.LocalPlayerId);
             for(int i=0;i<4;i++)sim.AddPlayer("split_mate_"+i,"Mate "+i).Ready=true;
             sim.State.LevelIndex=1;player.X=0;player.Z=19;session.Command("Ready");
-            deadline=Time.realtimeSinceStartup+90;
-            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-            {
-                if(sim.State.Phase=="Loading")foreach(var mate in sim.State.Players)if(mate!=player&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="loaded_"+mate.Id,Kind="MapReady"});
-                yield return null;
-            }
-            Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+            yield return SkipCountdown(session);yield return SkipSpin(session);yield return FinishLoading(session);
             Assert.That(session.State.SecondFriend.Active,Is.True,"the host's view says a crew of five lost two friends");
             sim.State.Npcs.Clear();
             foreach(var mate in sim.State.Players)if(mate!=player){mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;}

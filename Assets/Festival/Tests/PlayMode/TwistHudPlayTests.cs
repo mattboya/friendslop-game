@@ -55,14 +55,8 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("twist_mate","Sam");mate.Ready=true;
-                sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=1;player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-                {
-                    if(sim.State.Phase=="Loading"&&!mate.MapReady)sim.Execute(mate.Id,new GameCommand{Id="twist_mate_loaded",Kind="MapReady"});
-                    yield return null;
-                }
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"round starts: "+session.Message);
+                sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=1;
+                yield return StartLevel(session);
                 // Sam trips and waits at the way back to camp; you are sober, with a free hand, $20, and only the guard and the cops about.
                 sim.State.TripperId=mate.Id;mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;
                 var guard=sim.State.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);Assert.That(guard,Is.Not.Null,"setup: Palm Mirage's VIP rope has a guard");
@@ -150,6 +144,88 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"Twists a sober player uses from the HUD:\n"+string.Join("\n",failures));
+        }
+
+        // PLAYA-2: on Ember Playa money is odd objects, and the longest ("10 friendship bracelets") beside a 24-letter crew name
+        // overran the crew action buttons and the session notice at 1080p. Every crew action at the holding desk, lost property,
+        // medical and the shared stash shows its whole label, the paid release naming the friend it frees, and a refused release
+        // shows the whole notice of where to go. Labels are laid out on a 1920x1080 canvas, so a cut-off line fails.
+        [UnityTest]public IEnumerator LongPlayaMoneyLabelsFitTheCrewActionsAndNotice()
+        {
+            var world=new GameObject("Playa HUD world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Playa HUD");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            void Fits(string where,Text text)
+            {
+                Canvas.ForceUpdateCanvases();
+                int shown=text.cachedTextGenerator.characterCountVisible;
+                if(shown<text.text.Length)failures.Add(where+": box "+text.rectTransform.rect.size+" cuts \""+text.text+"\" after \""+text.text.Substring(0,shown)+"\"");
+            }
+            List<Text> Actions(){var listed=new List<Text>();foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name.StartsWith("Action:"))listed.Add(b.transform.Find("Text").GetComponent<Text>());return listed;}
+            string Listed(){var labels=new List<string>();foreach(var t in Actions())labels.Add(t.text);return string.Join(" | ",labels);}
+            void AllFit(string where,string mustList)
+            {
+                if(!Listed().Contains(mustList))failures.Add(where+": \""+mustList+"\" is not listed: \""+Listed()+"\"");
+                foreach(var label in Actions())Fits(where,label);
+            }
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("playa_mate","Persephone Wintersbottom");mate.Ready=true;
+                Assert.That(mate.Name.Length,Is.EqualTo(24),"setup: the crew name is as long as a name can be");
+                sim.State.FestivalIndex=Festivals.PlayaFestival;sim.State.LevelIndex=0;
+                yield return StartLevel(session);
+                // You pay in friendship bracelets, the longest odd object, and only the cops are about.
+                player.Ordinal=3;player.Cash=40;sim.State.StashCash=10;
+                sim.State.Npcs.RemoveAll(n=>n.Kind!="Cop");
+                string ten=FestivalHudText.Money(sim.State,player,10);
+                Assert.That(ten,Is.EqualTo("10 friendship bracelets"),"setup: you pay in friendship bracelets");
+
+                // Away from both desks, a paid release is refused, and the notice says where to go.
+                mate.Life="Detained";mate.X=27;mate.Z=5;player.X=0;player.Z=0;
+                session.Command("BeginRelease",mate.Id,amount:1);
+                yield return null;yield return null;
+                Text notice=null;foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Notice")notice=text;
+                if(notice==null)failures.Add("the release refusal: no notice is shown ("+session.Message+")");
+                else if(!notice.text.StartsWith("Release: "+ten+" at holding desk"))failures.Add("the release refusal: the notice reads \""+notice.text+"\"");
+                else Fits("the release refusal",notice);
+
+                // The crew list is open on the pause menu.
+                session.MenuOpen=true;yield return null;
+                foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="CREW + NEARBY")b.onClick.Invoke();
+                // At the holding desk beside your detained friend.
+                player.X=26.4f;player.Z=5;
+                yield return new WaitForSeconds(.6f);
+                AllFit("at the holding desk","Pay "+ten+" release for "+mate.Name);
+                // At lost property, your friend still held.
+                player.X=-28;player.Z=16;
+                yield return new WaitForSeconds(.6f);
+                AllFit("at lost property","Free release task for "+mate.Name);
+                // At the shared stash, your friend downed beside you.
+                mate.Life="Downed";mate.X=-25.6f;mate.Z=-8;player.X=-25;player.Z=-8.6f;
+                yield return new WaitForSeconds(.6f);
+                AllFit("at the shared stash beside a downed friend","Deposit "+FestivalHudText.Money(sim.State,player,5)+" in shared stash");
+                // At medical, holding your friend's wristband after they died.
+                mate.Life="Spirit";mate.X=24;mate.Z=-20;player.Wristbands.Add(mate.Id);player.X=24.4f;player.Z=-20;
+                yield return new WaitForSeconds(.6f);
+                AllFit("at medical with a friend's wristband","Revive "+mate.Name+" — pay "+ten);
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Ember Playa's long money labels at 1080p:\n"+string.Join("\n",failures));
         }
     }
 }

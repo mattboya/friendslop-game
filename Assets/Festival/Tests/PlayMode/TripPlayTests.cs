@@ -32,10 +32,8 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
-                var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-                deadline=Time.realtimeSinceStartup+90;
-                while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-                Assert.That(session.State.Phase,Is.EqualTo("Playing"),"setup: the solo host reaches the festival: "+session.Message);
+                var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);
                 var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);Assert.That(dose,Is.Not.Null,"setup: solo practice always trips");
                 Assert.That(FestivalSimulation.Substances,Does.Contain(dose.Substance),"the spin gave the solo tripper a substance");
                 var view=session.ViewCamera;var me=session.LocalPlayerId;
