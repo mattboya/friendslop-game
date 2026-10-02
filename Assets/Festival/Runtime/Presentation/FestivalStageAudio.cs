@@ -67,7 +67,8 @@ namespace Festival.Presentation
             session=GetComponent<FestivalSession>();
             speakers=Speakers();decks=speakers.GetComponents<AudioSource>();
         }
-        // ponytail: the same two-deck loop as FestivalCampAudio's Play/Queue; lift both onto one helper once MENU-1's title music lands there.
+        // ponytail: the same two-deck loop as FestivalCampAudio's Play/Queue. Lift both onto one helper when a third music player needs it;
+        // MENU-1's title music plays on the camp's own decks, so it added none.
         // Plays a track (null stops), its first pass starting at sample from.
         void Play(FestivalMusic.Track next,int from)
         {
