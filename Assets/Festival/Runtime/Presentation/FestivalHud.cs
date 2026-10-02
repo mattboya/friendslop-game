@@ -77,7 +77,7 @@ namespace Festival.Presentation
         private float gearToastUntil,lastGearStep=-1;
         private string checkoutItem="";
         private string connectionError="";
-        private bool settingsOpen;
+        private bool settingsOpen,wasConnected;
         private bool crewOpen;
         private AudioSource shopAudio;
         private AudioClip shopChime;
@@ -640,6 +640,10 @@ namespace Festival.Presentation
         private void Update()
         {
             if(session==null)return;
+            // MENU-1: a game that ends, by LEAVE SESSION or a drop, comes back to the title as the game opened: the camp in its own
+            // light (the session drives the world only while connected), and the settings put away so the title shows why it ended.
+            if(wasConnected&&!session.Connected){settingsOpen=false;if(world!=null)world.ShowCamp();}
+            wasConnected=session.Connected;
             // The host's replies name money in dollars; each player reads their own (PLAYA-1).
             string message=session.State!=null&&session.LocalPlayer!=null?FestivalHudText.MoneyText(session.State,session.LocalPlayer,session.Message):session.Message;
             status.text=connectionError==""?message:connectionError;

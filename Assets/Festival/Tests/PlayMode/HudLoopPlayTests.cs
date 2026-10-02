@@ -688,8 +688,9 @@ namespace Festival.Tests
         // 1080p. SETTINGS opens the settings before you join anyone: the rows read this machine's values, a change shows at once,
         // and its way out says BACK. Esc puts the settings away, steps out of PLAY's pages one at a time, and on the title itself
         // does nothing. PLAY fills in the name and the last host this machine saved; HOST A GAME hosts under the name typed, on the
-        // port under ADVANCED, as CREATE GAME did, and saves the name. LEAVE SESSION comes back to the title. Esc goes through the
-        // HUD's own input handling on a virtual keyboard. This machine's profile is put back as it was.
+        // port under ADVANCED, as CREATE GAME did, and saves the name. LEAVE SESSION comes back to the title, and so does a game
+        // that drops with the settings left up, saying why. Esc goes through the HUD's own input handling on a virtual keyboard.
+        // This machine's profile is put back as it was.
         [UnityTest]public IEnumerator TheGameOpensOnTheTitleAndLeavingComesBackToIt()
         {
             UseAVirtualKeyboard("HUD title keyboard");
@@ -799,6 +800,24 @@ namespace Festival.Tests
                     leave.onClick.Invoke();yield return null;
                     if(session.Connected||Buttons("Title menu")!=Home||Shows("Play"))failures.Add("LEAVE SESSION: "+(session.Connected?"still connected":"the buttons are \""+Buttons("Title menu")+"\"")+", not the title");
                 }
+
+                // The game drops (the host stops answering: FestivalSession.Fail) with the settings left up under a pass Esc closed.
+                // The title comes back on the page you hosted from, its status line saying why, not the settings.
+                play.onClick.Invoke();yield return null;
+                Named<InputField>("PORT","Advanced").text=FreePort().ToString();
+                Named<Button>("HOST A GAME","Play choices").onClick.Invoke();
+                deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"HOST A GAME hosts again: "+session.Message);
+                yield return Tap(Key.Escape);
+                Named<Button>("SETTINGS","Pass home").onClick.Invoke();yield return null;
+                yield return Tap(Key.Escape);
+                if(session.MenuOpen)failures.Add("setup: Esc doesn't close the pass over its settings");
+                const string dropped="Host stopped responding. No host migration is available in this prototype.";
+                typeof(FestivalSession).GetMethod("Fail",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new object[]{dropped});
+                yield return null;
+                var status=Named<Text>("Status","Play");
+                if(Shows("Pass settings")||status==null||status.text!=dropped)failures.Add("dropped: "+(Shows("Pass settings")?"the settings come up":"the status line reads \""+(status==null?"(hidden)":status.text)+"\"")+", not the title saying why");
             }
             finally
             {
@@ -866,7 +885,8 @@ namespace Festival.Tests
         // looks over the campsite from inside it, clear of anything solid and of every tree, tent and prop by 3 m, the camp's
         // middle right of the title's column; the live camera follows it, and holds still with reduced motion. The camp plays
         // ORGANIC HOUSE (MUSIC-2's decision A) until a game starts, then the camp's own first track, and ORGANIC HOUSE again once
-        // you leave. This machine's profile is put back as it was.
+        // you leave. Leaving in the middle of a night level brings back the campsite in its own light, framed the same way. This
+        // machine's profile is put back as it was.
         [UnityTest]public IEnumerator TheTitleDriftsOverTheCampsiteToItsOwnMusic()
         {
             var world=new GameObject("HUD title camp world");var built=world.AddComponent<FestivalWorld>();yield return null;
@@ -897,7 +917,7 @@ namespace Festival.Tests
                 session.Profile.Data.ReducedMotion=false;
                 yield return new WaitForSeconds(.3f);
                 if(!built.IsCampVisible)failures.Add("the campsite isn't the scene behind the title");
-                scenery=built.GetComponentsInChildren<Renderer>(false);
+                scenery=built.GetComponentsInChildren<Renderer>(false);var daySky=RenderSettings.ambientSkyColor;
                 // A second at a time round the whole drift: framed as above, wide, and slow.
                 FestivalTitleScreen.Shot(0,false,out var first,out _);
                 float widest=0,fastest=0;var last=first;
@@ -934,6 +954,23 @@ namespace Festival.Tests
                 session.Leave();
                 yield return new WaitForSeconds(.3f);
                 if(Playing()!="organic-house-loop")failures.Add("back on the title the camp plays "+Playing()+", not ORGANIC HOUSE");
+
+                // LEAVE SESSION in the middle of Night 1, by the pass's own button: the title is back over the campsite in the light
+                // it opened in, not the festival and its night, the live camera framed as above.
+                session.Host("Tester",HostPort);
+                deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host again: "+session.Message);
+                Simulation(session).State.LevelIndex=1;
+                yield return StartLevel(session);
+                if(built.IsCampVisible||RenderSettings.ambientSkyColor==daySky)failures.Add("setup: Night 1 shows "+(built.IsCampVisible?"the campsite":"the day's light"));
+                session.MenuOpen=true;yield return null;
+                hud.transform.Find("Festival HUD/Festival pass/Pass home/LEAVE SESSION").GetComponent<Button>().onClick.Invoke();
+                yield return new WaitForSeconds(.3f);
+                if(!built.IsCampVisible)failures.Add("after leaving Night 1 the title shows the festival, not the campsite");
+                if(RenderSettings.ambientSkyColor!=daySky)failures.Add("after leaving Night 1 the title's sky light is "+RenderSettings.ambientSkyColor+", not the campsite's "+daySky);
+                scenery=built.GetComponentsInChildren<Renderer>(false);
+                string left=Framing(view.transform.position,view.transform.rotation);if(left!="")failures.Add("after leaving Night 1: "+left);
             }
             finally
             {
