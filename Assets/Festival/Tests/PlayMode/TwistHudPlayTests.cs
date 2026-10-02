@@ -112,11 +112,13 @@ namespace Festival.Tests
                 var friend=sim.State.FriendPosition;
                 Assert.That(sim.State.GateOpened,Is.False,"setup: the trail is not yet followed");
                 Assert.That(Vector2.Distance(new Vector2(Festivals.WheelX,Festivals.WheelZ),new Vector2(friend.X,friend.Z)),Is.GreaterThan(12),"setup: the lost friend is far out of sight of the wheel");
-                player.X=Festivals.WheelX;player.Z=Festivals.WheelZ+1.5f;
+                player.X=Festivals.WheelX;player.Z=Festivals.WheelZ+1.5f;mate.X=Festivals.WheelX+1;mate.Z=Festivals.WheelZ+1.5f;
                 yield return new WaitForSeconds(.6f);
                 Expect("at the Ferris wheel's base","Prompt",Wheel);
-                PressE();yield return null;
+                // POLO-5: Sam boards on the same tick, so you share a gondola.
+                PressE();var samBoards=sim.Execute(mate.Id,new GameCommand{Id="sam_wheel",Kind=FestivalSimulation.RideWheelKind});yield return null;
                 if(!FestivalSimulation.OnWheel(sim.State,player.Id))failures.Add("at the Ferris wheel's base: E boards no ride ("+session.Message+")");
+                Assert.That(samBoards.Accepted&&FestivalSimulation.OnWheel(sim.State,mate.Id),Is.True,"setup: Sam boards the wheel with you");
                 yield return new WaitForSeconds(.6f);
                 // POLO-2: up there nothing cancels the ride, so nothing offers to; the prompt counts down the turn and E does nothing.
                 string riding=Read("Prompt");
@@ -135,6 +137,53 @@ namespace Festival.Tests
                 detail=Read("Objective detail");
                 if(!detail.StartsWith("From the wheel you spot security "))failures.Add("on the wheel by day: the objective card reads \""+detail+"\"");
                 if(GameObject.Find("mission_friend")!=null)failures.Add("on the wheel by day: a lost friend is drawn");
+
+                // POLO-5 (Matt: "the player never goes into it"): halfway round, your eye is up in the gondola the wheel draws, and
+                // Sam sits beside you in it rather than standing or striding in the air. The turn is moved on by starting both rides
+                // earlier.
+                void Started(double ago){foreach(var i in sim.State.Interactions)if(i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")i.StartSeconds=sim.State.SimulationSeconds-ago;}
+                Started(Festivals.WheelRideSeconds/2);
+                var sam=GameObject.Find(mate.Id);if(sam!=null)foreach(var skin in sam.GetComponentsInChildren<SkinnedMeshRenderer>())skin.updateWhenOffscreen=true;
+                yield return new WaitForSeconds(.5f);
+                var eye=session.ViewCamera.transform.position;
+                if(eye.y<=10)failures.Add("halfway round the wheel: the eye is only "+eye.y.ToString("0.00")+" m up, at "+eye);
+                Transform Cabin(Vector3 at){foreach(var g in GameObject.FindObjectsByType<Transform>(FindObjectsSortMode.None))if(g.name=="Gondola"&&g.gameObject.activeInHierarchy&&Encased(g).Contains(at))return g;return null;}
+                var yours=Cabin(eye);
+                if(yours==null)failures.Add("halfway round the wheel: the eye "+eye+" is in none of the gondolas drawn");
+                if(sam==null)failures.Add("halfway round the wheel: Sam's body is not drawn");
+                else
+                {
+                    var hips=Bone(sam.transform,"Hips");var head=Bone(sam.transform,"Head");var theirs=Cabin(hips.position);
+                    if(theirs!=null)Debug.Log($"[Festival.Test] wheel ride: eye {eye-theirs.position:F2} hips {hips.position-theirs.position:F2} head {head.position-theirs.position:F2} from the middle of Sam's gondola");
+                    if(theirs==null||theirs!=yours||!Encased(theirs).Contains(head.position))failures.Add("halfway round the wheel: Sam's body (hips "+hips.position+", head "+head.position+") is not in your gondola");
+                    else
+                    {
+                        if(Vector2.Distance(new Vector2(hips.position.x,hips.position.z),new Vector2(eye.x,eye.z))<.3f)failures.Add("halfway round the wheel: Sam sits in the same place as you ("+hips.position+", your eye "+eye+"), not beside you");
+                        // The gondola's floor is .37-.45 m below its middle, and its walls stand .01 m above it. Seated, Sam's hips are
+                        // down behind the walls, and nothing of Sam hangs out under the floor, where friends on the ground look up at it, or
+                        // through its sides. Sam's head (the rig's is .56 m tall) still shows over the roof.
+                        if(hips.position.y>theirs.position.y)failures.Add("halfway round the wheel: Sam stands rather than sits (hips "+(hips.position.y-theirs.position.y).ToString("0.00")+" m above the gondola's middle)");
+                        var cabin=Encased(theirs);
+                        // An elbow or a hat brim may reach a few centimetres over a side, in the open air between the walls and the roof.
+                        const float Over=.05f;
+                        foreach(var skin in sam.GetComponentsInChildren<SkinnedMeshRenderer>())
+                        {
+                            if(!skin.enabled)continue;var part=skin.bounds;
+                            if(part.min.y<theirs.position.y-.45f)failures.Add("halfway round the wheel: Sam's "+skin.name+" hangs "+(theirs.position.y-.45f-part.min.y).ToString("0.000")+" m out under the gondola's floor");
+                            if(part.min.x<cabin.min.x-Over||part.max.x>cabin.max.x+Over||part.min.z<cabin.min.z-Over||part.max.z>cabin.max.z+Over)failures.Add("halfway round the wheel: Sam's "+skin.name+" ("+part.min.ToString("F2")+" to "+part.max.ToString("F2")+") sticks out through the sides of the gondola ("+cabin.min.ToString("F2")+" to "+cabin.max.ToString("F2")+")");
+                        }
+                    }
+                    var posed=sam.GetComponent<FestivalCharacter>().Pose;if(posed!=FestivalSimulation.RideWheelKind)failures.Add("halfway round the wheel: Sam's body is posed "+posed);
+                }
+                // Once the turn comes round, you both step back onto the platform and your eye is back at standing height.
+                Started(Festivals.WheelRideSeconds-.2);
+                yield return new WaitForSeconds(1.2f);
+                eye=session.ViewCamera.transform.position;
+                if(FestivalSimulation.OnWheel(sim.State,player.Id))failures.Add("after the turn: you are still on the wheel");
+                if(Mathf.Abs(eye.y-1.65f)>.05f||Vector2.Distance(new Vector2(eye.x,eye.z),new Vector2(Festivals.WheelX,Festivals.WheelZ))>Festivals.WheelReach)failures.Add("after the turn: the eye is at "+eye+", not standing at the wheel's base");
+                var you=GameObject.Find(player.Id);
+                if(you==null||you.transform.position.y>.05f||you.GetComponent<FestivalCharacter>().Pose==FestivalSimulation.RideWheelKind)failures.Add("after the turn: your body is not back on its feet at the base ("+(you==null?"not drawn":you.transform.position+" "+you.GetComponent<FestivalCharacter>().Pose)+")");
+                if(sam!=null&&(sam.transform.position.y>.05f||Vector2.Distance(new Vector2(sam.transform.position.x,sam.transform.position.z),new Vector2(mate.X,mate.Z))>.1f))failures.Add("after the turn: Sam's body is at "+sam.transform.position+", not back where Sam boarded");
             }
             finally
             {
@@ -145,6 +194,10 @@ namespace Festival.Tests
             yield return null;
             Assert.That(failures,Is.Empty,"Twists a sober player uses from the HUD:\n"+string.Join("\n",failures));
         }
+
+        // Everything a part of the world is drawn with, in one box.
+        private static Bounds Encased(Transform part){var renderers=part.GetComponentsInChildren<Renderer>();var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);return bounds;}
+        private static Transform Bone(Transform body,string name){foreach(var t in body.GetComponentsInChildren<Transform>())if(t.name==name)return t;Assert.Fail(body.name+" has no "+name+" bone");return null;}
 
         // PLAYA-2: on Ember Playa money is odd objects, and the longest ("10 friendship bracelets") beside a 24-letter crew name
         // overran the crew action buttons and the session notice at 1080p. Every crew action at the holding desk, lost property,

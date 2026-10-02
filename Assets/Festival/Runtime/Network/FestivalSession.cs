@@ -526,11 +526,15 @@ namespace Festival.Network
                 if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
                 bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
                 if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
+                // POLO-5: a Ferris wheel rider is drawn seated in their gondola, facing away from its bench (-z), while the rules keep
+                // them at its base. They are aimed a glide (1/15 s, Actor's) ahead of the seat so it keeps them there.
+                bool wheel=p.VisualWheelSince>=0&&world!=null;
+                var at=togetherInside?new Vector3(p.CampInteriorX,0,p.CampInteriorZ):wheel?world.WheelSeat(State,p,1/15f):new Vector3(p.X,0,p.Z);
                 // A debrief winner wears their awards over their head until the next level's results (HUD-3).
-                Actor(p.Id,FestivalHudText.Nameplate(State,p),togetherInside?p.CampInteriorX:p.X,togetherInside?p.CampInteriorZ:p.Z,p.VisualPose=="Dj"?0:p.Yaw,
+                Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,p.VisualPose=="Dj"?0:wheel?180:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
-                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId);
+                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:at.y);
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)
                 {
@@ -567,7 +571,7 @@ namespace Festival.Network
             foreach(var pair in actors)pair.Value.gameObject.SetActive(seen.Contains(pair.Key));
             ViewCamera.backgroundColor=spirit?new Color(.08f,.2f,.24f):new Color(.13f,.1f,.22f);
         }
-        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null)
+        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null,float y=0)
         {
             if(!actors.TryGetValue(id,out var tr))
             {
@@ -593,7 +597,7 @@ namespace Festival.Network
                 foreach(var child in textObject.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
             }
             var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.PlayerDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);}
-            tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:0,z);
+            tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:y,z);
             tr.position=Vector3.Distance(tr.position,target)>5?target:Vector3.Lerp(tr.position,target,1-Mathf.Exp(-15*Time.unscaledDeltaTime));tr.rotation=Quaternion.Euler(0,angle,0);
             var nameTag=names[id];nameTag.text=label;nameTag.transform.parent.rotation=ViewCamera.transform.rotation;
             nameBubbles[id].localScale=new Vector3(Mathf.Max(.9f,label.Length*.033f+.28f),.29f,.05f);
@@ -635,7 +639,11 @@ namespace Festival.Network
             }
             if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying);firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
             var visit=CampFeatures.Find(player.CampVisitId);
-            var target=visit==null?new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z):new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ);
+            // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed a glide (1/20 s, the eye's)
+            // ahead of the seat so the glide keeps it there as it turns; the mouse still aims it, and the turn ends back by the base.
+            var target=visit!=null?new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ)
+                :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,1/20f)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
+                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
             ViewCamera.transform.position=Vector3.Distance(ViewCamera.transform.position,target)>5?target:Vector3.Lerp(ViewCamera.transform.position,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;
             if(!Profile.Data.ReducedMotion)

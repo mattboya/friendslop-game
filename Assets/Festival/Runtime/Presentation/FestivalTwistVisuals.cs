@@ -32,11 +32,12 @@ namespace Festival.Presentation
         // every other does. Between snapshots it runs on with the frame, eased onto each new one at WheelPull, and jumps to one
         // further out than WheelSnap seconds.
         private const double WheelPull=2,WheelSnap=1;
-        // POLO-5: a rider sits on the floor of ART-1's gondola, CabinFloor below the point the model hangs from less GondolaDrop, and
-        // their eye is SeatedEyeHeight above that floor: in the open cabin, under the canopy roof .74 m above the floor that a
-        // standing eye poked through, and above the walls' tops (.38 m).
+        // POLO-5: a rider sits in the middle of ART-1's gondola, over its floor CabinFloor below the model's middle (the point it hangs
+        // from, less GondolaDrop). Their eye is SeatedEyeHeight above that floor: in the open cabin, under the canopy roof .74 m above
+        // the floor that a standing eye poked through, and above the walls' tops (.38 m). Riders sharing a gondola sit side by side
+        // across the middle CabinSpread of its 1.2 m width, which keeps the widest seated body (.93 m) within its sides.
         public const float SeatedEyeHeight=.56f;
-        private const float CabinFloor=.37f;
+        private const float CabinFloor=.37f,CabinSpread=.7f;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
@@ -68,6 +69,8 @@ namespace Festival.Presentation
         private readonly List<string> gone=new List<string>();
         private float clock;
         private double carClock,wheelClock;
+        /// <summary>POLO-5: the rules' clock (SimulationSeconds) as this wheel is drawn at it, for Seat.</summary>
+        public double WheelClock=>wheelClock;
 
         public FestivalTwistVisuals(Transform festival)
         {
@@ -178,14 +181,21 @@ namespace Festival.Presentation
             float angle=Angle(wheelClock);rotor.localRotation=Quaternion.Euler(angle,0,0);
             for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=Hung(k,angle);
         }
-        /// <summary>POLO-5: where a rider who boarded at since (their ride's StartSeconds) sits at now, both on the rules' clock, in the
-        /// world: on the floor of the gondola that hung nearest the platform as they boarded. A ride is exactly one turn, so it brings
-        /// them back round to the platform, and riders who board together share the gondola.</summary>
-        public static Vector3 Seat(double since,double now)
+        /// <summary>POLO-5: where rider sits at now (on the rules' clock), in the world, on the floor of the gondola that hung nearest
+        /// the platform when they boarded (their VisualWheelSince). A ride is exactly one turn, so it brings them back round to the
+        /// platform. Everyone in state who boarded the same gondola sits side by side across it, in id order, so every client seats
+        /// them alike.</summary>
+        public static Vector3 Seat(RoundState state,PlayerState rider,double now)
+        {
+            int gondola=Boarded(rider.VisualWheelSince),place=0,riders=1;
+            foreach(var p in state.Players)if(p.Id!=rider.Id&&p.VisualWheelSince>=0&&Boarded(p.VisualWheelSince)==gondola){riders++;if(string.CompareOrdinal(p.Id,rider.Id)<0)place++;}
+            return new Vector3(Festivals.WheelX+((place+.5f)/riders-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ)+Hung(gondola,Angle(now));
+        }
+        private static int Boarded(double since)
         {
             float boarding=Angle(since);int nearest=0;
             for(int k=1;k<Gondolas;k++)if(Hung(k,boarding).y<Hung(nearest,boarding).y)nearest=k;
-            return new Vector3(Festivals.WheelX,0,Festivals.WheelZ)+Hung(nearest,Angle(now))+Vector3.down*CabinFloor;
+            return nearest;
         }
         // Where gondola k hangs from the wheel's base with the wheel turned angle degrees, and the angle it turns to at a clock reading.
         private static Vector3 Hung(int k,float angle)=>Vector3.up*AxleHeight+Quaternion.Euler(angle,0,0)*Rim(360f*k/Gondolas)-Vector3.up*GondolaDrop;

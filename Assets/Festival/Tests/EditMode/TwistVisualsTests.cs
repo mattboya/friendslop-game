@@ -86,8 +86,10 @@ namespace Festival.Tests
         // POLO-5: boarding seats the rider in the gondola nearest the platform, and Seat keeps them in it all the way round: the eye
         // in its open cabin under the roof, more than 10 m up at the top, and back by the platform when the turn comes round. A
         // head's room round the eye stays clear of the rotor model and of the gondola itself. The rotor's rims, spokes, hangers, hub
-        // and bulbs are merged into one renderer per colour, so its meshes, not its renderers' boxes, are what is measured.
-        [Test]public void ARiderSitsInTheGondolaTheyBoardedAllTheWayRound()
+        // and bulbs are merged into one renderer per colour, so its meshes, not its renderers' boxes, are what is measured. Friends
+        // who board together (one, two, or the whole crew of eight) sit side by side across the gondola, never in one another, and a
+        // rider in another gondola takes no place in theirs.
+        [Test]public void RidersSitInTheGondolaTheyBoardedAllTheWayRound()
         {
             var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var round=Round(Festivals.PoloFestival);
             var wheel=Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel");var rotor=Rotor(grounds);var gondolas=Gondolas(grounds);
@@ -95,30 +97,36 @@ namespace Festival.Tests
             foreach(var part in new List<Transform>(gondolas){rotor})foreach(var mesh in part.GetComponentsInChildren<MeshFilter>())mesh.gameObject.AddComponent<MeshCollider>().sharedMesh=mesh.sharedMesh;
             Assert.That(rotor.GetComponentsInChildren<MeshCollider>().Length,Is.GreaterThan(0),"setup: the rotor model's meshes are measured");
             const float Head=.15f;var touching=new Collider[8];
-            foreach(double since in new[]{0,3.7,11.2})
+            foreach(int crew in new[]{1,2,8})foreach(double since in new[]{0,3.7,11.2})
             {
+                round.Players.Clear();for(int r=0;r<crew;r++)round.Players.Add(new PlayerState{Id="rider "+r,VisualWheelSince=since});
+                round.Players.Add(new PlayerState{Id="later rider",VisualWheelSince=since+5});round.Players.Add(new PlayerState{Id="walker"});
                 int boarded=-1;
                 foreach(double part in new[]{0,.25,.5,.75,1})
                 {
                     double now=since+part*Festivals.WheelRideSeconds;round.SimulationSeconds=now;twists.Apply(round,0);Physics.SyncTransforms();
-                    var eye=FestivalTwistVisuals.Seat(since,now)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight;string when="boarded "+since+" s, "+part*100+"% round: ";
-                    int inside=gondolas.FindIndex(g=>Bounds(g).Contains(eye));
-                    Assert.That(inside,Is.GreaterThanOrEqualTo(0),when+"the eye "+eye+" is in a gondola");
-                    if(part==0)
+                    string when=crew+" aboard, boarded "+since+" s, "+part*100+"% round: ";var eyes=new List<Vector3>();
+                    for(int r=0;r<crew;r++)eyes.Add(FestivalTwistVisuals.Seat(round,round.Players[r],now)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight);
+                    for(int a=0;a<crew;a++)for(int b=a+1;b<crew;b++)Assert.That(Vector3.Distance(eyes[a],eyes[b]),Is.GreaterThan(.05f),when+"riders "+a+" and "+b+" sit side by side, not in one another");
+                    var middle=Vector3.zero;foreach(var at in eyes)middle+=at/crew;
+                    Assert.That(middle.x,Is.EqualTo(Festivals.WheelX).Within(1e-3f),when+"they spread evenly across the gondola, and the later rider takes no place in it");
+                    foreach(var eye in eyes)
                     {
-                        boarded=inside;
-                        foreach(var g in gondolas)Assert.That(gondolas[boarded].position.y,Is.LessThanOrEqualTo(g.position.y+1e-4f),when+"the rider boards the gondola nearest the platform");
-                    }
-                    else Assert.That(inside,Is.EqualTo(boarded),when+"the rider stays in the gondola they boarded");
-                    int hits=Physics.OverlapSphereNonAlloc(eye,Head,touching);var hit=new List<string>();
-                    for(int h=0;h<hits;h++)if(touching[h].transform.IsChildOf(wheel))hit.Add(touching[h].transform.parent.name+"/"+touching[h].name);
-                    Assert.That(hit,Is.Empty,when+"a head's room round the eye is clear of the wheel's rims, spokes and hangers and the gondola's walls");
-                    Assert.That(Physics.Raycast(eye,Vector3.up,out var roof,.5f)&&roof.transform.IsChildOf(gondolas[boarded]),Is.True,when+"the eye sits under the gondola's roof");
-                    if(part==.5)Assert.That(eye.y,Is.GreaterThan(10f),when+"the top of the turn is more than 10 m up");
-                    if(part==1)
-                    {
-                        Assert.That(Vector2.Distance(Flat(eye),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThanOrEqualTo(Festivals.WheelReach),when+"the turn ends back by the platform");
-                        Assert.That(eye.y,Is.LessThan(2.5f),when+"down at the platform");
+                        int inside=gondolas.FindIndex(g=>Bounds(g).Contains(eye));
+                        Assert.That(inside,Is.GreaterThanOrEqualTo(0),when+"the eye "+eye+" is in a gondola");
+                        if(boarded<0)foreach(var g in gondolas)Assert.That(gondolas[inside].position.y,Is.LessThanOrEqualTo(g.position.y+1e-4f),when+"the rider boards the gondola nearest the platform");
+                        if(boarded<0)boarded=inside;
+                        Assert.That(inside,Is.EqualTo(boarded),when+"every rider stays in the gondola they boarded together");
+                        int hits=Physics.OverlapSphereNonAlloc(eye,Head,touching);var hit=new List<string>();
+                        for(int h=0;h<hits;h++)if(touching[h].transform.IsChildOf(wheel))hit.Add(touching[h].transform.parent.name+"/"+touching[h].name);
+                        Assert.That(hit,Is.Empty,when+"a head's room round the eye "+eye+" is clear of the wheel's rims, spokes and hangers and the gondola's walls");
+                        Assert.That(Physics.Raycast(eye,Vector3.up,out var roof,.5f)&&roof.transform.IsChildOf(gondolas[boarded]),Is.True,when+"the eye sits under the gondola's roof");
+                        if(part==.5)Assert.That(eye.y,Is.GreaterThan(10f),when+"the top of the turn is more than 10 m up");
+                        if(part==1)
+                        {
+                            Assert.That(Vector2.Distance(Flat(eye),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThanOrEqualTo(Festivals.WheelReach),when+"the turn ends back by the platform");
+                            Assert.That(eye.y,Is.LessThan(2.5f),when+"down at the platform");
+                        }
                     }
                 }
             }

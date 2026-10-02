@@ -737,6 +737,9 @@ namespace Festival.Presentation
             if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);if(giggleTank!=null)FestivalGiggleTank.Show(giggleTank,state);
             if(PoloDressing!=null)PoloDressing.Show(state.FestivalIndex==Festivals.PoloFestival,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero);
         }
+        /// <summary>POLO-5: where a Ferris wheel rider in state sits, ahead seconds on from the wheel as SetTwists last drew it
+        /// (FestivalTwistVisuals.Seat).</summary>
+        public Vector3 WheelSeat(RoundState state,PlayerState rider,float ahead)=>FestivalTwistVisuals.Seat(state,rider,(twists!=null?twists.WheelClock:rider.VisualWheelSince)+ahead);
         private void Update()
         {
             float time=Time.time;
