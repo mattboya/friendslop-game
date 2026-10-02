@@ -146,7 +146,7 @@ namespace Festival.Tests
             Assert.That(Vector2.Distance(new Vector2(station.position.x,station.position.z),new Vector2(CampFeatures.GiggleBalloonX,CampFeatures.GiggleBalloonZ)),Is.LessThan(1e-3f),"where the rules take a hit");
             Assert.That(station.position.y,Is.EqualTo(0).Within(1e-3f),"on the ground");
             Assert.That(station.Find(FestivalGiggleTank.Name),Is.Not.Null,"a Giggle Tank, like the festival's");
-            var balloons=new List<Renderer>();foreach(var r in station.GetComponentsInChildren<Renderer>(true))if(r.name=="Balloon")balloons.Add(r);
+            var balloons=new List<Renderer>();foreach(var r in station.GetComponentsInChildren<Renderer>(true))if(r.name.StartsWith("GiggleBalloon",System.StringComparison.Ordinal)&&r.name.EndsWith("__Rose",System.StringComparison.Ordinal))balloons.Add(r);
             Assert.That(balloons.Count,Is.GreaterThanOrEqualTo(3),"a bunch of balloons");
             foreach(var balloon in balloons)Assert.That(balloon.bounds.min.y,Is.GreaterThan(1.65f),"each floats above eye height");
             foreach(var r in station.GetComponentsInChildren<Renderer>(true))Assert.That(r.sharedMaterial,Is.Not.Null,r.name+" has a material");

@@ -20,6 +20,7 @@ namespace Festival.Tests
             Assert.That(tank.parent,Is.EqualTo(parent),"it is built where it is asked for");
             var renderers=tank.GetComponentsInChildren<Renderer>(true);
             Assert.That(renderers.Length,Is.GreaterThanOrEqualTo(4),"a tank, its valve and a glow to find it by");
+            Assert.That(System.Array.Exists(renderers,r=>r.name.StartsWith("GiggleTank",System.StringComparison.Ordinal)),Is.True,"the tank is ART-1's model");
             foreach(var renderer in renderers)Assert.That(renderer.sharedMaterial,Is.Not.Null,renderer.name+" has a material");
             var bounds=Bounds(tank);
             Assert.That(bounds.min.y,Is.EqualTo(0).Within(.01f),"it stands on the ground");

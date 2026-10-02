@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>GAS-2: the Giggle Tank's stand-in, from primitives, until the art pass. A waist-high mint gas cylinder with a
-    /// glowing band, a brass valve and a glowing disc at its foot, so it reads from a distance and at night. Nothing collides, so
+    /// <summary>GAS-2 / ART-1: the Giggle Tank, ART-1's model on a glowing disc. A waist-high mint gas cylinder with a glowing
+    /// band, a brass valve and hand wheel, standing on that disc at its foot, so it reads from a distance and at night. Nothing collides, so
     /// only the rules decide who reaches it. FestivalWorld raises one on the festival grounds and shows it where the view has a
     /// tank (Show). GAS-1 raises one more at camp with a bunch of balloons tied to its valve (BuildBalloons).</summary>
     public static class FestivalGiggleTank
@@ -20,11 +20,7 @@ namespace Festival.Presentation
         {
             var tank=new GameObject(Name).transform;tank.SetParent(parent,false);
             Part(tank,"Tank glow",PrimitiveType.Cylinder,new Vector3(0,.01f,0),new Vector3(1.1f,.01f,1.1f),"StageGlowGold");
-            Part(tank,"Tank body",PrimitiveType.Cylinder,new Vector3(0,.47f,0),new Vector3(.42f,.45f,.42f),"PaintMint");
-            Part(tank,"Tank shoulder",PrimitiveType.Sphere,new Vector3(0,.92f,0),new Vector3(.42f,.3f,.42f),"PaintMint");
-            Part(tank,"Tank band",PrimitiveType.Cylinder,new Vector3(0,.6f,0),new Vector3(.44f,.06f,.44f),"StageGlowRose");
-            Part(tank,"Tank valve",PrimitiveType.Cylinder,new Vector3(0,1.09f,0),new Vector3(.1f,.08f,.1f),"Metal");
-            Part(tank,"Tank hand wheel",PrimitiveType.Cylinder,new Vector3(0,1.18f,0),new Vector3(.22f,.015f,.22f),"Gold");
+            FestivalArtView.Create(tank,"FestivalGiggleTank");
             return tank;
         }
 
@@ -39,7 +35,12 @@ namespace Festival.Presentation
                 var at=BalloonAt[i];var rise=at-Valve;
                 // A unit cylinder is 2 m tall: half the string's length as its height scale, turned to run from the valve to the balloon.
                 Part(station,"Balloon string",PrimitiveType.Cylinder,(Valve+at)*.5f,new Vector3(.012f,rise.magnitude*.5f,.012f),"White").localRotation=Quaternion.FromToRotation(Vector3.up,rise);
-                Part(station,"Balloon",PrimitiveType.Sphere,at,new Vector3(.34f,.4f,.34f),BalloonLook[i]);
+                var balloon=FestivalArtView.Create(station,"FestivalGiggleBalloon");
+                if(balloon!=null)
+                {
+                    balloon.transform.localPosition=at;
+                    foreach(var r in balloon.GetComponentsInChildren<Renderer>(true))if(r.name.EndsWith("__Rose",System.StringComparison.Ordinal))r.sharedMaterial=FestivalArtView.MaterialFor(BalloonLook[i]);
+                }
             }
             return station;
         }
