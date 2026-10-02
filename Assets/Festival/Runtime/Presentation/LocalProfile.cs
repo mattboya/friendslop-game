@@ -19,6 +19,8 @@ namespace Festival.Presentation
         public int UnlockedFestivalCount=1;
         // CAM-1: the view over your shoulder rather than first person (V, or CAMERA VIEW). Older profiles load it as false.
         public bool ThirdPerson;
+        // HUD-7: the first-time tips this machine has shown (FestivalHudText.Tip). Older profiles load it empty.
+        public List<string> SeenTips=new List<string>();
     }
     public sealed class LocalProfile
     {
@@ -35,7 +37,7 @@ namespace Festival.Presentation
                 if(File.Exists(path) && new FileInfo(path).Length<65536)
                 {
                     var loaded=JsonUtility.FromJson<ProfileData>(File.ReadAllText(path));
-                    if(loaded!=null && loaded.SchemaVersion==1 && loaded.Cosmetics!=null && loaded.SeenDialogue!=null && loaded.SeenDialogue.Count<=512)
+                    if(loaded!=null && loaded.SchemaVersion==1 && loaded.Cosmetics!=null && loaded.SeenDialogue!=null && loaded.SeenDialogue.Count<=512 && loaded.SeenTips!=null)
                         Data=loaded;
                 }
             }
@@ -66,6 +68,10 @@ namespace Festival.Presentation
             if(state.UnlockedFestivalCount<=Data.UnlockedFestivalCount)return;
             Data.UnlockedFestivalCount=Math.Min(state.UnlockedFestivalCount,Festivals.Count);Save();
         }
+        // HUD-7: a first-time tip shows once on this machine (FestivalHudText.Tip), until "Show tips again" in the settings, which
+        // returns Save's error for the settings to say.
+        public void SeeTip(string id){if(Data.SeenTips.Contains(id))return;Data.SeenTips.Add(id);Save();}
+        public string ShowTipsAgain(){Data.SeenTips.Clear();return Save();}
         public void AwardFirstRescue()
         {
             if(!Data.Cosmetics.Contains("first_shuttle")) { Data.Cosmetics.Add("first_shuttle"); Save(); }

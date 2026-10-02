@@ -66,6 +66,34 @@ namespace Festival.Presentation
                 ("KEYS",string.Join("\n",keys)),
             };
         }
+        /// <summary>How long a first-time tip stays up.</summary>
+        public const double TipSeconds=6;
+
+        /// <summary>
+        /// The first-time tip p should read now, as its id and two lines, or ("",""): the first whose moment has come that this machine
+        /// has not seen (seen: LocalProfile.Data.SeenTips; the HUD shows the tip and marks it with LocalProfile.SeeTip). Most urgent
+        /// first: a swarm on p, security stopping p, the tripper's first vision, their first checked one, a friend tripping. Only
+        /// while p is Alive in play, and never over the level briefing. Asked every frame, so it allocates nothing until it has a tip.
+        /// </summary>
+        public static (string Id,string Text) Tip(RoundState s,PlayerState p,ICollection<string> seen)
+        {
+            if(s.Phase!="Playing"||p.Life!="Alive"||s.ElapsedSeconds<BriefingSeconds)return ("","");
+            // The card's own rules (Condition, StoppedBy): a festivalgoer swarming p, a cop stopping p over visible stock, read in one
+            // loop with no closure. The stop tip words its ways out as ESC-2's card does.
+            bool swarmed=false,stopped=false,verdict=false,tripper=s.TripperId==p.Id;
+            foreach(var n in s.Npcs)if(n.TargetId==p.Id){swarmed|=n.Kind=="Wook"&&n.Mode=="Swarming";stopped|=n.Kind=="Cop"&&n.Mode=="Stop";}
+            foreach(var v in s.Visions)verdict|=v.Confirmed;
+            if(swarmed&&!seen.Contains("swarm"))return ("swarm","Your card says SWARMING: the crowd is after you, and their hits can down you.\nRun, and keep well clear of them until they lose interest.");
+            if(stopped&&!seen.Contains("stop"))return ("stop","Security stopped you: they saw your stock.\nTalk to them (E), ditch it (G) or walk away out of sight, or they arrest you.");
+            // A view holds visions only for its tripper (FestivalSimulation.VisibleVisions).
+            if(tripper&&s.Visions.Count>0&&!seen.Contains("vision"))return ("vision","Your visions: green ball buyer, red cube narc, blue pill clue, gold drum secret.\nSome lie: walk up and press F to chat or E to dance to check one.");
+            if(tripper&&verdict&&!seen.Contains("verdict"))return ("verdict","Checked! A green ring means it's true, a red ring that it's fake.\nAim at it to read what you found, like "
+                +FestivalVisionMarkers.VerdictText("Narc",false)+" or "+FestivalVisionMarkers.VerdictText("DoubleBuyer",true)+".");
+            if(!tripper&&s.TripperId!=""&&!seen.Contains("friend"))return ("friend","Only "+(Crew(s,s.TripperId)?.Name??"the tripper")+" can see the visions.\nStick close and ask what they see.");
+            return ("","");
+        }
+        // The view's player with id, or null. Its own method, so Briefing and Tip make no closure on the frames they say nothing.
+        static PlayerState Crew(RoundState s,string id)=>s.Players.Find(x=>x.Id==id);
         static string Claim(string kind)=>FestivalVisionMarkers.ClaimText(kind);
         // What each FestivalInput action does, by its name. ponytail: an action added without a line here reads its bare key, which
         // HudBriefingTests catches.
@@ -78,8 +106,5 @@ namespace Festival.Presentation
             "Slot3"=>"hand 3 • ask 3 in a chat • vote 3 at the campfire",
             "Rhythm0"=>"dance lane: left","Rhythm1"=>"dance lane: down","Rhythm2"=>"dance lane: up","Rhythm3"=>"dance lane: right",_=>"",
         };
-
-        // The view's player with id, or null. Its own method, so Briefing makes no closure on the frames it says nothing.
-        static PlayerState Crew(RoundState s,string id)=>s.Players.Find(x=>x.Id==id);
     }
 }

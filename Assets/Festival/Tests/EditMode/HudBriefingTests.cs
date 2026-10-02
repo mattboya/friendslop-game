@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Presentation;
+using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.TestTools.Constraints;
 using Is = UnityEngine.TestTools.Constraints.Is;
@@ -131,6 +134,98 @@ namespace Festival.Tests
                 // The design's one hint about fakes is "Trust, but verify.": How to Play never gives their tells away.
                 foreach(var b in FestivalHudText.HowToPlay(input))Assert.That(b.Text.ToLowerInvariant(),Does.Not.Contain("shadow").And.Not.Contain("shimmer"),b.Title);
             }
+        }
+
+        // First-time tips: a short card the first time each moment comes, once per profile on this machine (LocalProfile.SeenTips),
+        // until "Show tips again". Sam trips Day 1, the briefing is over, and you stand beside them.
+        static RoundState Under(){var s=Start(0,0);s.ElapsedSeconds=FestivalHudText.BriefingSeconds;return s;}
+        static (string Id,string Text) TipOf(RoundState s,string id,List<string> seen)=>FestivalHudText.Tip(s,s.Players.Find(p=>p.Id==id),seen);
+        const string TipProfile="hud-briefing-tips-test";
+        static string TipFile=>Path.Combine(Application.persistentDataPath,"profiles",TipProfile+".json");
+        [SetUp][TearDown] public void ForgetTheTipProfile(){if(File.Exists(TipFile))File.Delete(TipFile);}
+
+        [Test] public void EachFirstTimeTipComesAtItsMomentOnce()
+        {
+            var s=Under();var seen=new List<string>();
+            var tip=TipOf(s,"you",seen);
+            Assert.That(tip.Text,Is.EqualTo("Only Sam can see the visions.\nStick close and ask what they see."),"a friend tripping");
+            seen.Add(tip.Id);
+            Assert.That(TipOf(s,"you",seen).Id,Is.Empty,"once seen, never again");
+            Assert.That(TipOf(s,"sam",seen).Id,Is.Empty,"the tripper has no tip before a vision");
+            s.Visions.Add(new VisionState{Id="v1",Kind="Narc",NpcId="wook_1"});
+            tip=TipOf(s,"sam",seen);
+            foreach(var shape in new[]{"green ball","red cube","blue pill","gold drum"})Assert.That(tip.Text,Does.Contain(shape),"the first vision names every marker shape");
+            Assert.That(tip.Text,Does.Contain("F to chat").And.Contain("E to dance"),"and how to check one");
+            Assert.That(TipOf(s,"you",seen).Id,Is.Empty,"a friend's view holds no visions, and gets no vision tip");
+            seen.Add(tip.Id);
+            s.Visions[0].Confirmed=true;
+            tip=TipOf(s,"sam",seen);
+            Assert.That(tip.Text,Does.Contain("green ring").And.Contain("red ring").And.Contain(FestivalVisionMarkers.VerdictText("Narc",false)),"the first verdict, in VISION-5's words");
+            seen.Add(tip.Id);
+            s.Npcs.Add(new NpcState{Id="cop_1",Kind="Cop",Mode="Stop",TargetId="sam"});
+            Assert.That(TipOf(s,"you",seen).Id,Is.Empty,"a friend's stop is not yours");
+            tip=TipOf(s,"sam",seen);
+            Assert.That(tip.Text,Does.StartWith("Security stopped you").And.Contain("Talk to them (E), ditch it (G) or walk away out of sight"),"the first security stop (ESC-2)");
+            seen.Add(tip.Id);
+            s.Npcs.Add(new NpcState{Id="wook_2",Kind="Wook",Mode="Swarming",TargetId="sam"});
+            tip=TipOf(s,"sam",seen);
+            Assert.That(tip.Text,Does.Contain("SWARMING"),"the first swarm, as the card says it (HUD-5)");
+            seen.Add(tip.Id);
+            Assert.That(seen,Is.Unique.And.Count.EqualTo(5),"five tips");
+            Assert.That(TipOf(s,"sam",seen).Id,Is.Empty,"all seen");
+        }
+
+        [Test] public void TipsWaitForTheBriefingAndComeMostUrgentFirst()
+        {
+            var s=Under();var none=new List<string>();
+            s.Npcs.Add(new NpcState{Id="cop_1",Kind="Cop",Mode="Stop",TargetId="you"});
+            Assert.That(TipOf(s,"you",none).Text,Does.StartWith("Security stopped you"),"a stop before the friend tripping");
+            s.Npcs.Add(new NpcState{Id="wook_2",Kind="Wook",Mode="Swarming",TargetId="you"});
+            Assert.That(TipOf(s,"you",none).Text,Does.Contain("SWARMING"),"a swarm before anything");
+            s.ElapsedSeconds=FestivalHudText.BriefingSeconds-.1;
+            Assert.That(TipOf(s,"you",none).Id,Is.Empty,"never over the briefing");
+            s.ElapsedSeconds=FestivalHudText.BriefingSeconds;s.Players[0].Life="Spirit";
+            Assert.That(TipOf(s,"you",none).Id,Is.Empty,"never for a spirit");
+            s.Players[0].Life="Alive";s.Phase="Shopping";
+            Assert.That(TipOf(s,"you",none).Id,Is.Empty,"never at camp");
+            // Every tip is two short lines: the objective card's measured detail box holds lines of about 80 (ECON-3).
+            s=Under();s.Visions.Add(new VisionState{Id="v1",Kind="Buyer",NpcId="wook_1",Confirmed=true});
+            s.Npcs.Add(new NpcState{Id="cop_1",Kind="Cop",Mode="Stop",TargetId="sam"});s.Npcs.Add(new NpcState{Id="wook_2",Kind="Wook",Mode="Swarming",TargetId="sam"});
+            var seen=new List<string>();
+            foreach(var id in new[]{"you","sam","sam","sam","sam"})
+            {
+                var tip=TipOf(s,id,seen);var lines=tip.Text.Split('\n');
+                Assert.That(lines.Length,Is.EqualTo(2),tip.Text);
+                foreach(var line in lines)Assert.That(line.Length,Is.LessThanOrEqualTo(80),line);
+                seen.Add(tip.Id);
+            }
+            Assert.That(seen,Is.Unique.And.Count.EqualTo(5));
+            TestDelegate ask=()=>FestivalHudText.Tip(s,s.Players[1],seen);ask();
+            Assert.That(ask,Is.Not.AllocatingGCMemory(),"asked every frame with every tip seen, it makes no garbage");
+        }
+
+        [Test] public void ATipSeenOnThisMachineStaysSeenUntilShowTipsAgain()
+        {
+            var s=Under();var you=s.Players[0];
+            var profile=new LocalProfile(TipProfile);
+            var tip=FestivalHudText.Tip(s,you,profile.Data.SeenTips);
+            Assert.That(tip.Id,Is.Not.Empty,"a new profile gets the tip");
+            profile.SeeTip(tip.Id);
+            Assert.That(FestivalHudText.Tip(s,you,profile.Data.SeenTips).Id,Is.Empty,"seen");
+            Assert.That(FestivalHudText.Tip(s,you,new LocalProfile(TipProfile).Data.SeenTips).Id,Is.Empty,"and still seen after a restart");
+            profile.ShowTipsAgain();
+            Assert.That(FestivalHudText.Tip(s,you,profile.Data.SeenTips).Id,Is.EqualTo(tip.Id),"Show tips again brings it back");
+            Assert.That(FestivalHudText.Tip(s,you,new LocalProfile(TipProfile).Data.SeenTips).Id,Is.EqualTo(tip.Id),"for good");
+        }
+
+        [Test] public void AProfileFromBeforeTipsKeepsItsSettings()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(TipFile));
+            File.WriteAllText(TipFile,"{\"SchemaVersion\":1,\"Cosmetics\":[],\"SeenDialogue\":[],\"ReducedMotion\":false,\"HighContrast\":true,\"TimingCalibrationMs\":0,\"MouseSensitivity\":0.2,\"MusicVolume\":0.5,\"UnlockedFestivalCount\":1,\"ThirdPerson\":true}");
+            var old=new LocalProfile(TipProfile);
+            Assert.That(old.Data.MusicVolume,Is.EqualTo(.5f),"its settings load");
+            Assert.That(old.Data.ThirdPerson,Is.True);
+            Assert.That(old.Data.SeenTips,Is.Not.Null.And.Empty,"with no tips seen");
         }
     }
 }
