@@ -21,6 +21,8 @@ namespace Festival.Presentation
         private VolumeProfile duskProfile;
         private FestivalNightLighting lighting;
         private FestivalTwistVisuals twists;
+        private readonly List<GameObject> groundTrees=new List<GameObject>();
+        public FestivalPoloDressing PoloDressing{get;private set;}
         private Transform giggleTank;
         private FestivalClouds clouds;
         private Font worldFont;
@@ -210,7 +212,7 @@ namespace Festival.Presentation
                 float x=-37+(i%11)*7.4f,z=i<11?38:-38;
                 if(Mathf.Abs(x)<8&&z<0)continue;
                 var tree=Visual(i%4==0?"FestivalTreeFir":i%2==0?"FestivalTreeA":"FestivalTreeB",new Vector3(x,0,z));
-                if(tree!=null)tree.transform.localScale=Vector3.one*(.85f+i%3*.08f);
+                if(tree!=null){groundTrees.Add(tree);tree.transform.localScale=Vector3.one*(.85f+i%3*.08f);}
             }
             var approachTrees=new[]{
                 new Vector3(-15,0,23),new Vector3(-25,0,26),
@@ -228,6 +230,7 @@ namespace Festival.Presentation
                     position);
                 if(tree!=null)
                 {
+                    groundTrees.Add(tree);
                     tree.transform.localScale=Vector3.one*(framesApproach?1.05f+(i%4)*.08f:1.2f+(i%5)*.12f);
                     tree.transform.localRotation=Quaternion.Euler(0,(i*97)%360,0);
                 }
@@ -235,7 +238,7 @@ namespace Festival.Presentation
             foreach(var site in new[]{new Vector3(-24,0,10.5f),new Vector3(23,0,13.5f),new Vector3(22,0,-11.5f)})
             {
                 var tree=Visual(site.x<0?"FestivalTreeA":"FestivalTreeB",site);
-                if(tree!=null)tree.transform.localScale=Vector3.one*1.22f;
+                if(tree!=null){groundTrees.Add(tree);tree.transform.localScale=Vector3.one*1.22f;}
                 ProxyBox("Gathering tree trunk",site+new Vector3(0,1.2f,0),new Vector3(.76f,2.4f,.76f),wood);
             }
             foreach(var table in new[]{new Vector3(-24,0,2),new Vector3(22,0,-10)})
@@ -329,6 +332,8 @@ namespace Festival.Presentation
             surface.BuildNavMesh();
             // After the navmesh, though they never collide: twist stand-ins don't shape where anyone walks.
             twists=new FestivalTwistVisuals(owned);
+            // ART-1: Palm Mirage's look, shown by SetTwists; like the twists it never collides.
+            PoloDressing=new FestivalPoloDressing(owned,groundTrees,earth);
             // GAS-2: hidden until a view has a Giggle Tank (SetTwists).
             giggleTank=FestivalGiggleTank.Build(owned);giggleTank.gameObject.SetActive(false);
             // LIGHT-2: the day sky's clouds hang under the festival, so camp has none.
@@ -727,7 +732,11 @@ namespace Festival.Presentation
             if(clouds!=null)clouds.Apply(state,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero,localPlayerId);
         }
         // TWISTVIS-1: the festival's twist stand-ins, straight from the round state, and GAS-2's Giggle Tank.
-        public void SetTwists(RoundState state){if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);if(giggleTank!=null)FestivalGiggleTank.Show(giggleTank,state);}
+        public void SetTwists(RoundState state)
+        {
+            if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);if(giggleTank!=null)FestivalGiggleTank.Show(giggleTank,state);
+            if(PoloDressing!=null)PoloDressing.Show(state.FestivalIndex==Festivals.PoloFestival,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero);
+        }
         private void Update()
         {
             float time=Time.time;

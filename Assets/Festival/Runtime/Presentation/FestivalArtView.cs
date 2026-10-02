@@ -32,6 +32,7 @@ namespace Festival.Presentation
             {"StageGlowRose",new Color(1f,.30f,.55f)},
             {"Rubber",new Color(.10f,.12f,.16f)},
             {"Glass",new Color(.30f,.73f,.79f)},{"White",new Color(.86f,.90f,.82f)}
+            ,{"Frond",new Color(.24f,.55f,.30f)},{"PalmBark",new Color(.55f,.42f,.30f)},{"Sand",new Color(.80f,.62f,.42f)}
         };
         public static GameObject Create(Transform parent,string resource)
         {
@@ -66,9 +67,9 @@ namespace Festival.Presentation
             if(template==null)return null;
             material=new Material(template){name="Festival art "+color,color=colors.TryGetValue(color,out var tint)?tint:Color.white};
             string map=color.StartsWith("Canvas",System.StringComparison.Ordinal)?"FestivalCanvas"
-                :color=="Bark"?"FestivalBark"
+                :color=="Bark"||color=="PalmBark"?"FestivalBark"
                 :color=="Wood"?"FestivalWood"
-                :color=="Leaf"||color=="LeafWarm"||color=="Needle"?"FestivalLeaf"
+                :color=="Leaf"||color=="LeafWarm"||color=="Needle"||color=="Frond"?"FestivalLeaf"
                 :color=="Stone"?"FestivalGround":"";
             if(map!="")material.mainTexture=Resources.Load<Texture2D>(map);
             if(material.HasProperty("_Smoothness"))
