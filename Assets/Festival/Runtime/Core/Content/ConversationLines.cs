@@ -42,7 +42,7 @@ namespace Festival.Core
         {
             if(Array.IndexOf(Topics,topic)<0||!Tastes.TryGetValue(persona,out var taste)) throw new ArgumentException("Unknown talk topic or persona: "+topic+", "+persona);
             var said=new ConversationTurn();
-            if(turn>0) said.Reaction=Grammar.Line(heard==Silence?"react.silence":"react."+persona+"."+heard,festival,random);
+            if(turn>0) said.Reaction=Say(heard==Silence?"react.silence":"react."+persona+"."+heard,festival,random,history);
             said.Line=Say(turn>0?Body(topic,role,clear):persona==Security?"police":"opener."+persona,festival,random,history);
             int skip=random.Next(3),soso=-1;
             for(int style=0;soso<0;style++) if(style!=taste.liked&&style!=taste.hated&&skip--==0) soso=style;
@@ -101,26 +101,53 @@ namespace Festival.Core
         private static void Shuffle<T>(T[] items,ContentRandom random) { for(int k=items.Length-1;k>0;k--) { int j=random.Next(k+1); var swap=items[k]; items[k]=items[j]; items[j]=swap; } }
 
         private static readonly Dictionary<string,string[]> Parts=new Dictionary<string,string[]>{
-            // Their reaction to your reply: "react.<persona>.<grade>", and to a silence.
-            ["react.Wook.0"]=new[]{"Duuude, yes.","Oh, that's beautiful.","Far out, friend.","You get it. You really get it.","Mmm. That landed."},
-            ["react.Wook.1"]=new[]{"Mm, sure.","Okay, okay.","Heh. Alright.","Right on, I guess.","Cool, cool."},
-            ["react.Wook.2"]=new[]{"Whoa. Harsh vibe.","That felt crunchy.","Hm. My aura flinched.","Yikes, man.","Brother, no."},
-            ["react.Influencer.0"]=new[]{"Obsessed.","Okay, you get it.","That's so content.","Iconic answer.","Wait, say that on camera."},
-            ["react.Influencer.1"]=new[]{"Cute, I guess.","Sure, babe.","Mm, fine.","Okay. Noted.","That's fine. Ish."},
-            ["react.Influencer.2"]=new[]{"That's not the vibe.","Ew, cringe.","Not for the feed.","Babe, no.","I'm muting that."},
-            ["react.Burner.0"]=new[]{"That's beautiful.","Welcome home.","I feel that.","Thank you for that.","Now that's the spirit."},
-            ["react.Burner.1"]=new[]{"Okay, sure.","Hm. Fair.","I hear you.","Alright.","That's one way to see it."},
-            ["react.Burner.2"]=new[]{"That's very default.","Wow. Very commercial.","Hm. Not the spirit.","That stings a little.","Very sponsored of you."},
-            ["react.Raver.0"]=new[]{"YES, fam!","Ahh, I love you!","Same energy!","That's so PLUR!","Bestie!"},
-            ["react.Raver.1"]=new[]{"Haha, sure!","Okay, cool!","Totally. I guess!","Ha, yeah!","Fair, fam!"},
-            ["react.Raver.2"]=new[]{"Oh. Okay, grandpa.","Wow, buzzkill.","Um. Less talk, more bass?","That's not it, fam.","Yikes. Hug it out?"},
-            ["react.DraggedAlongDad.0"]=new[]{"Ha! Good one.","Now that's sensible.","Well said, champ.","Exactly my thinking.","Finally, a normal answer."},
-            ["react.DraggedAlongDad.1"]=new[]{"Sure, sure.","If you say so.","Hm. Okay.","Right-o.","I suppose."},
-            ["react.DraggedAlongDad.2"]=new[]{"I don't follow, kiddo.","Hoo boy.","That's a lot of words.","Is that a young person thing?","My ears hurt now."},
-            ["react.Security.0"]=new[]{"Good. Appreciated.","Alright. That's fair.","Okay. Thank you.","Fine. Noted.","That's what I like to hear."},
-            ["react.Security.1"]=new[]{"Mm.","Okay.","Go on.","Sure.","If you say so."},
-            ["react.Security.2"]=new[]{"Excuse me?","Don't get smart.","That's not helping.","Try again.","Not the answer I wanted."},
-            ["react.silence"]=new[]{"Hello? Anyway.","Cat got your tongue? Okay.","Okay. Moving on.","Not a talker. Fine.","Silent type, huh."},
+            // Their reaction to your reply ("react.<persona>.<grade>", Tables): a lead and a comment, both what the line is about, so
+            // each persona's reaction to a grade comes in a hundred-odd bodies; some leads name you as that persona would ("pal.").
+            // A silence gets one of its own, the same from anyone.
+            ["pal.Wook"]=new[]{"friend","brother","sister","star child","my dude","fellow traveler","cosmic cousin","sunshine"},
+            ["pal.Influencer"]=new[]{"babe","bestie","hun","queen","icon","love","gorgeous","angel"},
+            ["pal.Burner"]=new[]{"neighbor","friend","camp mate","dusty one","fellow burner","stranger","traveler","kin"},
+            ["pal.Raver"]=new[]{"fam","bestie","kandi kid","love","friend","party person","bass buddy","rave fam"},
+            ["pal.DraggedAlongDad"]=new[]{"champ","kiddo","sport","chief","pal","buddy","young fella","partner"},
+            ["pal.Security"]=new[]{"pal","buddy","friend","chief","boss","sir","mate","champ"},
+            ["react_lead.Wook.0"]=new[]{"Duuude, yes.","Oh, that's beautiful, {pal.Wook}.","Far out, {pal.Wook}.","Mmm.","Whoa. Yes."},
+            ["react_more.Wook.0"]=new[]{"You get it. You really get it.","That landed.","I felt that in my spine.","The trees heard that.","My aura's purring.","That's the frequency.","Pure vibes.","Say it again, slower."},
+            ["react_lead.Wook.1"]=new[]{"Mm, sure.","Okay, okay.","Heh. Alright, {pal.Wook}.","Right on, I guess.","Cool, cool, {pal.Wook}."},
+            ["react_more.Wook.1"]=new[]{"Half the vibe's there.","I'm floating on it.","Close to the frequency.","My chakras are undecided.","The bass shrugged.","We'll see where it drifts.","Not quite cosmic.","I'll let it simmer."},
+            ["react_lead.Wook.2"]=new[]{"Whoa. Harsh vibe.","Yikes, {pal.Wook}.","Brother, no.","Hm.","Easy there, {pal.Wook}."},
+            ["react_more.Wook.2"]=new[]{"That felt crunchy.","My aura flinched.","Too much hustle, man.","That's very loud.","The trees didn't like that.","Let's breathe that one out.","Bad energy, friend.","My crystals went cold."},
+            ["react_lead.Influencer.0"]=new[]{"Obsessed.","Okay, {pal.Influencer}, you get it.","Iconic answer.","Wait, {pal.Influencer}.","Stop it."},
+            ["react_more.Influencer.0"]=new[]{"That's so content.","Say that on camera.","I'm clipping that.","That's going in my caption.","The comments will love you.","Main character answer.","My followers felt that.","Pinning that one."},
+            ["react_lead.Influencer.1"]=new[]{"Cute, I guess.","Sure, {pal.Influencer}.","Mm, fine.","Okay. Noted.","Hm, {pal.Influencer}."},
+            ["react_more.Influencer.1"]=new[]{"That's fine. Ish.","Not quite on brand.","It's giving okay.","Maybe for my close friends story.","Like, a three out of five.","I'd need a better filter for that.","I'd post it. Maybe.","Not my best angle."},
+            ["react_lead.Influencer.2"]=new[]{"Ew.","{pal.Influencer}, no.","That's not the vibe.","Cringe.","Um, {pal.Influencer}?"},
+            ["react_more.Influencer.2"]=new[]{"Not for the feed.","I'm muting that.","That's so off brand.","Delete that from my memory.","My engagement just dropped.","Don't tag me in that.","Unfollow.","That's a no from my audience."},
+            ["react_lead.Burner.0"]=new[]{"That's beautiful.","Welcome home, {pal.Burner}.","I feel that.","Thank you, {pal.Burner}.","Oh, wow."},
+            ["react_more.Burner.0"]=new[]{"Now that's the spirit.","That's a real gift.","Radical honesty. Love it.","You'd fit right in at our camp.","That came from the heart.","Leave no trace but that.","The dust approves.","That's some real community."},
+            ["react_lead.Burner.1"]=new[]{"Okay, sure.","Hm. Fair.","I hear you, {pal.Burner}.","Alright.","Mm, {pal.Burner}."},
+            ["react_more.Burner.1"]=new[]{"That's one way to see it.","Not quite gifting, but okay.","I'll sit with that.","Some of that rang true.","Half in the spirit, maybe.","We all start somewhere.","Bit of a tourist answer.","The desert will teach you."},
+            ["react_lead.Burner.2"]=new[]{"Hm.","Oh, {pal.Burner}.","Wow.","Yikes.","Easy, {pal.Burner}."},
+            ["react_more.Burner.2"]=new[]{"That's very default.","Very commercial.","Not the spirit.","That stings a little.","Very sponsored of you.","Who's selling who here?","Go back to your hotel.","That's not how we do it here."},
+            ["react_lead.Raver.0"]=new[]{"YES, {pal.Raver}!","Ahh, I love you!","Same energy!","Bestie!","Okay, {pal.Raver}!"},
+            ["react_more.Raver.0"]=new[]{"That's so PLUR!","Hug me right now!","You get the bass!","Let's trade kandi!","Front row energy!","My heart just dropped!","Kandi for life!","That's a whole vibe!"},
+            ["react_lead.Raver.1"]=new[]{"Haha, sure!","Okay, cool!","Ha, yeah, {pal.Raver}!","Totally!","Fair, {pal.Raver}!"},
+            ["react_more.Raver.1"]=new[]{"I guess!","Kinda vibing with it!","Not a drop, but okay!","I'll take it!","Half a hug for that!","Let's see where the set goes!","Sure, I'll dance to it!","Mid-set energy!"},
+            ["react_lead.Raver.2"]=new[]{"Oh. Okay, grandpa.","Wow.","Um, {pal.Raver}.","Yikes.","Oof, {pal.Raver}."},
+            ["react_more.Raver.2"]=new[]{"Buzzkill.","Less talk, more bass?","That's not it.","Hug it out?","That killed the drop.","Somebody's not dancing.","Where's your rave spirit?","My kandi just snapped."},
+            ["react_lead.DraggedAlongDad.0"]=new[]{"Ha! Good one.","Well said, {pal.DraggedAlongDad}.","Now that's sensible.","Exactly.","Thank you, {pal.DraggedAlongDad}."},
+            ["react_more.DraggedAlongDad.0"]=new[]{"Finally, a normal answer.","That's my kind of thinking.","You'd get on with my brother-in-law.","Short and sweet.","Somebody raised you right.","I'll tell the wife you said that.","Common sense at last.","You'd do well in sales."},
+            ["react_lead.DraggedAlongDad.1"]=new[]{"Sure, sure.","If you say so.","Hm. Okay, {pal.DraggedAlongDad}.","Right-o.","I suppose, {pal.DraggedAlongDad}."},
+            ["react_more.DraggedAlongDad.1"]=new[]{"Can't argue with that.","Close enough.","I've heard worse.","That's a maybe from me.","Sounds about right.","We'll see, won't we?","I'll take your word for it.","That's about what I figured."},
+            ["react_lead.DraggedAlongDad.2"]=new[]{"Hoo boy.","Now, {pal.DraggedAlongDad}.","Huh?","Oh dear.","Steady on, {pal.DraggedAlongDad}."},
+            ["react_more.DraggedAlongDad.2"]=new[]{"I don't follow.","That's a lot of words.","Is that a young person thing?","My ears hurt now.","I'm too old for this.","Say that in plain English?","Ask your mother.","Where's the nearest bench?"},
+            ["react_lead.Security.0"]=new[]{"Good.","Alright, {pal.Security}.","Okay.","Fine.","Thank you, {pal.Security}."},
+            ["react_more.Security.0"]=new[]{"That's fair.","Appreciated.","Noted.","That's what I like to hear.","Clear enough.","That helps.","Good answer.","I'll make a note of that."},
+            ["react_lead.Security.1"]=new[]{"Mm.","Okay, {pal.Security}.","Go on.","Sure.","Uh-huh, {pal.Security}."},
+            ["react_more.Security.1"]=new[]{"If you say so.","I'm listening.","Keep going.","We'll see.","Not convinced yet.","Hm. Maybe.","Hm. Okay.","Carry on."},
+            ["react_lead.Security.2"]=new[]{"Excuse me?","Listen, {pal.Security}.","Come on.","Really?","Look, {pal.Security}."},
+            ["react_more.Security.2"]=new[]{"Don't get smart.","That's not helping.","Try again.","Not the answer I wanted.","Let's keep it simple.","You're not making this easier.","Don't make this harder.","That's not what I asked."},
+            ["react_lead.silence"]=new[]{"Hello?","Um.","Okay then.","Cat got your tongue?","Nothing? Huh.","Hm.","Still with me?","No answer?","Tough crowd.","Huh."},
+            ["react_more.silence"]=new[]{"Anyway.","Moving on.","Not a talker. Fine.","Silent type, I see.","I'll keep going.","Guess I'll fill the silence.","That's okay.","Where was I?","Thinking it over? Okay.","Right. So."},
 
             // A narc selling: a seller's line round a slip of cop-speak, or a line with cop-speak in it.
             ["buy.narc"]=new[]{"{narc_buy} {~narc_slip}","{~narc_slip} {narc_buy}","{narc_sell}","{~narc_lead} {narc_sell}"},
@@ -197,13 +224,15 @@ namespace Festival.Core
             ["security.plain"]=new[]{"Of course. What do you need?","I was just heading to the water tent.","No problem. I'll keep it moving.",
                 "I understand. I'm only here for the music.","Happy to help however I can.","I'm with {friend}. We're heading back to camp."},
         };
-        // FestivalLines' parts and these, and each reply: its style's body, bare or dressed with the style's hello or tail
-        // ("reply.<topic>.<style>").
+        // FestivalLines' parts and these, each reply: its style's body, bare or dressed with the style's hello or tail
+        // ("reply.<topic>.<style>"), and each reaction: its lead, then its comment ("react.<persona>.<grade>", "react.silence").
         private static Dictionary<string,string[]> Tables()
         {
             var all=new Dictionary<string,string[]>(FestivalLines.Parts);
             foreach(var part in Parts) all.Add(part.Key,part.Value);
             foreach(var topic in Topics) foreach(var style in Styles) all.Add("reply."+topic+"."+style,new[]{"{"+topic+"."+style+"}","{~"+style+"_hi} {"+topic+"."+style+"}","{"+topic+"."+style+"} {~"+style+"_tail}"});
+            foreach(var persona in Tastes.Keys) for(int grade=Smooth;grade<=Awkward;grade++) all.Add("react."+persona+"."+grade,new[]{"{react_lead."+persona+"."+grade+"} {react_more."+persona+"."+grade+"}"});
+            all.Add("react.silence",new[]{"{react_lead.silence} {react_more.silence}"});
             return all;
         }
         public static readonly LineGrammar Grammar=new LineGrammar(Tables());

@@ -24,7 +24,7 @@ public static class ConversationTests
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
             AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
-            AWorkedUpFestivalgoerWontTalk})
+            AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -99,6 +99,42 @@ public static class ConversationTests
             Check(!started.Accepted&&started.Reason=="They're too agitated to chat","a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
             Check(p.InteractionId==""&&p.Cash==cash&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==stock,"and nothing starts, held or taken ("+p.InteractionId+", $"+p.Cash+")");
         }
+    }
+
+    // K2: their reaction to your reply is built from parts too (DIALOG-4), and drawn past what you heard lately, so it rarely comes
+    // back. 30 talks in a row with one kind of person, the same grade of reply every turn (or none), say at least 55 different
+    // reactions in their 60, and none comes back within five. Before, each persona's reaction to a grade was one of five lines.
+    static void TheirReactionsRarelyRepeat()
+    {
+        var samey=new List<string>();
+        foreach(var persona in DialogueGrammar.Personas.Concat(new[]{ConversationLines.Security}))foreach(int grade in new[]{Smooth,SoSo,Awkward,Silence})
+        {
+            var heard=Reactions(persona,grade,30);int soonest=int.MaxValue;
+            for(int k=1;k<heard.Count;k++){int last=heard.LastIndexOf(heard[k],k-1);if(last>=0)soonest=Math.Min(soonest,k-last);}
+            int distinct=heard.Distinct().Count();
+            if(distinct<55||soonest<5)samey.Add(persona+" after a "+(grade==Silence?"silence":"grade "+grade+" reply")+": "+distinct+" different in "+heard.Count+", one back "+(soonest==int.MaxValue?"never":"after "+soonest)+" (e.g. \""+heard.GroupBy(r=>r).OrderByDescending(g=>g.Count()).First().Key+"\")");
+        }
+        Check(samey.Count==0,"their reactions repeat:\n  "+string.Join("\n  ",samey));
+    }
+    // One player's `talks` chats (security: talks) with someone of `persona`, fresh and at ease each time, a reply of `grade`
+    // every turn (Silence: none): their two reactions each time, in order.
+    static List<string> Reactions(string persona,int grade,int talks)
+    {
+        bool security=persona==ConversationLines.Security;string kind=security?"Police":"Conversation";
+        // Only POLO-1's influencer twist talks like an influencer.
+        string twist=persona=="Influencer"?FestivalSimulation.Influencer:"";
+        var s=Pair(kind,11);var heard=new List<string>();int n=0;
+        string Next(){for(;;n++)if(DialogueGrammar.PersonaFor("goer_"+n,twist)==persona)return "goer_"+n++;}
+        string id=security?Partner(s).Id:Next();
+        while(heard.Count<2*talks)
+        {
+            s.State.Npcs[0]=new NpcState{Id=id,Kind=security?"Cop":"Wook",Twist=twist,Role="Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true};
+            var i=Start(s,kind);
+            // Some ravers and burners always want a dance first: talk with another.
+            if(i.TrustDance){Act(s,"p0","Cancel");id=Next();continue;}
+            Talk(s,i,grade,grade,grade);heard.Add(i.Turns[1].Reaction);heard.Add(i.Turns[2].Reaction);
+        }
+        return heard;
     }
 
     // The same seed and the same picks give the same talk, line for line and in the same order; another seed another talk.
