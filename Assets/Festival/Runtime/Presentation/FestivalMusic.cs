@@ -26,6 +26,8 @@ namespace Festival.Presentation
             public string Resource=>"Music/"+Clip;
             /// <summary>The recording, loaded on first use. It streams, so it holds only a small buffer.</summary>
             public AudioClip Audio=>audio!=null?audio:audio=Resources.Load<AudioClip>(Resource);
+            // Whether a clip is this track's recording, without loading it or reading its name (which allocates).
+            internal bool Is(AudioClip clip)=>audio!=null&&audio==clip;
             public double LoopSeconds=>(LoopEnd-FirstBeat)/(double)Rate;
             /// <summary>The loop's average tempo.</summary>
             public double Bpm=>(Beat(LoopEnd)-Beat(FirstBeat))*60/LoopSeconds;
@@ -53,5 +55,17 @@ namespace Festival.Presentation
             // 83.47 BPM on average (the one-drop beat; the off-beat skank is twice that); the loop is 7 phrases from beat 0.
             new Track("dub-reggae-loop",17576,7746504,17712,1122274,2228711,3335259,4439896,5542379,6644428,7746660),
         };
+
+        /// <summary>The track a camp DJ choice plays (CampFeatures.Tracks' index), or null for SILENCE.</summary>
+        public static Track For(int campTrack)=>campTrack>0&&campTrack<=Tracks.Length?Tracks[campTrack-1]:null;
+
+        /// <summary>Where a playing source is in its track's beat (Track.BeatPhase), or null when it isn't playing one of these:
+        /// the beat other effects follow (GAS-5's Giggle Balloon, MUSIC-1's stage).</summary>
+        public static float? BeatPhase(AudioSource source)
+        {
+            if(source==null||source.clip==null||!source.isPlaying)return null;
+            foreach(var track in Tracks)if(track.Is(source.clip))return track.BeatPhase(source.timeSamples);
+            return null;
+        }
     }
 }

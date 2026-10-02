@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEditor;
@@ -40,6 +41,16 @@ namespace Festival.Tests
             }
         }
         [OneTimeTearDown]public void Remove(){AssetDatabase.DeleteAsset(Probe);decoded.Clear();}
+
+        [Test]public void TheCampDjPlaysSilenceThenTheFiveTracks()
+        {
+            Assert.That(CampFeatures.Tracks,Is.EqualTo(new[]{"SILENCE","TECH HOUSE","DISCO HOUSE","ORGANIC HOUSE","DRUM & BASS","DUB REGGAE"}),"the DJ's choices");
+            Assert.That(FestivalMusic.For(0),Is.Null,"SILENCE plays nothing");
+            string[] clips={"tech-house-loop","disco-house-loop","organic-house-loop","drum-and-bass-loop","dub-reggae-loop"};
+            for(int i=1;i<CampFeatures.Tracks.Length;i++)Assert.That(FestivalMusic.For(i)?.Clip,Is.EqualTo(clips[i-1]),CampFeatures.Tracks[i]+" plays its recording");
+            Assert.That(FestivalMusic.For(CampFeatures.Tracks.Length),Is.Null,"no track past the list");
+            Assert.That(FestivalMusic.For(new RoundState().CampMusicTrack)?.Clip,Is.EqualTo("tech-house-loop"),"a new camp starts on TECH HOUSE");
+        }
 
         [Test]public void EveryTrackStreamsFromResourcesAsTheGamePlaysIt()
         {

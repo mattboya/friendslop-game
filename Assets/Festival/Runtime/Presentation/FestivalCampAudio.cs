@@ -5,23 +5,33 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>Original synthesized camp loops; selection comes from the host snapshot.</summary>
+    /// <summary>The camp's sound: the DJ's track, chosen in the host snapshot, and the original synthesized gag sounds. MUSIC-2: the
+    /// tracks are Matt's recordings (FestivalMusic). Each loops between beats measured from the recording, not over the file's silent
+    /// start and faded end. Two decks take turns on the audio clock so the join lands to the sample: the first plays the track from
+    /// its start to the loop's end, then the other plays the loop from its first beat, and so on.</summary>
     public sealed class FestivalCampAudio : MonoBehaviour
     {
         const int Rate=24000;
-        readonly AudioClip[] tracks=new AudioClip[3];
+        // How far ahead a track is scheduled, so its stream is open by the time it starts.
+        const double Lead=.2;
         readonly AudioClip[] antics=new AudioClip[3];
-        AudioSource source,foley;
+        readonly AudioSource[] decks=new AudioSource[2];
+        AudioSource foley;
         FestivalSession session;
-        int playing=-1;
+        FestivalMusic.Track track;
+        int playing=-1,live;
+        // When the deck not live takes over, on the audio clock.
+        double turnAt;
         int lastAntics;
+
+        /// <summary>The deck sounding now (FestivalMusic.BeatPhase reads its beat), or null in silence.</summary>
+        public AudioSource Music=>track==null?null:decks[AudioSettings.dspTime<turnAt?live:1-live];
 
         void Awake()
         {
             session=GetComponent<FestivalSession>();
-            source=gameObject.AddComponent<AudioSource>();source.playOnAwake=false;source.loop=true;source.spatialBlend=0;
+            for(int deck=0;deck<decks.Length;deck++){decks[deck]=gameObject.AddComponent<AudioSource>();decks[deck].playOnAwake=false;decks[deck].spatialBlend=0;}
             foley=gameObject.AddComponent<AudioSource>();foley.playOnAwake=false;foley.spatialBlend=0;
-            for(int track=0;track<tracks.Length;track++)tracks[track]=CreateTrack(track);
             for(int kind=0;kind<antics.Length;kind++)antics[kind]=CreateAntic(kind);
         }
         static AudioClip CreateAntic(int kind)
@@ -40,40 +50,34 @@ namespace Festival.Presentation
             var clip=AudioClip.Create("Original camp antic "+kind,samples.Length,1,Rate,false);
             clip.SetData(samples,0);return clip;
         }
-        static AudioClip CreateTrack(int track)
+        // Plays the DJ's choice (CampFeatures.Tracks' index; SILENCE stops), its first pass starting at sample from.
+        void Play(int selected,int from)
         {
-            // Four bars in 4/4; every component is generated from a fixed pattern.
-            const int seconds=8;
-            var samples=new float[Rate*seconds];
-            int[] notes=track==0?new[]{0,4,7,9,7,4,2,4}:track==1?new[]{0,3,7,10,7,3,5,7}:new[]{0,5,7,5,2,5,9,7};
-            double root=track==0?196:track==1?174.61:220;
-            for(int n=0;n<samples.Length;n++)
-            {
-                double t=n/(double)Rate,beat=t*2,beatPhase=beat-Math.Floor(beat);
-                int step=(int)(t*2)%notes.Length;
-                double note=root*Math.Pow(2,notes[step]/12.0);
-                double melody=Math.Sin(2*Math.PI*note*t)*Math.Exp(-beatPhase*3.5)*.15;
-                double kick=Math.Sin(2*Math.PI*(58+35*Math.Exp(-beatPhase*28))*beatPhase/2)*Math.Exp(-beatPhase*19)*.25;
-                double clap=(track==2?Math.Sin(2*Math.PI*890*t):Math.Sin(2*Math.PI*1100*t))*Math.Exp(-beatPhase*30)*((int)beat%2==1?.065:.018);
-                double bass=Math.Sin(2*Math.PI*(note/4)*t)*.09;
-                samples[n]=(float)(melody+kick+clap+bass);
-            }
-            var clip=AudioClip.Create("Original "+CampFeatures.Tracks[track+1],samples.Length,1,Rate,false);
-            clip.SetData(samples,0);return clip;
+            playing=selected;track=FestivalMusic.For(selected);
+            foreach(var deck in decks){deck.Stop();deck.clip=track?.Audio;}
+            if(track==null)return;
+            double start=AudioSettings.dspTime+Lead;
+            live=0;turnAt=start+(track.LoopEnd-from)/(double)FestivalMusic.Rate;
+            decks[0].timeSamples=from;decks[0].PlayScheduled(start);decks[0].SetScheduledEndTime(turnAt);
+            Queue(decks[1]);
         }
+        // A deck waits to take over at turnAt and plays the loop once.
+        void Queue(AudioSource deck){deck.Stop();deck.timeSamples=track.FirstBeat;deck.PlayScheduled(turnAt);deck.SetScheduledEndTime(turnAt+track.LoopSeconds);}
         void Update()
         {
             var state=session.State;
             int selected=state!=null&&(state.Phase=="Shopping"||state.Phase=="Spinning"||state.Phase=="CampReview")?state.CampMusicTrack:0;
             if(selected!=playing)
             {
-                playing=selected;source.Stop();
-                if(selected>0&&selected<=tracks.Length){source.clip=tracks[selected-1];source.Play();}
+                Play(selected,0);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","camp_music","track="+selected);
 #endif
             }
-            source.volume=session.Profile==null?0:session.Profile.Data.MusicVolume*.6f;
+            // The other deck has taken over: it is live now, and the one that just finished waits for the next turn.
+            if(track!=null&&AudioSettings.dspTime>=turnAt){live=1-live;turnAt+=track.LoopSeconds;Queue(decks[1-live]);}
+            float volume=session.Profile==null?0:session.Profile.Data.MusicVolume*.6f;
+            foreach(var deck in decks)deck.volume=volume;
             var player=session.LocalPlayer;
             if(player==null){lastAntics=0;return;}
             if(player.CampAntics>lastAntics&&player.CampVisitId!="")
@@ -84,6 +88,6 @@ namespace Festival.Presentation
             }
             lastAntics=player.CampAntics;
         }
-        void OnDestroy(){foreach(var track in tracks)if(track!=null)Destroy(track);foreach(var antic in antics)if(antic!=null)Destroy(antic);}
+        void OnDestroy(){foreach(var antic in antics)if(antic!=null)Destroy(antic);}
     }
 }

@@ -900,6 +900,10 @@ namespace Festival.Presentation
             player.X=CampFeatures.DjX;player.Z=CampFeatures.DjZ;
             session.Command("ChooseCampTrack",amount:2);
             if(sim.State.CampMusicTrack!=2){Fail("solo DJ track selection");yield break;}
+            // MUSIC-2: the camp plays the recording picked (track 2 is DISCO HOUSE), which proves the build carries Resources/Music.
+            yield return new WaitForSeconds(.3f);
+            var campMusic=session.GetComponent<FestivalCampAudio>().Music;
+            if(campMusic==null||!campMusic.isPlaying||campMusic.clip!=FestivalMusic.For(2).Audio){Fail("solo DJ plays DISCO HOUSE");yield break;}
             // ECON-2: the camp shelves sell gear only, so the solo crew buys the practice poi it spins on Day 1.
             var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("poi_practice"));
             player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"poi_practice");

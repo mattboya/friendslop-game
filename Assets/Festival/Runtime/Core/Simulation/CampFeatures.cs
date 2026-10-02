@@ -45,7 +45,8 @@ namespace Festival.Core
                     :new[]{"The flush sounds like a tiny standing ovation.","You read graffiti: 'the real headliner was the queue'.","The hand dryer gives your hair an impossible new shape."};
             return choices[Math.Abs(turn-1)%choices.Length];
         }
-        public static readonly string[] Tracks={"SILENCE","CAMPFIRE BOUNCE","MOONLIT DISCO","SNEAKY SKA"};
+        // MUSIC-2: SILENCE, then Matt's five recorded tracks (Presentation's FestivalMusic.Tracks, in this order).
+        public static readonly string[] Tracks={"SILENCE","TECH HOUSE","DISCO HOUSE","ORGANIC HOUSE","DRUM & BASS","DUB REGGAE"};
         // DEBRIEF-1 award pools: each debrief draws two worst awards, then one best award.
         public static readonly string[] WorstAwards={"Worst Dancer","Trusted the Narc","Got Lost","Blew Our Cover"};
         public static readonly string[] BestAwards={"MVP Tripper","Carried the Team","Best Moves"};

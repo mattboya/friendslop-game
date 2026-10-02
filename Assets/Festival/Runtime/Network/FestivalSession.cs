@@ -34,6 +34,7 @@ namespace Festival.Network
         // DIALOG-5: a chat check, and the VIP rope chat, lasts 8 s instead of 5 (FestivalSimulation.ConfirmChatSeconds).
         // ESC-2: a security stop ignored for 20 s becomes an arrest warning, and G ditches stock first during one; drops carry
         // the cop who claimed ditched stock (DropState.ClaimedBy), and the host's evidence its start (EvidenceState.StartSeconds).
+        // MUSIC-2: CampMusicTrack picks SILENCE or one of five recorded tracks (track 2 is DISCO HOUSE, no longer MOONLIT DISCO).
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
