@@ -172,30 +172,11 @@ namespace Festival.Presentation
             while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
             if(Time.realtimeSinceStartup>=deadline){Fail("camp spoon purchase");yield break;}
             if(session.LocalPlayer.HeldOfferId!=""){Fail("purchase still held");yield break;}
-            // Days are sold (LOOP-2): each friend also takes a Tongue Stamp off the shelf and pays the seller for it.
-            var tabs=Catalog.ShopPoint(true,session.State.VendorOffers.IndexOf("stock_lsd"));
+            // Days are sold (LOOP-2), but no shelf sells stock (ECON-2): each friend buys a Tongue Stamp from a festivalgoer on Day 1.
             if(session.IsHost)
             {
                 while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="little_spoon"))&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("two camp purchases");yield break;}
-                sim.State.Players[0].X=tabs.X-.4f;sim.State.Players[0].Z=tabs.Z-1;sim.State.Players[1].X=tabs.X+.4f;sim.State.Players[1].Z=tabs.Z-1;
-            }
-            while(!Within(session.LocalPlayer,tabs.X,tabs.Z,2.8f)&&Time.realtimeSinceStartup<deadline)yield return null;
-            session.Command("HoldOffer",item:"stock_lsd");
-            while(session.LocalPlayer.HeldOfferId!="stock_lsd"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(session.IsHost)
-            {
-                while(!sim.State.Players.TrueForAll(p=>p.HeldOfferId=="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
-                sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
-            }
-            while(!Near(session.LocalPlayer,campX,6)&&Time.realtimeSinceStartup<deadline)yield return null;
-            session.Command("Buy",item:"stock_lsd");
-            while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("camp stock purchase");yield break;}
-            if(session.IsHost)
-            {
-                while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="stock_lsd"))&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("two camp stock purchases");yield break;}
                 var site=CampFeatures.Find("tent_1");
                 foreach(var peer in sim.State.Players)
                 {
@@ -322,23 +303,42 @@ namespace Festival.Presentation
             // Only test actor placement is privileged. The client uses the
             // ordinary command channel for every mission action and note.
             NpcState[] buyers=null;
+            // ECON-2: each first buys a Tongue Stamp from a festivalgoer the host stands 1.5 m south of them, the client at the
+            // origin and the host 2.5 m west. Then the client shops in front of the voucher's night-market shelf, the host beside.
+            var market=MarketSpot(session.State);
             if(session.IsHost)
             {
                 // Give the client time to verify remote browsing at the normal entry
-                // before host-only test placement moves both peers to the market.
+                // before host-only test placement moves both peers to the stock buys and the market.
                 yield return new WaitForSeconds(1f);
-                // Day 1: two festivalgoers dealt as buyers stay, the first one in the tripper's visions; the rest of the crowd and
-                // security step away so nothing else interrupts the check and the sales.
+                // Day 1: two festivalgoers dealt as buyers stay, the first one in the tripper's visions, and two who sell Tongue
+                // Stamps; the rest of the crowd and security step away so nothing else interrupts the buys, the check and the sales.
                 buyers=DayBuyers(sim);
                 if(buyers==null){Fail("day buyers");yield break;}
-                KeepOnly(sim,buyers);
-                PlaceBoth(sim,-15.75f,-22);
-                sim.Player(sim.State.HostPlayerId).X=-15;
+                var clientSeller=Seller(sim,"stock_lsd");var hostSeller=Seller(sim,"stock_lsd",clientSeller);
+                if(clientSeller==null||hostSeller==null){Fail("day sellers");yield break;}
+                KeepOnly(sim,new[]{buyers[0],buyers[1],clientSeller,hostSeller});
+                PlaceBoth(sim,0,0);
+                sim.Player(sim.State.HostPlayerId).X=-2.5f;
+                Stand(clientSeller,0,-1.5f);Stand(hostSeller,-2.5f,-1.5f);
                 MakeClientTheTripper(sim);
+                yield return BuyStock(session,"stock_lsd",-2.5f,-1.5f,deadline);
+                if(failed!=null){Fail(failed);yield break;}
+                var client=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
+                while(!client.Inventory.Exists(item=>item.ItemId=="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("client's stock buy");yield break;}
+                // The sellers step away, out of the market views.
+                KeepOnly(sim,buyers);
+                PlaceBoth(sim,market.X,market.Z);
+                sim.Player(sim.State.HostPlayerId).X=market.X-.75f;
             }
             else
             {
-                while(!Near(session.LocalPlayer,-15.75f,-22)&&Time.realtimeSinceStartup<deadline)yield return null;
+                while(!Near(session.LocalPlayer,0,0)&&Time.realtimeSinceStartup<deadline)yield return null;
+                if(Time.realtimeSinceStartup>=deadline){Fail("stock buy placement");yield break;}
+                yield return BuyStock(session,"stock_lsd",0,-1.5f,deadline);
+                if(failed!=null){Fail(failed);yield break;}
+                while(!Near(session.LocalPlayer,market.X,market.Z)&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("night market placement");yield break;}
                 var marketGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.RootName+"/Night market goods");
                 if(marketGoods==null||marketGoods.childCount!=session.State.VendorOffers.Count){Fail("night market physical display");yield break;}
@@ -403,7 +403,7 @@ namespace Festival.Presentation
                 // the crew's quota is met. The smoke hands them enough Tongue Stamps for every sale the two buyers take.
                 Stand(buyers[0],0,1);Stand(buyers[1],1.6f,.6f);
                 var tabStack=seller.Inventory.Find(item=>item.ItemId=="stock_lsd");
-                if(tabStack==null){Fail("tripper's camp stock");yield break;}
+                if(tabStack==null){Fail("tripper's Day 1 stock");yield break;}
                 tabStack.Count=2*FestivalSimulation.SalesPerBuyer(sim.State);
                 while(!FestivalSimulation.DayQuotaMet(sim.State)&&Time.realtimeSinceStartup<deadline)yield return null;
                 PlaceBoth(sim,Festivals.CampGateX,Festivals.CampGateZ);
@@ -900,29 +900,25 @@ namespace Festival.Presentation
             player.X=CampFeatures.DjX;player.Z=CampFeatures.DjZ;
             session.Command("ChooseCampTrack",amount:2);
             if(sim.State.CampMusicTrack!=2){Fail("solo DJ track selection");yield break;}
-            var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_mushrooms"));
-            player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"stock_mushrooms");
-            if(player.HeldOfferId!="stock_mushrooms"){Fail("solo shelf pickup");yield break;}
-            player.X=0;player.Z=7;session.Command("Buy",item:"stock_mushrooms");
-            if(!player.Inventory.Exists(item=>item.ItemId=="stock_mushrooms")){Fail("solo camp purchase");yield break;}
-            if(player.EquippedItemId!="stock_mushrooms"){Fail("solo purchased gear equips");yield break;}
+            // ECON-2: the camp shelves sell gear only, so the solo crew buys the practice poi it spins on Day 1.
+            var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("poi_practice"));
+            player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"poi_practice");
+            if(player.HeldOfferId!="poi_practice"){Fail("solo shelf pickup");yield break;}
+            player.X=0;player.Z=7;session.Command("Buy",item:"poi_practice");
+            if(!player.Inventory.Exists(item=>item.ItemId=="poi_practice")){Fail("solo camp purchase");yield break;}
+            if(player.EquippedItemId!="poi_practice"){Fail("solo purchased gear equips");yield break;}
             player.Z=1;
             yield return new WaitForSeconds(.3f);
             string equippedCapture=Path.Combine(soloCaptureDir,"solo-equipped-camp.png");
             if(File.Exists(equippedCapture))File.Delete(equippedCapture);
             ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
             if(!File.Exists(equippedCapture)){Fail("solo equipped camp render");yield break;}
-            // Days are sold (LOOP-2): a Tongue Stamp from the shelf to sell.
-            var tabs=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_lsd"));
-            player.X=tabs.X;player.Z=tabs.Z;session.Command("HoldOffer",item:"stock_lsd");
-            player.X=0;player.Z=7;session.Command("Buy",item:"stock_lsd");
-            if(!player.Inventory.Exists(item=>item.ItemId=="stock_lsd")){Fail("solo stock purchase");yield break;}
             player.Z=19;session.Command("Ready");
             yield return CaptureSpinner(session,"solo-spinner.png",deadline);
             if(failed!=null){Fail(failed);yield break;}
             while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.State.Phase!="Playing"){Fail("solo campsite countdown");yield break;}
-            player.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});session.Command("Equip",item:"poi_practice");
+            session.Command("Equip",item:"poi_practice");
             yield return new WaitForSeconds(.2f);
             string poiCapture=Path.Combine(soloCaptureDir,"solo-poi-grip.png");
             if(File.Exists(poiCapture))File.Delete(poiCapture);
@@ -931,6 +927,15 @@ namespace Festival.Presentation
             // Day 1: two festivalgoers dealt as buyers stay, the first one in the solo tripper's visions; the rest step away.
             var buyers=DayBuyers(sim);
             if(buyers==null){Fail("solo day buyers");yield break;}
+            // Days are sold (LOOP-2), and stock comes from festivalgoers (ECON-2): Fun Guys to take, then a Tongue Stamp to sell, each
+            // bought from a festivalgoer who sells that kind, out of security's sight. They step away once they've sold.
+            var funGuys=Seller(sim,"stock_mushrooms");var tabs=Seller(sim,"stock_lsd");
+            if(funGuys==null||tabs==null){Fail("solo day sellers");yield break;}
+            KeepOnly(sim,new[]{buyers[0],buyers[1],funGuys,tabs});
+            player.X=0;player.Z=0;Stand(funGuys,-1.6f,.6f);Stand(tabs,1.6f,.6f);
+            yield return BuyStock(session,"stock_mushrooms",-1.6f,.6f,deadline);
+            if(failed==null)yield return BuyStock(session,"stock_lsd",1.6f,.6f,deadline);
+            if(failed!=null){Fail("solo "+failed);yield break;}
             KeepOnly(sim,buyers);
             player.X=-18;player.Z=-22;session.Command("Use",item:"stock_mushrooms");
             if(player.Effects.Count==0){Fail("solo consumable use");yield break;}
@@ -1021,7 +1026,7 @@ namespace Festival.Presentation
         // Sets finished to it, or leaves it null when the command was refused.
         IEnumerator Interact(FestivalSession session,string command,string target,string item,float deadline)
         {
-            finished=null;string kind=command=="StartSale"?"Sale":command;
+            finished=null;string kind=command=="StartSale"?"Sale":command=="StartBuy"?"Buy":command;
             while(session.LocalPlayer.InteractionId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
             session.Command(command,target,item);
             InteractionState running=null;float refusedAfter=Time.realtimeSinceStartup+3;
@@ -1039,6 +1044,17 @@ namespace Festival.Presentation
                 }
             while(session.LocalPlayer.InteractionId==running.Id&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer.InteractionId!=running.Id)finished=running;
+        }
+        // ECON-2: buys a unit of this kind from the festivalgoer the host stood at (x, z), dancing it perfectly, as a sale is.
+        IEnumerator BuyStock(FestivalSession session,string kind,float x,float z,float deadline)
+        {
+            NpcState seller=null;
+            while((seller=session.State.Npcs.Find(n=>Near(n,x,z)))==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            if(seller==null){failed="seller placement";yield break;}
+            int held=session.LocalPlayer.Inventory.Find(item=>item.ItemId==kind)?.Count??0;
+            yield return Interact(session,"StartBuy",seller.Id,kind,deadline);
+            if(finished==null||(session.LocalPlayer.Inventory.Find(item=>item.ItemId==kind)?.Count??0)<=held){failed="stock bought from "+seller.Id+": life="+session.LocalPlayer.Life+" "+session.Message;yield break;}
+            Debug.Log("FESTIVAL SMOKE STOCK BUY PASSED: "+kind+" from "+seller.Id+" at score "+session.LocalPlayer.LastRhythmScore.ToString("F2")+"; host="+session.IsHost);
         }
         // Day 1 for the tripper (TRIP-3, LOOP-2): check the buyer in their visions by chatting, then sell to that buyer and then
         // the other until the crew's quota is met.
@@ -1149,6 +1165,11 @@ namespace Festival.Presentation
             var other=buyers.Find(n=>n!=seen);
             return seen==null||other==null?null:new[]{seen,other};
         }
+        // ECON-2: a festivalgoer dealt as a Regular who sells this kind (FestivalSimulation.SellerStock), other than `besides`: Day 1's
+        // stock comes from them (SmokeStockTests). Never the VIP guard; KeepOnly puts an influencer's phone away.
+        public static NpcState Seller(FestivalSimulation sim,string kind,NpcState besides=null)=>sim.State.Npcs.Find(n=>n!=besides&&n.Role=="Regular"&&n.Twist!=FestivalSimulation.VipGuard&&FestivalSimulation.SellerStock(n.Id)==kind);
+        // Where the client stands to buy a medical voucher at the night market: just in front of its shelf, wherever the seed put it.
+        public static WorldPoint MarketSpot(RoundState s){var shelf=Catalog.ShopPoint(false,s.VendorOffers.IndexOf("medical_voucher"));return new WorldPoint(shelf.X,shelf.Z-.85f);}
         // The spinner picks the tripper; the smoke makes the client the dose-1 tripper so the host stays the sober helper and
         // the day always takes the same sales.
         static void MakeClientTheTripper(FestivalSimulation sim)
