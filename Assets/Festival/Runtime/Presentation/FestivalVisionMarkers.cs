@@ -11,14 +11,19 @@ namespace Festival.Presentation
     /// <summary>VISION-1: draws the tripper's visions over festivalgoers and places. Only the tripper's view carries visions
     /// (FestivalSimulation.VisibleVisions), so every other client draws nothing. A fake's tells come from the host's Tell flag,
     /// never from its truth: it casts no shadow, is slightly off in colour and shimmers while the camera moves. A checked
-    /// vision drops its tells and is ringed in green (a truth) or red (a fake), and it says what it found (NOT A NARC, PAYS
-    /// DOUBLE...) while the aim dot is on it (VISION-5). The shadow is a pool on the ground right under the marker, at the
-    /// festivalgoer's feet (the festival sun is only 14 degrees up, so a real one would land about 10 m away): dark by day, and
-    /// by night, when the ground is too dark for any shadow to show, a faint pale glow.</summary>
+    /// vision drops its tells and is ringed in green (a truth) or red (a fake). While the aim dot is on it, a checked vision says
+    /// what it found (NOT A NARC, PAYS DOUBLE...) and an unchecked one asks what it claims (NARC?) (VISION-5). The shadow is a
+    /// pool on the ground right under the marker, at the festivalgoer's feet (the festival sun is only 14 degrees up, so a real
+    /// one would land about 10 m away): dark by day, and by night, when the ground is too dark for any shadow to show, a faint
+    /// pale glow.</summary>
     public sealed class FestivalVisionMarkers : MonoBehaviour
     {
-        // Over a festivalgoer's head (stacked when two visions share one), or over a spot on the grounds.
-        private const float OverHead=2.45f,StackStep=.5f,OverPlace=1.4f,Size=.32f,LabelRise=.4f;
+        // Over a festivalgoer's head (stacked when two visions share one), or over a spot on the grounds. A label sits LabelGap over
+        // its own glyph, and StackStep leaves room for it under the next glyph up: two .64 m glyphs (a clue under a double buyer)
+        // plus a .23 m line and the gaps (VISION-5).
+        private const float OverHead=2.45f,StackStep=.95f,OverPlace=1.4f,Size=.32f,LabelGap=.04f;
+        // Under an unchecked claim, smaller: how to settle it. E dances and F chats with the festivalgoer (FestivalHud's check).
+        private const string CheckLine="\n<size=40>F CHAT • E DANCE TO CHECK</size>";
         // Fakes: hue a little off, and a scale shimmer that grows with how fast the camera turns or moves, eased over ShimmerEase
         // seconds so a mouse that reports slower than the screen refreshes cannot make it flicker.
         private const float FakeHueShift=.06f,ShimmerDepth=.18f,ShimmerHz=9,FullShimmerTurn=90,FullShimmerMove=4,ShimmerEase=.15f;
@@ -35,7 +40,7 @@ namespace Festival.Presentation
         // the top of their whole stack of markers (or from its spot on the ground up to the top of its marker).
         private const float AimReach=.5f;
 
-        private sealed class Marker { public Transform Root,Label,Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; }
+        private sealed class Marker { public Transform Root,Label,Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask; }
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
@@ -94,38 +99,43 @@ namespace Festival.Presentation
                 if(view!=null)marker.Label.rotation=view.rotation;
             }
             // Once every marker is placed: a festivalgoer is aimed at up to the top of their whole stack, so every vision over them
-            // answers the aim alike and the lower verdict stays up while the dot moves up to read the upper one.
+            // answers the aim alike and the lower label stays up while the dot moves up to read the upper one. Checked or not: an
+            // unchecked vision says what it claims.
             int aimed=-1;float nearest=float.PositiveInfinity;
             var from=view==null?Vector3.zero:FestivalThirdPerson.AimFrom(view.position,view.forward,eye??view.position);
             for(int i=0;i<visions.Count&&view!=null;i++)
             {
                 var vision=visions[i];var marker=markers[vision.Id];
-                if(!vision.Confirmed||!marker.Root.gameObject.activeSelf)continue;
+                if(!marker.Root.gameObject.activeSelf)continue;
                 float top=marker.Glyph.bounds.max.y;
                 for(int j=i+1;j<visions.Count;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)top=Mathf.Max(top,markers[visions[j].Id].Glyph.bounds.max.y);
                 marker.Aimed=Aim(from,view.forward,marker.Ground,top);
                 if(marker.Aimed<nearest){nearest=marker.Aimed;aimed=i;}
             }
-            // Only the checked target nearest the camera along the aim says what it is; every checked vision over that festivalgoer does.
+            // Only the target nearest the camera along the aim says what it found, or claims; every vision over that festivalgoer does.
+            // One check settles them all, so only the top of the stack carries the check line, where no glyph sits above it.
             for(int i=0;i<visions.Count;i++)
             {
                 var vision=visions[i];var marker=markers[vision.Id];
-                bool said=marker.Aimed<float.PositiveInfinity&&(i==aimed||vision.NpcId!=""&&vision.NpcId==visions[aimed].NpcId);
-                marker.Verdict.text=!said?"":VerdictText(vision.Kind,vision.IsTrue);
+                bool said=marker.Aimed<float.PositiveInfinity&&(i==aimed||vision.NpcId!=""&&vision.NpcId==visions[aimed].NpcId),top=true;
+                for(int j=i+1;j<visions.Count&&said;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)top=false;
+                marker.Verdict.text=!said?"":vision.Confirmed?VerdictText(vision.Kind,vision.IsTrue):top?marker.Ask:ClaimText(vision.Kind);
             }
         }
 
         /// <summary>What a checked vision of kind says it found: the claim it settles, never a bare TRUE or FALSE (VISION-5).</summary>
         public static string VerdictText(string kind,bool isTrue){var words=Words(kind);return isTrue?words.True:words.False;}
+        /// <summary>What an unchecked vision of kind claims, as the question a check settles (VISION-5).</summary>
+        public static string ClaimText(string kind)=>Words(kind).Claim;
         // One table, shared with HUD-7's How to Play. A stash and a double buyer are always true in play (SecretSights), so their
         // fake words only show in hand-built states; every kind has both all the same.
-        private static (string True,string False) Words(string kind)=>kind switch
+        private static (string Claim,string True,string False) Words(string kind)=>kind switch
         {
-            "Buyer"=>("BUYER","NOT BUYING"),
-            "Narc"=>("NARC!","NOT A NARC"),
-            "Clue"=>("REAL CLUE","FAKE CLUE"),
-            "DoubleBuyer"=>("PAYS DOUBLE","PAYS NORMAL"),
-            _=>("STASH HERE","NOTHING HERE"),
+            "Buyer"=>("BUYER?","BUYER","NOT BUYING"),
+            "Narc"=>("NARC?","NARC!","NOT A NARC"),
+            "Clue"=>("CLUE?","REAL CLUE","FAKE CLUE"),
+            "DoubleBuyer"=>("PAYS DOUBLE?","PAYS DOUBLE","PAYS NORMAL"),
+            _=>("STASH HERE?","STASH HERE","NOTHING HERE"),
         };
 
         // How far along the aim (from eye, along forward) it passes within AimReach of the upright line from ground up to top;
@@ -203,10 +213,13 @@ namespace Festival.Presentation
             shadow.transform.localScale=new Vector3(ShadowWidth,ShadowThickness/2,ShadowWidth);
             var shadowCollider=shadow.GetComponent<Collider>();shadowCollider.enabled=false;Dispose(shadowCollider);
             var shadowRenderer=shadow.GetComponent<MeshRenderer>();shadowRenderer.sharedMaterial=Pool(night);shadowRenderer.shadowCastingMode=ShadowCastingMode.Off;shadowRenderer.receiveShadows=false;
-            var label=new GameObject("Label").transform;label.SetParent(root,false);label.localPosition=Vector3.up*LabelRise;
-            var verdict=label.gameObject.AddComponent<TextMesh>();verdict.fontSize=64;verdict.characterSize=.03f;verdict.anchor=TextAnchor.MiddleCenter;verdict.alignment=TextAlignment.Center;verdict.color=new Color(.96f,.94f,.84f);
+            // VISION-5: the label grows up from just over its own glyph, so a second line never reaches down into it.
+            var label=new GameObject("Label").transform;label.SetParent(root,false);label.localPosition=Vector3.up*(glyph.GetComponent<MeshFilter>().sharedMesh.bounds.extents.y*Size+LabelGap);
+            var verdict=label.gameObject.AddComponent<TextMesh>();verdict.fontSize=64;verdict.characterSize=.03f;verdict.anchor=TextAnchor.LowerCenter;verdict.alignment=TextAlignment.Center;verdict.color=new Color(.96f,.94f,.84f);
             var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){verdict.font=font;label.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
-            return new Marker{Root=root,Label=label,Shadow=shadow.transform,Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring};
+            // A spot on the ground is checked by walking to it (FindStashes), so it says no more than its claim.
+            var ask=vision.NpcId==""?ClaimText(vision.Kind):ClaimText(vision.Kind)+CheckLine;
+            return new Marker{Root=root,Label=label,Shadow=shadow.transform,Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring,Ask=ask};
         }
 
         private void OnDestroy(){foreach(var marker in markers.Values){Dispose(marker.Material);Dispose(marker.RingMaterial);}markers.Clear();if(shade!=null)Dispose(shade);if(glow!=null)Dispose(glow);}

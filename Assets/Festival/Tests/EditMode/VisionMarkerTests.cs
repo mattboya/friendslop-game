@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -141,7 +142,7 @@ namespace Festival.Tests
             Assert.That(Label(markers,"false"),Is.Empty,"while the checked fake it is not aimed at stays blank");
             Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo("NOT BUYING"),"aimed at a checked fake, it says what is true");
             Assert.That(Label(markers,"true"),Is.Empty,"while the checked truth it is no longer aimed at goes blank");
-            Assert.That(Aimed(bodies["a"].position+Vector3.up,"open"),Is.Empty,"an unchecked vision aimed at makes no claim");
+            Assert.That(Aimed(bodies["a"].position+Vector3.up,"open"),Does.StartWith("BUYER?"),"an unchecked vision aimed at says what it claims");
 
             // On it means within about half a metre of the upright line from the feet to the top of the marker.
             float top=Glyph(markers,"true").bounds.max.y;string truth=FestivalVisionMarkers.VerdictText("Buyer",true),fake=FestivalVisionMarkers.VerdictText("Buyer",false);
@@ -159,6 +160,11 @@ namespace Festival.Tests
             Assert.That(Aimed(bodies["c"].position+Vector3.up,"false"),Is.EqualTo(fake),"from the far side, the other one is the nearer");
             Assert.That(Label(markers,"true"),Is.Empty,"and the first one is now behind it");
             view.position=new Vector3(0,1.65f,-10);bodies["c"].position=new Vector3(4,0,0);
+            // Unchecked festivalgoers answer the aim too, so one standing in front of a checked one is the one read.
+            bodies["a"].position=new Vector3(0,0,-4);
+            Assert.That(Aimed(feet+Vector3.up,"open"),Does.StartWith("BUYER?"),"an unchecked festivalgoer in front of a checked one answers the aim");
+            Assert.That(Label(markers,"true"),Is.Empty,"and the checked one behind them stays blank");
+            bodies["a"].position=new Vector3(-4,0,0);
 
             var plain=Markers();var solid=new RoundState{Phase="Playing"};solid.Visions.Add(new VisionState{Id="true",Kind="Buyer",NpcId="b"});plain.Apply(solid,View(),actorFor,0,.02f);
             Assert.That(Glyph(markers,"true").sharedMaterial.color,Is.EqualTo(Glyph(plain,"true").sharedMaterial.color),"a checked truth keeps its kind's colour");
@@ -186,7 +192,8 @@ namespace Festival.Tests
 
         // VISION-5: the aim dot is on a festivalgoer anywhere from their feet to the top of their whole stack of visions, so
         // every checked vision over them answers together and none flickers off as the dot moves up the stack to read the upper
-        // one. Matt's case: a checked fake Narc under a buyer who pays double, checked later; a third, unchecked, stays blank.
+        // one. Matt's case: a checked fake Narc under a buyer who pays double, checked later; a third, unchecked, says what it claims,
+        // and as the top of the stack it carries the festivalgoer's one check line.
         [Test]public void EveryCheckedVisionOverTheAimedFestivalgoerAnswers()
         {
             var state=Round();var body=Made("b").transform;Func<string,Transform> actorFor=id=>id=="b"?body:null;
@@ -204,8 +211,8 @@ namespace Festival.Tests
                     Aim(view,body.position+Vector3.up*y);markers.Apply(state,view,actorFor,0,.02f);
                     string at=" (aimed "+y.ToString("0.00")+" m up the festivalgoer"+(checkedLater?", both checked)":", the upper one unchecked)");
                     Assert.That(Label(markers,"narc"),Is.EqualTo("NOT A NARC"),"the lower checked fake says what is true"+at);
-                    Assert.That(Label(markers,"double"),Is.EqualTo(checkedLater?"PAYS DOUBLE":""),"the buyer who pays double"+(checkedLater?" says so":" makes no claim until checked")+at);
-                    Assert.That(Label(markers,"open"),Is.Empty,"the unchecked one on top makes no claim"+at);
+                    Assert.That(Label(markers,"double"),Is.EqualTo(checkedLater?"PAYS DOUBLE":"PAYS DOUBLE?"),"the buyer who pays double"+(checkedLater?" says so":" asks it until checked")+at);
+                    Assert.That(Label(markers,"open"),Does.StartWith("BUYER?\n").And.Contain(CheckLine),"the unchecked one on top asks its claim over how to check"+at);
                 }
             }
         }
@@ -234,6 +241,75 @@ namespace Festival.Tests
                 {"DoubleBuyer truth","PAYS DOUBLE"},{"DoubleBuyer fake","PAYS NORMAL"},
                 {"Stash truth","STASH HERE"},{"Stash fake","NOTHING HERE"},
             }),"each kind's words name the claim it settles");
+        }
+
+        // VISION-5: before a check, every marker says what it claims, so it relates to something. Aimed at, an unchecked vision reads
+        // its claim as a question, and on a festivalgoer a smaller line under it says how to settle it. A stash is a spot on the
+        // ground, found by walking to it (FindStashes), so it carries no check line. Once checked, the same marker reads its answer
+        // and the check line is gone.
+        [Test]public void AnUncheckedVisionSaysWhatItClaims()
+        {
+            var claims=new Dictionary<string,string>();
+            foreach(var kind in new[]{"Buyer","Narc","Clue","DoubleBuyer","Stash"})
+            {
+                var state=Round();var body=Made(kind).transform;bool place=kind=="Stash";Func<string,Transform> actorFor=id=>id==kind?body:null;
+                var vision=new VisionState{Id="seen",Kind=kind,NpcId=place?"":kind,Tell=true};state.Visions.Add(vision);
+                var markers=Markers();var view=View();view.rotation=Quaternion.LookRotation(Vector3.back);markers.Apply(state,view,actorFor,0,.02f);
+                Assert.That(Label(markers,"seen"),Is.Empty,kind+": aimed away, nothing shows");
+                Aim(view,Vector3.up);markers.Apply(state,view,actorFor,0,.02f);
+                var lines=Label(markers,"seen").Split('\n');claims[kind]=lines[0];
+                Assert.That(lines[0],Is.EqualTo(FestivalVisionMarkers.ClaimText(kind)),kind+": aimed at, it reads its claim");
+                if(place)Assert.That(lines.Length,Is.EqualTo(1),kind+" is a spot found by walking to it, so it shows no check line");
+                else
+                {
+                    var check=Regex.Match(lines.Length>1?lines[1]:"","^<size=(\\d+)>"+CheckLine+"</size>$");
+                    Assert.That(lines.Length==2&&check.Success,Is.True,kind+": one line under the claim says how to settle it ("+Label(markers,"seen")+")");
+                    Assert.That(Text(markers,"seen").richText&&int.Parse(check.Groups[1].Value)<Text(markers,"seen").fontSize,Is.True,kind+": the check line is smaller than the claim");
+                }
+                Assert.That(()=>markers.Apply(state,view,actorFor,.02f,.02f),Is.Not.AllocatingGCMemory(),kind+": aiming at an unchecked vision makes no garbage");
+                vision.Confirmed=true;vision.IsTrue=true;markers.Apply(state,view,actorFor,.04f,.02f);
+                Assert.That(Label(markers,"seen"),Is.EqualTo(FestivalVisionMarkers.VerdictText(kind,true)),kind+": once checked, the same marker reads its answer and the check line is gone");
+            }
+            Assert.That(claims,Is.EquivalentTo(new Dictionary<string,string>{{"Buyer","BUYER?"},{"Narc","NARC?"},{"Clue","CLUE?"},{"DoubleBuyer","PAYS DOUBLE?"},{"Stash","STASH HERE?"}}),
+                "each claim is the question its check settles, from the same table as the answers");
+        }
+
+        // VISION-5: Matt's screenshot. A checked fake Narc sat under a checked buyer who pays double, and the lower label landed inside
+        // the gold pillar above it. Over every pair of kinds a festivalgoer can wear, checked or not, each label sits over its own
+        // glyph and under the next one up. One check settles every vision over a festivalgoer, so an unchecked stack carries one check
+        // line, under the top claim, where nothing sits above it.
+        [Test]public void StackedLabelsSitBetweenTheirGlyphs()
+        {
+            var kinds=new[]{"Buyer","Narc","Clue","DoubleBuyer"};
+            foreach(bool seen in new[]{true,false})
+                foreach(var lower in kinds)
+                    foreach(var upper in kinds)
+                    {
+                        var state=Round();var body=Made("b").transform;body.position=new Vector3(0,0,0);
+                        state.Visions.Add(new VisionState{Id="lower",Kind=lower,NpcId="b",Confirmed=seen});
+                        state.Visions.Add(new VisionState{Id="upper",Kind=upper,NpcId="b",IsTrue=seen,Confirmed=seen});
+                        var markers=Markers();var view=View();Aim(view,Vector3.up);markers.Apply(state,view,id=>id=="b"?body:null,0,.02f);
+                        string pair=lower+" under "+upper+(seen?", checked":", unchecked");
+                        Bounds low=Glyph(markers,"lower").bounds,high=Glyph(markers,"upper").bounds,lowLabel=LabelBounds(markers,"lower"),highLabel=LabelBounds(markers,"upper");
+                        Assert.That(Label(markers,"lower").Length>0&&Label(markers,"upper").Length>0,Is.True,"setup: "+pair+": aimed at, both labels show");
+                        Assert.That(lowLabel.min.y,Is.GreaterThanOrEqualTo(low.max.y),pair+": the lower label sits over its own glyph");
+                        Assert.That(lowLabel.max.y,Is.LessThanOrEqualTo(high.min.y),pair+": and under the next glyph up");
+                        Assert.That(highLabel.min.y,Is.GreaterThanOrEqualTo(high.max.y),pair+": the upper label sits over its own glyph");
+                        Assert.That(Mathf.Abs(lowLabel.center.x-low.center.x)+Mathf.Abs(highLabel.center.x-high.center.x),Is.LessThan(1e-3f),pair+": each label is centred over its glyph");
+                        Assert.That(high.center.y-low.center.y,Is.GreaterThanOrEqualTo(low.extents.y+high.extents.y+lowLabel.size.y),pair+": the glyphs are at least their height plus the label's apart");
+                        if(!seen)
+                        {
+                            Assert.That(Label(markers,"lower"),Is.EqualTo(FestivalVisionMarkers.ClaimText(lower)),pair+": the lower claim is one line");
+                            Assert.That(Label(markers,"upper"),Does.StartWith(FestivalVisionMarkers.ClaimText(upper)+"\n").And.Contain(CheckLine),pair+": the top claim carries the check line");
+                        }
+                    }
+
+            var matt=Round();var person=Made("p").transform;Func<string,Transform> actorFor=id=>id=="p"?person:null;
+            matt.Visions.Add(new VisionState{Id="narc",Kind="Narc",NpcId="p",IsTrue=false,Confirmed=true});
+            matt.Visions.Add(new VisionState{Id="double",Kind="DoubleBuyer",NpcId="p",IsTrue=true,Confirmed=true});
+            var drawn=Markers();var eye=View();Aim(eye,Vector3.up);drawn.Apply(matt,eye,actorFor,0,.02f);
+            Assert.That(new[]{Label(drawn,"narc"),Label(drawn,"double")},Is.EqualTo(new[]{"NOT A NARC","PAYS DOUBLE"}),"Matt's festivalgoer reads NOT A NARC under PAYS DOUBLE");
+            Assert.That(LabelBounds(drawn,"narc").max.y,Is.LessThanOrEqualTo(Glyph(drawn,"double").bounds.min.y),"and NOT A NARC sits under the gold pillar, not on it");
         }
 
         // CAM-1: over the shoulder the camera hangs 2.4 m behind and .45 m right of your eye, and the aim dot (the camera's centre)
@@ -370,7 +446,10 @@ namespace Festival.Tests
         {
             var shadow=Marker(markers,id).Find("Shadow");Assert.That(shadow,Is.Not.Null,"vision "+id+" has a shadow to show");return shadow;
         }
-        private static string Label(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMesh>().text;
+        private const string CheckLine="F CHAT • E DANCE TO CHECK";
+        private static TextMesh Text(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMesh>();
+        private static string Label(FestivalVisionMarkers markers,string id)=>Text(markers,id).text;
+        private static Bounds LabelBounds(FestivalVisionMarkers markers,string id)=>Text(markers,id).GetComponent<MeshRenderer>().bounds;
         private static MeshRenderer Outline(FestivalVisionMarkers markers,string id)
         {
             var outline=Marker(markers,id).Find("Glyph/Outline");Assert.That(outline,Is.Not.Null,"vision "+id+" has an outline");return outline.GetComponent<MeshRenderer>();
