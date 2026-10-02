@@ -46,7 +46,8 @@ public static class TripperTests
         var s=Crew(11,2);Spin(s);
         var tripper=Tripper(s);Check(tripper!=null,"the people spinner lands on a crew member");
         var friend=s.State.Players.Find(p=>p!=tripper);double left=s.State.SpinEndsAt-s.State.SimulationSeconds;
-        Check(left>12.1&&left<=FestivalSimulation.SpinSeconds,"each wheel spins 4 s and rests .6 s on its result, then the take and the reaction: at least 12 s");
+        // SPIN-3: the three reels start together and stop 2.5, 4 and 6 s in, the results rest 1 s, then the take and the reaction.
+        Check(left>9.9&&left<10.1&&left<=FestivalSimulation.SpinSeconds,"the slot machine's reels stop in turn, the results rest, then the take and the reaction: about 10 s, got "+left.ToString("F2"));
         Check(s.State.Doses.Count==1&&s.State.Doses[0].PlayerId==tripper.Id&&s.State.Doses[0].Dose==Dose(tripper)&&Dose(tripper)>=1&&Dose(tripper)<=4,"the tripper takes the 1-4 doses the dose spinner landed on");
         Check(Dose(friend)==0,"everyone else stays sober on a normal level");
         Check(!s.TryMove(friend.Id,friend.X+.1f,friend.Z,0,.1),"the crew stands still at camp while the wheels spin");

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Festival.Core;
@@ -11,7 +12,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    // SPIN-1 in a running scene: the wheels cover the screen, then the camera cuts to the tripper taking the dose and reacting.
+    // SPIN-1 in a running scene: the slot machine (SPIN-3) covers the screen, then the camera cuts to the tripper taking the dose and reacting.
     public sealed class SpinnerTakeTests:FestivalPlayModeTest
     {
         static Transform Bone(FestivalCharacter actor,string name)=>actor.GetComponentsInChildren<Transform>().First(t=>t.name==name);
@@ -68,31 +69,39 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.3f);
 
                 var overlay=host.transform.Find("Festival spinner");
-                Assert.That(overlay!=null&&overlay.gameObject.activeInHierarchy,"the wheels cover the screen during the spin");
+                Assert.That(overlay!=null&&overlay.gameObject.activeInHierarchy,"the slot machine covers the screen during the spin");
                 var shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
-                Assert.That(shown,Does.Contain("TESTER").And.Contain("MATE"),"the people wheel has a slice for each friend");
-                Assert.That(shown,Does.Contain("1").And.Contain("4"),"the dose wheel shows its slices, sliver included");
-                Assert.That(shown,Is.SupersetOf(new[]{"TONGUE\nSTAMPS","FUN\nGUYS","ROLLY\nPOLLIES","PONY\nDUST","COUCH\nLOCK"}),"the substance wheel shows its five, each name on two lines");
-
-                while(session.EstimatedSimulationSeconds<start+FestivalSpinner.WheelStops(FestivalSimulation.WheelCount-1)+.2&&Time.realtimeSinceStartup<deadline)yield return null;
-                string name=sim.Player(tripper).Name.ToUpperInvariant();
-                shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
-                Assert.That(shown.Any(t=>t.Contains(name))&&shown.Any(t=>t.StartsWith(dose+" DOSE"))&&shown.Contains(took),"all three results read out once the wheels land: "+string.Join(" | ",shown));
-                // What sits under each pointer on screen is the result's own slice: the wheel's pixels there match the pixels behind its label.
-                void PointerOn(string wheel,string label)
+                Assert.That(shown,Is.SupersetOf(new[]{"WHO TRIPS?","HOW MANY DOSES?","WHAT DID THEY TAKE?"}),"each reel window is headed with its question");
+                List<string> Tiles(string reel)
                 {
-                    var holder=overlay.Find("Spinner backdrop/"+wheel);var disc=(RectTransform)holder.Find("Disc");var texture=(Texture2D)disc.GetComponent<RawImage>().texture;
-                    Color Pixel(Vector2 at)=>texture.GetPixelBilinear(at.x/disc.rect.width+.5f,at.y/disc.rect.height+.5f);
-                    var slice=(Vector2)disc.GetComponentsInChildren<Text>().First(t=>t.text==label).rectTransform.localPosition;
-                    var pointer=((Vector2)disc.InverseTransformPoint(holder.Find("Pointer").position)).normalized*slice.magnitude;
-                    Assert.That(Vector4.Distance(Pixel(pointer),Pixel(slice)),Is.LessThan(.05f),"the "+wheel+"'s pointer rests on "+label+"'s slice");
+                    var strip=overlay.Find("Spinner backdrop/Cabinet/"+reel+"/Window/Strip");
+                    Assert.That(strip,Is.Not.Null,"the cabinet's "+reel+" scrolls a strip of tiles in its window");
+                    return strip.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();
                 }
-                PointerOn("People wheel",name);PointerOn("Dose wheel",dose.ToString());PointerOn("Substance wheel",took.Replace(' ','\n'));
+                Assert.That(Tiles("People reel"),Does.Contain("TESTER").And.Contain("MATE"),"the people reel has a tile for each friend");
+                Assert.That(Tiles("Dose reel"),Does.Contain("1").And.Contain("4"),"the dose reel holds its doses, the rare 4 included");
+                Assert.That(Tiles("Substance reel"),Is.SupersetOf(new[]{"TONGUE STAMPS","FUN GUYS","ROLLY POLLIES","PONY DUST","COUCH LOCK"}),"the substance reel holds all five");
+
+                string[] Results()=>new[]{"People reel","Dose reel","Substance reel"}.Select(r=>overlay.Find("Spinner backdrop/Cabinet/"+r+"/Result").GetComponent<Text>().text).ToArray();
+                Assert.That(Results(),Is.EqualTo(new[]{"","",""}),"nothing reads out while the reels spin");
+
+                while(session.EstimatedSimulationSeconds<start+FestivalSpinner.LastReelStops+.2&&Time.realtimeSinceStartup<deadline)yield return null;
+                string name=sim.Player(tripper).Name.ToUpperInvariant();
+                Assert.That(Results(),Is.EqualTo(new[]{name+" TRIPS",dose+(dose==1?" DOSE":" DOSES"),took}),"all three results read out under their reels once the last reel stops");
+                // The tile nearest the payline in each window is the result's own, resting centred on it.
+                var payline=(RectTransform)overlay.Find("Spinner backdrop/Cabinet/Payline");
+                void OnPayline(string reel,string label)
+                {
+                    var tile=overlay.Find("Spinner backdrop/Cabinet/"+reel+"/Window/Strip").Cast<Transform>().OrderBy(t=>Mathf.Abs(t.position.y-payline.position.y)).First();
+                    Assert.That(tile.GetComponentInChildren<Text>().text,Is.EqualTo(label),"the "+reel+" rests on "+label);
+                    Assert.That(Mathf.Abs(tile.position.y-payline.position.y),Is.LessThan(.5f),"centred on the payline");
+                }
+                OnPayline("People reel",name);OnPayline("Dose reel",dose.ToString());OnPayline("Substance reel",took);
 
                 while(session.EstimatedSimulationSeconds<start+FestivalSpinner.TakeStarts+.4&&Time.realtimeSinceStartup<deadline)yield return null;
                 var cut=host.GetComponentsInChildren<Camera>(true).First(c=>c.name=="Spinner take camera");
                 var actor=session.WorldCharacter(tripper);
-                Assert.That(cut.enabled,"the camera cuts to the tripper after the wheels land");
+                Assert.That(cut.enabled,"the camera cuts to the tripper after the reels stop");
                 var shot=overlay.Find("Take letterbox/Take shot").GetComponent<RawImage>();
                 Assert.That(shot.enabled&&shot.texture!=null&&shot.texture==cut.targetTexture,"the shot fills the spinner's own canvas, over the HUD");
                 Assert.That(actor.Beat,Is.EqualTo("TakeDose"),"the tripper takes the dose");
@@ -108,7 +117,7 @@ namespace Festival.Tests
                 while(session.State.Phase=="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
                 yield return null;yield return null;
                 Assert.That(session.State.Phase,Is.Not.EqualTo("Spinning"),"setup: the spin ends");
-                Assert.That(overlay.gameObject.activeSelf,Is.False,"the wheels clear for Loading");
+                Assert.That(overlay.gameObject.activeSelf,Is.False,"the slot machine clears for Loading");
                 Assert.That(cut.enabled,Is.False,"the first-person view returns");
                 Assert.That(cut.targetTexture,Is.Null,"and the shot's texture is let go");
                 Assert.That(actor.Beat,Is.Empty,"the tripper goes back to the session's pose");

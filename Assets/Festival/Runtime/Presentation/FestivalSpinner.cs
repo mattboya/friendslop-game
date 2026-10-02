@@ -7,98 +7,158 @@ using UnityEngine.UI;
 
 namespace Festival.Presentation
 {
-    /// <summary>SPIN-1: the people wheel lands on the tripper, the dose wheel on their dose, TRIP-5's substance wheel on what they
-    /// took, then the camera cuts to the tripper taking it at camp. Everything is computed from the public spin result (SpinSeed,
-    /// SpinEndsAt, TripperId, Doses), so every client shows the same spin, landing and reaction without any extra network traffic.</summary>
+    /// <summary>SPIN-3: a slot machine whose people reel stops on the tripper, dose reel on their dose and TRIP-5's substance reel on
+    /// what they took, then the camera cuts to the tripper taking it at camp (SPIN-1). Everything is computed from the public spin
+    /// result (SpinSeed, SpinEndsAt, TripperId, Doses), so every client shows the same spin, landing and reaction without any extra
+    /// network traffic.</summary>
     public sealed class FestivalSpinner : MonoBehaviour
     {
-        // SPIN-2: seconds from the spin's start (SpinEndsAt - SpinSeconds), all from Core's timeline. Wheel i (0 people, 1 dose, 2 substance)
-        // turns from WheelStarts(i) to WheelStops(i) and rests on its result; after the last rest come the take and the reaction.
-        public static float WheelStarts(int wheel)=>wheel*(float)(FestivalSimulation.WheelSeconds+FestivalSimulation.PauseSeconds);
-        public static float WheelStops(int wheel)=>WheelStarts(wheel)+(float)FestivalSimulation.WheelSeconds;
-        public static float TakeStarts=>WheelStarts(FestivalSimulation.WheelCount);
+        // Seconds from the spin's start (SpinEndsAt - SpinSeconds), all from Core's timeline. The reels (0 people, 1 dose, 2 substance)
+        // start together as the lever drops and reel i comes to rest at ReelStops(i); after the results rest come the take and the reaction.
+        public static float ReelStops(int reel)=>(float)FestivalSimulation.ReelStopSeconds[reel];
+        public static float LastReelStops=>ReelStops(FestivalSimulation.ReelStopSeconds.Count-1);
+        public static float TakeStarts=>LastReelStops+(float)FestivalSimulation.RestSeconds;
         public static float ReactStarts=>TakeStarts+(float)FestivalSimulation.TakeSeconds;
-        // About 8 turns under the cubic ease-out keeps a 4 s wheel sweeping over 120 degrees a second at 3 s, not crawling.
-        const int Turns=8;
-        public enum Stage{Hidden,People,Dose,Substance,Take,React}
+        public enum Stage{Hidden,Reels,Take,React}
         public struct Beat
         {
             public Stage Stage;
-            // Wheel rotations are clockwise degrees; the pointer sits at the top. Reaction is the dose's size, 0-1.
-            public float Elapsed,PeopleDegrees,DoseDegrees,SubstanceDegrees,Reaction;
+            // Reel scrolls count tiles, so the payline shows tile TileAt(strip length, scroll). Lever is how far the lever is pulled
+            // down and Reaction the dose's size, both 0-1.
+            public float Elapsed,PeopleScroll,DoseScroll,SubstanceScroll,Lever,Reaction;
             public bool PeopleLanded,DoseLanded,SubstanceLanded;
             public int Dose;
             public string Substance;
         }
 
-        // Connected friends in state order; a tripper who just dropped keeps a slice so the wheel can still land.
+        // Connected friends in state order; a tripper who just dropped keeps their tiles so the reel can still land.
         public static List<string> Crew(RoundState state)
         {
             var crew=state.Players.FindAll(p=>p.Connected).ConvertAll(p=>p.Id);
             if(state.TripperId!=""&&!crew.Contains(state.TripperId))crew.Add(state.TripperId);
             return crew;
         }
-        // Slices run clockwise from the top of the wheel.
-        static int SliceAt(IReadOnlyList<int> weights,float wheelDegrees)
+        // The people reel's strip: tile i shows crew[PeopleStrip(n)[i]]. The crew repeats until the strip is MinTiles long, so even a
+        // crew of one fills the window, and every friend has as many tiles.
+        const int MinTiles=5;
+        static int PeopleTiles(int crew)=>crew*((MinTiles+crew-1)/crew);
+        public static int[] PeopleStrip(int crew){var strip=new int[PeopleTiles(crew)];for(int i=0;i<strip.Length;i++)strip[i]=i%crew;return strip;}
+        // The dose reel's strip, dealt round-robin from DoseSlices in units of their common factor: TRIP-12's 30/30/30/10 is 1, 2 and
+        // 3 three times each and 4 once, so the 4 comes round rarely and what players see is what the spinner rolls.
+        // ponytail: exact, so a table whose slices share no factor would deal 100 tiles; round to fewer if the table ever changes so.
+        public static readonly IReadOnlyList<int> DoseStrip=DealDoses();
+        static int[] DealDoses()
         {
-            float total=0,end=0,angle=Mathf.Repeat(wheelDegrees,360);foreach(var w in weights)total+=w;
-            for(int i=0;i<weights.Count;i++){end+=weights[i]*360f/total;if(angle<end)return i;}
-            return weights.Count-1;
+            var slices=FestivalSimulation.DoseSlices;int unit=0,most=0;
+            foreach(var slice in slices)unit=Factor(unit,slice);
+            foreach(var slice in slices)most=Mathf.Max(most,slice/unit);
+            var strip=new List<int>();
+            for(int round=0;round<most;round++)for(int dose=0;dose<slices.Count;dose++)if(round<slices[dose]/unit)strip.Add(dose+1);
+            return strip.ToArray();
         }
-        public static int SliceUnderPointer(IReadOnlyList<int> weights,float rotation)=>SliceAt(weights,-rotation);
-        // Whole turns, then a seeded spot inside the chosen slice (never on an edge), so every client stops on the same point.
-        static float LandingDegrees(IReadOnlyList<int> weights,int slice,int seed,int turns)
-        {
-            float total=0,start=0;foreach(var w in weights)total+=w;
-            for(int i=0;i<slice;i++)start+=weights[i]*360f/total;
-            return turns*360+360-(start+weights[slice]*360f/total*(.15f+.7f*Unit(seed)));
-        }
-        static float Unit(int seed){uint x=unchecked((uint)seed*2654435761u);x^=x>>15;x=unchecked(x*0x2c1b3c6du);x^=x>>12;return (x>>8)/16777216f;}
-        static float Turn(float landing,float progress){float left=1-Mathf.Clamp01(progress);return landing*(1-left*left*left);}
-        static float Progress(float elapsed,int wheel)=>(elapsed-WheelStarts(wheel))/(float)FestivalSimulation.WheelSeconds;
-        static int[] Equal(int count){var weights=new int[count];for(int i=0;i<count;i++)weights[i]=1;return weights;}
-        static readonly int[] SubstanceSlices=Equal(FestivalSimulation.Substances.Count);
-        // The substance wheel's slice for a catalog id; an unknown one (a host from before the wheel) rests on the first.
-        static int SubstanceSlice(string substance){for(int i=0;i<FestivalSimulation.Substances.Count;i++)if(FestivalSimulation.Substances[i]==substance)return i;return 0;}
+        static int Factor(int a,int b)=>b==0?a:Factor(b,a%b);
+        // The substance reel's strip is the five substances, one tile each; an unknown id (a host from before the reel) rests on the first.
+        static int SubstanceTile(string substance){for(int i=0;i<FestivalSimulation.Substances.Count;i++)if(FestivalSimulation.Substances[i]==substance)return i;return 0;}
         /// <summary>What a substance id reads as on screen ("FUN GUYS"), or "" for none.</summary>
         public static string SubstanceName(string substance)=>string.IsNullOrEmpty(substance)?"":Catalog.FindEffect(substance)?.Name.ToUpperInvariant()??"";
+        // One of the strip's tiles that hold value, picked by seed, so a reel does not always stop on the same one.
+        static int TileOf(IReadOnlyList<int> strip,int value,int seed)
+        {
+            int count=0;for(int i=0;i<strip.Count;i++)if(strip[i]==value)count++;
+            int nth=Pick(seed,Mathf.Max(1,count));
+            for(int i=0;i<strip.Count;i++)if(strip[i]==value&&nth--==0)return i;
+            return 0;
+        }
+        static float Unit(int seed){uint x=unchecked((uint)seed*2654435761u);x^=x>>15;x=unchecked(x*0x2c1b3c6du);x^=x>>12;return (x>>8)/16777216f;}
+        static int Pick(int seed,int count)=>(int)(Unit(seed)*count);
+        /// <summary>The strip tile resting nearest the payline at this scroll.</summary>
+        public static int TileAt(int count,float scroll){int tile=Mathf.FloorToInt(scroll+.5f)%count;return tile<0?tile+count:tile;}
+        /// <summary>How many tiles above the payline the middle of a strip tile sits at this scroll, wrapped round the strip so it runs
+        /// on forever: as the scroll grows the tiles move down.</summary>
+        public static float TileOffset(int tile,int count,float scroll)=>Mathf.Repeat(tile-scroll+count*.5f,count)-count*.5f;
+        // A reel window shows the payline's tile whole and the tiles either side cut off by its edges.
+        public const float WindowTiles=2.2f;
+
+        // A reel spins up from rest over SpinUp as the lever drops, runs about Cruise tiles a second, and spends its last EaseSeconds
+        // easing into the stop: a back ease-out whose opening speed matches the run, so it passes the result by a little and settles back.
+        const float Cruise=20,SpinUp=.3f,EaseSeconds=.4f,Back=1.70158f,BackSpeed=3*(Back+1)-2*Back;
+        // Tiles run by elapsed at one tile a second, for a reel that stops at stop.
+        static float Run(float elapsed,float stop)
+        {
+            float t=Mathf.Clamp(elapsed,0,stop),ease=stop-EaseSeconds;
+            if(t<SpinUp)return t*t/(2*SpinUp);
+            if(t<=ease)return t-SpinUp*.5f;
+            float u=(t-ease)/EaseSeconds-1;
+            return ease-SpinUp*.5f+EaseSeconds/BackSpeed*(1+(Back+1)*u*u*u+Back*u*u);
+        }
+        /// <summary>The scroll, in tiles, elapsed seconds after the lever drops, of a reel of count tiles that starts on a seeded tile
+        /// and comes to rest at stop with tile centred on the payline. Every client works out the same scroll from the same seed.</summary>
+        public static float Scroll(int count,int tile,int seed,float stop,float elapsed)
+        {
+            int from=Pick(unchecked(seed*7+1),count);float run=Run(stop,stop);
+            int distance=Mathf.RoundToInt((Cruise*run-(tile-from))/count)*count+tile-from;
+            return elapsed>=stop?from+distance:from+distance*Run(elapsed,stop)/run;
+        }
+        // The lever drops as the reels start and springs back.
+        static float Lever(float t)=>t<.15f?Mathf.Clamp01(t/.15f):t<.35f?1:1-Mathf.SmoothStep(0,1,(t-.35f)/.45f);
+        // The cabinet's row of bulbs: while the reels spin every third one is lit, chasing along the row ChaseSteps times a second; the
+        // whole row blinks twice in the FlashSeconds after each reel stops, and stays lit once every reel rests.
+        public const int Bulbs=15;
+        const float ChaseSteps=12,FlashSeconds=.4f;
+        public static bool BulbLit(float elapsed,int bulb)
+        {
+            if(elapsed>=LastReelStops+FlashSeconds)return true;
+            for(int reel=0;reel<FestivalSimulation.ReelStopSeconds.Count;reel++)
+            {
+                float since=elapsed-ReelStops(reel);
+                if(since>=0&&since<FlashSeconds)return since%(FlashSeconds*.5f)<FlashSeconds*.25f;
+            }
+            return (Mathf.FloorToInt(elapsed*ChaseSteps)-bulb)%3==0;
+        }
         public static Beat At(RoundState state,List<string> crew,double now)
         {
             var beat=new Beat();
             if(state==null||state.Phase!="Spinning"||crew.Count==0)return beat;
             float t=beat.Elapsed=(float)(now-(state.SpinEndsAt-FestivalSimulation.SpinSeconds));
-            var took=state.Doses.Find(d=>d.PlayerId==state.TripperId);
+            PlayerDose took=null;for(int i=0;i<state.Doses.Count&&took==null;i++)if(state.Doses[i].PlayerId==state.TripperId)took=state.Doses[i];
             beat.Dose=Mathf.Clamp(took?.Dose??1,1,FestivalSimulation.DoseSlices.Count);beat.Substance=took?.Substance??"";
             beat.Reaction=beat.Dose/(float)FestivalSimulation.DoseSlices.Count;
-            beat.PeopleDegrees=Turn(LandingDegrees(Equal(crew.Count),Mathf.Max(0,crew.IndexOf(state.TripperId)),state.SpinSeed,Turns),Progress(t,0));
-            beat.DoseDegrees=Turn(LandingDegrees(FestivalSimulation.DoseSlices,beat.Dose-1,unchecked(state.SpinSeed*31+7),Turns),Progress(t,1));
-            beat.SubstanceDegrees=Turn(LandingDegrees(SubstanceSlices,SubstanceSlice(beat.Substance),unchecked(state.SpinSeed*41+3),Turns),Progress(t,2));
-            beat.PeopleLanded=t>=WheelStops(0);beat.DoseLanded=t>=WheelStops(1);beat.SubstanceLanded=t>=WheelStops(2);
-            beat.Stage=t<WheelStarts(1)?Stage.People:t<WheelStarts(2)?Stage.Dose:t<TakeStarts?Stage.Substance:t<ReactStarts?Stage.Take:Stage.React;
+            int size=crew.Count,people=PeopleTiles(size),doseSeed=unchecked(state.SpinSeed*31+7),substanceSeed=unchecked(state.SpinSeed*41+3);
+            beat.PeopleScroll=Scroll(people,Mathf.Max(0,crew.IndexOf(state.TripperId))+size*Pick(state.SpinSeed,people/size),state.SpinSeed,ReelStops(0),t);
+            beat.DoseScroll=Scroll(DoseStrip.Count,TileOf(DoseStrip,beat.Dose,doseSeed),doseSeed,ReelStops(1),t);
+            beat.SubstanceScroll=Scroll(FestivalSimulation.Substances.Count,SubstanceTile(beat.Substance),substanceSeed,ReelStops(2),t);
+            beat.PeopleLanded=t>=ReelStops(0);beat.DoseLanded=t>=ReelStops(1);beat.SubstanceLanded=t>=ReelStops(2);
+            beat.Lever=Lever(t);
+            beat.Stage=t<TakeStarts?Stage.Reels:t<ReactStarts?Stage.Take:Stage.React;
             return beat;
         }
 
         // FestivalHud's palette, so the spinner reads as part of the same interface.
         static readonly Color Ink=new Color(.035f,.065f,.075f,1),Paper=new Color(.948f,.928f,.852f,1),Orange=new Color(.99f,.465f,.255f,1);
+        static readonly Color Gold=new Color(1,.76f,.29f),Unlit=new Color(.3f,.23f,.09f),Pink=new Color(1,.25f,.55f);
         static readonly Color[] CrewColors={new Color(.99f,.465f,.255f),new Color(.385f,.86f,.725f),new Color(1,.38f,.61f),new Color(1,.76f,.29f),
             new Color(.34f,.78f,1),new Color(.46f,.95f,.68f),new Color(.66f,.52f,1),new Color(.96f,.62f,.50f)};
-        // The dose wheel heats up from calm mint to the hot pink 4-dose sliver.
-        static readonly Color[] DoseColors={new Color(.385f,.86f,.725f),new Color(1,.76f,.29f),new Color(.99f,.465f,.255f),new Color(1,.25f,.55f)};
-        // The substance wheel, in Substances order: stamp pink, mushroom violet, warm gold, cool sky blue, leaf green.
+        // The dose tiles heat up from calm mint to the hot pink 4.
+        static readonly Color[] DoseColors={new Color(.385f,.86f,.725f),new Color(1,.76f,.29f),new Color(.99f,.465f,.255f),Pink};
+        // The substance tiles, in Substances order: stamp pink, mushroom violet, warm gold, cool sky blue, leaf green.
         static readonly Color[] SubstanceColors={new Color(1,.38f,.61f),new Color(.66f,.52f,1),new Color(1,.76f,.29f),new Color(.34f,.78f,1),new Color(.55f,.85f,.4f)};
         static readonly string[] Reactions={"","Feels fine. Probably.","Whoa.","The colors are talking.","Oh no. Oh yes. Oh no."};
-        // Three wheels side by side at a fifth, a half and four fifths of the screen's width.
-        const float WheelSize=420;
+        // The cabinet, in reference pixels: three reel windows side by side under the row of bulbs, the lever on its right.
+        const float TileHeight=128,ReelWidth=420,ReelSpacing=470,ReelY=-30,LeverLength=150;
+        static readonly Vector2 CabinetSize=new Vector2(1500,600);
         // The take camera pushes in from TakeFar to TakeNear. It swings to the first of TakeAngles (degrees from the tripper's
         // facing) whose line to their face passes SceneryClearance from the scenery and TakeClearance from every other friend at
         // camp; past 90 it would see the back of the head.
         const float TakeFar=2.5f,TakeNear=1.8f,TakeClearance=.45f,SceneryClearance=.3f;
         static readonly float[] TakeAngles={0,30,-30,60,-60,90,-90};
-        sealed class Wheel{public RectTransform Disc;public RawImage Image;public Text Result;public CanvasGroup Group;public Texture2D Texture;}
+        // One reel: a masked window over a strip of tiles that wraps round forever. LOOP-4's one-reel corner spinner can reuse it.
+        sealed class Reel{public RectTransform Strip;public Text Result;public readonly List<RectTransform> Tiles=new List<RectTransform>();public readonly List<Image> Faces=new List<Image>();public readonly List<Color> Colors=new List<Color>();}
         FestivalSession session;
         Font font;
-        GameObject overlay,wheels,letterbox;
-        Wheel people,dose,substance;
+        GameObject overlay,backdrop,letterbox;
+        Reel people,dose,substance;
+        readonly Image[] bulbs=new Image[Bulbs];
+        RectTransform leverRod,leverKnob;
         Text caption;
         RawImage shot;
         RenderTexture shotTexture;
@@ -106,7 +166,8 @@ namespace Festival.Presentation
         FestivalCharacter acting;
         float focusHeight,takeYaw;
         List<string> crew=new List<string>();
-        string spinKey="";
+        string spinRound="",whoLine="",doseLine="",tookLine="",takeLine="",reactLine="";
+        int spinSeed;
 
         void Awake()
         {
@@ -116,18 +177,34 @@ namespace Festival.Presentation
             var canvas=overlay.AddComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=110; // over the HUD (100)
             var scaler=overlay.AddComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution=new Vector2(1920,1080);scaler.matchWidthOrHeight=.5f;
-            wheels=Panel(overlay.transform,"Spinner backdrop",new Color(Ink.r,Ink.g,Ink.b,.92f),Vector2.zero,Vector2.one);
-            people=MakeWheel(wheels.transform,"People wheel",.2f,"WHO TRIPS?");
-            dose=MakeWheel(wheels.transform,"Dose wheel",.5f,"HOW MANY DOSES?");
-            substance=MakeWheel(wheels.transform,"Substance wheel",.8f,"WHAT DID THEY TAKE?");
-            var numbers=new List<string>();for(int n=1;n<=FestivalSimulation.DoseSlices.Count;n++)numbers.Add(n.ToString());
-            Paint(dose,FestivalSimulation.DoseSlices,DoseColors,numbers);
-            // Two-word names stack on two lines so they fit their slice.
-            var names=new List<string>();foreach(var id in FestivalSimulation.Substances)names.Add(SubstanceName(id).Replace(' ','\n'));
-            Paint(substance,SubstanceSlices,SubstanceColors,names);
+            backdrop=Panel(overlay.transform,"Spinner backdrop",new Color(Ink.r,Ink.g,Ink.b,.92f),Vector2.zero,Vector2.one);
+            var cabinet=Block(backdrop.transform,"Cabinet",Orange,new Vector2(-40,0),CabinetSize);
+            var face=(RectTransform)Panel(cabinet,"Face",Ink,Vector2.zero,Vector2.one).transform;face.offsetMin=new Vector2(16,16);face.offsetMax=new Vector2(-16,-16);
+            for(int i=0;i<Bulbs;i++)
+            {
+                var bulb=Block(cabinet,"Bulb "+i,Unlit,new Vector2((i-(Bulbs-1)*.5f)*92,CabinetSize.y*.5f-50),new Vector2(24,24));
+                bulb.localEulerAngles=new Vector3(0,0,45);bulbs[i]=bulb.GetComponent<Image>();
+            }
+            people=MakeReel(cabinet,"People reel",-ReelSpacing,"WHO TRIPS?");
+            dose=MakeReel(cabinet,"Dose reel",0,"HOW MANY DOSES?");
+            substance=MakeReel(cabinet,"Substance reel",ReelSpacing,"WHAT DID THEY TAKE?");
+            var doses=new List<string>();var heat=new List<Color>();foreach(var d in DoseStrip){doses.Add(d.ToString());heat.Add(DoseColors[d-1]);}
+            Fill(dose,doses,heat,72);
+            var names=new List<string>();var shades=new List<Color>();
+            for(int i=0;i<FestivalSimulation.Substances.Count;i++){names.Add(SubstanceName(FestivalSimulation.Substances[i]));shades.Add(SubstanceColors[i%SubstanceColors.Length]);}
+            Fill(substance,names,shades,38);
+            // The payline frames the row the results rest on, right across the three windows, with a diamond at either end.
+            float span=2*ReelSpacing+ReelWidth+60;
+            var payline=Block(cabinet,"Payline",Color.clear,new Vector2(0,ReelY),new Vector2(span,TileHeight));
+            Block(payline,"Top",Pink,new Vector2(0,TileHeight*.5f),new Vector2(span,5));Block(payline,"Bottom",Pink,new Vector2(0,-TileHeight*.5f),new Vector2(span,5));
+            foreach(var end in new[]{-1,1})Block(payline,end<0?"Left":"Right",Pink,new Vector2(end*span*.5f,0),new Vector2(28,28)).localEulerAngles=new Vector3(0,0,45);
+            // The lever stands on the cabinet's right; pulled, its knob drops past the pivot.
+            var lever=Block(cabinet,"Lever",Paper,new Vector2(CabinetSize.x*.5f+18,ReelY),new Vector2(36,110));
+            leverRod=Block(lever,"Rod",Paper,Vector2.zero,new Vector2(12,LeverLength));leverRod.pivot=new Vector2(.5f,0);
+            leverKnob=Block(lever,"Knob",Pink,new Vector2(0,LeverLength),new Vector2(54,54));
             letterbox=new GameObject("Take letterbox",typeof(RectTransform));letterbox.transform.SetParent(overlay.transform,false);
             Stretch((RectTransform)letterbox.transform);
-            // The take renders into this canvas too, so the HUD stays hidden under the cut as it does under the wheels.
+            // The take renders into this canvas too, so the HUD stays hidden under the cut as it does under the reels.
             shot=new GameObject("Take shot",typeof(RectTransform),typeof(CanvasRenderer),typeof(RawImage)).GetComponent<RawImage>();
             shot.transform.SetParent(letterbox.transform,false);Stretch(shot.rectTransform);shot.raycastTarget=false;shot.enabled=false;
             Panel(letterbox.transform,"Top bar",Color.black,new Vector2(0,.87f),Vector2.one);
@@ -142,30 +219,33 @@ namespace Festival.Presentation
         void LateUpdate()
         {
             var state=session!=null?session.State:null;
-            if(state!=null&&state.Phase=="Spinning"&&spinKey!=state.RoundId+":"+state.SpinSeed)Prepare(state);
+            if(state!=null&&state.Phase=="Spinning"&&(spinRound!=state.RoundId||spinSeed!=state.SpinSeed))Prepare(state);
             var beat=At(state,crew,session!=null?session.EstimatedSimulationSeconds:0);
             overlay.SetActive(beat.Stage!=Stage.Hidden&&!session.MenuOpen);
             FestivalCharacter tripper=null;
             if(beat.Stage!=Stage.Hidden)
             {
-                string name=Name(state,state.TripperId),doses=beat.Dose+(beat.Dose==1?" DOSE":" DOSES"),took=SubstanceName(beat.Substance);
-                bool spinning=beat.Stage==Stage.People||beat.Stage==Stage.Dose||beat.Stage==Stage.Substance;
-                wheels.SetActive(spinning);letterbox.SetActive(!spinning);
-                people.Disc.localEulerAngles=new Vector3(0,0,-beat.PeopleDegrees);people.Result.text=beat.PeopleLanded?name+" TRIPS":"";
-                dose.Disc.localEulerAngles=new Vector3(0,0,-beat.DoseDegrees);dose.Result.text=beat.DoseLanded?doses:"";
-                substance.Disc.localEulerAngles=new Vector3(0,0,-beat.SubstanceDegrees);substance.Result.text=beat.SubstanceLanded?took:"";
-                dose.Group.alpha=beat.Stage==Stage.People?.35f:1;
-                substance.Group.alpha=beat.Stage==Stage.People||beat.Stage==Stage.Dose?.35f:1;
-                caption.text=name+" TAKES "+doses+(took!=""?" OF "+took:"")+(beat.Stage==Stage.React?"\n"+Reactions[beat.Dose]:"");
-                if(!spinning)tripper=session.WorldCharacter(state.TripperId);
+                bool reeling=beat.Stage==Stage.Reels;
+                backdrop.SetActive(reeling);letterbox.SetActive(!reeling);
+                Show(people,beat.PeopleScroll);Show(dose,beat.DoseScroll);Show(substance,beat.SubstanceScroll);
+                people.Result.text=beat.PeopleLanded?whoLine:"";dose.Result.text=beat.DoseLanded?doseLine:"";substance.Result.text=beat.SubstanceLanded?tookLine:"";
+                for(int i=0;i<Bulbs;i++)bulbs[i].color=BulbLit(beat.Elapsed,i)?Gold:Unlit;
+                leverRod.localScale=new Vector3(1,1-2*beat.Lever,1);leverKnob.anchoredPosition=new Vector2(0,LeverLength*(1-2*beat.Lever));
+                caption.text=beat.Stage==Stage.React?reactLine:takeLine;
+                if(!reeling)tripper=session.WorldCharacter(state.TripperId);
             }
             Cut(tripper!=null&&tripper.gameObject.activeInHierarchy?tripper:null,beat,state);
         }
-        // Freeze the wheels for this spin, so a friend dropping mid-spin cannot reshuffle the slices.
+        // Freeze the people reel for this spin, so a friend dropping mid-spin cannot reshuffle its tiles, and word the results once.
         void Prepare(RoundState state)
         {
-            spinKey=state.RoundId+":"+state.SpinSeed;crew=Crew(state);
-            Paint(people,Equal(crew.Count),CrewColors,crew.ConvertAll(id=>Name(state,id)));
+            spinRound=state.RoundId;spinSeed=state.SpinSeed;crew=Crew(state);
+            var names=new List<string>();var colors=new List<Color>();
+            foreach(var friend in PeopleStrip(crew.Count)){names.Add(Name(state,crew[friend]));colors.Add(CrewColors[friend%CrewColors.Length]);}
+            Fill(people,names,colors,44);
+            var beat=At(state,crew,0);string name=Name(state,state.TripperId),took=SubstanceName(beat.Substance);
+            whoLine=name+" TRIPS";doseLine=beat.Dose+(beat.Dose==1?" DOSE":" DOSES");tookLine=took;
+            takeLine=name+" TAKES "+doseLine+(took!=""?" OF "+took:"");reactLine=takeLine+"\n"+Reactions[beat.Dose];
         }
         static string Name(RoundState state,string id)
         {
@@ -228,51 +308,41 @@ namespace Festival.Presentation
         {
             var line=to-from;return Vector2.Distance(point,from+line*Mathf.Clamp01(Vector2.Dot(point-from,line)/line.sqrMagnitude));
         }
-        void Paint(Wheel wheel,IReadOnlyList<int> weights,Color[] colors,List<string> labels)
+        Reel MakeReel(RectTransform cabinet,string name,float x,string title)
         {
-            if(wheel.Texture!=null)Destroy(wheel.Texture);
-            wheel.Texture=WheelTexture(weights,colors);wheel.Image.texture=wheel.Texture;
-            foreach(Transform old in wheel.Disc)Destroy(old.gameObject);
-            float total=0,start=0;foreach(var w in weights)total+=w;
-            for(int i=0;i<weights.Count;i++)
+            var holder=Block(cabinet,name,Paper,new Vector2(x,ReelY),new Vector2(ReelWidth,TileHeight*WindowTiles)+Vector2.one*16); // its paper rim
+            var window=(RectTransform)Panel(holder,"Window",Ink,Vector2.zero,Vector2.one).transform;window.offsetMin=Vector2.one*8;window.offsetMax=-Vector2.one*8;
+            window.gameObject.AddComponent<RectMask2D>();
+            var strip=new GameObject("Strip",typeof(RectTransform));strip.transform.SetParent(window,false);Stretch((RectTransform)strip.transform);
+            var heading=Label(holder,"Title",36);heading.text=title;heading.rectTransform.anchoredPosition=new Vector2(0,holder.sizeDelta.y*.5f+40);
+            var result=Label(holder,"Result",48);result.color=Orange;result.rectTransform.anchoredPosition=new Vector2(0,-holder.sizeDelta.y*.5f-44);
+            return new Reel{Strip=(RectTransform)strip.transform,Result=result};
+        }
+        // Lays a strip's tiles out, each label on its colour; Show moves them.
+        void Fill(Reel reel,List<string> labels,List<Color> colors,int size)
+        {
+            foreach(Transform old in reel.Strip)Destroy(old.gameObject);
+            reel.Tiles.Clear();reel.Faces.Clear();reel.Colors.Clear();
+            for(int i=0;i<labels.Count;i++)
             {
-                float span=weights[i]*360f/total,center=start+span*.5f;start+=span;
-                // Names read outward along their slice and turn with the wheel.
-                var label=Label(wheel.Disc,"Slice "+labels[i],labels[i].Contains("\n")?24:weights.Count>5?21:28);label.color=Ink;label.text=labels[i];
-                label.rectTransform.anchoredPosition=new Vector2(Mathf.Sin(center*Mathf.Deg2Rad),Mathf.Cos(center*Mathf.Deg2Rad))*WheelSize*.3f;
-                label.rectTransform.localEulerAngles=new Vector3(0,0,90-center);
+                var tile=(RectTransform)Panel(reel.Strip,"Tile "+i,colors[i],new Vector2(0,.5f),new Vector2(1,.5f)).transform;tile.sizeDelta=new Vector2(0,TileHeight-8);
+                var label=Label(tile,"Label",size);label.color=Ink;label.text=labels[i];Stretch(label.rectTransform);
+                reel.Tiles.Add(tile);reel.Faces.Add(tile.GetComponent<Image>());reel.Colors.Add(colors[i]);
             }
         }
-        static Texture2D WheelTexture(IReadOnlyList<int> weights,Color[] colors)
+        // Each tile sits TileOffset tiles off the payline, and darkens towards the window's edges as the reel curves away.
+        static void Show(Reel reel,float scroll)
         {
-            const int size=256;const float radius=size*.5f;
-            float total=0;foreach(var w in weights)total+=w;
-            var edges=new List<float>();float edge=0;if(weights.Count>1)foreach(var w in weights){edges.Add(edge);edge+=w*360f/total;}
-            var pixels=new Color[size*size];
-            for(int y=0;y<size;y++)for(int x=0;x<size;x++)
+            for(int i=0;i<reel.Tiles.Count;i++)
             {
-                float dx=x+.5f-radius,dy=y+.5f-radius,distance=Mathf.Sqrt(dx*dx+dy*dy);
-                float angle=Mathf.Repeat(Mathf.Atan2(dx,dy)*Mathf.Rad2Deg,360);
-                bool divider=false;foreach(var e in edges)divider|=Mathf.Abs(Mathf.DeltaAngle(angle,e))*Mathf.Deg2Rad*distance<1.4f;
-                var color=divider||distance>radius-5||distance<radius*.09f?Ink:colors[SliceAt(weights,angle)%colors.Length];
-                color.a=Mathf.Clamp01(radius-distance);
-                pixels[y*size+x]=color;
+                float offset=TileOffset(i,reel.Tiles.Count,scroll);
+                reel.Tiles[i].anchoredPosition=new Vector2(0,offset*TileHeight);
+                reel.Faces[i].color=Color.Lerp(reel.Colors[i],Ink,Mathf.Clamp01(Mathf.Abs(offset)*.4f));
             }
-            var texture=new Texture2D(size,size,TextureFormat.RGBA32,false){filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
-            texture.SetPixels(pixels);texture.Apply();return texture;
         }
-        Wheel MakeWheel(Transform parent,string name,float x,string title)
+        static RectTransform Block(Transform parent,string name,Color color,Vector2 at,Vector2 size)
         {
-            var holder=new GameObject(name,typeof(RectTransform),typeof(CanvasGroup));holder.transform.SetParent(parent,false);
-            var rect=(RectTransform)holder.transform;rect.anchorMin=rect.anchorMax=new Vector2(x,.5f);rect.sizeDelta=new Vector2(WheelSize,WheelSize);
-            var disc=new GameObject("Disc",typeof(RectTransform),typeof(CanvasRenderer),typeof(RawImage));disc.transform.SetParent(holder.transform,false);
-            var discRect=(RectTransform)disc.transform;discRect.sizeDelta=new Vector2(WheelSize,WheelSize);disc.GetComponent<RawImage>().raycastTarget=false;
-            // A diamond whose lower tip bites into the rim marks the winning slice.
-            var pointer=Panel(holder.transform,"Pointer",Paper,new Vector2(.5f,1),new Vector2(.5f,1));
-            var tip=(RectTransform)pointer.transform;tip.sizeDelta=new Vector2(38,38);tip.anchoredPosition=new Vector2(0,5);tip.localEulerAngles=new Vector3(0,0,45);
-            var heading=Label(holder.transform,"Title",40);heading.text=title;heading.rectTransform.anchoredPosition=new Vector2(0,WheelSize*.5f+70);
-            var result=Label(holder.transform,"Result",48);result.color=Orange;result.rectTransform.anchoredPosition=new Vector2(0,-WheelSize*.5f-56);
-            return new Wheel{Disc=discRect,Image=disc.GetComponent<RawImage>(),Result=result,Group=holder.GetComponent<CanvasGroup>()};
+            var rect=(RectTransform)Panel(parent,name,color,new Vector2(.5f,.5f),new Vector2(.5f,.5f)).transform;rect.sizeDelta=size;rect.anchoredPosition=at;return rect;
         }
         static GameObject Panel(Transform parent,string name,Color color,Vector2 min,Vector2 max)
         {
@@ -289,9 +359,6 @@ namespace Festival.Presentation
         static void Stretch(RectTransform rect){rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;}
         void OnDestroy()
         {
-            if(people?.Texture!=null)Destroy(people.Texture);
-            if(dose?.Texture!=null)Destroy(dose.Texture);
-            if(substance?.Texture!=null)Destroy(substance.Texture);
             if(shotTexture!=null)Destroy(shotTexture);
         }
     }

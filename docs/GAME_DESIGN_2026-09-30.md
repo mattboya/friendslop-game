@@ -61,8 +61,9 @@ The two hooks the design is built around:
   Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust or Couch Lock. Each
   looks and feels different on the dosed player's own screen, but only the
   dose changes the rules. On Night 2 every dosed friend rolls their own.
-- **Presentation:** an animation shows the tripper taking the dose and
-  reacting.
+- **Presentation:** the three spinners are one slot machine. Its reels
+  start together and stop left to right: who, then how many, then what.
+  Then an animation shows the tripper taking the dose and reacting.
 
 **How reliable the visions are, by dose:**
 
