@@ -45,14 +45,16 @@ namespace Festival.Presentation
         /// <summary>Objective card heading: the outcome at results, the quota for a free player on a day, otherwise the guidance headline.</summary>
         public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s,p):FestivalGuidance.Headline(s,p);
 
-        /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line.
+        /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line;
+        /// either way the card says where stock comes from (ECON-2: no shelf sells it). This card, not FestivalGuidance.Hint, is what camp reads.
         /// A Ferris wheel rider reads what they spot from up there instead of the quota's line (FestivalGuidance.Hint, POLO-1).</summary>
         public static string ObjectiveDetail(RoundState s,PlayerState p)
         {
             if(s.Phase=="Results")return OutcomeDetail(s);
-            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id);return choice!=""?choice:"Browse gear • pay the seller • meet at the trailhead";}
+            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id);return choice!=""?choice+" • "+StockSource:"Browse gear • pay the seller • "+StockSource+" • meet at the trailhead";}
             return SellingToday(s,p)&&!FestivalSimulation.OnWheel(s,p.Id)?QuotaHint(s,p):FestivalGuidance.Hint(s,p);
         }
+        const string StockSource="stock comes from festivalgoers";
         // Downed, detained and spirit players keep the guidance about getting back on their feet.
         static bool SellingToday(RoundState s,PlayerState p)=>s.Phase=="Playing"&&p.Life=="Alive"&&!Festivals.For(s).Night;
 

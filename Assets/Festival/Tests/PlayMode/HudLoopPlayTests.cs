@@ -50,6 +50,10 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
+                // ECON-2: at camp, with no festival to pick, the card says where stock comes from, and draws whole.
+                sim.State.UnlockedFestivalCount=1;yield return new WaitForSeconds(.4f);
+                Expect("camp","Objective detail","Browse gear • pay the seller • stock comes from festivalgoers • meet at the trailhead");
+                Fits("camp","Objective detail");
                 yield return StartLevel(session);
 
                 // Day 1 of Palm Mirage asks $15 from each of the two.

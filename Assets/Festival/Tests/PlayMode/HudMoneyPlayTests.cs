@@ -53,8 +53,8 @@ namespace Festival.Tests
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("money_mate","Sam");mate.Ready=true;
-                // The weekend is at Ember Playa, and you are the crew member who counts in friendship bracelets.
-                sim.State.FestivalIndex=Festivals.PlayaFestival;player.Ordinal=3;
+                // The weekend is at Ember Playa, so both festivals are unlocked, and you are the crew member who counts in friendship bracelets.
+                sim.State.FestivalIndex=Festivals.PlayaFestival;sim.State.UnlockedFestivalCount=2;player.Ordinal=3;
                 Assert.That(Festivals.CurrencyName(Festivals.PlayaFestival,3,2),Is.EqualTo("2 friendship bracelets"),"setup: the longest odd object");
                 int shelf=sim.State.VendorOffers.IndexOf("poi_practice");Assert.That(shelf,Is.GreaterThanOrEqualTo(0),"setup: the practice poi is on the shelf");
 
@@ -64,7 +64,8 @@ namespace Festival.Tests
                 typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Atan2((shelf<4?1.17f:2.05f)-1.65f,9f-6.3f)*Mathf.Rad2Deg);
                 yield return new WaitForSeconds(.5f);
                 Expect("at the shelf","Prompt","PICK UP PRACTICE POI  •  5 FRIENDSHIP BRACELETS  •  Reusable dance tool: 15% wider good window, capped at 175 ms. Pair with a friend for rescue.");
-                // The camp hint, which now also says where stock comes from, still draws whole.
+                // The host's camp card, which now also says where stock comes from beside the festival pick (ECON-2), still draws whole.
+                Expect("at the shelf","Objective detail","F  switch to Palm Mirage (1 of 2 unlocked) • stock comes from festivalgoers");
                 Fits("at the shelf","Prompt","Objective detail");NoDollars("at the shelf");
                 // The price tags on both shelves, each lettered within its painted card.
                 int tags=0;

@@ -124,12 +124,24 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.BodyAction(s,kim,first),Is.Empty,"no carrying while dragging a downed friend");
         }
 
+        // ECON-2: no shelf sells stock, so whoever is at camp reads where it comes from: the host beside Day 1's festival pick,
+        // everyone else on the camp line.
+        const string CampLine="Browse gear • pay the seller • stock comes from festivalgoers • meet at the trailhead";
+        [Test] public void CampSaysStockComesFromFestivalgoers()
+        {
+            var s=Level(0,0,"Shopping");var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.UnlockedFestivalCount=2;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked) • stock comes from festivalgoers"));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(CampLine));
+            s.LevelIndex=1;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(CampLine),"mid-weekend the host has no festival to pick");
+        }
+
         [Test] public void OnlyTheHostIsOfferedTheFestivalBeforeDayOne()
         {
             var s=Level(0,0,"Shopping");var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.UnlockedFestivalCount=2;
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked)"),"F names the festival it moves to; the banner names this one");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Does.StartWith("F  switch to Ember Playa (2 of 2 unlocked)"),"F names the festival it moves to; the banner names this one");
             Assert.That(FestivalHudText.NextFestival(s),Is.EqualTo(1),"F sends the festival it names");
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo("Browse gear • pay the seller • meet at the trailhead"),"only the host picks the festival");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(CampLine),"only the host picks the festival");
             s.FestivalIndex=1;
             Assert.That(FestivalHudText.FestivalChoice(s,"you"),Is.EqualTo("F  switch to Palm Mirage (1 of 2 unlocked)"),"F wraps round to the first festival");
             Assert.That(FestivalHudText.NextFestival(s),Is.EqualTo(0));
