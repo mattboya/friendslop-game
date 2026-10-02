@@ -22,7 +22,8 @@ public static class ConversationTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EachTalkIsThreeTurnsOfThreeReplies,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
-            AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores})
+            AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
+            ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -57,7 +58,7 @@ public static class ConversationTests
             var said=Say(s,i,grade);Check(said.Accepted,"setup: reply "+grade+" on turn "+turn+": "+said.Reason);
         }
         for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
-        Check(i.Status=="Complete","setup: the "+i.Kind+" settles ("+i.Status+")");return i;
+        Check(i.Status=="Complete"||i.Status=="Police bust","setup: the "+i.Kind+" settles ("+i.Status+")");return i;
     }
     static string Text(ConversationTurn t)=>t.Reaction+"|"+t.Line+"|"+string.Join("|",t.Replies)+"|"+string.Join(",",t.Grades)+"|"+string.Join(",",t.Garbled);
 
@@ -107,7 +108,7 @@ public static class ConversationTests
                 opens[person]=new HashSet<string>();smooth[person]=new HashSet<string>();soso[person]=new HashSet<string>();awkward[person]=new HashSet<string>();
                 for(int seed=0;seed<300;seed++)
                 {
-                    var t=ConversationLines.Turn(topic,person,festival,0,-1,0,new ContentRandom(seed));opens[person].Add(t.Line);
+                    var t=ConversationLines.Turn(topic,person,"Regular",festival,0,-1,false,0,new ContentRandom(seed));opens[person].Add(t.Line);
                     for(int r=0;r<3;r++)(t.Grades[r]==Smooth?smooth:t.Grades[r]==SoSo?soso:awkward)[person].Add(t.Replies[r]);
                 }
             }
@@ -287,10 +288,96 @@ public static class ConversationTests
         foreach(var topic in ConversationLines.Topics)foreach(var person in DialogueGrammar.Personas.Concat(new[]{ConversationLines.Security}))
             for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<300;seed++)for(int turn=0;turn<3;turn++)
             {
-                var t=ConversationLines.Turn(topic,person,festival,turn,turn==0?-1:seed%4,seed%3,new ContentRandom(seed*7+turn));
+                var t=ConversationLines.Turn(topic,person,DialogueGrammar.Roles[seed%4],festival,turn,turn==0?-1:seed%4,seed%2==0,seed%3,new ContentRandom(seed*7+turn));
                 foreach(var reply in t.Replies)Check(!DialogueGrammar.HasNarcTell(reply),"a player's reply carries a narc tell: "+reply);
                 foreach(var line in t.Replies.Concat(new[]{t.Line,t.Reaction}))Check(line.Length<=80,topic+" "+person+" line over 80 characters: "+line);
             }
+    }
+
+    // A chat with someone of this role on festival 0 (night 1 for a clue holder), a reply of `grade` every turn: what it left
+    // you feeling, and whether any of their lines carried a narc's cop-speak.
+    static (string hunch,bool copSpeak,string lines) Read(string role,int seed,int grade,string kind="Conversation")
+    {
+        var s=Pair(kind,seed);Partner(s).Role=role;if(role=="ClueHolder")s.State.LevelIndex=1;
+        var i=Talk(s,Start(s,kind),grade,grade,grade);var lines=string.Join(" / ",i.Turns.Select(t=>t.Line));
+        return (i.Hunch,i.Turns.Exists(t=>DialogueGrammar.HasNarcTell(t.Line)),lines);
+    }
+    static double Share(string role,int grade,Func<(string hunch,bool copSpeak,string lines),bool> what){int hits=0;for(int seed=1;seed<=200;seed++)if(what(Read(role,seed,grade)))hits++;return hits/200.0;}
+
+    // A chat reads the person: a narc slips in cop-speak, a buyer hints they're after something, and a smooth chat draws the
+    // tell out where an awkward one leaves it vague. It ends on a hunch built from what their lines showed: usually right
+    // after a smooth chat, wrong more often after an awkward one, and never TRUE or FALSE (only the tripper's check says that).
+    static void ATalkReadsThePerson()
+    {
+        double narcSpeak=Share("Narc",Smooth,r=>r.copSpeak),regularSpeak=Share("Regular",Smooth,r=>r.copSpeak);
+        Check(narcSpeak>=.7&&regularSpeak<=.1,"after a smooth chat a narc's lines carry cop-speak "+narcSpeak.ToString("0.00")+" of the time (at least .70), a regular's "+regularSpeak.ToString("0.00")+" (at most .10)");
+        double narcCop=Share("Narc",Smooth,r=>r.hunch==ConversationLines.HunchCop),regularCop=Share("Regular",Smooth,r=>r.hunch==ConversationLines.HunchCop);
+        Check(narcCop>=.7&&regularCop<=.1,"after a smooth chat a narc leaves you feeling they might be a cop "+narcCop.ToString("0.00")+" of the time, a regular "+regularCop.ToString("0.00"));
+        double buyerBuys=Share("Buyer",Smooth,r=>r.hunch==ConversationLines.HunchBuyer),regularMusic=Share("Regular",Smooth,r=>r.hunch==ConversationLines.HunchMusic);
+        Check(buyerBuys>=.7&&regularMusic>=.9,"after a smooth chat a buyer feels like they'd buy "+buyerBuys.ToString("0.00")+" of the time, and a regular is just here for the music "+regularMusic.ToString("0.00"));
+        foreach(var (role,right) in new[]{("Narc",ConversationLines.HunchCop),("Buyer",ConversationLines.HunchBuyer)})
+        {
+            double smooth=Share(role,Smooth,r=>r.hunch==right),soso=Share(role,SoSo,r=>r.hunch==right),awkward=Share(role,Awkward,r=>r.hunch==right);
+            Check(awkward<soso&&soso<smooth,"the smoother the chat, the more often a "+role+" reads right: awkward "+awkward.ToString("0.00")+", so-so "+soso.ToString("0.00")+", smooth "+smooth.ToString("0.00"));
+        }
+        foreach(var role in DialogueGrammar.Roles)foreach(int grade in new[]{Smooth,SoSo,Awkward})for(int seed=1;seed<=40;seed++)
+        {
+            var read=Read(role,seed,grade);
+            Check(read.hunch.StartsWith("You get the feeling ")&&read.hunch.IndexOf("true",StringComparison.OrdinalIgnoreCase)<0&&read.hunch.IndexOf("false",StringComparison.OrdinalIgnoreCase)<0,"a "+role+"'s hunch is a feeling, never TRUE or FALSE: "+read.hunch);
+            if(role!="Narc")Check(!read.copSpeak,"only a narc ever slips into cop-speak: "+read.lines);
+        }
+    }
+    // At night a clue holder's chat, drawn out smoothly, names a landmark, and leaves you feeling they know something about it.
+    static void AClueHolderNamesALandmark()
+    {
+        int named=0;
+        for(int seed=1;seed<=200;seed++)
+        {
+            var read=Read("ClueHolder",seed,Smooth);if(read.hunch==ConversationLines.HunchMusic)continue;named++;
+            const string Lead="You get the feeling they know something about ";
+            Check(read.hunch.StartsWith(Lead)&&read.hunch.EndsWith("."),"a clue holder's hunch: "+read.hunch);
+            string landmark=read.hunch.Substring(Lead.Length,read.hunch.Length-Lead.Length-1);
+            Check(landmark.StartsWith("the ")&&read.lines.IndexOf(landmark,StringComparison.OrdinalIgnoreCase)>=0,"the landmark ("+landmark+") is one their lines named: "+read.lines);
+        }
+        Check(named>=140,"a smooth chat with a clue holder names a landmark at least .70 of the time, got "+named/200.0);
+    }
+    // The hunch comes with the last turn, once every line it reads is said, and only from a chat or a buy: a sale's buyer is
+    // buying, and security is security.
+    static void OnlyAFestivalgoerTalkLeavesAHunch()
+    {
+        foreach(var kind in Kinds)
+        {
+            var s=Pair(kind);var i=Start(s,kind);Say(s,i,Smooth);
+            Check(i.Hunch=="","no hunch before the last turn ("+i.Hunch+")");
+            Say(s,i,Smooth);bool reads=kind=="Conversation"||kind=="Buy";
+            Check((i.Hunch!="")==reads,"a "+kind+(reads?" leaves a hunch as its last turn begins":" leaves no hunch")+" ("+i.Hunch+")");
+        }
+    }
+    // A narc asked to sell talks, as a seller does, its lines carrying cop-speak when drawn out. Finishing the buy busts you
+    // whatever your replies: detained, stock confiscated, the held $5 back and then the $10 fine. Walking off or stopping first
+    // is safe, and so is a narc who walks off after a poor trust dance.
+    static void ANarcSellerTalksAndFinishingTheBuyBusts()
+    {
+        int told=0;
+        for(int seed=1;seed<=100;seed++){var read=Read("Narc",seed,Smooth,"Buy");if(read.copSpeak)told++;Check(read.hunch==ConversationLines.HunchCop==read.copSpeak,"a narc seller's hunch follows their cop-speak: "+read.hunch+" / "+read.lines);}
+        Check(told>=70,"a smoothly talked narc seller slips into cop-speak at least 70 times in 100, got "+told);
+        foreach(var grades in new[]{new[]{Smooth,Smooth,Smooth},new[]{Silence,Silence,Silence}})
+        {
+            var s=Pair("Buy");Partner(s).Role="Narc";var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+            var i=Start(s,"Buy");Check(p.Life=="Alive"&&p.Cash==15&&i.Turns.Count==1,"asking a narc to sell starts a talk, the $5 held, no bust yet");
+            CommandResult last=null;
+            foreach(int grade in grades){if(grade==Silence){for(int guard=0;i.Status=="Active"&&guard<50;guard++)s.Tick(.1);continue;}last=Say(s,i,grade);}
+            for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+            Check(p.Life=="Detained"&&p.Cash==10&&!p.Inventory.Exists(x=>x.ItemId.StartsWith("stock_"))&&Partner(s).StockSold==0&&i.Status=="Police bust","finishing the buy with a narc ("+string.Join(",",grades)+") busts you: detained, stock gone, $10 fine ("+p.Life+", $"+p.Cash+", "+i.Status+")");
+            if(last!=null)Check(last.Reason=="Busted! That was an undercover narc.","the last reply says so: "+last.Reason);
+        }
+        var walk=Pair("Buy");Partner(walk).Role="Narc";var w=walk.Player("p0");var off=Start(walk,"Buy");Say(walk,off,Smooth);w.Z-=10;walk.Tick(.1);
+        Check(w.Life=="Alive"&&w.Cash==20&&off.Status!="Active","walking off a narc's buy is safe, the $5 back ("+w.Life+", $"+w.Cash+")");
+        var stop=Pair("Buy");Partner(stop).Role="Narc";var q=stop.Player("p0");Start(stop,"Buy");
+        Check(Act(stop,"p0","Cancel").Accepted&&q.Life=="Alive"&&q.Cash==20,"stopping a narc's buy is safe, the $5 back");
+        var shy=Pair("Buy");Partner(shy).Role="Narc";Partner(shy).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});var r=shy.Player("p0");var walked=Start(shy,"Buy");
+        for(int guard=0;walked.Status=="Active"&&guard<100;guard++)shy.Tick(.1);
+        Check(walked.TrustDance&&walked.Turns.Count==0&&r.Life=="Alive"&&r.Cash==20,"a narc who walks off after a poor trust dance busts no one ("+r.Life+", $"+r.Cash+")");
     }
 
     // A talk in a snapshot from before conversations (no turns, no trust dance) restores, and carries on as a conversation.

@@ -14,11 +14,12 @@ namespace Festival.Core
     // - Their first line is their persona's opener (FestivalLines' "opener.<persona>"), so it hints at who they are; security
     //   opens on one of its lines ("police"). Each later turn opens on their reaction to your reply, in their persona's voice
     //   (a silence gets its own), then the topic's line: a festivalgoer's small talk (a regular's chat-check answer), a buyer's
-    //   or a seller's line ("sale", "buy"), or security's.
+    //   or a seller's line ("sale", "buy"), or security's. In a chat or a buy, a reply that lands draws out a clear line with
+    //   the person's tell (Body), and the first one shown sets the Hunch.
     // - Your replies come in five Styles. Each persona likes one (the smooth reply) and can't stand one (the awkward reply); the
     //   so-so reply is one of the other three. Security likes it plain and can't stand the cosmic.
-    // - Only fictional goods are named, no reply carries a narc's cop-speak (DialogueGrammar.NarcTells), and every line stays
-    //   within 80 characters for DIALOG-2's bubbles.
+    // - Only fictional goods are named, only a narc's lines carry a narc's cop-speak (DialogueGrammar.NarcTells), and every line
+    //   stays within 80 characters for DIALOG-2's bubbles.
     public static class ConversationLines
     {
         public const int Smooth=0,SoSo=1,Awkward=2,Silence=3;
@@ -31,15 +32,18 @@ namespace Festival.Core
         public static string Topic(string kind)=>kind=="Sale"?"sale":kind=="Buy"?"buy":kind=="Police"?"security":"talk";
 
         // A turn of a talk on `topic` with `persona` on `festival`: turn 0 opens it; a later one follows a reply of grade `heard`
-        // (Silence for none). `garbled` of the replies come out jumbled. Drawn from `random` in order (their reaction, their
+        // (Silence for none), and is `clear` when the reply drew their `role`'s tell out. `garbled` of the replies come out jumbled. Drawn from `random` in order (their reaction, their
         // line, the so-so style, the replies' order, the replies, the garbling), and given `history` each line heard lately is
         // drawn again and each line drawn is remembered (DialogueHistory.Fresh), as DialogueGrammar's chats are.
-        public static ConversationTurn Turn(string topic,string persona,int festival,int turn,int heard,int garbled,ContentRandom random,DialogueHistory history=null)
+        // What a chat or a buy leaves you feeling (Conversations.cs): a hunch, never a verdict.
+        public const string HunchCop="You get the feeling they might be a cop.",HunchBuyer="You get the feeling they'd buy if you offered.",HunchMusic="You get the feeling they're just here for the music.";
+        public static string HunchClue(string landmark)=>"You get the feeling they know something about "+landmark+".";
+        public static ConversationTurn Turn(string topic,string persona,string role,int festival,int turn,int heard,bool clear,int garbled,ContentRandom random,DialogueHistory history=null)
         {
             if(Array.IndexOf(Topics,topic)<0||!Tastes.TryGetValue(persona,out var taste)) throw new ArgumentException("Unknown talk topic or persona: "+topic+", "+persona);
             var said=new ConversationTurn();
             if(turn>0) said.Reaction=Grammar.Line(heard==Silence?"react.silence":"react."+persona+"."+heard,festival,random);
-            said.Line=Say(turn>0?Body(topic):persona==Security?"police":"opener."+persona,festival,random,history);
+            said.Line=Say(turn>0?Body(topic,role,clear):persona==Security?"police":"opener."+persona,festival,random,history);
             int skip=random.Next(3),soso=-1;
             for(int style=0;soso<0;style++) if(style!=taste.liked&&style!=taste.hated&&skip--==0) soso=style;
             var styles=new[]{taste.liked,soso,taste.hated};var grades=new[]{Smooth,SoSo,Awkward};Shuffle(grades,random);
@@ -51,8 +55,37 @@ namespace Festival.Core
             }
             return said;
         }
-        // What a festivalgoer or security says after the first turn: small talk, a buyer's or a seller's line, or security's.
-        private static string Body(string topic)=>topic=="sale"?"sale":topic=="buy"?"buy":topic=="security"?"police":"answer.Regular.0";
+        // What a festivalgoer or security says after the first turn: small talk, a buyer's or a seller's line, or security's. A
+        // clear line in a chat or a buy carries the person's tell, as the chat check's answers do: a narc's cop-speak (their small
+        // talk, or a seller's line round a slip), a buyer's wish to buy, a clue holder's landmark; anyone else's is plain.
+        private static string Body(string topic,string role,bool clear)
+        {
+            if(topic=="sale") return "sale";
+            if(topic=="security") return "police";
+            if(clear&&role=="ClueHolder") return "talk.clue";
+            if(topic=="buy") return clear&&role=="Narc"?"buy.narc":"buy";
+            return clear&&(role=="Narc"||role=="Buyer")?"answer."+role+".0":"answer.Regular.0";
+        }
+        // The hunch a chat or a buy leaves, from its first clear line (`told`, null if none came through): their role's tell, or
+        // nothing to go on.
+        public static string Hunch(string role,string told,int festival)
+        {
+            if(told==null) return HunchMusic;
+            if(role=="Narc") return HunchCop;
+            if(role=="Buyer") return HunchBuyer;
+            string landmark=role=="ClueHolder"?LandmarkIn(told,festival):"";
+            return landmark==""?HunchMusic:HunchClue(landmark);
+        }
+        // The landmark (FestivalLines' "landmark" part) a line names on this festival, or "".
+        private static string LandmarkIn(string line,int festival)
+        {
+            foreach(var entry in FestivalLines.Parts["landmark"])
+            {
+                bool tagged=entry.Length>1&&char.IsDigit(entry[0])&&entry[1]==':';string name=tagged?entry.Substring(2):entry;
+                if((!tagged||entry[0]-'0'==festival)&&line.IndexOf(name,StringComparison.OrdinalIgnoreCase)>=0) return name;
+            }
+            return "";
+        }
         private static string Say(string kind,int festival,ContentRandom random,DialogueHistory history)
         {
             if(history==null) return Grammar.Line(kind,festival,random);
@@ -88,6 +121,19 @@ namespace Festival.Core
             ["react.Security.1"]=new[]{"Mm.","Okay.","Go on.","Sure.","If you say so."},
             ["react.Security.2"]=new[]{"Excuse me?","Don't get smart.","That's not helping.","Try again.","Not the answer I wanted."},
             ["react.silence"]=new[]{"Hello? Anyway.","Cat got your tongue? Okay.","Okay. Moving on.","Not a talker. Fine.","Silent type, huh."},
+
+            // A narc selling: a seller's line round a slip of cop-speak, or a line with cop-speak in it.
+            ["buy.narc"]=new[]{"{narc_buy} {~narc_slip}","{~narc_slip} {narc_buy}","{narc_sell}","{~narc_lead} {narc_sell}"},
+            ["narc_buy"]=new[]{"One {unit}, one {exchange2}, nobody {nobody}.","Keep the {money} low and the eye contact {friendly}.",
+                "Quick and {quiet}. Nobody looks twice.","Just the one? Hold it like a {souvenir}.","Pay me in fives. {count} of them."},
+            ["narc_sell"]=new[]{"I can provide a controlled substance. Hypothetically.","Ten-four. I mean, sure. For my records, how many?","Let's conclude this proceeding on foot to {landmark}.",
+                "Copy that. One unit, cash only. Nothing illicit.","As the kids call it, a little treat? I carry several.","What street value would you put on one of these?",
+                "Fellow festival-goer, it's five. Hypothetically speaking.","Is anyone in the vicinity? Good. Hand me the cash."},
+            // A clue holder at night, drawn out: someone lost, and a landmark.
+            ["talk.clue"]=new[]{"{clue_line}","{~clue_lead} {clue_line}","{clue_line} {~clue_tail}"},
+            ["clue_line"]=new[]{"Someone lost asked the way to {landmark}.","A lost-looking person was near {landmark}. Yours?","Someone was calling a name by {landmark}.",
+                "A confused soul spun circles at {landmark}.","I sent someone very lost to {landmark}.","Someone's waiting by {landmark}. Looks lonely.",
+                "A lost one borrowed my map near {landmark}.","A lost one asked me about {landmark}. Twice."},
 
             // Each style's hello and tail, dressing round the reply.
             ["cosmic_hi"]=new[]{"Far out.","Whoa.","Mmm.","Oh, wow.","Duuude.","Breathe."},

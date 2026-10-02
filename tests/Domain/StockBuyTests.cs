@@ -5,7 +5,7 @@ using Festival.Core;
 
 // ECON-2: the camp and night-market shelves sell gear only. Tongue Stamps and Fun Guys come from festivalgoers through a buy, talked
 // through (DIALOG-3). Regulars (and clue holders at night) sell one kind each, a few units a level; anyone else turns the ask down the
-// same way, and asking a narc is a bust.
+// same way, and a narc plays along: finishing the buy with one is a bust.
 public static class StockBuyTests
 {
     static int sequence;
@@ -14,7 +14,7 @@ public static class StockBuyTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{NoShelfSellsStock,ASellerSells,TheReplyNeverTellsThemApart,AskingANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
+        foreach(var test in new Action[]{NoShelfSellsStock,ASellerSells,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stock buy test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -112,7 +112,8 @@ public static class StockBuyTests
             Check(p.Cash==15&&buy.ReservedCash==5,who+": the $5 is held while they talk, cash $"+p.Cash);
             var perfect=Talk(s,p,Smooth,Smooth,Smooth);
             Check(perfect.Status=="Complete"&&perfect.Score>.99,"setup: "+who+": a perfect buy, score "+perfect.Score);
-            Check(p.Dialogue.Seen.Exists(key=>key.StartsWith("buy_")),who+": the seller speaks lines from the buy pool");
+            // DIALOG-3: a seller's lines come from the buy pool; a clue holder's, drawn out, can name a landmark instead.
+            Check(p.Dialogue.Seen.Exists(key=>key.StartsWith("buy_")||role=="ClueHolder"&&key.StartsWith("talk.clue_")),who+": the seller speaks lines from the buy pool");
             Check(Count(p,kind)==1&&p.Cash==15&&p.EquippedItemId==kind&&seller.StockSold==1,who+": a perfect buy hands over one unit, in hand, for $5 (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
             // A botched buy, a cancelled one and one walked away from all give the $5 back and no unit.
@@ -173,14 +174,16 @@ public static class StockBuyTests
         Refused("full hands",kind);
     }
 
-    // Asking a narc to sell is the same bust as offering them stock: detained, stock confiscated and the $10 fine.
-    static void AskingANarcIsABust()
+    // DIALOG-3: a narc asked to sell plays along, so there's a talk to read them by. Finishing it is the same bust as offering
+    // them stock: the held $5 back, then detained, stock confiscated and the $10 fine.
+    static void FinishingABuyWithANarcIsABust()
     {
         var s=Start(33,0);var p=s.Player("p1");var narc=Wook(s,"Narc");Check(narc!=null,"setup: the crowd has a narc");
-        p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
-        var reply=Ask(s,p,narc);
-        Check(reply.Reason=="Busted! That was an undercover narc.","the narc busts the buyer: "+reply.Reason);
-        Check(p.Life=="Detained"&&!p.Inventory.Exists(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms")&&p.Cash==10&&p.InteractionId==""&&s.State.LevelSales==0,"detained, stock confiscated and fined $10 ("+p.Life+", $"+p.Cash+")");
+        p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+        var asked=Ask(s,p,narc);
+        Check(asked.Accepted&&p.Life=="Alive"&&p.Cash==15&&p.InteractionId!="","the narc plays along: a talk starts, the $5 held ("+asked.Reason+")");
+        var buy=Talk(s,p,Smooth,Smooth,Smooth);
+        Check(buy.Status=="Police bust"&&p.Life=="Detained"&&!p.Inventory.Exists(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms")&&p.Cash==10&&p.InteractionId==""&&s.State.LevelSales==0&&narc.StockSold==0,"finished, the buy is a bust: detained, stock confiscated and fined $10 ("+p.Life+", $"+p.Cash+", "+buy.Status+")");
     }
 
     // A cop who sees a buy start records a witnessed deal and moves in to arrest; one looking away never hears of it. The bust

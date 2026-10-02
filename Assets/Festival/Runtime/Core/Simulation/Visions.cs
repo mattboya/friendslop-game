@@ -119,7 +119,7 @@ namespace Festival.Core
         static bool Buys(NpcState n)=>n.Role==""||n.Role=="Buyer";
         CommandResult RefuseSale(PlayerState p,NpcState npc)
         {
-            if(npc.Role=="Narc"){Detain(p);return Ok("Busted! That was an undercover narc.");}
+            if(npc.Role=="Narc"){Detain(p);return Ok(NarcBust);}
             Adjust(npc,p,RefusedSaleSuspicion,packed:false);return Reject("Not buying. They give you a funny look.");
         }
         int SalePayout(NpcState buyer,int pay)=>(int)Math.Round(pay*PayoutMultiplier(State)*(buyer!=null&&State.Visions.Exists(v=>v.Kind=="DoubleBuyer"&&v.NpcId==buyer.Id)?2:1),MidpointRounding.AwayFromZero);

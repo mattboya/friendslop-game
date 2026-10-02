@@ -36,7 +36,8 @@ namespace Festival.Network
         // the cop who claimed ditched stock (DropState.ClaimedBy), and the host's evidence its start (EvidenceState.StartSeconds).
         // MUSIC-2: CampMusicTrack picks SILENCE or one of five recorded tracks (track 2 is DISCO HOUSE, no longer MOONLIT DISCO).
         // DIALOG-3: sales, buys, chats and security talks are conversations, not charts: a Reply command (Amount the reply,
-        // Direction the turn), and talks carry their Turns and whether a TrustDance came first.
+        // Direction the turn), and talks carry their Turns, whether a TrustDance came first and a chat's or a buy's Hunch. A narc
+        // asked to sell talks instead of busting at the ask; finishing the buy busts.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";

@@ -9,7 +9,10 @@ namespace Festival.Core
     /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
     /// watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
     /// first asks for a dance (TrustAsk): eight notes on the talk's own chart, danced and watched like any dance. TrustScore or
-    /// better wins their trust and the talk follows; less and they walk off, the talk over at 0.</summary>
+    /// better wins their trust and the talk follows; less and they walk off, the talk over at 0. A chat or a buy reads the
+    /// person: a reply that lands draws out a line with their role's tell, more often the smoother it was (TellOdds), and the
+    /// first tell shown sets the Hunch the talk leaves, as its last turn begins. A narc asked to sell talks too, its tells in its
+    /// lines; finishing the buy busts you (StockBuys.cs).</summary>
     public sealed partial class FestivalSimulation
     {
         public const int ConversationTurns=3;
@@ -53,19 +56,32 @@ namespace Festival.Core
             if(c.Amount<0||c.Amount>2)return Reject("Pick reply 1, 2 or 3");
             turn.Pick=c.Amount;
             if(i.Turns.Count<ConversationTurns)AddTurn(i,p);else FinishInteraction(i,p);
-            return Ok();
+            return Ok(i.Status=="Police bust"?NarcBust:"Accepted");
         }
         // The next turn, drawn from its own stream of the talk's seed, due ReplySeconds after the last ended: at its reply, or
         // when its time ran out (so silent turns keep a steady beat whatever the tick).
         void AddTurn(InteractionState i,PlayerState p)
         {
-            int t=i.Turns.Count;var npc=State.Npcs.Find(n=>n.Id==i.TargetId);
+            int t=i.Turns.Count;var npc=State.Npcs.Find(n=>n.Id==i.TargetId);string role=npc?.Role??"";
             string persona=i.Kind=="Police"?ConversationLines.Security:DialogueGrammar.PersonaFor(i.TargetId,npc?.Twist??"");
-            int dose=DoseOf(p);
-            i.Turns.Add(ConversationLines.Turn(ConversationLines.Topic(i.Kind),persona,State.FestivalIndex,t,t==0?-1:Graded(i.Turns[t-1]),dose>=3?2:dose>=1?1:0,new ContentRandom(unchecked(i.ChartSeed*31+t)),p.Dialogue));
+            int dose=DoseOf(p);var random=new ContentRandom(TurnSeed(i,t));bool clear=t>0&&Told(random,i.Turns[t-1]);
+            i.Turns.Add(ConversationLines.Turn(ConversationLines.Topic(i.Kind),persona,role,State.FestivalIndex,t,t==0?-1:Graded(i.Turns[t-1]),clear,dose>=3?2:dose>=1?1:0,random,p.Dialogue));
             i.DurationSeconds=Math.Min(State.SimulationSeconds,i.StartSeconds+i.DurationSeconds)+ReplySeconds-i.StartSeconds;
+            if(t==ConversationTurns-1&&(i.Kind=="Conversation"||i.Kind=="Buy"))i.Hunch=Hunch(i,role);
         }
+        static int TurnSeed(InteractionState i,int t)=>unchecked(i.ChartSeed*31+t);
         static int Graded(ConversationTurn t)=>t.Pick<0?ConversationLines.Silence:t.Grades[t.Pick];
+        // How often, in 8, a turn after a smooth, so-so, awkward or silent reply comes out clear, carrying the person's tell. The
+        // first draw of the turn's stream, so Hunch can read it again.
+        static readonly int[] TellOdds={6,3,0,0};
+        static bool Told(ContentRandom random,ConversationTurn heard)=>random.Next(8)<TellOdds[Graded(heard)];
+        // What a chat or a buy's lines showed by its last turn: the hunch from its first clear line, or nothing to go on. A sale's
+        // buyer is buying and security is security, so neither leaves one.
+        string Hunch(InteractionState i,string role)
+        {
+            for(int t=1;t<i.Turns.Count;t++)if(Told(new ContentRandom(TurnSeed(i,t)),i.Turns[t-1]))return ConversationLines.Hunch(role,i.Turns[t].Line,State.FestivalIndex);
+            return ConversationLines.Hunch(role,null,State.FestivalIndex);
+        }
         // FinishInteraction calls this each time the talk's clock runs out (a trust dance's verdict, or a turn left silent) and
         // after its last reply. True once the talk is over, its Score set and its watchers moved.
         bool TalkEnds(InteractionState i,PlayerState p)
