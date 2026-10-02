@@ -15,10 +15,10 @@ namespace Festival.Tests
         const string Hello="You made it out here! The sunset over those dunes is unreal.",Psst="Psst. Security's walking this way.";
         static void Says(PlayerState p,string line,double until,string speaker="FESTIVALGOER"){p.NpcSpeaker=speaker;p.NpcSpeech=line;p.NpcSpeechUntil=until;}
         // Plays `seconds` of 60 fps frames from simulation time `now`, moving it on, and returns for how long the card showed `line`.
-        static float Play(FestivalTalkLine card,PlayerState p,ref double now,float seconds,string line,bool challenge=false,bool hidden=false)
+        static float Play(FestivalTalkLine card,PlayerState p,ref double now,float seconds,string line,bool challenge=false,bool hidden=false,string round="game")
         {
             float shown=0;
-            for(int f=Mathf.RoundToInt(seconds/Frame);f>0;f--){if(card.Shows(p,now,challenge,hidden,Frame)&&card.Line==line)shown+=Frame;now+=Frame;}
+            for(int f=Mathf.RoundToInt(seconds/Frame);f>0;f--){if(card.Shows(round,p,now,challenge,hidden,Frame)&&card.Line==line)shown+=Frame;now+=Frame;}
             return shown;
         }
 
@@ -81,6 +81,17 @@ namespace Festival.Tests
         {
             var card=new FestivalTalkLine();var p=new PlayerState();double now=10;Says(p,Hello,5);
             Assert.That(Play(card,p,ref now,5,Hello),Is.Zero);
+        }
+
+        // The HUD outlives a game (Leave, then Host or Join again), but its line doesn't: the next game's clock starts again near 0,
+        // where the last game's line would still read as said, for as long as the last game had run.
+        [Test] public void ALineFromAnEarlierGameNeverShowsInTheNext()
+        {
+            var card=new FestivalTalkLine();var p=new PlayerState();double now=600;Says(p,Hello,607);
+            Assert.That(Play(card,p,ref now,8,Hello),Is.EqualTo(7).Within(2*Frame),"setup: ten minutes into a game, the line is up for the host's 7 s");
+            now=5;
+            Assert.That(Play(card,new PlayerState(),ref now,3,Hello,round:"next game"),Is.Zero,"5 s into the next game, the last game's line is gone");
+            Assert.That(card.Line,Is.Empty);
         }
     }
 }

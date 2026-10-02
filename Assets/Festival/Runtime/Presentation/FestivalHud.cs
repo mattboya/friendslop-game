@@ -956,7 +956,7 @@ namespace Festival.Presentation
             else dancePreview.Hide();
             // DIALOG-6: a one-line chat stays until read, through a challenge starting (it takes the challenge's line until then) and
             // anything covering the card.
-            bool chatter=talkLine.Shows(player,session.EstimatedSimulationSeconds,rhythm,session.MenuOpen||chatWindow.Open||mapPanel.activeSelf,Time.unscaledDeltaTime);
+            bool chatter=talkLine.Shows(state.RoundId,player,session.EstimatedSimulationSeconds,rhythm,session.MenuOpen||chatWindow.Open||mapPanel.activeSelf,Time.unscaledDeltaTime);
             bool showDialogue=(rhythm&&!string.IsNullOrEmpty(interaction.DialogueText))||chatter;
             dialoguePanel.SetActive(showDialogue);
             Place(dialoguePanel.GetComponent<RectTransform>(),showDancer ? .525f : .70f,showDancer ? .085f : .52f,showDancer ? .965f : .96f,showDancer ? .215f : .69f);

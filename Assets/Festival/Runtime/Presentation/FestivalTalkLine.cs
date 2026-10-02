@@ -17,18 +17,22 @@ namespace Festival.Presentation
         public string Speaker{get;private set;}="";
         public string Line{get;private set;}="";
         // The newest line heard, known by its NpcSpeechUntil (every Talk or bark sets a later one); the shown line's end on the host,
-        // and how long it has been on screen.
-        string nextSpeaker="",next="";double heard,until;float seen;
+        // and how long it has been on screen; and the round they were said in.
+        string nextSpeaker="",next="",round="";double heard,until;float seen;
 
         /// <summary>How long a one-line chat stays on screen at least: its reading time (FestivalChatWindow.ReadingSeconds), from
         /// ShortestRead up to the LongestRead the host gives a Talk.</summary>
         public static float ReadFor(string line)=>Mathf.Clamp(FestivalChatWindow.ReadingSeconds(line),ShortestRead,LongestRead);
 
-        /// <summary>Each frame, from the player's own view at `simulationSeconds`: whether the card shows Speaker's Line now.
-        /// `challenge`: a rhythm challenge is up, so the line shows only until read. `hidden`: something covers the card, so the line
-        /// waits. `dt`: the frame's seconds. A line the host has already dropped never comes up.</summary>
-        public bool Shows(PlayerState p,double simulationSeconds,bool challenge,bool hidden,float dt)
+        /// <summary>Each frame, from the player's own view of `round` (RoundState.RoundId) at `simulationSeconds`: whether the card
+        /// shows Speaker's Line now. `challenge`: a rhythm challenge is up, so the line shows only until read. `hidden`: something
+        /// covers the card, so the line waits. `dt`: the frame's seconds. A line the host has already dropped never comes up, nor
+        /// does one from an earlier game.</summary>
+        public bool Shows(string round,PlayerState p,double simulationSeconds,bool challenge,bool hidden,float dt)
         {
+            // The HUD outlives a game: after Leave, a new Host or Join is a new round on a clock from 0, where the last game's
+            // line would read as still said.
+            if(round!=this.round){this.round=round;Speaker=Line=nextSpeaker=next="";heard=until=0;seen=0;}
             if(!string.IsNullOrEmpty(p.NpcSpeech)&&p.NpcSpeechUntil>simulationSeconds&&p.NpcSpeechUntil!=heard){heard=p.NpcSpeechUntil;nextSpeaker=p.NpcSpeaker;next=p.NpcSpeech;}
             bool unread=Line!=""&&seen<ReadFor(Line),said=Line!=""&&simulationSeconds<until;
             if(next!=""&&(!unread&&!said||seen>=HoldSeconds)){Speaker=nextSpeaker;Line=next;until=heard;next="";seen=0;unread=said=true;}
