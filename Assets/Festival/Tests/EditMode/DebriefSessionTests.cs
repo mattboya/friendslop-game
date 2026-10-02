@@ -61,5 +61,12 @@ namespace Festival.Tests
         {
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":2}"),Is.False,"a pre-DANCE-5 client is told its version is incompatible");
         }
+
+        // TRIP-12: each client paints and lands the dose wheel from its own table, so a build with the old 31/31/31/7 wheel would
+        // show a different wheel and landing angle than the host's 30/30/30/10 for the same spin: it must not get in either.
+        [Test] public void ABuildWithTheOldDoseWheelCannotJoin()
+        {
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":3}"),Is.False,"a client with the 7% dose sliver is told its version is incompatible");
+        }
     }
 }

@@ -55,9 +55,8 @@ The two hooks the design is built around:
 
 - **Who:** a people spinner picks the tripper each level. Nobody goes again
   until everyone has had a turn.
-- **How much:** a dose spinner picks 1 to 4 doses. Its slices are 31/31/31/7:
-  1, 2 and 3 doses are equally likely, and the 4-dose slice is a thin
-  sliver.
+- **How much:** a dose spinner picks 1 to 4 doses. Its slices are 30/30/30/10:
+  1, 2 and 3 doses are equally likely, and the 4-dose slice is a clear 10%.
 - **What:** a third spinner, with five equal slices, picks the substance:
   Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust or Couch Lock. Each
   looks and feels different on the dosed player's own screen, but only the

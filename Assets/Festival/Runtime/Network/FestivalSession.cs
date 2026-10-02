@@ -28,7 +28,8 @@ namespace Festival.Network
         // is turned away with "Incompatible game version." rather than joining a game it cannot play.
         // 2: festival weekends (the Spinning phase, the weekend's new commands, and a ReviewVote that names a friend).
         // 3: wave 2026-09-30 (2): clients build DANCE-5's busier rhythm charts from the same ChartSeed, and the spin runs longer.
-        // 4: wave 2026-10-01 (2): snapshots carry when each Ferris wheel rider boarded (POLO-5).
+        // 4: wave 2026-10-01 (2): snapshots carry when each Ferris wheel rider boarded (POLO-5), and clients paint and land the
+        // 30/30/30/10 dose wheel (TRIP-12).
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";

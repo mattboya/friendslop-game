@@ -13,8 +13,9 @@ namespace Festival.Core
         public const int WheelCount=3;
         public const double WheelSeconds=4,PauseSeconds=.6,TakeSeconds=1.4,ReactSeconds=1.6;
         public const double SpinSeconds=WheelCount*(WheelSeconds+PauseSeconds)+TakeSeconds+ReactSeconds;
-        // Dose spinner slices in percent for 1-4 doses (summing to 100): 1, 2 and 3 are equally likely; the 4-dose slice is a thin sliver.
-        static readonly int[] DoseWeights={31,31,31,7};
+        // Dose spinner slices in percent for 1-4 doses (summing to 100): 1, 2 and 3 are equally likely; the 4-dose slice is the small
+        // one, a clear 10% (TRIP-12).
+        static readonly int[] DoseWeights={30,30,30,10};
         // The dose wheel draws these same slices, so what players see is what the spinner rolls.
         public static IReadOnlyList<int> DoseSlices=>DoseWeights;
         // TRIP-5: the substance spinner's five equal slices, as catalog effect ids (Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust,

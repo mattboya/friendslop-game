@@ -88,21 +88,23 @@ public static class TripperTests
         }
     }
 
-    // TRIP-6: the dose spinner walks one roll of 0-99 through its slices, so the exact odds are the rolls each dose takes. Doses
-    // 1, 2 and 3 are equally likely at 31 rolls each, the 4-dose sliver takes the last 7, and the wheel paints the same slices.
+    // TRIP-6: the dose spinner walks one roll of 0-99 through its slices, so the exact odds are the rolls each dose takes. TRIP-12:
+    // doses 1, 2 and 3 are equally likely at 30 rolls each, the 4-dose slice takes the last 10, and the wheel paints the same slices.
     static void DoseRollTable()
     {
         var counts=new int[5];var astray=new List<int>();
-        for(int roll=0;roll<100;roll++){int dose=FestivalSimulation.DoseForRoll(roll);counts[dose]++;if(dose!=(roll<31?1:roll<62?2:roll<93?3:4))astray.Add(roll);}
+        for(int roll=0;roll<100;roll++){int dose=FestivalSimulation.DoseForRoll(roll);counts[dose]++;if(dose!=(roll<30?1:roll<60?2:roll<90?3:4))astray.Add(roll);}
         string rolls=string.Join("/",counts.Skip(1)),wheel=string.Join("/",FestivalSimulation.DoseSlices);
-        Check(astray.Count==0,"the slices run 1, 2, 3, then the sliver, in roll order (0-30, 31-61, 62-92, 93-99), but rolls "+string.Join(",",astray)+" land elsewhere");
-        Check(rolls=="31/31/31/7","doses 1-4 take 31/31/31/7 of the 100 rolls, got "+rolls);
-        Check(wheel=="31/31/31/7","the dose wheel paints the same 31/31/31/7 slices, got "+wheel);
+        Check(astray.Count==0,"the slices run 1, 2, 3, then the 4-dose slice, in roll order (0-29, 30-59, 60-89, 90-99), but rolls "+string.Join(",",astray)+" land elsewhere");
+        Check(rolls=="30/30/30/10","doses 1-4 take 30/30/30/10 of the 100 rolls, got "+rolls);
+        Check(wheel=="30/30/30/10","the dose wheel paints the same 30/30/30/10 slices, got "+wheel);
     }
 
     // TRIP-5: the substance draws from its own stream once the doses are dealt, so the spin stream draws exactly what it drew
     // before the substance wheel existed. These spins, pinned at b2d4894 (before the wheel), still pick the same trippers and doses.
-    const string PinnedSpins="p0:3 p0:32 p0:2 p2:3143 p0:3 p1:13 p1:1 p1:1432 p0:2 p0:21 p2:1 p3:2333 p0:3 p1:23 p2:1 p2:2442 p0:1 p1:34 p1:1 p1:1323 p0:3 p0:44 p0:3 p0:3131";
+    // TRIP-12 moved six rolls up a dose (30, 60-61 and 90-92) without adding a draw: every tripper stays, and exactly five entries
+    // change dose (the 8th 1432->1433, 12th 2333->2334, 13th 3->4, 18th 34->44 and 24th 3131->4131).
+    const string PinnedSpins="p0:3 p0:32 p0:2 p2:3143 p0:3 p1:13 p1:1 p1:1433 p0:2 p0:21 p2:1 p3:2334 p0:4 p1:23 p2:1 p2:2442 p0:1 p1:44 p1:1 p1:1323 p0:3 p0:44 p0:3 p0:4131";
     static void ExistingSeedsKeepTheirTripperAndDose()
     {
         var spun=new List<string>();
@@ -118,7 +120,7 @@ public static class TripperTests
             var s=Crew(seed,1);var solo=s.Player("p0");solo.X=0;solo.Z=19;Act(s,"p0","Ready");Act(s,"p0","Start");
             Check(s.State.TripperId=="p0"&&Dose(solo)>=1&&Dose(solo)<=4,"seed "+seed+" spins a dose for the solo tripper");counts[Dose(solo)]++;
         }
-        var weights=new[]{0,31,31,31,7};
+        var weights=new[]{0,30,30,30,10};
         for(int dose=1;dose<=4;dose++){double share=100.0*counts[dose]/spins;Check(Math.Abs(share-weights[dose])<=1.5,"dose "+dose+" landed on "+share+"% of 10k spins; the slice is "+weights[dose]+"%");}
     }
 

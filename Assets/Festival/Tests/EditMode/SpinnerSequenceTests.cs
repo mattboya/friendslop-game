@@ -30,8 +30,10 @@ namespace Festival.Tests
             var doses=FestivalSimulation.DoseSlices;
             Assert.That(FestivalSpinner.SliceUnderPointer(doses,0),Is.EqualTo(0),"at rest the pointer sits on the start of the 1-dose slice");
             Assert.That(FestivalSpinner.SliceUnderPointer(doses,200),Is.EqualTo(1),"turned 200 degrees clockwise, the pointer reads 2 doses");
-            Assert.That(FestivalSpinner.SliceUnderPointer(doses,20),Is.EqualTo(3),"the 4-dose sliver sits just before the top");
-            Assert.That(FestivalSpinner.SliceUnderPointer(doses,26),Is.EqualTo(2),"and is thinner than 26 degrees (7% of the wheel is 25.2)");
+            Assert.That(FestivalSpinner.SliceUnderPointer(doses,20),Is.EqualTo(3),"the 4-dose slice sits just before the top");
+            // TRIP-12: a clear 10%, no longer a 7% sliver.
+            Assert.That(FestivalSpinner.SliceUnderPointer(doses,35),Is.EqualTo(3),"and is wider than 35 degrees (a 7% sliver is 25.2)");
+            Assert.That(FestivalSpinner.SliceUnderPointer(doses,37),Is.EqualTo(2),"and thinner than 37 degrees (10% of the wheel is 36)");
             Assert.That(FestivalSpinner.SliceUnderPointer(Equal(4),-100),Is.EqualTo(1),"a people wheel of four has quarter slices");
         }
 
