@@ -58,17 +58,24 @@ public static class MissionTests
     static void SoloFirstRunAndRecovery()
     {
         var game=new FestivalSimulation(5);var solo=game.AddPlayer("solo","Solo");
-        var shelf=Catalog.ShopPoint(true,game.State.VendorOffers.IndexOf("stock_mushrooms"));solo.X=shelf.X;solo.Z=shelf.Z;
-        Check(Act(game,solo.Id,"HoldOffer",item:"stock_mushrooms").Accepted,"solo takes camp item");
+        var shelf=Catalog.ShopPoint(true,game.State.VendorOffers.IndexOf("medical_voucher"));solo.X=shelf.X;solo.Z=shelf.Z;
+        Check(Act(game,solo.Id,"HoldOffer",item:"medical_voucher").Accepted,"solo takes camp item");
         solo.X=0;solo.Z=7;
-        Check(game.Execute(solo.Id,new GameCommand{Id="solo-buy",Kind="Buy",ItemId="stock_mushrooms",Amount=1}).Accepted,"solo pays seller");
+        Check(game.Execute(solo.Id,new GameCommand{Id="solo-buy",Kind="Buy",ItemId="medical_voucher",Amount=1}).Accepted,"solo pays seller");
         solo.Z=19;Check(Act(game,solo.Id,"Ready").Accepted,"solo readies");game.Tick(5.2);
         Check(game.State.Phase=="Spinning"&&game.State.TripperId==solo.Id,"solo countdown spins, and solo is always the tripper");
         game.Tick(FestivalSimulation.SpinSeconds+.1);Check(game.State.Phase=="Loading","the wheels land and the crew loads");
         Check(Act(game,solo.Id,"MapReady").Accepted&&game.State.Phase=="Playing","solo enters festival");
+        // ECON-2: no shelf sells stock, so the Fun Guys come from a festivalgoer who sells them, out of the cops' sight.
+        game.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
+        var seller=game.State.Npcs.Find(n=>n.Role=="Regular"&&n.Twist==""&&FestivalSimulation.SellerStock(n.Id)=="stock_mushrooms");solo.X=seller.X;solo.Z=seller.Z-1;
+        Check(Act(game,solo.Id,"StartBuy",seller.Id,"stock_mushrooms").Accepted,"solo asks a festivalgoer for Fun Guys");
+        var buy=game.Interaction(solo.InteractionId);
+        foreach(var note in RhythmChart.For(buy).Notes)buy.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        game.Tick(10);Check(buy.Status=="Complete"&&solo.Inventory.Exists(i=>i.ItemId=="stock_mushrooms"),"solo dances the buy and gets the Fun Guys");
         game.State.Npcs.Clear();game.State.LevelIndex=1;solo.X=-18;solo.Z=-22;
         Check(FestivalSimulation.VisibleVisions(game.State,solo.Id).Count>0,"the solo tripper sees the visions");
-        Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Fun Guys bought at camp");
+        Check(Act(game,solo.Id,"Consume",item:"stock_mushrooms").Accepted,"solo takes the Fun Guys a festivalgoer sold them");
         // Two samples a second apart: the drift is a slow sine, so one sample can land on a zero crossing.
         Check(Intoxication.MovementMultiplier(solo)<1&&Math.Abs(Intoxication.LateralDrift(solo,1))+Math.Abs(Intoxication.LateralDrift(solo,2))>.01,"intoxication changes walking");
         game.State.Npcs.Add(new NpcState{Id="dancer",X=solo.X,Z=solo.Z});

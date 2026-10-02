@@ -23,8 +23,8 @@ namespace Festival.Core
         public const double EncoreStep=.25,MaxSuspicionMultiplier=2.5;
         public const int MaxNarcs=8,MaxChainLength=5;
         public static double EncoreScale(int encoreTier)=>1+EncoreStep*encoreTier;
-        // What a day's quota is paid from, for a crew of `crew`. Each shelf (camp and night market) carries StockCopies of each
-        // stock item, and a buyer takes SalesPerBuyer sales a level, one more from a crew of five, so a crew of up to eight
+        // What a day's quota is paid from, for a crew of `crew`. ECON-2: each festivalgoer who sells has StockCopies units a level
+        // (StockBuys.cs), and a buyer takes SalesPerBuyer sales a level, one more from a crew of five, so a crew of up to eight
         // can sell its quota. A sale pays x EncoreScale like the quota (FestivalSimulation.PayoutMultiplier), so every
         // encore lap can be won too, with no cap on the quota.
         public static int StockCopies(int crew)=>Math.Max(2,crew);

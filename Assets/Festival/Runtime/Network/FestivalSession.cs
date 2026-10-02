@@ -29,7 +29,7 @@ namespace Festival.Network
         // 2: festival weekends (the Spinning phase, the weekend's new commands, and a ReviewVote that names a friend).
         // 3: wave 2026-09-30 (2): clients build DANCE-5's busier rhythm charts from the same ChartSeed, and the spin runs longer.
         // 4: wave 2026-10-01 (2): snapshots carry when each Ferris wheel rider boarded (POLO-5), and clients paint and land the
-        // 30/30/30/10 dose wheel (TRIP-12).
+        // 30/30/30/10 dose wheel (TRIP-12). ECON-2: shelves sell gear only, and festivalgoers sell stock through StartBuy.
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -312,17 +312,22 @@ namespace Festival.Network
                 var player=preview.AddPlayer("preview","Preview");
                 var friend=preview.AddPlayer("preview_friend","Preview Friend");
                 player.Cash=999;
-                if(!preview.State.VendorOffers.Contains(itemId))
+                // ECON-2: no shelf sells stock (festivalgoers do), so the preview player is simply handed it.
+                if(definition.Category=="Stock")player.Inventory.Add(new ItemStack{ItemId=itemId,Count=1});
+                else
                 {
-                    preview.State.VendorOffers.Add(itemId);
-                    preview.State.ShopStock.Add(new ShopStockState{ItemId=itemId,CampAvailable=1,MarketAvailable=1});
+                    if(!preview.State.VendorOffers.Contains(itemId))
+                    {
+                        preview.State.VendorOffers.Add(itemId);
+                        preview.State.ShopStock.Add(new ShopStockState{ItemId=itemId,CampAvailable=1,MarketAvailable=1});
+                    }
+                    var shelf=Catalog.ShopPoint(true,preview.State.VendorOffers.IndexOf(itemId));
+                    player.X=shelf.X;player.Z=shelf.Z;
+                    preview.Execute(player.Id,new GameCommand{Id="preview_hold",Kind="HoldOffer",ItemId=itemId});
+                    player.X=0;player.Z=7;
+                    var buy=preview.Execute(player.Id,new GameCommand{Id="preview_buy",Kind="Buy",ItemId=itemId,Amount=1});
+                    if(definition.Price>0 && !buy.Accepted)return definition.Description+"\nPreview rule: "+buy.Reason;
                 }
-                var shelf=Catalog.ShopPoint(true,preview.State.VendorOffers.IndexOf(itemId));
-                player.X=shelf.X;player.Z=shelf.Z;
-                preview.Execute(player.Id,new GameCommand{Id="preview_hold",Kind="HoldOffer",ItemId=itemId});
-                player.X=0;player.Z=7;
-                var buy=preview.Execute(player.Id,new GameCommand{Id="preview_buy",Kind="Buy",ItemId=itemId,Amount=1});
-                if(definition.Price>0 && !buy.Accepted)return definition.Description+"\nPreview rule: "+buy.Reason;
                 player.X=0;player.Z=19;friend.X=0;friend.Z=19;
                 preview.Execute(player.Id,new GameCommand{Id="preview_ready",Kind="Ready"});
                 preview.Execute(friend.Id,new GameCommand{Id="preview_friend_ready",Kind="Ready"});

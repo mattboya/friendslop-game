@@ -103,20 +103,20 @@ public static class WeekendTests
     }
 
     // Gear carries between levels, so a player can reach camp with all three hands full. G there leaves an item in the crew's
-    // shared stash, which carries through the weekend, so they can still buy stock and have the item back later.
+    // shared stash, which carries through the weekend, so they can still buy gear and have the item back later.
     static void FullHandsCanLeaveGearAtCamp()
     {
         var s=Crew(45);var a=s.Player("a");a.Cash=50;
         foreach(var item in new[]{"confetti","merch_bag","poi_practice"})a.Inventory.Add(new ItemStack{ItemId=item,Count=1});
         CommandResult Do(string kind,string item)=>s.Execute("a",new GameCommand{Id="weekend_"+(++sequence),Kind=kind,ItemId=item});
-        var shelf=Catalog.ShopPoint(true,s.State.VendorOffers.IndexOf("stock_lsd"));
-        void TakeTabs(){a.X=shelf.X;a.Z=shelf.Z;Check(Do("HoldOffer","stock_lsd").Accepted,"a takes Tongue Stamps off the shelf");a.X=0;a.Z=7;}
-        TakeTabs();Check(!Do("Buy","stock_lsd").Accepted,"setup: with three things in hand a cannot buy them");
-        Check(Do("ReturnOffer","").Accepted,"setup: a puts the tabs back");
+        var shelf=Catalog.ShopPoint(true,s.State.VendorOffers.IndexOf("medical_voucher"));
+        void TakeVoucher(){a.X=shelf.X;a.Z=shelf.Z;Check(Do("HoldOffer","medical_voucher").Accepted,"a takes a medical voucher off the shelf");a.X=0;a.Z=7;}
+        TakeVoucher();Check(!Do("Buy","medical_voucher").Accepted,"setup: with three things in hand a cannot buy it");
+        Check(Do("ReturnOffer","").Accepted,"setup: a puts the voucher back");
         var dropped=Do("Drop","confetti");Check(dropped.Accepted,"at camp a can put the confetti down (got \""+dropped.Reason+"\")");
         var stash=s.State.Stashes.Find(x=>x.Id=="stash");
         Check(!a.Inventory.Exists(i=>i.ItemId=="confetti")&&stash.Items.Exists(i=>i.ItemId=="confetti"&&i.Count==1),"the confetti waits in the crew's shared stash");
-        TakeTabs();Check(Do("Buy","stock_lsd").Accepted,"with a hand free a buys the Tongue Stamps");
+        TakeVoucher();Check(Do("Buy","medical_voucher").Accepted,"with a hand free a buys the voucher");
         Finish(s,"Success");Check(s.State.Stashes.Find(x=>x.Id=="stash").Items.Exists(i=>i.ItemId=="confetti"),"and the stash still holds the confetti on Night 1");
     }
 

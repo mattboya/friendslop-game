@@ -41,7 +41,7 @@ namespace Festival.Core
                 if(player.HeldOfferId!="")return "Carry your unpaid item to the seller "+Route(player,0,7)+". Press E to pay, or G to return it.";
                 return Distance(player,0,19)<4
                     ?"Press E at the lit trailhead to ready up and dance."
-                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E. Ready at lit trailhead "+Route(player,0,19)+".";
+                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E. Stock comes from festivalgoers. Ready at lit trailhead "+Route(player,0,19)+".";
             }
             if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";

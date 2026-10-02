@@ -133,15 +133,15 @@ public static class DayQuotaTests
         Check(refused,"a snapshot with negative sales is refused");
     }
 
-    // Every day can be won at any crew size and encore lap. A crew that buys all the stock the camp shelf and the night market
-    // carry (restocking from its takings) and sells it perfectly to the level's real buyers at dose 1 meets the quota. Nobody is
-    // watching, and nobody sells inside a VIP zone, so nothing pays extra. Lists every day that cannot be won.
+    // Every day can be won at any crew size and encore lap. ECON-2: a crew that leaves camp with its $20 each and no stock, buys
+    // every unit from the level's festivalgoers and sells it perfectly to the level's real buyers at dose 1 meets the quota.
+    // Nobody is watching, and nobody sells inside a VIP zone, so nothing pays extra. Lists every day that cannot be won.
     static void APerfectCrewCanMeetEveryQuota()
     {
         var misses=new List<string>();
         for(int festival=0;festival<Festivals.Count;festival++)for(int level=0;level<Festivals.LevelCount;level+=2)for(int tier=0;tier<=4;tier++)for(int crew=1;crew<=8;crew++)
         {
-            var s=Launch(crew,festival,level,tier);SellEverything(s);int quota=FestivalSimulation.DayQuota(s.State);
+            var s=Launch(crew,festival,level,tier);SellTheQuota(s);int quota=FestivalSimulation.DayQuota(s.State);
             if(s.State.LevelSales<quota)misses.Add(Festivals.Name(festival)+" "+Festivals.For(s.State).Name+", crew of "+crew+", encore "+tier+": sold $"+s.State.LevelSales+" of a $"+quota+" quota");
         }
         Check(misses.Count==0,"a perfect crew at dose 1 cannot meet "+misses.Count+" day quotas:\n"+string.Join("\n",misses));
@@ -169,54 +169,68 @@ public static class DayQuotaTests
         s=Crew(2);s.State.EncoreTier=4;Check(Sell(s,"p0","buyer_0")==20,"and $20 on the fourth, twice the first lap's pay");
     }
 
-    // A real launch from camp onto a day level, every player having bought what the camp shelf lets them, the tripper at dose 1
-    // with no double buyer, no cops, and anyone standing in a VIP zone walked out just south of its rope.
+    // A real launch from camp onto a day level, every player with the $20 they start with and no stock (no shelf sells it), the
+    // tripper at dose 1 with no double buyer, no cops, and anyone standing in a VIP zone walked out just south of its rope.
     static FestivalSimulation Launch(int crew,int festival,int level,int tier)
     {
         var s=new FestivalSimulation(21+crew);for(int i=0;i<crew;i++)s.AddPlayer("p"+i,"P"+i);
         s.State.FestivalIndex=festival;s.State.LevelIndex=level;s.State.EncoreTier=tier;s.State.UnlockedFestivalCount=Festivals.Count;
-        foreach(var p in s.State.Players){BuyStock(s,p,true);p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,p.Id+" readies at the trailhead");}
+        foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,p.Id+" readies at the trailhead");}
         s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
         Check(s.State.Phase=="Playing"&&Festivals.For(s.State).Name==(level==0?"Day 1":"Day 2"),"setup: the day is under way");
+        Check(s.State.Players.TrueForAll(p=>p.Cash==20&&p.Inventory.Count==0),"setup: the crew leaves camp with $20 each and nothing else");
         foreach(var d in s.State.Doses)d.Dose=1;s.State.Visions.RemoveAll(v=>v.Kind=="DoubleBuyer");
         s.HasLineOfSight=(ax,az,bx,bz)=>false;s.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
         foreach(var n in s.State.Npcs)if(Festivals.InVipZone(festival,n.X,n.Z))n.Z=Festivals.VipZones[0].MinZ-1.5f;
         return s;
     }
-    // Buys every stock item the shelf (camp) or the night market has left, while the player can pay and carry it.
-    static void BuyStock(FestivalSimulation s,PlayerState p,bool camp)
+    // Rounds of every friend with nothing to sell perfectly buying one unit from a free festivalgoer, then each perfectly selling
+    // it to a free buyer, until the quota is met or nobody sells: the sellers ran out, or every buyer they can reach has bought
+    // all they will. The crew asks anyone it knows is neither a narc nor a buyer, and the host turns down whoever doesn't sell.
+    static void SellTheQuota(FestivalSimulation s)
     {
-        foreach(var item in new[]{"stock_lsd","stock_mushrooms"})for(int guard=0;guard<20;guard++)
+        var done=new HashSet<string>();var dry=new HashSet<string>();
+        for(int round=0;round<100&&!FestivalSimulation.DayQuotaMet(s.State);round++)
         {
-            var shelf=Catalog.ShopPoint(camp,s.State.VendorOffers.IndexOf(item));p.X=shelf.X;p.Z=shelf.Z;
-            if(camp){if(!Act(s,p.Id,"HoldOffer","",item).Accepted)break;p.X=0;p.Z=7;}
-            if(!Act(s,p.Id,"Buy","",item).Accepted){if(camp)Act(s,p.Id,"ReturnOffer");break;}
-        }
-    }
-    // Rounds of the whole crew restocking at the night market, then each seller perfectly selling one stock to a free buyer,
-    // until nobody sells: stock ran out, or every buyer they can reach has bought all they will.
-    static void SellEverything(FestivalSimulation s)
-    {
-        var done=new HashSet<string>();
-        for(int round=0;round<100;round++)
-        {
+            var buys=new List<InteractionState>();
+            foreach(var p in s.State.Players)
+            {
+                if(p.Inventory.Count>0)continue;
+                foreach(var seller in s.State.Npcs)
+                {
+                    if(seller.Kind!="Wook"||seller.Role=="Narc"||seller.Role=="Buyer"||dry.Contains(seller.Id)||buys.Exists(x=>x.TargetId==seller.Id))continue;
+                    p.X=seller.X;p.Z=seller.Z-.5f;
+                    if(!Act(s,p.Id,"StartBuy",seller.Id,FestivalSimulation.SellerStock(seller.Id)).Accepted){dry.Add(seller.Id);continue;}
+                    buys.Add(Perfect(s,p));break;
+                }
+            }
+            Settle(s,buys,"buy");
             var sales=new List<InteractionState>();
             foreach(var p in s.State.Players)
             {
-                BuyStock(s,p,false);var stock=p.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");if(stock==null)continue;
+                var stock=p.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");if(stock==null)continue;
                 foreach(var buyer in s.State.Npcs)
                 {
                     if(buyer.Role!="Buyer"||done.Contains(buyer.Id)||sales.Exists(x=>x.TargetId==buyer.Id))continue;
                     p.X=buyer.X;p.Z=buyer.Z-.5f;if(Festivals.InVipZone(s.State.FestivalIndex,p.X,p.Z)){done.Add(buyer.Id);continue;}
                     if(!Act(s,p.Id,"StartSale",buyer.Id,stock.ItemId).Accepted){done.Add(buyer.Id);continue;}
-                    var sale=s.Interaction(p.InteractionId);sales.Add(sale);
-                    foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-                    break;
+                    sales.Add(Perfect(s,p));break;
                 }
             }
             if(sales.Count==0)return;
-            for(int guard=0;sales.Exists(x=>x.Status=="Active")&&guard<200;guard++)s.Tick(.1);
-            Check(!sales.Exists(x=>x.Status!="Complete"),"every perfect sale settles");
+            Settle(s,sales,"sale");
         }
+    }
+    // p's challenge, every note to be hit.
+    static InteractionState Perfect(FestivalSimulation s,PlayerState p)
+    {
+        var i=s.Interaction(p.InteractionId);
+        foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        return i;
+    }
+    static void Settle(FestivalSimulation s,List<InteractionState> challenges,string what)
+    {
+        for(int guard=0;challenges.Exists(x=>x.Status=="Active")&&guard<200;guard++)s.Tick(.1);
+        Check(!challenges.Exists(x=>x.Status!="Complete"),"every perfect "+what+" settles");
     }
 }

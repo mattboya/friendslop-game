@@ -14,10 +14,10 @@ namespace Festival.Tests
     public sealed class HudMoneyPlayTests:FestivalPlayModeTest
     {
         // HUD-3 with PLAYA-1: on Ember Playa the running HUD never shows a dollar. Hosts a real round as the crew member who counts
-        // in friendship bracelets, the longest odd object: at camp they eye the Tongue Stamps on the shelf, pick them up, show them to
-        // the seller and pay; out on Day 1 they read their pocket, the stash, the sales and the quota with security closing in,
-        // and try to leave early, which the host refuses in dollars. Labels are laid out on a 1920x1080 canvas and must draw
-        // whole, and the shelf's price tags must stay within their slot.
+        // in friendship bracelets, the longest odd object: at camp they eye the practice poi on the gear shelf (ECON-2: no shelf
+        // sells stock), pick it up, show it to the seller and pay; out on Day 1 they read their pocket, the stash, the sales and the
+        // quota with security closing in, and try to leave early, which the host refuses in dollars. Labels are laid out on a
+        // 1920x1080 canvas and must draw whole, and the shelf's price tags must stay within their slot.
         [UnityTest]public IEnumerator EmberPlayaCountsInYourOddObjects()
         {
             var world=new GameObject("HUD money world");world.AddComponent<FestivalWorld>();yield return null;
@@ -55,15 +55,16 @@ namespace Festival.Tests
                 // The weekend is at Ember Playa, and you are the crew member who counts in friendship bracelets.
                 sim.State.FestivalIndex=Festivals.PlayaFestival;player.Ordinal=3;
                 Assert.That(Festivals.CurrencyName(Festivals.PlayaFestival,3,2),Is.EqualTo("2 friendship bracelets"),"setup: the longest odd object");
-                int shelf=sim.State.VendorOffers.IndexOf("stock_lsd");Assert.That(shelf,Is.GreaterThanOrEqualTo(0),"setup: Tongue Stamps are on the shelf");
+                int shelf=sim.State.VendorOffers.IndexOf("poi_practice");Assert.That(shelf,Is.GreaterThanOrEqualTo(0),"setup: the practice poi is on the shelf");
 
-                // At the shelf, eyeing the Tongue Stamps.
+                // At the shelf, eyeing the practice poi.
                 var spot=Catalog.ShopPoint(true,shelf);player.X=spot.X;player.Z=6.3f;
                 typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,0f);
                 typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Atan2((shelf<4?1.17f:2.05f)-1.65f,9f-6.3f)*Mathf.Rad2Deg);
                 yield return new WaitForSeconds(.5f);
-                Expect("at the shelf","Prompt","PICK UP TONGUE STAMPS  •  5 FRIENDSHIP BRACELETS  •  Clean sales pay 10 friendship bracelets and up, or take: 60s of warped cues and slower, drifting steps.");
-                Fits("at the shelf","Prompt");NoDollars("at the shelf");
+                Expect("at the shelf","Prompt","PICK UP PRACTICE POI  •  5 FRIENDSHIP BRACELETS  •  Reusable dance tool: 15% wider good window, capped at 175 ms. Pair with a friend for rescue.");
+                // The camp hint, which now also says where stock comes from, still draws whole.
+                Fits("at the shelf","Prompt","Objective detail");NoDollars("at the shelf");
                 // The price tags on both shelves, each lettered within its painted card.
                 int tags=0;
                 foreach(var tag in world.GetComponentsInChildren<TextMesh>(true))
@@ -78,17 +79,17 @@ namespace Festival.Tests
 
                 // Picked up, shown to the seller, paid.
                 PressE();yield return new WaitForSeconds(.4f);
-                Assert.That(player.HeldOfferId,Is.EqualTo("stock_lsd"),"setup: E picks up the Tongue Stamps ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                Assert.That(player.HeldOfferId,Is.EqualTo("poi_practice"),"setup: E picks up the practice poi ("+session.Message+"), after:\n"+string.Join("\n",failures));
                 player.X=0;player.Z=7;yield return new WaitForSeconds(.4f);
-                Expect("holding them","Held item price","5 FRIENDSHIP BRACELETS");
-                Expect("holding them","Held item details","Clean sales pay 10 friendship bracelets and up, or take: 60s of warped cues and slower, drifting steps.");
-                Fits("holding them","Held item title","Held item price","Held item details");
+                Expect("holding it","Held item price","5 FRIENDSHIP BRACELETS");
+                Expect("holding it","Held item details","Reusable dance tool: 15% wider good window, capped at 175 ms. Pair with a friend for rescue.");
+                Fits("holding it","Held item title","Held item price","Held item details");
                 PressE();yield return new WaitForSeconds(.4f);
-                Expect("at the counter","Handoff price","E  PAY 5 FRIENDSHIP BRACELETS  •  TONGUE STAMPS    G CANCEL");
-                Expect("at the counter","Prompt","PAY 5 FRIENDSHIP BRACELETS FOR TONGUE STAMPS");
+                Expect("at the counter","Handoff price","E  PAY 5 FRIENDSHIP BRACELETS  •  PRACTICE POI    G CANCEL");
+                Expect("at the counter","Prompt","PAY 5 FRIENDSHIP BRACELETS FOR PRACTICE POI");
                 Fits("at the counter","Handoff price","Prompt","Held item price");NoDollars("at the counter");
                 PressE();yield return new WaitForSeconds(.4f);
-                Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: E pays for the Tongue Stamps ("+session.Message+")");
+                Assert.That(player.Inventory.Exists(i=>i.ItemId=="poi_practice"),Is.True,"setup: E pays for the practice poi ("+session.Message+")");
                 Fits("paid","Vitals");NoDollars("paid");
 
                 // Out on Day 1.

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Festival.Core;
 
-// ECON-2: Tongue Stamps and Fun Guys come from festivalgoers through a danced buy. Regulars (and clue holders at night) sell one
+// ECON-2: the camp and night-market shelves sell gear only. Tongue Stamps and Fun Guys come from festivalgoers through a danced buy. Regulars (and clue holders at night) sell one
 // kind each, a few units a level; anyone else turns the ask down the same way, and asking a narc is a bust.
 public static class StockBuyTests
 {
@@ -13,7 +13,7 @@ public static class StockBuyTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{ASellerSells,TheReplyNeverTellsThemApart,AskingANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
+        foreach(var test in new Action[]{NoShelfSellsStock,ASellerSells,TheReplyNeverTellsThemApart,AskingANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stock buy test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -40,6 +40,40 @@ public static class StockBuyTests
         for(int n=0;n<Math.Ceiling(share*notes.Count);n++)i.Inputs.Add(new RhythmInput{Direction=notes[n].Direction,TimeSeconds=notes[n].TimeSeconds});
         for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);
         return i;
+    }
+
+    // The shelves keep the three staples and the three extras each seed always drew, and never stock. Shelves restored from an
+    // older snapshot that still list stock won't sell it either, and the camp hint says where stock comes from now.
+    static void NoShelfSellsStock()
+    {
+        for(int seed=1;seed<=200;seed++)
+        {
+            var offers=Catalog.VendorOffers(seed);var old=OldOffers(seed);old.RemoveAll(id=>id=="stock_lsd"||id=="stock_mushrooms");
+            Check(!offers.Exists(id=>Catalog.FindItem(id).Category=="Stock"),"seed "+seed+"'s shelves hold no stock: "+string.Join(",",offers));
+            Check(string.Join(",",offers)==string.Join(",",old),"seed "+seed+"'s shelves keep the gear they drew: "+string.Join(",",offers)+", was "+string.Join(",",old));
+        }
+        var s=new FestivalSimulation(7);var p=s.AddPlayer("p0","P0");
+        s.State.VendorOffers.Add("stock_lsd");s.State.ShopStock.Add(new ShopStockState{ItemId="stock_lsd",CampAvailable=2,MarketAvailable=2});
+        int index=s.State.VendorOffers.IndexOf("stock_lsd");var shelf=Catalog.ShopPoint(true,index);p.X=shelf.X;p.Z=shelf.Z;
+        var held=Act(s,"p0","HoldOffer","","stock_lsd");
+        Check(!held.Accepted&&held.Reason=="Stock comes from festivalgoers, not shelves"&&p.HeldOfferId=="","the camp shelf won't hand over stock: "+held.Reason);
+        // Picked up before the update.
+        p.HeldOfferId="stock_lsd";p.X=0;p.Z=7;var paid=Act(s,"p0","Buy","","stock_lsd");
+        Check(!paid.Accepted&&p.Cash==20&&Count(p,"stock_lsd")==0,"nor will the camp seller sell it: "+paid.Reason);
+        p.HeldOfferId="";s.State.Phase="Playing";var market=Catalog.ShopPoint(false,index);p.X=market.X;p.Z=market.Z;
+        var bought=Act(s,"p0","Buy","","stock_lsd");
+        Check(!bought.Accepted&&p.Cash==20&&Count(p,"stock_lsd")==0&&s.State.ShopStock.Find(x=>x.ItemId=="stock_lsd").MarketAvailable==2,"nor will a night-market shelf: "+bought.Reason);
+        s.State.Phase="Shopping";p.X=-1;p.Z=-9;var hint=FestivalGuidance.Hint(s.State,p);
+        Check(hint.Contains("Camp supplies")&&hint.Contains("look at shelf props")&&hint.Contains("Stock comes from festivalgoers."),"the camp hint says stock comes from festivalgoers: "+hint);
+    }
+    // Catalog.VendorOffers as it was before ECON-2, stock and all, so NoShelfSellsStock can tell the shuffle draws what it drew.
+    static List<string> OldOffers(int seed)
+    {
+        var offers=new List<string>{"little_spoon","stock_lsd","stock_mushrooms","medical_voucher","poi_practice"};
+        var extras=new[]{"stage_pass","confetti","merch_bag","stash_box","poi_led"};var random=new ContentRandom(seed);
+        for(int i=extras.Length-1;i>0;i--){int j=random.Next(i+1);var t=extras[i];extras[i]=extras[j];extras[j]=t;}
+        for(int i=0;i<3;i++)offers.Add(extras[i]);
+        return offers;
     }
 
     // A regular by day and a clue holder by night each sell one unit of their kind for $5, danced well or sloppily. A missed

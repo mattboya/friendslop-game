@@ -1,9 +1,12 @@
 using System;
 namespace Festival.Core {
 public sealed partial class FestivalSimulation {
+    // ECON-2: a shelf restored from an older snapshot may still list stock; it sells gear only all the same.
+    const string StockOffShelves="Stock comes from festivalgoers, not shelves";
     CommandResult HoldOffer(PlayerState p,GameCommand c)
     {
         if(State.Phase!="Shopping"||p.Ready||p.HeldOfferId!="")return Reject("Return your held item before choosing another");
+        if(Catalog.FindItem(c.ItemId)?.Category=="Stock")return Reject(StockOffShelves);
         int index=State.VendorOffers.IndexOf(c.ItemId);
         if(index<0)return Reject("That item is not on the shelf");
         var point=Catalog.ShopPoint(true,index);
@@ -26,6 +29,7 @@ public sealed partial class FestivalSimulation {
         if(c.ItemId==VipWristband)return BuyVipWristband(p);
         int index=State.VendorOffers.IndexOf(c.ItemId);
         var item=Catalog.FindItem(c.ItemId);
+        if(item?.Category=="Stock")return Reject(StockOffShelves);
         if(index<0||item==null||c.Amount>1||c.Amount<0)return Reject("Invalid offer or amount");
         var stock=State.ShopStock.Find(s=>s.ItemId==c.ItemId);
         if(stock==null)return Reject("Offer unavailable");
