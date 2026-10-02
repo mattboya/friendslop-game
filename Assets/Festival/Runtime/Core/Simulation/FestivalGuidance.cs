@@ -26,6 +26,11 @@ namespace Festival.Core
             return trail>0?"FOLLOW THE CLUE TRAIL "+state.CluesRead+" / "+trail:"SELL THE DAY'S QUOTA";
         }
 
+        /// <summary>ECON-3: player holds no stock and the level (the one coming up, at camp) is a day, whose quota needs some. Only then
+        /// do the camp lines and the day's objective card say where stock comes from. ponytail: a unit on the table in a sale counts
+        /// as gone, as the card is hidden while you dance it; count the sale's ReservedItemId if a sale ever leaves the card up.</summary>
+        public static bool NeedsStock(RoundState state, PlayerState player) => !Festivals.For(state).Night&&!player.Inventory.Exists(i=>Catalog.FindItem(i.ItemId)?.Category=="Stock");
+
         public static string Hint(RoundState state, PlayerState player)
         {
             if(state==null||player==null)return "";
@@ -41,7 +46,7 @@ namespace Festival.Core
                 if(player.HeldOfferId!="")return "Carry your unpaid item to the seller "+Route(player,0,7)+". Press E to pay, or G to return it.";
                 return Distance(player,0,19)<4
                     ?"Press E at the lit trailhead to ready up and dance."
-                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E. Stock comes from festivalgoers. Ready at lit trailhead "+Route(player,0,19)+".";
+                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E."+(NeedsStock(state,player)?" Stock comes from festivalgoers.":"")+" Ready at lit trailhead "+Route(player,0,19)+".";
             }
             if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";

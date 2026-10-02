@@ -61,7 +61,15 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.6f);
                 Expect("day","Level banner","PALM MIRAGE  •  DAY 1");
                 Expect("day","Objective title","DAY QUOTA  $12 / $30");
-                Expect("day","Objective detail","Sell $18 more before sundown.");
+                // ECON-3: what is left to sell, then this player's next step: with no stock, where it comes from; holding some, Sam is
+                // the tripper who sees the buyers. Both draw whole.
+                Expect("day","Objective detail","Sell $18 more before sundown. You have nothing to sell: buy from festivalgoers, and some are narcs.");
+                Fits("day","Objective detail");
+                string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                yield return new WaitForSeconds(.6f);
+                Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer.");
+                Fits("day, holding stock","Objective detail");
+                sim.State.TripperId=tripperId;player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");
                 if(!System.Text.RegularExpressions.Regex.IsMatch(Read("Time"),@"^[0-8]:[0-5]\d$"))failures.Add("day: Time reads \""+Read("Time")+"\", expected m:ss");
                 sim.State.LevelSales=30;player.X=0;player.Z=-32;
                 yield return new WaitForSeconds(.6f);

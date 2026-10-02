@@ -46,15 +46,26 @@ namespace Festival.Presentation
         public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s,p):FestivalGuidance.Headline(s,p);
 
         /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line;
-        /// either way the card says where stock comes from (ECON-2: no shelf sells it). This card, not FestivalGuidance.Hint, is what camp reads.
-        /// A Ferris wheel rider reads what they spot from up there instead of the quota's line (FestivalGuidance.Hint, POLO-1).</summary>
+        /// either way the card says where stock comes from (ECON-2: no shelf sells it) while p has none for a day (ECON-3,
+        /// FestivalGuidance.NeedsStock). This card, not FestivalGuidance.Hint, is what camp reads. By day the quota's line is followed
+        /// by p's next step to a sale (NextStep). A Ferris wheel rider reads what they spot from up there instead (FestivalGuidance.Hint, POLO-1).</summary>
         public static string ObjectiveDetail(RoundState s,PlayerState p)
         {
             if(s.Phase=="Results")return OutcomeDetail(s);
-            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id);return choice!=""?choice+" • "+StockSource:"Browse gear • pay the seller • "+StockSource+" • meet at the trailhead";}
-            return SellingToday(s,p)&&!FestivalSimulation.OnWheel(s,p.Id)?QuotaHint(s,p):FestivalGuidance.Hint(s,p);
+            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=FestivalGuidance.NeedsStock(s,p)?" • "+StockSource:"";return choice!=""?choice+stock:"Browse gear • pay the seller"+stock+" • meet at the trailhead";}
+            if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return FestivalGuidance.Hint(s,p);
+            return FestivalSimulation.DayQuotaMet(s)?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p);
         }
         const string StockSource="stock comes from festivalgoers";
+        // ECON-3 (Matt: "i dont even know how to sell"): with no stock, where it comes from (ECON-2: festivalgoers, some of them narcs).
+        // Holding some, the tripper is pointed at a buyer vision (a green ball) whose check came back true (a green ring, VISION-5): a
+        // true narc vision is ringed green too, so the ring alone would send them to a narc. The crew stick with the tripper.
+        static string NextStep(RoundState s,PlayerState p)
+        {
+            if(FestivalGuidance.NeedsStock(s,p))return "You have nothing to sell: buy from festivalgoers, and some are narcs.";
+            if(p.Id==s.TripperId)return "A green ball in a green ring is a real buyer: walk up and press E to offer.";
+            return "Stick with "+(s.Players.Find(x=>x.Id==s.TripperId)?.Name??"the tripper")+": they see the buyers. Walk up to one and press E to offer.";
+        }
         // Downed, detained and spirit players keep the guidance about getting back on their feet.
         static bool SellingToday(RoundState s,PlayerState p)=>s.Phase=="Playing"&&p.Life=="Alive"&&!Festivals.For(s).Night;
 

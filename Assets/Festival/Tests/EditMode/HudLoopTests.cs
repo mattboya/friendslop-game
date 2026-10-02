@@ -40,7 +40,7 @@ namespace Festival.Tests
         {
             var s=Level(0,0);var you=Crew(s,"you","You");Crew(s,"sam","Sam");s.LevelSales=12;
             Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("DAY QUOTA  $12 / $30"),"Palm Mirage Day 1 asks $15 from each of two");
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("Sell $18 more before sundown."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("Sell $18 more before sundown. You have nothing to sell: buy from festivalgoers, and some are narcs."),"what is left, then your next step (ECON-3)");
             s.LevelSales=31;
             Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("QUOTA MET — HEAD BACK TO CAMP"));
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("Anyone can end the day at the way back to camp, or keep selling until sundown."));
@@ -49,6 +49,28 @@ namespace Festival.Tests
             var night=Level(0,1);var rescuer=Crew(night,"you","You");
             Assert.That(FestivalHudText.ObjectiveTitle(night,rescuer),Is.EqualTo(FestivalGuidance.Headline(night,rescuer)),"nights keep the rescue's directions");
             Assert.That(FestivalHudText.Quota(night,rescuer),Is.Empty,"a night has no quota");
+        }
+
+        // ECON-3 (Matt: "i dont even know how to sell"): by day the card says what this player needs next, after what the crew has
+        // left to sell. With no stock, where stock comes from. With stock, the tripper reads their visions: a green ball (a buyer
+        // vision) in a green ring (checked true, VISION-5) is a real buyer; a true narc vision is ringed green too, so the ring alone
+        // is not enough. The rest of the crew stick with the tripper, by name. Once the quota is met, only the way home.
+        [Test] public void TheDayCardSaysWhatYouNeedNextToSell()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.TripperId="sam";s.LevelSales=12;
+            const string Left="Sell $18 more before sundown. ",NoStock="You have nothing to sell: buy from festivalgoers, and some are narcs.";
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+NoStock));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(Left+NoStock),"the tripper buys stock like anyone");
+            you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+NoStock),"gear is not stock");
+            you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});sam.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=2});
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+"Stick with Sam: they see the buyers. Walk up to one and press E to offer."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press E to offer."));
+            s.LevelSales=30;
+            const string Met="Anyone can end the day at the way back to camp, or keep selling until sundown.";
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Met));
+            you.Inventory.Clear();
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Met),"quota met with no stock left: nothing more to buy for");
         }
 
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
@@ -125,15 +147,20 @@ namespace Festival.Tests
         }
 
         // ECON-2: no shelf sells stock, so whoever is at camp reads where it comes from: the host beside Day 1's festival pick,
-        // everyone else on the camp line.
+        // everyone else on the camp line. ECON-3: only while they hold none and a day is next; a night has no quota to sell.
         const string CampLine="Browse gear • pay the seller • stock comes from festivalgoers • meet at the trailhead";
         [Test] public void CampSaysStockComesFromFestivalgoers()
         {
             var s=Level(0,0,"Shopping");var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.UnlockedFestivalCount=2;
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked) • stock comes from festivalgoers"));
             Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(CampLine));
-            s.LevelIndex=1;
+            you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});sam.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked)"),"stock in hand: the host reads only the pick");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo("Browse gear • pay the seller • meet at the trailhead"),"stock in hand");
+            you.Inventory.Clear();s.LevelIndex=2;
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(CampLine),"mid-weekend the host has no festival to pick");
+            s.LevelIndex=1;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("Browse gear • pay the seller • meet at the trailhead"),"before a night");
         }
 
         [Test] public void OnlyTheHostIsOfferedTheFestivalBeforeDayOne()

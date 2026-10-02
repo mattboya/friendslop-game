@@ -104,7 +104,8 @@ namespace Festival.Tests
                 Expect("Day 1","Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  ARREST WARNING");
                 int quota=FestivalSimulation.DayQuota(sim.State);
                 Expect("Day 1","Objective title","DAY QUOTA  12 FRIENDSHIP BRACELETS / "+quota+" FRIENDSHIP BRACELETS");
-                Expect("Day 1","Objective detail","Sell "+(quota-12)+" friendship bracelets more before sundown.");
+                // ECON-3: with no stock yet, the card's next step says where it comes from, after the longest money in the game.
+                Expect("Day 1","Objective detail","Sell "+(quota-12)+" friendship bracelets more before sundown. You have nothing to sell: buy from festivalgoers, and some are narcs.");
                 Fits("Day 1","Vitals","Objective title","Objective detail");NoDollars("Day 1");
                 // Heading home before the quota is met: the host's refusal names the shortfall in dollars.
                 session.Command("Extract");yield return new WaitForSeconds(.4f);

@@ -17,9 +17,9 @@ namespace Festival.Tests
             // Ember Playa's Day 1 asks 22 from each of two.
             var s=Day(1);var ash=Crew(s,"ash",0);var sam=Crew(s,"sam",1);s.LevelSales=12;
             Assert.That(FestivalHudText.ObjectiveTitle(s,ash),Is.EqualTo("DAY QUOTA  12 BUTTONS / 44 BUTTONS"));
-            Assert.That(FestivalHudText.ObjectiveDetail(s,ash),Is.EqualTo("Sell 32 buttons more before sundown."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,ash),Is.EqualTo("Sell 32 buttons more before sundown. You have nothing to sell: buy from festivalgoers, and some are narcs."));
             Assert.That(FestivalHudText.ObjectiveTitle(s,sam),Is.EqualTo("DAY QUOTA  12 RAMEN PACKETS / 44 RAMEN PACKETS"),"the same quota in Sam's ramen");
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo("Sell 32 ramen packets more before sundown."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo("Sell 32 ramen packets more before sundown. You have nothing to sell: buy from festivalgoers, and some are narcs."));
         }
 
         [Test] public void ThePlayerCardCountsInYourObjects()

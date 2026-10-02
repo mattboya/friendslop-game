@@ -63,8 +63,13 @@ public static class StockBuyTests
         p.HeldOfferId="";s.State.Phase="Playing";var market=Catalog.ShopPoint(false,index);p.X=market.X;p.Z=market.Z;
         var bought=Act(s,"p0","Buy","","stock_lsd");
         Check(!bought.Accepted&&p.Cash==20&&Count(p,"stock_lsd")==0&&s.State.ShopStock.Find(x=>x.ItemId=="stock_lsd").MarketAvailable==2,"nor will a night-market shelf: "+bought.Reason);
+        // ECON-3: the hint says it only while you hold no stock for a day, not once you carry some, nor before a night's rescue.
         s.State.Phase="Shopping";p.X=-1;p.Z=-9;var hint=FestivalGuidance.Hint(s.State,p);
-        Check(hint.Contains("Camp supplies")&&hint.Contains("look at shelf props")&&hint.Contains("Stock comes from festivalgoers."),"the camp hint says stock comes from festivalgoers: "+hint);
+        Check(hint.Contains("Camp supplies")&&hint.Contains("look at shelf props")&&hint.Contains("Stock comes from festivalgoers."),"with no stock, the camp hint says stock comes from festivalgoers: "+hint);
+        p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});hint=FestivalGuidance.Hint(s.State,p);
+        Check(hint.Contains("Camp supplies")&&!hint.Contains("Stock comes from"),"with stock in hand it doesn't: "+hint);
+        p.Inventory.RemoveAll(i=>i.ItemId=="stock_mushrooms");s.State.LevelIndex=1;hint=FestivalGuidance.Hint(s.State,p);
+        Check(hint.Contains("Camp supplies")&&!hint.Contains("Stock comes from"),"nor before a night: "+hint);
     }
     // Catalog.VendorOffers as it was before ECON-2, stock and all, so NoShelfSellsStock can tell the shuffle draws what it drew.
     static List<string> OldOffers(int seed)
