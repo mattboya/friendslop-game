@@ -9,7 +9,7 @@ namespace Festival.Presentation
     /// The weekend text the HUD shows, built only from the viewer's filtered round state so EditMode tests
     /// can read it without a scene. FestivalHud puts these strings on screen and wires the commands.
     /// </summary>
-    public static class FestivalHudText
+    public static partial class FestivalHudText
     {
         const string Dot="  •  ";
 
