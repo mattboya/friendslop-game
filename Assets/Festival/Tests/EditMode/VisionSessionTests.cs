@@ -66,11 +66,19 @@ namespace Festival.Tests
         [Test] public void RolesAndTheChainStayOnTheHost()
         {
             var game=Night();
+            // ECON-2: the host has counted a unit a festivalgoer sold, which would tell a client they sell.
+            game.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
+            var asker=game.State.Players[0];var seller=game.State.Npcs.Find(n=>n.Role=="Regular"&&n.Twist=="");asker.X=seller.X;asker.Z=seller.Z-1;
+            Assert.That(game.Execute(asker.Id,new GameCommand{Id="buy",Kind="StartBuy",TargetId=seller.Id,ItemId=FestivalSimulation.SellerStock(seller.Id)}).Accepted,Is.True,"setup: a buy starts");
+            var buy=game.Interaction(asker.InteractionId);foreach(var note in RhythmChart.For(buy).Notes)buy.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int guard=0;guard<300&&buy.Status=="Active";guard++)game.Tick(.1);
+            Assert.That(seller.StockSold,Is.EqualTo(1),"setup: the host counts the unit sold");
             foreach(var viewer in game.State.Players)
             {
                 var view=FestivalSession.ViewFor(game,viewer.Id);
                 Assert.That(view.Npcs,Is.Not.Empty,"setup: "+viewer.Id+" sees the crowd");
                 Assert.That(view.Npcs.TrueForAll(n=>n.Role==""),Is.True,viewer.Id+" is never told who is a buyer, narc or clue holder");
+                Assert.That(view.Npcs.TrueForAll(n=>n.StockSold==0),Is.True,viewer.Id+" is never told who has sold stock");
                 Assert.That(view.ClueChain,Is.Empty,viewer.Id+" is never sent the clue chain");
             }
         }

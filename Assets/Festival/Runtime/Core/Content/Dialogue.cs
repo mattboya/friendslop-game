@@ -56,6 +56,17 @@ namespace Festival.Core
                 "We can trade after this beat lands.|I believe the beat missed its connecting flight.",
                 "That's the one. Nice and straightforward.|I have made it diagonally complicated."
             });
+            // ECON-2: a festivalgoer selling to you, so none of the sale pool's "I've got the agreed cash".
+            Add(result,"buy",new[] {
+                "Cash first, then the little curiosity. House rules.|I brought cash and a strong opinion about rules.",
+                "One unit, one exchange, nobody makes a speech.|I have prepared a short speech about exchanges.",
+                "You want the usual? I only carry the usual.|I would like the unusual, but casually.",
+                "Keep the money low and the eye contact friendly.|My eye contact has gone fully corporate.",
+                "Dance like we're old friends and nobody looks twice.|We have been friends since the start of this sentence.",
+                "The price is on the sign. The sign is in my head.|I read the sign in your head. It said hello.",
+                "Quick and quiet. The bass will cover us.|I have asked the bass to keep a secret.",
+                "Just the one? Easy. Hold it like a souvenir.|I am holding it like a very small trophy."
+            });
             Add(result,"police",new[] {
                 "Let's step aside and clear up what I observed.|Certainly. Which side is the clearing-up side?",
                 "Please keep the walkway clear while we talk.|I was supervising its walkability.",

@@ -12,8 +12,8 @@ namespace Festival.Core
         public const double DanceSpacing=1.4;
         /// <summary>Whether a challenge of this kind shows the player dancing with a partner: spaced from them, facing them, and
         /// stepping on each note (Submit). DANCE-2: a sale, a chat and a talk with security are danced too, so the live dancer
-        /// view beside their four lanes shows the player dancing.</summary>
-        public static bool DancesVisibly(string kind)=>kind=="Dance"||kind=="ConfirmDance"||kind=="Sale"||kind=="Conversation"||kind=="Police";
+        /// view beside their four lanes shows the player dancing. ECON-2: and so is a buy from a festivalgoer.</summary>
+        public static bool DancesVisibly(string kind)=>kind=="Dance"||kind=="ConfirmDance"||kind=="Sale"||kind=="Buy"||kind=="Conversation"||kind=="Police";
         // TryMove leaves p's yaw alone while this holds, so the camera can't turn a dancer away from their partner. TRIP-4: nor
         // spin someone lying on the grass round on their back as they look about.
         bool HoldsFacing(PlayerState p){var i=p.InteractionId==""?null:Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&(DancesVisibly(i.Kind)||i.Kind==LieDownKind);}

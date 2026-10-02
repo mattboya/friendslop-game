@@ -46,6 +46,8 @@ namespace Festival.Core
         public bool Busy;
         public bool HighlyIntoxicated,RedEyes,CanTalk;
         public double Suspicion, DistractedUntil, AttackAt, AttackCooldownUntil, LastTalkSeconds=-100; public int Sales,TalkCount;
+        // ECON-2: units this seller has sold the crew this level (StockBuys.cs). Host-only like Role: ViewFor never copies it. 0 in older snapshots.
+        public int StockSold;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();
     }
     [Serializable] public sealed class RhythmInput { public int Direction; public double TimeSeconds; }

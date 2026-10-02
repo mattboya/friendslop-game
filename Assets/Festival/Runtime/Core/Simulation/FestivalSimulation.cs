@@ -102,6 +102,7 @@ namespace Festival.Core
                 case "Pickup": return Pickup(p,c);
                 case "Deposit":case "Withdraw":return Stash(p,c);
                 case "StartSale":return BeginChallenge(p,c,"Sale");
+                case "StartBuy":return BeginChallenge(p,c,"Buy");
                 case "Dance":return BeginChallenge(p,c,"Dance");
                 case "Conversation":return BeginChallenge(p,c,"Conversation");
                 case "Talk":return Talk(p,c);
