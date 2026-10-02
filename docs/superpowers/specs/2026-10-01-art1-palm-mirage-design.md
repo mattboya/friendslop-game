@@ -1,6 +1,6 @@
 # ART-1 — Palm Mirage restyle (full polo-field parody)
 
-**Status:** design approved in chat 2026-10-01; this spec awaits review.
+**Status:** design approved in chat 2026-10-01; this spec is approved and implemented on `art/festival-art`.
 **Branch:** `art/festival-art` in the main checkout, from `3bed98b` (the green end of wave 2026-09-30 (2) and the base of wave 2026-10-01).
 **Queue entry:** ART-1 (Waiting, "art-freeze decision after PLAYTEST-1"). Matt lifted the freeze for this branch by starting the art pass.
 
@@ -140,4 +140,4 @@ These are reported at the end, confirmed or struck out:
 - **Confirmed.** After the wave, the queue update: ART-1 done, the art freeze lifted. Entries specced around the freeze (for example CROWD-4 option B, VISION-4's primitive goblin shadow, POLO-5's primitive gondolas) can then be re-specced with real art.
 - **Note.** The night-market stall has no banner in the game, so `GOOD TIMES SUPPLY` (modelled in the source) isn't shown anywhere. Showing it needs a new in-game sign.
 
-Branch `art/festival-art` is ready to merge into `claude/fun-loop` (fast-forward). Task 14's gates all exit 0: domain, EditMode 201/201, PlayMode 69/69, `build-mac-development`, `native-smoke.mjs` and `native-solo-smoke.mjs`. The smoke's rhythm frame p95 is 17.2 ms, against 17.5 ms before the art.
+Branch `art/festival-art` is ready to merge into `claude/fun-loop` (fast-forward). Task 14's gates all exit 0: domain, EditMode 201/201, PlayMode 69/69, `build-mac-development`, `native-smoke.mjs` and `native-solo-smoke.mjs`. The smoke's rhythm frame p95 is 17.2 ms, against 17.5 ms in the 2026-09-29 build (before the wave and the art). The max frame went from 50.0 ms to 66.7 ms in one smoke run, a single spike.

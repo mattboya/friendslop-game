@@ -4,6 +4,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Festival.Tests
 {
@@ -44,10 +45,17 @@ namespace Festival.Tests
             var wheel=Part(polo,"Ferris wheel");
             Assert.That(Vector2.Distance(Flat(wheel.position),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThan(1e-3f),"the wheel's base is where the rules board it");
             Assert.That(Bounds(wheel).max.y,Is.GreaterThan(10f),"the wheel stands over the festival");
-            int gondolas=0;foreach(Transform child in wheel)if(child.name=="Gondola"){gondolas++;Assert.That(child.GetComponentInChildren<Renderer>(),Is.Not.Null,"each gondola carries its model");}
+            var rotor=Part(wheel,"Wheel rotor");
+            int gondolas=0;
+            foreach(Transform child in wheel)if(child.name=="Gondola")
+            {
+                gondolas++;Assert.That(child.GetComponentInChildren<Renderer>(),Is.Not.Null,"each gondola carries its model");
+                foreach(var r in child.GetComponentsInChildren<Renderer>())Assert.That(r.shadowCastingMode,Is.EqualTo(ShadowCastingMode.On),"gondola "+gondolas+"/"+r.name+" casts a shadow, as the primitive did");
+                Assert.That(Vector3.Distance(child.localPosition+Vector3.up*.75f,rotor.localPosition),Is.EqualTo(6).Within(1e-3f),"gondola "+gondolas+" hangs .75 m below a point 6 m from the axle");
+            }
             Assert.That(gondolas,Is.EqualTo(8),"eight gondolas hang from the rim");
             Assert.That(Painted(wheel,"StageGlowMint"),Is.Not.Null,"the rim glows mint and rose, as before");
-            var rotor=Part(wheel,"Wheel rotor");var start=rotor.rotation;float quarter=(float)Festivals.WheelRideSeconds/4;
+            var start=rotor.rotation;float quarter=(float)Festivals.WheelRideSeconds/4;
             twists.Apply(round,quarter);
             Assert.That(Quaternion.Angle(start,rotor.rotation),Is.EqualTo(90).Within(.5f),"a quarter of a ride turns it a quarter");
             for(int k=0;k<3;k++)twists.Apply(round,quarter);

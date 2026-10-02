@@ -34,7 +34,8 @@ namespace Festival.Presentation
             {"Glass",new Color(.30f,.73f,.79f)},{"White",new Color(.86f,.90f,.82f)}
             ,{"Frond",new Color(.24f,.55f,.30f)},{"PalmBark",new Color(.55f,.42f,.30f)},{"Sand",new Color(.80f,.62f,.42f)}
         };
-        public static GameObject Create(Transform parent,string resource)
+        // Models cast no shadow by default (the trees and dressing they replaced cast none); castShadows is for the props whose primitives did.
+        public static GameObject Create(Transform parent,string resource,bool castShadows=false)
         {
             var prefab=Resources.Load<GameObject>(resource);
             if(prefab==null)
@@ -51,7 +52,7 @@ namespace Festival.Presentation
                 string name=renderer.name;int index=name.LastIndexOf("__",System.StringComparison.Ordinal);
                 string key=index<0?"Dark":name.Substring(index+2).Split('.')[0];
                 renderer.sharedMaterial=MaterialFor(key);
-                renderer.shadowCastingMode=ShadowCastingMode.Off;
+                renderer.shadowCastingMode=castShadows?ShadowCastingMode.On:ShadowCastingMode.Off;
             }
             foreach(var collider in go.GetComponentsInChildren<Collider>())
             {
@@ -75,7 +76,7 @@ namespace Festival.Presentation
             if(material.HasProperty("_Smoothness"))
                 material.SetFloat("_Smoothness",color=="Metal" ? .48f : color=="Glass" ? .68f :
                     color=="AutoGlass" ? .46f : color.StartsWith("Paint",System.StringComparison.Ordinal) ? .56f :
-                    color.StartsWith("Canvas",System.StringComparison.Ordinal) ? .06f : color=="Bark" ? .04f :
+                    color.StartsWith("Canvas",System.StringComparison.Ordinal) ? .06f : color=="Bark"||color=="PalmBark" ? .04f :
                     color=="Rubber"||color=="Stone"||color=="Needle" ? .02f : .16f);
             if(material.HasProperty("_Metallic") && color.StartsWith("Paint",System.StringComparison.Ordinal))
                 material.SetFloat("_Metallic",.20f);

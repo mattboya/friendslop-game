@@ -4,6 +4,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Festival.Tests
 {
@@ -22,6 +23,7 @@ namespace Festival.Tests
             Assert.That(renderers.Length,Is.GreaterThanOrEqualTo(4),"a tank, its valve and a glow to find it by");
             Assert.That(System.Array.Exists(renderers,r=>r.name.StartsWith("GiggleTank",System.StringComparison.Ordinal)),Is.True,"the tank is ART-1's model");
             foreach(var renderer in renderers)Assert.That(renderer.sharedMaterial,Is.Not.Null,renderer.name+" has a material");
+            foreach(var renderer in renderers)Assert.That(renderer.shadowCastingMode,Is.EqualTo(ShadowCastingMode.On),renderer.name+" casts a shadow, as the primitive tank did");
             var bounds=Bounds(tank);
             Assert.That(bounds.min.y,Is.EqualTo(0).Within(.01f),"it stands on the ground");
             Assert.That(bounds.max.y,Is.InRange(.9f,1.6f),"about waist high");

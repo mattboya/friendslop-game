@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Festival.Core;
 using Festival.Network;
 using UnityEngine;
-using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
 namespace Festival.Presentation

@@ -27,6 +27,7 @@ namespace Festival.Presentation
 
         private readonly Transform root,horizon;
         private readonly List<GameObject> trees;
+        private readonly Material lawnMaterial;
         private bool? shown;
 
         public FestivalPoloDressing(Transform grounds,List<GameObject> trees,Material earth)
@@ -50,7 +51,7 @@ namespace Festival.Presentation
             var lawn=GameObject.CreatePrimitive(PrimitiveType.Quad);lawn.name=LawnName;lawn.transform.SetParent(root,false);
             lawn.transform.localPosition=new Vector3(0,LawnHeight,0);lawn.transform.localRotation=Quaternion.Euler(90,0,0);lawn.transform.localScale=new Vector3(80,80,1);
             var collider=lawn.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
-            var renderer=lawn.GetComponent<Renderer>();renderer.sharedMaterial=new Material(earth){name="Polo lawn",color=LawnTint};
+            var renderer=lawn.GetComponent<Renderer>();renderer.sharedMaterial=lawnMaterial=new Material(earth){name="Polo lawn",color=LawnTint};
             renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
@@ -65,6 +66,9 @@ namespace Festival.Presentation
             }
             if(polo)horizon.position=new Vector3(view.x,root.position.y,view.z);
         }
+
+        /// <summary>Frees the lawn's own material; FestivalWorld calls it when it goes.</summary>
+        public void Dispose(){if(lawnMaterial!=null)Dispose(lawnMaterial);}
 
         public static bool InLandmark(Vector3 at)
         {

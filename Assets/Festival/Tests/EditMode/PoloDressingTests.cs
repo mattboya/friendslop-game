@@ -35,12 +35,15 @@ namespace Festival.Tests
         {
             var world=World();var dressing=Dressing(world);var trees=Trees(world);
             Assert.That(trees.Count,Is.GreaterThan(60),"setup: the grounds have their trees");
+            var colliders=new Dictionary<int,int>();
             foreach(var festival in new[]{Festivals.PoloFestival,Festivals.PlayaFestival,Festivals.PoloFestival,Festivals.PlayaFestival})
             {
                 world.SetTwists(Round(festival));bool polo=festival==Festivals.PoloFestival;
                 Assert.That(dressing.gameObject.activeSelf,Is.EqualTo(polo),Festivals.Name(festival)+": the dressing shows only at Palm Mirage");
                 foreach(var tree in trees)Assert.That(tree.activeSelf,Is.EqualTo(!polo),Festivals.Name(festival)+": "+tree.name+" hides only at Palm Mirage");
+                colliders[festival]=EnabledColliders(world);
             }
+            Assert.That(colliders[Festivals.PoloFestival],Is.EqualTo(colliders[Festivals.PlayaFestival]),"the palms and dressing add no collider and the hidden trees take none away");
         }
 
         [Test]public void PalmsStandOnTreeSpotsClearOfTheLandmarks()
@@ -102,6 +105,11 @@ namespace Festival.Tests
         }
 
         private FestivalWorld World(){var world=Made("Polo world").AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");return world;}
+        private static int EnabledColliders(FestivalWorld world)
+        {
+            int count=0;foreach(var collider in world.transform.Find(FestivalWorld.RootName).GetComponentsInChildren<Collider>(true))if(collider.enabled&&collider.gameObject.activeInHierarchy)count++;
+            return count;
+        }
         private static Transform Dressing(FestivalWorld world)
         {
             var d=world.transform.Find(FestivalWorld.RootName).Find(FestivalPoloDressing.RootName);

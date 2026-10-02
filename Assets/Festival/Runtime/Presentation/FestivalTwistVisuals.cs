@@ -39,10 +39,11 @@ namespace Festival.Presentation
         private const double TurnLookahead=2.5;
         private const float DeckWidth=1.75f,DeckBack=1.4f,DeckFront=.45f,VanScale=.42f,VanAhead=DeckFront+.05f+2.81f*VanScale;
         // POLO-2: the VIP stall's sign stands on the corner poles of the night market's stock stall, which FestivalWorld raises at
-        // (VipStallX, 0, StallZ) beside the rules' stall point; the poles top out at PoleTop, just clear of the awning, and the board
-        // clears the stall's banner. It faces the market's footpath to the south, and like FestivalWorld's signs its lettering shows
-        // only from that side and within SignRange, since TextMesh draws through its board.
-        private const float StallZ=-19,PoleX=2.25f,PoleTop=3.4f,SignBottom=3.95f,LetterSize=.12f,SignRange=22;
+        // (VipStallX, 0, StallZ) beside the rules' stall point. The model's anchor strip spans the poles' tops (the generator's pole
+        // 2.25 m out, 3.4 m up, just clear of the awning), and the board above it (SignBottom) clears the stall's banner. It faces the
+        // market's footpath to the south, and like FestivalWorld's signs its lettering shows only from that side and within
+        // SignRange, since TextMesh draws through its board.
+        private const float StallZ=-19,SignBottom=3.95f,LetterSize=.12f,SignRange=22;
         // The fire's flames stretch and shrink out of step with each other.
         private const float FlickerHz=9,FlickerDepth=.3f,FireGlow=6;
         // The grounds' middle festoon hangs along z=2 at chest height, through the rules' point, so the figure and its fire stand
@@ -165,7 +166,7 @@ namespace Festival.Presentation
         // A model under parent; if body is given, the model's Rose parts take that colour instead.
         private static void Art(Transform parent,string model,string body)
         {
-            var go=FestivalArtView.Create(parent,model);if(go==null||body==null)return;
+            var go=FestivalArtView.Create(parent,model,true);if(go==null||body==null)return;
             foreach(var r in go.GetComponentsInChildren<Renderer>(true))if(r.name.EndsWith("__Rose",System.StringComparison.Ordinal))r.sharedMaterial=FestivalArtView.MaterialFor(body);
         }
         private void Turn()

@@ -13,5 +13,6 @@
 .tooling/
 tests/**/bin/
 tests/**/obj/
+__pycache__/
 artifacts/
 mono_crash.*.json

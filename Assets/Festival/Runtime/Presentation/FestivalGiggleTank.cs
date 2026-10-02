@@ -20,7 +20,7 @@ namespace Festival.Presentation
         {
             var tank=new GameObject(Name).transform;tank.SetParent(parent,false);
             Part(tank,"Tank glow",PrimitiveType.Cylinder,new Vector3(0,.01f,0),new Vector3(1.1f,.01f,1.1f),"StageGlowGold");
-            FestivalArtView.Create(tank,"FestivalGiggleTank");
+            FestivalArtView.Create(tank,"FestivalGiggleTank",true);
             return tank;
         }
 
@@ -35,7 +35,7 @@ namespace Festival.Presentation
                 var at=BalloonAt[i];var rise=at-Valve;
                 // A unit cylinder is 2 m tall: half the string's length as its height scale, turned to run from the valve to the balloon.
                 Part(station,"Balloon string",PrimitiveType.Cylinder,(Valve+at)*.5f,new Vector3(.012f,rise.magnitude*.5f,.012f),"White").localRotation=Quaternion.FromToRotation(Vector3.up,rise);
-                var balloon=FestivalArtView.Create(station,"FestivalGiggleBalloon");
+                var balloon=FestivalArtView.Create(station,"FestivalGiggleBalloon",true);
                 if(balloon!=null)
                 {
                     balloon.transform.localPosition=at;

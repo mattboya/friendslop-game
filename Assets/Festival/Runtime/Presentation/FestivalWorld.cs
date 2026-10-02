@@ -1052,6 +1052,7 @@ namespace Festival.Presentation
             foreach(var mesh in generatedMeshes)if(mesh!=null)Dispose(mesh);
             if(duskProfile!=null)Dispose(duskProfile);
             if(clouds!=null)clouds.Dispose();
+            if(PoloDressing!=null)PoloDressing.Dispose();
         }
     }
 }

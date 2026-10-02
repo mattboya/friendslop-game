@@ -6,7 +6,8 @@ using UnityEngine;
 namespace Festival.Editor
 {
     /// <summary>ART-1 review: renders Palm Mirage by day and night, and Ember Playa by day, from fixed spots into
-    /// artifacts/polo-dressing/unity, through a camera like the game's (75° FOV, 130 m far clip).</summary>
+    /// artifacts/polo-dressing/unity, through a camera like the game's (75° FOV, 130 m far clip).
+    /// Run it in batchmode, without -nographics so the camera can render: <c>Unity -batchmode -projectPath &lt;repo&gt; -executeMethod Festival.Editor.PoloDressingShots.Capture -quit</c></summary>
     // ponytail: east-astronaut and corner eyes moved off the brief's spots, which sat inside the security booth and behind a corner palm (and off the east lane's walkers).
     public static class PoloDressingShots
     {
