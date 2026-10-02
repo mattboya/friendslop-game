@@ -136,6 +136,70 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"Riders seen from outside their gondolas:\n"+string.Join("\n",failures));
         }
 
+        // POLO-7: on a slow machine a rider's body and eye still sit on their seat. Each glides there (Actor's body at 15 a second,
+        // UpdateCamera's eye at 20), aimed FestivalWorld.WheelSeat ahead of it. A friend and the host ride the wheel with frames held
+        // near 30 a second, and once the glides settle, every frame for 3 s, the friend's body and the host's eye are measured
+        // against FestivalTwistVisuals.Seat at the wheel as it is drawn (its WheelClock). Their median must be under 5 mm, so one
+        // hitched frame cannot fail it. Aimed a fixed 1/rate ahead, both ran about 3 cm ahead; so does a WheelSeat rate that is not
+        // its glide's.
+        [UnityTest]public IEnumerator ARidersBodyAndEyeSitOnTheirSeatAtThirtyFramesASecond()
+        {
+            var world=new GameObject("Seat world");var festival=world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Seat session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            GameObject slow=null;
+            try
+            {
+                Assert.That(Object.FindObjectsByType<FestivalWorld>(FindObjectsSortMode.None),Has.Length.EqualTo(1),"setup: a world leaked from an earlier test");
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);
+                const string friend="player_4";
+                sim.AddPlayer(friend,friend).Ready=true;
+                yield return StartLevel(session);
+                var riders=new[]{friend,session.LocalPlayerId};
+                foreach(var id in riders)
+                {
+                    var rider=sim.Player(id);rider.X=Festivals.WheelX;rider.Z=Festivals.WheelZ+1.5f;
+                    Assert.That(sim.Execute(id,new GameCommand{Id=id+" boards",Kind=FestivalSimulation.RideWheelKind}).Accepted,Is.True,"setup: "+id+" boards the wheel");
+                }
+                slow=new GameObject("Slow frames");slow.AddComponent<SlowFrames>();
+                yield return new WaitForSeconds(1.5f);
+                var twists=(FestivalTwistVisuals)typeof(FestivalWorld).GetField("twists",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(festival);
+                var body=GameObject.Find(friend);Assert.That(body,Is.Not.Null,"setup: "+friend+" is drawn");
+                var bodyOff=new List<float>();var eyeOff=new List<float>();var frames=new List<float>();
+                for(float end=Time.realtimeSinceStartup+3;Time.realtimeSinceStartup<end;)
+                {
+                    yield return null;
+                    var state=session.State;
+                    bodyOff.Add(Vector3.Distance(body.transform.position,FestivalTwistVisuals.Seat(state,state.Players.Find(p=>p.Id==friend),twists.WheelClock)));
+                    eyeOff.Add(Vector3.Distance(session.EyePosition,FestivalTwistVisuals.Seat(state,session.LocalPlayer,twists.WheelClock)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight));
+                    frames.Add(Time.unscaledDeltaTime);
+                }
+                foreach(var id in riders)Assert.That(FestivalSimulation.OnWheel(sim.State,id),Is.True,"setup: "+id+" is still on the wheel");
+                float Median(List<float> values){values.Sort();return values[values.Count/2];}
+                string Off(List<float> values)=>"median "+(Median(values)*1000).ToString("0.0")+" mm, worst "+(values[values.Count-1]*1000).ToString("0.0")+" mm";
+                float frame=Median(frames);string fps=(1/frame).ToString("0")+" fps: ";
+                Assert.That(frame,Is.GreaterThan(1/40f),"setup: frames are held near 30 a second, not "+fps);
+                var off=new List<string>();
+                if(Median(bodyOff)>=.005f)off.Add(friend+"'s body: "+Off(bodyOff));
+                if(Median(eyeOff)>=.005f)off.Add("the host's eye: "+Off(eyeOff));
+                Assert.That(off,Is.Empty,fps+"riders sit off their seat:\n"+string.Join("\n",off));
+            }
+            finally
+            {
+                if(slow!=null)Object.Destroy(slow);
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+        }
+        // Holds this machine's frames near 30 a second, as a slow one runs them.
+        private sealed class SlowFrames:MonoBehaviour{private void Update()=>System.Threading.Thread.Sleep(30);}
+
         // POLO-5: a rider is drawn at FestivalTwistVisuals.RiderScale, and what they hold goes round at their size, whenever it was
         // made. The rules take Equip on the wheel (the HUD's number keys send it), so a friend equips the map at the base and boards,
         // then equips their poi and their confetti mid-ride, and after the turn shows the poi again. Each held item is measured
