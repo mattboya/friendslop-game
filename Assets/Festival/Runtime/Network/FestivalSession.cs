@@ -41,7 +41,8 @@ namespace Festival.Network
         // POLO-6: a player's own copy in their snapshot names the influencers filming them (PlayerState.VisualFilmedBy).
         // CROWD-3: every client sees a festivalgoer scattering from an arrest (Mode "Scattering"), never whom it suspects.
         // MINI-1: snapshots carry the level's minigame booth (RoundState.Booth), a game under way is the "Minigame" phase, and
-        // the players in it send its own Minigame command.
+        // the players in it send its own Minigame command. MINI-4: the booth carries a Mystery Cups game (the cups, the turns, the
+        // pot, and the tripper's hint on the tripper's own), and the Minigame command's ItemId drinks a cup (Amount) or calls it.
         // LIGHT-3: each client works the day sky's shapes out of its own spin seed, now from 12 shapes, not 8 (CloudShapes.Shapes),
         // so only builds on the same version show the same shape at the same moment.
         public const int ProtocolVersion=4;
@@ -514,8 +515,9 @@ namespace Festival.Network
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
-                // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here.
-                Booth=source.Booth};
+                // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here. MINI-4: all but
+                // which Mystery Cup is spiked, which stays here too, and the cup the tripper is shown as spiked, sent to them alone.
+                Booth=FestivalSimulation.VisibleBooth(source,viewer)};
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
