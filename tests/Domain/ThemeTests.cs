@@ -22,6 +22,8 @@ public static class ThemeTests
     {
         var files=new List<string>(Directory.GetFiles("Assets/Festival/Runtime/Presentation","FestivalHud*.cs"));
         files.Add("Assets/Festival/Runtime/Core/Simulation/FestivalGuidance.cs");
+        // CAMP-1: what Marigold, the camp seller, says on the HUD's chat window.
+        files.Add("Assets/Festival/Runtime/Presentation/CampSellerTalk.cs");
         return files;
     }
     public static void Run()
