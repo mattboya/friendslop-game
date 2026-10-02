@@ -6,7 +6,7 @@ namespace Festival.Core
     /// <summary>Each festival's twists. POLO-1: Palm Mirage's, off on every other festival. Tuning lives in Festivals.cs.
     /// Influencers film the crowd, and a player on camera puts the wooks around them on alert. VIP zones are roped off to anyone
     /// without a vip_wristband (bought at the night market, or talked out of the VIP guard), and inside them buyers pay double.
-    /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, where the lost friend is.
+    /// The Ferris wheel is a lookout: one turn stuck up top shows the rider every cop and, at night, roughly where each lost friend is.
     /// PLAYA-1: Ember Playa's, off everywhere else. Dust storms blow through, and while one does festivalgoers and cops
     /// (PLAYA-3) see only 5 m. Two art cars crawl round slow loops, and whoever rides one rolls along with it, out of
     /// festivalgoers' sight. For the last three minutes of Night 2 the effigy burns: the crowd gathers round it, and in the
@@ -106,8 +106,21 @@ namespace Festival.Core
         /// <summary>Whether playerId is riding the Ferris wheel. Reads a client's view too, since a view carries its own player's
         /// interactions, so the rider's client can mark every cop (every view carries every cop) while this holds.</summary>
         public static bool OnWheel(RoundState s,string playerId)=>s.Interactions.Exists(i=>i.PlayerId==playerId&&i.Kind==RideWheelKind&&i.Status=="Active");
-        /// <summary>At night a Ferris wheel rider sees where the lost friend is; FestivalSession.ViewFor sends it to them alone.</summary>
+        /// <summary>At night a Ferris wheel rider sees roughly where each lost friend is (WheelFriendAreas).</summary>
         public static bool WheelShowsFriend(RoundState s,string viewer)=>OnWheel(s,viewer)&&Festivals.For(s).Night;
+        /// <summary>POLO-3: what viewer makes out from the wheel, the WheelArea of each friend still lost (the first, then a big
+        /// crew's second), while WheelShowsFriend. FestivalSession.ViewFor sends it to them alone; the host's state never holds it.</summary>
+        public static List<WorldPoint> WheelFriendAreas(RoundState s,string viewer)
+        {
+            var areas=new List<WorldPoint>();if(!WheelShowsFriend(s,viewer))return areas;
+            if(!s.FriendFound)areas.Add(WheelArea(s.FriendPosition));
+            if(s.SecondFriend.Active&&!s.SecondFriend.Found)areas.Add(WheelArea(s.SecondFriend.Position));
+            return areas;
+        }
+        /// <summary>POLO-3: the centre of the WheelAreaSize square that at stands in, on a grid fixed to the map (its lines on
+        /// multiples of WheelAreaSize), so a second ride names the same square and narrows nothing down.</summary>
+        public static WorldPoint WheelArea(WorldPoint at)=>new WorldPoint(Square(at.X),Square(at.Z));
+        static float Square(float v)=>(float)((Math.Floor(v/Festivals.WheelAreaSize)+.5)*Festivals.WheelAreaSize);
         /// <summary>Whether p stands at the Ferris wheel's base on Palm Mirage, where RideWheel boards (the HUD offers the ride there).</summary>
         public static bool AtWheel(RoundState s,PlayerState p)=>s.FestivalIndex==Festivals.PoloFestival&&Near(p,Festivals.WheelX,Festivals.WheelZ,Festivals.WheelReach);
         // Anyone at the base boards for one turn, any number at once. In the rules the rider stays at the base, where anything

@@ -8,7 +8,7 @@ using Festival.Core;
 // POLO-1: Palm Mirage (festival 0) has three twists, and Ember Playa has none of them. Influencers film along their phone's
 // 8 m, 40 degree cone, and a player in frame puts every wook within 10 m of them on alert. Two VIP zones are roped off to
 // anyone without a vip_wristband ($15 at the night market, or talked into by the VIP guard), and inside, buyers pay double.
-// The Ferris wheel locks its rider for one 20 s turn, and at night shows them where the lost friend is.
+// The Ferris wheel locks its rider for one 20 s turn, and at night shows them roughly where each lost friend is (POLO-3).
 public static class PoloTwistTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -23,7 +23,7 @@ public static class PoloTwistTests
         var failures=new List<string>();
         foreach(var test in new Action[]{ThreeInfluencersFilmOnPalmMirageOnly,APlayerInFrameAlertsEveryWookNearby,OnlyTheFrameCounts,
             FramesAreAPassiveGain,TwistTagsSurviveASnapshot,VipZonesKeepOutAnyoneWithoutAWristband,VipSalesPayDouble,
-            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,EveryNightHasAVipGuard,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight})
+            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,EveryNightHasAVipGuard,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight,TheWheelShowsOnlyARoughArea})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" polo twist test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -294,11 +294,43 @@ public static class PoloTwistTests
     {
         var night=Start(5,1,0);var rider=night.Player("p0");var friend=night.Player("p1");
         Check(!FestivalSimulation.WheelShowsFriend(night.State,rider.Id),"on the ground the rider sees nothing special");
+        Check(Areas(night,rider.Id)=="","nor makes out any area");
         Check(Board(night,rider).Accepted,"setup: the rider gets on at night");
         Check(FestivalSimulation.WheelShowsFriend(night.State,rider.Id),"from the wheel at night the rider sees where the lost friend is");
-        Check(!FestivalSimulation.WheelShowsFriend(night.State,friend.Id),"their friend on the ground doesn't");
-        night.Tick(20.1);Check(!FestivalSimulation.WheelShowsFriend(night.State,rider.Id),"and the view ends with the ride");
+        var lost=night.State.FriendPosition;var area=FestivalSimulation.WheelArea(lost);
+        Check(Areas(night,rider.Id)==area.X+","+area.Z,"POLO-3: what they make out is the friend's rough area, not their spot "+lost.X+","+lost.Z+": got ["+Areas(night,rider.Id)+"]");
+        Check(!FestivalSimulation.WheelShowsFriend(night.State,friend.Id)&&Areas(night,friend.Id)=="","their friend on the ground doesn't");
+        night.State.FriendFound=true;Check(Areas(night,rider.Id)=="","a found friend follows their escort, so there is no area to make out");night.State.FriendFound=false;
+        night.Tick(20.1);Check(!FestivalSimulation.WheelShowsFriend(night.State,rider.Id)&&Areas(night,rider.Id)=="","and the view ends with the ride");
         var day=Start(5,0,0);Check(Board(day,day.Player("p0")).Accepted,"setup: a rider by day");
-        Check(!FestivalSimulation.WheelShowsFriend(day.State,"p0"),"nobody is lost by day, so there is no friend to see");
+        Check(!FestivalSimulation.WheelShowsFriend(day.State,"p0")&&Areas(day,"p0")=="","nobody is lost by day, so there is no friend to see");
+        var crowd=Start(5,1,0,5);var second=crowd.State.SecondFriend;Check(second.Active,"setup: a crew of five loses two friends");
+        Check(Board(crowd,crowd.Player("p0")).Accepted,"setup: one of the five rides at night");
+        var first=FestivalSimulation.WheelArea(crowd.State.FriendPosition);var other=FestivalSimulation.WheelArea(second.Position);
+        Check(Areas(crowd,"p0")==first.X+","+first.Z+" "+other.X+","+other.Z,"both lost friends' areas, in order: got ["+Areas(crowd,"p0")+"]");
+        second.Found=true;Check(Areas(crowd,"p0")==first.X+","+first.Z,"only the friends still lost: got ["+Areas(crowd,"p0")+"]");
+    }
+    // FestivalSimulation.WheelFriendAreas, written out as "x,z x,z".
+    static string Areas(FestivalSimulation s,string viewer)=>string.Join(" ",FestivalSimulation.WheelFriendAreas(s.State,viewer).Select(a=>a.X+","+a.Z));
+
+    // POLO-3: from up there a lost friend is only a rough area, the centre of the WheelAreaSize square they stand in. The grid
+    // is fixed to the map, so riding again never narrows it down, and only a friend lost right at a square's centre is told
+    // exactly where they are.
+    static void TheWheelShowsOnlyARoughArea()
+    {
+        Check(Festivals.WheelAreaSize==20,"the areas are 20 m squares");
+        string At(float x,float z){var a=FestivalSimulation.WheelArea(new WorldPoint(x,z));return a.X+","+a.Z;}
+        // The three spots a friend gets lost at (SplitObjective.FriendSpots), and spots on, beside and just inside square edges.
+        foreach(var (x,z,area) in new[]{(-24f,25f,"-30,30"),(25f,24f,"30,30"),(18f,5f,"10,10"),(0f,0f,"10,10"),(19.9f,-.1f,"10,-10"),(-.5f,-39.5f,"-10,-30"),(40f,-20f,"50,-10")})
+            Check(At(x,z)==area,"the spot "+x+","+z+" lies in the square round "+area+": got "+At(x,z));
+        Check(At(21,39)==At(39,21)&&At(21,21)==At(39,39),"two spots in one square give the same area: "+At(21,39)+", "+At(39,21)+", "+At(21,21)+", "+At(39,39));
+        Check(At(10,10)=="10,10"&&At(-30,30)=="-30,30","a square's own centre is its area");
+        for(float x=-50;x<=50;x+=2.5f)for(float z=-50;z<=50;z+=2.5f)
+        {
+            var spot=new WorldPoint(x,z);var area=FestivalSimulation.WheelArea(spot);
+            Check(Math.Abs(area.X-x)<=Festivals.WheelAreaSize/2&&Math.Abs(area.Z-z)<=Festivals.WheelAreaSize/2,"the area round "+x+","+z+" is the square they stand in: got "+area.X+","+area.Z);
+            Check(At(area.X,area.Z)==area.X+","+area.Z,"riding again names the same area for "+x+","+z);
+            Check((area.X==x&&area.Z==z)==(Math.Abs(x%20)==10&&Math.Abs(z%20)==10),"a spot is its own area only at a square's centre: "+x+","+z+" gives "+area.X+","+area.Z);
+        }
     }
 }

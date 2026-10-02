@@ -102,17 +102,17 @@ namespace Festival.Core
             return actions;
         }
 
-        // POLO-1: one turn up the Ferris wheel looks out over the grounds. The rider spots every cop (every view has them) and each
-        // lost friend whose spot their view holds, which at night FestivalSession.ViewFor sends to the rider alone.
+        // POLO-1: one turn up the Ferris wheel looks out over the grounds. The rider spots every cop (every view has them) and,
+        // POLO-3, only roughly where each lost friend is: the areas FestivalSession.ViewFor sends the rider alone at night, never a
+        // spot their view holds.
         // ponytail: every level has its two patrol cops, so there is no "nobody in sight" wording.
         private static string Lookout(RoundState state,PlayerState player)
         {
             var friends=new List<string>();var cops=new List<string>();
-            foreach(var (lost,at) in new[]{(!state.FriendFound,state.FriendPosition),(state.SecondFriend.Active&&!state.SecondFriend.Found,state.SecondFriend.Position)})
-                if(lost&&at!=null&&(at.X!=0||at.Z!=0))friends.Add(Route(player,at.X,at.Z));
+            foreach(var area in state.WheelFriendAreas)friends.Add(Rough(player,area));
             foreach(var n in state.Npcs)if(n.Kind=="Cop")cops.Add(Route(player,n.X,n.Z));
             var seen=new List<string>();
-            if(friends.Count>0)seen.Add((friends.Count==1?"your friend ":"your friends ")+string.Join(", ",friends));
+            if(friends.Count>0)seen.Add((friends.Count==1?"your friend":"your friends")+" somewhere around "+string.Join(", ",friends));
             if(cops.Count>0)seen.Add("security "+string.Join(", ",cops));
             return "From the wheel you spot "+string.Join(" and ",seen)+".";
         }
@@ -131,10 +131,19 @@ namespace Festival.Core
         {
             double distance=Distance(player,x,z);
             if(distance<3)return "here";
+            return Math.Ceiling(distance).ToString("0")+" m "+Compass(player,x,z);
+        }
+
+        // POLO-3: a rough area's centre to the nearest 10 m. ponytail: no "here" wording, as every area's centre is at least 7.5 m
+        // from a rider (the wheel's base is 10 m from the nearest centres, and the rider boards within WheelReach of it).
+        private static string Rough(PlayerState player,WorldPoint area)=>(Math.Round(Distance(player,area.X,area.Z)/10,MidpointRounding.AwayFromZero)*10).ToString("0")+" m "+Compass(player,area.X,area.Z);
+
+        private static string Compass(PlayerState player,float x,float z)
+        {
             double dx=x-player.X,dz=z-player.Z;
             string northSouth=dz>3?"N":dz< -3?"S":"";
             string eastWest=dx>3?"E":dx< -3?"W":"";
-            return Math.Ceiling(distance).ToString("0")+" m "+northSouth+eastWest;
+            return northSouth+eastWest;
         }
     }
 }

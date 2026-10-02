@@ -73,8 +73,9 @@ public static class TwistPromptTests
         Check(Offered(playa,q,Band)==null,"Ember Playa has no VIP stall: "+Listed(playa,q));
     }
 
-    // A rider's view of Palm Mirage's Night 1, their trail not yet followed: both cops, as every view has them, and the lost
-    // friend's spot, which FestivalSession.ViewFor sends to the rider alone while they ride.
+    // A rider's view of Palm Mirage's Night 1, their trail not yet followed: both cops, as every view has them, and (POLO-3) the
+    // rough area of each lost friend, which FestivalSession.ViewFor sends to the rider alone while they ride, never their spot.
+    // An area is read to the nearest 10 m from the rider to its centre, so the card never gives the friend away to the metre.
     static void TheRiderReadsWhatTheySpot()
     {
         var s=new RoundState{Phase="Playing",FestivalIndex=Festivals.PoloFestival,LevelIndex=1,TripperId="sam"};
@@ -82,18 +83,20 @@ public static class TwistPromptTests
         s.Npcs.Add(new NpcState{Id="cop_0",Kind="Cop",X=me.X,Z=me.Z+12});
         s.Npcs.Add(new NpcState{Id="cop_1",Kind="Cop",X=me.X+30,Z=me.Z});
         s.Npcs.Add(new NpcState{Id="wook",Kind="Wook",X=me.X-5,Z=me.Z});
-        s.FriendPosition=new WorldPoint(me.X-30,me.Z+40);
         string ground=FestivalGuidance.Hint(s,me);
         s.Interactions.Add(new InteractionState{Id="ride",PlayerId=me.Id,Kind=FestivalSimulation.RideWheelKind,Status="Active"});me.InteractionId="ride";
-        Check(FestivalGuidance.Hint(s,me)=="From the wheel you spot your friend 50 m NW and security 12 m N, 30 m E.","at night the rider reads where the friend and security are, trail or no trail: \""+FestivalGuidance.Hint(s,me)+"\"");
-        // A big crew's second friend, lost too (CROWD-2).
-        s.SecondFriend.Active=true;s.SecondFriend.Position=new WorldPoint(me.X,me.Z-33);
-        Check(FestivalGuidance.Hint(s,me)=="From the wheel you spot your friends 50 m NW, 33 m S and security 12 m N, 30 m E.","both lost friends: \""+FestivalGuidance.Hint(s,me)+"\"");
-        // Found friends follow their escort; they aren't lost out there any more.
-        s.FriendFound=true;s.SecondFriend.Found=true;
-        Check(FestivalGuidance.Hint(s,me)=="From the wheel you spot security 12 m N, 30 m E.","found friends aren't spotted: \""+FestivalGuidance.Hint(s,me)+"\"");
-        // Off the wheel the rider's hint is what it was on the ground.
-        s.FriendFound=false;s.SecondFriend=new LostFriendState();s.Interactions.Clear();me.InteractionId="";
+        // A view that holds a friend's spot (the tripper's, once their trail is done) still names no friend from the wheel by it.
+        s.FriendPosition=new WorldPoint(me.X-30,me.Z+40);
+        Check(FestivalGuidance.Hint(s,me)=="From the wheel you spot security 12 m N, 30 m E.","without an area the rider names no friend, whatever spot their view holds: \""+FestivalGuidance.Hint(s,me)+"\"");
+        // The area's centre is 53.3 m away: about 50 m, where the spot's own route would read 54 m.
+        s.WheelFriendAreas.Add(new WorldPoint(me.X-30,me.Z+44));
+        Check(FestivalGuidance.Hint(s,me)=="From the wheel you spot your friend somewhere around 50 m NW and security 12 m N, 30 m E.","at night the rider reads roughly where the friend is, trail or no trail, and exactly where security is: \""+FestivalGuidance.Hint(s,me)+"\"");
+        // A big crew's second friend, lost too (CROWD-2), whose area is 25 m due south: half way rounds up to 30 m.
+        s.SecondFriend.Active=true;s.SecondFriend.Position=new WorldPoint(me.X,me.Z-33);s.WheelFriendAreas.Add(new WorldPoint(me.X,me.Z-25));
+        Check(FestivalGuidance.Hint(s,me)=="From the wheel you spot your friends somewhere around 50 m NW, 30 m S and security 12 m N, 30 m E.","both lost friends: \""+FestivalGuidance.Hint(s,me)+"\"");
+        // Found friends follow their escort, so no area is sent for them (PoloTwistTests.TheRiderSeesTheFriendAtNight). Off the
+        // wheel the rider's hint is what it was on the ground.
+        s.SecondFriend=new LostFriendState();s.Interactions.Clear();me.InteractionId="";
         Check(FestivalGuidance.Hint(s,me)==ground&&!ground.StartsWith("From the wheel"),"on the ground: \""+FestivalGuidance.Hint(s,me)+"\"");
     }
 }

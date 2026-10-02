@@ -102,6 +102,10 @@ namespace Festival.Core
         public WorldPoint FriendPosition=new WorldPoint(); public string FriendLeaderId="";
         // CROWD-2: a crew of FestivalSimulation.TwoFriendCrew or more at the start of a night also looks for this friend (SplitObjective.cs).
         public LostFriendState SecondFriend=new LostFriendState();
+        // POLO-3: view-only, never set on the host: FestivalSession.ViewFor fills it with FestivalSimulation.WheelFriendAreas, the
+        // rough area of each friend still lost, while this view's player rides the Ferris wheel at night. Empty otherwise and in
+        // older snapshots.
+        public List<WorldPoint> WheelFriendAreas=new List<WorldPoint>();
         // Night 2 dead, in death order (Bodies.cs): the first one moves with one carrier, later ones need two.
         public List<BodyState> Bodies=new List<BodyState>();
         // TRIP-2: what the tripper sees (Visions.cs), and the night's clue holders in trail order; CluesRead is the next link.

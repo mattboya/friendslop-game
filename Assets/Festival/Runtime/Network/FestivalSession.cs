@@ -478,6 +478,8 @@ namespace Festival.Network
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
                 // CROWD-2: a big crew's second lost friend, shown like the first. Its clue chain stays on the host.
                 SecondFriend=new LostFriendState{Active=source.SecondFriend.Active,GateOpened=source.SecondFriend.GateOpened,CluesRead=source.SecondFriend.CluesRead,Found=!spirit&&source.SecondFriend.Found,LeaderId=spirit?"":source.SecondFriend.LeaderId,Position=Spot(source.SecondFriend.GateOpened,source.SecondFriend.Found,source.SecondFriend.Position)},
+                // POLO-3: a Ferris wheel rider at night makes out only the square each lost friend is in, never their spot.
+                WheelFriendAreas=FestivalSimulation.WheelFriendAreas(source,viewer),
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
@@ -512,9 +514,9 @@ namespace Festival.Network
             }
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
-            // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map. POLO-1: a
-            // Ferris wheel rider looks out over the whole festival, so at night their client alone sees it for the ride.
-            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z))||FestivalSimulation.WheelShowsFriend(source,viewer))?at:new WorldPoint(0,0);
+            // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map, not even from
+            // the Ferris wheel (POLO-3, WheelFriendAreas above).
+            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
         }
         private void UpdateActors()
         {
@@ -553,10 +555,9 @@ namespace Festival.Network
             if(!spirit && (State.Phase=="Playing"||State.Phase=="Results"))
             {
                 foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,n.Mode=="Blending"?n.IdlePose:n.Mode,n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false);seen.Add(n.Id);}
-                // A lost friend (a big crew's two, CROWD-2) shows once found, or once the view knows their spot and they are within 12 m,
-                // or wherever they are while this client rides the Ferris wheel at night and looks out over the grounds (POLO-1).
-                bool lookout=FestivalSimulation.WheelShowsFriend(State,LocalPlayerId);
-                void LostFriend(string id,WorldPoint at,bool found){if(at!=null && (at.X!=0||at.Z!=0) && (found||lookout||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12)){Actor(id,"MISSING FRIEND",at.X,at.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add(id);}}
+                // A lost friend (a big crew's two, CROWD-2) shows once found, or once the view knows their spot and they are within 12 m.
+                // The Ferris wheel draws nobody (POLO-3): its rider reads only a rough area on the objective card.
+                void LostFriend(string id,WorldPoint at,bool found){if(at!=null && (at.X!=0||at.Z!=0) && (found||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12)){Actor(id,"MISSING FRIEND",at.X,at.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add(id);}}
                 LostFriend("mission_friend",State.FriendPosition,State.FriendFound);LostFriend("mission_friend_2",State.SecondFriend.Position,State.SecondFriend.Found);
                 // A drop floats its display name ("Tongue Stamps", THEME-2); its id still picks the model.
                 foreach(var d in State.Drops){Actor(d.Id,Catalog.FindItem(d.ItemId)?.Name??d.ItemId,d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}

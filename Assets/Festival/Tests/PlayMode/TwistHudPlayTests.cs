@@ -15,8 +15,9 @@ namespace Festival.Tests
     {
         // POLO-1 and PLAYA-1 (journey J2): a sober player uses every twist from the running HUD on a real hosted Night 1. On Palm
         // Mirage F beside the VIP guard talks them past the rope, E at the night market's VIP stall buys a wristband, and E at the
-        // Ferris wheel's base boards it. Up there the objective card says where the lost friend and security are, and the friend
-        // is drawn, though their trail is not yet followed and they stand far out of sight; by day nobody is lost to spot. On
+        // Ferris wheel's base boards it. Up there the objective card says roughly where the lost friend is and exactly where
+        // security is, and (POLO-3) the friend, whose trail is not yet followed and who stands far out of sight, is not drawn;
+        // by day nobody is lost to spot. On
         // Ember Playa E climbs aboard a passing art car. Labels are laid out on a 1920x1080 canvas, so a cut-off line fails.
         [UnityTest]public IEnumerator ASoberPlayerUsesEveryTwistFromTheHud()
         {
@@ -124,11 +125,10 @@ namespace Festival.Tests
                 if(primary.GetValue(view)!=null)failures.Add("on the wheel: E still runs an action");
                 if(Actions().Contains(Cancel)||CancelShown())failures.Add("on the wheel: Cancel is still offered: \""+Actions()+"\", menu button "+(CancelShown()?"shown":"hidden"));
                 string detail=Read("Objective detail");
-                if(!detail.StartsWith("From the wheel you spot your friend ")||!detail.Contains(" and security "))failures.Add("on the wheel at night: the objective card reads \""+detail+"\"");
+                if(!detail.StartsWith("From the wheel you spot your friend somewhere around ")||!detail.Contains(" and security "))failures.Add("on the wheel at night: the objective card reads \""+detail+"\"");
                 Fits("on the wheel at night","Objective detail");
                 var shown=GameObject.Find("mission_friend");
-                if(shown==null)failures.Add("on the wheel at night: the lost friend is not drawn");
-                else if(Vector2.Distance(new Vector2(shown.transform.position.x,shown.transform.position.z),new Vector2(friend.X,friend.Z))>.5f)failures.Add("on the wheel at night: the lost friend is drawn at "+shown.transform.position+", not where they are lost");
+                if(shown!=null)failures.Add("on the wheel at night: the lost friend is drawn at "+shown.transform.position+", far out of sight, giving their spot away");
                 // By day nobody is lost: the rider spots security only, over the quota line.
                 sim.State.LevelIndex=0;
                 yield return new WaitForSeconds(.6f);

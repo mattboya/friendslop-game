@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Festival.Tests
 {
     // POLO-1: every client sees who is filming and who guards the VIP rope; only a Ferris wheel rider's client learns, at night,
-    // where the lost friends are.
+    // roughly where the lost friends are (POLO-3: the square each stands in, never their spot).
     public sealed class PoloSessionTests
     {
         // A crew of `crew` loads into a Palm Mirage level.
@@ -22,15 +22,18 @@ namespace Festival.Tests
         }
         // What viewer's client receives, through the wire format.
         static RoundState Wire(FestivalSimulation game,string viewer)=>JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,viewer)));
-        // A crew member who is not tripping boards the wheel.
-        static PlayerState Ride(FestivalSimulation game)
+        // A crew member who is not tripping (or the tripper) boards the wheel.
+        static PlayerState Ride(FestivalSimulation game,bool tripper=false)
         {
-            var rider=game.State.Players.Find(p=>p.Id!=game.State.TripperId);rider.X=Festivals.WheelX;rider.Z=Festivals.WheelZ+1;
+            var rider=game.State.Players.Find(p=>(p.Id==game.State.TripperId)==tripper);rider.X=Festivals.WheelX;rider.Z=Festivals.WheelZ+1;
             var boarded=game.Execute(rider.Id,new GameCommand{Id="ride_"+rider.Id+"_"+game.State.Tick,Kind="RideWheel"});
             Assert.That(boarded.Accepted,Is.True,"setup: "+rider.Id+" rides the wheel: "+boarded.Reason);
             return rider;
         }
         static bool Hidden(WorldPoint p)=>p.X==0&&p.Z==0;
+        static string At(WorldPoint p)=>p.X+","+p.Z;
+        // A view's wheel areas, written out as "x,z x,z".
+        static string Areas(RoundState view)=>string.Join(" ",view.WheelFriendAreas.ConvertAll(At));
 
         [Test] public void EveryClientSeesTheTwistsInTheCrowd()
         {
@@ -50,20 +53,33 @@ namespace Festival.Tests
             var game=Level(1,5);var second=game.State.SecondFriend;
             Assert.That(second.Active,Is.True,"setup: a crew of five loses two friends");
             foreach(var viewer in game.State.Players)
-                Assert.That(Hidden(Wire(game,viewer.Id).FriendPosition)&&Hidden(Wire(game,viewer.Id).SecondFriend.Position),Is.True,"setup: nobody's client knows where the friends are yet");
+                Assert.That(Hidden(Wire(game,viewer.Id).FriendPosition)&&Hidden(Wire(game,viewer.Id).SecondFriend.Position)&&Areas(Wire(game,viewer.Id))=="",Is.True,"setup: nobody's client knows where the friends are yet");
             var rider=Ride(game);var mine=Wire(game,rider.Id);
-            Assert.That(mine.FriendPosition.X==game.State.FriendPosition.X&&mine.FriendPosition.Z==game.State.FriendPosition.Z,Is.True,"from the wheel the rider's client sees where the friend is");
-            Assert.That(mine.SecondFriend.Position.X==second.Position.X&&mine.SecondFriend.Position.Z==second.Position.Z,Is.True,"and where the second friend is");
+            Assert.That(Hidden(mine.FriendPosition)&&Hidden(mine.SecondFriend.Position),Is.True,"POLO-3: from the wheel the rider's client never learns either friend's spot: got "+At(mine.FriendPosition)+" and "+At(mine.SecondFriend.Position));
+            Assert.That(Areas(mine),Is.EqualTo(At(FestivalSimulation.WheelArea(game.State.FriendPosition))+" "+At(FestivalSimulation.WheelArea(second.Position))),"only the square each friend is lost in, the first friend's then the second's");
+            Assert.That(Areas(mine),Is.Not.EqualTo(At(game.State.FriendPosition)+" "+At(second.Position)),"setup: neither friend stands at their square's centre");
+            Assert.That(game.State.WheelFriendAreas,Is.Empty,"the host's own state never holds them");
             Assert.That(FestivalSimulation.OnWheel(mine,rider.Id),Is.True,"the rider's client knows it is on the wheel");
             Assert.That(mine.Npcs.FindAll(n=>n.Kind=="Cop").Count,Is.EqualTo(game.State.Npcs.FindAll(n=>n.Kind=="Cop").Count),"with every cop in its view to mark");
             foreach(var viewer in game.State.Players)
             {
                 if(viewer==rider)continue;var theirs=Wire(game,viewer.Id);
-                Assert.That(Hidden(theirs.FriendPosition)&&Hidden(theirs.SecondFriend.Position),Is.True,viewer.Id+"'s client learns nothing from someone else's ride");
+                Assert.That(Hidden(theirs.FriendPosition)&&Hidden(theirs.SecondFriend.Position)&&Areas(theirs)=="",Is.True,viewer.Id+"'s client learns nothing from someone else's ride");
                 Assert.That(FestivalSimulation.OnWheel(theirs,rider.Id),Is.False,viewer.Id+"'s client can't tell the rider is up there looking");
             }
             game.Tick(Festivals.WheelRideSeconds+.1);
-            Assert.That(Hidden(Wire(game,rider.Id).FriendPosition),Is.True,"the view ends with the ride");
+            Assert.That(Hidden(Wire(game,rider.Id).FriendPosition)&&Areas(Wire(game,rider.Id))=="",Is.True,"the view ends with the ride");
+        }
+
+        // POLO-3: the wheel takes away no reason a client already had to know a friend's spot. The tripper, once their trail is
+        // done, still has the first friend's spot while riding, and the rough areas besides.
+        [Test] public void TheTripperWithTheTrailDoneStillSeesTheSpotFromTheWheel()
+        {
+            var game=Level(1);game.State.GateOpened=true;var tripper=Ride(game,tripper:true);var friend=game.State.FriendPosition;
+            Assert.That(tripper.Id,Is.EqualTo(game.State.TripperId),"setup: the tripper rides");
+            var mine=Wire(game,tripper.Id);
+            Assert.That(At(mine.FriendPosition),Is.EqualTo(At(friend)),"the trail's last link still shows the tripper where the friend is");
+            Assert.That(Areas(mine),Is.EqualTo(At(FestivalSimulation.WheelArea(friend))),"and the wheel shows their square");
         }
 
         // POLO-2: nothing cancels a turn on the wheel (the host refuses it), so the rider's HUD offers no Cancel and counts the
@@ -113,7 +129,7 @@ namespace Festival.Tests
         [Test] public void ByDayTheWheelShowsNoFriend()
         {
             var game=Level(0);var rider=Ride(game);
-            Assert.That(Hidden(Wire(game,rider.Id).FriendPosition),Is.True,"nobody is lost by day");
+            Assert.That(Hidden(Wire(game,rider.Id).FriendPosition)&&Areas(Wire(game,rider.Id))=="",Is.True,"nobody is lost by day");
         }
     }
 }
