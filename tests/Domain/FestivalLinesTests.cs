@@ -72,6 +72,9 @@ public static class FestivalLinesTests
         EveryLine("every line ends with . ! or ?",(kind,festival,line)=>".!?".IndexOf(line.TrimEnd('"','\'',')').LastOrDefault())>=0);
         EveryLine("every line has single spaces and no unfilled {slot}",(kind,festival,line)=>!line.Contains("  ")&&line.Trim()==line&&line.IndexOf('{')<0&&line.IndexOf('}')<0&&line.IndexOf('|')<0&&!line.Contains(" ,")&&!line.Contains(" ."));
         EveryLine("no 'a' before a vowel sound and no 'an' before a consonant",(kind,festival,line)=>BadArticle(line)==null);
+        // A slot's words run into the frame's ("Is this this remix"). An echo across a full stop ("Family! Family!") or a "Ha ha."
+        // or "Hey hey!" is meant.
+        EveryLine("no word twice in a row within a sentence",(kind,festival,line)=>{var words=line.ToLowerInvariant().Split(' ');for(int i=0;i+1<words.Length;i++)if(words[i]!="ha"&&words[i]!="hey"&&words[i]==words[i+1].TrimEnd('.','!','?',',',';'))return false;return true;});
         EveryLine("every line fits a bubble: "+Longest+" characters at most",(kind,festival,line)=>line.Length<=Longest);
     }
     // The article in front of a word that sounds otherwise, if any. A word spelt with a vowel can start with a "y" or "w" sound

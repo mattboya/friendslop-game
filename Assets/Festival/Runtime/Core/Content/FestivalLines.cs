@@ -21,7 +21,7 @@ namespace Festival.Core
             ["landmark"]=new[]{"0:the Ferris wheel","0:the VIP deck","0:the VIP rope","0:the matcha cart","0:the polo field","0:the VIP gate","1:the Man","1:the art car","1:the gifting tent","1:the drum circle","1:the deep playa","1:the pancake camp","the left speaker","the water tent","the merch tent","the main stage"},
             ["ground"]=new[]{"0:polo field","1:playa"},
             ["friend"]=new[]{"my friend","my cousin","my tentmate","my camp lead","my sister","the flag guy","a guy in a cape","+my friends","my whole camp","+the cape guys","+my tentmates","0:my VIP plus-one","1:my art car crew"},
-            ["thing"]=new[]{"a glow stick","a blue cooler","my left shoe","a sandwich","a bucket hat","a camp chair","a hula hoop","a fanny pack","a phone charger","a kandi bracelet","a rubber duck","a disco ball","a water bottle","0:an iced matcha","0:a VIP lanyard","0:a polo mallet","1:a dust mask","1:some goggles","1:a grilled cheese"},
+            ["thing"]=new[]{"a glow stick","a blue cooler","my left shoe","a sandwich","a bucket hat","a camp chair","a hula hoop","a fanny pack","a phone charger","a kandi bracelet","a rubber duck","a disco ball","a water bottle","0:an iced matcha","0:a VIP lanyard","0:a polo mallet","1:a dust mask","1:a playa bike","1:a grilled cheese"},
             ["when"]=new[]{"since sunrise","for three sets","all weekend","since Thursday","since the gates","for six hours","since the drop","0:since soundcheck","0:since my matcha","1:since the storm","1:since the Man"},
             ["count"]=new[]{"three","four","five","six","nine","eleven"},
             ["wearable"]=new[]{"hat","jacket","fanny pack","wristband","+sunglasses","+boots","cape"},
@@ -816,7 +816,7 @@ namespace Festival.Core
             ["dad_bit"]=new[]{
                 "Seen a kid in a {kidwear} near {landmark}? All of them?",
                 "I've been told this is a '{vibe}'. Am I doing it?",
-                "Is this {song}, or are they still setting up?",
+                "Has {song} started, or are they still setting up?",
                 "My kid said 'stay by {landmark}' {agohere} ago.",
                 "Great {weather} for it. For whatever this is.",
                 "I brought {dadgear}, and I'll use {it|them}.",
@@ -941,7 +941,7 @@ namespace Festival.Core
             ["lost"]=new[]{
                 "Have you seen my {lostfriend}? {lostlook}.",
                 "Seen someone {thistall} with a lot of {opinions}?",
-                "Did someone lost pass {landmark}? Big {wearable}.",
+                "Did someone lost-looking pass {landmark}? Big {wearable}.",
                 "Seen anyone who misplaced a whole {misplaced}?",
                 "My {lostfriend} left {agoish} toward {landmark}.",
                 "Which way did the {confusedone} go?",
