@@ -65,8 +65,22 @@ namespace Festival.Presentation
 
         public Color SkinTint => Skin[SkinColor];
         public Color SleeveTint => Role=="Friend"?new Color(.99f,.44f,.22f):Role=="Security"?new Color(.30f,.48f,.72f):Cloth[ShirtColor];
+        // CROWD-4: the dark, muted green a suspicious festivalgoer's skin turns. It stays darker and greyer than VISION-5's neon
+        // TRUE glow, so the two never read alike.
+        static readonly Color ZombieGreen=new Color(.38f,.50f,.32f);
 
-        public Texture2D CreatePalette(bool garment=false)
+        /// <summary>CROWD-4: redraws slot 0 (the skin) of a palette made with skin: true, from this look's own tone toward
+        /// zombie green by turned (0-1). It lerps the colour rather than tinting it, so even the darkest tone turns green.</summary>
+        public void PaintSkin(Texture2D palette,float turned)
+        {
+            var color=Color.Lerp(SkinTint,ZombieGreen,turned);
+            for(int y=0;y<palette.height;y++)for(int x=0;x<palette.width/8;x++)palette.SetPixel(x,y,color);
+            palette.Apply(true,false);
+        }
+
+        /// <summary>The actor's eight-slot palette. A skin palette (CROWD-4) stays readable so PaintSkin can redraw it, and is
+        /// one row tall to keep that copy small: only its columns carry colour.</summary>
+        public Texture2D CreatePalette(bool garment=false,bool skin=false)
         {
             var shirt=SleeveTint;
             var pants=Cloth[PantsColor];
@@ -75,8 +89,9 @@ namespace Festival.Presentation
             // Garment seams belong to the fabric. Reserve the vivid palette for
             // accessories and role markers instead of outlining every panel.
             if(garment)colors[7]=Color.Lerp(shirt,colors[7],.18f);
-            const int width=512,height=128,cell=width/8;
-            var texture=new Texture2D(width,height,TextureFormat.RGBA32,true){name="Festival fabric palette",filterMode=FilterMode.Trilinear,wrapMode=TextureWrapMode.Clamp};
+            const int width=512,cell=width/8;
+            int height=skin?1:128;
+            var texture=new Texture2D(width,height,TextureFormat.RGBA32,true){name=skin?"Festival skin palette":"Festival fabric palette",filterMode=FilterMode.Trilinear,wrapMode=TextureWrapMode.Clamp};
             var pixels=new Color32[width*height];
             for(int y=0;y<height;y++)for(int x=0;x<width;x++)
             {
@@ -89,7 +104,7 @@ namespace Festival.Presentation
                 }
                 var color=colors[slot]*shade;color.a=1;pixels[y*width+x]=color;
             }
-            texture.SetPixels32(pixels);texture.Apply(true,true);
+            texture.SetPixels32(pixels);texture.Apply(true,!skin);
             return texture;
         }
     }

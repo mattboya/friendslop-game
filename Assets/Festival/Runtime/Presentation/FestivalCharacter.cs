@@ -45,6 +45,12 @@ namespace Festival.Presentation
         // TRIP-4: someone lying on the grass watching the clouds lies on their back with their hips this high, in metres at the
         // actor's own scale.
         const float LieHipHeight=.12f;
+        // CROWD-4: a festivalgoer turns zombie-like with its suspicion of you (Threat), from none at Watching (.25) to full at
+        // Accusing (.70). Its skin redraws in SkinSteps steps along the way, never every frame. The full scowl's blend-shape
+        // weights: negative Concern pulls the inner brows down, negative Smile drops the brows and the mouth corners, and part of
+        // Blink hangs the lids.
+        const float TurnFrom=.25f,TurnFull=.70f,ScowlBrow=-60,ScowlMouth=-80,ScowlLid=40;
+        const int SkinSteps=16;
         int latestDanceDirection=-1;
         float latestDanceStepTime=-100;
         public string Pose="Idle";
@@ -61,13 +67,13 @@ namespace Festival.Presentation
         public Vector3 ShapeScale => Appearance.Scale;
         Material ownedMaterial;
         Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
-        Color baseTint;
         float lastAppliedThreat=-1;
+        int skinStep;
         float lastAnimationTime;
         // Time this actor has stood in the world, so its idle sway starts from its own spawn rather than the shared clock.
         float idleClock;
         Material eyeMaterial;
-        Texture2D ownedPalette,garmentPalette;
+        Texture2D ownedPalette,garmentPalette,skinPalette;
         Renderer eyeRenderer;
         Renderer spoonRenderer;
         SkinnedMeshRenderer faceRenderer;
@@ -123,12 +129,13 @@ namespace Festival.Presentation
             actor.ownedPalette=actor.Appearance.CreatePalette();
             actor.ownedMaterial=new Material(template){name="Festival actor palette"};
             actor.ownedMaterial.mainTexture=actor.ownedPalette;
-            actor.baseTint=Color.Lerp(Color.white,tint,.04f);
-            actor.ownedMaterial.color=actor.baseTint;
+            actor.ownedMaterial.color=Color.Lerp(Color.white,tint,.04f);
             actor.ownedMaterial.SetFloat("_Smoothness",.10f);
             actor.garmentPalette=actor.Appearance.CreatePalette(true);
             actor.garmentMaterial=new Material(actor.ownedMaterial){name="Festival tonal fabric",mainTexture=actor.garmentPalette};
-            actor.skinMaterial=new Material(actor.ownedMaterial){name="Festival skin"};actor.skinMaterial.SetFloat("_Smoothness",.24f);
+            // CROWD-4: the skin keeps its own palette, so suspicion can turn it green without touching hair, gear or lenses.
+            actor.skinPalette=actor.Appearance.CreatePalette(skin:true);
+            actor.skinMaterial=new Material(actor.ownedMaterial){name="Festival skin",mainTexture=actor.skinPalette};actor.skinMaterial.SetFloat("_Smoothness",.24f);
             actor.hairMaterial=new Material(actor.ownedMaterial){name="Festival hair"};actor.hairMaterial.SetFloat("_Smoothness",.18f);
             actor.gearMaterial=new Material(actor.ownedMaterial){name="Festival equipment"};actor.gearMaterial.SetFloat("_Smoothness",.30f);
             actor.lensMaterial=new Material(actor.ownedMaterial){name="Festival eyewear"};actor.lensMaterial.SetFloat("_Smoothness",.68f);
@@ -280,10 +287,12 @@ namespace Festival.Presentation
             float animationDelta=lastAnimationTime<=0?Time.deltaTime:Mathf.Max(Time.time-lastAnimationTime,.001f);
             lastAnimationTime=Time.time;
             idleClock+=animationDelta;
+            float turned=Mathf.InverseLerp(TurnFrom,TurnFull,Threat);
             if(faceRenderer!=null&&blinkIndex>=0&&!HighlyIntoxicated)
             {
+                // CROWD-4: a suspicious face's lids hang part-closed (near mesh only), and it still blinks.
                 float cycle=(Time.time+phase)%(3.6f+phase*.11f);
-                faceRenderer.SetBlendShapeWeight(blinkIndex,cycle<.18f?Mathf.Sin(cycle/.18f*Mathf.PI)*100:0);
+                faceRenderer.SetBlendShapeWeight(blinkIndex,Mathf.Max(UsesDistantMesh?0:turned*ScowlLid,cycle<.18f?Mathf.Sin(cycle/.18f*Mathf.PI)*100:0));
             }
             bool performingPoi=Pose=="Poi";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -603,8 +612,9 @@ namespace Festival.Presentation
             }
             if(faceRenderer!=null&&!UsesDistantMesh)
             {
-                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),dance?65:Time.time-receiptAt<1.4f||Giggling?80:0,1-Mathf.Exp(-7*animationDelta)));
-                if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:key=="DoseReaction"?85*BeatStrength:Threat*65,1-Mathf.Exp(-7*animationDelta)));
+                // CROWD-4: suspicion scowls rather than worries. Concern stays for Downed, Detained and the dose reaction.
+                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),Mathf.Lerp(dance?65:Time.time-receiptAt<1.4f||Giggling?80:0,ScowlMouth,turned),1-Mathf.Exp(-7*animationDelta)));
+                if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:key=="DoseReaction"?85*BeatStrength:turned*ScowlBrow,1-Mathf.Exp(-7*animationDelta)));
             }
             if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)
             {
@@ -612,14 +622,10 @@ namespace Festival.Presentation
                 float alarm=Mathf.Clamp01((Threat-.24f)/.76f);
                 eyeRenderer.enabled=alarm>.01f;
                 if(eyeMaterial!=null)eyeMaterial.color=Color.Lerp(new Color(1,.72f,.16f),new Color(1,.08f,.32f),alarm);
-                var tint=Color.Lerp(baseTint,new Color(1,.53f,.48f),alarm*.48f);
-                if(ownedMaterial!=null)ownedMaterial.color=tint;
-                if(garmentMaterial!=null)garmentMaterial.color=tint;
-                if(skinMaterial!=null)skinMaterial.color=tint;
-                if(hairMaterial!=null)hairMaterial.color=tint;
-                if(gearMaterial!=null)gearMaterial.color=tint;
-                if(lensMaterial!=null)lensMaterial.color=tint;
             }
+            // CROWD-4: only the skin turns zombie green; clothes, hair, gear and lenses keep their colours.
+            int turnStep=Mathf.RoundToInt(turned*SkinSteps);
+            if(turnStep!=skinStep){skinStep=turnStep;Appearance.PaintSkin(skinPalette,(float)turnStep/SkinSteps);}
             // Pose changes ease out of the previous pose instead of snapping toward the new
             // one; the ease replaces per-frame smoothing so motion starts on the first frame.
             float fade=Mathf.Clamp01(1-(transitionEnd-Time.time)/transitionLength);
@@ -729,6 +735,7 @@ namespace Festival.Presentation
             if(ownedMaterial!=null){if(Application.isPlaying)Destroy(ownedMaterial);else DestroyImmediate(ownedMaterial);}
             if(ownedPalette!=null){if(Application.isPlaying)Destroy(ownedPalette);else DestroyImmediate(ownedPalette);}
             if(garmentPalette!=null){if(Application.isPlaying)Destroy(garmentPalette);else DestroyImmediate(garmentPalette);}
+            if(skinPalette!=null){if(Application.isPlaying)Destroy(skinPalette);else DestroyImmediate(skinPalette);}
             if(eyeMaterial!=null){if(Application.isPlaying)Destroy(eyeMaterial);else DestroyImmediate(eyeMaterial);}
             foreach(var material in new[]{garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial})
                 if(material!=null){if(Application.isPlaying)Destroy(material);else DestroyImmediate(material);}
