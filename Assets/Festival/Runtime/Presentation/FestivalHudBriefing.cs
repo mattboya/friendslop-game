@@ -68,7 +68,8 @@ namespace Festival.Presentation
                 ("DANGER","Some festivalgoers are narcs: buy from or sell to one and you're busted. One who suspects you turns zombie-green; if"
                     +" a crowd swarms you, your card says SWARMING and their hits can down you. Security stops anyone it sees carrying stock"
                     +" (a merch bag hides it): talk ("+act+"), ditch it ("+drop+") or walk away out of its sight. A downed friend can be rescued or"
-                    +" dragged; a spirit walks to the medical tent. In an Ember Playa dust storm nobody sees past "+Festivals.DustStormSightRange+" m."),
+                    +" dragged; a spirit walks to the medical tent. In an Ember Playa dust storm nobody sees past "+Festivals.DustStormSightRange+" m."
+                    +" Palm Mirage's influencers film the crowd: while your card says ON CAMERA, festivalgoers near you grow suspicious."),
                 ("CAMP","The shelves sell gear only: pick it up ("+act+"), carry it to the seller and pay. At the campfire, vote the silly"
                     +" awards; the worst take a shot. Ready up at the lit trailhead ("+act+")."),
                 ("KEYS",string.Join("\n",keys)),

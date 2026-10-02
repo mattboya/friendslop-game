@@ -367,12 +367,14 @@ namespace Festival.Presentation
             // Security on you then outranks the crowd: after a deal in view some festivalgoer nearly always holds a little suspicion.
             // The worse of two cops on you shows; a cop on patrol is no warning. ESC-2: a stop names its three ways out, joined by
             // single-spaced dots so it reads as one warning before the effects. PLAYA-3: with nothing else to report, a dust storm
-            // says how far everyone, security too, can see; the view's festival, spin seed and clock are enough to know it.
+            // says how far everyone, security too, can see; the view's festival, spin seed and clock are enough to know it. POLO-6: an
+            // influencer filming you (your own view's VisualFilmedBy) puts the crowd round you on alert, so ON CAMERA leads the crowd
+            // or storm line, joined as one warning; the three above still take the whole line.
             bool arrest=s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
             string Crowd(double level,string crowdMode)=>"CROWD "+level.ToString("0")+" / "+crowdMode.ToUpperInvariant();
             string warning=arrest?"ARREST WARNING":swarm>=0?Crowd(swarm,"Swarming"):StoppedBy(s,p)!=null?"SECURITY STOP • TALK (E) • DITCH IT (G) • OR WALK AWAY"
-                :suspicion>0?Crowd(suspicion,mode)
-                :FestivalWorld.ShowsFestival(s.Phase)&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"CROWD CLEAR";
+                :(p.VisualFilmedBy.Count>0?"ON CAMERA • ":"")+(suspicion>0?Crowd(suspicion,mode)
+                :FestivalWorld.ShowsFestival(s.Phase)&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"CROWD CLEAR");
             return p.Effects.Count>0?warning+Dot+Catalog.EffectsLine(p.Effects).ToUpperInvariant():warning;
         }
 

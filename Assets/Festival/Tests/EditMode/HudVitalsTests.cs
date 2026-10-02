@@ -86,5 +86,27 @@ namespace Festival.Tests
             s.Phase="Playing";s.FestivalIndex=Festivals.PoloFestival;
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"Palm Mirage has no dust at the same moment");
         }
+
+        // POLO-6: an influencer filming you puts the festivalgoers round you on alert, so the card says ON CAMERA ahead of the crowd,
+        // as one warning (single-spaced, like a stop's ways out). Your own view names who films you (VisualFilmedBy). An arrest
+        // warning, a swarm on you or a security stop still takes the whole line, and effects still trail it.
+        [Test] public void OnCameraLeadsTheCrowdLine()
+        {
+            var s=new RoundState{Phase="Playing"};var you=new PlayerState{Id="you",Name="You"};s.Players.Add(you);
+            s.Npcs.Add(new NpcState{Id="wook_2",Kind="Wook",Twist=FestivalSimulation.Influencer});you.VisualFilmedBy.Add("wook_2");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ON CAMERA • CROWD CLEAR"),"on camera with nobody suspicious yet");
+            s.Npcs.Add(new NpcState{Id="wook_0",Kind="Wook",Mode="Watching",Suspicion=30});
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ON CAMERA • CROWD 30 / WATCHING"),"ahead of the crowd it is turning");
+            you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,RemainingSeconds=431});
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ON CAMERA • CROWD 30 / WATCHING  •  DOSE 431S"),"effects still trail it");
+            you.Effects.Clear();var cop=new NpcState{Id="cop_0",Kind="Cop",Mode="Stop",TargetId="you"};s.Npcs.Add(cop);
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"a security stop takes the whole line");
+            cop.Mode="ArrestWarning";
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ARREST WARNING"),"so does an arrest warning");
+            s.Npcs.Remove(cop);var swarm=new NpcState{Id="wook_1",Kind="Wook",Mode="Swarming",TargetId="you",Suspicion=80};s.Npcs.Add(swarm);
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 80 / SWARMING"),"and a swarm on you");
+            s.Npcs.Remove(swarm);you.VisualFilmedBy.Clear();
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 30 / WATCHING"),"out of the shot the card is back to the crowd");
+        }
     }
 }

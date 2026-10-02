@@ -146,6 +146,7 @@ namespace Festival.Tests
                 Assert.That(danger,Does.Contain("zombie-green"),"CROWD-4's suspicious festivalgoers");
                 Assert.That(danger,Does.Contain("SWARMING"),"HUD-5's swarm on the card");
                 Assert.That(danger,Does.Contain("dust storm").And.Contain(Festivals.DustStormSightRange+" m"),"PLAYA-3");
+                Assert.That(danger,Does.Contain("influencers film").And.Contain("ON CAMERA"),"POLO-6: who films and what the card says while they film you");
                 Assert.That(camp,Does.Contain("gear only"),"shelves sell no stock");
                 Assert.That(Block(input,"KEYS"),Does.Contain(input.Label(input.View)+"  first or third person"),"CAM-1's view key");
                 // The design's one hint about fakes is "Trust, but verify.": How to Play never gives their tells away.
