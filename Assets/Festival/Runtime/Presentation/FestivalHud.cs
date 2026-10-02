@@ -105,6 +105,8 @@ namespace Festival.Presentation
         private float nextActionRefresh;
         private string lastNotice="";
         private float noticeUntil;
+        // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice).
+        private bool stopNoticed;
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
         // it, and the results banner. Each warning, a round's SundownStage, stays SundownNoticeSeconds on screen; its seconds run only
         // while it shows, so a dance, the map or the menu hiding it never uses them up.
@@ -570,6 +572,10 @@ namespace Festival.Presentation
             }
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
             UpdateSundownAndResults(state,player,showMenu);
+            // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
+            // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
+            if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
+            else if(!stopNoticed&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf){stopNoticed=true;session.SetMessage(FestivalHudText.StopNotice);lastNotice="";}
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
@@ -1089,6 +1095,10 @@ namespace Festival.Presentation
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
             if(!lying&&FestivalHudText.CanCancel(state,player))AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
+            // ESC-2: security stopping you, in reach (the host's 2.5 m), comes next, so E talks to them as the card says (TALK (E)),
+            // even with a festivalgoer nearer or the stock you just ditched at your feet.
+            var stopper=FestivalHudText.StoppedBy(state,player);
+            if(stopper!=null&&Near(player,stopper.X,stopper.Z,2.5f))AddAction("Talk to security",()=>session.Command("Police",stopper.Id),ref y);
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+ItemName(drop.ItemId),()=>session.Command("Pickup",drop.Id),ref y);
@@ -1157,7 +1167,7 @@ namespace Festival.Presentation
             var npc=state.Phase=="Playing"&&player.Life=="Alive"?Nearest(state.Npcs,player.X,player.Z,2.5f):null;
             if(npc!=null)
             {
-                if(npc.Kind=="Cop")AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);
+                if(npc.Kind=="Cop"){if(npc!=stopper)AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);}
                 else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
             }
             // Offering your gear to a friend in reach follows the errands above, the checks and the festivalgoer beside you: the sober

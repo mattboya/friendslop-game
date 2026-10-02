@@ -7,6 +7,9 @@ namespace Festival.Tests
     // The player card's warning line, built from a crafted view the way a client holds it.
     public sealed class HudVitalsTests
     {
+        // ESC-2: a stop says what you can do about it: talk, ditch the stock or get away, or 20 s on it ends in arrest.
+        const string Stop="SECURITY STOP • TALK (E) • DITCH IT (G) • OR WALK AWAY";
+
         // The spinner's dose lasts the whole level, and on Night 2 everyone is dosed and the debrief's losers take shots: none of it
         // may take the place of the only on-screen warning that the crowd is turning or a cop is about to detain you.
         [Test] public void EffectsNeverHideTheCrowdOrSecurity()
@@ -33,7 +36,7 @@ namespace Festival.Tests
             s.Npcs.Add(wook);s.Npcs.Add(stopper);s.Npcs.Add(arrester);
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ARREST WARNING"),"a cop about to detain you, whatever the crowd holds");
             arrester.TargetId="friend";
-            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP"),"a cop stopping you over visible stock");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"a cop stopping you over visible stock, and what you can do");
             stopper.Mode="Patrol";
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 3 / BLENDING"),"a cop back on patrol, or on a friend, leaves the card to the crowd");
             s.Npcs.Remove(wook);
@@ -52,9 +55,9 @@ namespace Festival.Tests
             s.Npcs.Add(arrester);
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ARREST WARNING"),"a cop about to detain you still wins");
             s.Npcs.Remove(arrester);swarm.TargetId="friend";
-            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP"),"a swarm on a friend doesn't outrank a stop on you");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"a swarm on a friend doesn't outrank a stop on you");
             swarm.TargetId="you";swarm.Mode="Distracted";
-            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP"),"a distracted festivalgoer is no longer swarming");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"a distracted festivalgoer is no longer swarming");
             swarm.Mode="Swarming";s.Npcs.Add(new NpcState{Id="wook_1",Kind="Wook",Mode="Blending",Suspicion=95});
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 90 / SWARMING"),"the swarm on you shows its own suspicion, not the crowd's worst");
             you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,RemainingSeconds=431});

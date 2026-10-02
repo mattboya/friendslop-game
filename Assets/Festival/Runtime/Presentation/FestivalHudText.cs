@@ -344,9 +344,14 @@ namespace Festival.Presentation
         /// <summary>Beside the VIP guard with no vision about them to check, E or F chats them into handing over a VIP wristband.</summary>
         public static readonly string RopeChatAction="Talk your way past the VIP rope ("+FestivalSimulation.ConfirmChatSeconds+" s)";
 
+        /// <summary>ESC-2: the cop stopping p over visible stock, or null. A view shows a cop's real mode only to the player it targets.</summary>
+        public static NpcState StoppedBy(RoundState s,PlayerState p)=>s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="Stop");
+        /// <summary>ESC-2: the session notice as security stops you: why, the three ways out, and what ignoring it costs.</summary>
+        public static readonly string StopNotice="SECURITY SAW YOUR STOCK: talk, ditch it or walk away within "+FestivalSimulation.StopArrestSeconds+" s, or you're arrested";
+
         /// <summary>
-        /// The player card's warning: security about to detain p, else a festivalgoer swarming p, else security stopping p, else the
-        /// crowd's worst suspicion, else an Ember Playa dust storm, else "CROWD CLEAR"; then p's effects.
+        /// The player card's warning: security about to detain p, else a festivalgoer swarming p, else security stopping p (with the
+        /// ways out of it), else the crowd's worst suspicion, else an Ember Playa dust storm, else "CROWD CLEAR"; then p's effects.
         /// The warning always comes first: the spinner's dose lasts the whole level (everyone's on Night 2) and must never hide it.
         /// </summary>
         public static string Condition(RoundState s,PlayerState p)
@@ -356,11 +361,12 @@ namespace Festival.Presentation
             // An arrest warning detains you in seconds, so it always wins. HUD-5: next, a festivalgoer swarming you lunges for 20 HP a
             // hit, so it shows over a cop stopping you over visible stock; a swarm on a friend, or one a distraction broke off, doesn't.
             // Security on you then outranks the crowd: after a deal in view some festivalgoer nearly always holds a little suspicion.
-            // The worse of two cops on you shows; a cop on patrol is no warning. PLAYA-3: with nothing else to report, a dust storm
+            // The worse of two cops on you shows; a cop on patrol is no warning. ESC-2: a stop names its three ways out, joined by
+            // single-spaced dots so it reads as one warning before the effects. PLAYA-3: with nothing else to report, a dust storm
             // says how far everyone, security too, can see; the view's festival, spin seed and clock are enough to know it.
-            bool Security(string copMode)=>s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode==copMode);
+            bool arrest=s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
             string Crowd(double level,string crowdMode)=>"CROWD "+level.ToString("0")+" / "+crowdMode.ToUpperInvariant();
-            string warning=Security("ArrestWarning")?"ARREST WARNING":swarm>=0?Crowd(swarm,"Swarming"):Security("Stop")?"SECURITY STOP"
+            string warning=arrest?"ARREST WARNING":swarm>=0?Crowd(swarm,"Swarming"):StoppedBy(s,p)!=null?"SECURITY STOP • TALK (E) • DITCH IT (G) • OR WALK AWAY"
                 :suspicion>0?Crowd(suspicion,mode)
                 :FestivalWorld.ShowsFestival(s.Phase)&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"CROWD CLEAR";
             return p.Effects.Count>0?warning+Dot+Catalog.EffectsLine(p.Effects).ToUpperInvariant():warning;

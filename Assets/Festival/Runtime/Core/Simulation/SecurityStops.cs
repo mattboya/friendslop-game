@@ -7,7 +7,9 @@ namespace Festival.Core
     /// reach only the stopped player, as festivalgoers' chat does (NpcSpeech).</summary>
     public sealed partial class FestivalSimulation
     {
-        const double StopWarnSeconds=12,StopArrestSeconds=20,BoltSeconds=6,ConfiscateSeconds=10,BarkSeconds=5;
+        /// <summary>How long a stop may be ignored in the cop's sight before it is an arrest warning (the HUD's stop notice says so).</summary>
+        public const double StopArrestSeconds=20;
+        const double StopWarnSeconds=12,BoltSeconds=6,ConfiscateSeconds=10,BarkSeconds=5;
         const string StopBark="HEY! What's in the bag?",WarnBark="Last chance. Empty your pockets.",DitchBark="Fine. Move along.";
         static bool CarriesStock(PlayerState p)=>p.Inventory.Exists(i=>Stock(i.ItemId));
         // An arrest warning: a deal the cop saw (RecordDeal), or a stop ignored too long. Either detains at DetainAt.
