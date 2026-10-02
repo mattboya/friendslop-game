@@ -132,6 +132,10 @@ namespace Festival.Presentation
         private string sundownRound="";
         private int sundownStage;
         private float sundownShown;
+        // HUD-7: How to Play over the main menu or the pass (BuildHowToPlay), its six blocks' titles and text, and whether it's up.
+        private GameObject howToPlayPanel;
+        private readonly Text[] howToPlayTitles=new Text[6],howToPlayTexts=new Text[6];
+        private bool howToPlayOpen;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -401,6 +405,7 @@ namespace Festival.Presentation
             ShrinkToFit(heldDetailText,14);
             // DIALOG-5: the chat window, built last so that with the menu open it draws over the pass's dimmer (UpdateChat).
             chatWindow=FestivalChatWindow.Build(root.transform,font,roundedSprite);
+            BuildHowToPlay(root.transform);
         }
 
         private void BuildConnection(Transform root)
@@ -415,8 +420,9 @@ namespace Festival.Presentation
             addressField=Field(connectionPanel.transform,"HOST ADDRESS","127.0.0.1",.48f);
             portField=Field(connectionPanel.transform,"PORT","7777",.33f);
             portField.onValueChanged.AddListener(_=>connectionError="");
-            Button(connectionPanel.transform,"CREATE GAME",new Vector2(.075f,.10f),new Vector2(.49f,.20f),()=>StartHost());
-            Button(connectionPanel.transform,"JOIN GAME",new Vector2(.51f,.10f),new Vector2(.925f,.20f),()=>StartJoin());
+            Button(connectionPanel.transform,"CREATE GAME",new Vector2(.075f,.10f),new Vector2(.36f,.20f),()=>StartHost());
+            Button(connectionPanel.transform,"JOIN GAME",new Vector2(.37f,.10f),new Vector2(.645f,.20f),()=>StartJoin());
+            Button(connectionPanel.transform,"HOW TO PLAY",new Vector2(.655f,.10f),new Vector2(.925f,.20f),OpenHowToPlay);
             status=Label(connectionPanel.transform,"Status",18,TextAnchor.MiddleCenter);status.color=new Color(.25f,.35f,.32f);Place(status.rectTransform,.08f,.025f,.92f,.09f);
         }
 
@@ -444,7 +450,8 @@ namespace Festival.Presentation
             cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>session.Command("Cancel"));
             resumeButton=Button(menuHome.transform,"RESUME FESTIVAL",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>{session.MenuOpen=false;settingsOpen=false;});
             Button(menuHome.transform,"CREW + NEARBY",new Vector2(.045f,.26f),new Vector2(.955f,.375f),()=>{crewOpen=!crewOpen;});
-            Button(menuHome.transform,"SETTINGS",new Vector2(.045f,.135f),new Vector2(.955f,.25f),()=>{settingsOpen=true;});
+            Button(menuHome.transform,"SETTINGS",new Vector2(.045f,.135f),new Vector2(.495f,.25f),()=>{settingsOpen=true;});
+            Button(menuHome.transform,"HOW TO PLAY",new Vector2(.505f,.135f),new Vector2(.955f,.25f),OpenHowToPlay);
             Button(menuHome.transform,"LEAVE SESSION",new Vector2(.045f,.01f),new Vector2(.955f,.125f),()=>session.Leave());
             settingsPanel=Panel(menuPanel.transform,"Pass settings",Color.clear,new Vector2(.055f,.025f),new Vector2(.945f,.76f));settingsPanel.GetComponent<Image>().raycastTarget=false;
             var settingsHeading=Label(settingsPanel.transform,"Settings heading",32,TextAnchor.MiddleLeft);settingsHeading.text="LOCAL SETTINGS";settingsHeading.fontStyle=FontStyle.Normal;settingsHeading.color=Ink;Place(settingsHeading.rectTransform,.04f,.88f,.96f,.98f);
@@ -463,6 +470,38 @@ namespace Festival.Presentation
             Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.28f),new Vector2(.94f,.36f),()=>ChangeSetting("contrast",1));
             Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.15f),new Vector2(.94f,.23f),()=>ChangeSetting("view",1));
             Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.04f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false);
+        }
+
+        // HUD-7: How to Play, built last so it covers the main menu, the pass and whatever is open beside them; its dimmer takes the
+        // clicks meant for what is under it. FestivalHudText.HowToPlay's six blocks sit in three columns: the weekend, the tripper and
+        // everyone else; danger and camp; the keys. Each block is x min, y min, x max, y max on the card, its title along the top.
+        private static readonly Vector4[] HowToPlayBlocks=
+        {
+            new Vector4(.035f,.66f,.345f,.86f),new Vector4(.035f,.37f,.345f,.65f),new Vector4(.035f,.14f,.345f,.36f),
+            new Vector4(.365f,.44f,.675f,.86f),new Vector4(.365f,.14f,.675f,.43f),new Vector4(.695f,.14f,.965f,.86f),
+        };
+        private void BuildHowToPlay(Transform root)
+        {
+            howToPlayPanel=Panel(root,"How to play",new Color(.01f,.025f,.03f,.72f),Vector2.zero,Vector2.one);
+            var card=Card(howToPlayPanel.transform,"How to play card",new Vector2(.07f,.06f),new Vector2(.93f,.94f),false);
+            Accent(card.transform,Orange);
+            var title=Label(card.transform,"How to play title",44,TextAnchor.MiddleLeft);title.font=displayFont;title.text="HOW TO PLAY";title.color=Ink;Place(title.rectTransform,.035f,.885f,.70f,.97f);
+            Rule(card.transform,.875f);
+            for(int i=0;i<HowToPlayBlocks.Length;i++)
+            {
+                var block=HowToPlayBlocks[i];
+                howToPlayTitles[i]=Label(card.transform,"How to play heading "+(i+1),19,TextAnchor.LowerLeft);howToPlayTitles[i].fontStyle=FontStyle.Normal;howToPlayTitles[i].color=new Color(.12f,.43f,.37f);Place(howToPlayTitles[i].rectTransform,block.x,block.w-.04f,block.z,block.w);
+                howToPlayTexts[i]=Label(card.transform,"How to play text "+(i+1),17,TextAnchor.UpperLeft);howToPlayTexts[i].color=Ink;Place(howToPlayTexts[i].rectTransform,block.x,block.y,block.z,block.w-.045f);ShrinkToFit(howToPlayTexts[i],12);
+            }
+            Button(card.transform,"BACK",new Vector2(.695f,.035f),new Vector2(.965f,.115f),()=>howToPlayOpen=false);
+            howToPlayPanel.SetActive(false);
+        }
+        // HUD-7: How to Play reads the keys as bound when it opens, so a rebind shows.
+        private void OpenHowToPlay()
+        {
+            var blocks=FestivalHudText.HowToPlay(session.Controls);
+            for(int i=0;i<howToPlayTexts.Length;i++){howToPlayTitles[i].text=i<blocks.Length?blocks[i].Title:"";howToPlayTexts[i].text=i<blocks.Length?blocks[i].Text:"";}
+            howToPlayOpen=true;
         }
 
         private void BuildMap(Transform root)
@@ -551,6 +590,9 @@ namespace Festival.Presentation
             menuPanel.SetActive(showMenu);
             menuHome.SetActive(!settingsOpen);
             settingsPanel.SetActive(settingsOpen);
+            // HUD-7: How to Play stays up over the main menu or the pass until BACK, Esc or the pass closing.
+            if(session.Connected&&!showMenu||session.Controls.Menu.WasPressedThisFrame())howToPlayOpen=false;
+            howToPlayPanel.SetActive(howToPlayOpen);
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";

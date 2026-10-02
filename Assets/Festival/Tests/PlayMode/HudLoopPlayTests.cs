@@ -557,6 +557,84 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"The spin a player sees:\n"+string.Join("\n",failures));
         }
 
+        // HUD-7 (Matt, 2026-10-01: "if i had never played the game, it would be very unclear what i am supposed to do and what the
+        // objective is"): HOW TO PLAY sits beside CREATE GAME and JOIN GAME on the main menu and on the Escape menu's home. It opens
+        // FestivalHudText.HowToPlay's six blocks, as this machine's keys are bound, each drawn whole at 1080p; BACK or Esc puts it
+        // away. Hosts a real round; Esc goes through the HUD's own input handling on a virtual keyboard.
+        [UnityTest]public IEnumerator HowToPlayOpensFromTheMainMenuAndTheEscapeMenu()
+        {
+            UseAVirtualKeyboard("HUD how to play keyboard");
+            var world=new GameObject("HUD how to play world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD how to play");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+            var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+            bool Shows(string name){foreach(var t in hud.GetComponentsInChildren<Transform>(false))if(t.name==name)return true;return false;}
+            Button Labelled(string label,string on){foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name==label&&b.transform.parent.name==on)return b;return null;}
+            // Every block's title and text on screen, as How to Play reads with the keys bound now, each drawn whole.
+            void Reads(string where)
+            {
+                if(!Shows("How to play")){failures.Add(where+": How to Play is not up");return;}
+                Canvas.ForceUpdateCanvases();
+                foreach(var (title,text) in FestivalHudText.HowToPlay(session.Controls))
+                {
+                    Text heading=null,body=null;
+                    foreach(var label in hud.GetComponentsInChildren<Text>(false)){if(label.text==title)heading=label;if(label.text==text)body=label;}
+                    if(heading==null||body==null){failures.Add(where+": the "+title+" block has no "+(heading==null?"title":"text"));continue;}
+                    foreach(var label in new[]{heading,body})
+                    {
+                        int shown=label.cachedTextGenerator.characterCountVisible;
+                        if(shown<label.text.Length)failures.Add(where+": "+title+"'s "+label.name+" box "+label.rectTransform.rect.size+" cuts \""+label.text.Replace("\n"," | ")+"\" after \""+label.text.Substring(0,shown).Replace("\n"," | ")+"\"");
+                    }
+                }
+            }
+            try
+            {
+                // The main menu, before joining anyone.
+                var open=Labelled("HOW TO PLAY","Connection");
+                if(open==null||Labelled("CREATE GAME","Connection")==null||Labelled("JOIN GAME","Connection")==null)failures.Add("main menu: no HOW TO PLAY beside CREATE GAME and JOIN GAME");
+                else
+                {
+                    open.onClick.Invoke();yield return null;
+                    Reads("main menu");
+                    var back=Labelled("BACK","How to play card");
+                    if(back==null)failures.Add("main menu: How to Play has no BACK");else{back.onClick.Invoke();yield return null;}
+                    if(Shows("How to play"))failures.Add("main menu: BACK leaves How to Play up");
+                    open.onClick.Invoke();yield return null;
+                    yield return Tap(Key.Escape);
+                    if(Shows("How to play"))failures.Add("main menu: Esc leaves How to Play up");
+                }
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                // At camp, Esc opens the pass; HOW TO PLAY on its home opens the panel over it, and Esc puts both away.
+                yield return Tap(Key.Escape);
+                var fromPass=Labelled("HOW TO PLAY","Pass home");
+                if(!session.MenuOpen||fromPass==null)failures.Add("Esc menu: "+(session.MenuOpen?"no HOW TO PLAY on its home":"Esc opens no menu"));
+                else
+                {
+                    fromPass.onClick.Invoke();yield return null;
+                    Reads("Esc menu");
+                    yield return Tap(Key.Escape);
+                    if(session.MenuOpen||Shows("How to play"))failures.Add("Esc menu, How to Play up: Esc leaves "+(session.MenuOpen?"the menu":"How to Play")+" open");
+                    yield return Tap(Key.Escape);
+                    if(!session.MenuOpen||Shows("How to play"))failures.Add("Esc menu opened again: "+(session.MenuOpen?"How to Play is still up over it":"no menu"));
+                    session.MenuOpen=false;
+                }
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"How to Play:\n"+string.Join("\n",failures));
+        }
+
         // A virtual keyboard whose keys reach the HUD's own input handling, even unfocused in the editor; RestoreTheKeyboard removes it.
         private void UseAVirtualKeyboard(string name)
         {
