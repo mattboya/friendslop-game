@@ -40,9 +40,9 @@ namespace Festival.Presentation
         // both inside the walls (.57 m out inside). A third would sit .32 m from the next, in one another.
         // The cabin is far too low for a seated body at full size: the tallest seated look (body shape 0 in hat 1) reaches 1.68 m
         // over the floor, its head and shoulders up through the roof. So a rider's body is drawn at RiderScale: at .42 that look
-        // reaches .705 m, 3.5 cm under the roof (the glide leads the seat by 1.5-2.8 cm), its head bone .4 m over the floor, just
-        // under the rider's own eye (SeatedEyeHeight), and the widest look (shape 2, an accessory .56 m out at full size) .24 m
-        // either side of its middle.
+        // reaches .705 m, 3.5 cm under the roof (the glide keeps it within 3 mm of its seat, POLO-7), its head bone .4 m over the
+        // floor, just under the rider's own eye (SeatedEyeHeight), and the widest look (shape 2, an accessory .56 m out at full size)
+        // .24 m either side of its middle.
         // ponytail: back to 1 once ART-2 gives the gondola a seated person's headroom.
         public const float SeatedEyeHeight=.56f,RiderScale=.42f;
         private const float CabinFloor=.37f,CabinAhead=.025f,CabinSpread=.96f;

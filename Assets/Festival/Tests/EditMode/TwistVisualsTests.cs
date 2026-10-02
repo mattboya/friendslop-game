@@ -145,6 +145,43 @@ namespace Festival.Tests
         // over 240 looks), so two of them side by side need 1.12 m between their middles.
         private const float SeatedWidth=1.12f;
 
+        // POLO-7: a rider's body glides onto their seat at 15 a second and their eye at 20 (FestivalSession's Actor and UpdateCamera),
+        // each aimed ahead of the seat by FestivalWorld.GlideLead. Aimed a fixed 1/rate ahead, the glide ran 1.5 cm ahead of the
+        // seat at 60 fps and 2.9 cm at 30, where a seated body clears the gondola's walls by 2-3 cm. Aimed GlideLead ahead, it stays
+        // within 3 mm of the seat at any frame rate, a whole turn long once it has settled.
+        [Test]public void AGlidingRiderStaysOnTheirSeatAtAnyFrameRate()
+        {
+            var round=Round(Festivals.PoloFestival);var rider=new PlayerState{Id="rider",VisualWheelSince=0};round.Players.Add(rider);
+            const double Settle=1;var off=new List<string>();
+            foreach(int fps in new[]{30,60,144})foreach(float rate in new[]{15f,20f})
+            {
+                float dt=1f/fps,worst=0;var glided=FestivalTwistVisuals.Seat(round,rider,0);
+                for(int frame=1;frame*(double)dt<=Settle+Festivals.WheelRideSeconds;frame++)
+                {
+                    double now=frame*(double)dt;var target=FestivalTwistVisuals.Seat(round,rider,now+FestivalWorld.GlideLead(rate,dt));
+                    // The session's glide, as Actor and UpdateCamera move the body and the eye each frame.
+                    glided=Vector3.Lerp(glided,target,1-Mathf.Exp(-rate*dt));
+                    if(now>=Settle)worst=Mathf.Max(worst,Vector3.Distance(glided,FestivalTwistVisuals.Seat(round,rider,now)));
+                }
+                if(worst>=.003f)off.Add(fps+" fps, gliding at "+rate+": "+(worst*1000).ToString("0.0")+" mm off the seat");
+            }
+            Assert.That(off,Is.Empty,"The glided rider leaves their seat:\n"+string.Join("\n",off));
+        }
+
+        // POLO-7: GlideLead(rate,dt) is how far ahead to aim a glide at rate, a frame of dt seconds at a time, so it keeps up with a
+        // target moving at a steady pace: dt·q/(1−q), q=exp(−rate·dt). It falls short of 1/rate by under half a frame, so it nears
+        // 1/rate as frames shorten, and is 1/rate before there is a frame time, or when a frame is too short to measure.
+        [Test]public void TheGlideLeadNearsOneOverTheRateAsFramesShorten()
+        {
+            foreach(float rate in new[]{15f,20f})
+            {
+                Assert.That(FestivalWorld.GlideLead(rate,0),Is.EqualTo(1/rate),"gliding at "+rate+" with no frame time yet");
+                Assert.That(FestivalWorld.GlideLead(rate,1e-30f),Is.EqualTo(1/rate),"gliding at "+rate+" through a frame too short to measure, not an endless lead");
+                foreach(float dt in new[]{1/30f,1/60f,1/144f,1e-3f})
+                    Assert.That(FestivalWorld.GlideLead(rate,dt),Is.LessThan(1/rate).And.GreaterThan(1/rate-dt/2),"gliding at "+rate+" in "+dt+" s frames: under 1/rate by less than half a frame");
+            }
+        }
+
         // POLO-2: a gold-trimmed sign over the night market's stock stall says where the rules sell wristbands, and for how much.
         // TextMesh draws through its own board, so like the world's signs it shows only from the market's side and within range.
         [Test]public void AGoldSignMarksTheNightMarketsVipStall()

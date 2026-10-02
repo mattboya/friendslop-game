@@ -737,9 +737,13 @@ namespace Festival.Presentation
             if(twists!=null)twists.Apply(state,Time.unscaledDeltaTime);if(giggleTank!=null)FestivalGiggleTank.Show(giggleTank,state);
             if(PoloDressing!=null)PoloDressing.Show(state.FestivalIndex==Festivals.PoloFestival,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero);
         }
-        /// <summary>POLO-5: where a Ferris wheel rider in state sits, ahead seconds on from the wheel as SetTwists last drew it
-        /// (FestivalTwistVisuals.Seat).</summary>
-        public Vector3 WheelSeat(RoundState state,PlayerState rider,float ahead)=>FestivalTwistVisuals.Seat(state,rider,(twists!=null?twists.WheelClock:rider.VisualWheelSince)+ahead);
+        /// <summary>POLO-5: where a Ferris wheel rider in state sits (FestivalTwistVisuals.Seat), on from the wheel as SetTwists last
+        /// drew it by the GlideLead of a glide at rate over this frame, so that glide keeps them on their seat (POLO-7).</summary>
+        public Vector3 WheelSeat(RoundState state,PlayerState rider,float rate)=>FestivalTwistVisuals.Seat(state,rider,(twists!=null?twists.WheelClock:rider.VisualWheelSince)+GlideLead(rate,Time.unscaledDeltaTime));
+        /// <summary>POLO-7: how many seconds ahead of a target moving at a steady pace to aim a glide that closes 1-exp(-rate·dt) of
+        /// the gap each dt-second frame, so it keeps up with the target: dt·q/(1-q), q=exp(-rate·dt). Under 1/rate by less than half a
+        /// frame, and 1/rate when there is no frame time to measure.</summary>
+        public static float GlideLead(float rate,float dt){double q=System.Math.Exp(-(double)rate*dt);return q<1?(float)(dt*q/(1-q)):1/rate;}
         private void Update()
         {
             float time=Time.time;

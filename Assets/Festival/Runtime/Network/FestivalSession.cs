@@ -542,10 +542,10 @@ namespace Festival.Network
                 bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
                 if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
                 // POLO-5: a Ferris wheel rider is drawn seated in their gondola, facing away from its bench (-z), and at
-                // FestivalTwistVisuals.RiderScale so they fit under its roof, while the rules keep them at its base. They are aimed a
-                // glide (1/15 s, Actor's) ahead of the seat so it keeps them there.
+                // FestivalTwistVisuals.RiderScale so they fit under its roof, while the rules keep them at its base. They are aimed
+                // ahead of the seat for Actor's glide (rate 15) so it keeps them there at any frame rate (POLO-7).
                 bool wheel=p.VisualWheelSince>=0&&world!=null;
-                var at=togetherInside?new Vector3(p.CampInteriorX,0,p.CampInteriorZ):wheel?world.WheelSeat(State,p,1/15f):new Vector3(p.X,0,p.Z);
+                var at=togetherInside?new Vector3(p.CampInteriorX,0,p.CampInteriorZ):wheel?world.WheelSeat(State,p,15):new Vector3(p.X,0,p.Z);
                 // A debrief winner wears their awards over their head until the next level's results (HUD-3).
                 Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,p.VisualPose=="Dj"?0:wheel?180:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
@@ -658,10 +658,11 @@ namespace Festival.Network
             ThirdPersonView=FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
             if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
             var visit=CampFeatures.Find(player.CampVisitId);
-            // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed a glide (1/20 s, the eye's)
-            // ahead of the seat so the glide keeps it there as it turns; the mouse still aims it, and the turn ends back by the base.
+            // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
+            // the eye's glide (rate 20) so it keeps it there as it turns, at any frame rate (POLO-7); the mouse still aims it, and the
+            // turn ends back by the base.
             var target=visit!=null?new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ)
-                :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,1/20f)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
+                :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,20)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
                 :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;
