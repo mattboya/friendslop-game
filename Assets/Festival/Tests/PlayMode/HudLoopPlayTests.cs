@@ -716,6 +716,67 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"The level briefing:\n"+string.Join("\n",failures));
         }
 
+        // HUD-7: the first time a moment comes on this machine (FestivalHudText.Tip), a two-line tip shows down the left rail for
+        // TipSeconds, drawn whole at 1080p, and the profile remembers it, so it never comes again; SHOW TIPS AGAIN in the settings
+        // brings it back. Hosts a real round of two through StartLevel, on the editor's saved profile, as every hosted test does.
+        [UnityTest]public IEnumerator AFirstTimeTipShowsOnceUntilShowTipsAgain()
+        {
+            var world=new GameObject("HUD tip world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD tip");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            Text Find(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
+            string Read(string name)=>Find(name)?.text??"(hidden)";
+            void Expect(string where,string label,string expected){string shown=Read(label);if(shown!=expected)failures.Add(where+": "+label+" reads \""+shown.Replace("\n"," | ")+"\", expected \""+expected.Replace("\n"," | ")+"\"");}
+            Button Labelled(string label,string on){foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name==label&&b.transform.parent.name==on)return b;return null;}
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("tip_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                // A first time on this machine: no tip seen yet.
+                var seen=session.Profile.Data.SeenTips;seen.Clear();
+                sim.State.Npcs.Clear();sim.State.TripperId=mate.Id;sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds;
+                yield return new WaitForSeconds(.4f);
+                const string Friend="Only Sam can see the visions.\nStick close and ask what they see.";
+                Expect("Sam trips","First-time tip",Friend);
+                var tip=Find("First-time tip");
+                if(tip!=null)
+                {
+                    Canvas.ForceUpdateCanvases();int shown=tip.cachedTextGenerator.characterCountVisible;
+                    if(shown<tip.text.Length)failures.Add("Sam trips: the tip's box "+tip.rectTransform.rect.size+" cuts it after \""+tip.text.Substring(0,shown).Replace("\n"," | ")+"\"");
+                }
+                if(!seen.Contains("friend"))failures.Add("Sam trips: the profile does not remember the tip it showed (seen: "+string.Join(", ",seen)+")");
+                // It goes after TipSeconds, and does not come back.
+                yield return new WaitForSeconds((float)FestivalHudText.TipSeconds+.3f);
+                Expect("Sam trips, "+FestivalHudText.TipSeconds+" s later","First-time tip","(hidden)");
+                // SHOW TIPS AGAIN in the settings brings it back.
+                session.MenuOpen=true;yield return null;
+                Labelled("SETTINGS","Pass home")?.onClick.Invoke();yield return null;
+                var again=Labelled("SHOW TIPS AGAIN","Pass settings");
+                if(again==null)failures.Add("settings: no SHOW TIPS AGAIN");else{again.onClick.Invoke();yield return null;}
+                if(seen.Count>0)failures.Add("SHOW TIPS AGAIN: the profile still holds "+string.Join(", ",seen));
+                Labelled("BACK TO PASS","Pass settings")?.onClick.Invoke();session.MenuOpen=false;
+                yield return new WaitForSeconds(.4f);
+                Expect("after SHOW TIPS AGAIN","First-time tip",Friend);
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"First-time tips:\n"+string.Join("\n",failures));
+        }
+
         // A virtual keyboard whose keys reach the HUD's own input handling, even unfocused in the editor; RestoreTheKeyboard removes it.
         private void UseAVirtualKeyboard(string name)
         {

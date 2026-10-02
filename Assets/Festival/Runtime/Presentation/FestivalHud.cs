@@ -142,6 +142,12 @@ namespace Festival.Presentation
         private CanvasGroup briefingFade;
         private Text briefingGoal,briefingJob,briefingStakes;
         private string shownBriefing="",briefingSkipped="";
+        // HUD-7: the first-time tip up (FestivalHudText.Tip), the round it came in, and how long it has shown: its seconds run only
+        // while nothing covers it, as the sundown warning's do.
+        private GameObject tipPanel;
+        private Text tipText;
+        private string tipId="",tipRound="";
+        private float tipShown;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -316,6 +322,10 @@ namespace Festival.Presentation
             briefingJob=Label(briefingPanel.transform,"Briefing job",19,TextAnchor.MiddleCenter);Place(briefingJob.rectTransform,.04f,.29f,.96f,.68f);ShrinkToFit(briefingJob,14);
             briefingStakes=Label(briefingPanel.transform,"Briefing stakes",17,TextAnchor.MiddleCenter);briefingStakes.color=MutedPaper;Place(briefingStakes.rectTransform,.04f,.06f,.96f,.29f);ShrinkToFit(briefingStakes,12);
             briefingPanel.SetActive(false);
+            // HUD-7: a first-time tip down the left rail, under the prompt and the nearby strip and clear of the price confirmation.
+            tipPanel=Card(root.transform,"First-time tip card",new Vector2(.022f,.535f),new Vector2(.42f,.615f),true);
+            Accent(tipPanel.transform,Mint);
+            tipText=Label(tipPanel.transform,"First-time tip",18,TextAnchor.MiddleLeft);Place(tipText.rectTransform,.035f,.06f,.97f,.90f);ShrinkToFit(tipText,13);tipPanel.SetActive(false);
             // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
             // built before the map and the menus so they draw over it, and it catches no clicks.
             resultsPanel=Card(root.transform,"Results banner",new Vector2(.25f,.37f),new Vector2(.75f,.63f),true);resultsPanel.GetComponent<Image>().raycastTarget=false;
@@ -482,7 +492,9 @@ namespace Festival.Presentation
             Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.41f),new Vector2(.94f,.49f),()=>ChangeSetting("motion",1));
             Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.28f),new Vector2(.94f,.36f),()=>ChangeSetting("contrast",1));
             Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.15f),new Vector2(.94f,.23f),()=>ChangeSetting("view",1));
-            Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.04f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false);
+            // HUD-7: every first-time tip this machine has shown comes back.
+            Button(settingsPanel.transform,"SHOW TIPS AGAIN",new Vector2(.04f,.015f),new Vector2(.49f,.105f),()=>{string error=session.Profile.ShowTipsAgain();settingsText.text=error!=""?error:"First-time tips will show again.";});
+            Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.51f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false);
         }
 
         // HUD-7: How to Play, built last so it covers the main menu, the pass and whatever is open beside them; its dimmer takes the
@@ -609,7 +621,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -651,7 +663,9 @@ namespace Festival.Presentation
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
-            UpdateBriefing(state,player,!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
+            bool uncovered=!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf;
+            UpdateBriefing(state,player,uncovered);
+            UpdateTip(state,player,uncovered);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
             if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
@@ -769,6 +783,19 @@ namespace Festival.Presentation
             if(briefingPanel.activeSelf&&SkipsBriefing())briefingSkipped=state.RoundId;
             briefingPanel.SetActive(clear&&briefing!=""&&briefingSkipped!=state.RoundId);
             briefingFade.alpha=FestivalHudText.BriefingAlpha(state.ElapsedSeconds,session.Profile.Data.ReducedMotion);
+        }
+        // HUD-7: the first tip whose moment has come, up for TipSeconds of being seen and remembered in the profile as it first shows;
+        // the next waits for it to go. Only while nothing covers it (clear: no menu, map or dance).
+        private void UpdateTip(RoundState state,PlayerState player,bool clear)
+        {
+            if(tipId!=""&&(tipRound!=state.RoundId||tipShown>=FestivalHudText.TipSeconds||state.Phase!="Playing"||player.Life!="Alive"))tipId="";
+            if(tipId==""&&clear)
+            {
+                var tip=FestivalHudText.Tip(state,player,session.Profile.Data.SeenTips);
+                if(tip.Id!=""){tipId=tip.Id;tipRound=state.RoundId;tipShown=0;tipText.text=tip.Text;session.Profile.SeeTip(tip.Id);}
+            }
+            tipPanel.SetActive(clear&&tipId!="");
+            if(tipPanel.activeSelf)tipShown+=Time.unscaledDeltaTime;
         }
         // HUD-7: any key that doesn't move you (Move, Sprint) puts the briefing away; walking off keeps it up, to read on the way.
         private bool SkipsBriefing()
