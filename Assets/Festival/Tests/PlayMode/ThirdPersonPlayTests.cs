@@ -169,6 +169,42 @@ namespace Festival.Tests
             finally{session.Profile.Data.ThirdPerson=wanted;session.Profile.Save();session.Leave();Object.Destroy(host);Object.Destroy(world);}
         }
 
+        // VISION-5 under CAM-1, on a real hosted Day 1 (the solo host trips): over the shoulder, the tripper's eye just right of a
+        // festivalgoer with a checked vision still reads it. The camera's own line, .45 m further right, would pass them by.
+        [UnityTest]public IEnumerator OverTheShoulderTheTripperReadsTheVisionTheirEyeIsOn()
+        {
+            var world=new GameObject("Camera vision world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Camera vision");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            bool wanted=session.Profile.Data.ThirdPerson;
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;
+                yield return StartLevel(session);
+                Assert.That(session.State.TripperId,Is.EqualTo(session.LocalPlayerId),"setup: the solo host is the tripper");
+                var vision=sim.State.Visions.Find(v=>v.NpcId!="");
+                Assert.That(vision,Is.Not.Null,"setup: a vision hangs over a festivalgoer");
+                // Only that festivalgoer is about, the vision over them checked, 6 m north of you on the open lawn.
+                var npc=sim.State.Npcs.Find(n=>n.Id==vision.NpcId);sim.State.Npcs.RemoveAll(n=>n!=npc);vision.Confirmed=true;
+                player.Effects.Clear();player.X=-20;player.Z=-2;
+                session.Profile.Data.ThirdPerson=true;
+                var aim=new Vector3(-19.6f,1,4)-new Vector3(-20,1.65f,-2);
+                typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg);
+                typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Asin(aim.normalized.y)*Mathf.Rad2Deg);
+                for(deadline=Time.realtimeSinceStartup+.8f;Time.realtimeSinceStartup<deadline;){npc.X=-20;npc.Z=4;npc.Mode="Blending";yield return null;}
+                Assert.That(session.ThirdPersonView,Is.True,"setup: the view is over your shoulder");
+                var label=host.transform.Find("Vision "+vision.Id+"/Label")?.GetComponent<TextMesh>();
+                Assert.That(label,Is.Not.Null,"setup: the vision is drawn");
+                Assert.That(label.text,Is.Not.Empty,"your eye is .4 m right of the festivalgoer with the checked "+vision.Kind+", so it answers (eye "+session.EyePosition.ToString("0.00")+", camera "+session.ViewCamera.transform.position.ToString("0.00")+")");
+            }
+            finally{session.Profile.Data.ThirdPerson=wanted;session.Leave();Object.Destroy(host);Object.Destroy(world);}
+        }
+
         // Whether two of the pass's controls share a row: their anchored spans overlap up the panel.
         static bool Overlaps(RectTransform a,RectTransform b)=>a.anchorMin.y<b.anchorMax.y&&b.anchorMin.y<a.anchorMax.y;
         static bool HandsShown()=>Object.FindObjectsByType<FestivalHands>(FindObjectsSortMode.None).Any(h=>h.gameObject.activeInHierarchy);

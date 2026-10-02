@@ -210,6 +210,25 @@ namespace Festival.Tests
             }
         }
 
+        // CAM-1: over the shoulder the camera hangs 2.4 m behind and .45 m right of your eye, and the aim still runs from your eye along
+        // the view, so you read the festivalgoer you would read in first person. Your eye is on a; b stands a little closer, .75 m to
+        // their right, where the camera's own line, .45 m right of yours, would find b first.
+        [Test]public void OverTheShoulderTheAimComesFromYourEye()
+        {
+            var state=Round();var a=Made("a").transform;var b=Made("b").transform;b.position=new Vector3(.75f,0,-1);
+            Func<string,Transform> actorFor=id=>id=="a"?a:id=="b"?b:null;
+            state.Visions.Add(new VisionState{Id="on a",Kind="Narc",NpcId="a",IsTrue=false,Confirmed=true});
+            state.Visions.Add(new VisionState{Id="on b",Kind="Buyer",NpcId="b",IsTrue=true,Confirmed=true});
+            var eye=new Vector3(0,1.65f,-6);var look=Quaternion.LookRotation(a.position+Vector3.up-eye).eulerAngles;
+            var view=View();view.position=FestivalThirdPerson.Place(eye,look.y,look.x,out float boom);view.rotation=Quaternion.Euler(look.x,look.y,0);
+            Assert.That(boom,Is.GreaterThan(2.4f),"setup: the camera is over your shoulder");
+            var markers=Markers();markers.Apply(state,view,actorFor,0,.02f,eye);
+            Assert.That(Label(markers,"on a"),Is.EqualTo("FALSE"),"the festivalgoer your eye is on answers");
+            Assert.That(Label(markers,"on b"),Is.Empty,"the one beside them, nearer the camera's line, does not");
+            markers.Apply(state,view,actorFor,0,.02f);
+            Assert.That(Label(markers,"on b"),Is.EqualTo("TRUE"),"setup: from the camera's own spot the aim would be on b");
+        }
+
         // VISION-5: once checked, a vision's marker is ringed by a thin bright outline, neon green for a truth and red for a fake,
         // whatever the kind's own colour. The ring is on the floating marker, never on the festivalgoer. The read without colour
         // stays: a checked fake's glyph is grey, and a checked truth's keeps its kind's colour.
