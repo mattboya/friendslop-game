@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Festival.Core;
+using UnityEngine;
 
 namespace Festival.Presentation
 {
@@ -10,6 +11,9 @@ namespace Festival.Presentation
     /// like?" names that level, its quota in the viewer's money and its festival's twists (Today); "Any tips?" draws one true tip,
     /// never the one she gave last (Tip). Her greetings and sign-offs are built on DIALOG-4's LineGrammar. Everything reads only
     /// the view the client already has, and none of it changes the game.
+    /// The talk itself runs on DIALOG-5's chat window, on the client alone (FestivalHud): beside her at camp F opens it (Begin),
+    /// 1-3 ask, G closes it (End), walking off ends it on her sign-off (Follow), and she faces you while you talk (Face). The host
+    /// never hears of it, so no other player sees her turn.
     /// </summary>
     public sealed class CampSellerTalk
     {
@@ -19,6 +23,68 @@ namespace Festival.Presentation
         string lastTip="";
         /// <summary>A talker whose greetings, sign-offs and tips are drawn from `seed`'s stream.</summary>
         public CampSellerTalk(int seed){random=new ContentRandom(seed);}
+
+        // What the HUD shows beside her (the strip under the prompt), her talk's title and the initial on her bubbles. The title says
+        // G closes it, as an ended chat's does (FestivalChatWindow.OverHeader).
+        public const string TalkPrompt="F  TALK TO MARIGOLD",Header="MARIGOLD  •  CAMP SUPPLIES  •  G CLOSE",Mark="M";
+        // Where she stands, in front of the supplies table (FestivalWorld puts her there), and which way she faces when nobody talks
+        // to her: the camp. F reaches her from as far as the checkout takes payment (Economy.cs: 2.7 m from 0, 7). She turns to
+        // face whoever talks to her at TurnDegreesPerSecond.
+        public const float X=0,Z=7,RestYaw=180,Reach=2.7f,TurnDegreesPerSecond=240;
+        /// <summary>Whether a talk with her is under way: 1-3 ask her questions, G closes it.</summary>
+        public bool Open{get;private set;}
+        // An ended talk still up on the window with her sign-off; which talk this is, for the window's thread; the window it is on,
+        // and the view and player her answers read, as of this frame.
+        bool lingering;int talks;string thread="";FestivalChatWindow window;RoundState state;PlayerState player;
+
+        /// <summary>Whether p stands beside her at camp: within Reach, out in the open (not inside a tent, car or potty). F there is
+        /// hers, never the host's festival switch.</summary>
+        public static bool Beside(RoundState s,PlayerState p)=>s.Phase=="Shopping"&&p.CampVisitId==""&&Within(p,Reach);
+        /// <summary>Whether F talks to her: beside her with nothing unpaid in hand, which shows the pay prompt instead.</summary>
+        public static bool CanTalk(RoundState s,PlayerState p)=>Beside(s,p)&&p.HeldOfferId=="";
+        static bool Within(PlayerState p,float range){float x=p.X-X,z=p.Z-Z;return x*x+z*z<=range*range;}
+
+        /// <summary>F beside her: the window opens on a new thread, her greeting typed out, and her three questions to ask with 1-3.
+        /// Each one asked says it on your side and types her answer, from the view as it is then; all three stay to ask again.</summary>
+        public void Begin(FestivalChatWindow window,RoundState s,PlayerState p,float now)
+        {
+            this.window=window;state=s;player=p;Open=true;lingering=false;thread="Marigold "+(++talks);
+            window.Begin(thread,Header,Mark,now);
+            window.TheySay(Greeting(s.FestivalIndex),true);
+            Ask();
+        }
+        void Ask()=>window.Offer(Questions,Asked);
+        void Asked(int i){window.YouSay(Questions[i]);window.TheySay(i==0?Grab(state,player):i==1?Today(state,player):Tip(state,player),true);Ask();}
+
+        /// <summary>
+        /// Each frame at `now`: keeps her talk on the window while p stays within FestivalChatWindow.LeaveReach of her, the reach at
+        /// which the host ends a chat. Walking off past it ends the talk on her sign-off, which stays up read-only until read
+        /// (FestivalChatWindow.Linger); the spin starting or going inside a tent, car or potty closes it at once. False once nothing
+        /// of the talk is up, which leaves the window to the host's chats (FestivalChatWindow.Follow).
+        /// </summary>
+        public bool Follow(RoundState s,PlayerState p,float now,bool reducedMotion)
+        {
+            bool gone=s.Phase!="Shopping"||p.CampVisitId!="";
+            if(lingering)return lingering=window.Linger(now,reducedMotion,gone);
+            if(!Open)return false;
+            if(gone){End();return false;}
+            state=s;player=p;
+            if(!Within(p,FestivalChatWindow.LeaveReach)){Open=false;window.TheySay(SignOff(s.FestivalIndex),true);return lingering=window.Linger(now,reducedMotion,false);}
+            window.Begin(thread,Header,Mark,now);window.Advance(now,1,reducedMotion);
+            return true;
+        }
+        /// <summary>Closes her talk at once, with no sign-off (G, or the session going).</summary>
+        public void End(){if(Open||lingering)window.Dismiss();Open=lingering=false;}
+
+        /// <summary>Each frame: while you talk to her, or her sign-off is still up, she turns to face p (TurnDegreesPerSecond, dt
+        /// seconds) in the Talk pose; otherwise she turns back to face the camp (RestYaw) and idles.</summary>
+        public void Face(FestivalCharacter seller,PlayerState p,float dt)
+        {
+            bool talking=Open||lingering;var toYou=new Vector3(p.X-X,0,p.Z-Z);
+            var aim=talking&&toYou.sqrMagnitude>.01f?Quaternion.LookRotation(toYou):Quaternion.Euler(0,RestYaw,0);
+            var turn=seller.transform;turn.localRotation=Quaternion.RotateTowards(turn.localRotation,aim,TurnDegreesPerSecond*dt);
+            seller.Pose=talking?"Conversation":"Idle";
+        }
 
         /// <summary>"What should I grab?" for p's next level. Before a day with no stock in hand: something to sell, both kinds at
         /// their price in p's money, bought from festivalgoers, some of them narcs (ECON-2). Stocked up, or before a night (a rescue,

@@ -100,6 +100,9 @@ namespace Festival.Presentation
         // DIALOG-5: the chat window, the reply 1-3 picked this frame for it to take once it has followed the chat (-1: none), and
         // whether it sits beside the pass (the menu is open) rather than in play's spot.
         private FestivalChatWindow chatWindow;
+        // CAMP-1: Marigold's talk at camp, on the chat window, and the world she stands in (FestivalWorld.CampSeller).
+        private readonly CampSellerTalk sellerTalk=new CampSellerTalk(Environment.TickCount);
+        private FestivalWorld world;
         private int chatReply=-1;
         // DIALOG-6: the one-line chat (Talk, a guard's bark) the dialogue card shows, kept up until read.
         private readonly FestivalTalkLine talkLine=new FestivalTalkLine();
@@ -161,6 +164,7 @@ namespace Festival.Presentation
         {
             session=GetComponent<FestivalSession>();
             if(session==null)session=FindFirstObjectByType<FestivalSession>();
+            world=FindFirstObjectByType<FestivalWorld>();
             displayFont=Resources.Load<Font>("FestivalDisplay");
             if(displayFont==null)displayFont=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             // The AFTER HOURS wordmark's Boogaloo face is the festival's
@@ -629,7 +633,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -831,6 +835,13 @@ namespace Festival.Presentation
             {
                 session.Command("CampAntic");return;
             }
+            // CAMP-1: beside Marigold F talks to her (with nothing unpaid in hand), never the host's festival switch, which F is anywhere
+            // else at camp.
+            if(!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame()&&CampSellerTalk.Beside(state,player))
+            {
+                if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open)sellerTalk.Begin(chatWindow,state,player,Time.unscaledTime);
+                return;
+            }
             if(!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame()&&FestivalHudText.FestivalChoice(state,player.Id)!="")
             {
                 session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state));return;
@@ -838,7 +849,8 @@ namespace Festival.Presentation
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
             // DIALOG-5: while the chat window has questions to ask this frame, or a talk's replies (DIALOG-3), 1-3 pick them instead of
             // equipping (never in a rope chat, which has none, nor once the conversation is over).
-            if(equipSlot>=0&&!session.MenuOpen&&FestivalChatWindow.TakesReplies(state,player)){chatReply=equipSlot;equipSlot=-1;}
+            // CAMP-1: so do Marigold's questions while you talk to her.
+            if(equipSlot>=0&&!session.MenuOpen&&(FestivalChatWindow.TakesReplies(state,player)||sellerTalk.Open)){chatReply=equipSlot;equipSlot=-1;}
             // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
             bool gearKeys=FestivalSimulation.Interactive(state.Phase);
             // HUD-8: a notch of the wheel steps round the filled hand slots, then switches like the key for the slot it lands on.
@@ -862,6 +874,8 @@ namespace Festival.Presentation
             HoldToStop(dancing?session.Controls.Drop:talking?session.Controls.Interact:null);
             // DIALOG-6: G closes a chat left up after it ended, as its header says, and drops nothing.
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&chatWindow.Lingering){chatWindow.Dismiss();return;}
+            // CAMP-1: G closes a talk with Marigold, as its header says.
+            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&sellerTalk.Open){sellerTalk.End();return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
             if(handGear.Count>0&&gearKeys)
@@ -938,13 +952,16 @@ namespace Festival.Presentation
         {
             if(chatBesidePass!=showMenu){chatBesidePass=showMenu;Place(Rect(chatWindow.gameObject),showMenu?.735f:.60f,.155f,showMenu?.985f:.975f,.652f);}
             bool covered=showMenu&&crewOpen;
-            bool live=!covered&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion);
+            // CAMP-1: at camp the window may be Marigold's talk instead, which the host knows nothing of; she faces whoever talks to her.
+            bool live=!covered&&(sellerTalk.Follow(state,player,Time.unscaledTime,session.Profile.Data.ReducedMotion)
+                ||chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
+            if(world!=null&&world.CampSeller!=null)sellerTalk.Face(world.CampSeller,player,Time.unscaledDeltaTime);
             if(covered)chatWindow.Close();
             if(chatReply>=0){if(live)chatWindow.Pick(chatReply);chatReply=-1;}
             if(chatWindow.Open)dialoguePanel.SetActive(false);
             // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
             // equip.
-            inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)?"":"1–3 EQUIP     ")+"Q USE     G DROP";
+            inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)||sellerTalk.Open?"":"1–3 EQUIP     ")+"Q USE     G DROP";
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)
@@ -1232,6 +1249,8 @@ namespace Festival.Presentation
                     }
                     else SetPromptAction("GEAR SHELVES BESIDE SELLER  •  READY AT LIT TRAILHEAD",null);
                 }
+                // CAMP-1: beside Marigold, the strip under the prompt says F talks to her.
+                if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open){nearby.text=CampSellerTalk.TalkPrompt;UpdateNearbyLayout(0);}
                 FinishActions();return;
             }
             if(state.Phase=="Playing"&&player.Life=="Alive")

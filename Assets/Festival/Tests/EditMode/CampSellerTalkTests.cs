@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Presentation;
+using UnityEngine;
 
 namespace Festival.Tests
 {
@@ -22,6 +23,112 @@ namespace Festival.Tests
             you=new PlayerState{Id="you",Name="You",Ordinal=ordinal,X=0,Z=5};s.Players.Add(you);
             for(int i=1;i<crew;i++)s.Players.Add(new PlayerState{Id="mate"+i,Name="Mate "+i,Ordinal=i});
             return s;
+        }
+
+        GameObject canvas,worldObject;
+        [TearDown] public void TakeItDown(){if(canvas!=null)Object.DestroyImmediate(canvas);if(worldObject!=null)Object.DestroyImmediate(worldObject);}
+        // The HUD's chat window on a 1920x1080 canvas, as ChatWindowTests builds it.
+        FestivalChatWindow Window()
+        {
+            canvas=new GameObject("Camp seller test canvas",typeof(RectTransform),typeof(Canvas));canvas.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
+            ((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);
+            return FestivalChatWindow.Build(canvas.transform,Resources.Load<Font>("FestivalDisplay"),null);
+        }
+        // The thread as drawn, oldest first: "< " for her bubbles, "> " for yours, then what the bubble shows.
+        static string[] Thread(FestivalChatWindow window){var lines=new List<string>();for(int i=0;i<window.Bubbles;i++)lines.Add((window.IsTheirs(i)?"< ":"> ")+window.Shown(i));return lines.ToArray();}
+        static string Last(FestivalChatWindow window)=>Thread(window)[window.Bubbles-1];
+
+        [Test] public void FTalksBesideHerAtCampWithNothingUnpaidInHand()
+        {
+            var s=Camp(Festivals.PoloFestival,0,out var you);
+            Assert.That(CampSellerTalk.Beside(s,you)&&CampSellerTalk.CanTalk(s,you),Is.True,"2 m in front of her table, at camp");
+            you.HeldOfferId="merch_bag";
+            Assert.That(CampSellerTalk.CanTalk(s,you),Is.False,"holding an unpaid item: the pay prompt, not the talk");
+            Assert.That(CampSellerTalk.Beside(s,you),Is.True,"but still beside her, so F there is never the festival switch");
+            you.HeldOfferId="";you.X=CampSellerTalk.Reach*.75f;you.Z=CampSellerTalk.Z-CampSellerTalk.Reach*.75f;
+            Assert.That(CampSellerTalk.CanTalk(s,you),Is.False,"more than 2.7 m off");
+            you.X=0;you.Z=5;you.CampVisitId="tent_1";
+            Assert.That(CampSellerTalk.Beside(s,you),Is.False,"inside a tent");
+            you.CampVisitId="";s.Phase="Playing";
+            Assert.That(CampSellerTalk.Beside(s,you),Is.False,"only at camp");
+        }
+
+        [Test] public void FOpensOnHerGreetingThenEachQuestionIsAnsweredAndCanBeAskedAgain()
+        {
+            var s=Camp(Festivals.PoloFestival,0,out var you);var talk=new CampSellerTalk(5);var twin=new CampSellerTalk(5);var window=Window();
+            talk.Begin(window,s,you,0);
+            Assert.That(talk.Open&&window.Open,Is.True,"her talk is on the chat window");
+            Assert.That(window.Header,Is.EqualTo(CampSellerTalk.Header));
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+FestivalChatWindow.Ellipsis}),"she starts typing her greeting");
+            Assert.That(window.Replies,Is.EqualTo(3),"the three questions to ask with 1-3");
+            for(int i=0;i<3;i++)Assert.That(window.ReplyLabel(i),Is.EqualTo(CampSellerTalk.Questions[i]));
+            Assert.That(talk.Follow(s,you,10,false),Is.True,"the talk goes on while you stand there");
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+twin.Greeting(s.FestivalIndex)}),"her greeting, typed out");
+            string[] answers={CampSellerTalk.Grab(s,you),CampSellerTalk.Today(s,you),twin.Tip(s,you)};
+            for(int ask=0;ask<3;ask++)
+            {
+                Assert.That(window.Pick(ask),Is.True,"question "+(ask+1)+" can be asked");
+                Assert.That(Thread(window)[window.Bubbles-2],Is.EqualTo("> "+CampSellerTalk.Questions[ask]),"you ask it");
+                talk.Follow(s,you,20+10*ask,false);
+                Assert.That(Last(window),Is.EqualTo("< "+answers[ask]),"she answers question "+(ask+1));
+                for(int i=0;i<3;i++)Assert.That(window.CanReply(i),Is.True,"question "+(i+1)+" can be asked again after question "+(ask+1));
+            }
+            s.ShopStock.Find(x=>x.ItemId=="merch_bag").CampAvailable=0;
+            window.Pick(0);talk.Follow(s,you,60,false);
+            Assert.That(Last(window),Is.EqualTo("< "+CampSellerTalk.Grab(s,you)).And.Contain("Sold out"),"asked again, she answers from the view as it is now");
+        }
+
+        [Test] public void WalkingOffEndsTheTalkOnHerSignOffWhichStaysUpUntilRead()
+        {
+            var s=Camp(Festivals.PlayaFestival,0,out var you);var talk=new CampSellerTalk(8);var twin=new CampSellerTalk(8);var window=Window();
+            talk.Begin(window,s,you,0);talk.Follow(s,you,5,false);twin.Greeting(s.FestivalIndex);
+            you.Z=CampSellerTalk.Z-(FestivalChatWindow.LeaveReach-.3f);
+            Assert.That(talk.Follow(s,you,6,false)&&talk.Open,Is.True,"stepping back, still within reach, the talk goes on");
+            you.Z=CampSellerTalk.Z-(FestivalChatWindow.LeaveReach+.3f);
+            // With reduced motion her sign-off shows whole after the "…" (FestivalChatWindow.TypingSeconds).
+            Assert.That(talk.Follow(s,you,7,true),Is.True,"walking off, the window stays up");
+            Assert.That(talk.Open,Is.False,"the talk is over, so 1-3 equip again");
+            Assert.That(talk.Follow(s,you,8,true)&&window.Lingering,Is.True,"it lingers, read-only");
+            Assert.That(Last(window),Is.EqualTo("< "+twin.SignOff(s.FestivalIndex)),"her sign-off, called after you");
+            for(int i=0;i<3;i++)Assert.That(window.CanReply(i),Is.False,"nothing to ask once it is over");
+            Assert.That(talk.Follow(s,you,60,true),Is.False,"read, it goes");
+            Assert.That(window.Open,Is.False);
+        }
+
+        [Test] public void GoingInsideTheSpinStartingOrGClosesItAtOnce()
+        {
+            var s=Camp(Festivals.PoloFestival,0,out var you);var talk=new CampSellerTalk(2);var window=Window();
+            void Talk(float now){talk.Begin(window,s,you,now);Assert.That(talk.Follow(s,you,now+.1f,false)&&talk.Open&&window.Open,Is.True,"setup: talking to her");}
+            Talk(0);you.CampVisitId="tent_1";
+            Assert.That(talk.Follow(s,you,1,false)||window.Open||talk.Open,Is.False,"inside a tent");
+            you.CampVisitId="";Talk(2);s.Phase="Spinning";
+            Assert.That(talk.Follow(s,you,3,false)||window.Open||talk.Open,Is.False,"the spin starting");
+            s.Phase="Shopping";Talk(4);talk.End();
+            Assert.That(window.Open||talk.Open,Is.False,"G");
+            Assert.That(talk.Follow(s,you,5,false),Is.False,"closed stays closed");
+        }
+
+        [Test] public void SheTurnsToFaceYouAndTalksThenTurnsBackAndIdles()
+        {
+            worldObject=new GameObject("Camp seller world");var world=worldObject.AddComponent<FestivalWorld>();world.Build();
+            var seller=world.CampSeller;var rest=Quaternion.Euler(0,CampSellerTalk.RestYaw,0);
+            Assert.That(seller,Is.Not.Null,"the world exposes Marigold");
+            Assert.That(Vector3.Distance(seller.transform.localPosition,new Vector3(CampSellerTalk.X,0,CampSellerTalk.Z)),Is.LessThan(.001f),"in front of the supplies table");
+            Assert.That(Quaternion.Angle(seller.transform.localRotation,rest),Is.LessThan(.1f),"facing the camp");
+            var s=Camp(Festivals.PoloFestival,0,out var you);you.X=CampSellerTalk.X+2;you.Z=CampSellerTalk.Z;
+            var talk=new CampSellerTalk(4);
+            talk.Face(seller,you,1);
+            Assert.That(Quaternion.Angle(seller.transform.localRotation,rest),Is.LessThan(.1f),"nobody talking: she keeps facing the camp");
+            Assert.That(seller.Pose,Is.EqualTo("Idle"));
+            talk.Begin(Window(),s,you,0);
+            talk.Face(seller,you,.1f);
+            Assert.That(Quaternion.Angle(seller.transform.localRotation,rest),Is.EqualTo(CampSellerTalk.TurnDegreesPerSecond*.1f).Within(.5f),"she turns toward you, not in a snap");
+            talk.Face(seller,you,1);
+            Assert.That(Vector3.Angle(seller.transform.localRotation*Vector3.forward,Vector3.right),Is.LessThan(.5f),"she faces you");
+            Assert.That(seller.Pose,Is.EqualTo("Conversation"),"in the Talk pose");
+            talk.End();talk.Face(seller,you,1);
+            Assert.That(Quaternion.Angle(seller.transform.localRotation,rest),Is.LessThan(.1f),"then back to the camp");
+            Assert.That(seller.Pose,Is.EqualTo("Idle"),"and idle");
         }
 
         [Test] public void WithNoStockBeforeADayGrabNamesBothStockItemsAndTheirPriceInYourMoney()

@@ -53,6 +53,9 @@ namespace Festival.Presentation
         public bool CampNavigationReady => campSurface != null && campSurface.navMeshData != null;
         public bool IsCampVisible => camp != null && camp.gameObject.activeSelf;
         public Transform PlayerDjConsole { get; private set; }
+        /// <summary>CAMP-1: Marigold, the camp seller in front of the supplies table. The HUD turns her to face whoever talks to her
+        /// (CampSellerTalk.Face).</summary>
+        public FestivalCharacter CampSeller { get; private set; }
         private void Awake() { Build(); }
         public void Build()
         {
@@ -547,9 +550,10 @@ namespace Festival.Presentation
                 if(detail!=null){detail.transform.localScale=Vector3.one*(.72f+i%3*.14f);detail.transform.localRotation=Quaternion.Euler(0,i*79%360,0);}
             }
             var seller=FestivalCharacter.Create(camp,"camp_seller_2",Color.white,"Vendor0");
-            seller.transform.localPosition=new Vector3(0,0,7);
-            seller.transform.localRotation=Quaternion.Euler(0,180,0);
+            seller.transform.localPosition=new Vector3(CampSellerTalk.X,0,CampSellerTalk.Z);
+            seller.transform.localRotation=Quaternion.Euler(0,CampSellerTalk.RestYaw,0);
             seller.transform.localScale=Vector3.Scale(Vector3.one*.85f,seller.ShapeScale);
+            CampSeller=seller;
             var campLight=new GameObject("Camp sunset");campLight.transform.SetParent(camp,false);
             campLight.transform.rotation=Quaternion.Euler(32,-35,0);
             campSun=campLight.AddComponent<Light>();campSun.type=LightType.Directional;campSun.intensity=1.15f;campSun.color=new Color(1,.82f,.65f);campSun.shadows=LightShadows.Soft;
