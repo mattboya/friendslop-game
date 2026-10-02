@@ -1,7 +1,8 @@
 # Minigames: booths that stop the clock (proposed 2026-09-30)
 
-Status: approved 2026-10-01, every open decision taken as (A). MINI-1's rules are built (`Core/Simulation/Minigames.cs`); its
-screen, and MINI-2 to MINI-4, are queue entries in `WORK_QUEUE.md`.
+Status: approved 2026-10-01, every open decision taken as (A). MINI-1 is built: its rules (`Core/Simulation/Minigames.cs`)
+and its screen (`Presentation/FestivalMinigameView.cs`, the HUD's minigame card). MINI-2 to MINI-4 are queue entries in
+`WORK_QUEUE.md`.
 This design builds on [GAME_DESIGN_2026-09-30.md](GAME_DESIGN_2026-09-30.md) (the tripper, doses, visions and their
 tells, the group dance, the debrief). Where the two conflict, that document wins, except on one point: the minigame
 pause is a deliberate exception to "the clock keeps running" in
@@ -37,6 +38,14 @@ As built (MINI-1): the booths stand at `Festivals.BoothSpots`, three crowd-edge 
 players routinely take. Players in the game send its own `Minigame` command; `Rhythm` also goes through, for the Drum
 Circle. The result banner shows while the world is still stopped, so the pause is the game plus its banner. Until MINI-2
 lands, the bag holds a no-op stub that any player in it ends at once, for +0 s.
+
+On screen (MINI-1): the booth is a festivalgoer rig under a MINIGAME sign, in a glowing mint ring the size of the rules'.
+Standing alive in it, the HUD's minigame card counts who of the crew is in, names whoever keeps it from starting (down or
+busy, anywhere), then counts the 3 s down. While the game runs the festival stays on screen, frozen: `Time.timeScale` is 0, so
+everything drawn on frame time holds still (a game's own visuals must run on unscaled time), the Ferris wheel stops on the
+world's clock (`FestivalSimulation.WorldSeconds`: the simulation clock less the pause), the colour grade loses 30 saturation
+and the HUD's clock stands at the time left. The card says the festival is paused (E finishes the stub), then shows the
+result, such as "+45 s" or "−30 s", until play resumes.
 
 **Resuming.** Many timers store an absolute time on the simulation clock:
 - handoff offers (`ExpiresAt`)

@@ -158,6 +158,9 @@ namespace Festival.Presentation
         private Text tipText;
         private string tipId="",tipRound="";
         private float tipShown;
+        // MINI-1: the minigame card (FestivalHudText.MinigameCard): the booth's ring and countdown, the game under way, its result.
+        private GameObject minigamePanel;
+        private Text minigameTitle,minigameDetail;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -335,6 +338,13 @@ namespace Festival.Presentation
             briefingJob=Label(briefingPanel.transform,"Briefing job",19,TextAnchor.MiddleCenter);Place(briefingJob.rectTransform,.04f,.29f,.96f,.68f);ShrinkToFit(briefingJob,14);
             briefingStakes=Label(briefingPanel.transform,"Briefing stakes",17,TextAnchor.MiddleCenter);briefingStakes.color=MutedPaper;Place(briefingStakes.rectTransform,.04f,.06f,.96f,.29f);ShrinkToFit(briefingStakes,12);
             briefingPanel.SetActive(false);
+            // MINI-1: the minigame card where the briefing hangs, which makes way for it (Update). Built before the map and the menus so
+            // they draw over it; it catches no clicks.
+            minigamePanel=Card(root.transform,"Minigame card",new Vector2(.31f,.285f),new Vector2(.69f,.42f),true);minigamePanel.GetComponent<Image>().raycastTarget=false;
+            Accent(minigamePanel.transform,Mint);
+            minigameTitle=Label(minigamePanel.transform,"Minigame title",34,TextAnchor.MiddleCenter);minigameTitle.fontStyle=FontStyle.Normal;Place(minigameTitle.rectTransform,.05f,.47f,.95f,.93f);ShrinkToFit(minigameTitle,18);
+            minigameDetail=Label(minigamePanel.transform,"Minigame detail",19,TextAnchor.MiddleCenter);Place(minigameDetail.rectTransform,.05f,.07f,.95f,.47f);ShrinkToFit(minigameDetail,13);
+            minigamePanel.SetActive(false);
             // HUD-7: a first-time tip down the left rail, under the prompt and the nearby strip and clear of the price confirmation.
             tipPanel=Card(root.transform,"First-time tip card",new Vector2(.022f,.535f),new Vector2(.42f,.615f),true);
             Accent(tipPanel.transform,Mint);
@@ -664,7 +674,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -702,7 +712,8 @@ namespace Festival.Presentation
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
             bool uncovered=!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf;
-            UpdateBriefing(state,player,uncovered);
+            UpdateMinigame(state,player,uncovered);
+            UpdateBriefing(state,player,uncovered&&!minigamePanel.activeSelf);
             UpdateTip(state,player,uncovered);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
@@ -810,6 +821,15 @@ namespace Festival.Presentation
             sundownPanel.SetActive(stage>0&&sundownShown<SundownNoticeSeconds&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             if(!sundownPanel.activeSelf)return;
             sundownText.text=FestivalHudText.SundownWarning(state,player);sundownShown+=Time.unscaledDeltaTime;
+        }
+
+        // MINI-1: the minigame card while nothing covers it (clear: no menu, map or dance); a gain or no change shows mint, a loss orange.
+        private void UpdateMinigame(RoundState state,PlayerState player,bool clear)
+        {
+            var (title,detail)=FestivalHudText.MinigameCard(state,player);
+            minigamePanel.SetActive(clear&&title!="");if(!minigamePanel.activeSelf)return;
+            minigameTitle.text=title;minigameDetail.text=detail;
+            minigameTitle.color=state.Phase==FestivalSimulation.MinigamePhase&&state.Booth.ScoredAt>=0&&state.Booth.ClockChange>=0?Mint:Orange;
         }
 
         // HUD-7: the level briefing for its window, unless a key put it away this level; only while nothing covers it (clear: no
@@ -1221,6 +1241,13 @@ namespace Festival.Presentation
             if(state.Phase=="Results")
             {
                 SetPromptAction(FestivalHudText.ResultsPrompt(state,player.Id),null);
+                FinishActions();return;
+            }
+            // MINI-1: while a minigame runs the host takes only its own command, so E plays it for those in it, and nothing else is offered.
+            if(state.Phase==FestivalSimulation.MinigamePhase)
+            {
+                string play=FestivalHudText.MinigamePrompt(state,player);
+                SetPromptAction(play,play==""?null:(Action)(()=>session.Command(FestivalSimulation.MinigameKind)));
                 FinishActions();return;
             }
             // HUD-4: while the wheels spin and the festival loads the host refuses every action, so none is offered.

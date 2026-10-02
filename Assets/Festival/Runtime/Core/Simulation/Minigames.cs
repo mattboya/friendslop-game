@@ -36,6 +36,12 @@ namespace Festival.Core
         /// <summary>Where this level's booth stands, or null: none (camp, an older snapshot) or spent. It reads only public state,
         /// so the HUD and the world show it from any client's view.</summary>
         public static WorldPoint BoothAt(RoundState s)=>!s.Booth.Spent&&s.Booth.Spot>=0&&s.Booth.Spot<Festivals.BoothSpots.Length?Festivals.BoothSpots[s.Booth.Spot]:null;
+        /// <summary>Whether p stands in the booth's ring (never where the level has none). Like the rule's other half, HoldsBooth,
+        /// it reads only public state, so the HUD counts the ring from any client's view.</summary>
+        public static bool InRing(RoundState s,PlayerState p){var at=BoothAt(s);return at!=null&&Near(p,at.X,at.Z,MinigameRingRadius);}
+        /// <summary>The first connected player, wherever they are, who keeps the booth's game from starting: downed, or in the middle
+        /// of something (lying down, a ride, a talk, a dance); null when nobody does.</summary>
+        public static PlayerState HoldsBooth(RoundState s)=>s.Players.Find(p=>p.Connected&&(p.Life=="Downed"||p.InteractionId!=""));
         /// <summary>The world's clock: the simulation clock with this level's game taken out, so it stands still while one runs and
         /// runs on from there after it. What a client draws on the simulation clock (the Ferris wheel) runs on this, so the
         /// festival holds as a freeze-frame and never jumps once play resumes. at: a time on the simulation clock, read on it.</summary>
@@ -56,9 +62,9 @@ namespace Festival.Core
         // Last in each Playing step that doesn't end the level: the ring's countdown, which starts the game.
         void WatchBooth(double dt)
         {
-            var at=BoothAt(State);if(at==null)return;
+            if(BoothAt(State)==null)return;
             var crew=State.Players.FindAll(p=>p.Connected&&p.Life=="Alive");
-            bool ready=crew.Count>0&&crew.TrueForAll(p=>Near(p,at.X,at.Z,MinigameRingRadius))&&!State.Players.Exists(p=>p.Connected&&(p.Life=="Downed"||p.InteractionId!=""));
+            bool ready=crew.Count>0&&crew.TrueForAll(p=>InRing(State,p))&&HoldsBooth(State)==null;
             State.Booth.RingSeconds=ready?State.Booth.RingSeconds+dt:0;
             if(State.Booth.RingSeconds<MinigameRingSeconds)return;
             State.Booth.RingSeconds=0;State.Booth.Seconds=0;State.Booth.ScoredAt=-1;State.Booth.ClockChange=0;State.Booth.PlayerIds=crew.ConvertAll(p=>p.Id);

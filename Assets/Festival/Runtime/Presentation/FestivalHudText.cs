@@ -23,10 +23,11 @@ namespace Festival.Presentation
             return s.ReviewResult!=""&&s.ReviewResult!="Success"?"BACK TO DAY 1"+Dot+festival+encore:"UP NEXT"+Dot+banner;
         }
 
-        /// <summary>Time left while playing, in whole seconds rounded up so 0:00 means the level is over; one word in every other phase.</summary>
+        /// <summary>Time left while playing, in whole seconds rounded up so 0:00 means the level is over; one word in every other phase.
+        /// MINI-1: a minigame stops it, so while one runs it stands at the time left.</summary>
         public static string Clock(RoundState s)
         {
-            if(s.Phase!="Playing")return s.Phase=="Shopping"?"CAMP":s.Phase=="CampReview"?"REVIEW":s.Phase=="Results"?"DONE":"WAIT";
+            if(s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)return s.Phase=="Shopping"?"CAMP":s.Phase=="CampReview"?"REVIEW":s.Phase=="Results"?"DONE":"WAIT";
             int left=(int)Math.Ceiling(Math.Max(0,s.DurationSeconds-s.ElapsedSeconds));
             return left/60+":"+(left%60).ToString("00");
         }
