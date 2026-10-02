@@ -7,9 +7,10 @@ namespace Festival.Core
     public sealed partial class FestivalSimulation
     {
         // A chat check takes this long; the tripper stands within ConfirmReach of the festivalgoer to start either check.
-        public const double ConfirmChatSeconds=5,ConfirmReach=2.5;
+        // DIALOG-5: 8 s, long enough to ask two of the three questions in the chat window and read both answers.
+        public const double ConfirmChatSeconds=8,ConfirmReach=2.5;
         // Four notes half a second apart: 2 s of steps after the chart's lead-in, with no countdown, so the verdict lands in
-        // 4.75 s (the chart's 4 s plus the .75 s every rhythm verdict waits for late input), just ahead of a chat.
+        // 4.75 s (the chart's 4 s plus the .75 s every rhythm verdict waits for late input), well ahead of a chat.
         const int ConfirmDanceNotes=4;const double ConfirmDanceBeat=.5;
 
         /// <summary>Whether p may check n: only the tripper, and only someone they still have an unchecked vision about. POLO-1's one

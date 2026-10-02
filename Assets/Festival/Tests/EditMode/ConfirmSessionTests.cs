@@ -44,7 +44,7 @@ namespace Festival.Tests
                 var json=JsonUtility.ToJson(FestivalSession.ViewFor(game,viewer.Id));
                 foreach(var answer in said.Answers)Assert.That(json,Does.Not.Contain(answer),viewer.Id+"'s client never hears the answers");
             }
-            game.Tick(5.1);
+            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
             var verdict=FestivalSession.ViewFor(game,game.State.TripperId).Visions.Find(v=>v.Id==vision.Id);
             Assert.That(verdict.Confirmed&&verdict.IsTrue==vision.IsTrue,Is.True,"the chat's verdict reaches the tripper's client");
             foreach(var viewer in game.State.Players)if(viewer.Id!=game.State.TripperId)Assert.That(FestivalSession.ViewFor(game,viewer.Id).Visions,Is.Empty,viewer.Id+"'s client gets no verdict");

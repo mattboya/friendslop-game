@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Festival.Core;
 
-// TRIP-3: the tripper checks a vision in person. A chat takes 5 s, is safe, and the festivalgoer's answers carry their
+// TRIP-3: the tripper checks a vision in person. A chat takes 8 s (DIALOG-5), is safe, and the festivalgoer's answers carry their
 // role's tells; a dance is four quick notes whose verdict lands sooner, but a score under .6 draws the watchers'
 // suspicion. Either way the truth reaches only the tripper, and a true clue holder moves the night's trail on.
 public static class ConfirmTests
@@ -72,7 +72,7 @@ public static class ConfirmTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{OnlyTheTripperChecks,AChecksNeedsSomethingToCheck,AChatTakesFiveSafeSeconds,TheChatCarriesTheirTells,
+        foreach(var test in new Action[]{OnlyTheTripperChecks,AChecksNeedsSomethingToCheck,AChatTakesEightSafeSeconds,TheChatCarriesTheirTells,
             ADanceIsQuickButRisky,EveryStepShowsOnTheDancer,TheTrailMovesOnlyOnATrueHolder,WalkingAwayEndsTheChat,AChatSurvivesASnapshot})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" confirm test(s) failed:\n"+string.Join("\n",failures));
@@ -114,7 +114,7 @@ public static class ConfirmTests
         var again=Act(s,tripper.Id,"ConfirmDance",npc.Id);Check(!again.Accepted,"once checked there is nothing left to check: "+again.Reason);
     }
 
-    static void AChatTakesFiveSafeSeconds()
+    static void AChatTakesEightSafeSeconds()
     {
         var s=Start(5,0);var tripper=Tripper(s);var friend=Friend(s);
         foreach(var truth in new[]{true,false})
@@ -123,10 +123,11 @@ public static class ConfirmTests
             var npc=Npc(s,vision.NpcId);Beside(tripper,npc);Watch(s,npc,tripper,30);
             var started=Act(s,tripper.Id,"ConfirmChat",npc.Id);Check(started.Accepted,"the tripper chats with someone they have a vision about: "+started.Reason);
             var chat=s.Interaction(tripper.InteractionId);Check(chat.Kind=="ConfirmChat"&&chat.PlayerId==tripper.Id,"a chat under way");
-            s.Tick(4.9);
-            Check(chat.Status=="Active"&&!vision.Confirmed&&!Seen(s,tripper,vision).Confirmed,"4.9 s in, the chat is still going and nothing is revealed");
+            // DIALOG-5: long enough to ask two of the three questions and read both answers.
+            s.Tick(7.9);
+            Check(chat.Status=="Active"&&!vision.Confirmed&&!Seen(s,tripper,vision).Confirmed,"7.9 s in, the chat is still going and nothing is revealed");
             s.Tick(.2);
-            Check(chat.Status=="Complete"&&About(s,npc).TrueForAll(v=>v.Confirmed),"after 5 s every vision about them is checked");
+            Check(chat.Status=="Complete"&&About(s,npc).TrueForAll(v=>v.Confirmed),"after 8 s every vision about them is checked");
             var seen=Seen(s,tripper,vision);
             Check(seen.Confirmed&&seen.IsTrue==truth,"and the tripper learns the "+(truth?"true":"false")+" vision is "+(truth?"true":"false"));
             Check(FestivalSimulation.VisibleVisions(s.State,friend.Id).Count==0,"the friend learns nothing");
@@ -164,7 +165,7 @@ public static class ConfirmTests
         Check(dance.Kind=="ConfirmDance"&&notes.Count==4&&Math.Abs(notes[3].TimeSeconds+dance.BeatSeconds-notes[0].TimeSeconds-2)<1e-9,"four steps taking 2 s");
         var witnesses=dance.WitnessIds.ConvertAll(id=>Npc(s,id));Check(witnesses.Contains(npc),"their dance partner watches");
         s.Tick(4.6);Check(dance.Status=="Active"&&!vision.Confirmed,"4.6 s in, the dance is still being judged");
-        s.Tick(.3);Check(dance.Status=="Complete"&&vision.Confirmed&&Seen(s,tripper,vision).IsTrue==vision.IsTrue,"its verdict lands before a chat's 5 s and reveals the truth to the tripper");
+        s.Tick(.3);Check(dance.Status=="Complete"&&vision.Confirmed&&Seen(s,tripper,vision).IsTrue==vision.IsTrue,"its verdict lands well before a chat's "+FestivalSimulation.ConfirmChatSeconds+" s and reveals the truth to the tripper");
         Check(witnesses.TrueForAll(n=>Heat(n,tripper)>0),"missing every step raises every witness's suspicion");
 
         double After(int perfect,int good,out InteractionState done)
@@ -226,7 +227,7 @@ public static class ConfirmTests
         var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
         var chat=restored.Interaction(restored.Player(tripper.Id).InteractionId);
         Check(chat!=null&&chat.Chat.Opener==said.Opener&&chat.Chat.Answers.SequenceEqual(said.Answers),"a chat in progress keeps its conversation through a snapshot");
-        restored.Tick(3.1);Check(chat.Status=="Complete"&&restored.State.Visions.Find(v=>v.Id==vision.Id).Confirmed,"and finishes after it");
+        restored.Tick(FestivalSimulation.ConfirmChatSeconds-2+.1);Check(chat.Status=="Complete"&&restored.State.Visions.Find(v=>v.Id==vision.Id).Confirmed,"and finishes after it");
         var legacy=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
         foreach(var i in legacy["Interactions"].AsArray())i.AsObject().Remove("Chat");
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));

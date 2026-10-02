@@ -118,7 +118,7 @@ public static class SplitObjectiveTests
         var chat=Start(5,seed:7);var tripper=Tripper(chat);var holder=Npc(chat,Chain(chat,1)[0]);
         double yaw=holder.Yaw*Math.PI/180;tripper.X=holder.X+(float)Math.Sin(yaw);tripper.Z=holder.Z+(float)Math.Cos(yaw);
         Check(Act(chat,tripper.Id,"ConfirmChat",holder.Id).Accepted,"the tripper can check the second trail's clue holder");
-        chat.Tick(5.2);Check(chat.State.SecondFriend.CluesRead==1&&chat.State.CluesRead==0,"and the chat moves the second trail on");
+        chat.Tick(FestivalSimulation.ConfirmChatSeconds+.2);Check(chat.State.SecondFriend.CluesRead==1&&chat.State.CluesRead==0,"and the chat moves the second trail on");
     }
 
     // Followed in any order, the two trails' clue visions never collide: no festivalgoer carries two, and no fake, checked or

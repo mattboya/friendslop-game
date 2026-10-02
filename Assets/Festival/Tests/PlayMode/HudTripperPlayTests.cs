@@ -77,7 +77,7 @@ namespace Festival.Tests
             }
             // The actions the HUD lists (NEARBY / CREW), first to last; E runs the first.
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
-            const string CheckDance="Check by dancing  •  F CHECK BY CHAT (5 s)",CheckChat="Check by chatting (5 s, safe)",DanceAndChat="Dance with festivalgoer  •  F CHAT";
+            const string CheckDance="Check by dancing  •  F CHECK BY CHAT (8 s)",CheckChat="Check by chatting (8 s, safe)",DanceAndChat="Dance with festivalgoer  •  F CHAT";
             const string GearKeys="GEAR   /   1–3 EQUIP     Q USE     G DROP",GearKeysInChat="GEAR   /   Q USE     G DROP";
             try
             {

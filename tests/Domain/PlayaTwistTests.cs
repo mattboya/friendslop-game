@@ -305,7 +305,7 @@ public static class PlayaTwistTests
         var s=Burn(Festivals.BurnSeconds);var p=s.Player("p0");p.X=20;p.Z=-20;var n=new NpcState{Id="wook",Role="Buyer",X=21,Z=-20};s.State.Npcs.Add(n);
         s.State.TripperId="p0";s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="wook"});
         Check(Act(s,"p0","ConfirmChat","wook").Accepted,"setup: p0 starts a chat");
-        s.Tick(4.5);
+        s.Tick(FestivalSimulation.ConfirmChatSeconds-.5);
         Check(FestivalSimulation.Burning(s.State)&&n.X==21&&n.Z==-20&&p.InteractionId!="","a festivalgoer mid-chat stays to finish it, at ("+n.X+", "+n.Z+")");
         s.Tick(1);
         Check(p.InteractionId==""&&s.State.Visions[0].Confirmed,"setup: the chat is done");

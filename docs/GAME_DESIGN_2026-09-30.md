@@ -93,7 +93,7 @@ the game is one line: "Trust, but verify."
 
 | Method | Takes | Risk |
 | --- | --- | --- |
-| Chat with the person | about 5 s | safe |
+| Chat with the person | about 8 s | safe |
 | Dance with them | about 2 s | misses raise suspicion |
 
 Only the tripper learns the truth and must relay it over voice.

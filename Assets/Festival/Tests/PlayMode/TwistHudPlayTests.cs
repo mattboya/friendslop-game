@@ -42,7 +42,7 @@ namespace Festival.Tests
             void PressE()=>((System.Action)primary.GetValue(view))?.Invoke();
             void PressF()=>chatKey.Invoke(view,new object[]{session.State,session.LocalPlayer});
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
-            const string Rope="Talk your way past the VIP rope (5 s)",Band="Buy VIP wristband  •  $15",Wheel="Ride the Ferris wheel (20 s)",Car="Climb aboard the art car",DanceAndChat="Dance with festivalgoer  •  F CHAT",Cancel="Cancel current action";
+            const string Rope="Talk your way past the VIP rope (8 s)",Band="Buy VIP wristband  •  $15",Wheel="Ride the Ferris wheel (20 s)",Car="Climb aboard the art car",DanceAndChat="Dance with festivalgoer  •  F CHAT",Cancel="Cancel current action";
             // The pause menu's CANCEL ACTION button.
             bool CancelShown(){foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name=="CANCEL ACTION")return b.gameObject.activeSelf;return false;}
             try
