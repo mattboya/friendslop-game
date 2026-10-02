@@ -35,7 +35,9 @@ namespace Festival.Presentation
         // POLO-5: a rider sits in ART-1's gondola, over its floor CabinFloor below the model's middle (the point it hangs from, less
         // GondolaDrop), and CabinAhead forward of that middle, toward the way they face (-z). Their eye is SeatedEyeHeight above that
         // floor: in the open cabin, under the canopy roof .74 m above the floor that a standing eye poked through, and above the
-        // walls' tops (.38 m). Riders sharing a gondola sit side by side across the middle CabinSpread of its 1.2 m width.
+        // walls' tops (.38 m). A gondola seats Seats side by side across the middle CabinSpread of its 1.2 m width: two sit .48 m
+        // apart, which bodies drawn at RiderScale clear whatever they wear (the widest look reaches .24 m either side of its middle),
+        // both inside the walls (.57 m out inside). A third would sit .32 m from the next, in one another.
         // The cabin is far too low for a seated body at full size: the tallest seated look (body shape 0 in hat 1) reaches 1.68 m
         // over the floor, its head and shoulders up through the roof. So a rider's body is drawn at RiderScale: at .42 that look
         // reaches .705 m, 3.5 cm under the roof (the glide leads the seat by 1.5-2.8 cm), its head bone .4 m over the floor, just
@@ -43,7 +45,8 @@ namespace Festival.Presentation
         // either side of its middle.
         // ponytail: back to 1 once ART-2 gives the gondola a seated person's headroom.
         public const float SeatedEyeHeight=.56f,RiderScale=.42f;
-        private const float CabinFloor=.37f,CabinAhead=.025f,CabinSpread=.7f;
+        private const float CabinFloor=.37f,CabinAhead=.025f,CabinSpread=.96f;
+        private const int Seats=2;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
@@ -187,15 +190,24 @@ namespace Festival.Presentation
             float angle=Angle(wheelClock);rotor.localRotation=Quaternion.Euler(angle,0,0);
             for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=Hung(k,angle);
         }
-        /// <summary>POLO-5: where rider sits at now (on the rules' clock), in the world, on the floor of the gondola that hung nearest
-        /// the platform when they boarded (their VisualWheelSince). A ride is exactly one turn, so it brings them back round to the
-        /// platform. Everyone in state who boarded the same gondola sits side by side across it, in id order, so every client seats
-        /// them alike.</summary>
+        /// <summary>POLO-5: where rider sits at now (on the rules' clock), in the world, on the floor of their gondola. A ride is
+        /// exactly one turn, so it brings them back round to where they boarded. Everyone in state on the wheel is seated in the order
+        /// they boarded (their VisualWheelSince, then id, so every client seats them alike), each in the gondola that hung nearest the
+        /// platform then; once its Seats are taken, in the next one round to come down to it, the one that has just gone up, the one
+        /// after next, and so on. Those sharing a gondola sit side by side across it.</summary>
         public static Vector3 Seat(RoundState state,PlayerState rider,double now)
         {
-            int gondola=Boarded(rider.VisualWheelSince),place=0,riders=1;
-            foreach(var p in state.Players)if(p.Id!=rider.Id&&p.VisualWheelSince>=0&&Boarded(p.VisualWheelSince)==gondola){riders++;if(string.CompareOrdinal(p.Id,rider.Id)<0)place++;}
-            return new Vector3(Festivals.WheelX+((place+.5f)/riders-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
+            var aboard=state.Players.FindAll(p=>p.Id!=rider.Id&&p.VisualWheelSince>=0);aboard.Add(rider);
+            aboard.Sort((a,b)=>a.VisualWheelSince!=b.VisualWheelSince?a.VisualWheelSince.CompareTo(b.VisualWheelSince):string.CompareOrdinal(a.Id,b.Id));
+            var seated=new int[Gondolas];int gondola=0,place=0;
+            foreach(var p in aboard)
+            {
+                int boarded=Boarded(p.VisualWheelSince),k=boarded;
+                for(int j=1;seated[k]>=Seats&&j<Gondolas;j++)k=(boarded+(j%2==1?(j+1)/2:Gondolas-j/2))%Gondolas;
+                if(p.Id==rider.Id){gondola=k;place=seated[k];}
+                seated[k]++;
+            }
+            return new Vector3(Festivals.WheelX+((place+.5f)/seated[gondola]-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
         }
         private static int Boarded(double since)
         {
