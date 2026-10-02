@@ -72,6 +72,10 @@ namespace Festival.Tests
                 if(Actions().Contains(DanceAndChat))failures.Add("sober beside the VIP guard: the dance still offers F as a plain chat: \""+Actions()+"\"");
                 PressF();yield return null;
                 if(!sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.TargetId==guard.Id&&i.Status=="Active"))failures.Add("sober beside the VIP guard: F starts no chat with them ("+session.Message+")");
+                // POLO-4: and the chat panel is the rope card, not a check: the guard's opener and doorman line, nothing to ask.
+                var rope=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Kind=="ConfirmChat"&&i.Status=="Active")?.Chat;
+                yield return new WaitForSeconds(.2f);
+                if(rope!=null){Expect("talking to the VIP guard","Chat check","TALKING YOUR WAY IN  •  VIP ROPE\n\""+rope.Opener+"\"\n\""+rope.Doorman+"\"");Fits("talking to the VIP guard","Chat check");}
                 yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds+.4f);
                 if(!Banded())failures.Add("the guard's chat is over and there is no VIP wristband ("+session.Message+")");
 

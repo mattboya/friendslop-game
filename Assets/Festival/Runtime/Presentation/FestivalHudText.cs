@@ -282,12 +282,15 @@ namespace Festival.Presentation
 
         /// <summary>
         /// The chat check under way: the festivalgoer's opener, then the tripper's three questions on 1-3, the picked one followed by
-        /// their answer. "" without one; a view carries only its own player's chat, so no other client can read it.
+        /// their answer. POLO-4: a chat with no questions is the VIP guard talking p past the rope (DialogueGrammar.Rope), and is its
+        /// own card, the guard's opener and doorman line with nothing to ask, so it never reads like a check. "" without one; a view
+        /// carries only its own player's chat, so no other client can read it.
         /// </summary>
         public static string ChatPicker(RoundState s,PlayerState p,int picked)
         {
             var chat=s.Interactions.Find(i=>i.Id==p.InteractionId&&i.Kind=="ConfirmChat"&&i.Status=="Active")?.Chat;
             if(chat==null)return "";
+            if(chat.Questions.Length==0)return "TALKING YOUR WAY IN"+Dot+"VIP ROPE\n\""+chat.Opener+"\"\n\""+chat.Doorman+"\"";
             string text="CHECKING BY CHAT"+Dot+"1–3 ASK\n\""+chat.Opener+"\"";
             for(int i=0;i<chat.Questions.Length;i++)text+="\n"+(i+1)+"  "+chat.Questions[i]+(i==picked?"\n      \""+chat.Answers[i]+"\"":"");
             return text;
