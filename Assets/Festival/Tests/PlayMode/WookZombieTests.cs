@@ -1,5 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -11,8 +14,8 @@ namespace Festival.Tests
     /// turns a dark, muted green and its face scowls, from none at Watching (.25) to full at Accusing (.70).</summary>
     public sealed class WookZombieTests:FestivalPlayModeTest
     {
-        // FestivalSession.Actor's tints for a festivalgoer and for security.
-        static readonly Color Festivalgoer=new Color(.8f,.5f,.3f),Security=new Color(.25f,.4f,.7f);
+        // FestivalSession.Actor's tint for a festivalgoer.
+        static readonly Color Festivalgoer=new Color(.8f,.5f,.3f);
 
         [UnityTest]public IEnumerator SuspicionTurnsOnlyTheSkinZombieGreen()
         {
@@ -22,9 +25,7 @@ namespace Festival.Tests
                 // The darkest and the lightest skin tones (FestivalAppearance's Skin[0] and Skin[7]).
                 var wooks=new[]{FestivalCharacter.Create(root.transform,WithSkin(0),Festivalgoer),FestivalCharacter.Create(root.transform,WithSkin(7),Festivalgoer)};
                 var untouched=new[]{FestivalCharacter.Create(root.transform,WithSkin(0),Festivalgoer),FestivalCharacter.Create(root.transform,WithSkin(7),Festivalgoer)};
-                var guard=FestivalCharacter.Create(root.transform,"cop_1",Security,"Security");
                 yield return null;
-                var guardLooks=Looks(guard);
                 float[] threats={0,.20f,.25f,.45f,.70f,.85f,1,0};
                 for(int w=0;w<wooks.Length;w++)
                 {
@@ -54,12 +55,81 @@ namespace Festival.Tests
                     Assert.That(green.g-green.r,Is.GreaterThan(.08f),wook.name+" reads green at .70, not red: "+green);
                     Assert.That(green.g-green.b,Is.GreaterThan(.08f),wook.name+" reads green at .70, not blue: "+green);
                 }
-                // Security (and every player) always gets Threat 0, so it never changes.
-                var guardNow=Looks(guard);
-                foreach(var surface in guardLooks)for(int slot=0;slot<8;slot++)
-                    Assert.That(Gap(guardNow[surface.Key][slot],surface.Value[slot]),Is.LessThan(.01f),"security's "+surface.Key.name+" slot "+slot+" never changes");
             }
             finally{Object.Destroy(root);}
+        }
+
+        // An actor whose art has no eye glow (Create warns of it) still turns.
+        [UnityTest]public IEnumerator TheSkinTurnsWithoutAnEyeGlow()
+        {
+            var root=new GameObject("Wook zombie eyeless test");
+            try
+            {
+                var wook=FestivalCharacter.Create(root.transform,"wook_eyeless",Festivalgoer);
+                typeof(FestivalCharacter).GetField("eyeRenderer",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(wook,null);
+                yield return null;
+                var tone=Slots(SkinOf(wook))[0];
+                wook.Threat=.70f;yield return null;
+                Assert.That(Gap(Slots(SkinOf(wook))[0],tone),Is.GreaterThan(.05f),"its skin turns at Accusing, eye glow or not");
+            }
+            finally{Object.Destroy(root);}
+        }
+
+        // The whole path, hosted with a friend joined over the network: the host's rule (WookTick) raises a festivalgoer's suspicion
+        // of the friend sprinting in its view, ViewFor sends each player only its suspicion of them, and each screen's actor turns
+        // by that. No finally: leaving both sessions at once there logs a disposed-transport exception (see LevelStartTests), and
+        // DestroyWhatTheTestLeft clears up however this ends.
+        [UnityTest]public IEnumerator SprintingInFrontOfAFestivalgoerTurnsItGreenOnlyOnTheSprintersScreen()
+        {
+            var world=new GameObject("Wook zombie world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Wook zombie host").AddComponent<FestivalSession>();
+            var friend=new GameObject("Wook zombie friend").AddComponent<FestivalSession>();
+            yield return null;
+            ushort port=FreePort();host.Host("Tester",port);
+            float deadline=Time.realtimeSinceStartup+30;
+            while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            Assert.That(host.LocalPlayer,Is.Not.Null,"host has a local player: "+host.Message);
+            friend.Join("Friend","127.0.0.1",port);
+            while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            Assert.That(friend.LocalPlayer,Is.Not.Null,"the friend joins the host on port "+port+": "+friend.Message);
+            var sim=Simulation(host);string friendId=friend.LocalPlayerId;var sprinter=sim.Player(friendId);
+            sprinter.X=0;sprinter.Z=19;friend.Command("Ready");
+            for(deadline=Time.realtimeSinceStartup+5;!sprinter.Ready&&Time.realtimeSinceStartup<deadline;)yield return null;
+            yield return StartLevel(host,friendId);
+            for(deadline=Time.realtimeSinceStartup+5;friend.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline;)yield return null;
+            Assert.That(friend.State.Phase,Is.EqualTo("Playing"),"the festival opens on the friend's screen too");
+
+            var me=sim.Player(host.LocalPlayerId);
+            var wook=sim.State.Npcs.Find(n=>n.Kind=="Wook");var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");
+            Assert.That(wook!=null&&cop!=null,Is.True,"the level has a festivalgoer and security");
+            foreach(var n in sim.State.Npcs)if(n!=wook&&n!=cop){n.X=-45;n.Z=-45;}
+            // Security can hold suspicion of a player too (a poor dance it witnessed, Interactions.cs): give it the most there is.
+            cop.Observers.Add(new ObserverState{PlayerId=friendId,Suspicion=100});
+            // The friend sprints right in front of the festivalgoer, beside security; the host stands well out of its sight.
+            void Hold(){sprinter.X=0;sprinter.Z=0;sprinter.SprintUntil=sim.State.SimulationSeconds+1;me.X=30;me.Z=-30;wook.X=0;wook.Z=3;wook.Yaw=180;wook.DistractedUntil=0;cop.X=2;cop.Z=0;}
+            double Suspicion()=>wook.Observers.Find(o=>o.PlayerId==friendId)?.Suspicion??0;
+            FestivalCharacter onHost=null,onFriend=null,copOnHost=null,copOnFriend=null;
+            for(deadline=Time.realtimeSinceStartup+5;(onHost==null||onFriend==null||copOnHost==null||copOnFriend==null)&&Time.realtimeSinceStartup<deadline;)
+            {
+                Hold();yield return null;
+                onHost=ActorOn(host,wook.Id);onFriend=ActorOn(friend,wook.Id);copOnHost=ActorOn(host,cop.Id);copOnFriend=ActorOn(friend,cop.Id);
+            }
+            Assert.That(onHost!=null&&onFriend!=null&&copOnHost!=null&&copOnFriend!=null,Is.True,"both screens show the festivalgoer and security");
+            var tone=Slots(SkinOf(onHost))[0];
+            Assert.That(Gap(Slots(SkinOf(onFriend))[0],tone),Is.LessThan(.01f),"both screens start on its own tone");
+
+            for(deadline=Time.realtimeSinceStartup+40;Suspicion()<75&&Time.realtimeSinceStartup<deadline;){Hold();yield return null;}
+            Assert.That(Suspicion(),Is.GreaterThanOrEqualTo(75),"sprinting in its view raises its suspicion of the friend past Questioning's 45, to Accusing");
+            // A second more for the friend's screen to catch up (10 snapshots a second).
+            for(deadline=Time.realtimeSinceStartup+1;Time.realtimeSinceStartup<deadline;){Hold();yield return null;}
+            var green=Slots(SkinOf(onFriend))[0];
+            Assert.That(onFriend.Threat,Is.GreaterThanOrEqualTo(.70f),"the friend's screen gets the festivalgoer's suspicion of them");
+            Assert.That(onHost.Threat,Is.EqualTo(0),"the host's screen gets none: it isn't suspicious of the host");
+            Assert.That(green.g-green.r,Is.GreaterThan(.08f),"on the friend's screen its skin reads green, not red: "+green);
+            Assert.That(green.g-green.b,Is.GreaterThan(.08f),"on the friend's screen its skin reads green, not blue: "+green);
+            Assert.That(Gap(Slots(SkinOf(onHost))[0],tone),Is.LessThan(.01f),"on the host's screen it keeps its own tone");
+            Assert.That(Gap(Slots(SkinOf(copOnFriend))[0],Slots(SkinOf(copOnHost))[0]),Is.LessThan(.01f),
+                "security keeps its own colour on the friend's screen, as suspicious of them as it is");
         }
 
         [UnityTest]public IEnumerator TheSkinRedrawsInAFewStepsNotEveryFrame()
@@ -149,6 +219,13 @@ namespace Festival.Tests
                 Assert.That(brow[5],Is.GreaterThan(60f),"a downed actor looks worried");
             }
             finally{Object.Destroy(root);}
+        }
+
+        // The actor a session draws for this id (FestivalSession.Actor).
+        static FestivalCharacter ActorOn(FestivalSession session,string id)
+        {
+            var actors=(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+            return actors.TryGetValue(id,out var actor)&&actor!=null?actor.GetComponent<FestivalCharacter>():null;
         }
 
         static string WithSkin(int tone){for(int i=0;;i++)if(FestivalAppearance.For("wook_"+i).SkinColor==tone)return "wook_"+i;}

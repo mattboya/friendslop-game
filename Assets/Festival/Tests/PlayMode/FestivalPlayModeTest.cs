@@ -15,9 +15,12 @@ namespace Festival.Tests
     public abstract class FestivalPlayModeTest
     {
         // The port every fixture hosts its session on. 0 lets the OS pick a free one, so a PlayMode run in a snapshot and one in
-        // the shared checkout can host at the same time. LevelStartTests, the one fixture that joins a client, probes a free port
-        // of its own, as a client has to know the port it joins.
+        // the shared checkout can host at the same time. A fixture that joins a client hosts on FreePort instead, as a client has
+        // to know the port it joins.
         protected const ushort HostPort=0;
+
+        /// <summary>A port nobody holds right now: the OS picks one for the probe, which lets it go for the host.</summary>
+        protected static ushort FreePort(){using(var probe=new UdpClient(new IPEndPoint(IPAddress.Any,0)))return (ushort)((IPEndPoint)probe.Client.LocalEndPoint).Port;}
 
         // TEST-2: how long a skipped spin still runs on the host's clock: at least two of its 10 Hz snapshots (FestivalSession.Update)
         // go out meanwhile, so a joined client sees the spin.
@@ -29,11 +32,12 @@ namespace Festival.Tests
         // (the spin, roles and twists), the Spinning -> Loading -> Playing steps and every MapReady through its real Step code;
         // only the waits go. SpinnerTakeTests keeps the real countdown and spin.
         /// <summary>The host walks to the trailhead gate and readies up, and the level starts: the countdown, spin and loading
-        /// each skipped. Every other player must be ready already.</summary>
-        protected static IEnumerator StartLevel(FestivalSession session)
+        /// each skipped. Every other player must be ready already. A real joined client's player (realClients) reports its own
+        /// map loaded.</summary>
+        protected static IEnumerator StartLevel(FestivalSession session,params string[] realClients)
         {
             var player=Simulation(session).Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-            yield return SkipCountdown(session);yield return SkipSpin(session);yield return FinishLoading(session);
+            yield return SkipCountdown(session);yield return SkipSpin(session);yield return FinishLoading(session,realClients);
         }
 
         /// <summary>Once the whole crew has sent Ready, the round starts on the host's next step. The host's own Step arms the

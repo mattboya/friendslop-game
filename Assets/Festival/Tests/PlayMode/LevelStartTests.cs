@@ -1,7 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -28,9 +26,6 @@ namespace Festival.Tests
                 yield return null;
             }
         }
-
-        // A port nobody holds right now: the OS picks one for the probe, which lets it go for the host.
-        static ushort FreePort(){using(var probe=new UdpClient(new IPEndPoint(IPAddress.Any,0)))return (ushort)((IPEndPoint)probe.Client.LocalEndPoint).Port;}
 
         // The host's view goes through the spin and loading in order, well inside the countdown's own 5 s. The spin deals the
         // tripper their dose, and the friend without a client of their own is reported loaded.
