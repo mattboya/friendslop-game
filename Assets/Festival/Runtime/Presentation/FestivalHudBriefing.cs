@@ -49,7 +49,7 @@ namespace Festival.Presentation
         /// </summary>
         public static (string Title,string Text)[] HowToPlay(FestivalInput input)
         {
-            string act=input.Label(input.Interact),chat=input.Label(input.Chat),drop=input.Label(input.Drop);
+            string act=input.Label(input.Interact),chat=input.Label(input.Chat),drop=input.Label(input.Drop),reply=input.Label(input.Slot1)+"-"+input.Label(input.Slot3);
             var keys=new List<string>();
             foreach(var action in input.Map.actions)keys.Add((action==input.Look?"Mouse":input.Label(action))+"  "+KeyUse(action.name));
             return new[]
@@ -62,7 +62,9 @@ namespace Festival.Presentation
                     +" true, a red one if fake, and says what it found, like "+FestivalVisionMarkers.VerdictText("Narc",false)+".\n"
                     +"green ball "+Claim("Buyer")+Dot+"red cube "+Claim("Narc")+Dot+"blue pill "+Claim("Clue")+Dot+"gold drum "+Claim("DoubleBuyer")+" or "+Claim("Stash")),
                 ("EVERYONE ELSE","Stick with the tripper and act on what they call out. Buy stock from festivalgoers and offer it to the buyers the"
-                    +" tripper spots. Dance together to blend in: the worst dancer near the crowd sets everyone's suspicion."),
+                    +" tripper spots. Talk to them ("+chat+") to sus them out first: answer with "+reply+" the way they like to be talked to, and"
+                    +" a smooth talk leaves a hunch about who they are. Dance together to blend in: the worst dancer near the crowd sets"
+                    +" everyone's suspicion."),
                 ("DANGER","Some festivalgoers are narcs: buy from or sell to one and you're busted. One who suspects you turns zombie-green; if"
                     +" a crowd swarms you, your card says SWARMING and their hits can down you. Security stops anyone it sees carrying stock"
                     +" (a merch bag hides it): talk ("+act+"), ditch it ("+drop+") or walk away out of its sight. A downed friend can be rescued or"
@@ -106,10 +108,10 @@ namespace Festival.Presentation
         static string KeyUse(string action)=>action switch
         {
             "Move"=>"move","Look"=>"look around","Sprint"=>"run (the crowd notices)","Interact"=>"the top action on your list",
-            "Chat"=>"chat (checks a vision)","Use"=>"use what's in your hand","Drop"=>"drop it • in a stop, ditch your stock • hold to stop dancing",
+            "Chat"=>"talk to someone • the tripper checks a vision","Use"=>"use what's in your hand","Drop"=>"drop it • in a stop, ditch your stock • hold to stop dancing",
             "Objectives"=>"hold for the map","Menu"=>"menu and settings","View"=>"first or third person",
-            "Slot1"=>"hand 1 • ask 1 in a chat • vote 1 at the campfire","Slot2"=>"hand 2 • ask 2 in a chat • vote 2 at the campfire",
-            "Slot3"=>"hand 3 • ask 3 in a chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
+            "Slot1"=>"hand 1 • reply 1 in a talk or chat • vote 1 at the campfire","Slot2"=>"hand 2 • reply 2 in a talk or chat • vote 2 at the campfire",
+            "Slot3"=>"hand 3 • reply 3 in a talk or chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
             "Rhythm0"=>"dance lane: left","Rhythm1"=>"dance lane: down","Rhythm2"=>"dance lane: up","Rhythm3"=>"dance lane: right",_=>"",
         };
     }

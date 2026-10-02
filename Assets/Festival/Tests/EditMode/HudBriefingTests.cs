@@ -139,6 +139,9 @@ namespace Festival.Tests
                 foreach(var kind in new[]{"Buyer","Narc","Clue","DoubleBuyer","Stash"})Assert.That(tripper,Does.Contain(FestivalVisionMarkers.ClaimText(kind)),"the legend has "+kind);
                 Assert.That(tripper,Does.Contain("green ring").And.Contain("red one").And.Contain(FestivalVisionMarkers.VerdictText("Narc",false)),"a check rings it and says what it found");
                 Assert.That(crew,Does.Contain("from festivalgoers"),"stock comes from festivalgoers (ECON-2)");
+                // DIALOG-3: anyone sizes someone up by talking: the chat key starts a talk, 1-3 reply, and a smooth one leaves a hunch.
+                Assert.That(crew,Does.Contain("Talk to them ("+input.Label(input.Chat)+")").And.Contain(input.Label(input.Slot1)+"-"+input.Label(input.Slot3)).And.Contain("hunch"),"talk to people to sus them out before you buy or offer");
+                Assert.That(Block(input,"KEYS"),Does.Contain(input.Label(input.Chat)+"  talk to someone").And.Contain(input.Label(input.Slot1)+"  hand 1 • reply 1 in a talk"),"F talks and 1-3 reply");
                 Assert.That(danger,Does.Contain("narcs").And.Contain("busted"),"and some of them are narcs");
                 Assert.That(danger,Does.Contain("zombie-green"),"CROWD-4's suspicious festivalgoers");
                 Assert.That(danger,Does.Contain("SWARMING"),"HUD-5's swarm on the card");
