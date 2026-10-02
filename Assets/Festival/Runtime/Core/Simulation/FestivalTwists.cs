@@ -150,7 +150,8 @@ namespace Festival.Core
             return false;
         }
         // Every sighting (Sees) reaches SightRange, down to DustStormSightRange in a storm. PLAYA-3: cops' too, not only
-        // festivalgoers'. A storm cuts new sightings only: a cop already holding evidence on you still chases you (PoliceTick).
+        // festivalgoers'. ESC-2: a stopping cop follows only within it, so a storm makes a stop easier to bolt from; a cop with
+        // an arrest to make still chases you (PoliceTick).
         double SightRange(NpcState n)=>DustStorm(State)?Festivals.DustStormSightRange:Festivals.SightRange;
         /// <summary>Which art car playerId is riding (0 to ArtCars-1), or -1. Reads a client's view too, since a view carries its
         /// own player's interactions; everyone else sees a rider's VisualPose "RideCar".</summary>

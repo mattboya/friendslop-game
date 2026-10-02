@@ -1,0 +1,55 @@
+namespace Festival.Core
+{
+    /// <summary>ESC-2: a security stop is a real moment. A cop who sees stock carried without a merch bag (PoliceTick) calls the
+    /// player out and stops them, and the stop ends one of three ways: a talk scoring .75 (the cop waves them on), ditching every
+    /// unit in the cop's sight, or keeping out of its sight (Sees: 12 m, 5 m in a dust storm, and walls) for BoltSeconds. Ignored
+    /// for StopArrestSeconds in its sight with the stock, it becomes an arrest warning, warned at StopWarnSeconds. The cop's lines
+    /// reach only the stopped player, as festivalgoers' chat does (NpcSpeech).</summary>
+    public sealed partial class FestivalSimulation
+    {
+        const double StopWarnSeconds=12,StopArrestSeconds=20,BoltSeconds=6,ConfiscateSeconds=10,BarkSeconds=5;
+        const string StopBark="HEY! What's in the bag?",WarnBark="Last chance. Empty your pockets.",DitchBark="Fine. Move along.";
+        static bool CarriesStock(PlayerState p)=>p.Inventory.Exists(i=>Stock(i.ItemId));
+        // An arrest warning: a deal the cop saw (RecordDeal), or a stop ignored too long. Either detains at DetainAt.
+        static bool Arrests(EvidenceState e)=>e.Kind=="WitnessedDeal"||e.Kind=="IgnoredStop";
+        bool Stopped(PlayerState p)=>State.Npcs.Exists(n=>n.Kind=="Cop"&&n.Evidence.Exists(e=>e.PlayerId==p.Id&&e.Kind=="VisibleStock"));
+        bool TalkingTo(PlayerState p,NpcState cop){var i=Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&i.Kind=="Police"&&i.TargetId==cop.Id;}
+        void Bark(PlayerState p,string line){p.NpcSpeaker="SECURITY";p.NpcSpeech=line;p.NpcSpeechUntil=State.SimulationSeconds+BarkSeconds;}
+        EvidenceState StartStop(NpcState cop,PlayerState p){var e=new EvidenceState{PlayerId=p.Id,Kind="VisibleStock",StartSeconds=State.SimulationSeconds,SeenSeconds=State.SimulationSeconds};cop.Evidence.Add(e);Bark(p,StopBark);return e;}
+        // A talk scoring .75 (Interactions.cs) waves the stopped player on: the cop lets them be until it has lost sight of them.
+        void WaveOn(string copId,PlayerState p){var e=State.Npcs.Find(n=>n.Id==copId)?.Evidence.Find(x=>x.PlayerId==p.Id&&x.Kind=="VisibleStock");if(e!=null)e.Kind="WavedOn";}
+
+        // Whether cop goes after p this tick on evidence e, turned to face them. A stop ends once p carries no stock (ditched in
+        // the cop's sight, it says so and claims the stock lying in view; out of its sight, it just lets them go) or has kept out
+        // of its sight for BoltSeconds. Ignored, it escalates only in the cop's sight, and never mid-talk: the cop hears a talk
+        // out. Ceiling: a cop works one case at a time (PoliceTick), so a second player's stop waits, its clocks running.
+        bool Pursue(NpcState cop,PlayerState p,EvidenceState e,double dt)
+        {
+            double now=State.SimulationSeconds;
+            if(e.Kind=="WavedOn"){if(!Sees(cop,p))cop.Evidence.Remove(e);return false;}
+            cop.Yaw=Bearing(cop.X,cop.Z,p.X,p.Z);
+            if(e.Kind!="VisibleStock")return true;
+            // A stop saved before ESC-2 has no start: it is timed from the load, the first tick after it.
+            if(e.StartSeconds<0)e.StartSeconds=e.SeenSeconds=now;
+            bool seen=Sees(cop,p);if(seen)e.SeenSeconds=now;
+            if(!CarriesStock(p)){if(seen){Bark(p,DitchBark);ClaimDitchedStock(cop);}cop.Evidence.Remove(e);return false;}
+            if(now-e.SeenSeconds>=BoltSeconds){cop.Evidence.Remove(e);return false;}
+            double held=now-e.StartSeconds;
+            if(held>=StopWarnSeconds&&held-dt<StopWarnSeconds)Bark(p,WarnBark);
+            // The usual 4 s from an arrest warning to detention, as for a witnessed deal (RecordDeal).
+            if(held>=StopArrestSeconds&&seen&&!TalkingTo(p,cop)){e.Kind="IgnoredStop";e.DetainAt=now+4;}
+            return true;
+        }
+        void ClaimDitchedStock(NpcState cop){foreach(var d in State.Drops)if(Stock(d.ItemId)&&d.ClaimedBy==""&&Distance(cop.X,cop.Z,d.X,d.Z)<=SightRange(cop)&&(HasLineOfSight==null||HasLineOfSight(cop.X,cop.Z,d.X,d.Z))){d.ClaimedBy=cop.Id;d.ClaimAt=State.SimulationSeconds+ConfiscateSeconds;}}
+        // Ditched stock lies there for anyone for ConfiscateSeconds, the cop standing by; then it walks over at its 3 m/s and takes
+        // what is still there, from a player's reach (Near's 2.5 m). False with nothing to take, so the cop patrols.
+        bool Confiscate(NpcState cop,double dt)
+        {
+            var d=State.Drops.Find(x=>x.ClaimedBy==cop.Id);if(d==null)return false;
+            cop.Mode="Patrol";cop.TargetId="";double dist=Distance(cop.X,cop.Z,d.X,d.Z);if(dist>.1)cop.Yaw=Bearing(cop.X,cop.Z,d.X,d.Z);
+            if(State.SimulationSeconds<d.ClaimAt)return true;
+            if(dist<=2.5){State.Drops.Remove(d);return true;}
+            var point=Move(cop.X,cop.Z,d.X,d.Z,3*dt);cop.X=point.X;cop.Z=point.Z;return true;
+        }
+    }
+}

@@ -32,6 +32,8 @@ namespace Festival.Network
         // 30/30/30/10 dose wheel (TRIP-12). ECON-2: shelves sell gear only, and festivalgoers sell stock through StartBuy.
         // POLO-4: a chat with the VIP guard that checks no vision carries a Doorman line and no questions or answers.
         // DIALOG-5: a chat check, and the VIP rope chat, lasts 8 s instead of 5 (FestivalSimulation.ConfirmChatSeconds).
+        // ESC-2: a security stop ignored for 20 s becomes an arrest warning, and G ditches stock first during one; drops carry
+        // the cop who claimed ditched stock (DropState.ClaimedBy), and the host's evidence its start (EvidenceState.StartSeconds).
         public const int ProtocolVersion=4;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";

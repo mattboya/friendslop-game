@@ -33,7 +33,10 @@ namespace Festival.Core
         public List<string> Wristbands=new List<string>(); public DialogueHistory Dialogue=new DialogueHistory();
     }
     [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }
-    [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt; }
+    // A cop's case on a player (Danger.cs, SecurityStops.cs): Kind VisibleStock is a security stop, WavedOn one talked down,
+    // and WitnessedDeal or IgnoredStop an arrest warning, detaining at DetainAt. ESC-2: a stop runs from StartSeconds, and the
+    // cop last saw them at SeenSeconds; -1 in older snapshots, whose stops are timed from the load.
+    [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt, StartSeconds=-1, SeenSeconds=-1; }
     [Serializable] public sealed class NpcState {
         public string Id="",Kind="Wook",Mode="Blending",TargetId="",IdlePose="Idle"; public float X,Z,Yaw;
         // TRIP-2: Buyer, Narc, Regular or (at night) ClueHolder, dealt as the crew leaves camp; never sent to clients. "" is not
@@ -60,7 +63,9 @@ namespace Festival.Core
         // TRIP-3: a ConfirmChat's conversation (DialogueGrammar). A view carries only its own player's interactions, so only the tripper reads it.
         public Conversation Chat=new Conversation();
     }
-    [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId=""; public int Count; public float X,Z; }
+    // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
+    // older snapshots).
+    [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId="",ClaimedBy=""; public int Count; public float X,Z; public double ClaimAt; }
     [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
     [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); }
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }

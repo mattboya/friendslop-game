@@ -10,7 +10,8 @@ public static class EscalationTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel})
+        foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
+            AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -149,5 +150,179 @@ public static class EscalationTests
             s.State.Phase="Results";s.State.Result="Success";Check(s.Execute("a",Command("Reset")).Accepted,where+": the host brings the crew back");
         }
         Check(s.State.EncoreTier==1,"the walk reached the encore lap");
+    }
+
+    // ---- ESC-2: security stops ----
+    // cop_0 alone at the origin looking north (+Z), the crowd and the other cop gone; a stands 5 m in front of it holding a
+    // Tongue Stamp, so the first tick starts a stop. `sight` stands in for the host's walls: the cop sees a only while it
+    // returns true.
+    static FestivalSimulation Stopped(out NpcState cop,out PlayerState a,Func<bool> sight=null)
+    {
+        var s=Level(1);s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
+        if(sight!=null)s.HasLineOfSight=(x,z,tx,tz)=>sight();
+        a=s.Player("a");a.X=0;a.Z=5;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        s.Tick(.1);return s;
+    }
+    static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
+    static bool Says(PlayerState p,string line)=>p.NpcSpeaker=="SECURITY"&&p.NpcSpeech==line;
+    // Puts a `metres` straight ahead of the cop, in its view.
+    static void InFront(NpcState cop,PlayerState a,double metres){double h=cop.Yaw*Math.PI/180;a.X=cop.X+(float)(metres*Math.Sin(h));a.Z=cop.Z+(float)(metres*Math.Cos(h));}
+    // Ember Playa, a second into a dust storm (storms blow for 20 s or more).
+    static void IntoADustStorm(FestivalSimulation s)
+    {
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=Festivals.PlayaFestival;s.State.SpinSeed=12345;
+        while(!FestivalSimulation.DustStorm(s.State))s.State.ElapsedSeconds+=1;
+        s.State.ElapsedSeconds+=1;Check(FestivalSimulation.DustStorm(s.State),"setup: a dust storm blows");
+    }
+    // a talks to the guard, hitting at least the first `share` of the notes; the talk then runs on its own.
+    static InteractionState Talk(FestivalSimulation s,PlayerState a,NpcState cop,double share)
+    {
+        var started=s.Execute("a",Command("Police",cop.Id));Check(started.Accepted,"setup: a talks to security (\""+started.Reason+"\")");
+        var i=s.Interaction(a.InteractionId);var notes=RhythmChart.For(i).Notes;
+        for(int n=0;n<(int)Math.Ceiling(share*notes.Count);n++)i.Inputs.Add(new RhythmInput{Direction=notes[n].Direction,TimeSeconds=notes[n].TimeSeconds});
+        return i;
+    }
+    static void Finish(FestivalSimulation s,InteractionState i){for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);}
+
+    // A cop who sees stock calls the player out and stops them, and the stop holds while they stay in sight with it.
+    static void AStopCallsYouOutAndHolds()
+    {
+        var s=Stopped(out var cop,out var a);
+        Check(cop.Mode=="Stop"&&cop.TargetId=="a","a cop who sees stock stops the player (mode "+cop.Mode+")");
+        Check(Says(a,"HEY! What's in the bag?")&&a.NpcSpeechUntil>s.State.SimulationSeconds,"the guard calls it out (\""+a.NpcSpeaker+": "+a.NpcSpeech+"\")");
+        s.Tick(11);
+        Check(cop.Mode=="Stop"&&cop.TargetId=="a"&&Dist(cop.X,cop.Z,a.X,a.Z)<=2.05,"11 s on, still in sight with the stock, the stop holds with the cop beside them (mode "+cop.Mode+", "+Dist(cop.X,cop.Z,a.X,a.Z)+" m)");
+    }
+
+    // Ignored, a stop is warned at 12 s ("Last chance. Empty your pockets.") and becomes an arrest warning at 20 s; the usual
+    // 4 s later the player is detained, and the cop walks on.
+    static void AnIgnoredStopEndsInAnArrest()
+    {
+        var s=Stopped(out var cop,out var a);double began=s.State.SimulationSeconds;double Held()=>s.State.SimulationSeconds-began;
+        s.Tick(11.85);Check(Says(a,"HEY! What's in the bag?"),"no warning before 12 s (\""+a.NpcSpeech+"\" at "+Held()+" s)");
+        s.Tick(.3);Check(Says(a,"Last chance. Empty your pockets."),"at 12 s the guard warns them (\""+a.NpcSpeech+"\" at "+Held()+" s)");
+        s.Tick(7.7);Check(cop.Mode=="Stop","the stop holds until 20 s (mode "+cop.Mode+" at "+Held()+" s)");
+        s.Tick(.3);Check(cop.Mode=="ArrestWarning"&&cop.TargetId=="a","at 20 s, still in sight with the stock, it is an arrest warning (mode "+cop.Mode+" at "+Held()+" s)");
+        s.Tick(3.75);Check(a.Life=="Alive","the usual 4 s run before the arrest ("+a.Life+" at "+Held()+" s)");
+        s.Tick(.3);Check(a.Life=="Detained"&&Count(a,"stock_lsd")==0,"4 s after the warning they are detained and the stock taken ("+a.Life+" at "+Held()+" s)");
+        s.Tick(1);Check(cop.Mode=="Patrol"&&cop.TargetId=="","then the cop walks on (mode "+cop.Mode+")");
+
+        // Out of sight at 20 s (and not yet for the 6 s that loses the guard), the arrest waits for the guard to see them again.
+        bool open=true;s=Stopped(out cop,out a,()=>open);began=s.State.SimulationSeconds;s.Tick(17);
+        open=false;s.Tick(4);Check(cop.Mode=="Stop","out of the guard's sight at 21 s, no arrest yet (mode "+cop.Mode+" at "+Held()+" s)");
+        open=true;s.Tick(.1);Check(cop.Mode=="ArrestWarning","back in its sight with the stock, an arrest warning at once (mode "+cop.Mode+" at "+Held()+" s)");
+    }
+
+    // Ditching: during a stop G drops stock first, whatever is in hand. With the last of it on the ground in the guard's sight
+    // the stop ends ("Fine. Move along."). The stock lies there for anyone for 10 s, then the guard walks over and takes it;
+    // picked back up in their sight, it starts a fresh stop. Out of a stop, G drops what's in hand, as ever.
+    static void DitchingTheStockEndsTheStop()
+    {
+        var s=Stopped(out var cop,out var a);
+        a.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});a.EquippedItemId="poi_practice";
+        var ditched=s.Execute("a",Command("Drop",item:"poi_practice"));
+        Check(ditched.Accepted&&Count(a,"stock_lsd")==0&&Count(a,"poi_practice")==1,"G during a stop drops the stock, not the poi in hand (\""+ditched.Reason+"\")");
+        var drop=s.State.Drops.Find(d=>d.ItemId=="stock_lsd");
+        s.Tick(.1);double ditchedAt=s.State.SimulationSeconds;
+        Check(cop.Mode=="Patrol"&&cop.TargetId==""&&cop.Evidence.Count==0,"with the last stock dropped in sight the stop ends within a tick (mode "+cop.Mode+", "+cop.Evidence.Count+" evidence)");
+        Check(Says(a,"Fine. Move along."),"and the guard waves them on (\""+a.NpcSpeech+"\")");
+        float x=cop.X,z=cop.Z;s.Tick(9.8);
+        Check(drop!=null&&s.State.Drops.Contains(drop)&&cop.X==x&&cop.Z==z,"for 10 s the stock lies where it fell, the guard standing by (moved "+Dist(x,z,cop.X,cop.Z)+" m)");
+        for(int guard=0;s.State.Drops.Contains(drop)&&guard<50;guard++)s.Tick(.1);
+        Check(!s.State.Drops.Contains(drop)&&s.State.SimulationSeconds-ditchedAt>=10&&Dist(x,z,cop.X,cop.Z)>1&&Dist(cop.X,cop.Z,drop.X,drop.Z)<=2.5,"then the guard walks over and takes it ("+(s.State.SimulationSeconds-ditchedAt)+" s on, walked "+Dist(x,z,cop.X,cop.Z)+" m, "+Dist(cop.X,cop.Z,drop.X,drop.Z)+" m from it)");
+        x=cop.X;z=cop.Z;s.Tick(1);Check(cop.Mode=="Patrol"&&Dist(x,z,cop.X,cop.Z)>1,"and walks on (mode "+cop.Mode+")");
+
+        s=Stopped(out cop,out a);
+        Check(s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted,"setup: a ditches the stock");s.Tick(.1);drop=s.State.Drops.Find(d=>d.ItemId=="stock_lsd");
+        Check(cop.Mode=="Patrol"&&s.Execute("a",Command("Pickup",drop.Id)).Accepted,"anyone can pick it back up before the guard does (mode "+cop.Mode+")");
+        s.Tick(.1);Check(cop.Mode=="Stop"&&Says(a,"HEY! What's in the bag?"),"and picked up in the guard's sight, it starts a fresh stop (mode "+cop.Mode+")");
+
+        s=Stopped(out cop,out a,()=>false);
+        a.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});a.EquippedItemId="poi_practice";
+        Check(cop.Mode=="Patrol"&&s.Execute("a",Command("Drop",item:"poi_practice")).Accepted&&Count(a,"poi_practice")==0&&Count(a,"stock_lsd")==1,"unstopped, G drops the poi in hand and keeps the stock (mode "+cop.Mode+")");
+    }
+
+    // Bolting: out of the guard's sight for 6 s, behind a wall or beyond their sight, and they give up; 5 s isn't enough. Within
+    // sight range they follow at their 3 m/s; beyond it they stand. Sight is Sees': 12 m, or 5 m in a dust storm.
+    static void BoltingOutOfSightEndsTheStop()
+    {
+        bool open=true;var s=Stopped(out var cop,out var a,()=>open);
+        open=false;a.Z=cop.Z+10;float z=cop.Z;s.Tick(1);
+        Check(Math.Abs(cop.Z-z-3)<.01,"behind a wall but within sight range the cop follows at 3 m/s ("+(cop.Z-z)+" m in 1 s)");
+        s.Tick(4);Check(cop.Mode=="Stop","5 s out of sight isn't enough (mode "+cop.Mode+")");
+        s.Tick(1.1);Check(cop.Mode=="Patrol"&&cop.TargetId==""&&cop.Evidence.Count==0,"6 s out of sight and the cop gives up (mode "+cop.Mode+")");
+
+        s=Stopped(out cop,out a);a.Z=cop.Z+13;z=cop.Z;s.Tick(5);
+        Check(cop.Mode=="Stop"&&cop.Z==z,"13 m off, beyond sight, the cop stands, and 5 s isn't enough (mode "+cop.Mode+", moved "+(cop.Z-z)+" m)");
+        a.Z=cop.Z+11;s.Tick(.1);a.Z=cop.Z+13;s.Tick(5);Check(cop.Mode=="Stop","back in sight for a moment, the 6 s start over (mode "+cop.Mode+")");
+        s.Tick(1.1);Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0,"then 6 s beyond sight and the cop gives up (mode "+cop.Mode+")");
+
+        foreach(bool storm in new[]{false,true})
+        {
+            s=Stopped(out cop,out a);if(storm)IntoADustStorm(s);a.Z=cop.Z+6;s.Tick(6.2);
+            Check(storm?cop.Mode=="Patrol":cop.Mode=="Stop",storm?"in a dust storm the guard sees 5 m, so 6 s at 6 m loses them (mode "+cop.Mode+")":"in clear air 6 m is in sight, and the stop holds (mode "+cop.Mode+")");
+        }
+    }
+
+    // Talking: a talk scoring .75 clears the stop, and the guard lets them be until it has lost sight of them. One scoring .5
+    // keeps it with its clock running. The guard hears a talk out: past 20 s mid-talk, the arrest warning waits for its end.
+    static void TalkingYourWayOut()
+    {
+        bool open=true;var s=Stopped(out var cop,out var a,()=>open);s.Tick(1);
+        var talk=Talk(s,a,cop,.75);Finish(s,talk);
+        Check(talk.Status=="Complete"&&talk.Score>=.75&&talk.Score<.85,"setup: the talk scores .75 or a little more (got "+talk.Score+")");
+        for(int tick=0;tick<20;tick++){InFront(cop,a,3);s.Tick(.1);}
+        Check(cop.Mode=="Patrol"&&cop.TargetId==""&&!cop.Evidence.Exists(e=>e.Kind=="VisibleStock"),"a talk scoring .75 clears the stop: 2 s on, stock right in front of the guard, it lets them be (mode "+cop.Mode+")");
+        open=false;s.Tick(.1);open=true;InFront(cop,a,3);s.Tick(.1);
+        Check(cop.Mode=="Stop","once the guard has lost sight of them, stock in view starts a fresh stop (mode "+cop.Mode+")");
+
+        s=Stopped(out cop,out a);double began=s.State.SimulationSeconds;s.Tick(1);
+        talk=Talk(s,a,cop,.5);Finish(s,talk);
+        Check(talk.Status=="Complete"&&talk.Score>=.5&&talk.Score<.75,"setup: the talk scores .5 or a little more, under .75 (got "+talk.Score+")");
+        s.Tick(.1);Check(cop.Mode=="Stop","a talk scoring .5 keeps the stop (mode "+cop.Mode+")");
+        s.Tick(19.85-(s.State.SimulationSeconds-began));Check(cop.Mode=="Stop","its clock runs on: a stop until 20 s (mode "+cop.Mode+")");
+        s.Tick(.3);Check(cop.Mode=="ArrestWarning","and an arrest warning at 20 s (mode "+cop.Mode+")");
+
+        s=Stopped(out cop,out a);began=s.State.SimulationSeconds;s.Tick(17);
+        talk=Talk(s,a,cop,.5);bool warned=false;
+        for(int guard=0;talk.Status=="Active"&&guard<300;guard++){s.Tick(.1);warned|=cop.Mode=="ArrestWarning";}
+        Check(s.State.SimulationSeconds-began>20.5&&!warned,"a talk running past 20 s holds the arrest warning (talk over at "+(s.State.SimulationSeconds-began)+" s, warned "+warned+")");
+        s.Tick(.1);Check(cop.Mode=="ArrestWarning","then the poor talk is over and it comes (mode "+cop.Mode+")");
+    }
+
+    // A player who sells their last stock out of the guard's sight is let go, and walking past the guard later starts nothing.
+    static void SellingTheLastStockUnseenEndsTheStop()
+    {
+        bool open=true;var s=Stopped(out var cop,out var a,()=>open);
+        s.State.Npcs.Add(new NpcState{Id="buyer",X=a.X+1,Z=a.Z,Yaw=-90});
+        open=false;var sold=s.Execute("a",Command("StartSale","buyer","stock_lsd"));Check(sold.Accepted,"setup: a sells out of the guard's sight (\""+sold.Reason+"\")");
+        var sale=s.Interaction(a.InteractionId);foreach(var note in RhythmChart.For(sale).Notes)sale.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+        s.Tick(.1);Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0&&!Says(a,"Fine. Move along."),"with no stock on them and out of the guard's sight, the stop is over within a tick, unremarked (mode "+cop.Mode+", "+cop.Evidence.Count+" evidence, \""+a.NpcSpeech+"\")");
+        Finish(s,sale);Check(sale.Status=="Complete"&&sale.Score>=.4&&Count(a,"stock_lsd")==0,"setup: the sale goes through (score "+sale.Score+")");
+        open=true;InFront(cop,a,3);s.Tick(.1);
+        Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0,"walking past the guard with nothing on them starts nothing (mode "+cop.Mode+")");
+    }
+
+    // A stop saved before stops kept a start time is timed from the load: no arrest at once, an arrest warning 20 s on.
+    static void AnOldSnapshotsStopStartsAtLoad()
+    {
+        var saved=Level(1);saved.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=saved.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;cop.Mode="Stop";cop.TargetId="a";
+        var a=saved.Player("a");a.X=0;a.Z=2;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});saved.State.SimulationSeconds=500;
+        cop.Evidence.Add(new EvidenceState{PlayerId="a",Kind="VisibleStock"});
+        var s=new FestivalSimulation();s.Restore(saved.State);
+        s.Tick(19.8);Check(cop.Mode=="Stop","19.8 s after the load the old stop holds (mode "+cop.Mode+")");
+        s.Tick(.3);Check(cop.Mode=="ArrestWarning","20 s after the load it is an arrest warning (mode "+cop.Mode+")");
+    }
+
+    // Being downed ends a stop: back on their feet with the stock, the player gets a fresh one. The level's end ends it too.
+    static void StopsEndWhenDownedOrWithTheLevel()
+    {
+        var s=Stopped(out var cop,out var a);s.Tick(15);
+        a.Life="Downed";a.DownedRemaining=35;s.Tick(.1);
+        Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0,"a downed player's stop ends (mode "+cop.Mode+", "+cop.Evidence.Count+" evidence)");
+        a.Life="Alive";InFront(cop,a,3);s.Tick(.1);s.Tick(6);
+        Check(cop.Mode=="Stop","back on their feet in sight with the stock, a fresh stop: 21 s after the first began it is no arrest (mode "+cop.Mode+")");
+        s.State.ElapsedSeconds=s.State.DurationSeconds;s.Tick(.1);
+        Check(s.State.Phase=="Results"&&cop.Mode=="Patrol"&&cop.TargetId==""&&cop.Evidence.Count==0,"when the level ends so does the stop (phase "+s.State.Phase+", mode "+cop.Mode+")");
     }
 }
