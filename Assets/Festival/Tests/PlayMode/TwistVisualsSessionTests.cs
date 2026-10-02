@@ -57,13 +57,12 @@ namespace Festival.Tests
             yield return null;
         }
 
-        // POLO-5: friends watch a ride from the ground, so every rider sits inside their gondola as it goes round, alone or beside a
-        // friend, whatever their body's shape (FestivalAppearance.Shape 0, 1 or 2, the last the widest and deepest). Three crews of
-        // two put each shape on each side of a friend (riders sharing a gondola sit in id order), and the deepest look rides alone:
-        // shape 2 in a tutu, with a backpack. Each crew boards together, a gondola apart, and the turn is moved on by starting their
-        // rides earlier, so two crews are at the top. Not covered, as it does not fit: friends sharing a gondola sit .35 m apart, and
-        // a shape-2 skirt, tutu or crossbody pouch reaches .49-.55 m out from its rider's middle, so beside a friend it shows 3-10 cm
-        // past a side wall. The crews here wear neither; how many friends a gondola seats is a product call.
+        // POLO-5: friends watch a ride from the ground, so every rider sits inside their gondola as it goes round, under its roof,
+        // alone or beside a friend, whatever their body's shape (FestivalAppearance.Shape 0, 1 or 2, the last the widest and deepest).
+        // Three crews of two put each shape on each side of a friend (riders sharing a gondola sit in id order), and the deepest look
+        // rides alone: shape 2 in a tutu, with a backpack. Player_1 wears the tallest seated look (shape 0 in hat 1), and player_29
+        // the widest (shape 2 in a skirt or tutu, with accessory 1, which reaches furthest out) beside a friend. Each crew boards together, a gondola
+        // apart, and the turn is moved on by starting their rides earlier, so two crews are at the top.
         [UnityTest]public IEnumerator EveryBodySitsInsideItsGondolaAloneOrBesideAFriend()
         {
             var world=new GameObject("Wheel world");world.AddComponent<FestivalWorld>();yield return null;
@@ -78,7 +77,7 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=Simulation(session);
-                var crews=new[]{new[]{"player_1","player_4"},new[]{"player_11","twist_mate"},new[]{"look_b2","player_9"},new[]{"player_81"}};
+                var crews=new[]{new[]{"player_1","player_29"},new[]{"player_11","twist_mate"},new[]{"look_b2","player_9"},new[]{"player_81"}};
                 var shapes=new[]{new[]{0,2},new[]{2,1},new[]{1,0},new[]{2}};
                 for(int c=0;c<crews.Length;c++)for(int r=0;r<crews[c].Length;r++)
                 {
@@ -87,6 +86,8 @@ namespace Festival.Tests
                 }
                 var deep=FestivalAppearance.For("player_81");
                 Assert.That(deep.Pants>=2&&deep.Accessory==0,Is.True,"setup: the lone rider wears a skirt or tutu and a backpack");
+                var tall=FestivalAppearance.For("player_1");var wide=FestivalAppearance.For("player_29");
+                Assert.That(tall.Headgear==1&&wide.Pants>=2&&wide.Accessory==1,Is.True,"setup: the tallest look wears hat 1, and the widest a skirt or tutu and accessory 1");
                 yield return StartLevel(session);
                 for(int c=0;c<crews.Length;c++)foreach(var id in crews[c])
                 {
@@ -137,13 +138,13 @@ namespace Festival.Tests
 
         // POLO-5: what of a seated body shows outside its gondola: each skinned part's furthest vertex past ART-1's gondola (its
         // "gond" in generate_polo_dressing.py), from the gondola's middle: the floor's underside .45 m down, the walls' outer faces .63 m
-        // either side and .53 m ahead and behind, their tops .01 m up. Below the wall tops nothing may come through; above them, in
-        // the open air under the roof, a hand, a hat brim or a backpack's top may overhang by up to Overhang. Vertices, not the
-        // renderers' bounds: a skinned renderer's bounds join a box per bone, which with the arms bent stand up to 10 cm wider than
-        // the mesh.
+        // either side and .53 m ahead and behind, their tops .01 m up, and the canopy roof's underside .37 m up. Below the wall tops
+        // nothing may come through; above them, in the open air under the roof, a hand, a hat brim or a backpack's top may overhang
+        // the walls by up to Overhang; and nothing, not even a hat, may come up through the roof. Vertices, not the renderers'
+        // bounds: a skinned renderer's bounds join a box per bone, which with the arms bent stand up to 10 cm wider than the mesh.
         internal static List<string> OutsideItsGondola(GameObject body,Transform gondola)
         {
-            const float Underside=.45f,Side=.63f,End=.53f,WallTop=.01f,Overhang=.05f;
+            const float Underside=.45f,Side=.63f,End=.53f,WallTop=.01f,Roof=.37f,Overhang=.05f;
             var outside=new List<string>();var mesh=new Mesh();var middle=gondola.position;
             foreach(var skin in body.GetComponentsInChildren<SkinnedMeshRenderer>())
             {
@@ -152,7 +153,7 @@ namespace Festival.Tests
                 foreach(var vertex in mesh.vertices)
                 {
                     var p=toWorld.MultiplyPoint3x4(vertex)-middle;
-                    float past=Mathf.Max(Mathf.Abs(p.x)-Side,Mathf.Abs(p.z)-End,-Underside-p.y)-(p.y>WallTop?Overhang:0);
+                    float past=Mathf.Max(Mathf.Max(Mathf.Abs(p.x)-Side,Mathf.Abs(p.z)-End)-(p.y>WallTop?Overhang:0),-Underside-p.y,p.y-Roof);
                     if(past>worst){worst=past;at=p;}
                 }
                 if(worst>0)outside.Add(skin.name+" shows "+worst.ToString("0.000")+" m past the gondola at "+at.ToString("F2")+" from its middle");

@@ -170,10 +170,10 @@ namespace Festival.Tests
                     else
                     {
                         if(Vector2.Distance(new Vector2(hips.position.x,hips.position.z),new Vector2(eye.x,eye.z))<.3f)failures.Add("halfway round the wheel: Sam sits in the same place as you ("+hips.position+", your eye "+eye+"), not beside you");
-                        // The gondola's floor is .37-.45 m below its middle, and its walls stand .01 m above it. Seated, Sam's hips are
-                        // down behind the walls, and nothing of Sam comes out under the floor, where friends on the ground look up at it, or
-                        // through its walls (TwistVisualsSessionTests.OutsideItsGondola, which every body shape passes). Sam's head (the
-                        // rig's is .56 m tall) still shows over the roof.
+                        // The gondola's floor is .37-.45 m below its middle, its walls stand .01 m above it and its roof's underside .37 m.
+                        // Seated, Sam's hips are down behind the walls, and nothing of Sam comes out under the floor, where friends on the
+                        // ground look up at it, through its walls, or up through its roof (TwistVisualsSessionTests.OutsideItsGondola,
+                        // which every body shape passes).
                         if(hips.position.y>theirs.position.y)failures.Add("halfway round the wheel: Sam stands rather than sits (hips "+(hips.position.y-theirs.position.y).ToString("0.00")+" m above the gondola's middle)");
                         foreach(var part in TwistVisualsSessionTests.OutsideItsGondola(sam,theirs))failures.Add("halfway round the wheel: Sam's "+part);
                     }

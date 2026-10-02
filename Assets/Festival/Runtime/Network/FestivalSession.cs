@@ -541,8 +541,9 @@ namespace Festival.Network
                 if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
                 bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
                 if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
-                // POLO-5: a Ferris wheel rider is drawn seated in their gondola, facing away from its bench (-z), while the rules keep
-                // them at its base. They are aimed a glide (1/15 s, Actor's) ahead of the seat so it keeps them there.
+                // POLO-5: a Ferris wheel rider is drawn seated in their gondola, facing away from its bench (-z), and at
+                // FestivalTwistVisuals.RiderScale so they fit under its roof, while the rules keep them at its base. They are aimed a
+                // glide (1/15 s, Actor's) ahead of the seat so it keeps them there.
                 bool wheel=p.VisualWheelSince>=0&&world!=null;
                 var at=togetherInside?new Vector3(p.CampInteriorX,0,p.CampInteriorZ):wheel?world.WheelSeat(State,p,1/15f):new Vector3(p.X,0,p.Z);
                 // A debrief winner wears their awards over their head until the next level's results (HUD-3).
@@ -550,6 +551,7 @@ namespace Festival.Network
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
                     string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:at.y);
+                if(wheel)actors[p.Id].localScale*=FestivalTwistVisuals.RiderScale;
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)
                 {

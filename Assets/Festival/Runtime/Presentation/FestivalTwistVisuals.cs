@@ -33,14 +33,16 @@ namespace Festival.Presentation
         // further out than WheelSnap seconds.
         private const double WheelPull=2,WheelSnap=1;
         // POLO-5: a rider sits in ART-1's gondola, over its floor CabinFloor below the model's middle (the point it hangs from, less
-        // GondolaDrop), and CabinAhead forward of that middle, toward the way they face (-z). That shares out the room between the
-        // front and back walls: the widest body shape's skirt, tutu or hat brim reaches .47-.54 m ahead of its middle, and its
-        // backpack .51-.59 m behind. Their eye is SeatedEyeHeight above that floor: in the open cabin, under the canopy roof .74 m
-        // above the floor that a standing eye poked through, and above the walls' tops (.38 m). Riders sharing a gondola sit side
-        // by side across the middle CabinSpread of its 1.2 m width, .35 m apart for two, which keeps every seated body inside its
-        // sides (.45 m out from its middle at most) except the widest shape's skirt, tutu or crossbody pouch (.49-.55 m), which
-        // shows 3-10 cm past a side beside a friend.
-        public const float SeatedEyeHeight=.56f;
+        // GondolaDrop), and CabinAhead forward of that middle, toward the way they face (-z). Their eye is SeatedEyeHeight above that
+        // floor: in the open cabin, under the canopy roof .74 m above the floor that a standing eye poked through, and above the
+        // walls' tops (.38 m). Riders sharing a gondola sit side by side across the middle CabinSpread of its 1.2 m width.
+        // The cabin is far too low for a seated body at full size: the tallest seated look (body shape 0 in hat 1) reaches 1.68 m
+        // over the floor, its head and shoulders up through the roof. So a rider's body is drawn at RiderScale: at .42 that look
+        // reaches .705 m, 3.5 cm under the roof (the glide leads the seat by 1.5-2.8 cm), its head bone .4 m over the floor, just
+        // under the rider's own eye (SeatedEyeHeight), and the widest look (shape 2, an accessory .56 m out at full size) .24 m
+        // either side of its middle.
+        // ponytail: back to 1 once ART-2 gives the gondola a seated person's headroom.
+        public const float SeatedEyeHeight=.56f,RiderScale=.42f;
         private const float CabinFloor=.37f,CabinAhead=.025f,CabinSpread=.7f;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
