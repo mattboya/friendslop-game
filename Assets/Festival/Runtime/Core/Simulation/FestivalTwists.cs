@@ -184,6 +184,9 @@ namespace Festival.Core
         void RideArtCars(){foreach(var ride in State.Interactions){var p=ride.Status=="Active"&&ride.Kind==RideCarKind?Player(ride.PlayerId):null;if(p!=null&&Car(ride)>=0)RideArtCar(p,Car(ride));}}
         void RideArtCar(PlayerState p,int car){var at=Festivals.ArtCarAt(car,State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;}
         bool Hidden(NpcState n,PlayerState p)=>n.Kind=="Wook"&&p.InteractionId!=""&&ArtCarOf(State,p.Id)>=0;
+        // PLAYA-4: whether the rider boarded under ArtCarTrailSeconds ago, so a festivalgoer already after them still trails the
+        // car (WookTick). The boarding is the ride's StartSeconds: a ride is one RideCar from climbing aboard to hopping off.
+        bool Trailed(PlayerState rider){var ride=State.Interactions.Find(i=>i.PlayerId==rider.Id&&i.Kind==RideCarKind&&i.Status=="Active");return ride!=null&&State.SimulationSeconds-ride.StartSeconds<Festivals.ArtCarTrailSeconds;}
         /// <summary>Whether Ember Playa's effigy is burning: the last BurnSeconds of Night 2. Like the storms it reads only the view's
         /// festival, level and clock, so every client knows it.</summary>
         public static bool Burning(RoundState s)=>s.FestivalIndex==Festivals.PlayaFestival&&s.LevelIndex==Festivals.LevelCount-1&&s.ElapsedSeconds>=s.DurationSeconds-Festivals.BurnSeconds;

@@ -61,9 +61,11 @@ namespace Festival.Core
         public const float SightRange=12,DustStormSightRange=5;
         // Two art cars crawl round their loops at ArtCarSpeed, one on the lawn each side of the main path, between the bunting and
         // the crowd, clear of trees, totems and the crowd's standing spots. Corners as x, z pairs: car 0 heads north up its
-        // inner side, car 1 south. RideCar boards the one within ArtCarReach.
+        // inner side, car 1 south. RideCar boards the one within ArtCarReach. PLAYA-4: for ArtCarTrailSeconds after a rider
+        // boards, festivalgoers already after them trail the car, holding off ArtCarReach from it (WookTick).
         public const int ArtCars=2;
         public const float ArtCarSpeed=1.2f,ArtCarReach=3;
+        public const double ArtCarTrailSeconds=8;
         static readonly float[][] ArtCarLoops={new float[]{-8,-10,-8,8,-13,8,-13,-10},new float[]{8,8,8,-10,13,-10,13,8}};
         /// <summary>Where art car `car` is `seconds` into the level. It depends on the level clock alone, so a client works it out
         /// from its own view exactly as the host does.</summary>

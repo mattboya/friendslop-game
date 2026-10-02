@@ -6,7 +6,8 @@ using Festival.Core;
 
 // PLAYA-1: Ember Playa (festival 1) has four twists, and Palm Mirage has none of them. Money reads as odd objects, a different
 // set for each player, over the same economy. Dust storms of 20-40 s blow on a seeded schedule and cut everyone's sight, cops'
-// too (PLAYA-3), from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight. For the
+// too (PLAYA-3), from 12 m to 5 m. Two art cars crawl round slow loops, and a rider moves with their car out of festivalgoers' sight
+// (PLAYA-4: a swarm already after them trails the car for a few seconds, then gives up). For the
 // last three minutes of Night 2 the effigy burns: the crowd gathers round it (a festivalgoer busy with someone first finishes
 // with them), and within 12 m of it every step is x.7 and suspicion of anyone there cools twice as fast.
 public static class PlayaTwistTests
@@ -21,7 +22,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmLosesARiderItCannotSee,
+            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
             TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -248,20 +249,53 @@ public static class PlayaTwistTests
         Check(!FestivalSimulation.Burning(palm)&&!FestivalSimulation.InBurnCrowd(palm,Festivals.EffigyX,Festivals.EffigyZ),"Palm Mirage has no effigy");
     }
 
-    // A swarm already on p0 when they climb aboard can't see them up there, so it loses them: it stops closing in, never lands
-    // a blow, and cools off like a festivalgoer left far behind.
-    static void ASwarmLosesARiderItCannotSee()
+    // A festivalgoer 6 m behind p0 is swarming them when p0 climbs aboard art car 0.
+    static FestivalSimulation Swarmed(out NpcState n)
     {
         var s=Cars();var p=s.Player("p0");s.State.SimulationSeconds=30;
-        var n=new NpcState{Id="wook",X=p.X,Z=p.Z-6};s.State.Npcs.Add(n);
+        n=new NpcState{Id="wook",X=p.X,Z=p.Z-6};s.State.Npcs.Add(n);
         n.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=s.State.SimulationSeconds,AccusationSeconds=s.State.SimulationSeconds-10});
         s.Tick(.1);Check(n.Mode=="Swarming"&&n.TargetId=="p0","setup: a festivalgoer is swarming p0, got "+n.Mode);
         Check(Act(s,"p0","RideCar").Accepted,"setup: p0 climbs aboard art car 0");
-        double closest=double.MaxValue;
-        for(int k=0;k<300;k++){s.Tick(.1);closest=Math.Min(closest,Math.Sqrt((n.X-p.X)*(n.X-p.X)+(n.Z-p.Z)*(n.Z-p.Z)));}
-        Check(p.Life=="Alive"&&p.Health==100,"the swarm never lands a blow on the rider: "+p.Life+", health "+p.Health+", closest "+closest+" m");
-        Check(FestivalSimulation.ArtCarOf(s.State,"p0")==0,"p0 rides on for 30 s");
-        Check(n.Mode!="Swarming"&&Heat(s,"wook","p0")<70,"and it gives up the chase: "+n.Mode+" at "+Heat(s,"wook","p0"));
+        return s;
+    }
+    static double Apart(NpcState n,PlayerState p)=>Math.Sqrt((n.X-p.X)*(n.X-p.X)+(n.Z-p.Z)*(n.Z-p.Z));
+    // How far (degrees) n's facing is from looking straight at p.
+    static double Off(NpcState n,PlayerState p){double to=Math.Atan2(p.X-n.X,p.Z-n.Z)*180/Math.PI;return Math.Abs(((n.Yaw-to)%360+540)%360-180);}
+
+    // PLAYA-4: the swarm can't see the rider up there, but for ArtCarTrailSeconds after the boarding it trails the car. It
+    // walks after it, a little faster than the car rolls, holds off ArtCarReach from the deck, keeps facing the rider and stays
+    // swarming. Then it loses them: it stops where it is and cools off like a festivalgoer left far behind. It never lands a blow.
+    static void ASwarmTrailsARiderThenGivesUp()
+    {
+        var s=Swarmed(out var n);var p=s.Player("p0");double boarded=s.State.SimulationSeconds,start=Apart(n,p),closest=double.MaxValue,stride=0;
+        while(s.State.SimulationSeconds+.1<boarded+Festivals.ArtCarTrailSeconds-.01)
+        {
+            float x=n.X,z=n.Z;s.Tick(.1);closest=Math.Min(closest,Apart(n,p));stride=Math.Max(stride,Math.Sqrt((n.X-x)*(n.X-x)+(n.Z-z)*(n.Z-z)));
+            string at=(s.State.SimulationSeconds-boarded).ToString("0.0")+" s after the boarding";
+            Check(n.Mode=="Swarming"&&Heat(s,"wook","p0")>=70,at+", it is still swarming: "+n.Mode+" at "+Heat(s,"wook","p0"));
+            Check(Off(n,p)<1,at+", it faces the rider, not "+Off(n,p)+" degrees off");
+            Check(p.Life=="Alive"&&p.Health==100&&FestivalSimulation.ArtCarOf(s.State,"p0")==0,at+", p0 rides car 0 unharmed: "+p.Life+", health "+p.Health);
+        }
+        Check(Apart(n,p)<start-1&&Apart(n,p)<=Festivals.ArtCarReach+.25,"it closes on the rider, from "+start+" m to "+Apart(n,p)+" m");
+        Check(closest>=Festivals.ArtCarReach-.1,"but holds off the deck: it came within "+closest+" m");
+        Check(stride<=1.7*.1+1e-3,"at a walk of 1.7 m/s, not "+stride*10+" m/s");
+        s.Tick(.3);float stoodX=n.X,stoodZ=n.Z;s.Tick(.1);
+        Check(n.X==stoodX&&n.Z==stoodZ,"once the "+Festivals.ArtCarTrailSeconds+" s are up, it stops where it is");
+        double gaveUp=-1;
+        for(int k=0;k<50&&gaveUp<0;k++){s.Tick(.1);if(n.Mode!="Swarming"&&Heat(s,"wook","p0")<70)gaveUp=s.State.SimulationSeconds-boarded;}
+        Check(gaveUp>0,"and within 5 s more it gives up the chase: "+n.Mode+" at "+Heat(s,"wook","p0"));
+        while(s.State.SimulationSeconds+.05<boarded+30){s.Tick(.1);Check(p.Life=="Alive"&&p.Health==100&&FestivalSimulation.ArtCarOf(s.State,"p0")==0,"p0 rides car 0 unharmed for 30 s: "+p.Life+", health "+p.Health);}
+    }
+    // A rider who hops off while the swarm still trails them is just next to an angry swarm again, and the chase picks them up.
+    static void ARiderWhoHopsOffMidTrailIsSwarmedAgain()
+    {
+        var s=Swarmed(out var n);var p=s.Player("p0");s.Tick(4);
+        Check(Act(s,"p0","Cancel").Accepted&&FestivalSimulation.ArtCarOf(s.State,"p0")<0,"setup: p0 hops off 4 s after boarding");
+        Check(n.Mode=="Swarming"&&Heat(s,"wook","p0")>=70,"the swarm trailing the car is still swarming: "+n.Mode+" at "+Heat(s,"wook","p0"));
+        double was=Apart(n,p),closest=was;
+        for(int k=0;k<20;k++){s.Tick(.1);closest=Math.Min(closest,Apart(n,p));}
+        Check(n.Mode=="Swarming"&&closest<=1.5,"and closes back in on p0, from "+was+" m to "+closest+" m ("+n.Mode+")");
     }
     static void TheCrowdGathersAtTheBurn()
     {
