@@ -104,9 +104,13 @@ namespace Festival.Presentation
         // DIALOG-6: the one-line chat (Talk, a guard's bark) the dialogue card shows, kept up until read.
         private readonly FestivalTalkLine talkLine=new FestivalTalkLine();
         private bool? chatBesidePass;
-        // ECON-2: the buy from a festivalgoer under way, the kind it buys and how many of that kind were held as it began.
-        private string buyInteractionId="",buyItem="";
+        // ECON-2: the buy from a festivalgoer under way, the kind it buys and how many of that kind were held as it began. K1: and
+        // whom from, as "<round id>/<their id>", kept once they hand a unit over (soldToYou): a seller never buys, so beside them E
+        // buys again rather than offering the unit back (FestivalHudText.FestivalgoerActions).
+        // ponytail: a key per buy, never pruned (a weekend makes a few dozen); clear it on a new round if that ever matters.
+        private string buyInteractionId="",buyItem="",buySeller="";
         private int heldBeforeBuy;
+        private readonly HashSet<string> soldToYou=new HashSet<string>();
         private Image effectWash;
         private float baseFov=75;
         private float nextActionRefresh;
@@ -940,7 +944,7 @@ namespace Festival.Presentation
         private void UpdateRhythm(RoundState state,PlayerState player)
         {
             var interaction=state.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
-            TrackBuy(interaction,player);
+            TrackBuy(state,interaction,player);
             bool rhythm=interaction!=null&&FestivalInput.IsRhythmKind(interaction.Kind);
             rhythmPanel.SetActive(rhythm);
             // DANCE-2: every four-lane challenge shows the live dancer beside its lanes.
@@ -1326,7 +1330,7 @@ namespace Festival.Presentation
             if(npc!=null)
             {
                 if(npc.Kind=="Cop"){if(npc!=stopper)AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);}
-                else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
+                else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id)))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
             }
             // Offering your gear to a friend in reach follows the errands above, the checks and the festivalgoer beside you: the sober
             // crew sticks by the tripper, so a friend is often in reach, and E must not hand them your gear (your stock, ECON-3)
@@ -1449,17 +1453,17 @@ namespace Festival.Presentation
         }
         // ECON-2: a buy from a festivalgoer holds the price as its dance starts and hands the unit over as it ends, so the check above
         // never sees both at once; the buy's own reply comes when it ends (FestivalHudText.BuyReply), read in your money by Update.
-        private void TrackBuy(InteractionState active,PlayerState player)
+        private void TrackBuy(RoundState state,InteractionState active,PlayerState player)
         {
             if(active!=null&&active.Kind=="Buy")
             {
-                if(active.Id!=buyInteractionId){buyInteractionId=active.Id;buyItem=FestivalSimulation.SellerStock(active.TargetId);heldBeforeBuy=Held(player,buyItem);}
+                if(active.Id!=buyInteractionId){buyInteractionId=active.Id;buyItem=FestivalSimulation.SellerStock(active.TargetId);heldBeforeBuy=Held(player,buyItem);buySeller=state.RoundId+"/"+active.TargetId;}
                 return;
             }
             if(buyInteractionId=="")return;
             buyInteractionId="";
             string reply=FestivalHudText.BuyReply(buyItem,heldBeforeBuy,Held(player,buyItem));
-            if(reply!="")session.SetMessage(reply);
+            if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
         }
         private static int Held(PlayerState player,string item){foreach(var stack in player.Inventory)if(stack.ItemId==item)return stack.Count;return 0;}
         private void ApplyContrast(bool high)

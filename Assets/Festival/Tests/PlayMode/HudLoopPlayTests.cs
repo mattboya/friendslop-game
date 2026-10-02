@@ -206,6 +206,31 @@ namespace Festival.Tests
                 Expect("the tripper beside a vision, holding stock",FestivalHudText.CheckDanceAction);
                 yield return PressE("the tripper beside a vision, holding stock","ConfirmDance");
                 sim.State.TripperId=mate.Id;sim.State.Visions.Clear();
+                // K1: once someone has sold to you, E beside them buys again. A seller never buys, so E offering the unit back was a
+                // sure refusal and +10 suspicion. The buy is talked through with the smooth reply every turn, after a perfect dance
+                // (over by the next tick) if they ask for one first.
+                buyer=new NpcState{Id="sale_seller_4",Role="Regular",CanTalk=true};sim.State.Npcs.Clear();sim.State.Npcs.Add(buyer);
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
+                yield return Stand();
+                ((System.Action)primary.GetValue(view))?.Invoke();yield return new WaitForSeconds(.4f);
+                var bought=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                Assert.That(bought?.Kind,Is.EqualTo("Buy"),"setup: E starts a buy from them ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                if(bought.TrustDance)
+                {
+                    foreach(var note in RhythmChart.For(bought).Notes)bought.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+                    bought.StartSeconds=sim.State.SimulationSeconds-bought.DurationSeconds-1;
+                    yield return new WaitForSeconds(.4f);
+                }
+                while(bought.Status=="Active"&&bought.Turns.Count>0)
+                {
+                    var turn=bought.Turns[bought.Turns.Count-1];
+                    Assert.That(sim.Execute(player.Id,new GameCommand{Id="sale_reply_"+bought.Turns.Count,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=bought.Turns.Count-1}).Accepted,Is.True,"setup: a smooth reply");
+                }
+                yield return new WaitForSeconds(.4f);
+                Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: the buy hands over a Tongue Stamp ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                yield return Stand();
+                Expect("by day, beside who just sold to you",FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"  •  F CHAT");
+                yield return PressE("by day, beside who just sold to you","Buy");
                 // At night E dances, stock or not.
                 sim.State.LevelIndex=1;
                 yield return Stand();
