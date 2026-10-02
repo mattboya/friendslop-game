@@ -198,8 +198,8 @@ namespace Festival.Tests
                 Assert.That(FestivalHudText.ShowsDancer(kind,false),Is.False,"no four-lane challenge ("+(kind??"none")+"), no dancer");
         }
 
-        // A check dance reads as a dance; a sale, a chat and a talk with security each say what the player is doing, under the
-        // lanes' "YOU  /  …" heading with two spaces round the slash.
+        // A check dance reads as a dance; a sale, a buy (ECON-2), a chat and a talk with security each say what the player is doing,
+        // under the lanes' "YOU  /  …" heading with two spaces round the slash.
         [Test]public void EachChallengeHasItsOwnHeadingAndCaption()
         {
             var expected=new Dictionary<string,(string heading,string caption)>
@@ -209,6 +209,7 @@ namespace Festival.Tests
                 {"Poi",("YOU  /  POI CIRCLE","YOUR POI • YOUR FLOW")},
                 {"Dj",("YOU  /  AT THE DECK","YOUR LOOK • YOUR MIX")},
                 {"Sale",("YOU  /  MAKING A SALE","YOUR LOOK • YOUR PITCH")},
+                {"Buy",("YOU  /  MAKING A BUY","YOUR LOOK • YOUR HAGGLE")},
                 {"Conversation",("YOU  /  CHATTING","YOUR LOOK • YOUR VIBE")},
                 {"Police",("YOU  /  TALKING TO SECURITY","YOUR LOOK • YOUR ALIBI")},
             };
@@ -220,18 +221,19 @@ namespace Festival.Tests
             }
         }
 
-        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Conversation","Police"};
+        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation","Police"};
 
-        // A sale, a chat and a talk with security are danced (FestivalSimulation.DancesVisibly), so every client, the dancer's own
-        // live view included, shows the player dancing with whoever they're talking to.
-        [Test]public void EveryoneSeesASaleAChatAndSecurityDanced()
+        // A sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are danced (FestivalSimulation.DancesVisibly),
+        // so every client, the dancer's own live view included, shows the player dancing with whoever they're talking to. The buy
+        // starts the way the HUD's Buy action starts it: StartBuy for the one kind the festivalgoer sells.
+        [Test]public void EveryoneSeesASaleABuyAChatAndSecurityDanced()
         {
-            foreach(var kind in new[]{"Sale","Conversation","Police"})
+            foreach(var kind in new[]{"Sale","Buy","Conversation","Police"})
             {
                 var game=new FestivalSimulation(5);var dancer=game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");game.State.Phase="Playing";game.State.Npcs.Clear();
-                game.State.Npcs.Add(new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",X=0,Z=2,Yaw=180,CanTalk=true});
+                game.State.Npcs.Add(new NpcState{Id="partner",Kind=kind=="Police"?"Cop":"Wook",Role=kind=="Buy"?"Regular":"",X=0,Z=2,Yaw=180,CanTalk=true});
                 dancer.X=0;dancer.Z=0;dancer.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
-                var started=game.Execute("p0",new GameCommand{Id="dance2_"+kind,Kind=kind=="Sale"?"StartSale":kind,TargetId="partner",ItemId=kind=="Sale"?"stock_lsd":""});
+                var started=game.Execute("p0",new GameCommand{Id="dance2_"+kind,Kind=kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,TargetId="partner",ItemId=kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock("partner"):""});
                 Assert.That(started.Accepted,Is.True,"setup: the "+kind+" starts: "+started.Reason);
                 foreach(var viewer in game.State.Players)
                     Assert.That(FestivalSession.ViewFor(game,viewer.Id).Players.Find(p=>p.Id=="p0").VisualPose,Is.EqualTo("Dance"),viewer.Id+" sees P0 dance through the "+kind);

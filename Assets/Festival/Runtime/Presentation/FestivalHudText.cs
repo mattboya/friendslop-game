@@ -327,12 +327,20 @@ namespace Festival.Presentation
 
         /// <summary>DANCE-2: every four-lane challenge shows the live dancer beside its lanes, unless the menu covers it.</summary>
         public static bool ShowsDancer(string kind,bool menuOpen)=>FestivalInput.IsRhythmKind(kind)&&!menuOpen;
-        /// <summary>The live dancer's heading. A check dance reads as a dance; a sale, a chat and a talk with security say what the
-        /// player is doing.</summary>
+        /// <summary>The live dancer's heading. A check dance reads as a dance; a sale, a buy, a chat and a talk with security say what
+        /// the player is doing.</summary>
         public static string DancerHeading(string kind)=>kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK","Sale"=>"YOU  /  MAKING A SALE",
-            "Conversation"=>"YOU  /  CHATTING","Police"=>"YOU  /  TALKING TO SECURITY",_=>"YOU  /  ON THE FLOOR"};
+            "Buy"=>"YOU  /  MAKING A BUY","Conversation"=>"YOU  /  CHATTING","Police"=>"YOU  /  TALKING TO SECURITY",_=>"YOU  /  ON THE FLOOR"};
         /// <summary>The caption under the live dancer, shown while nobody is saying a line.</summary>
         public static string DancerCaption(string kind)=>kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX","Sale"=>"YOUR LOOK • YOUR PITCH",
-            "Conversation"=>"YOUR LOOK • YOUR VIBE","Police"=>"YOUR LOOK • YOUR ALIBI",_=>"YOUR LOOK • YOUR MOVES"};
+            "Buy"=>"YOUR LOOK • YOUR HAGGLE","Conversation"=>"YOUR LOOK • YOUR VIBE","Police"=>"YOUR LOOK • YOUR ALIBI",_=>"YOUR LOOK • YOUR MOVES"};
+
+        /// <summary>ECON-2: beside any festivalgoer, "Buy Tongue Stamps  •  $5": the one kind they would sell, read off their id alone
+        /// (FestivalSimulation.SellerStock) so the label gives no role away, at its price in the viewer's money.</summary>
+        public static string BuyAction(RoundState s,PlayerState viewer,string npcId){var item=Catalog.FindItem(FestivalSimulation.SellerStock(npcId));return "Buy "+item.Name+Dot+Money(s,viewer,item.Price);}
+        /// <summary>ECON-2: what a finished buy says, in dollars like the host's replies, for MoneyText: "Bought Tongue Stamps for $5"
+        /// once the buyer holds one more of the kind than when the dance began; "" when a miss or a cancel handed the price back.
+        /// ponytail: a unit dropped at the buyer's feet (hands filled mid-dance) is not counted, so that rare buy says nothing.</summary>
+        public static string BuyReply(string item,int heldBefore,int heldNow){var bought=Catalog.FindItem(item);return heldNow>heldBefore?"Bought "+bought.Name+" for $"+bought.Price:"";}
     }
 }

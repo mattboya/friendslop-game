@@ -91,6 +91,9 @@ namespace Festival.Presentation
         // The chat check under way and the question 1-3 asked in it (-1 until one is).
         private string chatInteractionId="";
         private int chatQuestion=-1;
+        // ECON-2: the buy from a festivalgoer under way, the kind it buys and how many of that kind were held as it began.
+        private string buyInteractionId="",buyItem="";
+        private int heldBeforeBuy;
         private Image effectWash;
         private float baseFov=75;
         private float nextActionRefresh;
@@ -712,6 +715,7 @@ namespace Festival.Presentation
         private void UpdateRhythm(RoundState state,PlayerState player)
         {
             var interaction=state.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
+            TrackBuy(interaction,player);
             bool rhythm=interaction!=null&&FestivalInput.IsRhythmKind(interaction.Kind);
             rhythmPanel.SetActive(rhythm);
             // DANCE-2: every four-lane challenge shows the live dancer beside its lanes.
@@ -1095,6 +1099,9 @@ namespace Festival.Presentation
                     if(npc.CanTalk){AddAction("Chat with festivalgoer",()=>session.Command("Talk",npc.Id),ref y);AddAction("Talk and keep the beat",()=>session.Command("Conversation",npc.Id),ref y);}
                     var stock=player.Inventory.Find(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms");
                     if(stock!=null)AddAction("Offer "+ItemName(stock.ItemId),()=>session.Command("StartSale",npc.Id,stock.ItemId),ref y);
+                    // ECON-2: anyone in the crowd might sell, so every festivalgoer offers their kind, after the offer so E still dances.
+                    string kind=FestivalSimulation.SellerStock(npc.Id);
+                    AddAction(FestivalHudText.BuyAction(state,player,npc.Id),()=>session.Command("StartBuy",npc.Id,kind),ref y);
                 }
             }
             // TRIP-4: lying down comes last of all, after the festivalgoer beside you, so E never lies you down instead of dancing,
@@ -1184,6 +1191,21 @@ namespace Festival.Presentation
             }
             previousRound=state.RoundId;previousCash=player.Cash;previousUnits=units;
         }
+        // ECON-2: a buy from a festivalgoer holds the price as its dance starts and hands the unit over as it ends, so the check above
+        // never sees both at once; the buy's own reply comes when it ends (FestivalHudText.BuyReply), read in your money by Update.
+        private void TrackBuy(InteractionState active,PlayerState player)
+        {
+            if(active!=null&&active.Kind=="Buy")
+            {
+                if(active.Id!=buyInteractionId){buyInteractionId=active.Id;buyItem=FestivalSimulation.SellerStock(active.TargetId);heldBeforeBuy=Held(player,buyItem);}
+                return;
+            }
+            if(buyInteractionId=="")return;
+            buyInteractionId="";
+            string reply=FestivalHudText.BuyReply(buyItem,heldBeforeBuy,Held(player,buyItem));
+            if(reply!="")session.SetMessage(reply);
+        }
+        private static int Held(PlayerState player,string item){foreach(var stack in player.Inventory)if(stack.ItemId==item)return stack.Count;return 0;}
         private void ApplyContrast(bool high)
         {
             if(appliedContrast==high)return;appliedContrast=high;

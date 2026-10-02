@@ -16,7 +16,8 @@ namespace Festival.Tests
         // HUD-3 with PLAYA-1: on Ember Playa the running HUD never shows a dollar. Hosts a real round as the crew member who counts
         // in friendship bracelets, the longest odd object: at camp they eye the practice poi on the gear shelf (ECON-2: no shelf
         // sells stock), pick it up, show it to the seller and pay; out on Day 1 they read their pocket, the stash, the sales and the
-        // quota with security closing in, and try to leave early, which the host refuses in dollars. Labels are laid out on a
+        // quota with security closing in, try to leave early, which the host refuses in dollars, and buy a Tongue Stamp from a
+        // festivalgoer, whose price and reply read in bracelets too. Labels are laid out on a
         // 1920x1080 canvas and must draw whole, and the shelf's price tags must stay within their slot.
         [UnityTest]public IEnumerator EmberPlayaCountsInYourOddObjects()
         {
@@ -108,6 +109,29 @@ namespace Festival.Tests
                 session.Command("Extract");yield return new WaitForSeconds(.4f);
                 Expect("leaving early","Notice","Sell "+(quota-12)+" friendship bracelets more to meet the day's quota");
                 Fits("leaving early","Notice");NoDollars("leaving early");
+
+                // ECON-2: beside a festivalgoer the HUD offers their kind of stock at its price in your bracelets. Bought out of the
+                // cops' sight, the dance says it's a buy, and the reply names the price in bracelets too.
+                sim.State.Npcs.Remove(cop);
+                var seller=new NpcState{Id="money_seller_2",Role="Regular",X=0,Z=1.5f,Yaw=180};sim.State.Npcs.Add(seller);
+                yield return new WaitForSeconds(.4f);
+                const string BuyLabel="Buy Tongue Stamps  •  5 friendship bracelets";
+                Button buy=null;foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name=="Action:"+BuyLabel)buy=b;
+                if(buy==null){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name.StartsWith("Action:"))listed.Add(b.name.Substring(7));failures.Add("beside a festivalgoer: no \""+BuyLabel+"\" among \""+string.Join(" | ",listed)+"\"");}
+                else
+                {
+                    buy.onClick.Invoke();yield return new WaitForSeconds(.4f);
+                    var dance=sim.Interaction(player.InteractionId);
+                    Assert.That(dance?.Kind,Is.EqualTo("Buy"),"setup: the Buy action starts a buy ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                    Expect("buying","Dancer heading","YOU  /  MAKING A BUY");
+                    // Danced perfectly, and over by the next tick.
+                    foreach(var note in RhythmChart.For(dance).Notes)dance.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+                    dance.StartSeconds=sim.State.SimulationSeconds-dance.DurationSeconds-1;
+                    yield return new WaitForSeconds(.4f);
+                    Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: the buy hands over a Tongue Stamp ("+session.Message+")");
+                    Expect("bought","Notice","Bought Tongue Stamps for 5 friendship bracelets");
+                    Fits("bought","Notice");NoDollars("bought");
+                }
             }
             finally
             {
