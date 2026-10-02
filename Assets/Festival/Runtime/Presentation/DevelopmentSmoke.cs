@@ -1047,12 +1047,14 @@ namespace Festival.Presentation
         // talk's title, their line, three replies), and is screenshotted there before the reply. Sets failed when it doesn't.
         IEnumerator Talk(FestivalSession session,string id,float deadline,string capture=null)
         {
-            int replied=-1;
+            int replied=-1;bool seen=false;float showsBy=Time.realtimeSinceStartup+3;
             while(Time.realtimeSinceStartup<deadline)
             {
-                // A client's view is a new snapshot each time, so the talk is looked up afresh every frame.
+                // A client's view is a new snapshot each time, so the talk is looked up afresh every frame. Even the host's view only
+                // takes in a talk started this frame on its next Update, so the talk is over once seen and gone, not before.
                 var talk=session.State.Interactions.Find(i=>i.Id==id&&i.Status=="Active");
-                if(talk==null)yield break;
+                if(talk==null){if(seen||Time.realtimeSinceStartup>showsBy)yield break;yield return null;continue;}
+                seen=true;
                 if(FestivalSimulation.TrustDancing(talk))
                 {
                     double start=talk.StartSeconds;
