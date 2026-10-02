@@ -367,5 +367,56 @@ namespace Festival.Tests
             Assert.That(FestivalSession.ClosesMenu("Results","Playing"),Is.False,"results leave it open for NEXT ROUND");
             Assert.That(FestivalSession.ClosesMenu("Shopping","CampReview"),Is.False,"so does the camp shop opening");
         }
+
+        // HUD-8: what flashes over the gear bar as 1-3 or the wheel picks a hand slot: its number and what's in it, or why nothing
+        // switches. Inside a tent, car or potty the host takes no Equip, and an unpaid shelf item in hand would hide the switch.
+        [Test] public void AGearKeySaysWhatYouNowHoldOrWhyNot()
+        {
+            var you=new PlayerState{Id="you",Name="You"};
+            var hand=new List<ItemStack>{new ItemStack{ItemId="stock_mushrooms",Count=2},new ItemStack{ItemId="confetti",Count=1}};
+            Assert.That(FestivalHudGear.Toast(you,hand,0),Is.EqualTo("1  •  FUN GUYS"));
+            Assert.That(FestivalHudGear.Toast(you,hand,1),Is.EqualTo("2  •  CONFETTI CANNON"));
+            Assert.That(FestivalHudGear.Toast(you,hand,2),Is.EqualTo("3  •  EMPTY"),"an empty slot says so");
+            Assert.That(FestivalHudGear.Blocked(you),Is.Empty,"free hands switch");
+            you.HeldOfferId="merch_bag";
+            Assert.That(FestivalHudGear.Toast(you,hand,1),Is.EqualTo("Holding an unpaid item: pay or put it back (G)"),"an unpaid shelf item would hide the switch");
+            Assert.That(FestivalHudGear.Blocked(you),Is.EqualTo("Holding an unpaid item: pay or put it back (G)"),"so nothing switches");
+            you.HeldOfferId="";
+            foreach(var visit in new[]{new[]{"tent_2","Not inside the tent"},new[]{"car_1","Not inside the car"},new[]{"potty_1","Not inside the potty"}})
+            {
+                you.CampVisitId=visit[0];
+                Assert.That(FestivalHudGear.Toast(you,hand,0),Is.EqualTo(visit[1]),"in "+visit[0]);
+                Assert.That(FestivalHudGear.Blocked(you),Is.EqualTo(visit[1]),"so nothing switches in "+visit[0]);
+            }
+            you.CampVisitId="";you.Life="Detained";
+            Assert.That(FestivalHudGear.Toast(you,hand,0),Is.Empty,"held by security, nothing flashes: the host's reply says why");
+        }
+
+        // HUD-8: each notch of the wheel steps once through the filled hand slots, down to the next and up to the previous, round
+        // and round; a repeat within RepeatSeconds of a step is the same notch. It switches nothing with under two hand items, in a
+        // dance, or while a chat's questions take 1-3 (a VIP rope chat has none, so there it switches, as 1-3 do).
+        [Test] public void TheWheelStepsRoundTheFilledSlotsOneNotchAtATime()
+        {
+            Assert.That(new[]{FestivalHudGear.Next(0,1,3),FestivalHudGear.Next(1,1,3),FestivalHudGear.Next(2,1,3)},Is.EqualTo(new[]{1,2,0}),"down: the next, then round to the first");
+            Assert.That(new[]{FestivalHudGear.Next(0,-1,3),FestivalHudGear.Next(2,-1,3)},Is.EqualTo(new[]{2,1}),"up: the previous, round to the last");
+            Assert.That(new[]{FestivalHudGear.Next(1,1,2),FestivalHudGear.Next(-1,1,2),FestivalHudGear.Next(-1,-1,2)},Is.EqualTo(new[]{0,0,1}),"empty hands: down takes the first, up the last");
+            float last=-1;
+            Assert.That(FestivalHudGear.Notch(-1,10,ref last),Is.EqualTo(1),"a notch down steps to the next");
+            Assert.That(FestivalHudGear.Notch(-1,10.1f,ref last),Is.Zero,"its repeat within .12 s doesn't");
+            Assert.That(FestivalHudGear.Notch(-1,10.13f,ref last),Is.EqualTo(1),"the next notch does");
+            Assert.That(FestivalHudGear.Notch(2.5f,10.3f,ref last),Is.EqualTo(-1),"a notch up steps back, one step however far it scrolls");
+            Assert.That(FestivalHudGear.Notch(0,11,ref last),Is.Zero,"no scroll, no step");
+
+            var s=new RoundState{Phase="Playing"};var you=new PlayerState{Id="you"};s.Players.Add(you);
+            Assert.That(FestivalHudGear.Cycles(s,you,2),Is.True,"two hand items: the wheel switches");
+            Assert.That(FestivalHudGear.Cycles(s,you,1),Is.False,"one: nothing to switch to");
+            s.Interactions.Add(new InteractionState{Id="dance",PlayerId="you",Kind="Dance"});you.InteractionId="dance";
+            Assert.That(FestivalHudGear.Cycles(s,you,3),Is.False,"not mid-dance");
+            var chat=new InteractionState{Id="chat",PlayerId="you",Kind="ConfirmChat"};chat.Chat.Questions=new[]{"Q1","Q2","Q3"};
+            s.Interactions.Add(chat);you.InteractionId="chat";
+            Assert.That(FestivalHudGear.Cycles(s,you,3),Is.False,"nor while 1-3 ask a chat's questions");
+            chat.Chat.Questions=new string[0];
+            Assert.That(FestivalHudGear.Cycles(s,you,3),Is.True,"a VIP rope chat has none, so the wheel switches there, as 1-3 do");
+        }
     }
 }

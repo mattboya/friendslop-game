@@ -481,12 +481,144 @@ namespace Festival.Tests
             InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
         }
 
-        // The virtual keyboard and the input settings go back however the test ended (an error log skips its own finally).
+        // HUD-8 (Matt, 2026-10-01: "pressing 1 2 3 did not switch between my items. pressing them should or using the scroll
+        // wheel"): at camp and at the festival, 1, 2 and 3 each move what you hold, the gear bar's ● and the first-person hand to
+        // that slot, and its number and item flash over the gear bar for a second; the wheel steps round the filled slots. Where
+        // nothing switches, the line over the bar says why and nothing moves. Hosts a real round; the keys and the wheel go
+        // through a virtual keyboard and mouse, so through the HUD's own input handling (FestivalHud.UpdateKeyboard).
+        [UnityTest]public IEnumerator OneTwoThreeAndTheWheelSwitchWhatYouHold()
+        {
+            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
+            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            keyboard=InputSystem.AddDevice<Keyboard>("HUD gear keyboard");mouse=InputSystem.AddDevice<Mouse>("HUD gear mouse");
+            var world=new GameObject("HUD gear world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("HUD gear");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            PlayerState player=null;
+            IEnumerator Press(Key key)
+            {
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return new WaitForSeconds(.3f);
+            }
+            // One notch of the wheel, down (-1) or up (+1); the wait outlasts the wheel's repeat window.
+            IEnumerator Scroll(float notch)
+            {
+                InputSystem.QueueStateEvent(mouse,new MouseState{scroll=new Vector2(0,notch)});yield return null;yield return null;
+                yield return new WaitForSeconds(.3f);
+            }
+            // The slots the gear bar marks held (●), and what the first-person hand holds up.
+            string Marked(){string marked="";foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Slot label"&&text.text.EndsWith("●"))marked+=text.text.Substring(0,1);return marked;}
+            string Hand()
+            {
+                var held=new List<string>();var attachments=GameObject.Find("First-person hand attachments");
+                if(attachments!=null)foreach(Transform grip in attachments.transform)if(grip.gameObject.activeInHierarchy&&grip.name.StartsWith("Held grip "))held.Add(grip.name.Substring("Held grip ".Length));
+                return string.Join(",",held);
+            }
+            // The line over the gear bar, "(hidden)" while it isn't up; one that a 1080p box cuts off fails.
+            string Toast(string where)
+            {
+                Text line=null;foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Gear switch")line=text;
+                if(line==null)return "(hidden)";
+                Canvas.ForceUpdateCanvases();
+                if(line.cachedTextGenerator.characterCountVisible<line.text.Length)failures.Add(where+": the line over the gear bar cuts \""+line.text+"\"");
+                return line.text;
+            }
+            void Holds(string where,string item,string slot,string toast,string hand=null)
+            {
+                if(player.EquippedItemId!=item)failures.Add(where+": holding \""+player.EquippedItemId+"\", not "+item+" ("+session.Message+")");
+                if(Marked()!=slot)failures.Add(where+": the gear bar marks slot \""+Marked()+"\", not "+slot);
+                if(Hand()!=(hand??item))failures.Add(where+": the hand holds up \""+Hand()+"\", not "+(hand??item));
+                string shown=Toast(where);if(shown!=toast)failures.Add(where+": over the gear bar reads \""+shown+"\", not \""+toast+"\"");
+            }
+            // Hand items, given out (shelves sell gear only and stock comes from festivalgoers), with nothing yet in hand.
+            void Pack(params string[] items){player.Inventory.Clear();player.EquippedItemId="";foreach(var item in items)player.Inventory.Add(new ItemStack{ItemId=item,Count=1});}
+            const string Unpaid="Holding an unpaid item: pay or put it back (G)";
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);player=sim.Player(session.LocalPlayerId);
+                // First person whatever this machine's saved profile says (in memory only), so the hand shows.
+                session.Profile.Data.ThirdPerson=false;
+
+                // At camp, 1, 2 and 3 each switch, and the line goes after a second.
+                Pack("stock_mushrooms","confetti","medical_voucher");
+                yield return new WaitForSeconds(.3f);
+                yield return Press(Key.Digit1);Holds("camp, 1","stock_mushrooms","1","1  •  FUN GUYS");
+                yield return Press(Key.Digit2);Holds("camp, 2","confetti","2","2  •  CONFETTI CANNON");
+                yield return Press(Key.Digit3);Holds("camp, 3","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
+                yield return new WaitForSeconds(FestivalHudGear.ToastSeconds);
+                string after=Toast("camp, a second after 3");if(after!="(hidden)")failures.Add("camp, a second after 3: over the gear bar still reads \""+after+"\"");
+                // An unpaid shelf item in hand covers what you hold: 1 and the wheel say to pay or put it back, and nothing switches.
+                player.HeldOfferId="merch_bag";
+                yield return Press(Key.Digit1);Holds("camp, unpaid item, 1","medical_voucher","3",Unpaid,"merch_bag");
+                yield return Scroll(-1);Holds("camp, unpaid item, wheel","medical_voucher","3",Unpaid,"merch_bag");
+                player.HeldOfferId="";
+                // Inside a tent the host takes no Equip, and 2 says so.
+                var tent=CampFeatures.Find("tent_1");player.X=tent.X;player.Z=tent.Z;session.Command("EnterCamp",tent.Id);
+                yield return new WaitForSeconds(.3f);
+                Assert.That(player.CampVisitId,Is.EqualTo(tent.Id),"setup: inside the tent: "+session.Message);
+                yield return Press(Key.Digit2);Holds("camp, in a tent, 2","medical_voucher","3","Not inside the tent");
+                session.Command("ExitCamp");
+
+                yield return StartLevel(session);
+                // The festival, with nobody about but the VIP guard at the rope.
+                sim.State.Npcs.RemoveAll(n=>n.Twist!=FestivalSimulation.VipGuard);player.X=0;player.Z=0;
+                Pack("stock_mushrooms","confetti","medical_voucher");
+                yield return new WaitForSeconds(.3f);
+                yield return Press(Key.Digit1);Holds("festival, 1","stock_mushrooms","1","1  •  FUN GUYS");
+                yield return Press(Key.Digit2);Holds("festival, 2","confetti","2","2  •  CONFETTI CANNON");
+                yield return Press(Key.Digit3);Holds("festival, 3","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
+                // The wheel: down twice from slot 1 lands on 3, once more wraps round to 1, and up steps back to 3.
+                yield return Press(Key.Digit1);
+                yield return Scroll(-1);Holds("festival, wheel down from 1","confetti","2","2  •  CONFETTI CANNON");
+                yield return Scroll(-1);Holds("festival, wheel down twice","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
+                yield return Scroll(-1);Holds("festival, wheel down a third time","stock_mushrooms","1","1  •  FUN GUYS");
+                yield return Scroll(1);Holds("festival, wheel up from 1","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
+                // One hand item: 3 is empty and says so, and the wheel has nothing to switch to.
+                Pack("confetti");
+                yield return Press(Key.Digit1);
+                yield return Press(Key.Digit3);Holds("festival, one item, 3","confetti","1","3  •  EMPTY");
+                yield return new WaitForSeconds(FestivalHudGear.ToastSeconds);
+                yield return Scroll(-1);Holds("festival, one item, wheel","confetti","1","(hidden)");
+                // POLO-4's VIP rope chat has no questions, so it never swallows 1-3: they still switch while it's up.
+                Pack("stock_mushrooms","confetti");
+                var guard=sim.State.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);
+                Assert.That(guard,Is.Not.Null,"setup: Palm Mirage's VIP rope has a guard");
+                // This solo host is the tripper: with no vision of the guard to check, F's chat is the rope chat.
+                sim.State.Visions.RemoveAll(v=>v.NpcId==guard.Id);player.X=guard.X+.6f;player.Z=guard.Z;
+                yield return Press(Key.Digit1);
+                session.Command("ConfirmChat",guard.Id);
+                yield return new WaitForSeconds(.3f);
+                Assert.That(sim.State.Interactions.Exists(i=>i.Id==player.InteractionId&&i.Kind=="ConfirmChat"&&i.Status=="Active"&&i.Chat.Questions.Length==0),"setup: talking your way past the rope: "+session.Message);
+                yield return Press(Key.Digit2);Holds("festival, in the rope chat, 2","confetti","2","2  •  CONFETTI CANNON");
+                session.Command("Cancel");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"What 1-3 and the wheel switch:\n"+string.Join("\n",failures));
+        }
+
+        // The virtual keyboard and mouse and the input settings go back however the test ended (an error log skips its own finally).
         private Keyboard keyboard;
+        private Mouse mouse;
         private InputSettings.BackgroundBehavior oldBackground;
         private InputSettings.EditorInputBehaviorInPlayMode oldEditor;
         [UnityTearDown]public IEnumerator RestoreTheKeyboard()
         {
+            if(mouse!=null){InputSystem.RemoveDevice(mouse);mouse=null;}
             if(keyboard!=null)
             {
                 InputSystem.RemoveDevice(keyboard);keyboard=null;

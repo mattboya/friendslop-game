@@ -67,6 +67,11 @@ namespace Festival.Presentation
         private int activeActionCount;
         private Action primaryAction;
         private int selectedSlot;
+        // HUD-8: the line over the gear bar saying what a gear key or the wheel just switched to, or why not, until gearToastUntil;
+        // and when the wheel last stepped (FestivalHudGear.Notch).
+        private GameObject gearToast;
+        private Text gearToastText;
+        private float gearToastUntil,lastGearStep=-1;
         private string checkoutItem="";
         private string connectionError="";
         private bool settingsOpen;
@@ -274,6 +279,9 @@ namespace Festival.Presentation
                 slotFrames[i]=slot.GetComponent<Image>();
                 slotTexts[i]=Label(slot.transform,"Slot label",18,TextAnchor.MiddleCenter);Fill(slotTexts[i].rectTransform,4);
             }
+            // HUD-8: a switch flashes just over the bar (UpdateKeyboard), riding on it, so it hides whenever the bar does.
+            gearToast=Card(inventoryPanel.transform,"Gear switch line",Vector2.zero,Vector2.one,true);SetRect(Rect(gearToast),new Vector2(0,1),Vector2.one,new Vector2(0,8),new Vector2(0,52));
+            gearToastText=Label(gearToast.transform,"Gear switch",20,TextAnchor.MiddleCenter);gearToastText.color=new Color(1,.79f,.53f);Fill(gearToastText.rectTransform,6);ShrinkToFit(gearToastText,14);gearToast.SetActive(false);
             reticle=Panel(root.transform,"Aim dot",Paper,new Vector2(.499f,.498f),new Vector2(.501f,.502f));
             reticle.GetComponent<Image>().raycastTarget=false;
             // The tripper's one hint, quiet and brief, just under the aim dot as each level starts.
@@ -574,6 +582,7 @@ namespace Festival.Presentation
                 objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);trustLine.gameObject.SetActive(false);
             }
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
+            gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
@@ -701,7 +710,18 @@ namespace Festival.Presentation
             if(equipSlot>=0&&!session.MenuOpen&&FestivalChatWindow.TakesReplies(state,player)){chatReply=equipSlot;equipSlot=-1;}
             // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
             bool gearKeys=FestivalSimulation.Interactive(state.Phase);
-            if(equipSlot>=0&&!session.MenuOpen&&gearKeys){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
+            // HUD-8: a notch of the wheel steps round the filled hand slots, then switches like the key for the slot it lands on.
+            if(equipSlot<0&&!session.MenuOpen&&gearKeys&&FestivalHudGear.Cycles(state,player,handGear.Count))
+            {
+                int step=FestivalHudGear.Notch(session.Controls.Cycle.ReadValue<float>(),Time.unscaledTime,ref lastGearStep);
+                if(step!=0)equipSlot=FestivalHudGear.Next(handGear.FindIndex(item=>item.ItemId==player.EquippedItemId),step,handGear.Count);
+            }
+            if(equipSlot>=0&&!session.MenuOpen&&gearKeys)
+            {
+                // HUD-8: the switch flashes over the gear bar, or why not: inside a tent, or behind an unpaid item, nothing switches.
+                string toast=FestivalHudGear.Toast(player,handGear,equipSlot);if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
+                if(FestivalHudGear.Blocked(player)==""){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
+            }
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             // DANCE-12: E sits between the W and D lanes, so mid-dance it runs nothing, even in the moment before UpdateActions
             // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop).

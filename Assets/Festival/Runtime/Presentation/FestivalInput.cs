@@ -7,7 +7,7 @@ namespace Festival.Presentation
     {
         public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Conversation"||kind=="Sale"||kind=="Buy"||kind=="Police"||kind=="Poi"||kind=="Dj"||kind=="ConfirmDance";
         public readonly InputActionMap Map = new InputActionMap("Festival");
-        public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View;
+        public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle;
         public readonly InputAction[] Notes = new InputAction[4];
         private InputActionRebindingExtensions.RebindingOperation rebind;
         private readonly string saveKey;
@@ -24,6 +24,8 @@ namespace Festival.Presentation
             Slot1=Button("Slot1","<Keyboard>/1");Slot2=Button("Slot2","<Keyboard>/2");Slot3=Button("Slot3","<Keyboard>/3");
             // CAM-1: V flips between first person and over the shoulder.
             View=Button("View","<Keyboard>/v");
+            // HUD-8: each notch of the mouse wheel steps through the hand slots, down to the next (FestivalHudGear.Notch).
+            Cycle=Map.AddAction("Cycle",InputActionType.Value,"<Mouse>/scroll/y");
             string[] arrows={"leftArrow","downArrow","upArrow","rightArrow"};
             string[] wasd={"a","s","w","d"};
             for(int i=0;i<4;i++)

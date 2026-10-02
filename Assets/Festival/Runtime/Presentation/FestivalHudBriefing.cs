@@ -103,7 +103,7 @@ namespace Festival.Presentation
             "Chat"=>"chat (checks a vision)","Use"=>"use what's in your hand","Drop"=>"drop it • in a stop, ditch your stock • hold to stop dancing",
             "Objectives"=>"hold for the map","Menu"=>"menu and settings","View"=>"first or third person",
             "Slot1"=>"hand 1 • ask 1 in a chat • vote 1 at the campfire","Slot2"=>"hand 2 • ask 2 in a chat • vote 2 at the campfire",
-            "Slot3"=>"hand 3 • ask 3 in a chat • vote 3 at the campfire",
+            "Slot3"=>"hand 3 • ask 3 in a chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
             "Rhythm0"=>"dance lane: left","Rhythm1"=>"dance lane: down","Rhythm2"=>"dance lane: up","Rhythm3"=>"dance lane: right",_=>"",
         };
     }
