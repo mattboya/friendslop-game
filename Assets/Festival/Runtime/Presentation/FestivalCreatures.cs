@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Festival.Core;
 using Festival.Network;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
 namespace Festival.Presentation
@@ -13,7 +14,11 @@ namespace Festival.Presentation
     /// (ElapsedSeconds), so they come only while Playing, seeded by the round seed, the level and the player. Each creature's own
     /// life runs on frame time, so it finishes fading while the clock stands still at Results. The dose invents them, so they
     /// carry the fake-vision tells (FestivalVisionMarkers): no shadow, a shimmer while the camera moves, a slightly shifted hue.
-    /// ART-1: each is a Blender model, its parts painted from the palette.</summary>
+    /// ART-1: each is a Blender model, its parts painted from the palette. VISION-6: now and then one points. It reads the view
+    /// but sends nothing: when the view holds a vision the host hinted (only the tripper's does, and only true ones are hinted),
+    /// the next arrival is that job's kind and points at it, and any dosed player's jackalope now and then points at an ungrabbed
+    /// Giggle Tank. A pointer faces its target, beckons (a nod and a hop toward it, sparkles on the ground, one squeak) and, when
+    /// you come near, scurries on toward it.</summary>
     public sealed class FestivalCreatures : MonoBehaviour
     {
         // Doses 1-4: the mean gap between arrivals (each gap randomised by +-50%) and how many may be on screen at once.
@@ -31,6 +36,21 @@ namespace Festival.Presentation
         private const float Box=.5f;
         // A little hop, and a slight glow so they read at night.
         private const float Hop=.05f,HopHz=1.5f,Glow=.3f;
+        // VISION-6: a pointer's kind is its job (Looks' order): a gnome a stash or a double buyer, a pixie a buyer, a dragon a narc,
+        // a mushroom sprite a clue, a jackalope the Giggle Tank.
+        private const int Gnome=0,Pixie=1,Dragon=2,MushroomSprite=3,Jackalope=4;
+        // The tank is public, so each client times its own jackalope: the first no sooner than TankFirst s of level clock, then at
+        // most one every TankEvery s.
+        private const double TankFirst=60,TankEvery=120;
+        // With the eye within Startle m, a pointer scurries up to ScurryMetres on toward its target over ScurrySeconds, stopping
+        // StopShort m short (not for less than MinScurry m); it goes once the player is within Reached m of the target.
+        private const float Startle=5,ScurryMetres=6,ScurrySeconds=1,StopShort=3,MinScurry=.5f,Reached=4;
+        // The beckon, NodHz times a second: a lean of up to Lean degrees about its feet and a hop PointHop up and HopAhead toward
+        // its target. Sparkles flattened glints drift along the ground ahead, SparkleGap m apart, Drift gaps a second, twinkling.
+        private const float Lean=18,NodHz=2,PointHop=.08f,HopAhead=.06f,SparkleGap=.6f,SparkleSize=.14f,SparkleFlat=.15f,SparkleLift=.02f,Drift=1.2f,TwinkleHz=1.7f,SparkleGlow=1.5f;
+        private const int Sparkles=5;
+        // One squeak as it appears: SqueakSeconds rising from SqueakFrom to SqueakTo Hz.
+        private const float SqueakSeconds=.15f,SqueakFrom=1400,SqueakTo=2600;
 
         // The fixed palette, every colour saturated enough for the fake hue shift to show.
         private static readonly Color[] Paints={
@@ -38,6 +58,9 @@ namespace Festival.Presentation
             new Color(1f,.45f,.8f),new Color(.45f,.95f,1f),new Color(.3f,.8f,.3f),new Color(.15f,.55f,.35f),         // pink, wing, green, dark green
             new Color(.72f,.52f,.32f),new Color(.85f,.72f,.5f),new Color(.3f,.12f,.4f)};                               // tan, antler, eyes
         public static IReadOnlyList<Color> Palette=>Paints;
+        private static AudioClip squeak;
+        /// <summary>VISION-6: the chirp a pointer gives as it appears, made once.</summary>
+        public static AudioClip Squeak{get{if(squeak==null)squeak=CreateSqueak();return squeak;}}
         // ART-1: each look is a model whose parts end __P<n>, painted from Paints[n].
         private static readonly (string Name,string Model)[] Looks={("Gnome","FestivalCreatureGnome"),("Pixie","FestivalCreaturePixie"),
             ("Dragon","FestivalCreatureDragon"),("Mushroom sprite","FestivalCreatureMushroomSprite"),("Jackalope","FestivalCreatureJackalope")};
@@ -71,10 +94,22 @@ namespace Festival.Presentation
             return unchecked(state.Seed*41+state.FestivalIndex*7919+state.LevelIndex*131+(int)hash);
         }
 
-        private sealed class Creature { public Transform Root; public int Look,Index; public bool Persists,InView,Seen; public float Age,Life,Fading; public Vector3 Spot; }
+        // A pointer's target is a hinted vision's Id (Hint) or the tank; Goal is where that stands, Scurry the seconds into a scurry
+        // from From to To (-1 none). Its sparkles and voice are made the first time it points and kept in the pool.
+        private sealed class Creature
+        {
+            public Transform Root; public int Look,Index; public bool Persists,InView,Seen; public float Age,Life,Fading; public Vector3 Spot;
+            public string Hint=""; public bool Tank; public float Scurry=-1; public Vector3 Goal,From,To; public Transform Trail; public Transform[] Glints; public AudioSource Voice;
+            public bool Points=>Tank||Hint!="";
+        }
         private readonly List<Creature> live=new List<Creature>();
         private readonly List<Creature>[] pool=new List<Creature>[Looks.Length];
         private readonly Material[] paints=new Material[Paints.Length];
+        private Material glint;
+        // The hints this client has pointed at this level (vision ids restart every round), and when a tank pointer may next come.
+        private readonly List<string> pointed=new List<string>();
+        private double nextTank=TankFirst;
+        private float volume;
         private readonly Plane[] frustum=new Plane[6];
         private readonly FestivalVisionMarkers.MotionTracker motion=new FestivalVisionMarkers.MotionTracker();
         private Schedule schedule;
@@ -90,6 +125,7 @@ namespace Festival.Presentation
         private void LateUpdate()
         {
             if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;}
+            volume=session.Profile==null?0:Mathf.Clamp01(session.Profile.Data.MusicVolume+.25f);
             Apply(session.State,session.LocalPlayerId,session.ViewCamera,Time.time,Time.unscaledDeltaTime);
         }
         // Turned off (TEST-1's pixel checks do), it shows nothing. Not while the object itself is going inactive or away: its
@@ -100,13 +136,14 @@ namespace Festival.Presentation
         public void Apply(RoundState state,string localPlayerId,Camera view,float time,float deltaTime)
         {
             if(state==null||view==null||!FestivalWorld.ShowsFestival(state.Phase)){Clear();return;}
-            int key=SeedFor(state,localPlayerId);if(schedule==null||key!=seed){Clear();seed=key;schedule=new Schedule(key);}
-            int dose=DoseOf(state,localPlayerId),cap=dose<1?0:Caps[Math.Min(dose,Caps.Length)-1];
+            int key=SeedFor(state,localPlayerId);if(schedule==null||key!=seed){Clear();if(key!=seed){pointed.Clear();nextTank=TankFirst;}seed=key;schedule=new Schedule(key);}
+            var me=Find(state,localPlayerId);int dose=DoseOf(me),cap=dose<1?0:Caps[Math.Min(dose,Caps.Length)-1];
             var eye=view.transform.position;float shimmer=motion.Step(view.transform,deltaTime);
             for(int i=live.Count-1;i>=0;i--)
             {
                 var c=live[i];c.Age+=deltaTime;
-                if(c.Fading>=0)c.Fading+=deltaTime;else if(dose<1||!c.Persists&&c.Age>=FadeSeconds+c.Life)c.Fading=0;
+                if(c.Fading>=0)c.Fading+=deltaTime;else if(dose<1||!c.Persists&&c.Age>=FadeSeconds+c.Life||c.Points&&!Target(state,me,c.Hint,c.Tank,out c.Goal))c.Fading=0;
+                if(c.Points)Scurry(c,eye,deltaTime);
                 var off=eye-c.Spot;off.y=0;
                 if(c.Fading>=FadeSeconds||c.Persists&&off.sqrMagnitude>=LeaveDistance*LeaveDistance)Release(i);
             }
@@ -116,27 +153,98 @@ namespace Festival.Presentation
             foreach(var c in live){c.InView=InView(c.Spot);if(!c.InView)c.Seen=false;else if(c.Seen)OnScreen++;}
             foreach(var c in live)if(c.InView&&!c.Seen&&OnScreen<cap){c.Seen=true;OnScreen++;}
             // Arrivals only while the level clock runs. One over the cap is dropped (only those in view count) and the schedule
-            // keeps ticking.
+            // keeps ticking. VISION-6: a hint not pointed at yet, or else a due tank, makes the arrival its pointer (only its kind
+            // and staying change, so the schedule draws what it always drew); dropped, the hint waits for the next.
             if(state.Phase=="Playing")
                 while(schedule.Due(state.ElapsedSeconds,dose,out var arrival))
-                    if(OnScreen<cap&&Place(view,arrival,out var spot)){var c=Spawn(arrival,spot);c.InView=InView(spot);if(c.InView){c.Seen=true;OnScreen++;}}
+                {
+                    var hint=Unpointed(state,me);bool tank=hint==null&&arrival.At>=nextTank&&Target(state,me,"",true,out _);
+                    if(hint!=null||tank){arrival.Look=hint!=null?JobOf(hint.Kind):Jackalope;arrival.Persists=true;}
+                    if(!(OnScreen<cap&&Place(view,arrival,out var spot)))continue;
+                    var c=Spawn(arrival,spot);c.InView=InView(spot);if(c.InView){c.Seen=true;OnScreen++;}
+                    if(hint!=null){pointed.Add(hint.Id);c.Hint=hint.Id;}else if(tank){nextTank=arrival.At+TankEvery;c.Tank=true;}
+                    if(c.Points){Target(state,me,c.Hint,c.Tank,out c.Goal);Beckon(c);}
+                }
             foreach(var c in live)
             {
                 bool drawn=!c.InView||c.Seen;if(c.Root.gameObject.activeSelf!=drawn)c.Root.gameObject.SetActive(drawn);
                 if(!drawn)continue;
-                c.Root.position=c.Spot+Vector3.up*(Hop*Mathf.Abs(Mathf.Sin((c.Age*HopHz+c.Index*.37f)*Mathf.PI)));
-                var toEye=eye-c.Spot;toEye.y=0;if(toEye.sqrMagnitude>1e-4f)c.Root.rotation=Quaternion.LookRotation(toEye);
+                var ahead=c.Goal-c.Spot;ahead.y=0;
+                if(c.Points&&ahead.sqrMagnitude>1e-4f)
+                {
+                    // It faces its target, not you, leaning and hopping toward it.
+                    ahead.Normalize();float nod=Mathf.Abs(Mathf.Sin(c.Age*NodHz*Mathf.PI));
+                    c.Root.SetPositionAndRotation(c.Spot+Vector3.up*(PointHop*nod)+ahead*(HopAhead*nod),Quaternion.LookRotation(ahead)*Quaternion.Euler(Lean*nod,0,0));
+                }
+                else
+                {
+                    c.Root.position=c.Spot+Vector3.up*(Hop*Mathf.Abs(Mathf.Sin((c.Age*HopHz+c.Index*.37f)*Mathf.PI)));
+                    var toEye=eye-c.Spot;toEye.y=0;if(toEye.sqrMagnitude>1e-4f)c.Root.rotation=Quaternion.LookRotation(toEye);
+                }
                 float grown=Mathf.SmoothStep(0,1,c.Age/FadeSeconds)*(1-Mathf.SmoothStep(0,1,Mathf.Max(0,c.Fading)/FadeSeconds));
-                c.Root.localScale=Vector3.one*grown*FestivalVisionMarkers.ShimmerScale(shimmer,time,c.Index);
+                float scale=grown*FestivalVisionMarkers.ShimmerScale(shimmer,time,c.Index);c.Root.localScale=Vector3.one*scale;
+                // Placed after the body is scaled (they grow and fade with it); at no size at all there is nothing to place.
+                if(c.Points&&ahead.sqrMagnitude>1e-4f&&scale>1e-3f)Twinkle(c,ahead,time);
             }
         }
 
+        private static PlayerState Find(RoundState state,string playerId){foreach(var p in state.Players)if(p.Id==playerId)return p;return null;}
         // Only the local player's own dose counts, never another effect; a spirit sees none.
-        private static int DoseOf(RoundState state,string playerId)
+        private static int DoseOf(PlayerState p)
         {
-            foreach(var p in state.Players)
-                if(p.Id==playerId){if(p.Life=="Spirit")return 0;foreach(var e in p.Effects)if(e.Id==FestivalSimulation.DoseEffect)return e.Intensity;return 0;}
+            if(p==null||p.Life=="Spirit")return 0;
+            foreach(var e in p.Effects)if(e.Id==FestivalSimulation.DoseEffect)return e.Intensity;
             return 0;
+        }
+        // VISION-6: which kind points at a vision of this kind, or -1 for none.
+        private static int JobOf(string kind)=>kind=="Clue"?MushroomSprite:kind=="Buyer"?Pixie:kind=="Narc"?Dragon:kind=="Stash"||kind=="DoubleBuyer"?Gnome:-1;
+        // The first hinted vision in the view this client has not pointed at yet and whose target is there to point at, or null.
+        private VisionState Unpointed(RoundState state,PlayerState me)
+        {
+            for(int i=0;i<state.Visions.Count;i++){var v=state.Visions[i];if(v.Hinted&&JobOf(v.Kind)>=0&&!pointed.Contains(v.Id)&&Target(state,me,v.Id,false,out _))return v;}
+            return null;
+        }
+        // Where a pointer's target stands now (the vision's festivalgoer, its spot, or the tank), false once there is nothing left
+        // to point at: the vision left the view or was checked, its festivalgoer left the view, the tank was grabbed, or the player
+        // is within Reached m of it.
+        private static bool Target(RoundState state,PlayerState me,string hint,bool tank,out Vector3 at)
+        {
+            at=default;
+            if(tank){var spot=FestivalSimulation.GiggleTankAt(state);if(spot==null)return false;at=new Vector3(spot.X,0,spot.Z);}
+            else
+            {
+                VisionState v=null;for(int i=0;i<state.Visions.Count&&v==null;i++)if(state.Visions[i].Id==hint&&!state.Visions[i].Confirmed)v=state.Visions[i];
+                if(v==null)return false;
+                if(v.NpcId=="")at=new Vector3(v.X,0,v.Z);
+                else{NpcState n=null;for(int i=0;i<state.Npcs.Count&&n==null;i++)if(state.Npcs[i].Id==v.NpcId)n=state.Npcs[i];if(n==null)return false;at=new Vector3(n.X,0,n.Z);}
+            }
+            return me==null||(me.X-at.x)*(me.X-at.x)+(me.Z-at.z)*(me.Z-at.z)>=Reached*Reached;
+        }
+        // With the eye close, it scurries on toward its target over the ground, the way Place stands it, and stops short of it. A
+        // spot inside something keeps it where it is.
+        private static void Scurry(Creature c,Vector3 eye,float deltaTime)
+        {
+            if(c.Scurry<0)
+            {
+                var ahead=c.Goal-c.Spot;ahead.y=0;float room=ahead.magnitude-StopShort;var off=eye-c.Spot;off.y=0;
+                if(c.Fading>=0||room<MinScurry||off.sqrMagnitude>=Startle*Startle)return;
+                var to=c.Spot+ahead/ahead.magnitude*Mathf.Min(ScurryMetres,room);
+                if(!Ground(to.x,to.z,eye.y,out to))return;
+                c.From=c.Spot;c.To=to;c.Scurry=0;
+            }
+            c.Scurry+=deltaTime;c.Spot=Vector3.Lerp(c.From,c.To,Mathf.SmoothStep(0,1,c.Scurry/ScurrySeconds));
+            if(c.Scurry>=ScurrySeconds)c.Scurry=-1;
+        }
+        // Its sparkles drift along the ground toward the target, swelling and shrinking as they go and twinkling; none past it.
+        private static void Twinkle(Creature c,Vector3 ahead,float time)
+        {
+            var off=c.Goal-c.Spot;off.y=0;float room=off.magnitude;
+            for(int i=0;i<c.Glints.Length;i++)
+            {
+                float along=Mathf.Repeat(i+time*Drift,Sparkles),at=SparkleGap*(.5f+along);
+                float size=at>room?0:SparkleSize*Mathf.Sin(along/Sparkles*Mathf.PI)*(.4f+.6f*Mathf.Abs(Mathf.Sin((time*TwinkleHz+i*.37f)*Mathf.PI)));
+                c.Glints[i].SetPositionAndRotation(c.Spot+ahead*at+Vector3.up*SparkleLift,Quaternion.identity);c.Glints[i].localScale=new Vector3(size,size*SparkleFlat,size);
+            }
         }
         private bool InView(Vector3 spot)=>GeometryUtility.TestPlanesAABB(frustum,new Bounds(spot+Vector3.up*(Box/2),Vector3.one*Box));
         // ponytail: one spot per arrival, dropped when it is inside something; retry nearer if crowded places feel too empty.
@@ -144,8 +252,14 @@ namespace Festival.Presentation
         {
             float half=Mathf.Atan(Mathf.Tan(view.fieldOfView*.5f*Mathf.Deg2Rad)*view.aspect)*Mathf.Rad2Deg+EdgeMargin;
             var eye=view.transform.position;var along=Quaternion.Euler(0,view.transform.eulerAngles.y+arrival.Bearing*half,0)*Vector3.forward*arrival.Distance;
-            spot=new Vector3(eye.x+along.x,0,eye.z+along.z);
-            if(Physics.Raycast(new Vector3(spot.x,eye.y,spot.z),Vector3.down,out var hit,eye.y+1,~0,QueryTriggerInteraction.Ignore))spot.y=hit.point.y;
+            return Ground(eye.x+along.x,eye.z+along.z,eye.y,out spot);
+        }
+        // The ground at x, z: whatever a probe down from eye height lands on (y=0 where it finds nothing); false when a creature
+        // standing there would be inside something.
+        private static bool Ground(float x,float z,float eyeHeight,out Vector3 spot)
+        {
+            spot=new Vector3(x,0,z);
+            if(Physics.Raycast(new Vector3(x,eyeHeight,z),Vector3.down,out var hit,eyeHeight+1,~0,QueryTriggerInteraction.Ignore))spot.y=hit.point.y;
             return !Physics.CheckSphere(spot+Vector3.up*InsideProbe,InsideRadius,~0,QueryTriggerInteraction.Ignore);
         }
 
@@ -154,6 +268,7 @@ namespace Festival.Presentation
             var shelf=pool[arrival.Look];Creature c;
             if(shelf!=null&&shelf.Count>0){c=shelf[shelf.Count-1];shelf.RemoveAt(shelf.Count-1);}else c=Build(arrival.Look);
             c.Persists=arrival.Persists;c.Life=arrival.Life;c.Age=0;c.Fading=-1;c.Spot=spot;c.Seen=false;c.Index=++arrivals;
+            c.Hint="";c.Tank=false;c.Scurry=-1;if(c.Trail!=null)c.Trail.gameObject.SetActive(false);
             c.Root.SetPositionAndRotation(spot,Quaternion.identity);c.Root.localScale=Vector3.zero;c.Root.gameObject.SetActive(true);
             live.Add(c);return c;
         }
@@ -176,6 +291,41 @@ namespace Festival.Presentation
             }
             return new Creature{Root=root,Look=look};
         }
+        // VISION-6: a pointer's sparkles and voice, made the first time it points; it squeaks as it appears, from where it stands.
+        private void Beckon(Creature c)
+        {
+            if(c.Trail==null)
+            {
+                c.Trail=new GameObject("Sparkles").transform;c.Trail.SetParent(c.Root,false);c.Glints=new Transform[Sparkles];
+                for(int i=0;i<Sparkles;i++)
+                {
+                    var sparkle=GameObject.CreatePrimitive(PrimitiveType.Sphere);sparkle.name="Sparkle";sparkle.transform.SetParent(c.Trail,false);
+                    var collider=sparkle.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
+                    var renderer=sparkle.GetComponent<MeshRenderer>();renderer.sharedMaterial=Glint();renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
+                    c.Glints[i]=sparkle.transform;
+                }
+                c.Voice=c.Root.gameObject.AddComponent<AudioSource>();c.Voice.playOnAwake=false;c.Voice.spatialBlend=1;
+            }
+            c.Trail.gameObject.SetActive(true);c.Voice.PlayOneShot(Squeak,volume);
+        }
+        // The sparkles' one material: cream, hue-shifted like everything the dose invents, and glowing.
+        private Material Glint()
+        {
+            if(glint!=null)return glint;
+            var color=FestivalVisionMarkers.FakeTint(Paints[3]);glint=new Material(Resources.Load<Material>("FestivalLit")){color=color};
+            if(glint.HasProperty("_EmissionColor")){glint.EnableKeyword("_EMISSION");glint.SetColor("_EmissionColor",color*SparkleGlow);}
+            return glint;
+        }
+        private static AudioClip CreateSqueak()
+        {
+            const int rate=22050;var samples=new float[(int)(rate*SqueakSeconds)];double phase=0;
+            for(int n=0;n<samples.Length;n++)
+            {
+                float t=n/(float)samples.Length;phase+=2*Math.PI*Mathf.Lerp(SqueakFrom,SqueakTo,t)/rate;
+                samples[n]=(float)Math.Sin(phase)*Mathf.Sin(t*Mathf.PI)*.25f;
+            }
+            var clip=AudioClip.Create("Creature pointer squeak",samples.Length,1,rate,false);clip.SetData(samples,0);return clip;
+        }
         // One material per palette colour, shared by every creature: the included URP material, hue-shifted like a fake vision.
         private Material Paint(int paint)
         {
@@ -186,7 +336,7 @@ namespace Festival.Presentation
             return paints[paint]=material;
         }
 
-        private void OnDestroy(){foreach(var material in paints)if(material!=null)Dispose(material);}
+        private void OnDestroy(){foreach(var material in paints)if(material!=null)Dispose(material);if(glint!=null)Dispose(glint);}
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
     }
 }

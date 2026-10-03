@@ -222,6 +222,207 @@ namespace Festival.Tests
             // Called once first: the runtime's first call through a new delegate allocates on its own.
             TestDelegate frame=()=>{state.ElapsedSeconds+=Step;creatures.Apply(state,"me",eye,t,Step);};frame();
             Assert.That(frame,Is.Not.AllocatingGCMemory(),"a frame makes no garbage");
+            // VISION-6: nor does a pointer's, looking its target up, beckoning and twinkling its sparkles.
+            var hinted=Hinted(FirstArrival(true),"Clue",new Vector2(6,30));hinted.GiggleTankSpot=0;var pointing=Creatures();t=0;UntilOneArrives(pointing,hinted,eye,ref t);
+            Assert.That(Pointing(pointing).Count,Is.EqualTo(1),"setup: a creature points");
+            for(int i=0;i<5;i++,t+=Step)Frame(pointing,hinted,eye,t);
+            TestDelegate beckon=()=>{hinted.ElapsedSeconds+=Step;pointing.Apply(hinted,"me",eye,t,Step);};beckon();
+            Assert.That(beckon,Is.Not.AllocatingGCMemory(),"a pointer's frame makes no garbage");
+        }
+
+        // VISION-6: now and then one of the tripper's creatures points. Its kind says what at: a mushroom sprite a true clue, a
+        // pixie a true buyer, a dragon a true narc, a gnome a stash or a double buyer. It faces its target, not you, and leads you
+        // there when you come near.
+        [Test]public void AHintedVisionGetsItsKindPointingAtIt()
+        {
+            var goal=new Vector2(6,30);var state=Hinted(FirstArrival(true),"Clue",goal);var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);
+            Assert.That(body.name,Is.EqualTo("Creature Mushroom sprite"),"a hinted clue brings a mushroom sprite at the next arrival");
+            Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"and it points");
+            for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+            Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the festivalgoer");
+            Assert.That(Facing(body,Flat(eye.transform.position)),Is.GreaterThan(90),"not the camera");
+
+            // Come within 5 m and it scurries about 6 m on toward them; follow it and it leads there, stopping about 3 m short.
+            var before=Flat(body.position);StandBehind(eye,body,goal,3);
+            for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+            float ran=Vector2.Distance(before,goal)-Vector2.Distance(Flat(body.position),goal);
+            Assert.That(ran,Is.InRange(5f,6.5f),"it scurries about 6 m toward them once the eye is within 5 m ("+ran+" m)");
+            for(int follow=0;follow<6;follow++){StandBehind(eye,body,goal,3);for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);}
+            Assert.That(Vector2.Distance(Flat(body.position),goal),Is.InRange(2.8f,3.7f),"following it leads to about 3 m short of them");
+            Assert.That(Facing(body,goal),Is.LessThan(15),"still facing them");
+
+            // Checked, the vision needs no pointer: it goes with the usual fade.
+            state.Visions[0].Confirmed=true;
+            for(float until=t+.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+            Assert.That(body.gameObject.activeSelf&&body.localScale.x<.95f,Is.True,"once the vision is confirmed it fades");
+            for(float until=t+.5f+2*Step;t<until;t+=Step)Frame(creatures,state,eye,t);
+            Assert.That(creatures.Live,Is.Zero,"and is gone within the second");
+
+            foreach(var (kind,looks) in new[]{("Narc","Creature Dragon"),("Stash","Creature Gnome"),("Buyer","Creature Pixie"),("DoubleBuyer","Creature Gnome")})
+            {
+                state=Hinted(FirstArrival(true),kind,goal);creatures=Creatures();eye=Eye();t=0;
+                body=UntilOneArrives(creatures,state,eye,ref t);for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+                Assert.That(body.name,Is.EqualTo(looks),"a hinted "+kind+" brings a "+looks);
+                Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"the "+kind+"'s creature points");
+                Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the "+kind+(kind=="Stash"?"'s spot":"'s festivalgoer"));
+            }
+        }
+
+        [Test]public void APointerLeavesOnEachRuleAndPointsOnlyOncePerLevel()
+        {
+            var goal=new Vector2(6,30);
+            foreach(var (rule,end) in new (string,Action<RoundState>)[]{
+                ("the vision leaves the view",s=>s.Visions.Clear()),
+                ("its festivalgoer leaves the view",s=>s.Npcs.Clear()),
+                ("the player is within 4 m of them",s=>{s.Players[0].X=goal.x+2;s.Players[0].Z=goal.y-3;}),
+                ("the dose ends",s=>s.Players[0].Effects.Clear())})
+            {
+                var state=Hinted(FirstArrival(true),"Buyer",goal);var creatures=Creatures();var eye=Eye();float t=0;
+                var body=UntilOneArrives(creatures,state,eye,ref t);for(float until=t+2;t<until;t+=Step)Frame(creatures,state,eye,t);
+                Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"setup: a pixie points before "+rule);
+                end(state);
+                for(float until=t+1+2*Step;t<until;t+=Step)Frame(creatures,state,eye,t);
+                Assert.That(creatures.Live,Is.Zero,"it goes within a second once "+rule);
+            }
+
+            // Walked 40 m away from, it goes like any creature that stays; the same hint is never pointed at again this level.
+            {
+                var state=Hinted(FirstArrival(true),"Buyer",goal);var creatures=Creatures();var eye=Eye();float t=0;
+                var body=UntilOneArrives(creatures,state,eye,ref t);
+                eye.transform.position=new Vector3(body.position.x,1.65f,body.position.z-41);Frame(creatures,state,eye,t);t+=Step;
+                Assert.That(creatures.Live,Is.Zero,"40 m away it is gone");
+                Aim(eye);int pointers=0,came=0;
+                for(float until=t+5*60;t<until;t+=Step){Frame(creatures,state,eye,t);pointers=Mathf.Max(pointers,Pointing(creatures).Count);came=Mathf.Max(came,creatures.Live);}
+                Assert.That(came,Is.GreaterThan(0),"setup: other creatures still come");
+                Assert.That(pointers,Is.Zero,"a hint is pointed at once per level");
+                // A new level deals new visions whose ids start again, so the set of hints already pointed at starts again too.
+                state.LevelIndex=1;
+                for(float until=t+3*60;t<until&&pointers==0;t+=Step){Frame(creatures,state,eye,t);pointers=Pointing(creatures).Count;}
+                Assert.That(pointers,Is.EqualTo(1),"the next level's hint gets its pointer");
+            }
+
+            // An arrival that cannot be placed is dropped, and the hint waits for the next one.
+            {
+                var state=Hinted(FirstArrival(true),"Narc",goal);var creatures=Creatures();var eye=Eye();
+                var block=Solid("Block",new Vector3(0,1.5f,10),new Vector3(60,3,60));float t=0;
+                for(;t<3*60;t+=Step)Frame(creatures,state,eye,t);
+                Assert.That(creatures.Live,Is.Zero,"setup: nothing can stand inside the block");
+                Object.DestroyImmediate(block);Physics.SyncTransforms();
+                var body=UntilOneArrives(creatures,state,eye,ref t);
+                Assert.That(body.name,Is.EqualTo("Creature Dragon"),"the next arrival points at the waiting hint");
+                Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}));
+            }
+        }
+
+        // Decision A: a pointer beckons, so it stands out from the rest. It leans and nods toward its target with little hops,
+        // sparkles twinkle on the ground toward it, and it squeaks once as it appears.
+        [Test]public void APointerBeckonsWithANodSparklesAndASqueak()
+        {
+            var goal=new Vector2(6,30);var state=Hinted(FirstArrival(true),"Clue",goal);var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);
+            var voice=body.GetComponent<AudioSource>();
+            Assert.That(voice,Is.Not.Null,"it squeaks from where it stands");
+            Assert.That(voice.spatialBlend,Is.EqualTo(1f),"a 3-D sound, so it says which way to look");
+            var squeak=FestivalCreatures.Squeak;
+            Assert.That(squeak.length,Is.InRange(.1f,.2f),"a short squeak ("+squeak.length+" s)");
+            var samples=new float[squeak.samples];squeak.GetData(samples,0);int third=samples.Length/3;
+            Assert.That(Crossings(samples,2*third,samples.Length),Is.GreaterThan(Crossings(samples,0,third)*1.3f),"that rises in pitch");
+
+            float least=180,most=0,lowest=1,highest=0;
+            for(float until=t+3;t<until;t+=Step)
+            {
+                Frame(creatures,state,eye,t);if(t<until-1.5f)continue;
+                float pitch=Vector3.Angle(body.up,Vector3.up);least=Mathf.Min(least,pitch);most=Mathf.Max(most,pitch);
+                lowest=Mathf.Min(lowest,body.position.y);highest=Mathf.Max(highest,body.position.y);
+                var leaning=new Vector2(body.up.x,body.up.z);var ahead=goal-Flat(body.position);
+                if(pitch>3)Assert.That(Vector2.Angle(leaning,ahead),Is.LessThan(20),"it leans toward its target, not away");
+            }
+            Assert.That(least,Is.LessThan(3),"it straightens up between nods");Assert.That(most,Is.InRange(8f,30f),"and nods toward its target");
+            Assert.That(highest-lowest,Is.GreaterThan(.05f),"with little hops");
+
+            var sparkles=new List<Renderer>();
+            foreach(var part in body.GetComponentsInChildren<Renderer>())if(part.name=="Sparkle")sparkles.Add(part);
+            Assert.That(sparkles.Count,Is.InRange(4,6),"4 to 6 sparkles");
+            foreach(var sparkle in sparkles)
+            {
+                var at=sparkle.transform.position;var off=Flat(at)-Flat(body.position);
+                Assert.That(off.magnitude,Is.InRange(.2f,4f),"each sparkle is on the way, close by");
+                Assert.That(Vector2.Angle(off,goal-Flat(body.position)),Is.LessThan(10),"toward the target");
+                Assert.That(at.y,Is.InRange(-.01f,.1f),"on the ground");
+                var size=sparkle.transform.lossyScale;Assert.That(size.y,Is.LessThan(size.x*.4f),"flattened");
+                Assert.That(sparkle.GetComponent<Collider>(),Is.Null,"no collider");
+                Assert.That(sparkle.shadowCastingMode,Is.EqualTo(ShadowCastingMode.Off),"no shadow");
+                Assert.That(sparkle.sharedMaterial.GetColor("_EmissionColor").maxColorComponent,Is.GreaterThan(.5f),"glowing");
+            }
+            var sizes=new List<float>();for(int frame=0;frame<10;frame++,t+=Step){Frame(creatures,state,eye,t);sizes.Add(sparkles[0].transform.lossyScale.x);}
+            sizes.Sort();Assert.That(sizes[sizes.Count-1]-sizes[0],Is.GreaterThan(.01f),"they twinkle");
+
+            // An ordinary creature does none of it.
+            var plain=FirstArrival(true);var others=Creatures();var head=Eye();float u=0;var still=UntilOneArrives(others,plain,head,ref u);
+            for(float until=u+3;u<until;u+=Step){Frame(others,plain,head,u);Assert.That(Vector3.Angle(still.up,Vector3.up),Is.LessThan(1),"an ordinary creature stands straight");}
+            Assert.That(Pointing(others),Is.Empty,"and has no sparkles");
+        }
+
+        // The Giggle Tank is public, so each dosed player's client times its own jackalope: no sooner than 60 s into the level, then
+        // at most once every 120 s, and none once the tank is grabbed.
+        [Test]public void TheJackalopePointsAtAnUngrabbedTank()
+        {
+            var tank=Festivals.GiggleTankSpots[0];var goal=new Vector2(tank.X,tank.Z);
+            var state=Round(4);state.GiggleTankSpot=0;var creatures=Creatures();var eye=Eye();var came=new List<float>();var was=new List<Transform>();
+            for(float t=0;t<10*60;t+=Step)
+            {
+                Wander(eye,t);Frame(creatures,state,eye,t);var now=Pointing(creatures);
+                foreach(var body in now)
+                {
+                    if(!was.Contains(body)){came.Add(t);Assert.That(body.name,Is.EqualTo("Creature Jackalope"),"the tank's pointer is a jackalope");}
+                    Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the tank");
+                }
+                was=now;
+            }
+            Assert.That(came.Count,Is.InRange(3,5),"ten minutes at four doses bring a jackalope pointer every two minutes or so ("+came.Count+")");
+            Assert.That(came[0],Is.GreaterThanOrEqualTo(60f),"the first no sooner than 60 s in");
+            for(int i=1;i<came.Count;i++)Assert.That(came[i]-came[i-1],Is.GreaterThanOrEqualTo(120f-Step),"at most one every 120 s");
+
+            // Grabbed: the pointer goes and none comes again.
+            {
+                var grabbed=Round(4);grabbed.GiggleTankSpot=0;var shown=Creatures();var head=Eye();float t=0;
+                for(;t<3*60&&Pointing(shown).Count==0;t+=Step){Wander(head,t);Frame(shown,grabbed,head,t);}
+                Assert.That(Pointing(shown).Count,Is.EqualTo(1),"setup: a jackalope points at the tank");
+                grabbed.GiggleTankFound=true;int most=0;
+                for(float until=t+1+2*Step;t<until;t+=Step)Frame(shown,grabbed,head,t);
+                Assert.That(Pointing(shown),Is.Empty,"it goes once the tank is grabbed");
+                for(float until=t+5*60;t<until;t+=Step){Wander(head,t);Frame(shown,grabbed,head,t);most=Mathf.Max(most,Pointing(shown).Count);}
+                Assert.That(most,Is.Zero,"and none comes again");
+            }
+
+            // A hint waiting when the tank's pointer is due goes first.
+            {
+                var both=Hinted(Round(4),"Buyer",new Vector2(-6,30));both.GiggleTankSpot=0;var shown=Creatures();var head=Eye();
+                var block=Solid("Block",new Vector3(0,1.5f,10),new Vector3(60,3,60));float t=0;
+                for(;t<90;t+=Step)Frame(shown,both,head,t);
+                Object.DestroyImmediate(block);Physics.SyncTransforms();
+                var order=new List<string>();var seen=new List<Transform>();
+                for(float until=t+60;t<until&&order.Count<2;t+=Step)
+                {
+                    Frame(shown,both,head,t);
+                    foreach(var body in Pointing(shown))if(!seen.Contains(body)){seen.Add(body);order.Add(body.name);}
+                }
+                Assert.That(order,Is.EqualTo(new[]{"Creature Pixie","Creature Jackalope"}),"the waiting hint is pointed at before the due tank");
+            }
+        }
+
+        [Test]public void NoPointersWithoutAHint()
+        {
+            // A dosed festivalgoer who is not the tripper (night 2 doses the whole crew): no visions reach them, and night 2 has no tank.
+            var state=Round(4);int most=0,seen=0;var creatures=Creatures();var eye=Eye();
+            for(float t=0;t<10*60;t+=Step){eye.transform.Rotate(0,10*Step,0);Frame(creatures,state,eye,t);most=Mathf.Max(most,Pointing(creatures).Count);seen=Mathf.Max(seen,creatures.Live);}
+            Assert.That(seen,Is.GreaterThan(0),"setup: creatures come");
+            Assert.That(most,Is.Zero,"no creature points without a hint or a tank");
+            // The tripper's visions with none hinted bring none either.
+            state=Hinted(Round(4),"Buyer",new Vector2(6,30));state.Visions[0].Hinted=false;creatures=Creatures();eye=Eye();
+            for(float t=0;t<10*60;t+=Step){eye.transform.Rotate(0,10*Step,0);Frame(creatures,state,eye,t);most=Mathf.Max(most,Pointing(creatures).Count);}
+            Assert.That(most,Is.Zero,"visions no creature hints at get no pointer");
         }
 
         // A level being played by "me" (and whoever else is added), at the given dose.
@@ -276,7 +477,7 @@ namespace Festival.Tests
         }
         private static Transform UntilOneArrives(FestivalCreatures creatures,RoundState state,Camera eye,ref float t)
         {
-            for(;t<120;t+=Step){Frame(creatures,state,eye,t);if(creatures.Live>0){t+=Step;return Drawn(creatures);}}
+            for(float until=t+120;t<until;t+=Step){Frame(creatures,state,eye,t);if(creatures.Live>0){t+=Step;return Drawn(creatures);}}
             Assert.Fail("setup: no creature arrived in two minutes");return null;
         }
         private static Transform Drawn(FestivalCreatures creatures)
@@ -296,6 +497,31 @@ namespace Festival.Tests
             }
             return shown;
         }
+        // The tripper's view of state with one hinted, true and unchecked vision of kind: over a festivalgoer standing at goal, or
+        // (a Stash) the spot itself.
+        private static RoundState Hinted(RoundState state,string kind,Vector2 goal)
+        {
+            bool spot=kind=="Stash";if(!spot)state.Npcs.Add(new NpcState{Id="npc-1",X=goal.x,Z=goal.y});
+            state.Visions.Add(new VisionState{Id="vision-1",Kind=kind,NpcId=spot?"":"npc-1",X=spot?goal.x:0,Z=spot?goal.y:0,Hinted=true});
+            return state;
+        }
+        // The live creatures pointing at something: the ones beckoning with their sparkles.
+        private static List<Transform> Pointing(FestivalCreatures creatures)
+        {
+            var pointing=new List<Transform>();
+            foreach(Transform body in creatures.transform){var trail=body.Find("Sparkles");if(body.gameObject.activeSelf&&trail!=null&&trail.gameObject.activeSelf)pointing.Add(body);}
+            return pointing;
+        }
+        // Degrees between where body faces, seen from above, and the way to target.
+        private static float Facing(Transform body,Vector2 target)=>Vector2.Angle(new Vector2(body.forward.x,body.forward.z),target-Flat(body.position));
+        // The eye stands metres behind body, on the far side from goal, still looking along +z.
+        private static void StandBehind(Camera eye,Transform body,Vector2 goal,float metres)
+        {
+            var at=Flat(body.position);var back=(at-goal).normalized*metres;eye.transform.position=new Vector3(at.x+back.x,1.65f,at.y+back.y);
+        }
+        // Every 30 s the eye jumps 50 m along x and back, so the creatures that stay are left 40 m behind and new ground has room.
+        private static void Wander(Camera eye,float t)=>eye.transform.position=new Vector3((int)(t/30)%2*50,1.65f,0);
+        private static int Crossings(float[] samples,int from,int to){int count=0;for(int i=from+1;i<to;i++)if(samples[i-1]<0!=samples[i]<0)count++;return count;}
         private GameObject Made(string name){var go=new GameObject(name);made.Add(go);return go;}
         private FestivalCreatures Creatures()=>Made("Creatures").AddComponent<FestivalCreatures>();
         private Camera Eye(){var eye=Made("Eye").AddComponent<Camera>();Aim(eye);return eye;}

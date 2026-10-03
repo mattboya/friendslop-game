@@ -86,8 +86,16 @@ The two hooks the design is built around:
   stash or a buyer who pays double. They also raise the level's payout.
 
 **Spotting fakes:** false visions have learnable tells. They cast no shadow,
-shimmer when the camera moves, and are slightly off in colour. The only hint in
-the game is one line: "Trust, but verify."
+shimmer when the camera moves, and are slightly off in colour. The game's one
+line of advice is "Trust, but verify."
+
+**Little helpers:** now and then one of the tripper's little creatures points
+toward a true vision, or toward a Giggle Tank nobody has grabbed. Each kind has
+its own job: a mushroom sprite points at a clue, a pixie at a buyer, a dragon
+at a narc, a gnome at a stash or a buyer who pays double, and a jackalope at the
+Giggle Tank. A pointing creature faces what it points at, beckons toward it and
+squeaks once as it appears. When you come close it scurries on ahead, so
+following it leads you there. The rest of the creatures are just there.
 
 **Checking a vision:**
 
