@@ -13,7 +13,7 @@ namespace Festival.Presentation
         {
             Role=role;
             Gender=Pick(id,"gender",2);Shape=Pick(id,"shape",3);Face=Pick(id,"face",6);
-            Shirt=Pick(id,"shirt",4);Pants=Pick(id,"pants",4);Shoes=Pick(id,"shoes",4);
+            Shirt=Pick(id,"shirt",4);Pants=PickWeighted(id,"pants",PantsWeights);Shoes=Pick(id,"shoes",4);
             Headgear=Optional(id,"headgear",4);Sunglasses=Optional(id,"sunglasses",4);
             FacialHair=Gender==0?Optional(id,"facialhair",4):-1;
             Hairstyle=Pick(id,"hairstyle",4);Accessory=Optional(id,"accessory",4);
@@ -23,7 +23,17 @@ namespace Festival.Presentation
         }
 
         public static FestivalAppearance For(string id,string role="Attendee") => new FestivalAppearance(id??"",role??"Attendee");
-        public static int Pick(string id,string slot,int count)
+        // LOOK-1: shorts, trousers, an A-line skirt, a tutu (Pants_0-3): about 1 in 20 wears a skirt or a tutu.
+        static readonly int[] PantsWeights={48,47,3,2};
+        public static int Pick(string id,string slot,int count)=>(int)(Hash(id,slot)%(uint)count);
+        /// <summary>Pick from the same hash, with variant i coming up weights[i] times in their sum.</summary>
+        public static int PickWeighted(string id,string slot,int[] weights)
+        {
+            int total=0;foreach(var w in weights)total+=w;
+            int roll=(int)(Hash(id,slot)%(uint)total);
+            for(int i=0;;i++){if(roll<weights[i])return i;roll-=weights[i];}
+        }
+        private static uint Hash(string id,string slot)
         {
             unchecked
             {
@@ -37,7 +47,7 @@ namespace Festival.Presentation
                 hash^=hash>>16;hash*=0x7feb352du;
                 hash^=hash>>15;hash*=0x846ca68bu;
                 hash^=hash>>16;
-                return (int)(hash%(uint)count);
+                return hash;
             }
         }
         private static int Optional(string id,string slot,int count)

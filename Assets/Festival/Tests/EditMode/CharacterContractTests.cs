@@ -166,6 +166,23 @@ namespace Festival.Tests
             foreach(var pair in new[]{("headgear",headgear),("sunglasses",sunglasses),("accessories",accessories),("facial hair",facialHair)})
                 for(int variant=0;variant<5;variant++)Assert.That(pair.Item2[variant],Is.True,pair.Item1+" option "+(variant-1)+" never generated");
         }
+        // LOOK-1: about 1 in 20 festivalgoers wears a skirt or a tutu (Pants 2 or 3, split 3 to 2), not half the crowd; the rest wear
+        // shorts or trousers about evenly. Only the pants change: every other draw for an id is as it was.
+        [Test]public void AboutOneInTwentyWearsASkirtOrTutu()
+        {
+            const int people=20000;var pants=new int[4];var shirts=new int[4];
+            for(int i=0;i<people;i++){var a=FestivalAppearance.For("generated_attendee_"+i);pants[a.Pants]++;shirts[a.Shirt]++;}
+            double Share(int n)=>100.0*n/people;
+            var wanted=new[]{48,47,3,2};
+            for(int p=0;p<4;p++)Assert.That(Share(pants[p]),Is.EqualTo(wanted[p]).Within(1),"pants "+p+" (0 shorts, 1 trousers, 2 skirt, 3 tutu)");
+            Assert.That(Share(pants[2]+pants[3]),Is.EqualTo(5).Within(1),"a skirt or a tutu");
+            for(int s=0;s<4;s++)Assert.That(Share(shirts[s]),Is.EqualTo(25).Within(1),"shirt "+s+" is still drawn evenly");
+            // player_29's every other slot, as drawn before LOOK-1 (it wore a tutu then).
+            var k=FestivalAppearance.For("player_29");
+            Assert.That(string.Join(",",k.Gender,k.Shape,k.Face,k.Shirt,k.Shoes,k.Headgear,k.Sunglasses,k.FacialHair,k.Hairstyle,k.Accessory,
+                k.SkinColor,k.HairColor,k.ShirtColor,k.PantsColor,k.ShoeColor,k.AccentColor),Is.EqualTo("1,2,3,1,0,1,2,-1,2,1,7,8,3,1,3,6"),
+                "player_29 looks as before, but for the pants");
+        }
         [Test]public void RuntimeActorEnablesExactlyOneRequiredVariantPerSlot()
         {
             var root=new GameObject("Wardrobe test");

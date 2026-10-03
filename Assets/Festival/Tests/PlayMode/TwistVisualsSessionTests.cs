@@ -94,9 +94,11 @@ namespace Festival.Tests
         // POLO-5: friends watch a ride from the ground, so every rider sits inside their gondola as it goes round, under its roof,
         // alone or beside a friend, whatever their body's shape (FestivalAppearance.Shape 0, 1 or 2, the last the widest and deepest).
         // Three crews of two put each shape on each side of a friend (riders sharing a gondola sit in id order), and the deepest look
-        // rides alone: shape 2 in a tutu, with a backpack. Player_1 wears the tallest seated look (shape 0 in hat 1), and player_29
-        // the widest (shape 2 in a skirt or tutu, with accessory 1, which reaches furthest out) beside a friend. Each crew boards together, a gondola
-        // apart, and the turn is moved on by starting their rides earlier, so two crews are at the top.
+        // rides alone: shape 2 in a skirt (deeper than the tutu, and longer), with a backpack. Player_1 wears the tallest seated
+        // look (shape 0 in hat 1), and the widest (shape 2 in a tutu, wider than the skirt, with accessory 1, which reaches
+        // furthest out) sits beside them. About 1 in 20 wears a skirt or tutu (LOOK-1), so those two are found by their look
+        // (Rider). Each crew boards together, a gondola apart, and the turn is moved on by starting their rides earlier, so two
+        // crews are at the top.
         [UnityTest]public IEnumerator EveryBodySitsInsideItsGondolaAloneOrBesideAFriend()
         {
             var world=new GameObject("Wheel world");world.AddComponent<FestivalWorld>();yield return null;
@@ -111,17 +113,19 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=Simulation(session);
-                var crews=new[]{new[]{"player_1","player_29"},new[]{"player_11","twist_mate"},new[]{"look_b2","player_9"},new[]{"player_81"}};
+                // "wide_rider_…" sorts after "player_1", so the widest takes the second seat, as shape 2 does in no other crew.
+                string wideId=Rider("wide_rider_",3,1),deepId=Rider("deep_rider_",2,0);
+                var crews=new[]{new[]{"player_1",wideId},new[]{"player_11","twist_mate"},new[]{"look_b2","player_9"},new[]{deepId}};
                 var shapes=new[]{new[]{0,2},new[]{2,1},new[]{1,0},new[]{2}};
                 for(int c=0;c<crews.Length;c++)for(int r=0;r<crews[c].Length;r++)
                 {
                     Assert.That(FestivalAppearance.For(crews[c][r]).Shape,Is.EqualTo(shapes[c][r]),"setup: "+crews[c][r]+"'s body shape");
                     sim.AddPlayer(crews[c][r],crews[c][r]).Ready=true;
                 }
-                var deep=FestivalAppearance.For("player_81");
-                Assert.That(deep.Pants>=2&&deep.Accessory==0,Is.True,"setup: the lone rider wears a skirt or tutu and a backpack");
-                var tall=FestivalAppearance.For("player_1");var wide=FestivalAppearance.For("player_29");
-                Assert.That(tall.Headgear==1&&wide.Pants>=2&&wide.Accessory==1,Is.True,"setup: the tallest look wears hat 1, and the widest a skirt or tutu and accessory 1");
+                var deep=FestivalAppearance.For(deepId);
+                Assert.That(deep.Pants==2&&deep.Accessory==0,Is.True,"setup: the lone rider wears a skirt and a backpack");
+                var tall=FestivalAppearance.For("player_1");var wide=FestivalAppearance.For(wideId);
+                Assert.That(tall.Headgear==1&&wide.Pants==3&&wide.Accessory==1,Is.True,"setup: the tallest look wears hat 1, and the widest a tutu and accessory 1");
                 yield return StartLevel(session);
                 for(int c=0;c<crews.Length;c++)foreach(var id in crews[c])
                 {
@@ -168,6 +172,13 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"Riders seen from outside their gondolas:\n"+string.Join("\n",failures));
+        }
+
+        /// <summary>The first id from prefix whose look is body shape 2 in the given pants (2 skirt, 3 tutu) and accessory.</summary>
+        static string Rider(string prefix,int pants,int accessory)
+        {
+            for(int i=0;i<10000;i++){var look=FestivalAppearance.For(prefix+i);if(look.Shape==2&&look.Pants==pants&&look.Accessory==accessory)return prefix+i;}
+            throw new System.InvalidOperationException("No shape-2 look in pants "+pants+" with accessory "+accessory);
         }
 
         // POLO-7: on a slow machine a rider's body and eye still sit on their seat. Each glides there (Actor's body at 15 a second,
