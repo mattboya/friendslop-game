@@ -102,6 +102,95 @@ namespace Festival.Tests
             finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
         }
 
+        // TRIP-8 (with ECON-5's items 3 and 7) on a real hosted Day 1. In the middle of anything the host takes only its way out (and
+        // a handoff, a body, a call for help), so that is all the HUD lists, and the strip under the prompt stays empty: lying on the
+        // grass beside a festivalgoer and a dropped item, lying at the night market looking up at a shelf, mid chat check and mid talk.
+        [UnityTest]public IEnumerator InTheMiddleOfAnythingOnlyItsWayOutIsListed()
+        {
+            var world=new GameObject("Busy HUD world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Busy HUD");
+            var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();
+            var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
+            var pitchField=typeof(FestivalSession).GetField("pitch",BindingFlags.NonPublic|BindingFlags.Instance);
+            var yawField=typeof(FestivalSession).GetField("yaw",BindingFlags.NonPublic|BindingFlags.Instance);
+            void PressE()=>((System.Action)primary.GetValue(view))?.Invoke();
+            string Listed(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
+            string Read(string name,bool hidden=false){foreach(var text in hud.GetComponentsInChildren<Text>(hidden))if(text.name==name)return text.text;return "(hidden)";}
+            void OnlyItsWayOut(string where,string way)
+            {
+                if(Listed()!=way)failures.Add(where+": listed \""+Listed()+"\", not only \""+way+"\"");
+                if(Read("Nearby")!="(hidden)")failures.Add(where+": the strip under the prompt reads \""+Read("Nearby").Replace("\n"," | ")+"\"");
+            }
+            InteractionState Doing(FestivalSimulation sim,PlayerState p)=>sim.State.Interactions.Find(i=>i.PlayerId==p.Id&&i.Status=="Active");
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mate=sim.AddPlayer("busy_mate","Sam");mate.Ready=true;
+                sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;
+                yield return StartLevel(session);
+                // As in the test above: Sam trips, far off at the way back to camp; you are sober, with empty hands.
+                sim.State.TripperId=mate.Id;mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;player.Effects.Clear();
+                mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
+                sim.State.Visions.Clear();
+                // A chatty festivalgoer who wants no dance first (not a raver or burner: Wary), and a dropped confetti at your feet.
+                string talker="busy_talker";for(int k=0;DialogueGrammar.PersonaFor(talker,"")=="Raver"||DialogueGrammar.PersonaFor(talker,"")=="Burner";k++)talker="busy_talker_"+k;
+                var npc=new NpcState{Id=talker,Role="Buyer",X=-20,Z=-2,Yaw=90,CanTalk=true};sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);
+                player.X=npc.X+.8f;player.Z=npc.Z;
+                sim.State.Drops.Add(new DropState{Id="busy_drop",ItemId="confetti",Count=1,X=player.X,Z=player.Z});
+                yield return new WaitForSeconds(.6f);
+                if(!Listed().Contains("Pick up")||Read("Nearby")=="(hidden)")failures.Add("setup: standing there, the pickup and the festivalgoer's strip are not offered: \""+Listed()+"\"");
+
+                // 1. Lying there: only Get up, and E gets you up.
+                session.Command(FestivalSimulation.LieDownKind);
+                yield return new WaitForSeconds(.6f);
+                Assert.That(FestivalSimulation.LyingDown(sim.State,player.Id),Is.True,"setup: you lie down ("+session.Message+")");
+                OnlyItsWayOut("lying beside a festivalgoer and a drop",GetUp);
+                if(Read("Prompt")!=GetUp)failures.Add("lying beside a festivalgoer: the prompt reads \""+Read("Prompt")+"\"");
+
+                // 2. Lying at the night market, looking up at a shelf 1.6 m away: still only Get up, and E gets you up, buying nothing.
+                sim.State.Npcs.Clear();sim.State.Drops.Clear();
+                var shelf=Catalog.ShopPoint(false,0);player.X=shelf.X;player.Z=shelf.Z-1.6f;
+                yawField.SetValue(session,0f);pitchField.SetValue(session,-30f);
+                yield return new WaitForSeconds(.6f);
+                OnlyItsWayOut("lying at the night market, looking at a shelf",GetUp);
+                if(Read("Prompt")!=GetUp)failures.Add("lying at the night market, looking at a shelf: the prompt reads \""+Read("Prompt")+"\", not \""+GetUp+"\"");
+                int cash=player.Cash;PressE();
+                yield return new WaitForSeconds(.6f);
+                if(FestivalSimulation.LyingDown(sim.State,player.Id))failures.Add("lying at the night market: E doesn't get you up ("+session.Message+")");
+                var checkout=(string)typeof(FestivalHud).GetField("checkoutItem",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(view);
+                if(player.Cash!=cash||checkout!="")failures.Add("lying at the night market: E went to buy the shelf's "+checkout+" ("+session.Message+")");
+                if(FestivalSimulation.LyingDown(sim.State,player.Id))session.Command("Cancel");
+
+                // 3. Mid chat check (ECON-5 item 3) and mid talk (item 7), beside a festivalgoer: only the cancel, and no strip.
+                sim.State.TripperId=player.Id;player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                var checkee=new NpcState{Id="busy_checkee",Role="Buyer",X=-20,Z=-2,Yaw=90,CanTalk=true};
+                sim.State.Npcs.Add(checkee);sim.State.Visions.Add(new VisionState{Id="busy_vision",Kind="Buyer",NpcId=checkee.Id});
+                player.X=checkee.X+.8f;player.Z=checkee.Z;
+                session.Command("ConfirmChat",checkee.Id);
+                Assert.That(Doing(sim,player)?.Kind,Is.EqualTo("ConfirmChat"),"setup: you chat to check your vision ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                yield return new WaitForSeconds(.6f);
+                OnlyItsWayOut("mid chat check","Cancel current action");
+                session.Command("Cancel");sim.State.Npcs.Clear();sim.State.Visions.Clear();
+                npc.Mode="Blending";sim.State.Npcs.Add(npc);
+                session.Command("Conversation",npc.Id);
+                var talk=Doing(sim,player);
+                Assert.That(talk?.Kind=="Conversation"&&!FestivalSimulation.TrustDancing(talk),Is.True,"setup: you talk with them, no dance first ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                yield return new WaitForSeconds(.6f);
+                OnlyItsWayOut("mid talk","Cancel current action");
+                session.Command("Cancel");
+
+                Assert.That(failures,Is.Empty,string.Join("\n",failures));
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+        }
+
         static Transform Bone(FestivalCharacter actor,string name)=>actor.GetComponentsInChildren<Transform>().First(t=>t.name==name);
         static bool HandsShown()=>Object.FindObjectsByType<FestivalHands>(FindObjectsSortMode.None).Any(h=>h.gameObject.activeInHierarchy);
     }
