@@ -128,6 +128,9 @@ namespace Festival.Core
         public List<BodyState> Bodies=new List<BodyState>();
         // TRIP-2: what the tripper sees (Visions.cs), and the night's clue holders in trail order; CluesRead is the next link.
         public List<VisionState> Visions=new List<VisionState>(); public List<string> ClueChain=new List<string>();
+        // VISION-6: when a creature next hints at a true vision (HintVisions), on the level clock; 0, not armed (older snapshots arm
+        // on their first step). Host-only: ViewFor builds the view field by field and leaves it out.
+        public double NextVisionHintAt;
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();
         public List<CommittedCommand> Commands=new List<CommittedCommand>(); public List<DropState> Drops=new List<DropState>();

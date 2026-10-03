@@ -50,6 +50,26 @@ namespace Festival.Tests
             Assert.That(seen.FindAll(v=>v.IsTrue).Count,Is.EqualTo(1),"and no other vision's");
         }
 
+        // VISION-6: a creature's hint marks a true vision, so like its truth it reaches the tripper's client alone.
+        [Test] public void OnlyTheTrippersViewCarriesHints()
+        {
+            var game=Night();var tripper=game.Player(game.State.TripperId);
+            for(double due=game.State.NextVisionHintAt;game.State.ElapsedSeconds<due;)game.Tick(System.Math.Min(30,due-game.State.ElapsedSeconds+.1));
+            var hinted=game.State.Visions.FindAll(v=>v.Hinted).ConvertAll(v=>v.Id);
+            Assert.That(hinted,Has.Count.EqualTo(1),"setup: the host's first turn hinted the night's one unchecked truth");
+            Assert.That(FestivalSession.ViewFor(game,tripper.Id).Visions.FindAll(v=>v.Hinted).ConvertAll(v=>v.Id),Is.EqualTo(hinted),"the tripper's copies show exactly the host's hints");
+            foreach(var viewer in game.State.Players)
+            {
+                if(viewer==tripper)continue;
+                foreach(var life in new[]{"Alive","Detained","Spirit"})
+                {
+                    viewer.Life=life;
+                    Assert.That(FestivalSession.ViewFor(game,viewer.Id).Visions,Is.Empty,"a "+life+" friend who is not tripping gets no visions, so no hints");
+                }
+                viewer.Life="Alive";
+            }
+        }
+
         [Test] public void TheTrippersViewShowsTheFriendOnceTheTrailEnds()
         {
             var game=Night();var tripper=game.Player(game.State.TripperId);var friend=game.State.Players.Find(p=>p!=tripper);
@@ -97,10 +117,13 @@ namespace Festival.Tests
             Assert.That(game.State.DealSeed,Is.EqualTo(secret),"setup: the host dealt Night 1 from its secret");
             // The tripper has checked a vision and finished the trail, so their view holds all it ever does.
             game.State.Visions.Find(v=>v.IsTrue).Confirmed=true;game.State.GateOpened=true;
+            Assert.That(game.State.NextVisionHintAt,Is.GreaterThan(0),"setup: the host has armed the next hint");
             foreach(var viewer in game.State.Players)foreach(var life in new[]{"Alive","Detained","Spirit"})
             {
                 viewer.Life=life;var view=FestivalSession.ViewFor(game,viewer.Id);string who=(viewer==tripper?"the tripper":viewer.Id)+", "+life;
                 Assert.That(view.DealSeed,Is.Zero,who+": the view has no deal seed");
+                // VISION-6: nor when the host's next creature hint is due, which would say when a truth is about to be shown.
+                Assert.That(view.NextVisionHintAt,Is.Zero,who+": nor when the next hint is due");
                 Assert.That(UnityEngine.JsonUtility.ToJson(view),Does.Not.Contain(secret.ToString()),who+": nor the secret anywhere else");
                 viewer.Life="Alive";
             }

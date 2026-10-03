@@ -27,9 +27,9 @@ public static class VisionTests
     static bool LiveClue(VisionState v)=>v.Kind=="Clue"&&!(v.Confirmed&&v.IsTrue);
 
     // The crew readies at camp for this level, the wheels land and everyone loads into the real crowd.
-    static FestivalSimulation Start(int seed,int level,int festival=0,int encore=0,int crew=2)
+    static FestivalSimulation Start(int seed,int level,int festival=0,int encore=0,int crew=2,Func<int> secret=null)
     {
-        var s=new FestivalSimulation(seed);for(int i=0;i<crew;i++)s.AddPlayer("p"+i,"P"+i);
+        var s=new FestivalSimulation(seed){DealSecret=secret};for(int i=0;i<crew;i++)s.AddPlayer("p"+i,"P"+i);
         s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;s.State.EncoreTier=encore;
         foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,"setup: "+p.Id+" readies");}
         s.Tick(5.2);Check(s.State.Phase=="Spinning","setup: the wheels spin");
@@ -58,7 +58,8 @@ public static class VisionTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{RolesMatchTheTable,DayMarksFollowTheDose,NightShowsTheNextClueHolder,SecretsOnlyAtDoseThreeAndUp,
-            SalesDependOnTheRole,SecretsPay,OnlyTheTripperSeesVisions,VisionsSurviveSnapshots,TheClueTrailLeadsToTheFriend,TheTotemsAreGone,GuidanceFollowsTheTrail})
+            SalesDependOnTheRole,SecretsPay,OnlyTheTripperSeesVisions,VisionsSurviveSnapshots,TheClueTrailLeadsToTheFriend,TheTotemsAreGone,GuidanceFollowsTheTrail,
+            CreaturesHintTrueVisionsNowAndThen})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" vision test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -251,12 +252,61 @@ public static class VisionTests
         Check(!(night+daytime).ToLowerInvariant().Contains("totem"),"no totems left in the guidance: "+night+" "+daytime);
     }
 
+    // VISION-6: about every 2 minutes of level clock (60-180 s apart), the same at every dose, the host has one of the tripper's
+    // creatures hint at a true vision they have not checked. The hints draw from a stream of their own, mixed with the DealSeed,
+    // so the deal draws what it always drew and no client can predict a pick or a time.
+    static void CreaturesHintTrueVisionsNowAndThen()
+    {
+        string Deal(RoundState x)=>string.Join(";",x.Visions.ConvertAll(v=>v.Id+v.Kind+v.NpcId+v.IsTrue+v.Tell));
+        string Hinted(List<VisionState> seen)=>string.Join(",",seen.FindAll(v=>v.Hinted).ConvertAll(v=>v.Id));
+        int seed=0;
+        for(int dose=1;dose<=4;dose++)foreach(int level in new[]{0,1})
+        {
+            // The same level again with the hints stubbed out: their turn never comes.
+            var s=Dosed(dose,level,ref seed);var control=Start(seed-1,level);control.State.NextVisionHintAt=double.MaxValue;
+            string where="dose "+dose+" "+Festivals.For(s.State).Name;double due=s.State.NextVisionHintAt;int turns=0,hints=0;
+            Check(due>=60&&due<=180,where+": the deal arms the first hint 60-180 s in, got "+due);
+            while(s.State.Phase=="Playing")
+            {
+                var before=s.State.Visions.ConvertAll(v=>(v.Id,v.IsTrue,v.Confirmed,v.Hinted,v.ShowUntil));
+                s.Tick(.1);control.Tick(.1);bool turn=s.State.NextVisionHintAt!=due;
+                var fresh=s.State.Visions.FindAll(v=>v.Hinted&&!before.Exists(b=>b.Id==v.Id&&b.Hinted));hints+=fresh.Count;
+                bool open=turn&&before.Exists(b=>b.IsTrue&&!b.Confirmed&&!b.Hinted&&b.ShowUntil==0);
+                Check(fresh.Count==(open?1:0),where+": a turn hints one vision while any is left to hint, and only a turn does ("+fresh.Count+" at "+s.State.ElapsedSeconds+" s)");
+                foreach(var v in fresh){var b=before.Find(x=>x.Id==v.Id);Check(b.Id!=null&&b.IsTrue&&!b.Confirmed&&b.ShowUntil==0&&!v.Confirmed,where+": "+v.Kind+" "+v.Id+" was a true vision, unchecked and no found clue, when hinted");}
+                if(!turn)continue;
+                double gap=s.State.NextVisionHintAt-due;turns++;due=s.State.NextVisionHintAt;
+                Check(gap>=60&&gap<=180.1,where+": the next hint comes 60-180 s after the last, got "+gap);
+            }
+            Check(turns>=2&&hints>=1,where+": hints come through the level ("+turns+" turns, "+hints+" hints)");
+            Check(!control.State.Visions.Exists(v=>v.Hinted)&&Deal(s.State)==Deal(control.State),where+": the level's visions match a run with no hints");
+            var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
+            Check(Hinted(FestivalSimulation.VisibleVisions(s.State,tripper.Id))==Hinted(s.State.Visions),where+": the tripper's copies carry the hints");
+            Check(FestivalSimulation.VisibleVisions(s.State,friend.Id).Count==0,where+": a friend still sees no visions, so no hints");
+        }
+        // A found clue still saying TRUE is never hinted. With nothing else to hint, the turn passes and the next one is still armed.
+        var night=Dosed(1,1,ref seed);var found=night.State.Visions.Find(v=>v.Kind=="Clue"&&v.IsTrue);night.Tick(1);
+        foreach(var v in night.State.Visions)v.Confirmed=v!=found;found.ShowUntil=night.State.SimulationSeconds+600;night.State.NextVisionHintAt=night.State.ElapsedSeconds+.05;
+        night.Tick(.1);double next=night.State.NextVisionHintAt-night.State.ElapsedSeconds;
+        Check(!night.State.Visions.Exists(v=>v.Hinted)&&next>=59.9&&next<=180,"a found clue is never hinted, and the passed turn arms the next 60-180 s on, got "+next);
+        // A snapshot from before hints restores unarmed, and its first step only arms one.
+        night.State.NextVisionHintAt=0;found.ShowUntil=0;found.Confirmed=false;
+        var legacy=JsonNode.Parse(JsonSerializer.Serialize(night.State,Json)).AsObject();legacy.Remove("NextVisionHintAt");foreach(var v in legacy["Visions"].AsArray())v.AsObject().Remove("Hinted");
+        var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));old.Tick(.1);next=old.State.NextVisionHintAt-old.State.ElapsedSeconds;
+        Check(!old.State.Visions.Exists(v=>v.Hinted)&&next>=60&&next<=180,"an older snapshot's first step arms the next hint 60-180 s on and hints nothing, got "+next);
+        // The DealSeed is mixed in: the same public seeds with another host secret time the hints differently.
+        bool differs=false;for(int n=1;n<=4&&!differs;n++)differs=Start(n,1,secret:()=>11).State.NextVisionHintAt!=Start(n,1,secret:()=>12).State.NextVisionHintAt;
+        Check(differs,"the host's secret times the hints, so no client can predict them");
+    }
+
     static void VisionsSurviveSnapshots()
     {
         int seed=0;var s=Dosed(4,1,ref seed);Check(s.State.Visions.Count>0,"setup: a dose-4 night has visions");s.State.Visions[0].Confirmed=true;s.State.Visions[0].ShowUntil=12.5;
+        s.State.Visions[s.State.Visions.Count-1].Hinted=true;s.State.NextVisionHintAt=123.5;
         var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));var r=restored.State;
-        string Visions(RoundState x)=>string.Join(";",x.Visions.ConvertAll(v=>v.Id+v.Kind+v.NpcId+v.X+v.Z+v.IsTrue+v.Tell+v.Confirmed+v.ShowUntil));
+        string Visions(RoundState x)=>string.Join(";",x.Visions.ConvertAll(v=>v.Id+v.Kind+v.NpcId+v.X+v.Z+v.IsTrue+v.Tell+v.Confirmed+v.ShowUntil+v.Hinted));
         Check(Visions(r)==Visions(s.State)&&string.Join(",",r.ClueChain)==string.Join(",",s.State.ClueChain)&&string.Join(",",r.Npcs.ConvertAll(n=>n.Role))==string.Join(",",s.State.Npcs.ConvertAll(n=>n.Role)),"visions, the clue chain and the roles survive a snapshot");
+        Check(r.Visions.Exists(v=>v.Hinted)&&r.NextVisionHintAt==123.5,"VISION-6: a creature's hint and when the next one is due survive a snapshot");
         var legacy=JsonNode.Parse(JsonSerializer.Serialize(new FestivalSimulation(5).State,Json)).AsObject();legacy.Remove("Visions");legacy.Remove("ClueChain");
         foreach(var npc in legacy["Npcs"].AsArray())npc.AsObject().Remove("Role");
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));

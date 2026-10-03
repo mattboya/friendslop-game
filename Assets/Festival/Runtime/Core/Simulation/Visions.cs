@@ -7,8 +7,9 @@ namespace Festival.Core
     /// a cash Stash at a spot or a DoubleBuyer over a buyer. Tell is presentation-only and true on fakes, so they can
     /// show their tells; IsTrue reaches the tripper only once the vision is Confirmed (VisibleVisions). Trail says which lost
     /// friend's trail a Clue belongs to (0 the first, 1 the second; SplitObjective.cs) and stays on the host. VISION-3: ShowUntil is
-    /// when the host drops a found clue, still saying TRUE, in SimulationSeconds; 0 never (every other vision, and older snapshots).</summary>
-    [Serializable] public sealed class VisionState { public string Id="",Kind="",NpcId=""; public float X,Z; public bool IsTrue,Tell,Confirmed; public int Trail; public double ShowUntil; }
+    /// when the host drops a found clue, still saying TRUE, in SimulationSeconds; 0 never (every other vision, and older snapshots).
+    /// VISION-6: Hinted, one of the tripper's creatures points at it (HintVisions); only ever a true one, so it too reaches only the tripper.</summary>
+    [Serializable] public sealed class VisionState { public string Id="",Kind="",NpcId=""; public float X,Z; public bool IsTrue,Tell,Confirmed,Hinted; public int Trail; public double ShowUntil; }
 
     /// <summary>TRIP-2: each level deals the crowd hidden roles, and the spinner's tripper sees partly false visions of them.</summary>
     public sealed partial class FestivalSimulation
@@ -26,13 +27,17 @@ namespace Festival.Core
         const int SecretStashCash=15;
         // Secret stashes sit at fixed reachable spots: the old totem nooks and the far corners of the grounds.
         static readonly WorldPoint[] SecretSpots={new WorldPoint(16,-4),new WorldPoint(-16,5),new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
+        // VISION-6: a creature hints at a true vision about every 2 minutes of level clock, HintGap to HintGap+HintSpread-1 s apart,
+        // the same at every dose.
+        const int HintGap=60,HintSpread=121;
 
         /// <summary>This level's sale payout multiplier: x1, x1.25, x1.5 or x1.75 for the tripper's dose, times the encore lap's
         /// scale, which raises the pay as it raises the day's quota.</summary>
         public static double PayoutMultiplier(RoundState s)=>(1+PayoutStep*(TripperDose(s)-1))*Festivals.EncoreScale(s.EncoreTier);
-        /// <summary>Visions reach only the tripper, as copies. A vision's truth leaves the host only once it is confirmed; its tell always does.</summary>
+        /// <summary>Visions reach only the tripper, as copies. A vision's truth leaves the host only once it is confirmed; its tell always does.
+        /// VISION-6: so does a creature's hint, which only true visions get, so it too reaches the tripper alone.</summary>
         public static List<VisionState> VisibleVisions(RoundState s,string viewer)=>s.TripperId==""||viewer!=s.TripperId?new List<VisionState>():
-            s.Visions.ConvertAll(v=>new VisionState{Id=v.Id,Kind=v.Kind,NpcId=v.NpcId,X=v.X,Z=v.Z,IsTrue=v.Confirmed&&v.IsTrue,Tell=v.Tell,Confirmed=v.Confirmed});
+            s.Visions.ConvertAll(v=>new VisionState{Id=v.Id,Kind=v.Kind,NpcId=v.NpcId,X=v.X,Z=v.Z,IsTrue=v.Confirmed&&v.IsTrue,Tell=v.Tell,Confirmed=v.Confirmed,Hinted=v.Hinted});
         // MINI-4: the share of the tripper's visions that are true at their spun dose, which their Mystery Cups hint shares.
         internal static double VisionReliability(RoundState s)=>Reliability[TripperDose(s)-1];
         // The tripper's dose from the public spin result, 1-4; a round with no spin counts as dose 1.
@@ -55,7 +60,7 @@ namespace Festival.Core
             }
             int dose=TripperDose(State);bool night=level.Night;State.Visions.Clear();
             var seen=night?ClueVisions(random,dose,0,State.Visions):DayMarks(random,dose);if(trails>1)seen.AddRange(ClueVisions(random,dose,1,seen));
-            seen.AddRange(SecretSights(random,dose,night));Show(seen,random);
+            seen.AddRange(SecretSights(random,dose,night));Show(seen,random);ArmVisionHint(HintRandom(0));
         }
         // Day: marks on up to MaxDayMarks festivalgoers, one each. The dose's share of them label real buyers and narcs truly; the
         // rest put a wrong label on someone else (a regular or a narc as a buyer, a buyer as a narc). From dose 2 one fake is always
@@ -129,5 +134,18 @@ namespace Festival.Core
         void FindStashes(){foreach(var v in State.Visions)if(v.Kind=="Stash"&&!v.Confirmed&&State.Players.Exists(p=>p.Connected&&p.Life=="Alive"&&Near(p,v.X,v.Z))){v.Confirmed=true;State.StashCash+=SecretStashCash;}}
         // VISION-3: a found clue goes once it has said TRUE for its few seconds (FollowTrail).
         void DropFoundClues()=>State.Visions.RemoveAll(v=>v.ShowUntil>0&&State.SimulationSeconds>=v.ShowUntil);
+
+        // VISION-6, each Playing step: once a hint is due, one true vision, unchecked, not hinted yet and no found clue still saying
+        // TRUE, is hinted; with none, the turn passes. Either way the next one is armed. An older snapshot's 0 only arms.
+        void HintVisions()
+        {
+            if(State.ElapsedSeconds<State.NextVisionHintAt)return;var random=HintRandom(State.NextVisionHintAt);
+            var open=State.NextVisionHintAt>0?State.Visions.FindAll(v=>v.IsTrue&&!v.Confirmed&&!v.Hinted&&v.ShowUntil==0):new List<VisionState>();
+            if(open.Count>0)open[random.Next(open.Count)].Hinted=true;ArmVisionHint(random);
+        }
+        // The hint due at `at` draws from a stream of its own, mixed with the DealSeed like the deal's, so no client can predict a
+        // pick or a time, and the Spin, DealRoles, ClueVisions and SecretSights streams draw what they always drew.
+        ContentRandom HintRandom(double at){var random=new ContentRandom(unchecked((State.SpinSeed*73+17+(int)at)^State.DealSeed));random.Next(100);return random;}
+        void ArmVisionHint(ContentRandom random)=>State.NextVisionHintAt=State.ElapsedSeconds+HintGap+random.Next(HintSpread);
     }
 }

@@ -219,7 +219,7 @@ public static class MinigameTests
     // (AttackAt 0, ShowUntil 0, AccusationSeconds -1, LastTalkSeconds -100, ...) and stay put.
     static readonly Dictionary<string,string> NotSimulationTimes=new Dictionary<string,string>{
         {"RoundState.SimulationSeconds","the simulation clock itself"},{"RoundState.ElapsedSeconds","the level clock, stopped for the game"},
-        {"RoundState.DurationSeconds","the level's length"},{"RoundState.CloudClueStart","on the level clock"},
+        {"RoundState.DurationSeconds","the level's length"},{"RoundState.CloudClueStart","on the level clock"},{"RoundState.NextVisionHintAt","on the level clock (VISION-6)"},
         {"RoundState.LaunchAtSeconds","camp's ready countdown, over before a level plays"},{"RoundState.SpinEndsAt","the spin, over before a level plays"},
         {"PlayerState.DownedRemaining","a countdown that runs only in play"},{"PlayerState.LastRhythmScore","a score"},
         {"PlayerState.VisualWheelSince","view-only: ViewFor copies the ride's StartSeconds"},{"ActiveEffect.RemainingSeconds","a countdown that runs only in play"},

@@ -45,7 +45,9 @@ namespace Festival.Network
         // pot, and the tripper's hint on the tripper's own), and the Minigame command's ItemId drinks a cup (Amount) or calls it.
         // LIGHT-3: each client works the day sky's shapes out of its own spin seed, now from 12 shapes, not 8 (CloudShapes.Shapes),
         // so only builds on the same version show the same shape at the same moment.
-        public const int ProtocolVersion=4;
+        // 5: wave 2026-10-03: VISION-6: the tripper's snapshot marks the visions a creature hints at (VisionState.Hinted). Only
+        // true ones are hinted, so the mark tells a truth before it is checked.
+        public const int ProtocolVersion=5;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
