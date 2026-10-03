@@ -57,7 +57,9 @@ namespace Festival.Network
         public bool IsHost => manager!=null && manager.IsHost;
         public bool Connected => manager!=null && manager.IsConnectedClient;
         public bool Connecting {get;private set;}
-        public string Message {get;private set;}="Gather your friends. Make it back to camp.";
+        /// <summary>The title's line before any game, and again after leaving one (MENU-2).</summary>
+        public const string OpeningMessage="Gather your friends. Make it back to camp.";
+        public string Message {get;private set;}=OpeningMessage;
         public FestivalInput Controls {get;private set;}
         public LocalProfile Profile {get;private set;}
         public IVoiceSession Voice {get;}=new UnavailableVoiceSession();
@@ -733,6 +735,9 @@ namespace Festival.Network
                 if(stopping.IsListening)stopping.OnClientStopped+=_=>Destroy(stopping.gameObject);else Destroy(stopping.gameObject);
             }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
+            // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
+            // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
+            Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;
             if(firstPersonHands!=null){Destroy(firstPersonHands.gameObject);firstPersonHands=null;}
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
