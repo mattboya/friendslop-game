@@ -159,7 +159,7 @@ namespace Festival.Tests
         static RoundState Under(){var s=Start(0,0);s.ElapsedSeconds=FestivalHudText.BriefingSeconds;return s;}
         static (string Id,string Text) TipOf(RoundState s,string id,List<string> seen)=>FestivalHudText.Tip(s,s.Players.Find(p=>p.Id==id),seen);
         const string TipProfile="hud-briefing-tips-test";
-        static string TipFile=>Path.Combine(Application.persistentDataPath,"profiles",TipProfile+".json");
+        static string TipFile=>Path.Combine(LocalProfile.Folder,TipProfile+".json");
         [SetUp][TearDown] public void ForgetTheTipProfile(){if(File.Exists(TipFile))File.Delete(TipFile);}
 
         [Test] public void EachFirstTimeTipComesAtItsMomentOnce()

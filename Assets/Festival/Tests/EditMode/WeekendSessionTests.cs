@@ -35,7 +35,7 @@ namespace Festival.Tests
         [Test] public void HostProfileRemembersUnlockedFestivals()
         {
             string id="weekend_test_"+Guid.NewGuid().ToString("N").Substring(0,12);
-            string file=Path.Combine(Application.persistentDataPath,"profiles",id+".json");
+            string file=Path.Combine(LocalProfile.Folder,id+".json");
             try
             {
                 var profile=new LocalProfile(id);

@@ -30,12 +30,16 @@ namespace Festival.Presentation
     public sealed class LocalProfile
     {
         public ProfileData Data {get;private set;}
+        // CAM-2: where profiles are saved. This machine's own folder is the one the built game reads too, so tests point it at a
+        // temp folder for their whole run (TestProfiles); null puts it back.
+        public static string Folder {get=>folder??Path.Combine(Application.persistentDataPath,"profiles");set=>folder=value;}
+        private static string folder;
         private readonly string path;
         public LocalProfile(string id)
         {
             var safe=System.Text.RegularExpressions.Regex.Replace(id??"default","[^a-zA-Z0-9_-]", "_");
             if(safe.Length>40)safe=safe.Substring(0,40);
-            path=Path.Combine(Application.persistentDataPath,"profiles",safe+".json");
+            path=Path.Combine(Folder,safe+".json");
             Data=new ProfileData();
             try
             {

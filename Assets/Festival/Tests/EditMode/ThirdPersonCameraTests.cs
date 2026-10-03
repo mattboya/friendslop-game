@@ -18,7 +18,7 @@ namespace Festival.Tests
         private static Vector3 Pivot=>Eye+Vector3.up*.1f;
         private readonly List<GameObject> made=new List<GameObject>();
         private const string ProfileId="cam-test";
-        private static string ProfileFile=>Path.Combine(Application.persistentDataPath,"profiles",ProfileId+".json");
+        private static string ProfileFile=>Path.Combine(LocalProfile.Folder,ProfileId+".json");
         [TearDown]public void Cleanup()
         {
             foreach(var go in made)if(go!=null)Object.DestroyImmediate(go);made.Clear();

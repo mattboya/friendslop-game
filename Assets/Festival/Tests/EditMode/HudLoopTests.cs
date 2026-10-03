@@ -491,7 +491,7 @@ namespace Festival.Tests
         [Test] public void YourNameAndTheLastHostAreRememberedAndAnOldProfileLoadsTheDefaults()
         {
             const string id="menu-test";
-            string file=Path.Combine(Application.persistentDataPath,"profiles",id+".json");
+            string file=Path.Combine(LocalProfile.Folder,id+".json");
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(file));

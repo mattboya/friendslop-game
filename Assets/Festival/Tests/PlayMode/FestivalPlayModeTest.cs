@@ -47,7 +47,7 @@ namespace Festival.Tests
         {
             var sim=Simulation(session);
             // CAM-1: every hosted level starts in first person, whatever this machine's saved profile says; a test that wants the view
-            // over the shoulder turns it on after. Only in memory: the saved profile is left alone.
+            // over the shoulder turns it on after. Only in memory; what a test saves goes to its run's own profile (TestProfiles).
             session.Profile.Data.ThirdPerson=false;
             for(float deadline=Time.realtimeSinceStartup+15;session.State.Phase=="Shopping"&&Time.realtimeSinceStartup<deadline;)
             {

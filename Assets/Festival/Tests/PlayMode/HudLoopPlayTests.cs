@@ -1065,7 +1065,7 @@ namespace Festival.Tests
 
         // HUD-7: the first time a moment comes on this machine (FestivalHudText.Tip), a two-line tip shows down the left rail for
         // TipSeconds, drawn whole at 1080p, and the profile remembers it, so it never comes again; SHOW TIPS AGAIN in the settings
-        // brings it back. Hosts a real round of two through StartLevel, on the editor's saved profile, as every hosted test does.
+        // brings it back. Hosts a real round of two through StartLevel, on the run's own profile (TestProfiles), as every hosted test does.
         [UnityTest]public IEnumerator AFirstTimeTipShowsOnceUntilShowTipsAgain()
         {
             var world=new GameObject("HUD tip world");world.AddComponent<FestivalWorld>();yield return null;
