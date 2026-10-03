@@ -110,6 +110,8 @@ namespace Festival.Core
         // CloudClueLandmark (CloudShapes.Landmarks), which leaves the host only for the tripper once they read it at CloudClueReadAt
         // (SimulationSeconds, -1 unread). Then a cash stash waits by the landmark until someone finds it (CloudStashFound).
         public double CloudClueStart=-1,CloudClueReadAt=-1; public int CloudClueLandmark=-1; public bool CloudStashFound;
+        // TRIP-8: who found it, for their notice; every view has it. "" until then, and in older snapshots.
+        public string CloudStashFinderId="";
         public string ReviewResult=""; public int ReviewSales,ReviewSurvivors,ReviewAntics;
         // PLAYA-2: the festival the reviewed round was played at, whose money ReviewSales is counted in. The campfire already holds
         // the next round, so clearing a weekend has moved FestivalIndex on. -1 unknown (a snapshot from before it): read FestivalIndex.

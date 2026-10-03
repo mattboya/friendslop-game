@@ -131,8 +131,9 @@ namespace Festival.Presentation
         private Text nearby;
         private int nearbyLines=-1;
         private readonly List<string> nearbyLabels=new List<string>();
-        // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice).
-        private bool stopNoticed;
+        // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice). TRIP-8: whether the
+        // cloud's stash they found has had its own (FestivalHudText.CloudStashNotice).
+        private bool stopNoticed,stashNoticed;
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
         // it, and the results banner. Each warning, a round's SundownStage, stays SundownNoticeSeconds on screen; its seconds run only
         // while it shows, so a dance, the map or the menu hiding it never uses them up.
@@ -723,6 +724,9 @@ namespace Festival.Presentation
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
             if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
             else if(!stopNoticed&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf){stopNoticed=true;session.SetMessage(FestivalHudText.StopNotice);lastNotice="";}
+            // TRIP-8: whoever walks onto the cloud's stash is told so the same way, once.
+            if(state.CloudStashFinderId!=player.Id)stashNoticed=false;
+            else if(!stashNoticed&&uncovered){stashNoticed=true;session.SetMessage(FestivalHudText.CloudStashNotice);lastNotice="";}
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();

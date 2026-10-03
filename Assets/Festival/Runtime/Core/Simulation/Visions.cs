@@ -24,7 +24,7 @@ namespace Festival.Core
         // A regular or clue holder turns a sale down with this much suspicion of the seller, however many friends stand by them.
         const double RefusedSaleSuspicion=10;
         // A secret stash banks this much in the crew's shared stash, once, for whoever reaches it.
-        const int SecretStashCash=15;
+        public const int SecretStashCash=15;
         // Secret stashes sit at fixed reachable spots: the old totem nooks and the far corners of the grounds.
         static readonly WorldPoint[] SecretSpots={new WorldPoint(16,-4),new WorldPoint(-16,5),new WorldPoint(-24,25),new WorldPoint(25,24),new WorldPoint(18,5)};
         // VISION-6: a creature hints at a true vision about every 2 minutes of level clock, HintGap to HintGap+HintSpread-1 s apart,

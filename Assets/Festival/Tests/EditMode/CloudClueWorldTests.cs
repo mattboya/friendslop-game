@@ -69,10 +69,13 @@ namespace Festival.Tests
                 Assert.That(view.CloudClueReadAt,Is.EqualTo(-1),id+"'s view can't tell it was read");
                 Assert.That(view.CloudStashFound,Is.False,id+"'s view says nothing of the stash");
             }
+            // TRIP-8: once someone has found the stash, every view names them, for their notice.
+            s.CloudStashFound=true;s.CloudStashFinderId="sober";
+            foreach(var id in new[]{"trip","sober","ghost","held"})Assert.That(Wire(game,id).CloudStashFinderId,Is.EqualTo("sober"),id+"'s view names who found the stash");
             s.TripperId="sober";
             Assert.That(Wire(game,"trip").CloudClueLandmark,Is.EqualTo(-1),"a tripper replaced by a stand-in no longer holds it");
             var old=JsonUtility.FromJson<RoundState>("{\"Phase\":\"Playing\",\"StashCash\":5}");
-            Assert.That(old.CloudClueStart==-1&&old.CloudClueLandmark==-1&&old.CloudClueReadAt==-1&&!old.CloudStashFound,Is.True,"a snapshot from before clue clouds reads as none");
+            Assert.That(old.CloudClueStart==-1&&old.CloudClueLandmark==-1&&old.CloudClueReadAt==-1&&!old.CloudStashFound&&old.CloudStashFinderId=="",Is.True,"a snapshot from before clue clouds reads as none");
         }
 
         [Test]public void EveryoneSeesAPlayerLyingOnTheGrassLyingThere()

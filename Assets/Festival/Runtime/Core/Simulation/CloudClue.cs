@@ -36,7 +36,7 @@ namespace Festival.Core
         {
             int seed=unchecked(State.SpinSeed*29+17),window=CloudShapes.ClueLatestSeconds-CloudShapes.ClueEarliestSeconds+1;
             var random=new ContentRandom(seed);random.Next(100);var hidden=new ContentRandom(seed^State.DealSeed);hidden.Next(100);hidden.Next(window);
-            bool day=!Festivals.For(State).Night;State.CloudClueReadAt=-1;State.CloudStashFound=false;
+            bool day=!Festivals.For(State).Night;State.CloudClueReadAt=-1;State.CloudStashFound=false;State.CloudStashFinderId="";
             State.CloudClueStart=day?CloudShapes.ClueEarliestSeconds+random.Next(window):-1;
             State.CloudClueLandmark=day?hidden.Next(CloudShapes.LandmarkCount(State.FestivalIndex)):-1;
         }
@@ -47,13 +47,14 @@ namespace Festival.Core
             NewInteraction(p,LieDownKind,"sky",State.DurationSeconds);return Ok("You lie back and watch the clouds");
         }
         // Every Playing step, beside FindStashes. The tripper's ClueReadSeconds count from when they lay down or the cloud came up,
-        // whichever was later, each on its own clock; then whoever reaches the stash banks it.
+        // whichever was later, each on its own clock; then whoever reaches the stash banks it, and is named for their notice (TRIP-8).
         void WatchClouds()
         {
             var lying=State.CloudClueReadAt<0&&CloudClueUp(State)&&!DustStorm(State)?State.Interactions.Find(i=>i.PlayerId==State.TripperId&&i.Kind==LieDownKind&&i.Status=="Active"):null;
             if(lying!=null&&Math.Min(State.SimulationSeconds-lying.StartSeconds,State.ElapsedSeconds-State.CloudClueStart)>=ClueReadSeconds)State.CloudClueReadAt=State.SimulationSeconds;
             var stash=CloudStashAt(State);
-            if(stash!=null&&State.Players.Exists(p=>p.Connected&&p.Life=="Alive"&&Near(p,stash.X,stash.Z))){State.CloudStashFound=true;State.StashCash+=SecretStashCash;}
+            var finder=stash==null?null:State.Players.Find(p=>p.Connected&&p.Life=="Alive"&&Near(p,stash.X,stash.Z));
+            if(finder!=null){State.CloudStashFound=true;State.CloudStashFinderId=finder.Id;State.StashCash+=SecretStashCash;}
         }
     }
 }

@@ -46,7 +46,8 @@ namespace Festival.Network
         // LIGHT-3: each client works the day sky's shapes out of its own spin seed, now from 12 shapes, not 8 (CloudShapes.Shapes),
         // so only builds on the same version show the same shape at the same moment.
         // 5: wave 2026-10-03: VISION-6: the tripper's snapshot marks the visions a creature hints at (VisionState.Hinted). Only
-        // true ones are hinted, so the mark tells a truth before it is checked.
+        // true ones are hinted, so the mark tells a truth before it is checked. TRIP-8: snapshots name who found the cloud's stash
+        // (RoundState.CloudStashFinderId), for their notice.
         public const int ProtocolVersion=5;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -517,6 +518,8 @@ namespace Festival.Network
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
+                // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
+                CloudStashFinderId=source.CloudStashFinderId,
                 // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here. MINI-4: all but
                 // which Mystery Cup is spiked, which stays here too, and the cup the tripper is shown as spiked, sent to them alone.
                 Booth=FestivalSimulation.VisibleBooth(source,viewer)};

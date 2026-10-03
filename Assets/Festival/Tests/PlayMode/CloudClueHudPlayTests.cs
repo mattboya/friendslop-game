@@ -105,6 +105,7 @@ namespace Festival.Tests
         // TRIP-8 (with ECON-5's items 3 and 7) on a real hosted Day 1. In the middle of anything the host takes only its way out (and
         // a handoff, a body, a call for help), so that is all the HUD lists, and the strip under the prompt stays empty: lying on the
         // grass beside a festivalgoer and a dropped item, lying at the night market looking up at a shelf, mid chat check and mid talk.
+        // Whoever walks onto the cloud's stash is told so.
         [UnityTest]public IEnumerator InTheMiddleOfAnythingOnlyItsWayOutIsListed()
         {
             var world=new GameObject("Busy HUD world");world.AddComponent<FestivalWorld>();yield return null;
@@ -185,6 +186,18 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.6f);
                 OnlyItsWayOut("mid talk","Cancel current action");
                 session.Command("Cancel");
+
+                // 4. The cloud's stash: whoever walks onto it is told, once.
+                sim.State.CloudClueLandmark=0;sim.State.CloudClueReadAt=sim.State.SimulationSeconds;
+                var stash=FestivalSimulation.CloudStashAt(sim.State);Assert.That(stash,Is.Not.Null,"setup: the cloud's stash waits");
+                player.X=stash.X;player.Z=stash.Z;
+                yield return new WaitForSeconds(.6f);
+                Assert.That(sim.State.CloudStashFound,Is.True,"setup: you find the cloud's stash");
+                const string Found="Found the cloud's stash! +$15 for camp";
+                if(session.Message!=Found||Read("Notice")!=Found)failures.Add("found the cloud's stash: the notice reads \""+Read("Notice")+"\" (message \""+session.Message+"\"), not \""+Found+"\"");
+                session.SetMessage("");
+                yield return new WaitForSeconds(.3f);
+                if(session.Message!="")failures.Add("found the cloud's stash: the notice comes back (\""+session.Message+"\")");
 
                 Assert.That(failures,Is.Empty,string.Join("\n",failures));
             }

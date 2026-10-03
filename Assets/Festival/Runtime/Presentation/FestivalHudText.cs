@@ -349,6 +349,9 @@ namespace Festival.Presentation
         public static NpcState StoppedBy(RoundState s,PlayerState p)=>s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="Stop");
         /// <summary>ESC-2: the session notice as security stops you: why, the three ways out, and what ignoring it costs.</summary>
         public static readonly string StopNotice="SECURITY SAW YOUR STOCK: talk, ditch it or walk away within "+FestivalSimulation.StopArrestSeconds+" s, or you're arrested";
+        /// <summary>TRIP-8: the session notice for whoever finds the cloud's stash (RoundState.CloudStashFinderId), in dollars like the
+        /// host's replies, for MoneyText.</summary>
+        public static readonly string CloudStashNotice="Found the cloud's stash! +$"+FestivalSimulation.SecretStashCash+" for camp";
         /// <summary>ESC-2: E during a stop while the guard is still walking over, out of talking reach (the host's 2.5 m): said, not
         /// offered, so until the talk is in reach E does nothing, never a sale or a buy in the guard's sight, which is an arrest.</summary>
         public const string StopApproachAction="Security is coming over";

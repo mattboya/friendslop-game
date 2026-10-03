@@ -209,13 +209,22 @@ public static class CloudClueTests
             var landmark=CloudShapes.Landmarks[s.State.CloudClueLandmark];var stash=FestivalSimulation.CloudStashAt(s.State);string where="seed "+seed+" ("+landmark.Name+")";
             Check(stash!=null&&stash.X==landmark.Stash.X&&stash.Z==landmark.Stash.Z,where+": the stash waits at "+At(landmark.Stash)+", got "+(stash==null?"none":At(stash)));
             int banked=s.State.StashCash,cash=f.Cash,sales=s.State.LevelSales;
+            Check(s.State.CloudStashFinderId=="",where+": nobody has found it yet, got \""+s.State.CloudStashFinderId+"\"");
             f.X=stash.X+2.6f;f.Z=stash.Z;s.Tick(.2);Check(s.State.StashCash==banked,where+": 2.6 m off finds nothing");
             f.Life="Spirit";f.X=stash.X;f.Z=stash.Z;s.Tick(.2);Check(s.State.StashCash==banked,where+": a spirit on the spot finds nothing");
             f.Life="Alive";f.X=stash.X+2.4f;s.Tick(.2);
             Check(s.State.StashCash==banked+15,where+": 2.4 m off banks $15 in the crew stash, got +"+(s.State.StashCash-banked));
             Check(f.Cash==cash&&s.State.LevelSales==sales,where+": camp money, not sale cash");
             Check(s.State.CloudStashFound&&FestivalSimulation.CloudStashAt(s.State)==null,where+": the stash is gone");
+            // TRIP-8: the round names who found it, so their HUD can say so (FestivalHudText.CloudStashNotice).
+            Check(s.State.CloudStashFinderId==f.Id,where+": it names "+f.Id+" as the finder, got \""+s.State.CloudStashFinderId+"\"");
             f.X+=10;s.Tick(.2);f.X-=10;t.X=stash.X;t.Z=stash.Z;s.Tick(.5);Check(s.State.StashCash==banked+15,where+": it pays once");
+            Check(s.State.CloudStashFinderId==f.Id,where+": and the finder stays "+f.Id+", got \""+s.State.CloudStashFinderId+"\"");
+            if(seed>1)continue;
+            // Back at camp, the crew readies up again: the next level's cloud has no finder yet.
+            foreach(var p in s.State.Players)Act(s,p.Id,"Cancel");
+            s.State.Phase="Shopping";foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,where+": setup: "+p.Id+" readies again");}
+            s.Tick(5.2);Check(s.State.Phase=="Spinning"&&s.State.CloudStashFinderId=="",where+": the next level starts with no finder, got \""+s.State.CloudStashFinderId+"\" in "+s.State.Phase);
         }
         Check(read>=20,"setup: most of 24 days are read in a calm moment, got "+read);
     }
@@ -291,9 +300,9 @@ public static class CloudClueTests
         var saved=new FestivalSimulation();saved.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),Json));
         Check(saved.State.CloudClueStart==s.State.CloudClueStart&&saved.State.CloudClueLandmark==s.State.CloudClueLandmark&&saved.State.CloudClueReadAt==s.State.CloudClueReadAt
             &&FestivalSimulation.CloudStashAt(saved.State)!=null&&FestivalSimulation.LyingDown(saved.State,t.Id),"a snapshot keeps the clue, its read, its stash and who is lying down");
-        foreach(var field in new[]{"CloudClueStart","CloudClueLandmark","CloudClueReadAt","CloudStashFound"})json.Remove(field);
+        foreach(var field in new[]{"CloudClueStart","CloudClueLandmark","CloudClueReadAt","CloudStashFound","CloudStashFinderId"})json.Remove(field);
         var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),Json));
-        Check(old.State.CloudClueStart<0&&old.State.CloudClueLandmark<0&&old.State.CloudClueReadAt<0&&FestivalSimulation.CloudStashAt(old.State)==null,"a snapshot from before clue clouds has none");
+        Check(old.State.CloudClueStart<0&&old.State.CloudClueLandmark<0&&old.State.CloudClueReadAt<0&&FestivalSimulation.CloudStashAt(old.State)==null&&old.State.CloudStashFinderId=="","a snapshot from before clue clouds has none");
         old.State.ElapsedSeconds=s.State.CloudClueStart+5;Check(!FestivalSimulation.CloudClueUp(old.State),"so none is ever up");
         int banked=old.State.StashCash;var p=old.Player(t.Id);Act(old,p.Id,"Cancel");
         foreach(var landmark in CloudShapes.Landmarks){p.X=landmark.Stash.X;p.Z=landmark.Stash.Z;old.Tick(.1);}
