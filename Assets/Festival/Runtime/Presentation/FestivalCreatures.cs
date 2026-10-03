@@ -142,7 +142,7 @@ namespace Festival.Presentation
             for(int i=live.Count-1;i>=0;i--)
             {
                 var c=live[i];c.Age+=deltaTime;
-                if(c.Fading>=0)c.Fading+=deltaTime;else if(dose<1||!c.Persists&&c.Age>=FadeSeconds+c.Life||c.Points&&!Target(state,me,c.Hint,c.Tank,out c.Goal))c.Fading=0;
+                if(c.Fading>=0)c.Fading+=deltaTime;else if(dose<1||!c.Persists&&c.Age>=FadeSeconds+c.Life||c.Points&&!Aim(state,me,c))c.Fading=0;
                 if(c.Points)Scurry(c,eye,deltaTime);
                 var off=eye-c.Spot;off.y=0;
                 if(c.Fading>=FadeSeconds||c.Persists&&off.sqrMagnitude>=LeaveDistance*LeaveDistance)Release(i);
@@ -163,7 +163,7 @@ namespace Festival.Presentation
                     if(!(OnScreen<cap&&Place(view,arrival,out var spot)))continue;
                     var c=Spawn(arrival,spot);c.InView=InView(spot);if(c.InView){c.Seen=true;OnScreen++;}
                     if(hint!=null){pointed.Add(hint.Id);c.Hint=hint.Id;}else if(tank){nextTank=arrival.At+TankEvery;c.Tank=true;}
-                    if(c.Points){Target(state,me,c.Hint,c.Tank,out c.Goal);Beckon(c);}
+                    if(c.Points){Aim(state,me,c);Beckon(c);}
                 }
             foreach(var c in live)
             {
@@ -219,6 +219,13 @@ namespace Festival.Presentation
                 else{NpcState n=null;for(int i=0;i<state.Npcs.Count&&n==null;i++)if(state.Npcs[i].Id==v.NpcId)n=state.Npcs[i];if(n==null)return false;at=new Vector3(n.X,0,n.Z);}
             }
             return me==null||(me.X-at.x)*(me.X-at.x)+(me.Z-at.z)*(me.Z-at.z)>=Reached*Reached;
+        }
+        // A pointer's Goal follows its target while there is one; once there is none it keeps the last, so it fades out still
+        // facing where its target stood (not the world's origin).
+        private static bool Aim(RoundState state,PlayerState me,Creature c)
+        {
+            if(!Target(state,me,c.Hint,c.Tank,out var at))return false;
+            c.Goal=at;return true;
         }
         // With the eye close, it scurries on toward its target over the ground, the way Place stands it, and stops short of it. A
         // spot inside something keeps it where it is.
@@ -304,7 +311,8 @@ namespace Festival.Presentation
                     var renderer=sparkle.GetComponent<MeshRenderer>();renderer.sharedMaterial=Glint();renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
                     c.Glints[i]=sparkle.transform;
                 }
-                c.Voice=c.Root.gameObject.AddComponent<AudioSource>();c.Voice.playOnAwake=false;c.Voice.spatialBlend=1;
+                // 3-D so it says which way to look, but heard in full anywhere a pointer appears (out to Far); no Doppler, like the stage.
+                c.Voice=c.Root.gameObject.AddComponent<AudioSource>();c.Voice.playOnAwake=false;c.Voice.spatialBlend=1;c.Voice.minDistance=Far;c.Voice.dopplerLevel=0;
             }
             c.Trail.gameObject.SetActive(true);c.Voice.PlayOneShot(Squeak,volume);
         }

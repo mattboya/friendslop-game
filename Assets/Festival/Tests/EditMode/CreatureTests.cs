@@ -269,6 +269,45 @@ namespace Festival.Tests
             }
         }
 
+        // Its target gone (checked, or the tank grabbed), a pointer fades out still facing where its target stood, its sparkles too.
+        [Test]public void AFadingPointerKeepsFacingItsTarget()
+        {
+            var goal=new Vector2(6,30);var state=Hinted(FirstArrival(true),"Clue",goal);var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+            state.Visions[0].Confirmed=true;
+            Assert.That(WorstFacingWhileFading(creatures,state,eye,body,goal,ref t),Is.LessThan(15),"once the vision is confirmed it fades still facing the festivalgoer");
+
+            var tank=Festivals.GiggleTankSpots[0];var spot=new Vector2(tank.X,tank.Z);
+            var grabbed=Round(4);grabbed.GiggleTankSpot=0;var shown=Creatures();var head=Eye();t=0;
+            for(;t<3*60&&Pointing(shown).Count==0;t+=Step){Wander(head,t);Frame(shown,grabbed,head,t);}
+            Assert.That(Pointing(shown).Count,Is.EqualTo(1),"setup: a jackalope points at the tank");
+            var jackalope=Pointing(shown)[0];for(float until=t+1.5f;t<until;t+=Step)Frame(shown,grabbed,head,t);
+            grabbed.GiggleTankFound=true;
+            Assert.That(WorstFacingWhileFading(shown,grabbed,head,jackalope,spot,ref t),Is.LessThan(15),"once the tank is grabbed it fades still facing where the tank stood");
+        }
+
+        // VISION-6: a pointer stays put however fleeting the arrival it took over, so there is time to follow it.
+        [Test]public void APointerStaysEvenWhenItsArrivalWouldHaveBeenFleeting()
+        {
+            var state=Hinted(FirstArrival(false),"Clue",new Vector2(6,30));var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);
+            Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"setup: the fleeting first arrival points");
+            for(float until=t+10;t<until;t+=Step)Frame(creatures,state,eye,t);
+            Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"10 s on, past a fleeting creature's 8 s at most, it is still there pointing");
+            Assert.That(body.localScale.x,Is.EqualTo(1).Within(1e-4f),"and not fading");
+        }
+
+        // VISION-6: each level's jackalope is timed from that level's start, however late the last level's came.
+        [Test]public void TheTankTimerStartsAgainEachLevel()
+        {
+            var state=Round(4);state.GiggleTankSpot=0;var creatures=Creatures();var eye=Eye();int came=0;var was=new List<Transform>();
+            for(float t=0;t<5*60;t+=Step){Wander(eye,t);Frame(creatures,state,eye,t);var now=Pointing(creatures);foreach(var body in now)if(!was.Contains(body))came++;was=now;}
+            Assert.That(came,Is.GreaterThanOrEqualTo(2),"setup: a five-minute level brings jackalopes ("+came+")");
+            state.LevelIndex=1;state.ElapsedSeconds=0;double first=-1;
+            for(float t=0;t<200&&first<0;t+=Step){Wander(eye,t);Frame(creatures,state,eye,t);if(Pointing(creatures).Count>0)first=state.ElapsedSeconds;}
+            Assert.That(first,Is.InRange(60-Step,140),"the next level's first jackalope comes 60 s or so into it ("+first+")");
+        }
+
         [Test]public void APointerLeavesOnEachRuleAndPointsOnlyOncePerLevel()
         {
             var goal=new Vector2(6,30);
@@ -324,6 +363,8 @@ namespace Festival.Tests
             var voice=body.GetComponent<AudioSource>();
             Assert.That(voice,Is.Not.Null,"it squeaks from where it stands");
             Assert.That(voice.spatialBlend,Is.EqualTo(1f),"a 3-D sound, so it says which way to look");
+            Assert.That(voice.minDistance,Is.GreaterThanOrEqualTo(15f),"heard in full anywhere a pointer appears (4 to 15 m off), not faded by distance");
+            Assert.That(voice.dopplerLevel,Is.Zero,"and not bent in pitch as you turn or walk");
             var squeak=FestivalCreatures.Squeak;
             Assert.That(squeak.length,Is.InRange(.1f,.2f),"a short squeak ("+squeak.length+" s)");
             var samples=new float[squeak.samples];squeak.GetData(samples,0);int third=samples.Length/3;
@@ -511,6 +552,18 @@ namespace Festival.Tests
             var pointing=new List<Transform>();
             foreach(Transform body in creatures.transform){var trail=body.Find("Sparkles");if(body.gameObject.activeSelf&&trail!=null&&trail.gameObject.activeSelf)pointing.Add(body);}
             return pointing;
+        }
+        // From the next frame until body has all but faded away, the most degrees it turned from goal.
+        private static float WorstFacingWhileFading(FestivalCreatures creatures,RoundState state,Camera eye,Transform body,Vector2 goal,ref float t)
+        {
+            float worst=0;int frames=0;
+            for(float until=t+.9f;t<until;t+=Step)
+            {
+                Frame(creatures,state,eye,t);
+                if(body.gameObject.activeSelf&&body.localScale.x>.05f){worst=Mathf.Max(worst,Facing(body,goal));frames++;}
+            }
+            Assert.That(frames,Is.GreaterThan(3),"setup: it was seen fading");
+            return worst;
         }
         // Degrees between where body faces, seen from above, and the way to target.
         private static float Facing(Transform body,Vector2 target)=>Vector2.Angle(new Vector2(body.forward.x,body.forward.z),target-Flat(body.position));
