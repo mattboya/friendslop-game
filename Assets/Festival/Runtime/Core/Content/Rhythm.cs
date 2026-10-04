@@ -118,10 +118,12 @@ namespace Festival.Core
         }
         private static bool Finite(double value) => !double.IsNaN(value)&&!double.IsInfinity(value);
     }
-    [Serializable] public struct NoteVisual { public double X,Y,Rotation,Alpha; }
+    [Serializable] public struct NoteVisual { public double X,Y,Rotation,Alpha,Lane; }
     public static class EffectPresentation
     {
-        public static NoteVisual Path(string effectId,int noteId,double progress,bool reducedMotion)
+        // Shared by the flight and dose presentation; shop effects keep strength zero.
+        public static double Strength(int dose)=>dose<1?0:dose==1?.4:dose==2?.6:dose==3?.8:1;
+        public static NoteVisual Path(string effectId,int noteId,double progress,bool reducedMotion,int dose=0,int lane=1)
         {
             double u=double.IsNaN(progress)?0:Math.Max(0,Math.Min(1,progress)), remaining=1-u;
             var visual=new NoteVisual { X=0,Y=remaining,Rotation=0,Alpha=1 };
@@ -129,6 +131,22 @@ namespace Festival.Core
             if(effectId=="lsd") visual.X=remaining*(reducedMotion?0.035:0.13)*(Math.Sin(u*11+phase)+0.35*Math.Sin(u*23+phase));
             if(effectId=="mushrooms") visual.X=remaining*(reducedMotion?0.035:0.18)*Math.Sin(u*Math.PI+phase);
             if(effectId=="alcohol") { visual.X=remaining*0.04*Math.Sin(phase+u*6); visual.Rotation=reducedMotion?0:remaining*180*Math.Sin(u*5+phase); }
+            double strength=Strength(dose);
+            // Direction is explicit: generated note IDs do not identify a lane. Outer lanes always slide inward.
+            if(strength>0&&effectId=="lsd")
+            {
+                double side=lane==0?1:lane==3?-1:Math.Sin(phase)>=0?1:-1, slide=Math.Min(1,u/.75);
+                visual.Lane=side*strength*(1-slide*slide);
+            }
+            if(strength>0&&effectId=="mushrooms")visual.Y=1-(u-.7*strength*Math.Sin(4*Math.PI*u)/(4*Math.PI));
+            if(strength>0&&effectId=="ecstasy")visual.Y=1-Math.Pow(u,1+.6*strength);
+            if(strength>0&&effectId=="ketamine")
+            {
+                double stop=1.0/3, resume=stop+.3*strength;
+                visual.Y=1-(u<stop?u:u<=resume?stop:stop+(1-stop)*(u-resume)/(1-resume));
+            }
+            if(strength>0&&effectId=="weed")visual.Y=Math.Pow(remaining,1+.6*strength);
+            if(strength>0&&u==1) { visual.X=0;visual.Y=0;visual.Lane=0; }
             return visual;
         }
     }
