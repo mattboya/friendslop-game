@@ -85,9 +85,11 @@ The two hooks the design is built around:
 - Heavier doses also reveal secret things, by day or night: a hidden cash
   stash or a buyer who pays double. They also raise the level's payout.
 
-**Spotting fakes:** false visions have learnable tells. They cast no shadow,
-shimmer when the camera moves, and are slightly off in colour. The game's one
-line of advice is "Trust, but verify."
+**Spotting fakes:** false visions have learnable tells. They cast a subtly
+wrong shadow (too small, or oddly shaped), shimmer when the camera moves, and
+are slightly off in colour. The little creatures a dose brings cast ordinary
+shadows: nobody mistakes them for real. The game's one line of advice is
+"Trust, but verify."
 
 **Little helpers:** now and then one of the tripper's little creatures points
 toward a true vision, or toward a Giggle Tank nobody has grabbed. Each kind has

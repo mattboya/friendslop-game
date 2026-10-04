@@ -14,7 +14,7 @@ namespace Festival.Tests
 {
     // VISION-2: a dosed player's own client sometimes shows little mythical creatures, more often at higher doses. Nobody else
     // sees them and they change nothing. Arrivals run on the view's level clock, seeded by the round seed, level and player, and
-    // everything the dose invents carries the fake-vision tells.
+    // everything the dose invents is off in colour and shimmers like a fake vision. VISION-4: they cast ordinary sun shadows.
     public sealed class CreatureTests
     {
         // The spec's numbers for doses 1-4: the mean gap between arrivals, and how many may be on screen at once.
@@ -189,7 +189,7 @@ namespace Festival.Tests
                 foreach(var part in body.GetComponentsInChildren<Renderer>(true))
                 {
                     Assert.That(part.name.Contains("__P"),Is.True,body.name+"/"+part.name+" is a part of ART-1's creature model");
-                    Assert.That(part.shadowCastingMode,Is.EqualTo(ShadowCastingMode.Off),body.name+"/"+part.name+" casts no shadow");
+                    Assert.That(part.shadowCastingMode,Is.EqualTo(ShadowCastingMode.On),body.name+"/"+part.name+" casts an ordinary shadow, like any prop (VISION-4)");
                     var color=part.sharedMaterial.color;bool tinted=false;
                     foreach(var paint in FestivalCreatures.Palette)
                     {
@@ -383,7 +383,9 @@ namespace Festival.Tests
             Assert.That(highest-lowest,Is.GreaterThan(.05f),"with little hops");
 
             var sparkles=new List<Renderer>();
-            foreach(var part in body.GetComponentsInChildren<Renderer>())if(part.name=="Sparkle")sparkles.Add(part);
+            foreach(var part in body.GetComponentsInChildren<Renderer>())
+                if(part.name=="Sparkle")sparkles.Add(part);
+                else Assert.That(part.shadowCastingMode,Is.EqualTo(ShadowCastingMode.On),part.name+": a pointer casts an ordinary shadow too (VISION-4)");
             Assert.That(sparkles.Count,Is.InRange(4,6),"4 to 6 sparkles");
             foreach(var sparkle in sparkles)
             {

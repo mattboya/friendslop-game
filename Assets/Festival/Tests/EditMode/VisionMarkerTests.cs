@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Festival.Core;
 using Festival.Network;
@@ -13,8 +14,9 @@ using Object = UnityEngine.Object;
 
 namespace Festival.Tests
 {
-    // VISION-1: only the tripper's client draws vision markers. Fakes carry learnable tells (no shadow, a shimmer while the camera
-    // moves, a slightly shifted hue) read from the view's Tell flag; truths are solid; a checked vision plainly says what it found.
+    // VISION-1: only the tripper's client draws vision markers. Fakes carry learnable tells (a subtly wrong shadow, VISION-4; a
+    // shimmer while the camera moves; a slightly shifted hue) read from the view's Tell flag; truths are solid; a checked vision
+    // plainly says what it found.
     public sealed class VisionMarkerTests
     {
         private readonly List<GameObject> made=new List<GameObject>();
@@ -61,12 +63,14 @@ namespace Festival.Tests
             foreach(var vision in game.State.Visions)
             {
                 var shadow=Shadow(markers,vision);
-                Assert.That(shadow.gameObject.activeSelf,Is.EqualTo(vision.IsTrue),vision.Kind+" "+(vision.IsTrue?"truth casts a shadow":"fake casts none"));
+                // VISION-4: a fake's shadow is subtly wrong, never missing; a truth's is the normal pool.
+                Assert.That(shadow.gameObject.activeSelf,Is.True,vision.Kind+" "+(vision.IsTrue?"truth":"fake")+" casts a shadow");
                 // On the ground right under the marker, so it reads at the festivalgoer's feet whatever the sun is doing.
                 var ground=vision.NpcId==""?new Vector3(vision.X,0,vision.Z):actors(vision.NpcId).position;
                 Assert.That(Vector2.Distance(Flat(shadow.position),Flat(ground)),Is.LessThan(1e-3f),vision.Kind+"'s shadow lies right under it");
                 Assert.That(shadow.position.y-ground.y,Is.InRange(0f,.1f),vision.Kind+"'s shadow lies on the ground");
             }
+            foreach(var vision in game.State.Visions)ShadowIs(markers,vision.Id,!vision.IsTrue);
 
             // Crafted: a truth and a fake of every kind, side by side.
             var state=Round();var eye=View();var crafted=Markers();var bodies=new Dictionary<string,Transform>();
@@ -105,6 +109,46 @@ namespace Festival.Tests
                     else Assert.That(peak[vision.Id],Is.LessThan(1e-4f),vision.Id+" stays solid while the camera "+motion);
             }
         }
+
+        // VISION-4: every fake casts a wrong shadow, picked on the tripper's client from its vision id with a stable hash: too small
+        // (about 60% of a truth's width), or a goblin's (squat, wider than deep, with two pointed ears). It never hides and never
+        // changes while the vision is shown, however the camera turns or walks.
+        [Test]public void EveryFakeShadowIsWrongAndKeepsIt()
+        {
+            var state=Round();var bodies=new Dictionary<string,Transform>();var tells=new HashSet<FestivalVisionMarkers.FakeShadow>();
+            for(int i=1;i<=12;i++)
+            {
+                var id="vision_"+i;var body=Made(id).transform;body.position=new Vector3(i*2-13,0,6);bodies[id]=body;
+                state.Visions.Add(new VisionState{Id=id,Kind="Buyer",NpcId=id,Tell=true});tells.Add(FestivalVisionMarkers.ShadowTell(id));
+                Assert.That(FestivalVisionMarkers.ShadowTell(new string(id.ToCharArray())),Is.EqualTo(FestivalVisionMarkers.ShadowTell(id)),id+": the same id always gets the same shadow");
+            }
+            Assert.That(tells,Is.EquivalentTo(new[]{FestivalVisionMarkers.FakeShadow.Small,FestivalVisionMarkers.FakeShadow.Goblin}),"both wrong shadows turn up");
+            // Pinned: a stable string hash, not string.GetHashCode, which may differ between runtimes.
+            Assert.That(new[]{"vision_1","vision_2","vision_3","vision_4"}.Select(FestivalVisionMarkers.ShadowTell),Is.EqualTo(Pinned),"the pick is a stable hash of the id");
+            // Half each, and the host's numbered ids don't come in long runs of one shadow.
+            int smalls=0,run=0,longest=0;var last=FestivalVisionMarkers.FakeShadow.Small;
+            for(int i=1;i<=200;i++){var tell=FestivalVisionMarkers.ShadowTell("vision_"+i);if(tell==FestivalVisionMarkers.FakeShadow.Small)smalls++;run=i>1&&tell==last?run+1:1;longest=Mathf.Max(longest,run);last=tell;}
+            Assert.That(smalls,Is.InRange(80,120),"about half of 200 numbered fakes are too small, the rest goblins");
+            Assert.That(longest,Is.LessThanOrEqualTo(8),"no long run of one shadow among numbered ids");
+            Func<string,Transform> actorFor=id=>bodies.TryGetValue(id,out var t)?t:null;
+            var markers=Markers();var view=View();markers.Apply(state,view,actorFor,0,.02f);
+            var first=new Dictionary<string,(Vector3 Pool,bool Ears)>();
+            foreach(var vision in state.Visions){ShadowIs(markers,vision.Id,true);first[vision.Id]=(Pool(markers,vision.Id).transform.localScale,Ears(markers,vision.Id).activeSelf);}
+            for(int frame=1;frame<=20;frame++)
+            {
+                view.Rotate(0,4,0);view.position+=new Vector3(.05f,0,.05f);markers.Apply(state,view,actorFor,frame*.02f,.02f);
+                foreach(var vision in state.Visions)
+                {
+                    Assert.That(Shadow(markers,vision.Id).gameObject.activeSelf,Is.True,vision.Id+": a fake's shadow never hides (frame "+frame+")");
+                    Assert.That((Pool(markers,vision.Id).transform.localScale,Ears(markers,vision.Id).activeSelf),Is.EqualTo(first[vision.Id]),vision.Id+" keeps its wrong shadow (frame "+frame+")");
+                }
+            }
+            // The goblin's ears are always to the left and right as the tripper sees it.
+            foreach(var vision in state.Visions)
+                Assert.That(Mathf.Abs(Mathf.DeltaAngle(Shadow(markers,vision.Id).eulerAngles.y,view.eulerAngles.y)),Is.LessThan(.1f),vision.Id+"'s shadow turns with the view");
+            Assert.That(()=>markers.Apply(state,view,actorFor,1,.02f),Is.Not.AllocatingGCMemory(),"wrong shadows make no garbage");
+        }
+        private static readonly FestivalVisionMarkers.FakeShadow[] Pinned={FestivalVisionMarkers.FakeShadow.Goblin,FestivalVisionMarkers.FakeShadow.Goblin,FestivalVisionMarkers.FakeShadow.Small,FestivalVisionMarkers.FakeShadow.Goblin};
 
         // A 125 Hz mouse on a 240 Hz screen turns the camera on every other frame only; a fake keeps shimmering in between
         // instead of snapping back to solid each frame, which would read as flicker.
@@ -171,6 +215,7 @@ namespace Festival.Tests
             Color.RGBToHSV(Glyph(markers,"false").sharedMaterial.color,out _,out float saturation,out _);
             Assert.That(saturation,Is.LessThan(.15f),"a checked fake goes grey");
             Assert.That(Shadow(markers,"false").gameObject.activeSelf,Is.True,"a checked fake is plainly marked, so it drops its tells");
+            ShadowIs(markers,"open",true);ShadowIs(markers,"false",false);
             float still=Glyph(markers,"true").transform.localScale.x;
             for(int frame=1;frame<=20;frame++){view.Rotate(0,4,0);markers.Apply(state,view,actorFor,frame*.02f,.02f);Assert.That(Glyph(markers,"false").transform.localScale.x,Is.EqualTo(still).Within(1e-5f),"a checked fake no longer shimmers");}
             Aim(view,feet+Vector3.up);markers.Apply(state,view,actorFor,1,.02f);
@@ -445,6 +490,38 @@ namespace Festival.Tests
         private static Transform Shadow(FestivalVisionMarkers markers,string id)
         {
             var shadow=Marker(markers,id).Find("Shadow");Assert.That(shadow,Is.Not.Null,"vision "+id+" has a shadow to show");return shadow;
+        }
+        private static MeshRenderer Pool(FestivalVisionMarkers markers,string id)
+        {
+            var pool=Shadow(markers,id).Find("Pool");Assert.That(pool,Is.Not.Null,"vision "+id+"'s shadow has a pool");return pool.GetComponent<MeshRenderer>();
+        }
+        private static GameObject Ears(FestivalVisionMarkers markers,string id)
+        {
+            var ears=Shadow(markers,id).Find("Ears");Assert.That(ears,Is.Not.Null,"vision "+id+"'s shadow has goblin ears to show");return ears.gameObject;
+        }
+        // VISION-4: a truth's (or a checked vision's) shadow is the normal pool, 1.4 m across, no ears. A fake's is wrong for its
+        // ShadowTell: Small is .5-.7 of that width, no ears; Goblin has both ears showing and is wider than it is deep. Sizes are
+        // in the shadow's own frame, which turns with the view.
+        private static void ShadowIs(FestivalVisionMarkers markers,string id,bool fake)
+        {
+            var pool=Pool(markers,id).transform.localScale;var ears=Ears(markers,id);
+            if(!fake){Assert.That(pool.x,Is.EqualTo(1.4f).Within(1e-3f),id+": the normal pool");Assert.That(pool.z,Is.EqualTo(pool.x),id+": round");Assert.That(ears.activeSelf,Is.False,id+": with no ears");return;}
+            if(FestivalVisionMarkers.ShadowTell(id)==FestivalVisionMarkers.FakeShadow.Small)
+            {
+                Assert.That(pool.x/1.4f,Is.InRange(.5f,.7f),id+": a too-small pool");Assert.That(pool.z,Is.EqualTo(pool.x),id+": still round");Assert.That(ears.activeSelf,Is.False,id+": with no ears");
+                return;
+            }
+            Assert.That(ears.activeSelf&&ears.transform.childCount==2,Is.True,id+": a goblin's shadow has two ears");
+            float wide=pool.x/2,deep=pool.z/2;
+            foreach(Transform ear in ears.transform)
+            {
+                Assert.That(ear.GetComponent<Renderer>().enabled&&ear.gameObject.activeSelf,Is.True,id+": each ear shows");
+                Assert.That(ear.GetComponent<Collider>(),Is.Null,id+": an ear has no collider");
+                Assert.That(ear.GetComponent<Renderer>().shadowCastingMode,Is.EqualTo(ShadowCastingMode.Off),id+": an ear casts no shadow of its own");
+                Assert.That(ear.GetComponent<Renderer>().sharedMaterial,Is.EqualTo(Pool(markers,id).sharedMaterial),id+": an ear is the pool's material");
+                var corner=ear.localScale.x*.7071f;wide=Mathf.Max(wide,Mathf.Abs(ear.localPosition.x)+corner);deep=Mathf.Max(deep,Mathf.Abs(ear.localPosition.z)+corner);
+            }
+            Assert.That(wide,Is.GreaterThan(deep*1.3f),id+": squat, wider than it is deep ("+wide*2+" by "+deep*2+" m)");
         }
         private const string CheckLine="F CHAT • E DANCE TO CHECK";
         private static TextMesh Text(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMesh>();

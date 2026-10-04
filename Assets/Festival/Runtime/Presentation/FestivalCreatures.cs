@@ -13,7 +13,8 @@ namespace Festival.Presentation
     /// a spirit sees none, and nothing here touches the simulation or the network. Arrivals run on the view's level clock
     /// (ElapsedSeconds), so they come only while Playing, seeded by the round seed, the level and the player. Each creature's own
     /// life runs on frame time, so it finishes fading while the clock stands still at Results. The dose invents them, so they
-    /// carry the fake-vision tells (FestivalVisionMarkers): no shadow, a shimmer while the camera moves, a slightly shifted hue.
+    /// shimmer while the camera moves and are slightly off in hue, like a fake vision (FestivalVisionMarkers), but they cast
+    /// ordinary sun shadows: nobody mistakes them for real (VISION-4).
     /// ART-1: each is a Blender model, its parts painted from the palette. VISION-6: now and then one points. It reads the view
     /// but sends nothing: when the view holds a vision the host hinted (only the tripper's does, and only true ones are hinted),
     /// the next arrival is that job's kind and points at it, and any dosed player's jackalope now and then points at an ungrabbed
@@ -290,7 +291,7 @@ namespace Festival.Presentation
         private Creature Build(int look)
         {
             var root=new GameObject("Creature "+Looks[look].Name).transform;root.SetParent(transform,false);
-            var model=FestivalArtView.Create(root,Looks[look].Model);
+            var model=FestivalArtView.Create(root,Looks[look].Model,castShadows:true);
             if(model!=null)foreach(var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
             {
                 int mark=renderer.name.LastIndexOf("__P",StringComparison.Ordinal);

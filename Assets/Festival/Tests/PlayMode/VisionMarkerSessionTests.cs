@@ -66,10 +66,11 @@ namespace Festival.Tests
             yield return null;
         }
 
-        // VISION-1: a truth's shadow is one of the tells. The festival sun sits only 14 degrees up (and is dimmed at night), so a
+        // VISION-1: a vision's shadow is one of the tells. The festival sun sits only 14 degrees up (and is dimmed at night), so a
         // marker's real shadow lands about 10 m away; the shadow the tripper learns from has to lie at the festivalgoer's feet.
-        [UnityTest]public IEnumerator ByDayTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(0);
-        [UnityTest]public IEnumerator ByNightTheTripperSeesATruthsShadowAndNoneUnderAFake()=>ShadowAtTheFeet(1);
+        // VISION-4: a fake's is there too, but wrong: too small, or a goblin's.
+        [UnityTest]public IEnumerator ByDayTheTripperSeesATruthsShadowAndAWrongOneUnderAFake()=>ShadowAtTheFeet(0);
+        [UnityTest]public IEnumerator ByNightTheTripperSeesATruthsShadowAndAWrongOneUnderAFake()=>ShadowAtTheFeet(1);
 
         private static IEnumerator ShadowAtTheFeet(int level)
         {
@@ -118,10 +119,16 @@ namespace Festival.Tests
                 Assert.That(seen.z>0&&seen.x>0&&seen.x<1&&seen.y>0&&seen.y<1,Is.True,"setup: the tripper's view takes in the shadow ("+seen+")");
                 float solid=marker.Find("Glyph").localScale.x;int truthCue=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
 
-                // The host's Tell flag is all the tripper's client goes by: the same festivalgoer, now marked by a fake.
-                truth.Tell=true;
-                yield return Hold(.4f);
-                int fakeCue=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
+                // The host's Tell flag is all the tripper's client goes by: the same festivalgoer, now marked by a fake. Its id picks
+                // which wrong shadow it casts (VISION-4), so it is marked twice, once with an id for each.
+                truth.Tell=true;var fakeCues=new Dictionary<FestivalVisionMarkers.FakeShadow,int>();
+                foreach(var tell in new[]{FestivalVisionMarkers.FakeShadow.Goblin,FestivalVisionMarkers.FakeShadow.Small})
+                {
+                    for(int n=1;FestivalVisionMarkers.ShadowTell(truth.Id)!=tell;n++)truth.Id="vision_fake_"+n;
+                    yield return Hold(.4f);
+                    marker=host.transform.Find("Vision "+truth.Id);Assert.That(marker!=null&&marker.gameObject.activeSelf,Is.True,"setup: the "+tell+" fake's marker is drawn");
+                    fakeCues[tell]=AtTheFeet(session.ViewCamera,marker.gameObject,body.position);
+                }
 
                 // Walking at 4 m/s moves the first-person camera, which sets the fake shimmering.
                 var from=session.ViewCamera.transform.position;float peak=0;
@@ -131,10 +138,12 @@ namespace Festival.Tests
                     peak=Mathf.Max(peak,Mathf.Abs(marker.Find("Glyph").localScale.x/solid-1));
                 }
                 float walked=Vector3.Distance(from,session.ViewCamera.transform.position);
-                Debug.Log("VISION-1 "+when+": pixels a truth's marker changes at its festivalgoer's feet "+truthCue+", a fake's "+fakeCue+"; fake's shimmer while walking "+walked.ToString("0.0")+" m: "+peak.ToString("0.00"));
+                int small=fakeCues[FestivalVisionMarkers.FakeShadow.Small],goblin=fakeCues[FestivalVisionMarkers.FakeShadow.Goblin];
+                Debug.Log("VISION-1 "+when+": pixels a truth's marker changes at its festivalgoer's feet "+truthCue+", a too-small fake's "+small+", a goblin fake's "+goblin+"; fake's shimmer while walking "+walked.ToString("0.0")+" m: "+peak.ToString("0.00"));
                 var failures=new List<string>();
                 if(truthCue<=300)failures.Add("the tripper cannot see a truth's shadow at its festivalgoer's feet ("+truthCue+" pixels change, want over 300)");
-                if(fakeCue>=10)failures.Add("a fake shows a shadow at its festivalgoer's feet ("+fakeCue+" pixels change)");
+                foreach(var cue in fakeCues)if(cue.Value<=10)failures.Add("a "+cue.Key+" fake shows no shadow at its festivalgoer's feet ("+cue.Value+" pixels change, want over 10)");
+                if(small>=truthCue*.7f)failures.Add("a too-small fake's shadow is not smaller than a truth's ("+small+" pixels against "+truthCue+")");
                 if(walked<=2)failures.Add("setup: the tripper's camera walked only "+walked+" m");
                 if(peak<=.05f)failures.Add("the running game's camera leaves a fake still as the tripper walks (shimmer "+peak+")");
                 Assert.That(failures,Is.Empty,when);
