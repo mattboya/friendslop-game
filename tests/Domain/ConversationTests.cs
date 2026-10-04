@@ -278,7 +278,7 @@ public static class ConversationTests
         }
         foreach(var (grades,waved) in new[]{(new[]{Smooth,Smooth,SoSo},true),(new[]{Smooth,SoSo,SoSo},false)})
         {
-            var s=Pair("Police");var cop=Partner(s);s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});cop.Evidence.Add(new EvidenceState{PlayerId="p0",Kind="VisibleStock",StartSeconds=0,SeenSeconds=0});
+            var s=Pair("Police");var cop=Partner(s);s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});s.Player("p0").EquippedItemId="stock_lsd";cop.Evidence.Add(new EvidenceState{PlayerId="p0",Kind="VisibleStock",StartSeconds=0,SeenSeconds=0});
             var i=Talk(s,Start(s,"Police"),grades);
             Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+i.Score+(waved?" waves the stop off":" keeps the stop"));
         }

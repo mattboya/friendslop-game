@@ -111,7 +111,7 @@ public static class EscalationTests
         var s=Level(1);s.State.Npcs.RemoveAll(n=>n.Kind=="Wook");var cop=s.State.Npcs.Find(n=>n.Id=="cop_0");
         s.Tick(1);Check(cop.Mode=="Patrol","a cop with no evidence patrols (mode "+cop.Mode+")");
         double heading=cop.Yaw*Math.PI/180;float Ahead(double m,bool x)=>(float)((x?cop.X:cop.Z)+m*(x?Math.Sin(heading):Math.Cos(heading)));
-        var a=s.Player("a");a.X=Ahead(6,true);a.Z=Ahead(6,false);a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var a=s.Player("a");a.X=Ahead(6,true);a.Z=Ahead(6,false);a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});a.EquippedItemId="stock_lsd";
         var buyer=new NpcState{Id="buyer",X=Ahead(7,true),Z=Ahead(7,false),Yaw=(float)(cop.Yaw+180)};s.State.Npcs.Add(buyer);
         s.Tick(.1);Check(cop.Mode=="Stop"&&cop.TargetId=="a","the cop stops a player carrying stock in view (mode "+cop.Mode+")");
         s.Tick(2);Check(Dist(cop.X,cop.Z,a.X,a.Z)<=2.05,"the stop walks the cop over to the player ("+Dist(cop.X,cop.Z,a.X,a.Z)+" m away)");
@@ -160,7 +160,7 @@ public static class EscalationTests
     {
         var s=Level(1);s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
         if(sight!=null)s.HasLineOfSight=(x,z,tx,tz)=>sight();
-        a=s.Player("a");a.X=0;a.Z=5;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        a=s.Player("a");a.X=0;a.Z=5;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});a.EquippedItemId="stock_lsd";
         s.Tick(.1);return s;
     }
     static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
@@ -218,7 +218,7 @@ public static class EscalationTests
 
     // Ditching: during a stop G drops stock first, whatever is in hand. With the last of it on the ground in the guard's sight
     // the stop ends ("Fine. Move along."). The stock lies there for anyone for 10 s, then the guard walks over and takes it;
-    // picked back up in their sight, it starts a fresh stop. Out of a stop, G drops what's in hand, as ever.
+    // picked back up and held out in their sight, it starts a fresh stop. Out of a stop, G drops what's in hand, as ever.
     static void DitchingTheStockEndsTheStop()
     {
         var s=Stopped(out var cop,out var a);
@@ -238,7 +238,9 @@ public static class EscalationTests
         s=Stopped(out cop,out a);
         Check(s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted,"setup: a ditches the stock");s.Tick(.1);drop=s.State.Drops.Find(d=>d.ItemId=="stock_lsd");
         Check(cop.Mode=="Patrol"&&s.Execute("a",Command("Pickup",drop.Id)).Accepted,"anyone can pick it back up before the guard does (mode "+cop.Mode+")");
-        s.Tick(.1);Check(cop.Mode=="Stop"&&Says(a,"HEY! What's in the bag?"),"and picked up in the guard's sight, it starts a fresh stop (mode "+cop.Mode+")");
+        s.Tick(.1);Check(cop.Mode=="Patrol","picked up into a pocket, the stock stays concealed (mode "+cop.Mode+")");
+        InFront(cop,a,3);Check(s.Execute("a",Command("Equip",item:"stock_lsd")).Accepted,"setup: a equips the picked-up stock in sight");
+        s.Tick(.1);Check(cop.Mode=="Stop"&&Says(a,"HEY! What's in the bag?"),"and held out in the guard's sight, it starts a fresh stop (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a,()=>false);
         a.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});a.EquippedItemId="poi_practice";
@@ -334,7 +336,8 @@ public static class EscalationTests
         s.State.Npcs.Add(new NpcState{Id="buyer",X=a.X+1,Z=a.Z,Yaw=-90});
         open=false;var sold=s.Execute("a",Command("StartSale","buyer","stock_lsd"));Check(sold.Accepted,"setup: a sells out of the guard's sight (\""+sold.Reason+"\")");
         var sale=s.Interaction(a.InteractionId);
-        s.Tick(.1);Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0&&!Says(a,"Fine. Move along."),"with no stock on them and out of the guard's sight, the stop is over within a tick, unremarked (mode "+cop.Mode+", "+cop.Evidence.Count+" evidence, \""+a.NpcSpeech+"\")");
+        s.Tick(.1);Check(cop.Mode=="Stop"&&cop.Evidence.Exists(e=>e.Kind=="VisibleStock"),"the last unit stays out as a sale reservation, so the unseen stop still holds (mode "+cop.Mode+")");
+        s.Tick(6.2);Check(cop.Mode=="Patrol"&&cop.Evidence.Count==0&&!Says(a,"Fine. Move along."),"six seconds out of sight ends the stop unremarked, even while the sale holds the last unit (mode "+cop.Mode+", "+cop.Evidence.Count+" evidence, \""+a.NpcSpeech+"\")");
         for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)Reply(s,a,sale,Smooth);
         Finish(s,sale);Check(sale.Status=="Complete"&&sale.Score>=.4&&Count(a,"stock_lsd")==0,"setup: the sale goes through (score "+sale.Score+")");
         open=true;InFront(cop,a,3);s.Tick(.1);
@@ -345,7 +348,7 @@ public static class EscalationTests
     static void AnOldSnapshotsStopStartsAtLoad()
     {
         var saved=Level(1);saved.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=saved.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;cop.Mode="Stop";cop.TargetId="a";
-        var a=saved.Player("a");a.X=0;a.Z=2;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});saved.State.SimulationSeconds=500;
+        var a=saved.Player("a");a.X=0;a.Z=2;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});a.EquippedItemId="stock_lsd";saved.State.SimulationSeconds=500;
         cop.Evidence.Add(new EvidenceState{PlayerId="a",Kind="VisibleStock"});
         var s=new FestivalSimulation();s.Restore(saved.State);
         s.Tick(19.8);Check(cop.Mode=="Stop","19.8 s after the load the old stop holds (mode "+cop.Mode+")");

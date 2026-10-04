@@ -62,7 +62,7 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.4f);
                 WarningDrawn("dosed with a shot, $187 / $45 / $225","ARREST WARNING");
                 // ESC-2: the cop stops you over the stock you carry instead, and the card names every way out, whole.
-                cop.Evidence.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                cop.Evidence.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
                 yield return new WaitForSeconds(.4f);
                 WarningDrawn("dosed with a shot, a cop stopping you",Stop);
                 // The crowd turns on you instead: a festivalgoer beside you at 80.
@@ -113,7 +113,7 @@ namespace Festival.Tests
                 yield return StartLevel(session);
 
                 // You carry two Tongue Stamps past security, 2 m off and facing you, with a festivalgoer at arm's length.
-                sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");player.X=0;player.Z=0;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});
+                sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");player.X=0;player.Z=0;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});player.EquippedItemId="stock_lsd";
                 var festivalgoer=new NpcState{Id="stop_festivalgoer",X=-1,Z=0,Yaw=90};sim.State.Npcs.Add(festivalgoer);
                 var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.Evidence.Clear();cop.X=2;cop.Z=0;cop.Yaw=-90;
                 yield return new WaitForSeconds(.4f);
@@ -125,7 +125,7 @@ namespace Festival.Tests
 
                 // Each stop below ends without a word from you (the host takes the stock), and the next starts with the guard turned
                 // back to you. The first notice's 5 s run out with nothing said since, so it is still the session's last message.
-                void StopAgain(){cop.X=player.X+2;cop.Z=player.Z;cop.Yaw=-90;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});}
+                void StopAgain(){cop.X=player.X+2;cop.Z=player.Z;cop.Yaw=-90;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});player.EquippedItemId="stock_lsd";}
                 player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");yield return new WaitForSeconds(5.2f);
                 // A failure, not a setup Assert: without the first notice, "stopped" above has already said why.
                 if(cop.Mode=="Stop"||Find("Notice")!=null||session.Message!=StopNotice)failures.Add("setup: the stop is over, its notice gone and still the last message ("+cop.Mode+", \""+session.Message+"\")");

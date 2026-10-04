@@ -65,7 +65,7 @@ public static class CopScatterTests
         void Quiet(string mode,bool stock)
         {
             var s=Scene(5);var cop=Cop(s);var near=s.State.Npcs.GetRange(0,8);var start=near.ConvertAll(n=>(n.X,n.Z));
-            if(stock)s.Player("a").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            if(stock){s.Player("a").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});s.Player("a").EquippedItemId="stock_lsd";}
             for(int step=0;step<20;step++){s.Tick(.1);Check(cop.Mode==mode,"setup: the cop is in "+mode+" ("+cop.Mode+")");Check(!near.Exists(Scattering),"a cop in "+mode+" scatters nobody (step "+step+")");}
             for(int k=0;k<near.Count;k++)Check(near[k].X==start[k].X&&near[k].Z==start[k].Z,near[k].Id+" stays put beside a cop in "+mode);
         }

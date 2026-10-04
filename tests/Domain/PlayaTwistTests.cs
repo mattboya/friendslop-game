@@ -119,7 +119,7 @@ public static class PlayaTwistTests
         var s=new FestivalSimulation(3);s.AddPlayer("p0","P0");
         s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.Phase="Playing";s.State.SpinSeed=StormSpin;s.State.ElapsedSeconds=seconds;
         s.State.Npcs.Clear();s.State.Npcs.Add(new NpcState{Id="wook"});s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="Patrol",X=1});
-        var p=s.Player("p0");p.X=0;p.Z=(float)metres;p.SprintUntil=1e9;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var p=s.Player("p0");p.X=0;p.Z=(float)metres;p.SprintUntil=1e9;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";
         return s;
     }
     // Whether, in a tenth of a second, the festivalgoer notices p0 sprinting and the cop spots the stock.
@@ -182,7 +182,7 @@ public static class PlayaTwistTests
         s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.Phase="Playing";s.State.SpinSeed=StormSpin;s.State.ElapsedSeconds=10;
         s.State.Npcs.Clear();
         for(int k=0;k<2;k++){var car=Festivals.ArtCarAt(k,10);var p=s.Player("p"+k);p.X=car.X+1;p.Z=car.Z;}
-        s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});s.Player("p0").EquippedItemId="stock_lsd";
         return s;
     }
     // A festivalgoer and a cop turn up 2 m north of p, looking straight at them, while p sprints.
