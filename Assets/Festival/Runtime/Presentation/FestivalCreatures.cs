@@ -15,11 +15,11 @@ namespace Festival.Presentation
     /// life runs on frame time, so it finishes fading while the clock stands still at Results. The dose invents them, so they
     /// shimmer while the camera moves and are slightly off in hue, like a fake vision (FestivalVisionMarkers), but they cast
     /// ordinary sun shadows: nobody mistakes them for real (VISION-4).
-    /// ART-1: each is a Blender model, its parts painted from the palette. VISION-6: now and then one points. It reads the view
-    /// but sends nothing: when the view holds a vision the host hinted (only the tripper's does, and only true ones are hinted),
-    /// the next arrival is that job's kind and points at it, and any dosed player's jackalope now and then points at an ungrabbed
-    /// Giggle Tank. A pointer faces its target, beckons (a nod and a hop toward it, sparkles on the ground, one squeak) and, when
-    /// you come near, scurries on toward it.</summary>
+    /// ART-1: each is a Blender model, its parts painted from the palette, in one of 8 looks its arrival rolls (VISION-6: palette
+    /// swaps and a size). VISION-6: now and then one points. It reads the view but sends nothing: when the view holds a vision
+    /// the host hinted (only the tripper's does, and only true ones are hinted), the next arrival is that job's kind and points at
+    /// it, and any dosed player's jackalope now and then points at an ungrabbed Giggle Tank. A pointer faces its target, beckons
+    /// (a nod and a hop toward it, sparkles on the ground, one squeak) and, when you come near, scurries on toward it.</summary>
     public sealed class FestivalCreatures : MonoBehaviour
     {
         // Doses 1-4: the mean gap between arrivals (each gap randomised by +-50%) and how many may be on screen at once.
@@ -57,22 +57,48 @@ namespace Festival.Presentation
         private static readonly Color[] Paints={
             new Color(.22f,.42f,.9f),new Color(.9f,.18f,.16f),new Color(.95f,.68f,.52f),new Color(.98f,.9f,.62f),   // coat, red, skin, cream
             new Color(1f,.45f,.8f),new Color(.45f,.95f,1f),new Color(.3f,.8f,.3f),new Color(.15f,.55f,.35f),         // pink, wing, green, dark green
-            new Color(.72f,.52f,.32f),new Color(.85f,.72f,.5f),new Color(.3f,.12f,.4f)};                               // tan, antler, eyes
+            new Color(.72f,.52f,.32f),new Color(.85f,.72f,.5f),new Color(.3f,.12f,.4f),                                // tan, antler, eyes
+            new Color(.62f,.3f,.9f),new Color(1f,.55f,.15f),new Color(.95f,.85f,.2f),new Color(.1f,.7f,.65f)};         // VISION-6: purple, orange, yellow, teal
         public static IReadOnlyList<Color> Palette=>Paints;
         private static AudioClip squeak;
         /// <summary>VISION-6: the chirp a pointer gives as it appears, made once.</summary>
         public static AudioClip Squeak{get{if(squeak==null)squeak=CreateSqueak();return squeak;}}
-        // ART-1: each look is a model whose parts end __P<n>, painted from Paints[n].
+        // ART-1: each kind is a model whose parts end __P<n>, painted from Paints[n] (VISION-6: through its look's swaps).
         private static readonly (string Name,string Model)[] Looks={("Gnome","FestivalCreatureGnome"),("Pixie","FestivalCreaturePixie"),
             ("Dragon","FestivalCreatureDragon"),("Mushroom sprite","FestivalCreatureMushroomSprite"),("Jackalope","FestivalCreatureJackalope")};
+        // VISION-6: each kind's 8 looks, in Looks' order; look 0 is the model as painted. A look swaps palette colours (from>to) and
+        // sizes the model. The gnome is about .48 m tall, so it never grows: every creature stays .2-.5 m tall.
+        private const int LooksPerKind=8;
+        private static readonly (string Swaps,float Size)[] Variations={
+            ("",1),("0>6",1),("0>1 1>0",.9f),("0>11 1>13",1),("0>12",.9f),("0>14 1>4",1),("1>6 3>8",.9f),("0>7 1>12",1),            // gnome: coat 0, hat 1, beard 3
+            ("",1),("4>11",1.1f),("4>13 5>4",.9f),("5>6",1),("4>12",1.1f),("4>5 5>4",.9f),("4>14 5>13",1),("4>1",1.1f),            // pixie: dress and hair 4, wings 5
+            ("",1),("6>1 7>12",1.1f),("6>0 7>5",.9f),("6>11 7>4",1),("6>13 7>12",1.1f),("6>7 7>6",.9f),("6>14 7>0",1),("6>8 7>1",1.1f), // dragon: body 6, wings and legs 7
+            ("",1),("1>12",1.1f),("1>13",.9f),("1>11",1),("1>4",1.1f),("1>0",.9f),("1>6 3>13",1),("1>14",1.1f),                    // mushroom sprite: cap 1, stem 3
+            ("",1),("8>3 3>8",1.1f),("8>2",.9f),("9>13",1),("8>12",1.1f),("8>3 9>11",.9f),("9>4",1),("8>0 9>3",1.1f)};             // jackalope: fur 8, antlers 9
+        private static readonly int[][] Remaps=Remapped();
+        private static int[][] Remapped()
+        {
+            var remaps=new int[Variations.Length][];
+            for(int i=0;i<remaps.Length;i++)
+            {
+                var remap=remaps[i]=new int[Paints.Length];for(int p=0;p<remap.Length;p++)remap[p]=p;
+                foreach(var swap in Variations[i].Swaps.Split(new[]{' '},StringSplitOptions.RemoveEmptyEntries)){var ends=swap.Split('>');remap[int.Parse(ends[0])]=int.Parse(ends[1]);}
+            }
+            return remaps;
+        }
+        /// <summary>VISION-6: the palette colour a kind's look paints a part marked __P(paint) with.</summary>
+        public static int PaintOf(int kind,int look,int paint)=>Remaps[kind*LooksPerKind+look][paint];
+        /// <summary>VISION-6: how much a kind's look scales its model.</summary>
+        public static float SizeOf(int kind,int look)=>Variations[kind*LooksPerKind+look].Size;
 
         /// <summary>When creatures arrive and what each one is: a pure function of the seed and the clock it is stepped with.</summary>
         public sealed class Schedule
         {
-            public struct Arrival { public double At; public bool Persists; public int Look; public float Life,Bearing,Distance; }
-            private readonly ContentRandom random;
+            public struct Arrival { public double At; public bool Persists; public int Look,Variation; public float Life,Bearing,Distance; }
+            // VISION-6: each arrival's look comes from a stream of its own, so the first draws everything it always drew.
+            private readonly ContentRandom random,looks;
             private double next=-1;
-            public Schedule(int seed){random=new ContentRandom(seed);}
+            public Schedule(int seed){random=new ContentRandom(seed);looks=new ContentRandom(unchecked(seed*59+23));}
             // The first dosed step arms it one gap ahead, so joining mid-level brings no burst, and a sober step disarms it. Every
             // arrival draws the same values, and the next gap counts from the last arrival, dropped or not.
             public bool Due(double clock,int dose,out Arrival arrival)
@@ -81,7 +107,7 @@ namespace Festival.Presentation
                 if(dose<1){next=-1;return false;}
                 if(next<0){next=clock+Gap(dose);return false;}
                 if(clock<next)return false;
-                arrival=new Arrival{At=next,Persists=random.Next(PersistOneIn)==0,Look=random.Next(Looks.Length),Life=Mathf.Lerp(MinLife,MaxLife,Unit()),Bearing=Unit()*2-1,Distance=Mathf.Lerp(Near,Far,Unit())};
+                arrival=new Arrival{At=next,Persists=random.Next(PersistOneIn)==0,Look=random.Next(Looks.Length),Life=Mathf.Lerp(MinLife,MaxLife,Unit()),Bearing=Unit()*2-1,Distance=Mathf.Lerp(Near,Far,Unit()),Variation=looks.Next(LooksPerKind)};
                 next+=Gap(dose);return true;
             }
             private float Gap(int dose)=>MeanGaps[Math.Min(dose,MeanGaps.Length)-1]*(.5f+Unit());
@@ -99,12 +125,13 @@ namespace Festival.Presentation
         // from From to To (-1 none). Its sparkles and voice are made the first time it points and kept in the pool.
         private sealed class Creature
         {
-            public Transform Root; public int Look,Index; public bool Persists,InView,Seen; public float Age,Life,Fading; public Vector3 Spot;
+            public Transform Root; public int Look,Variation,Index; public bool Persists,InView,Seen; public float Age,Life,Fading; public Vector3 Spot;
             public string Hint=""; public bool Tank; public float Scurry=-1; public Vector3 Goal,From,To; public Transform Trail; public Transform[] Glints; public AudioSource Voice;
             public bool Points=>Tank||Hint!="";
         }
         private readonly List<Creature> live=new List<Creature>();
-        private readonly List<Creature>[] pool=new List<Creature>[Looks.Length];
+        // One shelf per (kind, look), so a creature taken back is never repainted.
+        private readonly List<Creature>[] pool=new List<Creature>[Looks.Length*LooksPerKind];
         private readonly Material[] paints=new Material[Paints.Length];
         private Material glint;
         // The hints this client has pointed at this level (vision ids restart every round), and when a tank pointer may next come.
@@ -273,8 +300,8 @@ namespace Festival.Presentation
 
         private Creature Spawn(Schedule.Arrival arrival,Vector3 spot)
         {
-            var shelf=pool[arrival.Look];Creature c;
-            if(shelf!=null&&shelf.Count>0){c=shelf[shelf.Count-1];shelf.RemoveAt(shelf.Count-1);}else c=Build(arrival.Look);
+            var shelf=pool[arrival.Look*LooksPerKind+arrival.Variation];Creature c;
+            if(shelf!=null&&shelf.Count>0){c=shelf[shelf.Count-1];shelf.RemoveAt(shelf.Count-1);}else c=Build(arrival.Look,arrival.Variation);
             c.Persists=arrival.Persists;c.Life=arrival.Life;c.Age=0;c.Fading=-1;c.Spot=spot;c.Seen=false;c.Index=++arrivals;
             c.Hint="";c.Tank=false;c.Scurry=-1;if(c.Trail!=null)c.Trail.gameObject.SetActive(false);
             c.Root.SetPositionAndRotation(spot,Quaternion.identity);c.Root.localScale=Vector3.zero;c.Root.gameObject.SetActive(true);
@@ -283,21 +310,26 @@ namespace Festival.Presentation
         private void Release(int index)
         {
             var c=live[index];live.RemoveAt(index);c.Root.gameObject.SetActive(false);
-            (pool[c.Look]??=new List<Creature>()).Add(c);
+            (pool[c.Look*LooksPerKind+c.Variation]??=new List<Creature>()).Add(c);
         }
         // Back to the pool: the festival is no longer shown, the level changed, or the client left.
         private void Clear(){for(int i=live.Count-1;i>=0;i--)Release(i);schedule=null;OnScreen=0;}
 
-        private Creature Build(int look)
+        // A kind in one of its looks. The size goes on the model, since Apply rewrites the root's scale every frame.
+        private Creature Build(int kind,int look)
         {
-            var root=new GameObject("Creature "+Looks[look].Name).transform;root.SetParent(transform,false);
-            var model=FestivalArtView.Create(root,Looks[look].Model,castShadows:true);
-            if(model!=null)foreach(var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
+            var root=new GameObject("Creature "+Looks[kind].Name).transform;root.SetParent(transform,false);
+            var model=FestivalArtView.Create(root,Looks[kind].Model,castShadows:true);
+            if(model!=null)
             {
-                int mark=renderer.name.LastIndexOf("__P",StringComparison.Ordinal);
-                if(mark>=0&&int.TryParse(renderer.name.Substring(mark+3).Split('.')[0],out int paint)&&paint<Paints.Length)renderer.sharedMaterial=Paint(paint);
+                model.transform.localScale*=SizeOf(kind,look);
+                foreach(var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    int mark=renderer.name.LastIndexOf("__P",StringComparison.Ordinal);
+                    if(mark>=0&&int.TryParse(renderer.name.Substring(mark+3).Split('.')[0],out int paint)&&paint<Paints.Length)renderer.sharedMaterial=Paint(PaintOf(kind,look,paint));
+                }
             }
-            return new Creature{Root=root,Look=look};
+            return new Creature{Root=root,Look=kind,Variation=look};
         }
         // VISION-6: a pointer's sparkles and voice, made the first time it points; it squeaks as it appears, from where it stands.
         private void Beckon(Creature c)

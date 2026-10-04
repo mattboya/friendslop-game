@@ -97,7 +97,9 @@ its own job: a mushroom sprite points at a clue, a pixie at a buyer, a dragon
 at a narc, a gnome at a stash or a buyer who pays double, and a jackalope at the
 Giggle Tank. A pointing creature faces what it points at, beckons toward it and
 squeaks once as it appears. When you come close it scurries on ahead, so
-following it leads you there. The rest of the creatures are just there.
+following it leads you there. The rest of the creatures are just there. Each
+kind comes in 8 looks (its colours and a slightly different size); the kind,
+not the look, tells you a pointer's job.
 
 **Checking a vision:**
 

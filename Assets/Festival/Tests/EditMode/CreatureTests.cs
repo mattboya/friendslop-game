@@ -71,6 +71,80 @@ namespace Festival.Tests
             Assert.That(Describe(Arrivals(FestivalCreatures.SeedFor(otherRound,"me"),3,10*60)),Is.Not.EqualTo(mine),"another round gets its own");
         }
 
+        // VISION-6: each of the 5 kinds has 8 looks, palette swaps and a size; look 0 is the model as ART-1 painted it. Every arrival
+        // rolls one from its own stream, every creature that shows up wears it, and the pool keeps each (kind, look) apart.
+        [Test]public void EveryKindHasEightLooksAndEachArrivalRollsOne()
+        {
+            for(int kind=0;kind<Kinds.Length;kind++)
+            {
+                Assert.That(FestivalCreatures.SizeOf(kind,0),Is.EqualTo(1f),Kinds[kind]+"'s look 0 is today's size");
+                for(int paint=0;paint<FestivalCreatures.Palette.Count;paint++)Assert.That(FestivalCreatures.PaintOf(kind,0,paint),Is.EqualTo(paint),Kinds[kind]+"'s look 0 keeps today's paints");
+                for(int look=0;look<8;look++)
+                {
+                    Assert.That(new[]{.9f,1f,1.1f},Does.Contain(FestivalCreatures.SizeOf(kind,look)),Kinds[kind]+" look "+look+" is 0.9, 1 or 1.1 times today's size");
+                    for(int paint=0;paint<FestivalCreatures.Palette.Count;paint++)Assert.That(FestivalCreatures.PaintOf(kind,look,paint),Is.InRange(0,FestivalCreatures.Palette.Count-1),Kinds[kind]+" look "+look+" paints from the palette");
+                }
+            }
+            for(int look=0;look<8;look++)Assert.That(FestivalCreatures.SizeOf(0,look),Is.LessThanOrEqualTo(1f),"a gnome (about .48 m) never grows: look "+look);
+
+            // Eight players' half hours at four doses in one level: all 40 (kind, look) pairs turn up, each look about an eighth.
+            var state=Round(4);var pairs=new HashSet<(int,int)>();var counts=new int[8];int total=0;var rolled=new List<string>();
+            foreach(var id in new[]{"me","friend","p3","p4","p5","p6","p7","p8"})
+            {
+                var text=new StringBuilder();
+                foreach(var a in Arrivals(FestivalCreatures.SeedFor(state,id),4,30*60)){pairs.Add((a.Look,a.Variation));counts[a.Variation]++;total++;text.Append(a.Variation);}
+                rolled.Add(text.ToString());
+            }
+            Assert.That(pairs.Count,Is.EqualTo(40),"every kind turns up in every one of its 8 looks");
+            for(int look=0;look<8;look++)Assert.That((double)counts[look]/total,Is.InRange(.095,.155),"look "+look+"'s share of "+total+" arrivals is 12.5% +-3%");
+            Assert.That(rolled[1],Is.Not.EqualTo(rolled[0]),"two players in one level roll their own looks");
+
+            // Watched for ten minutes (leaving the ones that stay behind every 30 s): each creature that appears wears the look its
+            // arrival rolled, its paints swapped and its model sized, whether newly built or taken back from the pool.
+            var schedule=new FestivalCreatures.Schedule(FestivalCreatures.SeedFor(state,"me"));var creatures=Creatures();var eye=Eye();
+            var wears=new Dictionary<Transform,(int Kind,int Look)>();var used=new Dictionary<int,HashSet<int>>();var tall=new Dictionary<int,float>();int spawned=0,reused=0;
+            for(float t=0;t<10*60;t+=Step)
+            {
+                Wander(eye,t);Frame(creatures,state,eye,t);
+                // The same schedule stepped alongside: a creature that appeared this frame (still at no size) came from the arrival due now.
+                bool due=false;var arrival=default(FestivalCreatures.Schedule.Arrival);while(schedule.Due(state.ElapsedSeconds,4,out var next)){arrival=next;due=true;}
+                foreach(Transform body in creatures.transform)
+                {
+                    if(!body.gameObject.activeSelf)continue;
+                    if(body.localScale.x>=.5f&&wears.TryGetValue(body,out var worn)){var bounds=Extent(body);tall[worn.Kind]=Mathf.Max(tall.TryGetValue(worn.Kind,out var most)?most:0,bounds.size.y/body.localScale.x/FestivalCreatures.SizeOf(worn.Kind,worn.Look));}
+                    if(body.localScale.x!=0)continue;
+                    Assert.That(due,Is.True,"setup: "+body.name+" appeared when an arrival was due ("+t+" s)");
+                    var pair=(arrival.Look,arrival.Variation);spawned++;
+                    Assert.That(body.name,Is.EqualTo("Creature "+Kinds[arrival.Look]),"it is the kind its arrival drew");
+                    if(wears.TryGetValue(body,out var was)){reused++;Assert.That(was,Is.EqualTo(pair),body.name+" is taken back from the pool only for its own look");}
+                    wears[body]=pair;
+                    Assert.That(body.GetChild(0).localScale.x,Is.EqualTo(FestivalCreatures.SizeOf(pair.Item1,pair.Item2)).Within(1e-4f),body.name+" look "+pair.Item2+" is its look's size");
+                    foreach(var part in body.GetComponentsInChildren<Renderer>(true))
+                    {
+                        int paint=int.Parse(part.name.Substring(part.name.LastIndexOf("__P",StringComparison.Ordinal)+3).Split('.')[0]);
+                        if(!used.TryGetValue(pair.Item1,out var paints))used[pair.Item1]=paints=new HashSet<int>();paints.Add(paint);
+                        Assert.That(Near(part.sharedMaterial.color,FestivalVisionMarkers.FakeTint(FestivalCreatures.Palette[FestivalCreatures.PaintOf(pair.Item1,pair.Item2,paint)])),Is.True,body.name+"/"+part.name+" wears look "+pair.Item2+"'s paint");
+                    }
+                }
+            }
+            Assert.That(spawned,Is.GreaterThan(60),"setup: ten minutes bring creatures");
+            Assert.That(reused,Is.GreaterThan(10),"setup: some are taken back from the pool");
+            // Pairwise distinct on what each model is painted with, or in size; and every look .2 to .5 m tall.
+            Assert.That(used.Count,Is.EqualTo(Kinds.Length),"setup: every kind was seen");
+            for(int kind=0;kind<Kinds.Length;kind++)
+                for(int look=0;look<8;look++)
+                {
+                    float height=tall[kind]*FestivalCreatures.SizeOf(kind,look);
+                    Assert.That(height,Is.InRange(.2f,.5f),Kinds[kind]+" look "+look+" is 0.2 to 0.5 m tall ("+height+")");
+                    for(int other=0;other<look;other++)
+                    {
+                        bool differs=FestivalCreatures.SizeOf(kind,look)!=FestivalCreatures.SizeOf(kind,other);
+                        foreach(int paint in used[kind])differs|=FestivalCreatures.PaintOf(kind,look,paint)!=FestivalCreatures.PaintOf(kind,other,paint);
+                        Assert.That(differs,Is.True,Kinds[kind]+" looks "+other+" and "+look+" differ in paint or size");
+                    }
+                }
+        }
+
         [Test]public void NoMoreThan1_2_4_6AreOnScreenAtOnce()
         {
             for(int dose=1;dose<=4;dose++)
@@ -239,6 +313,10 @@ namespace Festival.Tests
             var body=UntilOneArrives(creatures,state,eye,ref t);
             Assert.That(body.name,Is.EqualTo("Creature Mushroom sprite"),"a hinted clue brings a mushroom sprite at the next arrival");
             Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"and it points");
+            // VISION-6: its job sets only the kind; it wears the look its arrival rolled.
+            int rolled=Arrivals(FestivalCreatures.SeedFor(state,"me"),1,200)[0].Variation;
+            Assert.That(rolled,Is.Not.Zero,"setup: the first arrival rolls a look other than the model as painted");
+            AssertWears(body,rolled,"the clue's pointer");
             for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
             Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the festivalgoer");
             Assert.That(Facing(body,Flat(eye.transform.position)),Is.GreaterThan(90),"not the camera");
@@ -265,6 +343,7 @@ namespace Festival.Tests
                 body=UntilOneArrives(creatures,state,eye,ref t);for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
                 Assert.That(body.name,Is.EqualTo(looks),"a hinted "+kind+" brings a "+looks);
                 Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"the "+kind+"'s creature points");
+                AssertWears(body,Arrivals(FestivalCreatures.SeedFor(state,"me"),1,200)[0].Variation,"the "+kind+"'s pointer");
                 Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the "+kind+(kind=="Stash"?"'s spot":"'s festivalgoer"));
             }
         }
@@ -497,7 +576,7 @@ namespace Festival.Tests
         private static string Describe(List<FestivalCreatures.Schedule.Arrival> arrivals)
         {
             var text=new StringBuilder();
-            foreach(var a in arrivals)text.Append(a.At.ToString("0.000")).Append(a.Persists?" stays ":" goes ").Append(a.Look).Append(' ').Append(a.Life.ToString("0.00")).Append(' ').Append(a.Bearing.ToString("0.00")).Append(' ').Append(a.Distance.ToString("0.00")).Append('\n');
+            foreach(var a in arrivals)text.Append(a.At.ToString("0.000")).Append(a.Persists?" stays ":" goes ").Append(a.Look).Append('/').Append(a.Variation).Append(' ').Append(a.Life.ToString("0.00")).Append(' ').Append(a.Bearing.ToString("0.00")).Append(' ').Append(a.Distance.ToString("0.00")).Append('\n');
             return text.ToString();
         }
         private static void Frame(FestivalCreatures creatures,RoundState state,Camera eye,float t){state.ElapsedSeconds+=Step;creatures.Apply(state,"me",eye,t,Step);}
@@ -587,6 +666,21 @@ namespace Festival.Tests
             var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name=name;go.transform.position=at;go.transform.localScale=size;made.Add(go);Physics.SyncTransforms();return go;
         }
         private static Vector2 Flat(Vector3 at)=>new Vector2(at.x,at.z);
+        // FestivalCreatures' kinds, in its Looks' order.
+        private static readonly string[] Kinds={"Gnome","Pixie","Dragon","Mushroom sprite","Jackalope"};
+        private static Bounds Extent(Transform body){var bounds=body.GetComponentsInChildren<Renderer>()[0].bounds;foreach(var part in body.GetComponentsInChildren<Renderer>())bounds.Encapsulate(part.bounds);return bounds;}
+        // A creature wears its kind's look: that look's size on its model and that look's paint on every part.
+        private static void AssertWears(Transform body,int look,string what)
+        {
+            int kind=Array.IndexOf(Kinds,body.name.Substring("Creature ".Length));
+            Assert.That(body.GetChild(0).localScale.x,Is.EqualTo(FestivalCreatures.SizeOf(kind,look)).Within(1e-4f),what+" is look "+look+"'s size");
+            foreach(var part in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if(!part.name.Contains("__P"))continue;
+                int paint=int.Parse(part.name.Substring(part.name.LastIndexOf("__P",StringComparison.Ordinal)+3).Split('.')[0]);
+                Assert.That(Near(part.sharedMaterial.color,FestivalVisionMarkers.FakeTint(FestivalCreatures.Palette[FestivalCreatures.PaintOf(kind,look,paint)])),Is.True,what+"'s "+part.name+" wears look "+look+"'s paint");
+            }
+        }
         private static bool Near(Color a,Color b)=>Mathf.Abs(a.r-b.r)<1e-3f&&Mathf.Abs(a.g-b.g)<1e-3f&&Mathf.Abs(a.b-b.b)<1e-3f;
     }
 }
