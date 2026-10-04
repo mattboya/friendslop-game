@@ -329,8 +329,9 @@ namespace Festival.Presentation
 #endif
             // Equipped poi hang from both hands, wheel beside them while walking and join a
             // dance as butterflies on its beat. Rebuild only when the poi type changes. A dosed player stands in the Intoxicated pose
-            // (the tripper all level), and still holds and spins their poi.
-            bool poiCarryPose=Pose=="Idle"||Pose=="Walk"||Pose==""||Pose=="Intoxicated";
+            // (the tripper all level), and still holds and spins their poi. A dose beat (the spinner's take and reaction) keeps the
+            // arms, so the pair is put away for it.
+            bool poiCarryPose=Beat==""&&(Pose=="Idle"||Pose=="Walk"||Pose==""||Pose=="Intoxicated");
             bool carryingPoi=carriedPoi!=""&&!Crowd&&poiCarryPose;
             bool dancingPoi=carriedPoi!=""&&Pose=="Dance";
             // POI-1: held left click spins the carried pair standing or walking, the arms up as in the performance; let go and they

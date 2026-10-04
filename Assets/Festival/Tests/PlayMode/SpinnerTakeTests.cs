@@ -29,19 +29,33 @@ namespace Festival.Tests
                     actor.transform.localScale=Vector3.one*.82f;actor.transform.position=Vector3.right*x;actor.Pose="Intoxicated";return actor;
                 }
                 var sober=Actor("Beat reference",0);var taker=Actor("Beat taker",2.5f);var mild=Actor("Beat mild",5);var wild=Actor("Beat wild",7.5f);
-                taker.Beat="TakeDose";
+                // POI-1: poi in hand (buying them equips them), even with a click held through the slot machine, never take the arms
+                // off the take or the reaction. The pair is put away for the beat and comes back after it.
+                var poiTaker=Actor("Beat poi taker",10);var spinTaker=Actor("Beat spinning taker",12.5f);var poiWild=Actor("Beat poi wild",15);
+                foreach(var holder in new[]{poiTaker,spinTaker,poiWild})holder.SetEquippedItem("poi_led");
+                spinTaker.SpinningPoi=true;
+                int PoiShown(FestivalCharacter actor)=>actor.GetComponentsInChildren<FestivalPoiRig>().Length;
+                taker.Beat=poiTaker.Beat=spinTaker.Beat="TakeDose";
                 yield return new WaitForSeconds(.8f);
                 float Reach(FestivalCharacter actor)=>Vector3.Distance(Bone(actor,"HandR").position,Bone(actor,"Head").position);
-                Debug.Log($"[Festival.Test] dose take reach={Reach(taker):F3} sober={Reach(sober):F3} hand={Height(taker,"HandR"):F3} sober hand={Height(sober,"HandR"):F3}");
-                Assert.That(Reach(taker),Is.LessThan(Reach(sober)*.65f),"the take brings a hand up to the face");
-                Assert.That(Height(taker,"HandR"),Is.GreaterThan(Height(sober,"HandR")+.35f),"from hanging at the hip");
-                mild.Beat=wild.Beat="DoseReaction";mild.BeatStrength=.25f;wild.BeatStrength=1;
+                foreach(var actor in new[]{taker,poiTaker,spinTaker})
+                {
+                    Debug.Log($"[Festival.Test] dose take {actor.name} reach={Reach(actor):F3} sober={Reach(sober):F3} hand={Height(actor,"HandR"):F3} sober hand={Height(sober,"HandR"):F3}");
+                    Assert.That(Reach(actor),Is.LessThan(Reach(sober)*.65f),"the take brings a hand up to the face: "+actor.name);
+                    Assert.That(Height(actor,"HandR"),Is.GreaterThan(Height(sober,"HandR")+.35f),"from hanging at the hip: "+actor.name);
+                    Assert.That(PoiShown(actor),Is.Zero,"no poi in hand for the take: "+actor.name);
+                }
+                mild.Beat=wild.Beat=poiWild.Beat="DoseReaction";mild.BeatStrength=.25f;wild.BeatStrength=poiWild.BeatStrength=1;
                 yield return new WaitForSeconds(.8f);
                 float Hands(FestivalCharacter actor)=>(Height(actor,"HandL")+Height(actor,"HandR"))*.5f;
-                Debug.Log($"[Festival.Test] dose reaction hands mild={Hands(mild):F3} wild={Hands(wild):F3} sober={Hands(sober):F3} shoulders={Height(wild,"ArmL"):F3} head={Height(wild,"Head"):F3}");
+                Debug.Log($"[Festival.Test] dose reaction hands mild={Hands(mild):F3} wild={Hands(wild):F3} poi wild={Hands(poiWild):F3} sober={Hands(sober):F3} shoulders={Height(wild,"ArmL"):F3} head={Height(wild,"Head"):F3}");
                 Assert.That(Hands(wild),Is.GreaterThan(Height(wild,"ArmL")-.1f),"four doses flings both arms out to shoulder height");
+                Assert.That(Hands(poiWild),Is.GreaterThan(Height(poiWild,"ArmL")-.1f),"poi in hand too");
+                Assert.That(PoiShown(poiWild),Is.Zero,"no poi in hand for the reaction");
                 Assert.That(Hands(wild),Is.GreaterThan(Hands(mild)+.25f),"one dose is a much smaller reaction");
                 Assert.That(Hands(mild),Is.GreaterThan(Hands(sober)),"but still shows");
+                poiWild.Beat="";yield return null;
+                Assert.That(PoiShown(poiWild),Is.EqualTo(2),"once the beat ends the dosed player holds their poi again");
             }
             finally{Object.Destroy(root);}
         }
