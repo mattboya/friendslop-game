@@ -32,7 +32,7 @@ public static class MinigameTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EveryLevelPlacesOneBoothOnASeededSpot,BoothGamesComeOutOfAWeekendBag,TheBoothSpotsKeepClearOfEveryRoute,
-            TheCountdownNeedsEveryLivingPlayerInTheRing,NobodyDownedOrBusyMayStartIt,TheClockStopsForEverything,AHandoffKeepsItsSecondsThroughAMinuteLongGame,
+            TheCountdownNeedsEveryLivingPlayerInTheRing,NobodyDownedOrBusyMayStartIt,ABodyCarrierPassingThroughTheRingDoesNotOptIn,TheClockStopsForEverything,AHandoffKeepsItsSecondsThroughAMinuteLongGame,
             EveryClockDeadlineMovesOnByThePause,TheGameEndsAtNinetySecondsAndItsResultShowsForFour,ALossNeverLeavesUnderFifteenSeconds,ThePlayedBoothIsSpent,
             SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -168,6 +168,30 @@ public static class MinigameTests
         Check(Act(t,"p1",FestivalSimulation.LieDownKind).Accepted,"setup: p1 lies down in the ring");
         Check(!StartsWithin(t,5),"someone lying down is busy, so nothing starts");
         Check(Act(t,"p1","Cancel").Accepted&&StartsWithin(t,3.5),"once they get up, it starts");
+    }
+
+    // MINI-5.4: a survivor taking a body home crosses booth 2's ring at carry speed.
+    // Exercise death, CarryBody, TryMove and the real ring countdown; putting the body down opts in again.
+    static void ABodyCarrierPassingThroughTheRingDoesNotOptIn()
+    {
+        var s=Play(46,2);s.State.LevelIndex=Festivals.LevelCount-1;s.State.DurationSeconds=Festivals.For(s.State).DurationSeconds;s.State.Booth.Spot=2;
+        var p=s.Player("p0");var friend=s.Player("p1");p.X=friend.X=20;p.Z=friend.Z=-12;
+        friend.Life="Downed";friend.DownedRemaining=.05;s.Tick(.1);
+        Check(friend.Life=="Spirit"&&s.State.Bodies.Exists(b=>b.PlayerId==friend.Id),"setup: Night 2 death leaves a body");
+        Check(Act(s,p.Id,"CarryBody",friend.Id).Accepted,"setup: the survivor picks up their friend's body");
+        var at=FestivalSimulation.BoothAt(s.State);double distance=Math.Sqrt((at.X-p.X)*(at.X-p.X)+(at.Z-p.Z)*(at.Z-p.Z));
+        int steps=(int)Math.Ceiling(distance/(FestivalSimulation.SoloCarrySpeed*.1));float startX=p.X,startZ=p.Z;
+        for(int k=1;k<=steps;k++)
+        {
+            float progress=(float)k/steps;
+            Check(s.TryMove(p.Id,startX+(at.X-startX)*progress,startZ+(at.Z-startZ)*progress,0,.1),"the carrier moves toward camp through the ring");
+            s.Tick(.1);
+        }
+        s.Tick(5);
+        Check(s.State.Phase=="Playing"&&s.State.Booth.RingSeconds==0,"carrying a body is busy, never opts into a booth: got phase "+s.State.Phase+", ring seconds "+s.State.Booth.RingSeconds);
+        Check(Act(s,p.Id,"DropBody").Accepted,"the carrier deliberately puts the body down");
+        Check(StartsWithin(s,3.5),"with free hands, the living survivor can opt in while their spirit friend watches");
+        Check(string.Join(",",s.State.Booth.PlayerIds)==p.Id,"only the living survivor plays");
     }
 
     // While the game runs the level clock, bleed-out, effects, festivalgoers and their suspicion all hold still; nobody moves, and

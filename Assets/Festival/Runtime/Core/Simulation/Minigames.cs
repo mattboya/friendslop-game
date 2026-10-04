@@ -50,8 +50,8 @@ namespace Festival.Core
         /// it reads only public state, so the HUD counts the ring from any client's view.</summary>
         public static bool InRing(RoundState s,PlayerState p){var at=BoothAt(s);return at!=null&&Near(p,at.X,at.Z,MinigameRingRadius);}
         /// <summary>The first connected player, wherever they are, who keeps the booth's game from starting: downed, or in the middle
-        /// of something (lying down, a ride, a talk, a dance); null when nobody does.</summary>
-        public static PlayerState HoldsBooth(RoundState s)=>s.Players.Find(p=>p.Connected&&(p.Life=="Downed"||p.InteractionId!=""));
+        /// of something (lying down, a ride, a talk, a dance, carrying a body); null when nobody does.</summary>
+        public static PlayerState HoldsBooth(RoundState s)=>s.Players.Find(p=>p.Connected&&(p.Life=="Downed"||p.InteractionId!=""||p.CarryBodyId!=""));
         /// <summary>The world's clock: the simulation clock with this level's game taken out, so it stands still while one runs and
         /// runs on from there after it. What a client draws on the simulation clock (the Ferris wheel) runs on this, so the
         /// festival holds as a freeze-frame and never jumps once play resumes. at: a time on the simulation clock, read on it.</summary>
