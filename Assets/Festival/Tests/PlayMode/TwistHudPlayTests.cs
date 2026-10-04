@@ -57,7 +57,11 @@ namespace Festival.Tests
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("twist_mate","Sam");mate.Ready=true;
                 sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=1;
+                // The people spinner's bag holds only Sam, so the spin doses Sam, never you: picked yourself, a Pony Dust dose's camera
+                // lags behind the mouse and the dot settles on the wrong shelf at the VIP stall.
+                sim.State.TripperBag.Clear();sim.State.TripperBag.Add(mate.Id);
                 yield return StartLevel(session);
+                Assert.That(player.Effects.Exists(e=>e.Id==FestivalSimulation.DoseEffect),Is.False,"setup: you are sober; the spinner dosed Sam");
                 // Sam trips and waits at the way back to camp; you are sober, with a free hand, $20, and only the guard and the cops about.
                 sim.State.TripperId=mate.Id;mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;
                 var guard=sim.State.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);Assert.That(guard,Is.Not.Null,"setup: Palm Mirage's VIP rope has a guard");
