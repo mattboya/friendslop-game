@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Network;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Festival.Tests
@@ -13,6 +14,60 @@ namespace Festival.Tests
             return game.Execute(player,new GameCommand{Id=command,Kind="CampEgg",TargetId=egg});
         }
         static RoundState View(FestivalSimulation game,string viewer)=>JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,viewer)));
+
+        [Test] public void FirstNewRoundAndReconnectedSnapshotsExposePersistentPropsWithoutOldPlayback()
+        {
+            var host=new GameObject("impl:U31 persistent camp follower");var session=host.AddComponent<FestivalSession>();
+            var played=new List<string>();session.CampEggActivated+=egg=>played.Add(egg.Id);
+            try
+            {
+                var game=new FestivalSimulation(0);game.AddPlayer("host","Host");game.AddPlayer("friend","Friend");
+                Assert.That(Poke(game,"host","flamingo","old_flame").Accepted,Is.True);
+                Assert.That(Poke(game,"host","wash_me","old_dust").Accepted,Is.True);
+                session.FollowCampEggs(View(game,"friend"));
+                Assert.That(played,Is.Empty,"first snapshots never replay even very recent one-shots");
+                Assert.That(session.CampEggStates[5].Deflated,Is.True,"persistent deflation is available on that first snapshot");
+                Assert.That(session.CampEggStates[7].Word,Is.EqualTo(game.State.CampEggs[7].Word),"host-picked dust is available immediately");
+                Assert.That(Poke(game,"host","button","new_button").Accepted,Is.True);session.FollowCampEggs(View(game,"friend"));
+                Assert.That(played,Is.EqualTo(new[]{"button"}));
+                var next=new FestivalSimulation(1);next.AddPlayer("host","Host");next.AddPlayer("friend","Friend");
+                Assert.That(Poke(next,"host","flamingo","next_flame").Accepted,Is.True);session.FollowCampEggs(View(next,"friend"));
+                Assert.That(played.Count,Is.EqualTo(1),"new rounds baseline their own sequences instead of comparing with the prior visit");
+                Assert.That(session.CampEggStates[5].Deflated,Is.True);Assert.That(session.CampEggStates[7].Word,Is.Empty,"dust resets with the new round");
+                session.FollowCampEggs(null);Assert.That(session.CampEggStates,Is.Empty);
+                session.FollowCampEggs(View(next,"friend"));Assert.That(played.Count,Is.EqualTo(1),"reconnect arms a fresh baseline");
+                Assert.That(Poke(next,"host","wash_me","next_dust").Accepted,Is.True);session.FollowCampEggs(View(next,"friend"));
+                Assert.That(played,Is.EqualTo(new[]{"button","wash_me"}));
+            }
+            finally{Object.DestroyImmediate(host);}
+        }
+
+        [Test] public void DelayedRepeatedAndRegressingSnapshotsDoNotReplayTransientGags()
+        {
+            var host=new GameObject("impl:U31 delayed camp follower");var session=host.AddComponent<FestivalSession>();
+            var played=new List<string>();session.CampEggActivated+=egg=>played.Add(egg.Id);
+            try
+            {
+                var game=new FestivalSimulation(0);game.AddPlayer("host","Host");game.AddPlayer("friend","Friend");
+                session.FollowCampEggs(View(game,"friend"));
+                Assert.That(Poke(game,"host","flamingo","delayed_flame").Accepted,Is.True);game.Tick(3);
+                var delayed=View(game,"friend");session.FollowCampEggs(delayed);
+                Assert.That(played,Is.Empty,"old one-shots expire after the two-second gag window");Assert.That(session.CampEggStates[5].Deflated,Is.True);
+                Assert.That(Poke(game,"host","button","fresh_button").Accepted,Is.True);var current=View(game,"friend");session.FollowCampEggs(current);
+                Assert.That(played,Is.EqualTo(new[]{"button"}));
+                session.FollowCampEggs(current);session.FollowCampEggs(delayed);session.FollowCampEggs(current);
+                Assert.That(played.Count,Is.EqualTo(1),"duplicate and older snapshots never move a playback cursor backwards");
+                Assert.That(Poke(game,"host","wash_me","fresh_dust").Accepted,Is.True);game.Tick(2);session.FollowCampEggs(View(game,"friend"));
+                Assert.That(played,Is.EqualTo(new[]{"button","wash_me"}),"the two-second boundary is inclusive");
+                Assert.That(Poke(game,"host","button","regressed_time").Accepted,Is.True);var badClock=View(game,"friend");badClock.SimulationSeconds=3;badClock.CampEggs[1].LastActivationAt=2.5;
+                session.FollowCampEggs(badClock);Assert.That(played.Count,Is.EqualTo(2),"a higher sequence cannot replay an activation whose clock moved backwards");
+                badClock.CampEggs[1].Sequence++;badClock.CampEggs[1].LastActivationAt=2.75;
+                session.FollowCampEggs(badClock);Assert.That(played.Count,Is.EqualTo(2),"rejected timestamps cannot move the activation cursor backwards either");
+                Assert.That(Poke(game,"host","cone","future_cone").Accepted,Is.True);var future=View(game,"friend");future.CampEggs[6].LastActivationAt=future.SimulationSeconds+1;
+                session.FollowCampEggs(future);Assert.That(played.Count,Is.EqualTo(2),"future activation timestamps never play early");
+            }
+            finally{Object.DestroyImmediate(host);}
+        }
 
         [Test] public void DebugEggDiagnosticsExplainAcceptanceAndRefusalWithoutCollectionData()
         {

@@ -27,6 +27,62 @@ namespace Festival.Tests
         }
         private void Write(string json)=>File.WriteAllText(Path.Combine(ownedFolder,"settings.json"),json);
 
+        [Test]public void DiscoveryMergeFiltersDeduplicatesAndDoesNotWriteAnUnchangedCollection()
+        {
+            var profile=new LocalProfile("settings");profile.Data.FoundCampEggIds.AddRange(new[]{"gnome","gnome","unknown",null});
+            var game=new FestivalSimulation(0);var owner=game.AddPlayer("owner","Owner");var friend=game.AddPlayer("friend","Friend");
+            owner.FoundCampEggMask=1;friend.FoundCampEggMask=254;
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Empty);
+            Assert.That(profile.Data.FoundCampEggIds,Is.EqualTo(new[]{"gnome"}),"even an already-known mask normalizes only the owner's collection");
+            Assert.That(new LocalProfile("settings").Data.FoundCampEggIds,Is.EqualTo(new[]{"gnome"}));
+            string path=Path.Combine(ownedFolder,"settings.json");var stamp=new DateTime(2001,2,3,4,5,6,DateTimeKind.Utc);File.SetLastWriteTimeUtc(path,stamp);
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Empty);
+            Assert.That(File.GetLastWriteTimeUtc(path),Is.EqualTo(stamp),"following the same discovery does not save every frame");
+            owner.FoundCampEggMask=162;
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Empty);
+            Assert.That(new LocalProfile("settings").Data.FoundCampEggIds,Is.EquivalentTo(new[]{"gnome","button","flamingo","wash_me"}),"a newer mask unions discoveries with earlier visits");
+            profile.Data.FoundCampEggIds=null;owner.FoundCampEggMask=1;
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Empty);
+            Assert.That(profile.Data.FoundCampEggIds,Is.EqualTo(new[]{"gnome"}),"a missing collection uses the schema-two empty default");
+        }
+
+        [Test]public void AFailedDiscoverySaveKeepsThePreviousCollectionAndCanRetry()
+        {
+            var profile=new LocalProfile("settings");profile.Data.FoundCampEggIds.Add("gnome");Assert.That(profile.Save(),Is.Empty);
+            string path=Path.Combine(ownedFolder,"settings.json");string previous=File.ReadAllText(path);
+            File.Delete(path);Directory.CreateDirectory(path);
+            var game=new FestivalSimulation(0);var owner=game.AddPlayer("owner","Owner");owner.FoundCampEggMask=2;
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Not.Empty,"I/O failure must be visible to the session");
+            Assert.That(profile.Data.FoundCampEggIds,Is.EqualTo(new[]{"gnome"}),"failed atomic save cannot mark the discovery as already persisted");
+            Directory.Delete(path);File.WriteAllText(path,previous);
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Empty,"the same cumulative mask retries once storage works again");
+            Assert.That(new LocalProfile("settings").Data.FoundCampEggIds,Is.EqualTo(new[]{"gnome","button"}));
+            Assert.That(Directory.GetFiles(ownedFolder,"*.tmp"),Is.Empty,"each save cleans only its own staging file");
+            File.WriteAllText(path,"{\"SchemaVersion\":3,\"FoundCampEggIds\":[\"flamingo\"]}");string future=File.ReadAllText(path);
+            owner.FoundCampEggMask=255;
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Does.Contain("newer build"));
+            Assert.That(File.ReadAllText(path),Is.EqualTo(future),"discovery cannot overwrite a future schema");
+            Assert.That(profile.Data.FoundCampEggIds,Is.EqualTo(new[]{"gnome","button"}));
+        }
+
+        [Test]public void ThePassCollectionContractCountsOnlyKnownIdsAndUsesTheExactCompletionLine()
+        {
+            var profile=new LocalProfile("settings");
+            string Text(string name)=>(string)(typeof(LocalProfile).GetProperty(name)?.GetValue(profile)??"");
+            Assert.That(Text("CampEggCountText"),Is.EqualTo("EASTER EGGS 0 / 8"),"the pass has an exact empty-collection contract");
+            Assert.That(Text("CampEggCompletionText"),Is.Empty);
+            profile.Data.FoundCampEggIds.AddRange(new[]{"gnome","button","chair","gnome","unknown",null});
+            Assert.That(Text("CampEggCountText"),Is.EqualTo("EASTER EGGS 3 / 8"));Assert.That(Text("CampEggCompletionText"),Is.Empty);
+            var game=new FestivalSimulation(0);var owner=game.AddPlayer("owner","Owner");owner.FoundCampEggMask=255;
+            Assert.That(profile.RememberCampEggs(FestivalSession.ViewFor(game,owner.Id),owner.Id),Is.Empty);
+            profile=new LocalProfile("settings");
+            Assert.That(Text("CampEggCountText"),Is.EqualTo("EASTER EGGS 8 / 8"));
+            Assert.That(Text("CampEggCompletionText"),Is.EqualTo("You found every dumb secret. Seek help."));
+            Write("{\"SchemaVersion\":1,\"FoundCampEggIds\":[\"gnome\",\"button\"]}");profile=new LocalProfile("settings");
+            Assert.That(Text("CampEggCountText"),Is.EqualTo("EASTER EGGS 0 / 8"),"the single SET-1 migration initializes legacy profiles empty");
+            Assert.That(Text("CampEggCompletionText"),Is.Empty);Assert.That(profile.Data.SchemaVersion,Is.EqualTo(2));
+        }
+
         [Test]public void SessionTeardownRetainsTheLastConfiguredMasterAndFocusChoice()
         {
             float previousVolume=AudioListener.volume;var host=new GameObject("impl:U08 session audio teardown");

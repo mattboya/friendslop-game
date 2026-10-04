@@ -49,6 +49,9 @@ namespace Festival.Presentation
         public string LoadError {get;private set;}="";
         public string LastError {get;private set;}="";
         public bool ReadOnly {get;private set;}
+        // U66 binds these exact strings in the pass. Unknown and duplicate IDs never increase the displayed count.
+        public string CampEggCountText=>"EASTER EGGS "+CampEggIds().Count+" / "+CampFeatures.Eggs.Length;
+        public string CampEggCompletionText=>CampEggIds().Count==CampFeatures.Eggs.Length?"You found every dumb secret. Seek help.":"";
         [Serializable] private sealed class SchemaHeader { public int SchemaVersion=0; }
         // CAM-2: where profiles are saved. This machine's own folder is the one the built game reads too, so tests point it at a
         // temp folder for their whole run (TestProfiles); null puts it back.
@@ -173,6 +176,34 @@ namespace Festival.Presentation
         {
             if(state.UnlockedFestivalCount<=Data.UnlockedFestivalCount)return;
             Data.UnlockedFestivalCount=Math.Min(state.UnlockedFestivalCount,Festivals.Count);Save();
+        }
+        // The recipient-filtered cumulative mask recovers pokes between snapshots. Never infer credit from public gag events.
+        public string RememberCampEggs(RoundState state,string localPlayerId)
+        {
+            var player=state?.Players.Find(p=>p.Id==localPlayerId);
+            if(player==null||string.IsNullOrEmpty(localPlayerId))return "";
+            var found=CampEggIds(player.FoundCampEggMask);
+            bool changed=Data.FoundCampEggIds==null||found.Count!=Data.FoundCampEggIds.Count;
+            for(int index=0;!changed&&index<found.Count;index++)changed=found[index]!=Data.FoundCampEggIds[index];
+            if(!changed)return "";
+            var previous=Data.FoundCampEggIds;
+            Data.FoundCampEggIds=found;
+            string error=Save();
+            if(error!="")Data.FoundCampEggIds=previous;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(error=="")Debug.Log("[CampEggs] Saved local discoveries: "+Data.FoundCampEggIds.Count);
+#endif
+            return error;
+        }
+        private List<string> CampEggIds(int mask=0)
+        {
+            var found=new List<string>();
+            for(int index=0;index<CampFeatures.Eggs.Length;index++)
+            {
+                string id=CampFeatures.Eggs[index].Id;
+                if(mask>=0&&(mask&(1<<index))!=0||Data.FoundCampEggIds?.Contains(id)==true)found.Add(id);
+            }
+            return found;
         }
         // HUD-7: a first-time tip shows once on this machine (FestivalHudText.Tip), until "Show tips again" in the settings, which
         // returns Save's error for the settings to say.

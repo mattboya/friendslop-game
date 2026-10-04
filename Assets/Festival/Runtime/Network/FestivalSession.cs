@@ -74,6 +74,12 @@ namespace Festival.Network
         public string Message {get;private set;}=OpeningMessage;
         public FestivalInput Controls {get;private set;}
         public LocalProfile Profile {get;private set;}
+        // Persistent props read this even on their first snapshot; only a new, recent activation requests transient playback.
+        public IReadOnlyList<CampEggState> CampEggStates {get;private set;}=Array.Empty<CampEggState>();
+        public event Action<CampEggState> CampEggActivated;
+        private readonly Dictionary<string,(long Sequence,double At)> campEggCursor=new Dictionary<string,(long,double)>();
+        private string campEggRound="",campDiscoveryError="";
+        private double nextCampDiscoverySave;
         public IVoiceSession Voice {get;}=new UnavailableVoiceSession();
         public bool MenuOpen=true;
         /// <summary>The pointer is free, and the view holds still, for the menu and for clicking a friend at the debrief (HUD-3).</summary>
@@ -418,6 +424,21 @@ namespace Festival.Network
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
             var player=LocalPlayer;if(player==null)return;
+            if(Time.unscaledTimeAsDouble>=nextCampDiscoverySave)
+            {
+                string discoveryError=Profile.RememberCampEggs(State,LocalPlayerId);
+                if(discoveryError!="")
+                {
+                    if(campDiscoveryError=="")Message=discoveryError;
+                    campDiscoveryError=discoveryError;nextCampDiscoverySave=Time.unscaledTimeAsDouble+2;
+                }
+                else if(campDiscoveryError!="")
+                {
+                    if(Message==campDiscoveryError)Message="Camp discoveries saved.";
+                    campDiscoveryError="";nextCampDiscoverySave=0;
+                }
+            }
+            FollowCampEggs(State);
             if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetTwists(State);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State,player);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
             {
@@ -455,6 +476,27 @@ namespace Festival.Network
         /// <summary>Whether a menu left open closes itself as the round moves from lastPhase into phase: as the wheels start (HUD-4:
         /// the spinner hides under the menu), the festival opens or the debrief begins.</summary>
         public static bool ClosesMenu(string phase,string lastPhase)=>phase!=lastPhase&&(phase=="Spinning"||phase=="Playing"||phase=="CampReview");
+        /// <summary>Arm the first snapshot silently, expose current dust/deflation immediately, and deliver each recent host
+        /// activation once. Two seconds is the gag's transient window; a delayed snapshot keeps its persistent state.</summary>
+        public void FollowCampEggs(RoundState state)
+        {
+            CampEggStates=state?.CampEggs??(IReadOnlyList<CampEggState>)Array.Empty<CampEggState>();
+            if(state==null){campEggCursor.Clear();campEggRound="";return;}
+            if(campEggRound!=state.RoundId){campEggCursor.Clear();campEggRound=state.RoundId;}
+            foreach(var egg in CampEggStates)
+            {
+                if(egg==null||CampFeatures.FindEgg(egg.Id)==null)continue;
+                if(!campEggCursor.TryGetValue(egg.Id,out var previous)){campEggCursor[egg.Id]=(egg.Sequence,egg.LastActivationAt);continue;}
+                if(egg.Sequence<=previous.Sequence)continue;
+                campEggCursor[egg.Id]=(egg.Sequence,Math.Max(previous.At,egg.LastActivationAt));
+                double age=state.SimulationSeconds-egg.LastActivationAt;
+                if(egg.LastActivationAt<0||egg.LastActivationAt<previous.At||age<0||age>2)continue;
+                CampEggActivated?.Invoke(egg);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[CampEggs] Follow round="+state.RoundId+" egg="+egg.Id+" sequence="+egg.Sequence);
+#endif
+            }
+        }
         public void AcknowledgeDisplayedDialogue(InteractionState interaction)
         {
             if(interaction==null||string.IsNullOrEmpty(interaction.DialogueId)||acknowledgedDialogue==interaction.Id+interaction.DialogueId)return;
@@ -763,6 +805,8 @@ namespace Festival.Network
                 if(stopping.IsListening)stopping.OnClientStopped+=_=>Destroy(stopping.gameObject);else Destroy(stopping.gameObject);
             }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
+            FollowCampEggs(null);
+            nextCampDiscoverySave=0;campDiscoveryError="";
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
             Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;
