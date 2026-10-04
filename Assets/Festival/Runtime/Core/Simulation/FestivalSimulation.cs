@@ -47,6 +47,7 @@ namespace Festival.Core
             if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
             state.SchemaVersion=RoundState.CurrentSchemaVersion;
             State=state;
+            RestoreChats();
         }
         public CommandResult Execute(string playerId,GameCommand command) {
             if(command==null||string.IsNullOrEmpty(command.Id)||command.Id.Length>128||command.Kind==null||command.Kind.Length>32||command.TargetId==null||command.TargetId.Length>128||command.ItemId==null||command.ItemId.Length>64||!Finite(command.TimeSeconds))return Reject("Invalid command envelope");
@@ -80,6 +81,7 @@ namespace Festival.Core
             if(c.Kind=="Cancel") {if(OnWheel(State,p.Id))return Reject("You're stuck until the wheel comes round");Cancel(p,"Cancelled");return Ok();}
             if(c.Kind=="Rhythm")return Submit(p,c);
             if(c.Kind=="Reply")return Reply(p,c);
+            if(c.Kind=="EndChat")return EndChat(p,c);
             if(c.Kind=="Chime") {if(p.Life!="Spirit"||!Near(p,24,-20)||State.SimulationSeconds<p.ChimeUntil)return Reject("Chime requires medical memorial and cooldown");p.ChimeUntil=State.SimulationSeconds+10;return Ok("Memorial chime");}
             if(c.Kind=="HelpSelf")return HelpSelf(p);
             if(c.Kind=="BeginRevival"&&p.Life=="Spirit")return Revive(p,c);

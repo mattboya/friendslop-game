@@ -70,7 +70,7 @@ public static class VisionEdgeTests
             var holder=Npc(s,chain[link]);var truth=s.State.Visions.Find(v=>v.Kind=="Clue"&&v.IsTrue&&v.NpcId==holder.Id);string where="link "+link+": ";
             Check(truth!=null,where+"setup: the tripper sees the real clue holder");
             Beside(tripper,holder);var chat=Act(s,tripper.Id,"ConfirmChat",holder.Id);Check(chat.Accepted,where+"setup: the tripper checks them by chat: "+chat.Reason);
-            s.Tick(FestivalSimulation.ConfirmChatSeconds+.1);Check(s.State.CluesRead==link+1,where+"setup: the chat finds the link");
+            Check(Act(s,tripper.Id,"EndChat",tripper.InteractionId).Accepted,where+"end the check");Check(s.State.CluesRead==link+1,where+"setup: the chat finds the link");
             VisionState Seen()=>FestivalSimulation.VisibleVisions(s.State,tripper.Id).Find(v=>v.Id==truth.Id);
             Check(Seen()!=null&&Seen().Confirmed&&Seen().IsTrue,where+"the tripper sees the clue they found say TRUE");
             if(link+1<chain.Count)Check(s.State.Visions.Exists(v=>v.Kind=="Clue"&&v.IsTrue&&!v.Confirmed&&v.NpcId==chain[link+1]),where+"beside the next link's visions");

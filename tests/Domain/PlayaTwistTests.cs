@@ -341,7 +341,7 @@ public static class PlayaTwistTests
         Check(Act(s,"p0","ConfirmChat","wook").Accepted,"setup: p0 starts a chat");
         s.Tick(FestivalSimulation.ConfirmChatSeconds-.5);
         Check(FestivalSimulation.Burning(s.State)&&n.X==21&&n.Z==-20&&p.InteractionId!="","a festivalgoer mid-chat stays to finish it, at ("+n.X+", "+n.Z+")");
-        s.Tick(1);
+        Check(Act(s,p.Id,"EndChat",p.InteractionId).Accepted,"explicitly finish before heading over");s.Tick(1);
         Check(p.InteractionId==""&&s.State.Visions[0].Confirmed,"setup: the chat is done");
         Check(FromEffigy(n.X,n.Z)<FromEffigy(21,-20)-.1,"then it heads for the burn");
     }

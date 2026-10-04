@@ -63,10 +63,10 @@ namespace Festival.Tests
                 Assert.That(window.CanReply(i),Is.True,"reply "+(i+1)+" can be picked");
             }
             Assert.That(window.Header,Does.StartWith("FESTIVALGOER  •  "),"the header names who you're talking to");
-            Assert.That(window.TimeLeft,Is.EqualTo(1).Within(.01),"the whole chat is still ahead");
+            Assert.That(window.TimeLeft,Is.EqualTo(0),"a finite-zero chat check has no time left to count down");
             var view=View(game,tripper.Id);var chat=FestivalChatWindow.LiveChat(view,Me(view,tripper.Id));
             window.Follow(view,Me(view,tripper.Id),chat.StartSeconds+FestivalSimulation.ConfirmChatSeconds/2,0,false);
-            Assert.That(window.TimeLeft,Is.EqualTo(.5f).Within(.01),"halfway through the chat, the bar is half full");
+            Assert.That(window.TimeLeft,Is.EqualTo(0),"elapsed time does not give the untimed check a deadline");
         }
 
         [Test] public void PickingAQuestionAsksItThenTheyTypeTheirAnswer()
@@ -150,7 +150,7 @@ namespace Festival.Tests
                 Assert.That(FestivalChatWindow.TakesReplies(theirs,Me(theirs,friend.Id)),Is.False,friend.Id+" has no chat, so 1-3 equip");
                 Assert.That(FestivalChatWindow.LiveChat(theirs,Me(theirs,friend.Id)),Is.Null,friend.Id+"'s client can't read the tripper's chat");
             }
-            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_check_"+tripper.InteractionId,Kind="EndChat",TargetId=tripper.InteractionId}).Accepted,Is.True);
             view=View(game,tripper.Id);
             Assert.That(FestivalChatWindow.TakesReplies(view,Me(view,tripper.Id)),Is.False,"the chat is over: 1-3 equip again, on the frame the view says so");
             // DIALOG-6: an ended chat lingers until its last line is read (HudTripperTests), long before 30 s.
@@ -164,7 +164,7 @@ namespace Festival.Tests
         {
             var game=Day(out var tripper);var said=Chat(game,tripper);var window=Window();
             Follow(window,game,tripper.Id,0);window.Pick(0);Follow(window,game,tripper.Id,FestivalChatWindow.Typed(said.Answers[0])+.01f);
-            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);Follow(window,game,tripper.Id,30);
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_check_"+tripper.InteractionId,Kind="EndChat",TargetId=tripper.InteractionId}).Accepted,Is.True);Follow(window,game,tripper.Id,30);
             Assert.That(window.Open,Is.False,"setup: the chat is over, and its last line long read (DIALOG-6)");
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+said.Opener,"> "+said.Questions[0],"< "+said.Answers[0]}),"the thread is still on this client");
             var next=Chat(game,tripper,"next_chat");

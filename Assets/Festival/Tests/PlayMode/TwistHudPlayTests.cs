@@ -93,7 +93,7 @@ namespace Festival.Tests
                         if(window.Replies!=0)failures.Add("talking to the VIP guard: the rope chat offers "+window.Replies+" replies");
                     }
                 }
-                yield return new WaitForSeconds((float)FestivalSimulation.ConfirmChatSeconds+.4f-reading);
+                session.Command("EndChat",player.InteractionId);yield return new WaitForSeconds(.4f);
                 if(!Banded())failures.Add("the guard's chat is over and there is no VIP wristband ("+session.Message+")");
 
                 // POLO-2: at the VIP stall's end of the night market's shelves, eyeing the nearest shelf: E stays the shelf's, and
@@ -170,8 +170,8 @@ namespace Festival.Tests
 
                 // POLO-5 (Matt: "the player never goes into it"): halfway round, your eye is up in the gondola the wheel draws, and
                 // Sam sits beside you in it rather than standing or striding in the air. The turn is moved on by starting both rides
-                // earlier.
-                void Started(double ago){foreach(var i in sim.State.Interactions)if(i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")i.StartSeconds=sim.State.SimulationSeconds-ago;}
+                // earlier. The serialized boarding time must stay nonnegative, including after an explicitly ended short chat.
+                void Started(double ago){if(sim.State.SimulationSeconds<ago+1)sim.Tick(ago+1-sim.State.SimulationSeconds);foreach(var i in sim.State.Interactions)if(i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")i.StartSeconds=sim.State.SimulationSeconds-ago;}
                 Started(Festivals.WheelRideSeconds/2);
                 var sam=GameObject.Find(mate.Id);
                 yield return new WaitForSeconds(.5f);

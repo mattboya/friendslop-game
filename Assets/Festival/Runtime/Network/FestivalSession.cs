@@ -49,7 +49,11 @@ namespace Festival.Network
         // true ones are hinted, so the mark tells a truth before it is checked. TRIP-8: snapshots name who found the cloud's stash
         // (RoundState.CloudStashFinderId), for their notice. POI-1: a move intent says whether its player holds the poi spin
         // (MoveIntent.SpinPoi), and snapshots show who is spinning (PlayerState.VisualPoiSpin).
-        public const int ProtocolVersion=5;
+        // 6: wave 2026-10-04, DIALOG-9: Sale, Buy and Conversation reply turns and ConfirmChat use finite-zero untimed
+        // durations. EndChat names an owned active interaction: it completes a valid check or cancels a reply talk with the
+        // existing refund and witness cost. Police replies and trust/rhythm charts retain their deadlines. Version 5 peers
+        // cannot interpret these durations or commands and are rejected. Later wave units append their actual version-6 changes.
+        public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
@@ -175,6 +179,9 @@ namespace Festival.Network
             {
                 token="";endpoint="127.0.0.1:"+port;peers.Clear();tokens.Clear();inputs.Clear();pending.Clear();
                 simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);Profile.ApplyUnlocks(simulation.State);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                simulation.ChatDiagnostic=DevelopmentDiagnostics.Transition;
+#endif
                 simulation.HasLineOfSight=LineOfSight;
                 simulation.Navigate=Navigate;
                 // TRIP-7: each level's hidden deal is mixed with a fresh secret no view carries. A Guid, never System.Random, which

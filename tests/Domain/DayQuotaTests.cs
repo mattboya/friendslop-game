@@ -21,13 +21,13 @@ public static class DayQuotaTests
     }
     static void AtGate(PlayerState p){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
     static void Sundown(FestivalSimulation s){s.State.ElapsedSeconds=s.State.DurationSeconds-.05;s.Tick(.1);}
-    // Sell one stock to a buyer, played perfectly (perform false leaves every turn silent, a botched sale). Returns the cash it paid.
+    // Sell one stock to a buyer, played perfectly (perform false picks every awkward reply, a botched sale). Returns the cash it paid.
     static int Sell(FestivalSimulation s,string id,string buyer,bool perform=true)
     {
         var p=s.Player(id);var npc=s.State.Npcs.Find(n=>n.Id==buyer);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         int before=p.Cash;Check(Act(s,id,"StartSale",buyer,"stock_lsd").Accepted,id+" starts a sale to "+buyer);
         var sale=s.Interaction(p.InteractionId);
-        for(int guard=0;sale.Status=="Active"&&guard<200;guard++){if(perform)Perfectly(s,sale);s.Tick(.1);}
+        for(int guard=0;sale.Status=="Active"&&guard<200;guard++){if(perform)Perfectly(s,sale);else if(sale.Turns.Count>0){var turn=sale.Turns[sale.Turns.Count-1];Check(s.Execute(id,new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Awkward),Direction=sale.Turns.Count-1}).Accepted,"reply awkwardly to the buyer");}s.Tick(.1);}
         Check(sale.Status=="Complete","the sale to "+buyer+" settles");return p.Cash-before;
     }
     // DIALOG-3: plays a live talk perfectly as far as it has got: every note of a trust dance, then the smooth reply each turn.

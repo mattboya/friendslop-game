@@ -43,7 +43,7 @@ public static class GroupDanceTests
         }
         Check(done(),"the live dance reaches its checkpoint");
     }
-    static void Finish(FestivalSimulation s,InteractionState i){for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);Check(i.Status=="Complete",i.Kind+" completes");}
+    static void Finish(FestivalSimulation s,InteractionState i){while(i.Status=="Active"&&i.Turns.Count>0&&i.Kind!="Police"){var turn=i.Turns[i.Turns.Count-1];Check(s.Execute(i.PlayerId,new GameCommand{Id="group"+(sequence++),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Awkward),Direction=i.Turns.Count-1}).Accepted,"finish an ordinary talk with awkward replies");}for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);Check(i.Status=="Complete",i.Kind+" completes");}
     // DIALOG-3: the talker gives the smooth reply on every turn left in their talk.
     static void Smooth(FestivalSimulation s,InteractionState i){while(i.Status=="Active"&&i.Turns.Count>0){var t=i.Turns[i.Turns.Count-1];Check(s.Execute(i.PlayerId,new GameCommand{Id="group"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=i.Turns.Count-1}).Accepted,i.PlayerId+" replies smoothly");}}
 
@@ -121,14 +121,14 @@ public static class GroupDanceTests
         // watchers, once. One whose talk ended before the Dance's verdict stands idle by then, and counts as not dancing.
         foreach(var kind in new[]{"StartSale","Conversation","Police"})
         {
-            // Reference: the same talk left silent, with no crew member nearby, raises suspicion by 20.
+            // Reference: the same talk answered awkwardly (Police may stay silent), with no crew member nearby, raises suspicion by 20.
             s=Crew(kind);Place(s,"a",-20,0);var talk=Start(s,"b",kind);Finish(s,talk);
-            Check(talk.Score==0&&Heat(s,"b")==40,kind+": a silent talk alone raises suspicion by 20 (b="+Heat(s,"b")+")");
+            Check(talk.Score==0&&Heat(s,"b")==40,kind+": an awkward or silent Police talk alone raises suspicion by 20 (b="+Heat(s,"b")+")");
 
             // Still talking when the Dance finishes: left out, then settled once by their own talk.
             s=Crew(kind);dance=Start(s,"a");Hit(dance,0,8);talk=Start(s,"b",kind);Finish(s,dance);
             Check(talk.Status=="Active"&&Heat(s,"a")==solo&&Heat(s,"b")==20,kind+": a friend still talking neither drags the dancer down nor is charged by the Dance (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
-            Finish(s,talk);Check(Heat(s,"b")==40&&Heat(s,"a")==solo,kind+": the friend settles once, through their own silent talk (a="+Heat(s,"a")+", b="+Heat(s,"b")+")");
+            Finish(s,talk);Check(Heat(s,"b")==40&&Heat(s,"a")==solo,kind+": the friend settles once, through their own awkward talk (a="+Heat(s,"a")+", b="+Heat(s,"b")+")");
 
             // A smooth talk over before the Dance's verdict: the friend stands idle by then, so the group fails.
             s=Crew(kind);dance=Start(s,"a");Hit(dance,0,8);talk=Start(s,"b",kind);Smooth(s,talk);Finish(s,dance);

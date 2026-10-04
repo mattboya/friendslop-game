@@ -1,13 +1,13 @@
 namespace Festival.Core
 {
-    /// <summary>TRIP-3: the tripper checks a vision in person. A ConfirmChat takes ConfirmChatSeconds and is safe; the festivalgoer's
+    /// <summary>TRIP-3: the tripper checks a vision in person. A ConfirmChat waits for EndChat and is safe; the festivalgoer's
     /// answers (DialogueGrammar) carry their role's tells. A ConfirmDance is a four-note phrase whose verdict lands sooner, but like
     /// any dance a score under .6 draws the watchers' suspicion. Either way every vision about them is confirmed, so its truth
     /// reaches the tripper (VisibleVisions), and a true clue holder moves the night's trail on (ConfirmVisionsOf).</summary>
     public sealed partial class FestivalSimulation
     {
-        // A chat check takes this long; the tripper stands within ConfirmReach of the festivalgoer to start either check.
-        // DIALOG-5: 8 s, long enough to ask two of the three questions in the chat window and read both answers.
+        // Legacy reading estimate retained for source compatibility; DIALOG-9 checks have no deadline.
+        // The tripper stands within ConfirmReach of the festivalgoer to start either check.
         public const double ConfirmChatSeconds=8,ConfirmReach=2.5;
         // Four notes half a second apart: 2 s of steps after the chart's lead-in, with no countdown, so the verdict lands in
         // 4.75 s (the chart's 4 s plus the .75 s every rhythm verdict waits for late input), well ahead of a chat.
@@ -34,7 +34,7 @@ namespace Festival.Core
             if(Engaged(State,npc))return Reject(WorkedUp(npc)?"They're too worked up to stop for you":"NPC is busy");
             if(c.Kind=="ConfirmChat")
             {
-                var chat=NewInteraction(p,c.Kind,npc.Id,ConfirmChatSeconds);
+                var chat=NewInteraction(p,c.Kind,npc.Id,0);
                 // POLO-4: a chat that checks no vision is the VIP guard talking p past the rope, built without their role. DIALOG-4: either
                 // steers clear of lines p heard lately, and p remembers what it said.
                 string persona=DialogueGrammar.PersonaFor(npc.Id,npc.Twist);

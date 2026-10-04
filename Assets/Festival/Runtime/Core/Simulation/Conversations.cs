@@ -3,8 +3,9 @@ namespace Festival.Core
 {
     /// <summary>DIALOG-3: selling (Sale), buying (Buy, ECON-2), chatting (Conversation) and talking to security (Police) are talks,
     /// not dances. A talk is ConversationTurns turns: they say a line (their reaction to your last reply first), and you pick one
-    /// of three replies with the Reply command (Amount the reply 0-2, Direction the turn) before ReplySeconds run out, or say
-    /// nothing. One reply is smooth, one so-so and one awkward by the taste of whoever you're talking to (ConversationLines),
+    /// of three replies with the Reply command (Amount the reply 0-2, Direction the turn). DIALOG-9 waits for each pick;
+    /// only Police turns count silence after ReplySeconds. One reply is smooth, one so-so and one awkward by the person's taste
+    /// (ConversationLines),
     /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
     /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
     /// watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
@@ -52,21 +53,21 @@ namespace Festival.Core
             var i=Interaction(p.InteractionId);
             if(i==null||i.Status!="Active"||!Talks(i.Kind)||i.Turns.Count==0)return Reject("No conversation to reply in");
             var turn=i.Turns[i.Turns.Count-1];
-            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject("Too late: that moment has passed");
+            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject("Too late: that moment has passed");
             if(c.Amount<0||c.Amount>2)return Reject("Pick reply 1, 2 or 3");
             turn.Pick=c.Amount;
             if(i.Turns.Count<ConversationTurns)AddTurn(i,p);else FinishInteraction(i,p);
             return Ok(i.Status=="Police bust"?NarcBust:"Accepted");
         }
-        // The next turn, drawn from its own stream of the talk's seed, due ReplySeconds after the last ended: at its reply, or
-        // when its time ran out (so silent turns keep a steady beat whatever the tick).
+        // The next turn, drawn from its own stream of the talk's seed. Only Police gives it a ReplySeconds deadline;
+        // silent Police turns keep a steady beat whatever the tick. Other talks use finite zero for untimed duration.
         void AddTurn(InteractionState i,PlayerState p)
         {
             int t=i.Turns.Count;var npc=State.Npcs.Find(n=>n.Id==i.TargetId);string role=npc?.Role??"";
             string persona=i.Kind=="Police"?ConversationLines.Security:DialogueGrammar.PersonaFor(i.TargetId,npc?.Twist??"");
             int dose=DoseOf(p);var random=new ContentRandom(TurnSeed(i,t));bool clear=t>0&&Told(random,i.Turns[t-1]);
             i.Turns.Add(ConversationLines.Turn(ConversationLines.Topic(i.Kind),persona,role,State.FestivalIndex,t,t==0?-1:Graded(i.Turns[t-1]),clear,dose>=3?2:dose>=1?1:0,random,p.Dialogue));
-            i.DurationSeconds=Math.Min(State.SimulationSeconds,i.StartSeconds+i.DurationSeconds)+ReplySeconds-i.StartSeconds;
+            i.DurationSeconds=UntimedChat(i)?0:Math.Min(State.SimulationSeconds,i.StartSeconds+i.DurationSeconds)+ReplySeconds-i.StartSeconds;
             if(t==ConversationTurns-1&&(i.Kind=="Conversation"||i.Kind=="Buy"))i.Hunch=Hunch(i,role);
         }
         static int TurnSeed(InteractionState i,int t)=>unchecked(i.ChartSeed*31+t);

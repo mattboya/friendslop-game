@@ -265,7 +265,7 @@ public static class PoloTwistTests
         var expected=DialogueGrammar.Rope(guardPersona,0,chatSeed,friendHeard);
         Check(expected.Opener==said.Opener&&expected.Doorman==said.Doorman&&friendHeard.Seen.Count>0&&friend.Dialogue.Seen.SequenceEqual(friendHeard.Seen),"the friend's history holds what the guard said, got "+string.Join(", ",friend.Dialogue.Seen));
         s.Tick(FestivalSimulation.ConfirmChatSeconds-.1);Check(Bands(friend)==0,"not in yet "+(FestivalSimulation.ConfirmChatSeconds-.1)+" s in");
-        s.Tick(.2);Check(Bands(friend)==1,"after the "+FestivalSimulation.ConfirmChatSeconds+" s chat they wear a VIP wristband");
+        Check(Act(s,friend.Id,"EndChat",friend.InteractionId).Accepted,"finish the rope chat");Check(Bands(friend)==1,"after ending the chat they wear a VIP wristband");
         Check(!planted.Confirmed,"the friend's chat checks none of the tripper's visions");
         var again=Act(s,friend.Id,"ConfirmChat",guard.Id);
         Check(!again.Accepted&&again.Reason.Contains("already"),"one wristband is enough: "+again.Reason);
@@ -274,7 +274,7 @@ public static class PoloTwistTests
         Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper talks to the guard too");
         Check(s.Interaction(tripper.InteractionId).Chat.Questions.Length==3,"the tripper's chat checks their vision of the guard, so it asks the three questions");
         s.Tick(2);tripper.X=guard.X+5;s.Tick(.1);Check(tripper.InteractionId==""&&Bands(tripper)==0,"walking off mid-chat gets nothing");
-        Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper tries again");s.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
+        Beside(tripper,guard);Check(Act(s,tripper.Id,"ConfirmChat",guard.Id).Accepted,"setup: the tripper tries again");Check(Act(s,tripper.Id,"EndChat",tripper.InteractionId).Accepted,"finish the tripper rope chat");
         Check(Bands(tripper)==1&&planted.Confirmed,"the tripper talks their way in, and their chat checks their vision of the guard");
 
         var crowded=Start(3,0,0);var full=crowded.State.Players.Find(p=>p.Id!=crowded.State.TripperId);var doorman=Tagged(crowded,FestivalSimulation.VipGuard)[0];

@@ -122,7 +122,7 @@ namespace Festival.Tests
             Assert.That(started.Accepted,Is.True,"the sim takes the check the HUD offers: "+started.Reason);
             mine=FestivalSession.ViewFor(game,tripper.Id);
             Assert.That(FestivalHudText.CheckTarget(mine,Me(mine,tripper.Id)),Is.Null,"nothing more to offer while checking");
-            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_check_"+tripper.InteractionId,Kind="EndChat",TargetId=tripper.InteractionId}).Accepted,Is.True);
             mine=FestivalSession.ViewFor(game,tripper.Id);
             Assert.That(FestivalHudText.CheckTarget(mine,Me(mine,tripper.Id))?.Id,Is.Not.EqualTo(npc.Id),"a checked vision is not offered again");
         }
@@ -213,7 +213,7 @@ namespace Festival.Tests
                 Assert.That(FestivalChatWindow.LiveChat(view,Me(view,viewer.Id)),Is.Null,viewer.Id+" has no chat to read");
                 Assert.That(FestivalChatWindow.TakesReplies(view,Me(view,viewer.Id)),Is.False,viewer.Id+"'s 1-3 still equip");
             }
-            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
+            Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_check_"+tripper.InteractionId,Kind="EndChat",TargetId=tripper.InteractionId}).Accepted,Is.True);
             mine=FestivalSession.ViewFor(game,tripper.Id);
             // DIALOG-6: an ended chat stays up only until its last answer is read (below), long before 30 s.
             Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,30,false)||window.Open,Is.False,"the window closes after the chat");
@@ -272,7 +272,7 @@ namespace Festival.Tests
             game.Tick(FestivalSimulation.ConfirmChatSeconds-.1);
             Assert.That(Follow(window,game,tripper,20),Is.True,"setup: .1 s before the chat ends");
             Assert.That(window.Pick(0),Is.True,"setup: 1 asks the first question");
-            game.Tick(.12);
+            game.Tick(.12);Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_last_answer",Kind="EndChat",TargetId=id}).Accepted,Is.True);
             Assert.That(game.Interaction(id).Status,Is.EqualTo("Complete"),"setup: the chat ended .1 s after the question");
             ExpectItStaysUntilRead(game,tripper,window,said.Answers[0],20,20.1f);
         }
@@ -337,7 +337,7 @@ namespace Festival.Tests
             Assert.That(window.Pick(0)||window.Pick(1)||window.Pick(2),Is.False,"1-3 pick nothing");
             Assert.That(window.Bubbles,Is.EqualTo(2));
 
-            game.Tick(FestivalSimulation.ConfirmChatSeconds+.1);
+            Assert.That(game.Execute(sober.Id,new GameCommand{Id="end_rope",Kind="EndChat",TargetId=sober.InteractionId}).Accepted,Is.True);
             game.State.Visions.Add(new VisionState{Id="planted",Kind="Buyer",NpcId=guard.Id,Tell=true});
             tripper.X=guard.X+.6f;tripper.Z=guard.Z;
             started=game.Execute(tripper.Id,new GameCommand{Id="rope_check",Kind="ConfirmChat",TargetId=guard.Id});

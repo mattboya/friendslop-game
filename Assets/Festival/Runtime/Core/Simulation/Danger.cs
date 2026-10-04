@@ -22,7 +22,11 @@ public sealed partial class FestivalSimulation {
         foreach(var p in State.Players){foreach(var e in p.Effects.ToArray()){e.RemainingSeconds-=dt;if(e.RemainingSeconds<=0)p.Effects.Remove(e);}if(p.Life=="Downed"){p.DownedRemaining-=dt;if(p.DownedRemaining<=0)Die(p);}if(p.DragTargetId!=""){var target=Player(p.DragTargetId);if(p.Life!="Alive"||target==null||target.Life!="Downed")p.DragTargetId="";}}
         // Evidence/arrests precede all financial settlement within a simulation tick.
         RideArtCars();foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);Film(dt);GatherAtBurn(dt);
-        foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0))FinishInteraction(i,p);}
+        foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0)){
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(Talks(i.Kind))ChatDiagnostic?.Invoke("ChatTimeout",i.Kind,State.RoundId,State.SimulationSeconds);
+#endif
+            FinishInteraction(i,p);}}
         Escort(State.FriendFound,State.FriendPosition,ref State.FriendLeaderId,dt);Escort(State.SecondFriend.Found,State.SecondFriend.Position,ref State.SecondFriend.LeaderId,dt);
         FindStashes();WatchClouds();DropFoundClues();HintVisions();BodiesTick();if(State.Phase=="Playing"&&!EndIfLevelOver())WatchBooth(dt);
     }

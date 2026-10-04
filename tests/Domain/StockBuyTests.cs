@@ -34,9 +34,9 @@ public static class StockBuyTests
     static double Suspicion(NpcState n,PlayerState p)=>n.Observers.Find(o=>o.PlayerId==p.Id)?.Suspicion??0;
     // p asks npc for the kind it sells (or `item`), standing a metre in front of it and looking off to the side.
     static CommandResult Ask(FestivalSimulation s,PlayerState p,NpcState npc,string item=null){p.X=npc.X;p.Z=npc.Z-1;p.Yaw=90;return Act(s,p.Id,"StartBuy",npc.Id,item??FestivalSimulation.SellerStock(npc.Id));}
-    const int Smooth=ConversationLines.Smooth,SoSo=ConversationLines.SoSo,Silence=ConversationLines.Silence;
+    const int Smooth=ConversationLines.Smooth,SoSo=ConversationLines.SoSo,Awkward=ConversationLines.Awkward;
     // DIALOG-3: talks p's buy through, dancing every note first if the seller asks for a trust dance, then giving a reply of each
-    // grade as its turn comes (Silence lets the turn run out), and waits for it to settle.
+    // grade as its turn comes (every turn needs a pick), and waits for it to settle.
     static InteractionState Talk(FestivalSimulation s,PlayerState p,params int[] grades)
     {
         var i=s.Interaction(p.InteractionId);
@@ -45,7 +45,6 @@ public static class StockBuyTests
         {
             for(int guard=0;i.Status=="Active"&&i.Turns.Count==0&&guard<100;guard++)s.Tick(.1);
             int turn=i.Turns.Count;
-            if(grade==Silence){for(int guard=0;i.Status=="Active"&&i.Turns.Count==turn&&guard<100;guard++)s.Tick(.1);continue;}
             var t=i.Turns[turn-1];Check(s.Execute(p.Id,new GameCommand{Id="stockbuy"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,grade),Direction=turn-1}).Accepted,"setup: "+p.Id+" replies");
         }
         for(int guard=0;i.Status=="Active"&&guard<300;guard++)s.Tick(.1);
@@ -117,7 +116,7 @@ public static class StockBuyTests
             Check(Count(p,kind)==1&&p.Cash==15&&p.EquippedItemId==kind&&seller.StockSold==1,who+": a perfect buy hands over one unit, in hand, for $5 (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
             // A botched buy, a cancelled one and one walked away from all give the $5 back and no unit.
-            Check(Ask(s,p,seller).Accepted,who+": a second buy starts");var missed=Talk(s,p,Silence,Silence,Silence);
+            Check(Ask(s,p,seller).Accepted,who+": a second buy starts");var missed=Talk(s,p,Awkward,Awkward,Awkward);
             Check(missed.Score<.4&&Count(p,kind)==1&&p.Cash==15&&seller.StockSold==1,who+": a botched buy refunds the $5 (cash $"+p.Cash+")");
             Check(Ask(s,p,seller).Accepted&&p.Cash==10,who+": a third buy holds the $5");
             Check(Act(s,p.Id,"Cancel").Accepted&&p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": cancelling refunds it (cash $"+p.Cash+")");
@@ -126,7 +125,7 @@ public static class StockBuyTests
             Check(p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": walking off refunds it (cash $"+p.Cash+")");
 
             // A sloppy buy that lands still buys.
-            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,SoSo,Silence);
+            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,SoSo,Awkward);
             Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": smooth, so-so and a silence is a sloppy buy, score "+sloppy.Score);
             Check(Count(p,kind)==2&&p.Cash==10&&seller.StockSold==2,who+": a sloppy buy hands over a unit too (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 

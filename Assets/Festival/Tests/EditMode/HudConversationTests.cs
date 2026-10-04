@@ -58,11 +58,12 @@ namespace Festival.Tests
         static string[] Thread(FestivalChatWindow window){var lines=new List<string>();for(int i=0;i<window.Bubbles;i++)lines.Add((window.IsNote(i)?"= ":window.IsTheirs(i)?"< ":"> ")+window.Shown(i));return lines.ToArray();}
         static int Smooth(ConversationTurn turn)=>System.Array.IndexOf(turn.Grades,ConversationLines.Smooth);
 
-        [Test] public void ATalkOpensOnTheirLineWithThreeNumberedRepliesAndACountdown()
+        [Test] public void ASecurityTalkOpensOnTheirLineWithThreeNumberedRepliesAndACountdown()
         {
-            var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);var first=talk.Turns[0];
+            var game=Day(out var you,out _);var them=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=them.X+.3f;you.Z=them.Z;
+            var talk=Talk(game,you,them,"Police");var window=Window(game,you);var first=talk.Turns[0];
             Assert.That(Follow(window,game,you.Id,0),Is.True,"a talk opens the window");
-            Assert.That(window.Header,Is.EqualTo(FestivalChatWindow.TalkHeader),"its title line says what a chat is for");
+            Assert.That(window.Header,Is.EqualTo(FestivalChatWindow.SecurityHeader),"its title line says what a security talk is for");
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+first.Line}),"their line, whole at once: the time to answer is already running");
             Assert.That(window.Replies,Is.EqualTo(3),"your three replies");
             for(int i=0;i<3;i++)
@@ -96,14 +97,15 @@ namespace Festival.Tests
             Follow(window,game,you.Id,.1f);
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+first.Line,"> "+first.Replies[1],"< "+next.Reaction,"< "+next.Line}),"then their reaction to it and their next line");
             for(int i=0;i<3;i++)Assert.That(window.CanReply(i)&&window.ReplyLabel(i)==next.Replies[i],Is.True,"and the next turn's reply "+(i+1)+" to pick");
-            Assert.That(window.TimeLeft,Is.EqualTo(1).Within(.01),"with the whole time to answer it");
+            Assert.That(window.TimeLeft,Is.EqualTo(0),"the next ordinary-chat reply has no deadline");
             window.Pick(Smooth(next));
             Assert.That(sent.Count==2&&sent[1].Accepted&&next.Pick==Smooth(next),Is.True,"turn 2's pick is turn 2's Reply");
         }
 
         [Test] public void ATurnLeftUnansweredGoesBySilently()
         {
-            var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);var first=talk.Turns[0];
+            var game=Day(out var you,out _);var them=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=them.X+.3f;you.Z=them.Z;
+            var talk=Talk(game,you,them,"Police");var window=Window(game,you);var first=talk.Turns[0];
             Follow(window,game,you.Id,0);
             game.Tick(FestivalSimulation.ReplySeconds+.1);
             Assert.That(talk.Turns.Count==2&&first.Pick<0,Is.True,"setup: the turn ran out with no reply");
@@ -112,6 +114,17 @@ namespace Festival.Tests
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+first.Line,"< "+next.Reaction,"< "+next.Line}),"nothing on your side, then their reaction to the silence");
             for(int i=0;i<3;i++)Assert.That(window.CanReply(i)&&window.ReplyLabel(i)==next.Replies[i],Is.True,"the next turn's reply "+(i+1)+" to pick");
             Assert.That(sent,Is.Empty,"and nothing was sent");
+        }
+
+        [Test] public void AnOrdinaryTalkKeepsItsFirstRepliesAfterSixtySeconds()
+        {
+            var game=Day(out var you,out var them);var talk=Talk(game,you,them);var first=talk.Turns[0];var window=Window(game,you);
+            Follow(window,game,you.Id,0);game.Tick(60);
+            Assert.That(Follow(window,game,you.Id,60),Is.True,"the real client window still follows the talk");
+            Assert.That(talk.Turns.Count,Is.EqualTo(1),"no silent turn was invented");
+            for(int reply=0;reply<3;reply++)Assert.That(window.CanReply(reply)&&window.ReplyLabel(reply)==first.Replies[reply],Is.True,"the original choice remains available");
+            Assert.That(window.Pick(0)&&sent[0].Accepted,Is.True,"a pick after reading reaches the authority");
+            Assert.That(first.Pick,Is.EqualTo(0));
         }
 
         // V12 sets the hunch as a chat's or a buy's last turn begins; the window keeps it, and shows it once the talk is over, as the

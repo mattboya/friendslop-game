@@ -263,7 +263,8 @@ namespace Festival.Tests
                     }
                     session.MenuOpen=false;
                     // DIALOG-6: once the chat is over, the window stays only until its last answer has been read.
-                    float gone=Time.realtimeSinceStartup+(float)FestivalSimulation.ConfirmChatSeconds+15;
+                    session.Command("EndChat",player.InteractionId);
+                    float gone=Time.realtimeSinceStartup+15;
                     while(window!=null&&window.Open&&Time.realtimeSinceStartup<gone)yield return null;
                     if(window!=null&&window.Open)failures.Add("chat check done: the chat window still shows");
                     Expect("chat check done","Equipment heading",GearKeys);
@@ -300,9 +301,10 @@ namespace Festival.Tests
                     ExpectReplies("second chat check",said.Questions,true,true,true);
                     // DIALOG-6: 1 asked .2 s before the chat ends leaves their answer readable 1.5 s after it ended, in the window headed
                     // CHAT OVER with nothing left to ask, while 2 equips; once it is whole, G closes the window and drops nothing.
-                    double end=again.StartSeconds+again.DurationSeconds;string answer=said.Answers[0];
-                    while(sim.State.SimulationSeconds<end-.2)yield return null;
+                    double end=sim.State.SimulationSeconds+.2;string answer=said.Answers[0];
                     yield return Tap(Key.Digit1);
+                    while(sim.State.SimulationSeconds<end)yield return null;
+                    session.Command("EndChat",again.Id);
                     while(sim.State.SimulationSeconds<end+1.5)yield return null;
                     string where="1.5 s after a chat ended .2 s after 1 asked";
                     if(again.Status=="Active")failures.Add(where+": the chat is still on");
@@ -323,7 +325,7 @@ namespace Festival.Tests
                         if(window.Open)failures.Add(where+": G doesn't close the chat window");
                         if(player.Inventory.Sum(i=>i.Count)!=carried||sim.State.Drops.Count!=dropped)failures.Add(where+": G closing the chat window dropped something");
                     }
-                    // That chat ran its course and checked them, so you get a new vision about them to check.
+                    // That chat was ended explicitly and checked them, so you get a new vision about them to check.
                     sim.State.Visions.Add(new VisionState{Id="hud_vision_again",Kind="Buyer",NpcId=npc.Id});
                 }
 

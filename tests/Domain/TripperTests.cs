@@ -196,8 +196,8 @@ public static class TripperTests
         var tripper=Tripper(s);
         foreach(var v in s.State.Visions.FindAll(x=>x.NpcId!="").Take(3))
         {
-            var n=s.State.Npcs.Find(x=>x.Id==v.NpcId);tripper.X=n.X+.8f;tripper.Z=n.Z;Act(s,tripper.Id,"ConfirmChat",target:n.Id);
-            for(int guard=0;guard<80&&tripper.InteractionId!="";guard++)s.Tick(.1);
+            var n=s.State.Npcs.Find(x=>x.Id==v.NpcId);tripper.X=n.X+.8f;tripper.Z=n.Z;var started=Act(s,tripper.Id,"ConfirmChat",target:n.Id);
+            if(started.Accepted)Check(Act(s,tripper.Id,"EndChat",target:tripper.InteractionId).Accepted,"setup: end the accepted check explicitly");
         }
         bool checkedOne=s.State.Visions.Exists(v=>v.Confirmed);
         foreach(var p in s.State.Players)for(int step=0;step<20;step++){for(float stride=.7f;stride>.2f&&!s.TryMove(p.Id,p.X+stride,p.Z,90,.1);stride-=.05f){}s.Tick(.1);}

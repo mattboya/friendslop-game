@@ -12,7 +12,7 @@ public static class CrowdTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{()=>PursuersDoNotStepInsideEachOther(false,false),()=>PursuersDoNotStepInsideEachOther(false,true),()=>PursuersDoNotStepInsideEachOther(true,false),()=>PursuersDoNotStepInsideEachOther(true,true),PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
+        foreach(var scenario in new Action[]{()=>PursuersDoNotStepInsideEachOther(false,false),()=>PursuersDoNotStepInsideEachOther(false,true),()=>PursuersDoNotStepInsideEachOther(true,false),()=>PursuersDoNotStepInsideEachOther(true,true),PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,AwkwardChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -109,11 +109,11 @@ public static class CrowdTests
     // DIALOG-3: p0 gives the smooth reply on every turn of a chat.
     static void Smooth(FestivalSimulation s,InteractionState i){while(i.Status=="Active"&&i.Turns.Count>0){var t=i.Turns[i.Turns.Count-1];Check(s.Execute("p0",new GameCommand{Id="crowd"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=i.Turns.Count-1}).Accepted,"p0 replies smoothly");}}
 
-    // A chat left silent (+20) counts x1.7 in a pack of four.
-    static void MissedChatScales()
+    // An all-awkward chat (+20) counts x1.7 in a pack of four.
+    static void AwkwardChatScales()
     {
-        double Missed(int crew){var s=Pack(crew);Finish(s,Start(s,"Conversation"));return Heat(s,0)-20;}
-        Check(Missed(1)==20&&Missed(2)==20&&Same(Missed(4),34),"a silent chat: +20 alone or in a pair, +34 in a pack of four (got "+Missed(1)+", "+Missed(2)+", "+Missed(4)+")");
+        double Missed(int crew){var s=Pack(crew);var chat=Start(s,"Conversation");while(chat.Status=="Active"){var turn=chat.Turns[chat.Turns.Count-1];Check(s.Execute("p0",new GameCommand{Id="crowd"+(sequence++),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Awkward),Direction=chat.Turns.Count-1}).Accepted,"p0 replies awkwardly");}Finish(s,chat);return Heat(s,0)-20;}
+        Check(Missed(1)==20&&Missed(2)==20&&Same(Missed(4),34),"an all-awkward chat: +20 alone or in a pair, +34 in a pack of four (got "+Missed(1)+", "+Missed(2)+", "+Missed(4)+")");
     }
     // A smooth chat (-15) is not a gain, so a pack does not change it.
     static void GoodChatIsNotScaled()

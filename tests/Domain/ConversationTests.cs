@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 using Festival.Core;
 
 // DIALOG-3: selling, buying, chatting and talking to security are conversations, not dances. Each is three turns: they say a
-// line and you pick one of three replies (1-3) within ReplySeconds, or say nothing. One reply is smooth, one so-so and one
+// line and you pick one of three replies (1-3). Only Police replies time out after ReplySeconds. One reply is smooth, one so-so and one
 // awkward, by the taste of the person you're talking to, which their opener hints at; a dose garbles some. The average of
 // the turns is the talk's score, and settles it as the dance did. A wary festivalgoer asks for a dance first.
 public static class ConversationTests
@@ -49,13 +49,13 @@ public static class ConversationTests
     static ConversationTurn Live(InteractionState i)=>i.Turns[i.Turns.Count-1];
     // Picks the live turn's reply of this grade.
     static CommandResult Say(FestivalSimulation s,InteractionState i,int grade)=>Act(s,"p0","Reply",amount:Array.IndexOf(Live(i).Grades,grade),direction:i.Turns.Count-1);
-    // The talk, a grade a turn (Silence lets the turn run out), then ticks until it settles.
+    // The talk, a grade a turn (only Police Silence lets the turn run out), then ticks until it settles.
     static InteractionState Talk(FestivalSimulation s,InteractionState i,params int[] grades)
     {
         foreach(int grade in grades)
         {
             int turn=i.Turns.Count;
-            if(grade==Silence){for(int guard=0;i.Status=="Active"&&i.Turns.Count==turn&&guard<100;guard++)s.Tick(.1);continue;}
+            if(grade==Silence&&i.Kind=="Police"){for(int guard=0;i.Status=="Active"&&i.Turns.Count==turn&&guard<100;guard++)s.Tick(.1);continue;}
             var said=Say(s,i,grade);Check(said.Accepted,"setup: reply "+grade+" on turn "+turn+": "+said.Reason);
         }
         for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
@@ -63,11 +63,11 @@ public static class ConversationTests
     }
     static string Text(ConversationTurn t)=>t.Reaction+"|"+t.Line+"|"+string.Join("|",t.Replies)+"|"+string.Join(",",t.Grades)+"|"+string.Join(",",t.Garbled);
 
-    // Every talk opens on their line and your three replies, one of each grade, timed by ReplySeconds. Each reply brings the next
+    // Every talk opens on their line and your three replies, one of each grade, timed only for Police. Each reply brings the next
     // turn, their reaction then their line; the third ends the talk. A talk takes no notes.
     static void EachTalkIsThreeTurnsOfThreeReplies()
     {
-        Check(FestivalSimulation.ConversationTurns==3&&FestivalSimulation.ReplySeconds==4,"a talk is 3 turns of 4 s");
+        Check(FestivalSimulation.ConversationTurns==3&&FestivalSimulation.ReplySeconds==4,"a talk is 3 turns; Police replies keep 4 s");
         foreach(var kind in Kinds)
         {
             var s=Pair(kind);var i=Start(s,kind);
@@ -75,7 +75,7 @@ public static class ConversationTests
             var first=Live(i);
             Check(first.Line!=""&&first.Reaction==""&&first.Replies.Length==3&&first.Replies.All(r=>!string.IsNullOrWhiteSpace(r))&&first.Pick==-1,"a "+kind+"'s first turn: their line and three replies, nothing picked ("+Text(first)+")");
             Check(string.Join(",",first.Grades.OrderBy(g=>g))=="0,1,2"&&first.Garbled.All(g=>!g),"one smooth, one so-so and one awkward reply, none garbled sober ("+Text(first)+")");
-            Check(Math.Abs(i.StartSeconds+i.DurationSeconds-(s.State.SimulationSeconds+FestivalSimulation.ReplySeconds))<1e-9,"the reply is due in ReplySeconds");
+            Check(kind=="Police"?Math.Abs(i.StartSeconds+i.DurationSeconds-(s.State.SimulationSeconds+FestivalSimulation.ReplySeconds))<1e-9:i.DurationSeconds==0,"only Police replies are due in ReplySeconds; other talks have finite zero duration");
             Check(!Act(s,"p0","Rhythm",direction:0,amount:0).Accepted,"a "+kind+" takes no notes");
             Check(Say(s,i,SoSo).Accepted&&i.Turns.Count==2&&first.Pick>=0&&first.Grades[first.Pick]==SoSo,"a reply is kept and brings the second turn");
             Check(Live(i).Reaction!=""&&Live(i).Line!="","the second turn opens on their reaction and a line ("+Text(Live(i))+")");
@@ -109,6 +109,7 @@ public static class ConversationTests
         var samey=new List<string>();
         foreach(var persona in DialogueGrammar.Personas.Concat(new[]{ConversationLines.Security}))foreach(int grade in new[]{Smooth,SoSo,Awkward,Silence})
         {
+            if(grade==Silence&&persona!=ConversationLines.Security)continue;
             var heard=Reactions(persona,grade,30);int soonest=int.MaxValue;
             for(int k=1;k<heard.Count;k++){int last=heard.LastIndexOf(heard[k],k-1);if(last>=0)soonest=Math.Min(soonest,k-last);}
             int distinct=heard.Distinct().Count();
@@ -178,16 +179,16 @@ public static class ConversationTests
         }
     }
 
-    // Smooth scores 1, so-so .5 and awkward or silence 0, averaged over the three turns. Silence lets each turn run its 4 s.
+    // Smooth scores 1, so-so .5 and awkward or silence 0, averaged over the three turns. Only Police silence lets each turn run its 4 s.
     static void ATalkScoresTheAverageOfItsReplies()
     {
         foreach(var kind in Kinds)
         {
             var s=Pair(kind);var all=Talk(s,Start(s,kind),Smooth,Smooth,Smooth);Check(all.Score==1,"an all-smooth "+kind+" scores 1, got "+all.Score);
-            s=Pair(kind);var i=Start(s,kind);double began=s.State.SimulationSeconds;Talk(s,i,Silence,Silence,Silence);
-            Check(i.Score==0&&i.Turns.All(t=>t.Pick==-1),"an all-silent "+kind+" scores 0, got "+i.Score);
-            Check(Math.Abs(s.State.SimulationSeconds-began-3*FestivalSimulation.ReplySeconds)<.11,"three silent turns run 12 s ("+(s.State.SimulationSeconds-began)+")");
-            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Silence);Check(Math.Abs(mixed.Score-.5)<1e-9,"smooth, so-so and silence average .5, got "+mixed.Score);
+            s=Pair(kind);var i=Start(s,kind);double began=s.State.SimulationSeconds;Talk(s,i,Awkward,Awkward,Awkward);
+            Check(i.Score==0,"an all-awkward "+kind+" scores 0, got "+i.Score);
+            if(kind=="Police"){s=Pair(kind);i=Start(s,kind);began=s.State.SimulationSeconds;Talk(s,i,Silence,Silence,Silence);Check(i.Score==0&&i.Turns.All(t=>t.Pick==-1)&&Math.Abs(s.State.SimulationSeconds-began-3*FestivalSimulation.ReplySeconds)<.11,"Police alone scores three silent turns after 12 seconds");}
+            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward);Check(Math.Abs(mixed.Score-.5)<1e-9,"smooth, so-so and awkward average .5, got "+mixed.Score);
             s=Pair(kind);var good=Talk(s,Start(s,kind),Smooth,Awkward,SoSo);Check(Math.Abs(good.Score-.5)<1e-9,"smooth, awkward and so-so average .5, got "+good.Score);
             s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-5/6.0)<1e-9,"two smooth and a so-so average 5/6, got "+sure.Score);
             Check(s.Player("p0").LastRhythmScore==sure.Score,"the talk's score is the player's last result");
@@ -197,9 +198,9 @@ public static class ConversationTests
     // A reply is taken once per turn, for the live turn only, while its timer runs, and only as 1, 2 or 3.
     static void ALateOrPastReplyIsRefused()
     {
-        var s=Pair("Conversation");
+        var s=Pair("Police");
         Check(!Act(s,"p0","Reply",amount:0,direction:0).Accepted,"no reply with no talk");
-        var i=Start(s,"Conversation");
+        var i=Start(s,"Police");
         Check(!Act(s,"p0","Reply",amount:3,direction:0).Accepted&&!Act(s,"p0","Reply",amount:-1,direction:0).Accepted,"only reply 0-2");
         Check(!Act(s,"p0","Reply",amount:0,direction:1).Accepted,"no reply for a turn still to come");
         Check(Say(s,i,Smooth).Accepted,"setup: the first reply");
@@ -220,9 +221,9 @@ public static class ConversationTests
     {
         int Sold(params int[] grades){var s=Pair("Sale");var p=s.Player("p0");int cash=p.Cash;var i=Talk(s,Start(s,"Sale"),grades);Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(i.Score<.4),"a sale scoring "+i.Score+" keeps the stock only below .4");return p.Cash-cash;}
         Check(Sold(Smooth,Smooth,SoSo)==FestivalSimulation.PerfectSalePay,"a sale at 5/6 pays in full");
-        Check(Sold(Smooth,SoSo,Silence)==5,"a sale at .5 pays half");
-        Check(Sold(Smooth,Silence,Silence)==0,"a sale at 1/3 pays nothing and returns the stock");
-        foreach(var (grades,bought) in new[]{(new[]{Smooth,SoSo,Awkward},true),(new[]{SoSo,Silence,Silence},false)})
+        Check(Sold(Smooth,SoSo,Awkward)==5,"a sale at .5 pays half");
+        Check(Sold(Smooth,Awkward,Awkward)==0,"a sale at 1/3 pays nothing and returns the stock");
+        foreach(var (grades,bought) in new[]{(new[]{Smooth,SoSo,Awkward},true),(new[]{SoSo,Awkward,Awkward},false)})
         {
             var s=Pair("Buy");var p=s.Player("p0");string kind=FestivalSimulation.SellerStock(Partner(s).Id);var i=Talk(s,Start(s,"Buy"),grades);
             Check(p.Inventory.Exists(x=>x.ItemId==kind)==bought&&p.Cash==(bought?15:20),"a buy scoring "+i.Score+(bought?" hands over a unit for $5":" refunds the $5")+" ($"+p.Cash+")");
@@ -233,7 +234,7 @@ public static class ConversationTests
             var i=Talk(s,Start(s,"Police"),grades);
             Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+i.Score+(waved?" waves the stop off":" keeps the stop"));
         }
-        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth},-15),(new[]{Silence,Silence,Silence},20),(new[]{Smooth,SoSo,Silence},3)})
+        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward},3)})
         {
             var s=Pair("Conversation");var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
             var i=Talk(s,Start(s,"Conversation"),grades);
@@ -290,7 +291,7 @@ public static class ConversationTests
             for(int guard=0;i.Turns.Count==0&&i.Status=="Active"&&guard<100;guard++)s.Tick(.1);
             Check(i.Status=="Active"&&i.Turns.Count==1&&i.DialogueText==""&&!FestivalSimulation.Dancing(i),"danced well, the "+kind+" follows ("+i.Status+")");
             Check(Partner(s).Observers[0].Suspicion==25,"they trust you: 40 drops by RhythmDelta(1) to 25, got "+Partner(s).Observers[0].Suspicion);
-            Check(Math.Abs(i.StartSeconds+i.DurationSeconds-(s.State.SimulationSeconds+FestivalSimulation.ReplySeconds))<.11,"the first reply is due 4 s after the dance");
+            Check(i.DurationSeconds==0,"the first reply waits after the timed trust dance");
             Talk(s,i,Smooth,Smooth,Smooth);Check(i.Score==1,"the talk after the dance scores itself, got "+i.Score);
         }
         // They trust you by the dance even when they can't see you dance, as no watcher does.
@@ -415,12 +416,12 @@ public static class ConversationTests
         int told=0;
         for(int seed=1;seed<=100;seed++){var read=Read("Narc",seed,Smooth,"Buy");if(read.copSpeak)told++;Check(read.hunch==ConversationLines.HunchCop==read.copSpeak,"a narc seller's hunch follows their cop-speak: "+read.hunch+" / "+read.lines);}
         Check(told>=70,"a smoothly talked narc seller slips into cop-speak at least 70 times in 100, got "+told);
-        foreach(var grades in new[]{new[]{Smooth,Smooth,Smooth},new[]{Silence,Silence,Silence}})
+        foreach(var grades in new[]{new[]{Smooth,Smooth,Smooth},new[]{Awkward,Awkward,Awkward}})
         {
             var s=Pair("Buy");Partner(s).Role="Narc";var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
             var i=Start(s,"Buy");Check(p.Life=="Alive"&&p.Cash==15&&i.Turns.Count==1,"asking a narc to sell starts a talk, the $5 held, no bust yet");
             CommandResult last=null;
-            foreach(int grade in grades){if(grade==Silence){for(int guard=0;i.Status=="Active"&&guard<50;guard++)s.Tick(.1);continue;}last=Say(s,i,grade);}
+            foreach(int grade in grades)last=Say(s,i,grade);
             for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
             Check(p.Life=="Detained"&&p.Cash==10&&!p.Inventory.Exists(x=>x.ItemId.StartsWith("stock_"))&&Partner(s).StockSold==0&&i.Status=="Police bust","finishing the buy with a narc ("+string.Join(",",grades)+") busts you: detained, stock gone, $10 fine ("+p.Life+", $"+p.Cash+", "+i.Status+")");
             if(last!=null)Check(last.Reason=="Busted! That was an undercover narc.","the last reply says so: "+last.Reason);
@@ -442,8 +443,8 @@ public static class ConversationTests
         foreach(var talk in json["Interactions"].AsArray()){var o=talk.AsObject();o.Remove("Turns");o.Remove("TrustDance");o.Remove("Hunch");}
         var saved=JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),new JsonSerializerOptions{IncludeFields=true});
         var restored=new FestivalSimulation();restored.Restore(saved);var old=restored.Interaction(i.Id);
-        Check(old.Turns!=null&&old.Turns.Count==0&&!old.TrustDance,"an old talk restores with no turns ("+old.Turns?.Count+")");
-        for(int guard=0;old.Status=="Active"&&guard<300;guard++)restored.Tick(.1);
-        Check(old.Status=="Complete"&&old.Turns.Count==3&&old.Score==0,"it carries on as a three-turn talk, left silent ("+old.Status+", "+old.Turns.Count+" turns)");
+        Check(old.Turns!=null&&old.Turns.Count==1&&!old.TrustDance,"an old talk restores at its first turn ("+old.Turns?.Count+")");
+        restored.Tick(60);Check(old.Status=="Active"&&old.Turns.Count==1&&Live(old).Pick==-1,"a restored legacy talk waits for its first reply");
+        Talk(restored,old,Awkward,Awkward,Awkward);Check(old.Status=="Complete"&&old.Turns.Count==3&&old.Score==0,"three accepted awkward replies settle the restored talk");
     }
 }
