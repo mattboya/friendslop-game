@@ -16,7 +16,7 @@ namespace Festival.Presentation
         /// talk, face to face until it ends or you walk out of it with Cancel.</summary>
         public static bool Roots(string kind) => IsRhythmKind(kind)||FestivalSimulation.Talks(kind);
         public readonly InputActionMap Map = new InputActionMap("Festival");
-        public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle;
+        public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle, Spin;
         public readonly InputAction[] Notes = new InputAction[4];
         private InputActionRebindingExtensions.RebindingOperation rebind;
         private readonly string saveKey;
@@ -35,6 +35,8 @@ namespace Festival.Presentation
             View=Button("View","<Keyboard>/v");
             // HUD-8: each notch of the mouse wheel steps through the hand slots, down to the next (FestivalHudGear.Notch).
             Cycle=Map.AddAction("Cycle",InputActionType.Value,"<Mouse>/scroll/y");
+            // POI-1: hold left click with poi in hand to spin them (FestivalSession reads it while the pointer is locked).
+            Spin=Button("Spin","<Mouse>/leftButton");
             string[] arrows={"leftArrow","downArrow","upArrow","rightArrow"};
             string[] wasd={"a","s","w","d"};
             for(int i=0;i<4;i++)

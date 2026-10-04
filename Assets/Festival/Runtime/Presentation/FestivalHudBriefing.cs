@@ -113,6 +113,7 @@ namespace Festival.Presentation
             "Objectives"=>"hold for the map","Menu"=>"menu and settings","View"=>"first or third person",
             "Slot1"=>"hand 1 • reply 1 in a talk or chat • vote 1 at the campfire","Slot2"=>"hand 2 • reply 2 in a talk or chat • vote 2 at the campfire",
             "Slot3"=>"hand 3 • reply 3 in a talk or chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
+            "Spin"=>"hold to spin the poi in your hand",
             "Rhythm0"=>"dance lane: left","Rhythm1"=>"dance lane: down","Rhythm2"=>"dance lane: up","Rhythm3"=>"dance lane: right",_=>"",
         };
     }

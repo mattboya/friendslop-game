@@ -416,6 +416,10 @@ namespace Festival.Network
             // CAM-1: V flips your view between first person and over the shoulder, and remembers it; never in the menu or mid-rebind.
             if(Controls.View.WasPressedThisFrame()&&!MenuOpen&&!Controls.Rebinding){Profile.Data.ThirdPerson=!Profile.Data.ThirdPerson;string error=Profile.Save();if(error!="")Message=error;}
             Cursor.lockState=PointerFree?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=PointerFree;
+            // POI-1: left click held, with the pointer locked (never a click on the menu or the vote). No focus check: the Input
+            // System lets go of the mouse when the window loses focus, and batchmode tests run unfocused. One reading per frame feeds
+            // the intent, your hands and your own body, so your own spin shows with no round trip.
+            spinHeld=Controls.Spin.IsPressed()&&!PointerFree;
             if(!PointerFree && Application.isFocused)
             {
                 var look=Controls.Look.ReadValue<Vector2>();yaw+=look.x*Profile.Data.MouseSensitivity;pitch=Mathf.Clamp(pitch-look.y*Profile.Data.MouseSensitivity,-80,80);
@@ -424,7 +428,7 @@ namespace Festival.Network
             {
                 var active=State.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
                 var move=MenuOpen||!Application.isFocused||FestivalInput.Roots(active?.Kind)?Vector2.zero:Controls.Move.ReadValue<Vector2>();
-                var intent=new MoveIntent{X=move.x,Z=move.y,Yaw=yaw,Sprint=Controls.Sprint.IsPressed(),Sequence=++movementSequence};
+                var intent=new MoveIntent{X=move.x,Z=move.y,Yaw=yaw,Sprint=Controls.Sprint.IsPressed(),SpinPoi=spinHeld,Sequence=++movementSequence};
                 if(IsHost)AcceptInput(LocalPlayerId,intent);else SendJson("festival.move",NetworkManager.ServerClientId,intent);
                 nextInput=Time.realtimeSinceStartupAsDouble+.05;
             }
@@ -432,6 +436,7 @@ namespace Festival.Network
             UpdateActors();UpdateCamera(player);
         }
         private string lastPhase="";
+        private bool spinHeld;
         /// <summary>Whether a menu left open closes itself as the round moves from lastPhase into phase: as the wheels start (HUD-4:
         /// the spinner hides under the menu), the festival opens or the debrief begins.</summary>
         public static bool ClosesMenu(string phase,string lastPhase)=>phase!=lastPhase&&(phase=="Spinning"||phase=="Playing"||phase=="CampReview");
@@ -597,6 +602,8 @@ namespace Festival.Network
                     exchangeCharacter.SetExchange(exchange,p.VisualOfferItem,contact);
                     exchangeCharacter.SetReceipt(p.VisualReceiptSequence,p.VisualReceivedItem,(float)(State.SimulationSeconds-p.VisualReceiptAt));
                     exchangeCharacter.Giggling=p.VisualGiggling;
+                    // POI-1: your own body spins from your click at once; everyone else's from the host's view.
+                    exchangeCharacter.SpinningPoi=p.Id==LocalPlayerId?spinHeld&&FestivalSimulation.CanSpinPoi(p):p.VisualPoiSpin;
                 }
                 seen.Add(p.Id);
                 if(p.Id==LocalPlayerId)
@@ -693,7 +700,7 @@ namespace Festival.Network
                 wasLying=lying;
             }
             ThirdPersonView=FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id));}
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),spinHeld&&FestivalSimulation.CanSpinPoi(player));}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
             // the eye's glide (rate 20) so it keeps it there as it turns, at any frame rate (POLO-7); the mouse still aims it, and the
