@@ -12,7 +12,7 @@ public static class CrowdTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
+        foreach(var scenario in new Action[]{()=>PursuersDoNotStepInsideEachOther(false,false),()=>PursuersDoNotStepInsideEachOther(false,true),()=>PursuersDoNotStepInsideEachOther(true,false),()=>PursuersDoNotStepInsideEachOther(true,true),PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,MissedChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -162,4 +162,36 @@ public static class CrowdTests
         var gains=new List<double>();for(int k=0;k<4;k++)gains.Add(Heat(s,k)-20);
         Check(gains.TrueForAll(g=>Same(g,34)),"three perfect dancers beside an idle friend in a pack of four: +34 each, the idle friend last (got "+string.Join(", ",gains)+")");
     }
+    // CROWD-6 small prototype: exercise the actual Tick -> WookTick -> Move/Navigate path.
+    // Two already separated swarmers approaching from one side must not merge at strike range.
+    static void PursuersDoNotStepInsideEachOther(bool downed,bool navigation)
+    {
+        {
+            var s=new FestivalSimulation(3);s.AddPlayer("target","Target");
+            s.State.Phase="Playing";s.State.SimulationSeconds=10;s.State.Npcs.Clear();
+            var p=s.Player("target");p.X=0;p.Z=0;p.RecoveryUntil=100;
+            if(downed){p.Life="Downed";p.DownedRemaining=35;}
+            int navigated=0;
+            if(navigation)s.Navigate=(x,z,tx,tz,step)=>
+            {
+                navigated++;double d=Math.Sqrt((tx-x)*(tx-x)+(tz-z)*(tz-z));
+                double travel=Math.Min(step,d);
+                return new WorldPoint(x+(float)((tx-x)*travel/d),z+(float)((tz-z)*travel/d));
+            };
+            foreach(float z in new[]{1.35f,2.25f})
+            {
+                var n=new NpcState{Id="pursuer"+s.State.Npcs.Count,Z=z,Yaw=180,Mode="Swarming",TargetId=p.Id};
+                n.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=95,AccusationSeconds=0,LastSeenSeconds=10});
+                s.State.Npcs.Add(n);
+            }
+            for(int step=0;step<20;step++)
+            {
+                s.Tick(.1);var a=s.State.Npcs[0];var b=s.State.Npcs[1];
+                double gap=Math.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Z-b.Z)*(a.Z-b.Z));
+                Check(gap>=.7-1e-5,"same-side swarmers stay 0.7 m apart at every step: gap="+gap+", downed="+downed+", Navigate="+navigation);
+            }
+            Check(!navigation||navigated>0,"pursuit calls the installed navigation delegate");
+        }
+    }
+
 }
