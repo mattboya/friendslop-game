@@ -14,7 +14,7 @@ public static class StockBuyTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{NoShelfSellsStock,ASellerSells,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
+        foreach(var test in new Action[]{NoShelfSellsStock,ASellerSells,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stock buy test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -145,6 +145,28 @@ public static class StockBuyTests
 
     // A buyer, the VIP guard and a sold-out seller turn an ask down alike: the same reply and the same suspicion. Asking for the
     // wrong kind, short of the price or with full hands is refused before anyone's role counts, so even a narc busts no one.
+    // ECON-7: asking around is harmless; offering unwanted stock still costs ten.
+    static void ARefusedBuyLeavesSuspicionAlone()
+    {
+        var s=Start(32,0);s.HasLineOfSight=(ax,az,bx,bz)=>false;var p=s.Player("p1");
+        var buyer=Wook(s,"Buyer");var guard=s.State.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);var dry=Wook(s,"Regular");
+        Check(buyer!=null&&guard!=null&&dry!=null,"setup: buyer, guard and seller exist");
+        dry.StockSold=Festivals.StockCopies(2);
+        foreach(var npc in new[]{buyer,guard,dry})
+        {
+            npc.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=23});
+            for(int ask=0;ask<3;ask++)
+            {
+                var refused=Ask(s,p,npc);
+                Check(!refused.Accepted&&refused.Reason=="Not selling. They give you a funny look.","same refusal for "+npc.Id+": "+refused.Reason);
+                Check(Suspicion(npc,p)==23,"refused buy must leave "+npc.Id+" suspicion at 23, got "+Suspicion(npc,p));
+            }
+        }
+        p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.X=dry.X;p.Z=dry.Z-1;
+        double before=Suspicion(dry,p);var sale=Act(s,p.Id,"StartSale",dry.Id,"stock_lsd");
+        Check(!sale.Accepted&&sale.Reason=="Not buying. They give you a funny look."&&Suspicion(dry,p)==before+10,"refused sale still adds ten suspicion");
+    }
+
     static void TheReplyNeverTellsThemApart()
     {
         var s=Start(32,0);s.HasLineOfSight=(ax,az,bx,bz)=>false;var p=s.Player("p1");
@@ -158,7 +180,7 @@ public static class StockBuyTests
             Check(!reply.Accepted&&p.InteractionId==""&&p.Cash==20&&p.Life=="Alive","asking "+npc.Id+" ("+npc.Role+npc.Twist+") buys nothing");
             replies.Add(reply.Reason+" (+"+(Suspicion(npc,p)-before)+" suspicion)");
         }
-        Check(replies[0]==replies[1]&&replies[1]==replies[2]&&replies[0].StartsWith("Not selling. They give you a funny look. (+")&&!replies[0].EndsWith("(+0 suspicion)"),"a buyer, the guard and a sold-out seller give the same reply and suspicion: "+string.Join(" | ",replies));
+        Check(replies[0]==replies[1]&&replies[1]==replies[2]&&replies[0].StartsWith("Not selling. They give you a funny look. (+")&&replies[0].EndsWith("(+0 suspicion)"),"a buyer, the guard and a sold-out seller give the same reply and suspicion: "+string.Join(" | ",replies));
 
         var narc=Wook(s,"Narc");Check(narc!=null,"setup: the crowd has a narc");
         string kind=FestivalSimulation.SellerStock(narc.Id),other=kind=="stock_lsd"?"stock_mushrooms":"stock_lsd";

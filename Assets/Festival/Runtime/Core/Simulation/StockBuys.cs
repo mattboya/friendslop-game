@@ -20,7 +20,7 @@ namespace Festival.Core
             if(c.ItemId!=item.Id)return Reject("Ask them for "+item.Name);
             if(p.Cash<item.Price)return Reject("Insufficient cash");
             if(!CanAdd(p,item.Id,1))return Reject("Three slots or stack limit reached");
-            if(!Sells(npc)||npc.StockSold>=Festivals.StockCopies(QuotaCrew(State))){Adjust(npc,p,RefusedSaleSuspicion,packed:false);return Reject("Not selling. They give you a funny look.");}
+            if(!Sells(npc)||npc.StockSold>=Festivals.StockCopies(QuotaCrew(State)))return Reject("Not selling. They give you a funny look.");
             return null;
         }
         // The price is held while they talk; Cancel gives it back (a cancel, walking off, a disconnect or a bust).
