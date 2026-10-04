@@ -328,8 +328,10 @@ namespace Festival.Presentation
             }
 #endif
             // Equipped poi hang from both hands, wheel beside them while walking and join a
-            // dance as butterflies on its beat. Rebuild only when the poi type changes.
-            bool carryingPoi=carriedPoi!=""&&!Crowd&&(Pose=="Idle"||Pose=="Walk"||Pose=="");
+            // dance as butterflies on its beat. Rebuild only when the poi type changes. A dosed player stands in the Intoxicated pose
+            // (the tripper all level), and still holds and spins their poi.
+            bool poiCarryPose=Pose=="Idle"||Pose=="Walk"||Pose==""||Pose=="Intoxicated";
+            bool carryingPoi=carriedPoi!=""&&!Crowd&&poiCarryPose;
             bool dancingPoi=carriedPoi!=""&&Pose=="Dance";
             // POI-1: held left click spins the carried pair standing or walking, the arms up as in the performance; let go and they
             // carry or hang again.
@@ -609,7 +611,7 @@ namespace Festival.Presentation
             // Carry a prop with a bent elbow instead of swinging it through the
             // thigh. Keep dedicated interaction and performance poses in charge.
             if(spinningPoi)PoiArms(Time.time*9f+phase);
-            else if(!dance&&(Pose=="Idle"||Pose=="Walk"||Pose=="")&&carriedPoi!="")
+            else if(!dance&&poiCarryPose&&carriedPoi!="")
             {
                 // Both hands lead the wheeling heads at waist height, wrists rolling with each turn.
                 float roll=Mathf.Sin(Time.time*7.5f+phase)*Mathf.Clamp01(speed/1.2f);
