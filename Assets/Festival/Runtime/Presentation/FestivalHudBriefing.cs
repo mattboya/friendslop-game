@@ -62,8 +62,8 @@ namespace Festival.Presentation
                     +" true, a red one if fake, and says what it found, like "+FestivalVisionMarkers.VerdictText("Narc",false)+".\n"
                     +"green ball "+Claim("Buyer")+Dot+"red cube "+Claim("Narc")+Dot+"blue pill "+Claim("Clue")+Dot+"gold drum "+Claim("DoubleBuyer")+" or "+Claim("Stash")),
                 ("EVERYONE ELSE","Stick with the tripper and act on what they call out. Buy stock from festivalgoers and offer it to the buyers the"
-                    +" tripper spots. Talk to them ("+chat+") to sus them out first: answer with "+reply+" the way they like to be talked to, and"
-                    +" a smooth talk leaves a hunch about who they are. Dance together to blend in: the worst dancer near the crowd sets"
+                    +" tripper spots. Talk to them ("+chat+") and answer with "+reply+" the way they like to be talked to: a smooth talk leaves a hunch."
+                    +" Talk to someone first: a smooth talk can tell you they sell. Dance together to blend in: the worst dancer near the crowd sets"
                     +" everyone's suspicion."),
                 ("DANGER","Some festivalgoers are narcs: buy from or sell to one and you're busted. One who suspects you turns zombie-green; if"
                     +" a crowd swarms you, your card says SWARMING and their hits can down you. Security stops anyone it sees carrying stock"
