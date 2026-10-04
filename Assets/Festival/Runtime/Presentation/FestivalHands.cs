@@ -36,8 +36,11 @@ namespace Festival.Presentation
         // POI-2: in a poi performance both hands ride one loop round, in step with the right hand's poi, this far across and up
         // each way (camera metres). They are one mesh, so they cannot mirror the way the two heads do.
         const float LoopAcross=.03f,LoopUp=.04f;
-        /// <summary>POI-2: the player's reduced-motion setting, which halves the hands' poi loop.</summary>
+        /// <summary>POI-2: the player's reduced-motion setting, which shrinks the hands' poi loop to ReducedLoop of its size.</summary>
         public bool ReducedMotion;
+        // POI-3: not half: halved, the loop fell under the 5 cm that reads as the hands swinging the poi (4.5 cm), and reduced
+        // motion is on for a new profile, so most players saw still hands round whirling heads.
+        const float ReducedLoop=.75f;
         bool performing;
         float swing;
         public static FestivalHands Create(Camera camera,string playerId)
@@ -218,7 +221,7 @@ namespace Festival.Presentation
             var motion=new Vector3(turnSway+Mathf.Sin(walkPhase)*movement*.014f,
                 Mathf.Sin(Time.time*2.1f)*.004f+Mathf.Sin(walkPhase*2)*movement*.009f,present);
             // POI-2: performing, the hands swing the poi round on the right poi's own orbit, easing in and out with the raise.
-            swing=Mathf.Lerp(swing,performing?(ReducedMotion?.5f:1f):0,blendPose);
+            swing=Mathf.Lerp(swing,performing?(ReducedMotion?ReducedLoop:1f):0,blendPose);
             if(rightPoi!=null){var loop=rightPoi.HandLoop;motion+=new Vector3(loop.x*LoopAcross,loop.y*LoopUp,0)*swing;}
             transform.localPosition=rest+motion;
             // Attachment offsets use the same Blender Rest morph displacement.

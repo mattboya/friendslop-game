@@ -237,13 +237,15 @@ namespace Festival.Tests
             return points;
         }
         // POI-2: in first person your own hands swing round with the poi too, each rope still starting at the palm that holds it,
-        // and they settle back to rest when the performance ends.
+        // and they settle back to rest when the performance ends. POI-3: measured on a new profile's reduced-motion setting, what
+        // players actually get.
         [UnityTest]public IEnumerator FirstPersonPoiHandsMoveWithTheSpin()
         {
             var root=new GameObject("First-person poi performance camera");var baked=new Mesh();Time.captureDeltaTime=1/60f;
             try
             {
                 var hands=FestivalHands.Create(root.AddComponent<Camera>(),"poi_performance_hands");
+                hands.ReducedMotion=new ProfileData().ReducedMotion;
                 var rest=hands.transform.localPosition;
                 hands.SetState(new Festival.Core.PlayerState{Id="poi_performance_hands",Life="Alive",VisualPose="Poi"});
                 yield return new WaitForSeconds(.8f);
@@ -296,8 +298,9 @@ namespace Festival.Tests
             for(float start=Time.time;Time.time-start<2f;){yield return null;sweep.Encapsulate(hands.transform.localPosition);}
             result[0]=Mathf.Max(sweep.size.x,sweep.size.y,sweep.size.z);
         }
-        // POI-2: reduced motion keeps the first-person poi loop but halves it.
-        [UnityTest]public IEnumerator ReducedMotionHalvesTheFirstPersonPoiLoop()
+        // POI-2: reduced motion keeps the first-person poi loop but shrinks it. POI-3: never under the 5 cm that reads as hands
+        // swinging the poi, or they look still while the heads whirl.
+        [UnityTest]public IEnumerator ReducedMotionShrinksTheFirstPersonPoiLoop()
         {
             var root=new GameObject("Reduced-motion poi camera");Time.captureDeltaTime=1/60f;
             try
@@ -309,7 +312,8 @@ namespace Festival.Tests
                 hands.ReducedMotion=true;
                 yield return new WaitForSeconds(.8f);yield return HandSweep(hands,reduced);
                 Debug.Log($"[Festival.Test] first-person poi loop full={full[0]:F3} reduced={reduced[0]:F3}");
-                Assert.That(reduced[0],Is.InRange(full[0]*.4f,full[0]*.6f),"Reduced motion should halve the hands' loop, not stop it");
+                Assert.That(reduced[0],Is.InRange(full[0]*.6f,full[0]*.9f),"Reduced motion should shrink the hands' loop, not stop it");
+                Assert.That(reduced[0],Is.GreaterThanOrEqualTo(.05f),"The reduced loop still visibly swings the poi");
             }
             finally{Time.captureDeltaTime=0;Object.Destroy(root);}
         }
