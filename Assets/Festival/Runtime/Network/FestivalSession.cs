@@ -141,35 +141,60 @@ namespace Festival.Network
         public FestivalSettings Settings {get;private set;}
         private FestivalHands firstPersonHands;
         private bool closing;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private DevelopmentSmokeProfileScope smokeProfiles;
+#endif
+        private void InitializePreferences(string[] args)
+        {
+            profileId=Argument(args,"--profile","default");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            smokeProfiles=DevelopmentSmokeProfileScope.Load(args,profileId,LoadPreferences);
+#else
+            LoadPreferences();
+#endif
+        }
+        private void LoadPreferences()
+        {
+            Profile=new LocalProfile(profileId);Settings=new FestivalSettings(Profile);Settings.ApplyGraphics();Controls=new FestivalInput(profileId);
+        }
         private void Awake()
         {
             Application.runInBackground=true;
             var args=Environment.GetCommandLineArgs();
-            profileId=Argument(args,"--profile","default");
-            Profile=new LocalProfile(profileId);Settings=new FestivalSettings(Profile);Settings.ApplyGraphics();Controls=new FestivalInput(profileId);
-            gameObject.AddComponent<FestivalRhythmAudio>();
-            gameObject.AddComponent<FestivalCampAudio>();
-            gameObject.AddComponent<FestivalStageAudio>();
-            var cameraObject=new GameObject("First-person camera");ViewCamera=cameraObject.AddComponent<Camera>();cameraObject.AddComponent<AudioListener>();
-            ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=130;ViewCamera.fieldOfView=75;
-            FestivalCharacter.ViewTransform=ViewCamera.transform;
-            ViewCamera.cullingMask &= ~(1<<31); // Hide the local world body from its first-person camera.
-            ViewCamera.clearFlags=CameraClearFlags.Skybox;ViewCamera.backgroundColor=new Color(.13f,.10f,.22f);
-            ViewCamera.transform.position=EyePosition=new Vector3(0,1.65f,-29);
-            // The world owns the single dusk/lighting Volume. The camera only
-            // opts into it, avoiding a second, lower-priority bloom override.
-            ViewCamera.GetUniversalAdditionalCameraData().renderPostProcessing=true;
+            try
+            {
+                InitializePreferences(args);
+                gameObject.AddComponent<FestivalRhythmAudio>();
+                gameObject.AddComponent<FestivalCampAudio>();
+                gameObject.AddComponent<FestivalStageAudio>();
+                var cameraObject=new GameObject("First-person camera");ViewCamera=cameraObject.AddComponent<Camera>();cameraObject.AddComponent<AudioListener>();
+                ViewCamera.nearClipPlane=.05f;ViewCamera.farClipPlane=130;ViewCamera.fieldOfView=75;
+                FestivalCharacter.ViewTransform=ViewCamera.transform;
+                ViewCamera.cullingMask &= ~(1<<31); // Hide the local world body from its first-person camera.
+                ViewCamera.clearFlags=CameraClearFlags.Skybox;ViewCamera.backgroundColor=new Color(.13f,.10f,.22f);
+                ViewCamera.transform.position=EyePosition=new Vector3(0,1.65f,-29);
+                // The world owns the single dusk/lighting Volume. The camera only
+                // opts into it, avoiding a second, lower-priority bloom override.
+                ViewCamera.GetUniversalAdditionalCameraData().renderPostProcessing=true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            var graphics=cameraObject.AddComponent<DevelopmentGraphicsDiagnostics>();graphics.Session=this;
-            DevelopmentDiagnostics.GraphicsEvent("Rendering","camera_ready","post_processing=true world_volume_priority=20");
+                var graphics=cameraObject.AddComponent<DevelopmentGraphicsDiagnostics>();graphics.Session=this;
+                DevelopmentDiagnostics.GraphicsEvent("Rendering","camera_ready","post_processing=true world_volume_priority=20");
 #endif
-            actorRoot=new GameObject("Authoritative actor presentation").transform;
-            world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
-            gameObject.AddComponent<FestivalVisionMarkers>();
-            gameObject.AddComponent<FestivalCreatures>();
-            gameObject.AddComponent<FestivalTrip>();
-            gameObject.AddComponent<FestivalSpinner>();
-            gameObject.AddComponent<FestivalMinigameView>();
+                actorRoot=new GameObject("Authoritative actor presentation").transform;
+                world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
+                gameObject.AddComponent<FestivalVisionMarkers>();
+                gameObject.AddComponent<FestivalCreatures>();
+                gameObject.AddComponent<FestivalTrip>();
+                gameObject.AddComponent<FestivalSpinner>();
+                gameObject.AddComponent<FestivalMinigameView>();
+            }
+            catch
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                smokeProfiles?.Dispose();smokeProfiles=null;
+#endif
+                throw;
+            }
         }
         // NGO registers its message types after scene Awake and before Start.
         private void Start()
@@ -842,6 +867,15 @@ namespace Festival.Network
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
         }
-        private void OnDestroy(){Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
+        private void OnDestroy()
+        {
+            try{Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
+            finally
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                smokeProfiles?.Dispose();smokeProfiles=null;
+#endif
+            }
+        }
     }
 }
