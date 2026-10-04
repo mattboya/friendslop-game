@@ -9,7 +9,7 @@ namespace Festival.Core
     /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
     /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
     /// watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
-    /// first asks for a dance (TrustAsk): eight notes on the talk's own chart, danced and watched like any dance. TrustScore or
+    /// first asks for a dance (TrustAsk): eight beats on the talk's own chart, danced and watched like any dance. TrustScore or
     /// better wins their trust and the talk follows; less and they walk off, the talk over at 0. A chat or a buy reads the
     /// person: a reply that lands draws out a line with their role's tell, more often the smoother it was (TellOdds), and the
     /// first tell shown sets the Hunch the talk leaves, as its last turn begins. A narc asked to sell talks too, its tells in its
@@ -35,7 +35,7 @@ namespace Festival.Core
             if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
-            if(wary){i.TrustDance=true;i.DialogueText=TrustAsk;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;}else AddTurn(i,p);
+            if(wary){i.TrustDance=true;ScheduleChallengeLeadIn(i);i.DialogueText=TrustAsk;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;}else AddTurn(i,p);
             return Ok();
         }
         // A festivalgoer this wary of p, or one of the 1 in 4 ravers and burners who always want a dance first (by their id and the

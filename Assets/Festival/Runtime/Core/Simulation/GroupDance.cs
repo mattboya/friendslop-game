@@ -15,13 +15,13 @@ public sealed partial class FestivalSimulation {
     void JudgeGroupDance(InteractionState i,PlayerState dancer){double worst=i.Score;var judged=new List<PlayerState>{dancer};foreach(var q in State.Players){if(q==dancer||!q.Connected||Distance(q.X,q.Z,dancer.X,dancer.Z)>GroupDanceRadius||!State.Npcs.Exists(n=>i.WitnessIds.Contains(n.Id)&&Sees(n,q))||Talking(q))continue;if(!OverlappingDance(q,i,out double? own)){judged.Add(q);worst=0;}else if(own!=null)worst=Math.Min(worst,own.Value);}int delta=RhythmDelta(worst);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id))foreach(var q in judged){if(q!=dancer){var o=Observe(n,q);var prior=Interaction(o.BystanderDanceId);if(prior!=null&&Overlap(prior,i))continue;o.BystanderDanceId=i.Id;}Adjust(n,q,delta);}}
     // The tripper's check dance (TRIP-3 ConfirmDance) counts as dancing here, so the tripper is never an idle 0, but its score is
     // the tripper's own: it never sets a friend's worst, just as a friend's Dance never judges the check dance (FinishInteraction).
-    // Overlap means the windows players see intersect: from the press, ChallengeLeadIn before the first beat (a check dance has none,
+    // Overlap means the windows players see intersect: from the press, ChallengeLeadIn before the chart starts (checks share that lead-in,
     // BeginConfirm), to the verdict .75 s after the chart (Danger.cs). A challenge still running is judged on the notes due so far;
     // worst stays null while every overlapping one is still before its first note.
     bool OverlappingDance(PlayerState q,InteractionState i,out double? worst){worst=null;bool dancing=false;foreach(var x in State.Interactions){if(x==i||!DancesVisibly(x.Kind)||x.PlayerId!=q.Id||(x.Status!="Active"&&x.Status!="Complete")||!Overlap(x,i))continue;dancing=true;double? score=x.Kind=="ConfirmDance"?null:x.Status=="Complete"?x.Score:ScoreSoFar(x);if(score!=null)worst=worst==null?score:Math.Min(worst.Value,score.Value);}return dancing;}
     bool Talking(PlayerState q){var x=Interaction(q.InteractionId);return x!=null&&x.Status=="Active"&&Talks(x.Kind);}
     const double ChallengeLeadIn=2;
-    static double PressedAt(InteractionState x)=>x.StartSeconds-(x.Kind=="ConfirmDance"?0:ChallengeLeadIn);
+    static double PressedAt(InteractionState x)=>x.StartSeconds-ChallengeLeadIn;
     static double VerdictAt(InteractionState x)=>x.StartSeconds+x.DurationSeconds+.75;
     static bool Overlap(InteractionState a,InteractionState b)=>PressedAt(a)<=VerdictAt(b)&&PressedAt(b)<=VerdictAt(a);
     double? ScoreSoFar(InteractionState x){var judge=new RhythmJudge(RhythmChart.For(x),x.GoodWindowSeconds);foreach(var input in x.Inputs)judge.Submit(input.Direction,input.TimeSeconds);judge.Advance(State.SimulationSeconds-x.StartSeconds);return judge.ScoreSoFar;}

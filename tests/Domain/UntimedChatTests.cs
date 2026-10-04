@@ -67,7 +67,7 @@ public static class UntimedChatTests
         s=Pair("Conversation");s.State.Npcs[0].Observers.Add(new ObserverState{PlayerId="owner",Suspicion=40});i=Start(s,"Conversation");
         double deadline=i.DurationSeconds;var copy=new FestivalSimulation();copy.Restore(s.State);
         Check(i.DurationSeconds==deadline&&i.Turns.Count==0&&FestivalSimulation.TrustDancing(i),"restore preserves the active trust chart");
-        s.Tick(deadline+.8);Check(i.Status=="Complete"&&i.Turns.Count==0,"an unanswered trust dance still ends on time");
+        s.Tick(i.StartSeconds-s.State.SimulationSeconds+deadline+.8);Check(i.Status=="Complete"&&i.Turns.Count==0,"an unanswered trust dance still ends on time");
     }
     static void LegacyActiveChatsResumeWithoutInventedSilence()
     {

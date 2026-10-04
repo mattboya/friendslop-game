@@ -283,7 +283,7 @@ public static class PoloTwistTests
         Check(!refused.Accepted&&refused.Reason.Contains("hand"),"with three things in hand there's no hand for a wristband: "+refused.Reason);
         var dancer=crowded.Player(crowded.State.TripperId);crowded.State.Visions.Add(new VisionState{Id="planted",Kind="Narc",NpcId=doorman.Id,Tell=true});
         Beside(dancer,doorman);Check(Act(crowded,dancer.Id,"ConfirmDance",doorman.Id).Accepted,"setup: the tripper checks a vision of the guard by dancing");
-        crowded.Tick(6);Check(dancer.InteractionId==""&&Bands(dancer)==0,"a dance with the guard checks the vision but gets nobody in");
+        crowded.Tick(7);Check(dancer.InteractionId==""&&Bands(dancer)==0,"a dance with the guard checks the vision but gets nobody in");
 
         // POLO-4: a chat that checks nothing never hints at the guard's role. Whatever they are, the same seed says the same.
         var regular=RopeChat("Regular",false);

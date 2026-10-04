@@ -73,7 +73,7 @@ public static class ConfirmTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{OnlyTheTripperChecks,AChecksNeedsSomethingToCheck,AChatWaitsForAnExplicitSafeEnd,TheChatCarriesTheirTells,
-            ADanceIsQuickButRisky,EveryStepShowsOnTheDancer,TheTrailMovesOnlyOnATrueHolder,WalkingAwayEndsTheChat,AChatSurvivesASnapshot})
+            ACheckDanceHasTimeToEnterAtTheBottom,ADanceIsQuickButRisky,EveryStepShowsOnTheDancer,TheTrailMovesOnlyOnATrueHolder,WalkingAwayEndsTheChat,AChatSurvivesASnapshot})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" confirm test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -159,6 +159,33 @@ public static class ConfirmTests
         }
     }
 
+    // TRIP-9: start the real check command under Pony Dust, whose 2.4 s lane needs time to show the first arrow at the bottom.
+    static void ACheckDanceHasTimeToEnterAtTheBottom()
+    {
+        var s=Start(6,0);var tripper=Tripper(s);var dose=tripper.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
+        dose.Substance="ketamine";var npc=Npc(s,s.State.Visions.First(v=>v.NpcId!="").NpcId);Beside(tripper,npc);
+        double pressed=s.State.SimulationSeconds;
+        Check(Act(s,tripper.Id,"ConfirmDance",npc.Id).Accepted,"setup: a Pony Dust tripper starts a check dance");
+        var dance=s.Interaction(tripper.InteractionId);var notes=RhythmChart.For(dance).Notes;
+        double firstAfterPress=dance.StartSeconds+notes[0].TimeSeconds-pressed;
+        Check(firstAfterPress>=Catalog.FindEffect("ketamine").LeadSeconds,"Pony Dust's first arrow needs 2.4 s to enter at the bottom, but its beat is only "+firstAfterPress+" s after the press");
+        Check(Math.Abs(dance.StartSeconds-pressed-2)<1e-9,"a check uses the same 2 s lead-in as a Dance");
+        Check(notes.Count==4&&Math.Abs(notes[0].TimeSeconds-2)<1e-9&&Math.Abs(notes[3].TimeSeconds-3.5)<1e-9,"the four chart hit times stay at 2, 2.5, 3 and 3.5 s");
+        int next=0;
+        for(int guard=0;dance.Status=="Active"&&guard<100;guard++)
+        {
+            double now=s.State.SimulationSeconds-dance.StartSeconds;
+            while(next<notes.Count&&notes[next].TimeSeconds<=now+1e-9)
+            {
+                var note=notes[next++];
+                Check(s.Execute(tripper.Id,new GameCommand{Id="confirm"+(sequence++),Kind="Rhythm",Direction=note.Direction,TimeSeconds=note.TimeSeconds}).Accepted,"the unchanged beat is accepted through Rhythm");
+            }
+            s.Tick(.1);
+        }
+        Check(dance.Status=="Complete"&&dance.Score==1,"all four unchanged beats still score perfectly");
+        Check(Math.Abs(s.State.SimulationSeconds-pressed-6.75)<=.1,"the timed check verdict lands 6.75 s after the press, within one simulation tick");
+    }
+
     static void ADanceIsQuickButRisky()
     {
         var s=Start(6,0);var tripper=Tripper(s);
@@ -167,7 +194,7 @@ public static class ConfirmTests
         var dance=s.Interaction(tripper.InteractionId);var notes=RhythmChart.For(dance).Notes;
         Check(dance.Kind=="ConfirmDance"&&notes.Count==4&&Math.Abs(notes[3].TimeSeconds+dance.BeatSeconds-notes[0].TimeSeconds-2)<1e-9,"four steps taking 2 s");
         var witnesses=dance.WitnessIds.ConvertAll(id=>Npc(s,id));Check(witnesses.Contains(npc),"their dance partner watches");
-        s.Tick(4.6);Check(dance.Status=="Active"&&!vision.Confirmed,"4.6 s in, the dance is still being judged");
+        s.Tick(dance.StartSeconds-s.State.SimulationSeconds+4.6);Check(dance.Status=="Active"&&!vision.Confirmed,"4.6 chart seconds in, the dance is still being judged");
         s.Tick(.3);Check(dance.Status=="Complete"&&vision.Confirmed&&Seen(s,tripper,vision).IsTrue==vision.IsTrue,"its timed verdict reveals truth without needing EndChat");
         Check(witnesses.TrueForAll(n=>Heat(n,tripper)>0),"missing every step raises every witness's suspicion");
 

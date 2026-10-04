@@ -105,6 +105,19 @@ public static class GroupDanceTests
         s=Crew();s.State.TripperId="a";s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="partner_a",IsTrue=true});
         second=Start(s,"b");var check=Start(s,"a","ConfirmDance");Live(s,()=>check.Status!="Active"&&second.Status!="Active",check,second);
         Check(check.Score==1&&second.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,"a perfect check dance beside a friend's perfect Dance: both lose, each exactly once (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+        // TRIP-9 shares DANCE-11's late-check boundary: the press already counts as dancing during its new lead-in.
+        foreach(double beforeVerdict in new[]{.6,.3})
+        {
+            s=Crew();s.State.TripperId="a";s.Player("a").Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="ketamine",RemainingSeconds=100});s.State.Visions.Add(new VisionState{Id="late_v",Kind="Buyer",NpcId="partner_a",IsTrue=true});
+            second=Start(s,"b");double press=second.StartSeconds+second.DurationSeconds+.75-beforeVerdict;
+            Live(s,()=>s.State.SimulationSeconds>=press-1e-9,second);
+            check=Start(s,"a","ConfirmDance");Live(s,()=>second.Status!="Active",second,check);
+            Check(check.Status=="Active"&&check.Inputs.Count==0&&Heat(s,"b")==solo&&Heat(s,"a")==20,
+                "a check pressed "+beforeVerdict+" s before a friend's verdict counts as dancing during the lead-in (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+            Live(s,()=>check.Status!="Active",check);
+            Check(check.Score==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,"the later perfect check settles only its own suspicion");
+        }
+
         // The check dance is the tripper's own: its score moves only the tripper, either way round. A missed check (+20) leaves a
         // friend's perfect Dance at solo, and a friend's missed Dance leaves a perfect check at solo.
         foreach(bool checkHits in new[]{false,true})

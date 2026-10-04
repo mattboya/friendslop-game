@@ -22,7 +22,7 @@ public static class ConversationTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EachTalkIsThreeTurnsOfThreeReplies,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
-            AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
+            ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -268,7 +268,43 @@ public static class ConversationTests
         }
     }
 
-    // A festivalgoer whose suspicion of you is 40 or more asks you to dance first: TrustAsk, then eight notes on the talk's own
+    // TRIP-9: only a talk's trust dance gets the shared countdown. Its chart and the .75 s verdict window stay relative to start.
+    static void ATrustDanceGivesTheFirstArrowTimeToEnter()
+    {
+        foreach(var kind in new[]{"Sale","Buy","Conversation"})
+        {
+            var s=Pair(kind);var p=s.Player("p0");p.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="ketamine",RemainingSeconds=100});
+            Partner(s).Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});
+            double pressed=s.State.SimulationSeconds;var i=Start(s,kind);var chart=RhythmChart.For(i);
+            Check(i.StartSeconds-pressed==2,kind+": a trust dance gives the lane its shared 2 s countdown");
+            Check(i.NoteCount==8&&chart.Notes.Count>=8&&chart.Notes[0].TimeSeconds==2&&chart.Notes[chart.Notes.Count-1].TimeSeconds>=5.5&&chart.DurationSeconds==6,kind+": the eight chart beats, authored subdivisions and duration stay unchanged");
+            Check(i.StartSeconds+chart.Notes[0].TimeSeconds-pressed>=Catalog.FindEffect("ketamine").LeadSeconds,kind+": the first Pony Dust arrow can enter at the bottom");
+            Check(!Act(s,p.Id,"Rhythm",direction:chart.Notes[0].Direction).Accepted,kind+": the countdown does not admit an early press");
+            int next=0;
+            while(s.State.SimulationSeconds<i.StartSeconds+i.DurationSeconds+.7-1e-9)
+            {
+                double now=s.State.SimulationSeconds-i.StartSeconds;
+                while(next<chart.Notes.Count&&chart.Notes[next].TimeSeconds<=now+1e-9)
+                {
+                    var note=chart.Notes[next++];
+                    Check(s.Execute(p.Id,new GameCommand{Id="talk"+(sequence++),Kind="Rhythm",Direction=note.Direction,TimeSeconds=note.TimeSeconds}).Accepted,kind+": the original hit time is accepted through Rhythm");
+                }
+                s.Tick(.1);
+            }
+            Check(i.Status=="Active"&&i.Turns.Count==0,kind+": the .75 s verdict window has not ended");
+            s.Tick(.1);Check(i.Status=="Active"&&i.Turns.Count==1&&i.DurationSeconds==0,kind+": a perfect trust dance opens an untimed reply");
+            s.Tick(30);Check(i.Turns.Count==1&&Live(i).Pick==-1,kind+": the countdown never becomes a chat deadline");
+            Talk(s,i,Smooth,Smooth,Smooth);Check(i.Score==1,kind+": the following talk scores only its replies");
+        }
+        foreach(var kind in Kinds)
+        {
+            var s=Pair(kind);double pressed=s.State.SimulationSeconds;var i=Start(s,kind);
+            Check(i.StartSeconds==pressed&&!i.TrustDance,kind+": an ordinary talk begins immediately");
+            Check(i.DurationSeconds==(kind=="Police"?4:0),kind+": its existing reply timing is preserved");
+        }
+    }
+
+    // A festivalgoer whose suspicion of you is 40 or more asks you to dance first: TrustAsk, then eight beats on the talk's own
     // chart, danced and witnessed like a dance. At .6 or more they trust you: everyone watching, and they, move by the dance's
     // RhythmDelta, and the talk follows. Below .6 they walk off: the talk ends at 0, a sale's stock and a buy's cash come back,
     // and the watchers move once, for the dance. Security never asks.
@@ -283,8 +319,8 @@ public static class ConversationTests
             var s=Pair(kind);Wary(s,40);var p=s.Player("p0");p.Z=.5f;p.Yaw=90;var i=Start(s,kind);
             Check(i.TrustDance&&i.Turns.Count==0&&i.DialogueText==FestivalSimulation.TrustAsk&&FestivalSimulation.TrustDancing(i)&&FestivalSimulation.Dancing(i),"a wary partner opens a "+kind+" with \""+FestivalSimulation.TrustAsk+"\" and a dance, got \""+i.DialogueText+"\"");
             Check(Math.Abs(1.5-p.Z-FestivalSimulation.DanceSpacing)<1e-3&&p.X==0&&p.Yaw==0,"the trust dance gives the dancer room and turns them to face their partner, as any dance (at "+p.X+", "+p.Z+", yaw "+p.Yaw+")");
-            Check(i.NoteCount==8&&i.DurationSeconds==RhythmChart.For(i).DurationSeconds,"eight notes on the talk's chart");
-            var notes=RhythmChart.For(i).Notes;s.Tick(2);
+            Check(i.NoteCount==8&&i.DurationSeconds==RhythmChart.For(i).DurationSeconds,"eight beats on the talk's chart");
+            var notes=RhythmChart.For(i).Notes;s.Tick(i.StartSeconds-s.State.SimulationSeconds+2);
             var hit=s.Execute("p0",new GameCommand{Id="talk"+(sequence++),Kind="Rhythm",Direction=notes[0].Direction,TimeSeconds=notes[0].TimeSeconds});
             Check(hit.Accepted&&p.VisualDanceStepSequence>0,"the trust dance takes notes, each a step");
             foreach(var note in notes.Skip(1))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});

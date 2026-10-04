@@ -92,7 +92,7 @@ public static class DanceSpacingTests
             Check(Partner(s).Yaw==PartnerYaw,"the trust dance's partner doesn't turn");
             float yaw=p.Yaw;
             Check(s.TryMove("p0",p.X,p.Z,250,.1)&&p.Yaw==yaw,"the camera's yaw doesn't turn them away during the trust dance");
-            s.Tick(2);int steps=p.VisualDanceStepSequence;
+            s.Tick(s.Interaction(p.InteractionId).StartSeconds-s.State.SimulationSeconds+2);int steps=p.VisualDanceStepSequence;
             var played=s.Execute("p0",new GameCommand{Id="spacing"+(sequence++),Kind="Rhythm",Direction=3,TimeSeconds=1.9});
             Check(played.Accepted,"setup: the trust dance takes a note: "+played.Reason);
             Check(p.VisualDanceStepSequence==steps+1&&p.VisualDanceStepDirection==3,"a note played in the trust dance shows as a dance step");
