@@ -5,6 +5,9 @@ namespace Festival.Core
     /// <summary>Festival weekends: how each level ends and who may head back to camp.</summary>
     public sealed partial class FestivalSimulation
     {
+        // DEV-1: session-only capability; Unity enables it only in Editor/development hosted games.
+        public bool DevelopmentFestivalSelection;
+
         // Per-level outcome, checked at the start and end of every Playing step: a Result string ends the level, "" keeps
         // playing. Days settle on the sales quota (DayQuota.cs), nights are the rescue, and a wiped crew loses any level.
         // Night 2 also brings everyone home: CanExtractNow waits for the whole crew (Bodies.cs).
@@ -33,7 +36,7 @@ namespace Festival.Core
         void AdvanceWeekend(RoundState old)
         {
             var next=State;bool cleared=old.Result=="Success";bool continuing=cleared&&old.LevelIndex<Festivals.LevelCount-1;
-            if(cleared)UnlockNextFestival(old); // End already did it; keeps FestivalIndex<UnlockedFestivalCount for a round saved at Results before it did
+            if(cleared)UnlockNextFestival(old); // End already did it; also handles older Results snapshots. Development sessions never earn unlocks.
             next.FestivalIndex=old.FestivalIndex;next.EncoreTier=old.EncoreTier;next.UnlockedFestivalCount=old.UnlockedFestivalCount;
             if(continuing)next.LevelIndex=old.LevelIndex+1;
             else if(cleared)
@@ -47,12 +50,12 @@ namespace Festival.Core
         }
         // Clearing Night 2 of festival k unlocks k+1. End runs this on the win itself, so the host's profile saves the unlock
         // even when they leave from the results screen instead of pressing NEXT CAMP.
-        static void UnlockNextFestival(RoundState s){if(s.LevelIndex==Festivals.LevelCount-1)s.UnlockedFestivalCount=Math.Min(Festivals.Count,Math.Max(s.UnlockedFestivalCount,s.FestivalIndex+2));}
+        void UnlockNextFestival(RoundState s){if(!DevelopmentFestivalSelection&&s.LevelIndex==Festivals.LevelCount-1)s.UnlockedFestivalCount=Math.Min(Festivals.Count,Math.Max(s.UnlockedFestivalCount,s.FestivalIndex+2));}
         CommandResult ChooseFestival(PlayerState p,GameCommand c)
         {
             if(p.Id!=State.HostPlayerId)return Reject("Only the host picks the festival");
             if(State.Phase!="Shopping"||State.LevelIndex!=0)return Reject("Pick the festival at camp before Day 1");
-            if(c.Amount<0||c.Amount>=State.UnlockedFestivalCount)return Reject("Clear the earlier festivals to unlock that one");
+            if(c.Amount<0||c.Amount>=(DevelopmentFestivalSelection?Festivals.Count:State.UnlockedFestivalCount))return Reject("Clear the earlier festivals to unlock that one");
             State.FestivalIndex=c.Amount;return Ok("This weekend: "+Festivals.Name(c.Amount));
         }
     }

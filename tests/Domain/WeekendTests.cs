@@ -10,6 +10,10 @@ public static class WeekendTests
     static bool Same(double a,double b)=>Math.Abs(a-b)<1e-9;
     public static void Run()
     {
+        DevelopmentSelectionKeepsCampAndHostBoundaries();
+        DevelopmentCapabilityIsNotRestoredOrCommandSettable();
+        DevelopmentSessionNeverAdvancesEarnedUnlocksOnRealWins();
+        DevelopmentHostCanPickWithoutEarningUnlocks();
         FestivalTable();
         EncoreScaling();
         NewCrewStartsDayOne();
@@ -23,6 +27,110 @@ public static class WeekendTests
         FailureRestartsTheFestival();
         HostChoosesAnUnlockedFestival();
         WinningNightTwoUnlocksOnTheResultsScreen();
+    }
+
+    static void DevelopmentSelectionKeepsCampAndHostBoundaries()
+    {
+        var s=Crew(95);s.DevelopmentFestivalSelection=true;
+        foreach(var phase in new[]{"Lobby","Spinning","Loading","Playing","Results","CampReview",FestivalSimulation.MinigamePhase})
+        {
+            s.State.Phase=phase;
+            Check(!Act(s,"a","ChooseFestival",1).Accepted&&s.State.FestivalIndex==0,"development selection remains camp-only during "+phase);
+        }
+        s.State.Phase="Shopping";
+        for(int level=1;level<4;level++)
+        {
+            s.State.LevelIndex=level;
+            Check(!Act(s,"a","ChooseFestival",1).Accepted&&s.State.FestivalIndex==0,"development selection stays before Day 1, not level "+level);
+        }
+        s.State.LevelIndex=0;
+        Check(!Act(s,"b","ChooseFestival",1).Accepted&&s.State.FestivalIndex==0,"a connected client cannot select a locked festival");
+        s.Disconnect("a");
+        Check(!Act(s,"a","ChooseFestival",1).Accepted&&s.State.FestivalIndex==0,"a disconnected host cannot select festivals");
+        s.AddPlayer("a","A");
+        Check(Act(s,"a","ChooseFestival",1).Accepted&&s.State.UnlockedFestivalCount==1,"reconnected host selects before Day 1 without unlocking");
+        var before=s.State;
+        foreach(var mutate in new Action<RoundState>[] {x=>x.FestivalIndex=-1,x=>x.FestivalIndex=2,x=>x.LevelIndex=-1,x=>x.LevelIndex=4,x=>x.EncoreTier=-1,x=>x.UnlockedFestivalCount=0,x=>x.UnlockedFestivalCount=-1,x=>x.UnlockedFestivalCount=3})
+        {
+            var invalid=JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(before,Json),Json);mutate(invalid);
+            bool rejected=false;try{s.Restore(invalid);}catch(ArgumentException){rejected=true;}
+            Check(rejected&&ReferenceEquals(s.State,before),"invalid development snapshots are rejected without replacing the current round");
+        }
+    }
+
+    static void DevelopmentCapabilityIsNotRestoredOrCommandSettable()
+    {
+        var s=Crew(94);
+        Check(!s.DevelopmentFestivalSelection,"new sessions default to earned-only festival selection");
+        foreach(var player in new[]{"a","b"})
+        {
+            Check(!Act(s,player,"DevelopmentFestivalSelection",1).Accepted,"commands cannot enable the session capability for "+player);
+            Check(!s.DevelopmentFestivalSelection&&!Act(s,"a","ChooseFestival",1).Accepted,"a refused capability command leaves Ember Playa locked");
+        }
+        s.DevelopmentFestivalSelection=true;
+        var saved=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
+        Check(!saved.ContainsKey("DevelopmentFestivalSelection"),"round snapshots never carry the development capability");
+        saved["DevelopmentFestivalSelection"]=true;
+        var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));
+        Check(!restored.DevelopmentFestivalSelection&&!Act(restored,"a","ChooseFestival",1).Accepted,"even an injected snapshot flag cannot enable development selection");
+        s.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
+        Check(s.DevelopmentFestivalSelection&&Act(s,"a","ChooseFestival",1).Accepted,"restoration preserves the receiving host's enabled session capability");
+        Finish(s,"Time expired");s.State.Phase="Shopping";
+        Check(s.State.UnlockedFestivalCount==1&&Act(s,"a","ChooseFestival",0).Accepted,"a failed weekend preserves the capability without granting unlocks");
+    }
+
+    static void DevelopmentSessionNeverAdvancesEarnedUnlocksOnRealWins()
+    {
+        var s=Crew(92);s.DevelopmentFestivalSelection=true;
+        for(int festival=0;festival<2;festival++)
+        {
+            Check(Act(s,"a","ChooseFestival",festival).Accepted,"test host selects festival "+festival);
+            for(int level=0;level<3;level++){Finish(s,"Success");s.State.Phase="Shopping";}
+            Check(s.State.LevelIndex==3,"setup: Night 2 at festival "+festival);
+            foreach(var p in s.State.Players){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,p.Id+" readies for Night 2");}
+            s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);
+            foreach(var p in s.State.Players)Check(Act(s,p.Id,"MapReady").Accepted,p.Id+" loads Night 2");
+            Check(s.State.Phase=="Playing","setup: Night 2 launched at festival "+festival);
+            s.State.FriendFound=true;s.State.FriendPosition=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
+            foreach(var p in s.State.Players){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
+            Check(Act(s,"a","Extract").Accepted,"the crew extracts at festival "+festival);s.Tick(3.1);
+            Check(s.State.Phase=="Results"&&s.State.Result=="Success","Night 2 ends through the real extraction at festival "+festival);
+            Check(s.State.UnlockedFestivalCount==1,"test session earns no unlock at real Night 2 Results, even in Palm Mirage");
+            var old=s.State;Check(Act(s,"a","Reset").Accepted,"the host returns to camp after Night 2");
+            Check(!ReferenceEquals(s.State,old)&&s.State.UnlockedFestivalCount==1&&s.DevelopmentFestivalSelection,"fresh camp preserves the session capability and earned count");
+            s.State.Phase="Shopping";
+        }
+        var earned=Crew(93);earned.State.UnlockedFestivalCount=2;earned.DevelopmentFestivalSelection=true;
+        for(int level=0;level<4;level++)Finish(earned,"Success");
+        Check(earned.State.UnlockedFestivalCount==2,"test sessions retain already-earned unlocks");
+    }
+
+    static void DevelopmentHostCanPickWithoutEarningUnlocks()
+    {
+        var s=Crew(91);s.DevelopmentFestivalSelection=true;
+        var pick=Act(s,"a","ChooseFestival",1);
+        Check(pick.Accepted&&s.State.FestivalIndex==1,"test host can pick locked Ember Playa; got: "+pick.Reason);
+        Check(s.State.UnlockedFestivalCount==1,"test selection does not earn an unlock");
+        Check(!Act(s,"b","ChooseFestival",0).Accepted,"client cannot pick even in test mode");
+        Check(!Act(s,"a","ChooseFestival",-1).Accepted&&!Act(s,"a","ChooseFestival",Festivals.Count).Accepted,"test mode rejects invalid festival indices");
+        var restored=new FestivalSimulation();restored.DevelopmentFestivalSelection=true;
+        restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
+        Check(restored.State.FestivalIndex==1&&restored.State.UnlockedFestivalCount==1,"test host restores a selected locked festival without earning it");
+        foreach(int count in new[]{0,-1,Festivals.Count+1})
+        {
+            var invalid=JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json);invalid.UnlockedFestivalCount=count;
+            bool rejected=false;
+            try{restored.Restore(invalid);}catch(ArgumentException){rejected=true;}
+            Check(rejected,"test mode still rejects invalid earned unlock count "+count);
+        }
+        bool releaseRejected=false;
+        try{new FestivalSimulation().Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));}
+        catch(ArgumentException){releaseRejected=true;}
+        Check(releaseRejected,"default release rules reject a snapshot beyond earned unlocks");
+        for(int level=0;level<4;level++)Finish(s,"Success");
+        Check(s.State.UnlockedFestivalCount==1,"clearing test-selected Night 2 never earns a persistent unlock");
+        s.State.Phase="Shopping";
+        Check(Act(s,"a","ChooseFestival",1).Accepted,"test flag survives the camp round rebuild");
     }
 
     static int sequence;
