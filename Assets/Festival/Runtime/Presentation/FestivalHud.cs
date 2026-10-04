@@ -513,7 +513,7 @@ namespace Festival.Presentation
             var pocketHeading=Label(menuHome.transform,"Pockets heading",17,TextAnchor.MiddleLeft);pocketHeading.text="CURRENT LOADOUT";pocketHeading.fontStyle=FontStyle.Normal;pocketHeading.color=new Color(.31f,.42f,.38f);Place(pocketHeading.rectTransform,.045f,.61f,.95f,.69f);
             preview=Label(menuHome.transform,"Preview",21,TextAnchor.MiddleLeft);Place(preview.rectTransform,.045f,.51f,.95f,.62f);preview.color=Ink;
             nextButton=Button(menuHome.transform,"NEXT CAMP",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>session.Command("Reset"));
-            cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>session.Command("Cancel"));
+            cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),FinishCurrentAction);
             resumeButton=Button(menuHome.transform,"RESUME FESTIVAL",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>{session.MenuOpen=false;settingsOpen=false;});
             Button(menuHome.transform,"CREW + NEARBY",new Vector2(.045f,.26f),new Vector2(.955f,.375f),()=>{crewOpen=!crewOpen;});
             Button(menuHome.transform,"SETTINGS",new Vector2(.045f,.135f),new Vector2(.495f,.25f),()=>{settingsOpen=true;});
@@ -693,6 +693,7 @@ namespace Festival.Presentation
             UpdatePurchaseFeedback(state,player);
             nextButton.SetActive(state.Phase=="Results"&&session.IsHost);
             cancelButton.SetActive(state.Phase=="Playing"&&FestivalHudText.CanCancel(state,player));
+            cancelButton.GetComponentInChildren<Text>().text=ActiveConfirmation(state,player)!=null?"FINISH CHAT CHECK":"CANCEL ACTION";
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             UpdateText(state,player);
             trippingPanel.SetActive(!showMenu&&tripping.text!="");
@@ -1226,6 +1227,12 @@ namespace Festival.Presentation
             return new Color(color.r,color.g,color.b,reducedMotion?.025f:.055f);
         }
 
+        private static InteractionState ActiveConfirmation(RoundState state,PlayerState player)=>player==null?null:state?.Interactions.Find(i=>i.Id==player.InteractionId&&i.PlayerId==player.Id&&i.Status=="Active"&&i.Kind=="ConfirmChat");
+        private void FinishCurrentAction()
+        {
+            var check=ActiveConfirmation(session.State,session.LocalPlayer);
+            if(check!=null)session.Command("EndChat",check.Id);else session.Command("Cancel");
+        }
         private void UpdateActions(RoundState state,PlayerState player)
         {
             if(Time.unscaledTime<nextActionRefresh)return;
@@ -1353,7 +1360,7 @@ namespace Festival.Presentation
                 if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
-            if(!lying&&FestivalHudText.CanCancel(state,player))AddAction("Cancel current action",()=>session.Command("Cancel"),ref y);
+            if(!lying&&FestivalHudText.CanCancel(state,player))AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":"Cancel current action",FinishCurrentAction,ref y);
             // ESC-2: security stopping you comes next, so E talks to them as the card says (TALK (E)), even with a festivalgoer nearer
             // or the stock you just ditched at your feet. Until the guard has walked into reach (the host's 2.5 m), E says so and does
             // nothing: what E would do instead, a sale or a buy beside a festivalgoer, is a deal in the guard's sight, an arrest.

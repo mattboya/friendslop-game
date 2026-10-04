@@ -1038,7 +1038,8 @@ namespace Festival.Presentation
                 if(running==null)yield return null;
             }
             if(running==null)yield break;
-            if(FestivalSimulation.Talks(kind))yield return Talk(session,running.Id,deadline);
+            if(kind=="ConfirmChat")session.Command("EndChat",running.Id);
+            else if(FestivalSimulation.Talks(kind))yield return Talk(session,running.Id,deadline);
             else if(FestivalInput.IsRhythmKind(kind))
                 foreach(var note in RhythmChart.For(running).Notes)
                 {
