@@ -14,7 +14,7 @@ public static class PoiSpinTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes})
+        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes,CampPoiEquipOnlyOffersTheSpin,HoldingShelfPoiExplainsTheSpin,BuyingPoiExplainsTheSpin})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" poi spin test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -72,6 +72,46 @@ public static class PoiSpinTests
         var playa=Festival(1);var rider=playa.Player("p0");Check(Act(playa,rider.Id,"Equip","poi_led").Accepted,"setup: equip on the playa");
         var car=Festivals.ArtCarAt(0,playa.State.ElapsedSeconds);rider.X=car.X+1;rider.Z=car.Z;
         Check(Act(playa,rider.Id,"RideCar").Accepted,"setup: board an art car");Check(!FestivalSimulation.CanSpinPoi(rider),"not riding an art car");
+    }
+
+    static void BuyingPoiExplainsTheSpin()
+    {
+        var s=new FestivalSimulation(7);var p=s.AddPlayer("buyer","Buyer");
+        foreach(var item in new[]{"poi_practice","poi_led"})
+        {
+            p.Cash=100;var point=Catalog.ShopPoint(true,s.State.VendorOffers.IndexOf(item));p.X=point.X;p.Z=point.Z;
+            Check(Act(s,p.Id,"HoldOffer",item).Accepted,"setup: take poi to seller");p.X=0;p.Z=7;
+            var reply=Act(s,p.Id,"Buy",item);
+            Check(reply.Accepted,"setup: pay for poi");
+            Check(reply.Reason==Catalog.FindItem(item).Name+" bought for $"+Catalog.FindItem(item).Price+". Hold left click to spin them.","bought poi explain the spin, got \""+reply.Reason+"\"");
+            Check(p.EquippedItemId==item&&p.HeldOfferId=="","purchase still equips paid poi");
+        }
+    }
+
+    static void HoldingShelfPoiExplainsTheSpin()
+    {
+        var s=new FestivalSimulation(7);var p=s.AddPlayer("shelf","Shelf");
+        foreach(var item in new[]{"poi_practice","poi_led"})
+        {
+            var point=Catalog.ShopPoint(true,s.State.VendorOffers.IndexOf(item));p.X=point.X;p.Z=point.Z;
+            var reply=Act(s,p.Id,"HoldOffer",item);
+            Check(reply.Accepted,"setup: take poi from shelf");
+            Check(reply.Reason=="Holding "+Catalog.FindItem(item).Name+". Bring it to the seller, or press G to return it. Hold left click to spin them.","shelf poi explain the spin, got \""+reply.Reason+"\"");
+            Check(Act(s,p.Id,"ReturnOffer").Accepted,"setup: return shelf poi");
+        }
+    }
+
+    static void CampPoiEquipOnlyOffersTheSpin()
+    {
+        var s=new FestivalSimulation(7);var p=s.AddPlayer("camp","Camp");
+        foreach(var item in new[]{"poi_practice","poi_led"})
+        {
+            p.Inventory.Add(new ItemStack{ItemId=item,Count=1});
+            var reply=Act(s,p.Id,"Equip",item);
+            Check(reply.Accepted,"camp equips owned poi");
+            Check(reply.Reason=="Equipped "+Catalog.FindItem(item).Name+". Hold left click to spin them.","camp offers only the supported spin, got \""+reply.Reason+"\"");
+            Check(Act(s,p.Id,"Use",item).Reason=="Start the round first","camp still refuses Q performance");
+        }
     }
 
     // HUD-9: 1-3 and the wheel send Equip on every switch, and its reply shows for 5 s.
