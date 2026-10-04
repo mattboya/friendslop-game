@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using Festival.Core;
 
 // POI-1 (Matt, 2026-10-01): hold left click with poi in hand and you spin them, and your friends see it. It is only for show: the
-// one rule is who may spin (FestivalSimulation.CanSpinPoi), which the host turns into PlayerState.VisualPoiSpin each tick.
+// one rule is who may spin (FestivalSimulation.CanSpinPoi), which the host turns into PlayerState.VisualPoiSpin each tick. HUD-9:
+// Equip's reply says what the item in hand does: poi name Q's performance and the spin, and stock never says Q, since Q on stock
+// takes it yourself (ECON-3).
 public static class PoiSpinTests
 {
     static int sequence;
@@ -12,7 +14,7 @@ public static class PoiSpinTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins})
+        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" poi spin test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -70,5 +72,16 @@ public static class PoiSpinTests
         var playa=Festival(1);var rider=playa.Player("p0");Check(Act(playa,rider.Id,"Equip","poi_led").Accepted,"setup: equip on the playa");
         var car=Festivals.ArtCarAt(0,playa.State.ElapsedSeconds);rider.X=car.X+1;rider.Z=car.Z;
         Check(Act(playa,rider.Id,"RideCar").Accepted,"setup: board an art car");Check(!FestivalSimulation.CanSpinPoi(rider),"not riding an art car");
+    }
+
+    // HUD-9: 1-3 and the wheel send Equip on every switch, and its reply shows for 5 s.
+    static void EquipSaysWhatTheItemDoes()
+    {
+        var s=Festival();var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});
+        string Reply(string item)=>Act(s,p.Id,"Equip",item).Reason;
+        string stock=Reply("stock_lsd"),poi=Reply("poi_led"),gear=Reply("confetti");
+        Check(stock=="Equipped Tongue Stamps. Walk up to a festivalgoer to offer it.","stock points at a buyer and never says Q (that takes it yourself), got \""+stock+"\"");
+        Check(poi=="Equipped LED poi. Press Q to perform, hold left click to spin.","poi name the performance and the spin, got \""+poi+"\"");
+        Check(gear=="Equipped Confetti cannon. Press Q to use.","other gear still says Q, got \""+gear+"\"");
     }
 }
