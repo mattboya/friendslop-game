@@ -4,7 +4,7 @@ namespace Festival.Core {
 public sealed partial class FestivalSimulation {
     public Func<float,float,float,float,double,WorldPoint> Navigate;
     public void Tick(double deltaSeconds){if(!Finite(deltaSeconds)||deltaSeconds<0||deltaSeconds>60)throw new ArgumentOutOfRangeException(nameof(deltaSeconds));while(deltaSeconds>0){double dt=Math.Min(.1,deltaSeconds);Step(dt);deltaSeconds-=dt;}}
-    void Step(double dt){State.SimulationSeconds+=dt;State.Tick++;
+    void Step(double dt){State.SimulationSeconds+=dt;State.Tick++;CampEggTick();
         // MINI-1: a minigame stops the level, handoff expiry included (Minigames.cs).
         if(State.Phase==MinigamePhase){MinigameTick(dt);return;}
         foreach(var offer in State.Transfers.ToArray())if(offer.ExpiresAt<=State.SimulationSeconds)ReturnOffer(offer);

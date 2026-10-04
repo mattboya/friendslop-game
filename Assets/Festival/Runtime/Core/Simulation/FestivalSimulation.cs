@@ -10,7 +10,7 @@ namespace Festival.Core
         public Func<float,float,float,float,bool> HasLineOfSight;
         public FestivalSimulation(int seed=1) { State=CreateRound(seed); }
         static RoundState CreateRound(int seed) {
-            var s=new RoundState {Seed=seed,RoundId=Guid.NewGuid().ToString("N"),VendorOffers=Catalog.VendorOffers(seed)};
+            var s=new RoundState {Seed=seed,RoundId=Guid.NewGuid().ToString("N"),VendorOffers=Catalog.VendorOffers(seed),CampEggs=CreateCampEggs(seed)};
             foreach(var item in s.VendorOffers)s.ShopStock.Add(new ShopStockState{ItemId=item,CampAvailable=Catalog.ShopCopies(item,2),MarketAvailable=Catalog.ShopCopies(item,2)});
             s.FriendPosition=FriendSpot(seed,0);
             for(int i=0;i<FestivalCrowdLayout.Count;i++) { var point=FestivalCrowdLayout.Get(i,seed);bool wide=(i+seed%7)%7==0; s.Npcs.Add(new NpcState {Id="wook_"+i,X=point.X,Z=point.Z,Yaw=point.Yaw,IdlePose=point.Pose,HighlyIntoxicated=wide,RedEyes=(i+seed%5)%5==0||wide&&i<7,CanTalk=(i+seed%3)%4==0}); }
@@ -33,7 +33,7 @@ namespace Festival.Core
             }
             return p;
         }
-        public void Disconnect(string id) {var p=Player(id);if(p==null)return; Cancel(p,"Disconnected");ReturnHeldOffer(p);p.Connected=false;p.Ready=false;p.DragTargetId="";State.LaunchAtSeconds=0;if(State.FriendLeaderId==id)State.FriendLeaderId=""; ReturnOffers(id);RevealIfAllVoted();}
+        public void Disconnect(string id) {var p=Player(id);if(p==null)return; ReleaseCampSeat(id);Cancel(p,"Disconnected");ReturnHeldOffer(p);p.Connected=false;p.Ready=false;p.DragTargetId="";State.LaunchAtSeconds=0;if(State.FriendLeaderId==id)State.FriendLeaderId=""; ReturnOffers(id);RevealIfAllVoted();}
         public PlayerState Player(string id) {return State.Players.Find(p=>p.Id==id);}
         public InteractionState Interaction(string id) {return State.Interactions.Find(i=>i.Id==id);}
         public void Restore(RoundState state) {
@@ -46,8 +46,10 @@ namespace Festival.Core
             // a current round from here on, so saving it again does not re-read a weekend Day 1 as an old rescue.
             if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
             state.SchemaVersion=RoundState.CurrentSchemaVersion;
+            RestoreCampEggs(state);
             State=state;
             RestoreChats();
+            CampEggTick();
         }
         public CommandResult Execute(string playerId,GameCommand command) {
             if(command==null||string.IsNullOrEmpty(command.Id)||command.Id.Length>128||command.Kind==null||command.Kind.Length>32||command.TargetId==null||command.TargetId.Length>128||command.ItemId==null||command.ItemId.Length>64||!Finite(command.TimeSeconds))return Reject("Invalid command envelope");
@@ -63,7 +65,7 @@ namespace Festival.Core
         public static bool Interactive(string phase)=>phase=="Playing"||phase=="Shopping";
         CommandResult Apply(PlayerState p,GameCommand c) {
             if(State.Phase==MinigamePhase)return Paused(p,c);
-            if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
+            if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");ReleaseCampSeat(p.Id);p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
             if(c.Kind=="Start") {
                 if(p.Id!=State.HostPlayerId)return Reject("Only host starts rounds");
                 if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Round already started");
@@ -76,9 +78,10 @@ namespace Festival.Core
             if(c.Kind=="ReviewVote")return VoteForReview(p,c);
             if(c.Kind=="FinishReview")return FinishCampReview(p);
             if(c.Kind=="ChooseFestival")return ChooseFestival(p,c);
+            if(c.Kind=="CampEgg")return CampEgg(p,c);
             if(c.Kind=="EnterCamp"||c.Kind=="ExitCamp"||c.Kind=="CampAntic"||c.Kind=="ChooseCampTrack")return CampAction(p,c);
             if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");p.Dialogue.Acknowledge(c.TargetId,current.Id);return Ok();}
-            if(c.Kind=="Cancel") {if(OnWheel(State,p.Id))return Reject("You're stuck until the wheel comes round");Cancel(p,"Cancelled");return Ok();}
+            if(c.Kind=="Cancel") {if(OnWheel(State,p.Id))return Reject("You're stuck until the wheel comes round");ReleaseCampSeat(p.Id);Cancel(p,"Cancelled");return Ok();}
             if(c.Kind=="Rhythm")return Submit(p,c);
             if(c.Kind=="Reply")return Reply(p,c);
             if(c.Kind=="EndChat")return EndChat(p,c);
@@ -160,6 +163,7 @@ namespace Festival.Core
             if(!MayStep(p,x,z))return false;
             if(!CarryTo(p,x,z))return false;
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
+            if(Distance(p.X,p.Z,x,z)>.001)ReleaseCampSeat(p.Id);
             p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
         }
         static bool Finite(double d){return !double.IsNaN(d)&&!double.IsInfinity(d);}
@@ -177,6 +181,7 @@ namespace Festival.Core
         static void Take(PlayerState p,string item,int count){var s=p.Inventory.Find(i=>i.ItemId==item);s.Count-=count;if(s.Count==0){p.Inventory.Remove(s);if(p.EquippedItemId==item)p.EquippedItemId=p.Inventory.Find(i=>i.ItemId!="little_spoon")?.ItemId??"";}}
         void StartRound(List<PlayerState> connected)
         {
+            foreach(var player in State.Players)ReleaseCampSeat(player.Id);
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             // The level runs the table's length whatever the round was saved with (a snapshot from before weekends held 600 s).
@@ -194,7 +199,7 @@ namespace Festival.Core
             foreach(var player in old.Players)
             {
                 var fresh=AddPlayer(player.Id,player.Name);fresh.Connected=player.Connected;
-                fresh.HasCosmetic=player.HasCosmetic;fresh.Dialogue=player.Dialogue;
+                fresh.HasCosmetic=player.HasCosmetic;fresh.Dialogue=player.Dialogue;fresh.FoundCampEggMask=player.FoundCampEggMask;
             }
             State.HostPlayerId=old.HostPlayerId;
             AdvanceWeekend(old);
@@ -214,6 +219,7 @@ namespace Festival.Core
                 var site=CampFeatures.Find(c.TargetId);
                 if(p.Ready||p.CampVisitId!=""||site==null||!Near(p,site.X,site.Z,3.5))return Reject("Stand beside a camp door to enter");
                 int occupants=0;foreach(var other in State.Players)if(other!=p&&other.CampVisitId==site.Id)occupants++;
+                ReleaseCampSeat(p.Id);
                 p.CampVisitId=site.Id;p.CampGag="";p.X=site.X;p.Z=site.Z;
                 // Give the next arrival a distinct standing spot so friends
                 // do not spawn directly in one another's first-person view.

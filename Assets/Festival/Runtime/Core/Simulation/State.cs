@@ -31,6 +31,8 @@ namespace Festival.Core
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
         public int Performances, CampAntics; public double LastRhythmScore=-1;
+        // CAMP-3: shared last poke; the cumulative session discovery mask reaches only this player's own view.
+        public string LastCampEggId="",LastCampEggLine=""; public int CampEggSequence,FoundCampEggMask; public double LastCampEggAt=-1;
         public int EscapeProgress; public string VisualPose="Idle",NpcSpeech="",NpcSpeaker=""; public double NpcSpeechUntil;
         public int VisualDanceStepSequence,VisualDanceStepDirection=-1;
         public string VisualOfferItem="",VisualOfferTarget="",VisualReceivedItem="";
@@ -100,6 +102,8 @@ namespace Festival.Core
         // The night's clue trail is complete (Visions.cs): the lost friend can be found.
         public bool GateOpened;
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
+        // CAMP-3: persistent public prop state and host-picked points for this camp visit; additive in schema 2.
+        public List<CampEggState> CampEggs=new List<CampEggState>();
         // Sale cash paid out this level, after any payout multiplier; a day's quota counts it (DayQuota.cs).
         public int LevelSales;
         // GAS-2: this level's Giggle Tank (GiggleTanks.cs), public like the spin: its place in Festivals.GiggleTankSpots, or -1 for

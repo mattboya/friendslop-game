@@ -53,6 +53,9 @@ namespace Festival.Network
         // durations. EndChat names an owned active interaction: it completes a valid check or cancels a reply talk with the
         // existing refund and witness cost. Police replies and trust/rhythm charts retain their deadlines. Version 5 peers
         // cannot interpret these durations or commands and are rejected. Later wave units append their actual version-6 changes.
+        // CAMP-3: CampEgg targets one of eight stable camp IDs. RoundState.CampEggs publishes host-picked points, activation
+        // sequences/times, chair ownership, deflation and dust words. Player last-egg events are public; FoundCampEggMask is
+        // cumulative session discovery and copied only to its owner. All new fields default safely in older schema-2 rounds.
         public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -181,6 +184,7 @@ namespace Festival.Network
                 simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);Profile.ApplyUnlocks(simulation.State);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 simulation.ChatDiagnostic=DevelopmentDiagnostics.Transition;
+                simulation.CampEggDiagnostic=DevelopmentDiagnostics.Transition;
 #endif
                 simulation.HasLineOfSight=LineOfSight;
                 simulation.Navigate=Navigate;
@@ -526,6 +530,7 @@ namespace Festival.Network
             int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
+                CampEggs=source.CampEggs.ConvertAll(e=>JsonUtility.FromJson<CampEggState>(JsonUtility.ToJson(e))),
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
                 // CROWD-2: a big crew's second lost friend, shown like the first. Its clue chain stays on the host.
@@ -545,6 +550,7 @@ namespace Festival.Network
             {
                 if(spirit && p.Life!="Spirit")continue;
                 var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active") switch{null=>p.Effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect)?"Intoxicated":"Idle",var doing when FestivalSimulation.Dancing(doing)=>"Dance",var doing=>doing.Kind};
+                if(FestivalSimulation.CampSeated(source,p.Id))copy.VisualPose=FestivalSimulation.CampChairPose;
                 var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
                 copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
                 copy.WearingLittleSpoon=p.Inventory.Exists(item=>item.ItemId=="little_spoon"&&item.Count>0);
@@ -556,7 +562,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.Films(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;}view.Players.Add(copy);
+                if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
             }
             if(!spirit)
             {

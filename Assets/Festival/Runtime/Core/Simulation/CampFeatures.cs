@@ -32,6 +32,31 @@ namespace Festival.Core
             new Site("potty_1","Potty",19,6,0),new Site("potty_2","Potty",-19,1,0),
         };
         public static Site Find(string id){foreach(var site in Sites)if(site.Id==id)return site;return null;}
+        // CAMP-3: the public visit seed chooses a spot; consecutive visits never repeat it, including negative seeds.
+        public static readonly WorldPoint[] GnomeSpots={new WorldPoint(-11,16),new WorldPoint(11,19)};
+        public static WorldPoint GnomePoint(int seed)=>GnomeSpots[(seed%GnomeSpots.Length+GnomeSpots.Length)%GnomeSpots.Length];
+        public sealed class Egg
+        {
+            public readonly string Id,Name;
+            public readonly float X,Z;
+            public readonly string[] Lines;
+            public Egg(string id,string name,float x,float z,params string[] lines){Id=id;Name=name;X=x;Z=z;Lines=lines;}
+        }
+        // Array order is the discovery-mask contract. Keep these eight IDs stable across local profile saves.
+        public static readonly Egg[] Eggs={
+            new Egg("gnome","The gnome",-11,16,"The gnome whispers: the real festival was the snacks we hid along the way.","The gnome refuses to reveal its snack supplier.","The gnome claims it is on the lineup. Nobody can verify this."),
+            new Egg("button","DO NOT PRESS",4.85f,DjZ,"DO NOT PRESS. You press it. Confetti and an air horn happen.","You were warned. Twice now.","The button's legal team would like a word."),
+            new Egg("chair","The headliner's chair",-10,3.5f,"You feel famous for four seconds.","Your rider requests one crisp and absolute silence.","The imaginary crowd goes mild."),
+            new Egg("lost_found","Lost and found",10,7,"Fourteen left sandals, one right sandal, and a glow stick still glowing out of spite.","Somebody has lost a single eyebrow. No questions asked.","The box contains a smaller box labelled LOSTER AND FOUNDER."),
+            new Egg("hammock","The hammock sleeper",-23,-6,"five more minutes… the bass hasn't dropped yet","wake me when the opening act finishes… tomorrow","I wasn't asleep… I was buffering"),
+            new Egg("flamingo","The inflatable flamingo",23,-6,"The flamingo lets out a long, sad squeak.","The flamingo is already having a flat day.","The flamingo has nothing left to give."),
+            new Egg("cone","The cone shrine",-7,-19,"You pay your respects to Cone. Cone is pleased.","Cone blesses your extremely questionable itinerary.","Cone asks for no offerings. Cone has seen your budget."),
+            // The standing point is north of car_1's back window, outside its collision box and door zone.
+            new Egg("wash_me","WASH ME",-14,-11.2f,"You write {word} in the dust.","The dust now says {word}. Very professional.","{word}. Your finest work yet.")
+        };
+        public static Egg FindEgg(string id){foreach(var egg in Eggs)if(egg.Id==id)return egg;return null;}
+        public static WorldPoint EggPoint(Egg egg,int seed)=>egg.Id=="gnome"?GnomePoint(seed):new WorldPoint(egg.X,egg.Z);
+        public static readonly string[] DustWords={"BASS","HELP","NARC?","MOM SAYS HI"};
         // Every physical doorway owns a separate interior cell. Two players
         // entering different tents no longer appear in the same room.
         public static float InteriorSlotX(Site site)=>Array.IndexOf(Sites,site)<8?-InteriorX:InteriorX;
