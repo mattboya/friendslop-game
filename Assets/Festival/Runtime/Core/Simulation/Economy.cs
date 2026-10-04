@@ -1,12 +1,12 @@
 using System;
 namespace Festival.Core {
 public sealed partial class FestivalSimulation {
-    // ECON-2: a shelf restored from an older snapshot may still list stock; it sells gear only all the same.
+    // ECON-6: camp has a limited starter allowance; festival market shelves still sell gear only.
     const string StockOffShelves="Stock comes from festivalgoers, not shelves";
     CommandResult HoldOffer(PlayerState p,GameCommand c)
     {
         if(State.Phase!="Shopping"||p.Ready||p.HeldOfferId!="")return Reject("Return your held item before choosing another");
-        if(Catalog.FindItem(c.ItemId)?.Category=="Stock")return Reject(StockOffShelves);
+        string starterRefusal=StarterShelfRefusal(p,c.ItemId);if(starterRefusal!="")return Reject(starterRefusal);
         int index=State.VendorOffers.IndexOf(c.ItemId);
         if(index<0)return Reject("That item is not on the shelf");
         var point=Catalog.ShopPoint(true,index);
@@ -29,7 +29,7 @@ public sealed partial class FestivalSimulation {
         if(c.ItemId==VipWristband)return BuyVipWristband(p);
         int index=State.VendorOffers.IndexOf(c.ItemId);
         var item=Catalog.FindItem(c.ItemId);
-        if(item?.Category=="Stock")return Reject(StockOffShelves);
+        string starterRefusal=StarterShelfRefusal(p,c.ItemId);if(starterRefusal!="")return Reject(starterRefusal);
         if(index<0||item==null||c.Amount>1||c.Amount<0)return Reject("Invalid offer or amount");
         var stock=State.ShopStock.Find(s=>s.ItemId==c.ItemId);
         if(stock==null)return Reject("Offer unavailable");
@@ -47,7 +47,7 @@ public sealed partial class FestivalSimulation {
         }
         if(p.Cash<item.Price)return Reject("Insufficient cash");
         if(!CanAdd(p,c.ItemId,1))return Reject("Three slots or stack limit reached");
-        p.Cash-=item.Price;Add(p,c.ItemId,1);
+        p.Cash-=item.Price;Add(p,c.ItemId,1);SpendStarterAllowance(p,c.ItemId);
         if(c.ItemId!="little_spoon")p.EquippedItemId=c.ItemId;
         if(camp)p.HeldOfferId="";else stock.MarketAvailable--;
         p.VisualReceivedItem=c.ItemId;p.VisualReceiptSequence++;p.VisualReceiptAt=State.SimulationSeconds;

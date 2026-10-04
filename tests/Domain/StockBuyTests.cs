@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Festival.Core;
 
-// ECON-2: the camp and night-market shelves sell gear only. Tongue Stamps and Fun Guys come from festivalgoers through a buy, talked
+// ECON-6: camp sells one combined starter per player; the night-market shelves sell gear only. More stock comes from festivalgoers, talked
 // through (DIALOG-3). Regulars (and clue holders at night) sell one kind each, a few units a level; anyone else turns the ask down the
 // same way, and a narc plays along: finishing the buy with one is a bust.
 public static class StockBuyTests
@@ -14,7 +14,7 @@ public static class StockBuyTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{NoShelfSellsStock,ASellerSells,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
+        foreach(var test in new Action[]{CampStartersKeepGearShuffleAndMarketRefusesStock,ASellerSells,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stock buy test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -51,36 +51,26 @@ public static class StockBuyTests
         return i;
     }
 
-    // The shelves keep the three staples and the three extras each seed always drew, and never stock. Shelves restored from an
-    // older snapshot that still list stock won't sell it either, and the camp hint says where stock comes from now.
-    static void NoShelfSellsStock()
+    // The six gear offers keep their original shuffle; starters append, and no night-market shelf sells stock.
+    static void CampStartersKeepGearShuffleAndMarketRefusesStock()
     {
         for(int seed=1;seed<=200;seed++)
         {
             var offers=Catalog.VendorOffers(seed);var old=OldOffers(seed);old.RemoveAll(id=>id=="stock_lsd"||id=="stock_mushrooms");
-            Check(!offers.Exists(id=>Catalog.FindItem(id).Category=="Stock"),"seed "+seed+"'s shelves hold no stock: "+string.Join(",",offers));
-            Check(string.Join(",",offers)==string.Join(",",old),"seed "+seed+"'s shelves keep the gear they drew: "+string.Join(",",offers)+", was "+string.Join(",",old));
+            Check(offers.Count==8,"seed "+seed+" has six gear offers and two starters");
+            Check(string.Join(",",offers.GetRange(0,6))==string.Join(",",old),"seed "+seed+" keeps the gear it drew");
+            Check(offers[6]=="stock_lsd"&&offers[7]=="stock_mushrooms","both starters follow all six gear offers");
         }
-        var s=new FestivalSimulation(7);var p=s.AddPlayer("p0","P0");
-        s.State.VendorOffers.Add("stock_lsd");s.State.ShopStock.Add(new ShopStockState{ItemId="stock_lsd",CampAvailable=2,MarketAvailable=2});
-        int index=s.State.VendorOffers.IndexOf("stock_lsd");var shelf=Catalog.ShopPoint(true,index);p.X=shelf.X;p.Z=shelf.Z;
-        var held=Act(s,"p0","HoldOffer","","stock_lsd");
-        Check(!held.Accepted&&held.Reason=="Stock comes from festivalgoers, not shelves"&&p.HeldOfferId=="","the camp shelf won't hand over stock: "+held.Reason);
-        // Picked up before the update.
-        p.HeldOfferId="stock_lsd";p.X=0;p.Z=7;var paid=Act(s,"p0","Buy","","stock_lsd");
-        Check(!paid.Accepted&&p.Cash==20&&Count(p,"stock_lsd")==0,"nor will the camp seller sell it: "+paid.Reason);
-        p.HeldOfferId="";s.State.Phase="Playing";var market=Catalog.ShopPoint(false,index);p.X=market.X;p.Z=market.Z;
-        var bought=Act(s,"p0","Buy","","stock_lsd");
-        Check(!bought.Accepted&&p.Cash==20&&Count(p,"stock_lsd")==0&&s.State.ShopStock.Find(x=>x.ItemId=="stock_lsd").MarketAvailable==2,"nor will a night-market shelf: "+bought.Reason);
-        // ECON-3: the hint says it only while you hold no stock for a day, not once you carry some, nor before a night's rescue.
-        s.State.Phase="Shopping";p.X=-1;p.Z=-9;var hint=FestivalGuidance.Hint(s.State,p);
-        Check(hint.Contains("Camp supplies")&&hint.Contains("look at shelf props")&&hint.Contains("Stock comes from festivalgoers."),"with no stock, the camp hint says stock comes from festivalgoers: "+hint);
-        p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});hint=FestivalGuidance.Hint(s.State,p);
-        Check(hint.Contains("Camp supplies")&&!hint.Contains("Stock comes from"),"with stock in hand it doesn't: "+hint);
-        p.Inventory.RemoveAll(i=>i.ItemId=="stock_mushrooms");s.State.LevelIndex=1;hint=FestivalGuidance.Hint(s.State,p);
-        Check(hint.Contains("Camp supplies")&&!hint.Contains("Stock comes from"),"nor before a night: "+hint);
+        var s=new FestivalSimulation(7);var p=s.AddPlayer("p0","P0");s.State.Phase="Playing";
+        foreach(var item in new[]{"stock_lsd","stock_mushrooms"})
+        {
+            var stock=s.State.ShopStock.Find(x=>x.ItemId==item);stock.MarketAvailable=2;
+            var point=Catalog.ShopPoint(false,s.State.VendorOffers.IndexOf(item));p.X=point.X;p.Z=point.Z;
+            var reply=Act(s,p.Id,"Buy","",item);
+            Check(!reply.Accepted&&reply.Reason=="Stock comes from festivalgoers, not shelves"&&p.Cash==20&&Count(p,item)==0&&stock.MarketAvailable==2,"legacy market supply cannot sell "+item+": "+reply.Reason);
+        }
     }
-    // Catalog.VendorOffers as it was before ECON-2, stock and all, so NoShelfSellsStock can tell the shuffle draws what it drew.
+    // Catalog.VendorOffers as it was before ECON-2, stock and all, so CampStartersKeepGearShuffleAndMarketRefusesStock can tell the shuffle draws what it drew.
     static List<string> OldOffers(int seed)
     {
         var offers=new List<string>{"little_spoon","stock_lsd","stock_mushrooms","medical_voucher","poi_practice"};

@@ -56,6 +56,8 @@ namespace Festival.Network
         // CAMP-3: CampEgg targets one of eight stable camp IDs. RoundState.CampEggs publishes host-picked points, activation
         // sequences/times, chair ownership, deflation and dust words. Player last-egg events are public; FoundCampEggMask is
         // cumulative session discovery and copied only to its owner. All new fields default safely in older schema-2 rounds.
+        // ECON-6: camp offers append two starter kinds with eight copies each and zero market supply.
+        // PlayerState.StarterStockBought persists one paid combined allowance per fresh camp and is owner-only in views.
         public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -562,7 +564,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.Films(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
+                if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
             }
             if(!spirit)
             {

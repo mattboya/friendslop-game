@@ -14,12 +14,13 @@ public static class ContentTests
         for(int seed=-100;seed<100;seed++)
         {
             var first=Catalog.VendorOffers(seed); var second=Catalog.VendorOffers(seed);
-            Check(first.Count==6&&new HashSet<string>(first).Count==6,"six distinct offers");
+            Check(first.Count==8&&new HashSet<string>(first).Count==8,"six gear offers and two distinct starters");
             Check(string.Join(",",first)==string.Join(",",second),"stable offers");
             foreach(var id in new[]{"little_spoon","medical_voucher","poi_practice"}) Check(first.Contains(id),"guaranteed offer");
             foreach(var id in first) Check(Catalog.FindItem(id).Purchasable,"purchasable only");
-            // ECON-2: festivalgoers sell the stock (StockBuyTests).
-            foreach(var id in first) Check(Catalog.FindItem(id).Category!="Stock","no stock on a shelf");
+            // ECON-6: starters append to the existing gear slots; the night market remains gear only.
+            for(int i=0;i<6;i++) Check(Catalog.FindItem(first[i]).Category!="Stock","first six offers remain gear");
+            Check(first[6]=="stock_lsd"&&first[7]=="stock_mushrooms","starter slots follow the gear");
         }
         foreach(double offset in new[]{0,0.08,0.081,0.15,0.151}) foreach(int sign in new[]{-1,1})
         {

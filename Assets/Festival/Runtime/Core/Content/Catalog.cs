@@ -27,8 +27,8 @@ namespace Festival.Core
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
             // POLO-2, ECON-1: a clean sale pays $10 (FestivalSimulation.PerfectSalePay) at dose 1, and dose, VIP zones, double
             // buyers and encores raise it, so the text names no ceiling; a sloppy sale that lands pays less ($5 at dose 1), so the
-            // floor is a clean sale's. "$N" stays a token Ember Playa's odd-object money converts. ECON-2: no shelf sells either;
-            // festivalgoers do (StockBuys.cs), so this text now shows only in the item preview.
+            // floor is a clean sale's. "$N" stays a token Ember Playa's odd-object money converts. ECON-6 adds one camp starter;
+            // festivalgoers remain the source of further stock (StockBuys.cs).
             Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up, or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
             Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up, or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
             Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
@@ -68,8 +68,9 @@ namespace Festival.Core
             if(id=="poi_led")return "LED POI";
             return FindItem(id)?.Name.ToUpperInvariant()??id.ToUpperInvariant();
         }
-        // Gear only (ECON-2): festivalgoers sell the stock, as the weekend table sets it (Festivals.StockCopies).
-        public static int ShopCopies(string id,int crewSize) => RareShopItem(id)?1:Math.Max(2,(crewSize+1)/2);
+        // ECON-6: eight starters per kind cover the full crew; the combined per-player allowance controls payment.
+        public static bool StarterStock(string id) => id=="stock_lsd"||id=="stock_mushrooms";
+        public static int ShopCopies(string id,int crewSize) => StarterStock(id)?8:RareShopItem(id)?1:Math.Max(2,(crewSize+1)/2);
         public static WorldPoint ShopPoint(bool camp,int index)
         {
             int column=index%4;
@@ -78,12 +79,13 @@ namespace Festival.Core
         }
         public static List<string> VendorOffers(int seed)
         {
-            // ECON-2: three staples and three of the extras, no stock. The shuffle draws what it always drew.
+            // ECON-6: the six gear slots keep their shuffle; two starter kinds append without another random draw.
             var offers = new List<string> { "little_spoon", "medical_voucher", "poi_practice" };
             var extras = new[] { "stage_pass", "confetti", "merch_bag", "stash_box", "poi_led" };
             var random = new ContentRandom(seed);
             for(int i=extras.Length-1;i>0;i--) { int j=random.Next(i+1); var t=extras[i]; extras[i]=extras[j]; extras[j]=t; }
             for(int i=0;i<3;i++) offers.Add(extras[i]);
+            offers.Add("stock_lsd");offers.Add("stock_mushrooms");
             return offers;
         }
         private static ItemDefinition Item(string id,string name,string text,int price,int stack,string category,string context,string target,double setup,double duration,double range,bool consumed,string effect=null,bool purchasable=true)

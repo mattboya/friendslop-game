@@ -44,9 +44,11 @@ namespace Festival.Core
                         :"Dancing at the trailhead. Wait for the crew, or press E to unready.";
                 }
                 if(player.HeldOfferId!="")return "Carry your unpaid item to the seller "+Route(player,0,7)+". Press E to pay, or G to return it.";
+                string starter=player.StarterStockBought>0?" Starter bought this camp.":" One starter each at camp: Tongue Stamps or Fun Guys for $5.";
+                starter+=" Buy more from festivalgoers ($5 each; some are narcs).";
                 return Distance(player,0,19)<4
-                    ?"Press E at the lit trailhead to ready up and dance."
-                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E."+(NeedsStock(state,player)?" Stock comes from festivalgoers.":"")+" Ready at lit trailhead "+Route(player,0,19)+".";
+                    ?"Press E at the lit trailhead to ready up and dance."+starter
+                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E."+starter+" Ready at lit trailhead "+Route(player,0,19)+".";
             }
             if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";

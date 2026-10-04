@@ -29,6 +29,8 @@ namespace Festival.Core
         // older snapshots.
         public List<string> VisualFilmedBy=new List<string>();
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
+        // ECON-6: successful starter payments this camp, shared across both kinds; zero in older snapshots. Owner-only in views.
+        public int StarterStockBought;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
         public int Performances, CampAntics; public double LastRhythmScore=-1;
         // CAMP-3: shared last poke; the cumulative session discovery mask reaches only this player's own view.
