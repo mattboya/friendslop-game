@@ -35,7 +35,7 @@ public static class TripperTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseRollTable,ExistingSeedsKeepTheirTripperAndDose,DoseSpinnerWeights,SubstanceSpinnerPicksWhatTheyTook,TheSameSeedTakesTheSameSubstance,EveryDoseHasASubstance,SubstancesChangeNoRules,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
+        foreach(var test in new Action[]{SpinRunsAtCampBeforeLoading,EveryoneTripsOnceAWeekend,SmallCrewsAlternate,DoseRollTable,ExistingSeedsKeepTheirTripperAndDose,DoseSpinnerWeights,SubstanceSpinnerPicksWhatTheyTook,TheSameSeedTakesTheSameSubstance,EveryDoseHasASubstance,SubstancesChangeOnlyTheWalk,SoloAlwaysTrips,NightTwoDosesEveryone,SpinResultSurvivesSnapshots,
             DoseSlowsTheTripperAllLevel,RepickWhenTheTripperDiesOrLeaves,ClueTastingIsGone,NightTwoCrewFollowsTheTrail,DoseLeavesBothConsumableSlots,MedicalCannotCureTheDose,GuidanceFollowsTheSpin})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" tripper test(s) failed:\n"+string.Join("\n",failures));
@@ -169,17 +169,23 @@ public static class TripperTests
         Check(next!=gone&&Substance(next)==spun[next.Id],"on Night 2 the stand-in keeps the substance they already took");
     }
 
-    // Substances are perception only. The same level played the same way with each substance forced onto every dose (overwritten
-    // after the spin) ends in the same state, the substance aside: the same visions, truths, tells and checks, speeds and crowd.
-    static void SubstancesChangeNoRules()
+    // Outside walking, substances keep the same visions, truths, tells, checks, payouts and crowd. TryMove consumes speed,
+    // not sway: the host's input consumer adds that, so only Couch Lock shortens these direct eastward strides.
+    static void SubstancesChangeOnlyTheWalk()
     {
         foreach(int level in new[]{0,1,3})
         {
+            var standing=FestivalSimulation.Substances.Select(id=>PlayedWith(level,id,false)).ToList();
+            Check(standing[0].Checked,"setup: level "+level+"'s tripper checks a vision");
+            Check(standing.Select(p=>p.Raw).Distinct().Count()==standing.Count,"setup: five different substances were taken");
+            for(int i=1;i<standing.Count;i++)
+                Check(standing[i].Stripped==standing[0].Stripped,"without walking, level "+level+": "+FestivalSimulation.Substances[i]+" changes no other rule; "+Parting(standing[i].Stripped,standing[0].Stripped));
             var played=FestivalSimulation.Substances.Select(id=>PlayedWith(level,id)).ToList();
             Check(played[0].Checked,"setup: level "+level+"'s tripper checks a vision");
             Check(played.Select(p=>p.Raw).Distinct().Count()==played.Count,"setup: level "+level+" really played with five different substances");
-            for(int i=1;i<played.Count;i++)
+            for(int i=1;i<played.Count-1;i++)
                 Check(played[i].Stripped==played[0].Stripped,"level "+level+": "+FestivalSimulation.Substances[i]+" plays out exactly as "+FestivalSimulation.Substances[0]+" does, but parts at "+Parting(played[i].Stripped,played[0].Stripped));
+            Check(played[4].East<played[0].East,"level "+level+": Couch Lock's dosed players walk less far east than Tongue Stamps', got "+played[4].East+" / "+played[0].East);
         }
     }
     // Where two texts first differ, with a little of each.
@@ -187,7 +193,7 @@ public static class TripperTests
     // Three friends spin, every dose is forced to substance, the tripper chat-checks up to three of their visions, then everyone walks
     // as fast as they may (the longest step TryMove accepts, to 5 cm). The state's JSON without its random round id, as it is and with every Substance field removed.
     // Command ids restart, so they match.
-    static (string Raw,string Stripped,bool Checked) PlayedWith(int level,string substance)
+    static (string Raw,string Stripped,bool Checked,float East) PlayedWith(int level,string substance,bool walk=true)
     {
         sequence=0;var s=Crew(300+level,3);s.State.LevelIndex=level;Spin(s);
         foreach(var p in s.State.Players)if(DoseOf(p)!=null)DoseOf(p).Substance=substance;
@@ -200,12 +206,18 @@ public static class TripperTests
             if(started.Accepted)Check(Act(s,tripper.Id,"EndChat",target:tripper.InteractionId).Accepted,"setup: end the accepted check explicitly");
         }
         bool checkedOne=s.State.Visions.Exists(v=>v.Confirmed);
-        foreach(var p in s.State.Players)for(int step=0;step<20;step++){for(float stride=.7f;stride>.2f&&!s.TryMove(p.Id,p.X+stride,p.Z,90,.1);stride-=.05f){}s.Tick(.1);}
+        float east=0;
+        foreach(var p in s.State.Players)
+        {
+            float from=p.X;
+            for(int step=0;step<20;step++){if(walk)for(float stride=.7f;stride>.2f&&!s.TryMove(p.Id,p.X+stride,p.Z,90,.1);stride-=.05f){}s.Tick(.1);}
+            if(DoseOf(p)!=null)east+=p.X-from;
+        }
         s.Tick(10);
         var json=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();json.Remove("RoundId");string raw=json.ToJsonString();
         foreach(var p in json["Players"].AsArray())foreach(var e in p["Effects"].AsArray())e.AsObject().Remove("Substance");
         foreach(var d in json["Doses"].AsArray())d.AsObject().Remove("Substance");
-        return (raw,json.ToJsonString(),checkedOne);
+        return (raw,json.ToJsonString(),checkedOne,east);
     }
 
     static void SoloAlwaysTrips()

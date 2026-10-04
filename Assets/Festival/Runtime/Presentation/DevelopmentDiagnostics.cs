@@ -39,6 +39,7 @@ namespace Festival.Presentation
         {
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"--graphics-profile")<0)return;
             enabledByUser=true;showOverlay=false;
+            DevelopmentDiagnostics.Visible=true;
             nextLog=Time.unscaledTime+10f;
             lastAnimationUpdates=FestivalCharacter.DevelopmentAnimationUpdates;
             DevelopmentDiagnostics.GraphicsEvent("Rendering","profile_start","build="+Application.buildGUID);
@@ -49,6 +50,7 @@ namespace Festival.Presentation
             if(Keyboard.current!=null&&Keyboard.current.f9Key.wasPressedThisFrame)
             {
                 enabledByUser=!enabledByUser;
+                DevelopmentDiagnostics.Visible=enabledByUser;
                 showOverlay=enabledByUser;
                 sampleCount=0;sampleIndex=0;nextSummary=0;nextInventory=0;
                 nextLog=Time.unscaledTime+10f;

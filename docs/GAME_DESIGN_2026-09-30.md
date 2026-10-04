@@ -59,8 +59,13 @@ The two hooks the design is built around:
   1, 2 and 3 doses are equally likely, and the 4-dose slice is a clear 10%.
 - **What:** a third spinner, with five equal slices, picks the substance:
   Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust or Couch Lock. Each
-  looks and feels different on the dosed player's own screen, but only the
-  dose changes the rules. On Night 2 every dosed friend rolls their own.
+  sets the dosed player's screen look and rhythm-arrow travel. Tongue Stamps
+  and Fun Guys also add their shop versions' walking sway, from the dose's
+  own start time; Couch Lock adds a further 10% walking slowdown. These
+  walking twists require a positive dose, keep the 65% speed floor and
+  ±0.24 sway clamp, and never move a rooted dancer. Rolly Pollies and Pony
+  Dust have lane twists only. Visions, payouts and every other rule still
+  depend only on the dose. On Night 2 every dosed friend rolls their own.
 - **Presentation:** the three spinners are one slot machine. Its reels
   start together and stop left to right: who, then how many, then what.
   Then an animation shows the tripper taking the dose and reacting.

@@ -62,6 +62,8 @@ namespace Festival.Network
         // HUD purchase feedback preserves the poi reply. This correction adds no wire fields or commands.
         // DANCE-10 chart/judge: Night 1 onward selects one- or two-beat holds with covered rests from ChartSeed. RhythmNote
         // carries HoldSeconds; Day 1 and explicit QuarterNotes keep their tap shapes. Hold heads remain one scored note.
+        // TRIP-13 walking: positive Couch Lock doses multiply dose speed by .9; positive Tongue Stamps/Fun Guys doses add
+        // their own-start shop sway. The .65 floor and .24 clamp remain; Rolly Pollies/Pony Dust add no world twist.
         public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -122,6 +124,9 @@ namespace Festival.Network
         private const float LyingEyeHeight=.3f,LyingPitch=-80;
         private bool wasLying;private float preLiePitch;
         private double accumulator,nextSnapshot,nextInput,snapshotReceivedAt,serverClockAtSnapshot,connectAt;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private double nextMovementDiagnostic;
+#endif
         private int movementSequence;
         private string token="", endpoint="", loadedRound="", acknowledgedDialogue="", profileId="default";
         private static NavMeshPath navigationPath;
@@ -524,12 +529,23 @@ namespace Festival.Network
                 float speed=(input.Sprint?6:4)*Intoxication.MovementMultiplier(player);if(player.InteractionId!="")speed=1;if(player.DragTargetId!="")speed=2;if(player.Life=="Downed")speed=.8f;
                 speed=Mathf.Min(speed,(float)simulation.CarrySpeed(player));
                 var local=active!=null&&active.Status=="Active"&&FestivalInput.Roots(active.Kind)?Vector3.zero:Vector3.ClampMagnitude(new Vector3(input.X,0,input.Z),1);
-                if(local.sqrMagnitude>.0001f)local=Vector3.ClampMagnitude(local+new Vector3(Intoxication.LateralDrift(player,simulation.State.SimulationSeconds)*local.magnitude,0,0),1);
+                float drift=0;
+                if(local.sqrMagnitude>.0001f){drift=Intoxication.LateralDrift(player,simulation.State.SimulationSeconds);local=Vector3.ClampMagnitude(local+new Vector3(drift*local.magnitude,0,0),1);}
                 var delta=Quaternion.Euler(0,input.Yaw,0)*local*(speed*(float)dt);
                 var origin=player.CampVisitId!=""?new Vector3(player.CampInteriorX,0,player.CampInteriorZ):new Vector3(player.X,0,player.Z);
                 var target=player.CampVisitId!=""||player.Life=="Spirit"?origin+delta:Slide(origin,delta);
                 var previousCamp=player.CampVisitId;
-                if(simulation.TryMove(player.Id,target.x,target.z,input.Yaw,dt)&&previousCamp!=""&&player.CampVisitId=="")
+                bool moved=simulation.TryMove(player.Id,target.x,target.z,input.Yaw,dt);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if(DevelopmentDiagnostics.Visible&&local.sqrMagnitude>.0001f&&Time.unscaledTimeAsDouble>=nextMovementDiagnostic)
+                {
+                    nextMovementDiagnostic=Time.unscaledTimeAsDouble+1;
+                    var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
+                    DevelopmentDiagnostics.GraphicsEvent("Movement","sample","dose="+Mathf.Clamp(dose?.Intensity??0,0,4)
+                        +" substance="+(dose?.Substance??"")+" speed="+speed.ToString("F3")+" drift="+drift.ToString("F3")+" accepted="+moved);
+                }
+#endif
+                if(moved&&previousCamp!=""&&player.CampVisitId=="")
                 {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                     DevelopmentDiagnostics.Transition("ExitCampDoor",previousCamp,simulation.State.RoundId,simulation.State.SimulationSeconds);
