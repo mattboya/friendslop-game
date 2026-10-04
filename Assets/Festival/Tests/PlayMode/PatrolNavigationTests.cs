@@ -125,7 +125,7 @@ namespace Festival.Tests
                     string where="bust at "+At(spot.x,spot.y)+": ";
                     Assert.That(Bearing(centre,cop),Is.InRange(205f,225f),where+"setup: cop_0 reaches the south-west leg, at "+At(cop));
                     double heading=cop.Yaw*Math.PI/180;a.X=cop.X+(float)(5*Math.Sin(heading));a.Z=cop.Z+(float)(5*Math.Cos(heading));
-                    a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});sim.Tick(HostTick);
+                    a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});a.EquippedItemId="stock_lsd";sim.Tick(HostTick);
                     Assert.That(cop.Mode,Is.EqualTo("Stop"),where+"setup: the cop stops a player carrying stock");
                     for(int i=0;i<4000&&Vector2.Distance(new Vector2(a.X,a.Z),spot)>.1f;i++){var step=Vector2.ClampMagnitude(spot-new Vector2(a.X,a.Z),2.5f*(float)HostTick);a.X+=step.x;a.Z+=step.y;sim.Tick(HostTick);}
                     for(int i=0;i<90;i++)sim.Tick(HostTick);
