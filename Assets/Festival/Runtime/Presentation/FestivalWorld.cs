@@ -20,6 +20,10 @@ namespace Festival.Presentation
         private readonly List<Light> stageLights = new List<Light>();
         private VolumeProfile duskProfile;
         private FestivalNightLighting lighting;
+        private readonly RoundState campLighting=new RoundState();
+        private RoundState lightingState;
+        private string lightingPlayer="";
+        private float userBrightness;
         private FestivalTwistVisuals twists;
         private readonly List<GameObject> groundTrees=new List<GameObject>();
         public FestivalPoloDressing PoloDressing{get;private set;}
@@ -727,16 +731,24 @@ namespace Festival.Presentation
             DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","phase","space="+(festival?"festival":"campsite")+" camp_navigation="+CampNavigationReady+" festival_navigation="+NavigationReady);
 #endif
         }
+        // SET-1: reuse the current lighting state so a brightness change is immediate, including on the title.
+        public void SetBrightness(float brightness)
+        {
+            brightness=float.IsNaN(brightness)||float.IsInfinity(brightness)?0:Mathf.Clamp(brightness,-1,1);
+            if(userBrightness==brightness)return;userBrightness=brightness;
+            if(lighting!=null)lighting.Apply(lightingState??campLighting,lightingPlayer,userBrightness);
+        }
         /// <summary>MENU-1: the campsite as the world opened, for the title once a game ends: the camp up in its own daylight, whatever
         /// level, night, dose or freeze the game left showing. Only a connected session drives the world.</summary>
-        public void ShowCamp(){SetPhase("Shopping");if(lighting!=null)lighting.Apply(new RoundState(),"");}
+        public void ShowCamp(){SetPhase("Shopping");lightingState=campLighting;lightingPlayer="";if(lighting!=null)lighting.Apply(campLighting,"",userBrightness);}
         // MINI-1: a minigame holds the festival on screen as a freeze-frame.
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase==FestivalSimulation.MinigamePhase||phase=="Results";
         // LIGHT-1: night levels and the local player's dose, straight from the round state. LIGHT-2: the day sky's clouds, kept
         // over the local view, and TRIP-4's clue cloud as the local player sees it.
         public void SetLighting(RoundState state,string localPlayerId)
         {
-            if(lighting!=null)lighting.Apply(state,localPlayerId);
+            lightingState=state;lightingPlayer=localPlayerId;
+            if(lighting!=null)lighting.Apply(state,localPlayerId,userBrightness);
             if(clouds!=null)clouds.Apply(state,FestivalCharacter.ViewTransform!=null?FestivalCharacter.ViewTransform.position:Vector3.zero,localPlayerId);
         }
         // TWISTVIS-1: the festival's twist stand-ins, straight from the round state, and GAS-2's Giggle Tank.

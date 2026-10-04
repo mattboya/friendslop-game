@@ -1,3 +1,6 @@
+using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering;
+using System.Linq;
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -462,6 +465,265 @@ namespace Festival.Tests
             profile.Data.SeenTips.AddRange(new[]{null,"unsafe / id","vision","test3-saved-tip","vision"});
             Assert.That(profile.Save(),Is.Empty);var data=new LocalProfile("settings").Data;
             Assert.That(data.SeenDialogue,Is.EqualTo(new[]{"sale_0123456789abcdef"}));Assert.That(data.SeenTips,Is.EquivalentTo(new[]{"vision","test3-saved-tip"}));
+        }
+    }
+    public sealed class GraphicsApplicationTests
+    {
+        [TestCase(RuntimePlatform.WindowsPlayer,GraphicsDeviceType.Direct3D11,true)]
+        [TestCase(RuntimePlatform.WindowsPlayer,GraphicsDeviceType.Direct3D12,true)]
+        [TestCase(RuntimePlatform.WindowsPlayer,GraphicsDeviceType.Vulkan,false)]
+        [TestCase(RuntimePlatform.OSXPlayer,GraphicsDeviceType.Metal,false)]
+        [TestCase(RuntimePlatform.LinuxPlayer,GraphicsDeviceType.Vulkan,false)]
+        public void ExclusiveFullscreenRequiresASupportedPlatformAndGraphicsApi(RuntimePlatform platform,GraphicsDeviceType graphics,bool supported)
+        {
+            Assert.That(FestivalSettings.SupportsExclusiveDisplay(platform,graphics),Is.EqualTo(supported));
+        }
+        private string previousFolder,ownedFolder;
+        [SetUp]public void OwnGraphicsProfile()
+        {
+            previousFolder=LocalProfile.Folder;ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U34-graphics-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;
+        }
+        [TearDown]public void RestoreGraphicsProfile()
+        {
+            LocalProfile.Folder=previousFolder;if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
+        }
+        private static void Update(FestivalSession session)=>typeof(FestivalSession).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
+        private static FestivalSession Session(GameObject host)
+        {
+            var session=host.AddComponent<FestivalSession>();
+            if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
+            return session;
+        }
+        private static void Close(GameObject host,FestivalSession session)
+        {
+            // EditMode does not drive MonoBehaviour teardown after our explicit Awake.
+            var settings=typeof(FestivalSession).GetProperty("Settings")?.GetValue(session) as System.IDisposable;
+            settings?.Dispose();session.Controls?.Dispose();
+            var camera=session.ViewCamera;var actors=typeof(FestivalSession).GetField("actorRoot",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session) as Transform;
+            UnityEngine.Object.DestroyImmediate(host);
+            if(camera!=null)UnityEngine.Object.DestroyImmediate(camera.gameObject);if(actors!=null)UnityEngine.Object.DestroyImmediate(actors.gameObject);
+        }
+
+        [TestCase("Low",.75f)] [TestCase("Medium",.9f)]
+        public void PresetScaleIsSavedWithThePresetAndCustomScaleSurvivesRestart(string preset,float scale)
+        {
+            var profile=new LocalProfile("impl-U34-preset");var settings=new FestivalSettings(profile);
+            try
+            {
+                settings.ApplyGraphics();profile.Data.QualityPreset=preset;Assert.That(settings.Save(),Is.Empty);
+                Assert.That(new LocalProfile("impl-U34-preset").Data.RenderScale,Is.EqualTo(scale).Within(1e-5f),"the reset scale must be persisted before the save completes");
+                profile.Data.RenderScale=1.27f;Assert.That(settings.Save(),Is.Empty);settings.Dispose();
+                var loaded=new LocalProfile("impl-U34-preset");
+                using(var restarted=new FestivalSettings(loaded))
+                {
+                    restarted.ApplyGraphics();Assert.That(((UniversalRenderPipelineAsset)QualitySettings.renderPipeline).renderScale,Is.EqualTo(1.27f).Within(1e-5f),"startup retains the independently saved scale");
+                }
+            }
+            finally{settings.Dispose();}
+        }
+
+        [Test]public void TeardownRestoresEveryTouchedQualityPipelineAndFramePacing()
+        {
+            int initialLevel=QualitySettings.GetQualityLevel(),initialVsync=QualitySettings.vSyncCount,initialCap=Application.targetFrameRate;
+            var before=Enumerable.Range(0,QualitySettings.names.Length).Select(QualitySettings.GetRenderPipelineAssetAt).ToArray();
+            var source=(QualitySettings.renderPipeline??GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
+            var owned=new Dictionary<int,UniversalRenderPipelineAsset>();var settings=new FestivalSettings(new LocalProfile("impl-U34-restore"));
+            try
+            {
+                foreach(string name in new[]{"Low","Medium","High"})
+                {
+                    int level=Array.IndexOf(QualitySettings.names,name);var pipeline=UnityEngine.Object.Instantiate(source);pipeline.hideFlags=HideFlags.HideAndDontSave;
+                    owned.Add(level,pipeline);QualitySettings.SetQualityLevel(level,false);QualitySettings.renderPipeline=pipeline;
+                }
+                QualitySettings.SetQualityLevel(initialLevel,false);QualitySettings.vSyncCount=initialVsync;
+                settings.ApplyGraphics();settings.Data.VSyncCount=0;settings.Data.FrameCap=144;
+                foreach(string name in new[]{"Low","Medium","High"}){settings.Data.QualityPreset=name;settings.ApplyGraphics();}
+                settings.Dispose();
+                foreach(var entry in owned)Assert.That(QualitySettings.GetRenderPipelineAssetAt(entry.Key),Is.SameAs(entry.Value),QualitySettings.names[entry.Key]+" restores its own pipeline, not the last selected one");
+                Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(initialLevel));Assert.That(QualitySettings.vSyncCount,Is.EqualTo(initialVsync));Assert.That(Application.targetFrameRate,Is.EqualTo(initialCap));
+            }
+            finally
+            {
+                settings.Dispose();
+                foreach(var entry in owned){QualitySettings.SetQualityLevel(entry.Key,false);QualitySettings.renderPipeline=before[entry.Key];UnityEngine.Object.DestroyImmediate(entry.Value);}
+                QualitySettings.SetQualityLevel(initialLevel,false);QualitySettings.vSyncCount=initialVsync;Application.targetFrameRate=initialCap;
+            }
+        }
+
+        [Test]public void SessionAppliesSavedBrightnessAtTheTitleBeforeConnecting()
+        {
+            var worldObject=new GameObject("impl:U34 title brightness");var world=worldObject.AddComponent<FestivalWorld>();world.Build();
+            var host=new GameObject("impl:U34 title graphics session");var session=Session(host);
+            try
+            {
+                var volume=worldObject.GetComponent<Volume>();Assert.That(volume.sharedProfile.TryGet(out ColorAdjustments grade),Is.True);
+                session.Profile.Data.Brightness=.6f;Update(session);Assert.That(grade.postExposure.value,Is.EqualTo(.9f).Within(1e-5f));
+                session.Profile.Data.Brightness=-.3f;Update(session);Assert.That(grade.postExposure.value,Is.Zero.Within(1e-5f));
+            }
+            finally{Close(host,session);UnityEngine.Object.DestroyImmediate(worldObject);}
+        }
+
+        [TestCase(70f)] [TestCase(90f)] [TestCase(100f)]
+        public void HudUsesTheProfileBaseFovWithDoseAndGasOffsetsAndKeepsTitleFraming(float fov)
+        {
+            var host=new GameObject("impl:U34 profile FOV");var session=Session(host);var hud=host.AddComponent<FestivalHud>();
+            if(typeof(FestivalHud).GetField("effectWash",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud)==null)
+                typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+            try
+            {
+                session.Profile.Data.FieldOfView=fov;session.Profile.Data.ReducedMotion=false;
+                var state=new Festival.Core.RoundState{Phase="Playing",SimulationSeconds=110};var me=new Festival.Core.PlayerState{Id="me"};state.Players.Add(me);
+                typeof(FestivalSession).GetProperty("State").SetValue(session,state);
+                var apply=typeof(FestivalHud).GetMethod("ApplyEffects",BindingFlags.NonPublic|BindingFlags.Instance);
+                apply.Invoke(hud,new object[]{me});Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(fov),"the sober view uses the saved profile FOV");
+                me.Effects.Add(new Festival.Core.ActiveEffect{Id=Festival.Core.FestivalSimulation.DoseEffect,Substance="mushrooms",Intensity=4});
+                me.Effects.Add(new Festival.Core.ActiveEffect{Id=Festival.Core.FestivalSimulation.GiggleGasEffect,StartSeconds=100,RemainingSeconds=Festival.Core.FestivalSimulation.GiggleGasSeconds});
+                var camp=session.GetComponent<FestivalCampAudio>();
+                float offset=FestivalTrip.For(state,me.Id,false,Time.unscaledTime,camp!=null?camp.Beat:null).Fov;
+                apply.Invoke(hud,new object[]{me});Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(fov+offset).Within(.001f),"dose and gas compose over the chosen base");
+                typeof(FestivalHud).GetMethod("FrameTitle",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(FestivalTitleScreen.Fov),"the title keeps its authored shot");
+            }
+            finally{Close(host,session);}
+        }
+
+        private sealed class Display:IFestivalDisplay
+        {
+            public int Width {get;private set;}=800;public int Height {get;private set;}=600;
+            public FullScreenMode Mode {get;private set;}=FullScreenMode.Windowed;
+            public bool SupportsExclusiveFullscreen=>false;
+            public Resolution[] Resolutions {get;set;}=new[]{new Resolution{width=1920,height=1080},new Resolution{width=1280,height=720},new Resolution{width=1920,height=1080}};
+            public int Changes;
+            public bool Deferred;
+            private int pendingWidth,pendingHeight;
+            private FullScreenMode pendingMode;
+            public void SetResolution(int width,int height,FullScreenMode mode)
+            {
+                pendingWidth=width;pendingHeight=height;pendingMode=mode;Changes++;if(!Deferred)Acknowledge();
+            }
+            public void Acknowledge(){Width=pendingWidth;Height=pendingHeight;Mode=pendingMode;}
+        }
+        [TestCase(false)] [TestCase(true)]
+        public void EffectiveDisplayFollowsThePlatformAndTeardownCancelsPendingChanges(bool acknowledge)
+        {
+            var profile=new LocalProfile("impl-U34-deferred-display");var display=new Display{Deferred=true};var settings=new FestivalSettings(profile,display);
+            try
+            {
+                profile.Data.DisplayMode="Fullscreen";profile.Data.ResolutionWidth=1280;profile.Data.ResolutionHeight=720;settings.ApplyGraphics();
+                Assert.That(settings.EffectiveDisplayMode,Is.EqualTo(FullScreenMode.Windowed),"a request is not yet the effective platform mode");
+                Assert.That(settings.EffectiveResolution.width,Is.EqualTo(800));
+                if(acknowledge)
+                {
+                    display.Acknowledge();Assert.That(settings.EffectiveDisplayMode,Is.EqualTo(FullScreenMode.FullScreenWindow));
+                    Assert.That(settings.EffectiveResolution.width,Is.EqualTo(1280));Assert.That(settings.EffectiveResolution.height,Is.EqualTo(720));
+                }
+                settings.ApplyGraphics();Assert.That(display.Changes,Is.EqualTo(1),"pending requests are not submitted every frame");
+                settings.Dispose();display.Acknowledge();
+                Assert.That(display.Mode,Is.EqualTo(FullScreenMode.Windowed));Assert.That(display.Width,Is.EqualTo(800));Assert.That(display.Height,Is.EqualTo(600));
+            }
+            finally{settings.Dispose();}
+        }
+        [Test]public void GraphicsResetCancelsAnUnacknowledgedDisplayRequest()
+        {
+            var profile=new LocalProfile("impl-U34-pending-reset");var display=new Display{Deferred=true};var settings=new FestivalSettings(profile,display);
+            try
+            {
+                settings.ApplyGraphics();profile.Data.DisplayMode="Fullscreen";profile.Data.ResolutionWidth=1280;profile.Data.ResolutionHeight=720;
+                settings.ApplyGraphics();Assert.That(settings.ResetTab("Graphics"),Is.Empty);display.Acknowledge();
+                Assert.That(display.Mode,Is.EqualTo(FullScreenMode.Windowed),"reset supersedes the queued fullscreen request even while the platform still reports its original mode");
+                Assert.That(display.Width,Is.EqualTo(800));Assert.That(display.Height,Is.EqualTo(600));
+            }
+            finally{settings.Dispose();}
+        }
+        [Test]public void DisplayFallbackDeduplicatesModesAndGraphicsResetRestoresOnlyGraphics()
+        {
+            var profile=new LocalProfile("impl-U34-display");var display=new Display();var settings=new FestivalSettings(profile,display);
+            int quality=QualitySettings.GetQualityLevel(),vsync=QualitySettings.vSyncCount,cap=Application.targetFrameRate;
+            try
+            {
+                settings.ApplyGraphics();Assert.That(display.Changes,Is.Zero,"new defaults retain the current platform display");
+                Assert.That(settings.AvailableResolutions.Select(r=>r.width),Is.EquivalentTo(new[]{1920,1280,800}),"deduplicate reported modes and include the current window");
+                profile.Data.DisplayMode="Fullscreen";profile.Data.ResolutionWidth=1280;profile.Data.ResolutionHeight=720;profile.Data.MasterVolume=.37f;
+                settings.ApplyGraphics();Assert.That(display.Mode,Is.EqualTo(FullScreenMode.FullScreenWindow),"unsupported exclusive fullscreen falls back to borderless");
+                Assert.That(settings.EffectiveDisplayMode,Is.EqualTo(FullScreenMode.FullScreenWindow));Assert.That(display.Width,Is.EqualTo(1280));Assert.That(display.Height,Is.EqualTo(720));
+                settings.ApplyGraphics();Assert.That(display.Changes,Is.EqualTo(1),"unchanged graphics do not reapply the display every frame");
+                Assert.That(settings.ResetTab("Graphics"),Is.Empty);
+                Assert.That(display.Mode,Is.EqualTo(FullScreenMode.Windowed));Assert.That(display.Width,Is.EqualTo(800));Assert.That(display.Height,Is.EqualTo(600));
+                Assert.That(profile.Data.MasterVolume,Is.EqualTo(.37f));Assert.That(profile.Data.FrameCap,Is.EqualTo(60));Assert.That(profile.Data.FieldOfView,Is.EqualTo(75));
+                profile.Data.DisplayMode="Borderless";settings.ApplyGraphics();settings.Dispose();
+                Assert.That(display.Mode,Is.EqualTo(FullScreenMode.Windowed));Assert.That(display.Width,Is.EqualTo(800));Assert.That(display.Height,Is.EqualTo(600));
+                Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(quality));Assert.That(QualitySettings.vSyncCount,Is.EqualTo(vsync));Assert.That(Application.targetFrameRate,Is.EqualTo(cap));
+            }
+            finally{settings.Dispose();}
+        }
+        [Test]public void MissingReportedResolutionsKeepTheCurrentModeAndRejectUnsupportedSavedSizes()
+        {
+            var profile=new LocalProfile("impl-U34-no-modes");var display=new Display{Resolutions=new Resolution[0]};var settings=new FestivalSettings(profile,display);
+            try
+            {
+                settings.ApplyGraphics();Assert.That(settings.AvailableResolutions.Count,Is.EqualTo(1));Assert.That(settings.AvailableResolutions[0].width,Is.EqualTo(800));
+                profile.Data.ResolutionWidth=9999;profile.Data.ResolutionHeight=9999;settings.ApplyGraphics();
+                Assert.That(display.Width,Is.EqualTo(800));Assert.That(display.Height,Is.EqualTo(600));Assert.That(display.Changes,Is.Zero);
+            }
+            finally{settings.Dispose();}
+        }
+
+        [TestCase(30)] [TestCase(60)] [TestCase(120)] [TestCase(144)] [TestCase(-1)]
+        public void FrameCapAppliesWithoutVsyncAndVsyncTakesPriority(int cap)
+        {
+            int originalLevel=QualitySettings.GetQualityLevel(),originalVsync=QualitySettings.vSyncCount,originalCap=Application.targetFrameRate;
+            var originalPipeline=QualitySettings.renderPipeline;
+            var host=new GameObject("impl:U34 frame pacing");var session=Session(host);
+            try
+            {
+                session.Profile.Data.VSyncCount=0;session.Profile.Data.FrameCap=cap;Update(session);
+                Assert.That(QualitySettings.vSyncCount,Is.Zero);Assert.That(Application.targetFrameRate,Is.EqualTo(cap));
+                session.Profile.Data.VSyncCount=1;Update(session);
+                Assert.That(QualitySettings.vSyncCount,Is.EqualTo(1));Assert.That(Application.targetFrameRate,Is.EqualTo(-1),"vsync controls frame pacing while the saved cap is retained");
+                Assert.That(session.Profile.Data.FrameCap,Is.EqualTo(cap));
+                session.Profile.Data.VSyncCount=0;Update(session);Assert.That(Application.targetFrameRate,Is.EqualTo(cap));
+                session.Profile.Data.RenderScale=1.23f;Update(session);
+                Assert.That(((UniversalRenderPipelineAsset)QualitySettings.renderPipeline).renderScale,Is.EqualTo(1.23f).Within(1e-5f),"the independent render-scale choice survives later frames");
+                Close(host,session);host=null;
+                Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(originalLevel));Assert.That(QualitySettings.renderPipeline,Is.SameAs(originalPipeline));
+                Assert.That(QualitySettings.vSyncCount,Is.EqualTo(originalVsync));Assert.That(Application.targetFrameRate,Is.EqualTo(originalCap));
+            }
+            finally
+            {
+                if(host!=null)Close(host,session);
+                QualitySettings.SetQualityLevel(originalLevel,false);QualitySettings.renderPipeline=originalPipeline;QualitySettings.vSyncCount=originalVsync;Application.targetFrameRate=originalCap;
+            }
+        }
+
+        [TestCase("Low",.75f,0,1,1)]
+        [TestCase("Medium",.9f,30,1,2)]
+        [TestCase("High",1f,45,2,4)]
+        public void SessionAppliesAuditedQualityWithoutChangingTheSourceAsset(string name,float scale,float shadows,int cascades,int samples)
+        {
+            int originalLevel=QualitySettings.GetQualityLevel(),originalVsync=QualitySettings.vSyncCount,originalCap=Application.targetFrameRate;
+            var originalPipeline=QualitySettings.renderPipeline;
+            var source=(originalPipeline??GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
+            Assert.That(source,Is.Not.Null,"the authored URP pipeline is loaded");
+            float sourceScale=source.renderScale,sourceDistance=source.shadowDistance;int sourceSamples=source.msaaSampleCount;
+            var host=new GameObject("impl:U34 graphics application");var session=Session(host);
+            try
+            {
+                session.Profile.Data.QualityPreset="High";Update(session);
+                session.Profile.Data.QualityPreset=name;Update(session);
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo(name),"the selected quality name must reach the production session");
+                var applied=QualitySettings.renderPipeline as UniversalRenderPipelineAsset;
+                Assert.That(applied,Is.Not.Null);Assert.That(applied,Is.Not.SameAs(source),"quality changes use a disposable pipeline");
+                Assert.That(applied.renderScale,Is.EqualTo(scale).Within(1e-5f));
+                Assert.That(applied.shadowDistance,Is.EqualTo(shadows));Assert.That(applied.shadowCascadeCount,Is.EqualTo(cascades));
+                Assert.That(applied.supportsMainLightShadows,Is.EqualTo(shadows>0));Assert.That(applied.msaaSampleCount,Is.EqualTo(samples));
+                Assert.That(source.renderScale,Is.EqualTo(sourceScale));Assert.That(source.shadowDistance,Is.EqualTo(sourceDistance));Assert.That(source.msaaSampleCount,Is.EqualTo(sourceSamples));
+            }
+            finally
+            {
+                Close(host,session);QualitySettings.SetQualityLevel(originalLevel,false);QualitySettings.renderPipeline=originalPipeline;
+                QualitySettings.vSyncCount=originalVsync;Application.targetFrameRate=originalCap;
+            }
         }
     }
 }

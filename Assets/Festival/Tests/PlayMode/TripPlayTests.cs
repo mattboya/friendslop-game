@@ -19,6 +19,49 @@ namespace Festival.Tests
     // In a live dance, the rhythm arrows take the substance's look-ahead.
     public sealed class TripPlayTests:FestivalPlayModeTest
     {
+        [UnityTest]public IEnumerator GraphicsChoicesReachTitleGameplayAndCampThroughTheExistingWriters()
+        {
+            int originalQuality=QualitySettings.GetQualityLevel(),originalVsync=QualitySettings.vSyncCount,originalCap=Application.targetFrameRate;
+            var originalPipeline=QualitySettings.renderPipeline;
+            var world=new GameObject("impl:U34 live graphics world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl:U34 live graphics session");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                var data=session.Profile.Data;data.QualityPreset="Medium";data.VSyncCount=0;data.FrameCap=144;data.FieldOfView=90;data.Brightness=.4f;
+                yield return null;yield return null;
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("Medium"));
+                Assert.That(((UniversalRenderPipelineAsset)QualitySettings.renderPipeline).renderScale,Is.EqualTo(.9f).Within(1e-5f));
+                Assert.That(Application.targetFrameRate,Is.EqualTo(144));Assert.That(session.Settings.FrameCapControlledByVsync,Is.False);
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(FestivalTitleScreen.Fov),"title framing stays authored");
+                Assert.That(world.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True);
+                Assert.That(grade.postExposure.value,Is.EqualTo(.7f).Within(1e-4f),"brightness applies before connecting");
+                session.Host("Graphics tester",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var dose=Simulation(session).Player(session.LocalPlayerId).Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
+                Assert.That(dose,Is.Not.Null);dose.Substance="mushrooms";dose.Intensity=4;data.ReducedMotion=false;
+                yield return null;yield return null;
+                float offset=FestivalTrip.For(session.State,session.LocalPlayerId,false,Time.unscaledTime).Fov;
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(90+offset).Within(.01f),"the actual HUD adds the trip over the saved base");
+                Assert.That(grade.postExposure.value,Is.EqualTo(1.3f).Within(1e-4f),"four doses and the user's brightness share one grade");
+                data.FieldOfView=100;data.Brightness=-.2f;data.RenderScale=1.2f;data.VSyncCount=1;
+                yield return null;yield return null;
+                offset=FestivalTrip.For(session.State,session.LocalPlayerId,false,Time.unscaledTime).Fov;
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(100+offset).Within(.01f));
+                Assert.That(((UniversalRenderPipelineAsset)QualitySettings.renderPipeline).renderScale,Is.EqualTo(1.2f).Within(1e-5f));
+                Assert.That(session.Settings.FrameCapControlledByVsync,Is.True);Assert.That(Application.targetFrameRate,Is.EqualTo(-1));Assert.That(data.FrameCap,Is.EqualTo(144));
+                Assert.That(grade.postExposure.value,Is.EqualTo(.7f).Within(1e-4f));
+                session.Leave();yield return null;yield return null;
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(FestivalTitleScreen.Fov));
+                Assert.That(grade.postExposure.value,Is.EqualTo(.1f).Within(1e-4f),"leaving removes the trip and retains chosen brightness");
+                Assert.That(world.GetComponents<Volume>().Length,Is.EqualTo(1));
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
+            yield return null;yield return null;
+            Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(originalQuality));Assert.That(QualitySettings.renderPipeline,Is.SameAs(originalPipeline));
+            Assert.That(QualitySettings.vSyncCount,Is.EqualTo(originalVsync));Assert.That(Application.targetFrameRate,Is.EqualTo(originalCap));
+        }
+
         [UnityTest]public IEnumerator SettingsRouteTheLiveSourcesAndKeepMasterAfterLeaving()
         {
             float previousVolume=AudioListener.volume;

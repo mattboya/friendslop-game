@@ -3,11 +3,20 @@ using System.Collections.Generic;
 using Festival.Core;
 using Festival.Integrations;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace Festival.Presentation
 {
+    // Narrow operating-system boundary; settings policy is always applied by FestivalSettings.
+    public interface IFestivalDisplay
+    {
+        int Width {get;} int Height {get;} FullScreenMode Mode {get;}
+        bool SupportsExclusiveFullscreen {get;} Resolution[] Resolutions {get;}
+        void SetResolution(int width,int height,FullScreenMode mode);
+    }
     // SET-1: profile validation and tab defaults are shared by load, save and the settings screen.
-    public sealed class FestivalSettings
+    public sealed class FestivalSettings:IDisposable
     {
         [Serializable] private sealed class BindingData { public List<BindingRecord> bindings=null; }
         [Serializable] private sealed class BindingRecord
@@ -15,13 +24,117 @@ namespace Festival.Presentation
             public string action="",id="",path=null,interactions=null,processors=null;
         }
         private readonly LocalProfile profile;
+        private readonly IFestivalDisplay display;
+        private sealed class PlatformDisplay:IFestivalDisplay
+        {
+            public int Width=>Screen.width;public int Height=>Screen.height;public FullScreenMode Mode=>Screen.fullScreenMode;
+            public bool SupportsExclusiveFullscreen=>SupportsExclusiveDisplay(Application.platform,SystemInfo.graphicsDeviceType);
+            public Resolution[] Resolutions=>Screen.resolutions;
+            public void SetResolution(int width,int height,FullScreenMode mode)=>Screen.SetResolution(width,height,mode);
+        }
+        public FullScreenMode EffectiveDisplayMode=>display.Mode;
+        public Resolution EffectiveResolution=>new Resolution{width=display.Width,height=display.Height};
+        public bool FrameCapControlledByVsync=>QualitySettings.vSyncCount>0;
+        public static bool SupportsExclusiveDisplay(RuntimePlatform platform,GraphicsDeviceType graphics)=>platform==RuntimePlatform.WindowsPlayer&&graphics!=GraphicsDeviceType.Vulkan;
+        public IReadOnlyList<Resolution> AvailableResolutions
+        {
+            get
+            {
+                var choices=new List<Resolution>();
+                foreach(var resolution in display.Resolutions??Array.Empty<Resolution>())
+                    if(resolution.width>0&&resolution.height>0&&!choices.Exists(r=>r.width==resolution.width&&r.height==resolution.height))choices.Add(resolution);
+                int width=runtimePipeline!=null?initialWidth:display.Width,height=runtimePipeline!=null?initialHeight:display.Height;
+                if(!choices.Exists(r=>r.width==width&&r.height==height))choices.Add(new Resolution{width=width,height=height});
+                return choices;
+            }
+        }
+        private UniversalRenderPipelineAsset runtimePipeline;
+        private readonly Dictionary<int,RenderPipelineAsset> originalPipelines=new Dictionary<int,RenderPipelineAsset>();
+        private readonly Dictionary<int,int> originalVsync=new Dictionary<int,int>();
+        private int originalQuality,initialVsync,initialFrameCap;
+        private string appliedPreset,appliedMode;
+        private int initialWidth,initialHeight,appliedWidth,appliedHeight,appliedVsync,appliedCap;
+        private FullScreenMode initialMode,requestedMode;
+        private int requestedWidth,requestedHeight;
+        private bool displayApplied;
+        private float appliedScale;
         public ProfileData Data=>profile.Data;
         public string LastError {get;private set;}
 
-        public FestivalSettings(LocalProfile profile)
+        public FestivalSettings(LocalProfile profile,IFestivalDisplay display=null)
         {
             this.profile=profile??throw new ArgumentNullException(nameof(profile));
-            LastError=profile.LastError;
+            LastError=profile.LastError;this.display=display??new PlatformDisplay();
+        }
+        // Only runtime clones are edited; every touched quality slot is restored on teardown.
+        public void ApplyGraphics()
+        {
+            if(runtimePipeline!=null&&appliedPreset==Data.QualityPreset&&appliedScale==Data.RenderScale&&appliedVsync==Data.VSyncCount&&appliedCap==Data.FrameCap&&appliedMode==Data.DisplayMode&&appliedWidth==Data.ResolutionWidth&&appliedHeight==Data.ResolutionHeight)return;
+            Validate(Data);
+            if(runtimePipeline==null)
+            {
+                originalQuality=QualitySettings.GetQualityLevel();initialVsync=QualitySettings.vSyncCount;initialFrameCap=Application.targetFrameRate;
+                initialWidth=display.Width;initialHeight=display.Height;initialMode=display.Mode;
+                var source=(QualitySettings.renderPipeline??GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
+                if(source==null)return;
+                runtimePipeline=UnityEngine.Object.Instantiate(source);runtimePipeline.name="Festival settings runtime pipeline";
+                runtimePipeline.hideFlags=HideFlags.HideAndDontSave;
+            }
+            bool changed=appliedPreset!=Data.QualityPreset;
+            if(changed)
+            {
+                if(appliedPreset!=null)Data.RenderScale=PresetScale(Data.QualityPreset);
+                int level=Array.IndexOf(QualitySettings.names,Data.QualityPreset);
+                if(level>=0)
+                {
+                    if(!originalPipelines.ContainsKey(level))
+                    {
+                        originalPipelines.Add(level,QualitySettings.GetRenderPipelineAssetAt(level));
+                        QualitySettings.SetQualityLevel(level,false);originalVsync.Add(level,QualitySettings.vSyncCount);
+                    }
+                    else QualitySettings.SetQualityLevel(level,false);
+                    QualitySettings.renderPipeline=runtimePipeline;
+                }
+                bool low=Data.QualityPreset=="Low",medium=Data.QualityPreset=="Medium";
+                // URP exposes its serialized shadow switch as a read-only property. Overwrite only the clone.
+                JsonUtility.FromJsonOverwrite(low?"{\"m_MainLightShadowsSupported\":false}":"{\"m_MainLightShadowsSupported\":true}",runtimePipeline);
+                runtimePipeline.shadowDistance=low?0:medium?30:45;runtimePipeline.shadowCascadeCount=low||medium?1:2;
+                runtimePipeline.msaaSampleCount=low?1:medium?2:4;
+                appliedPreset=Data.QualityPreset;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[Settings] Applied graphics preset "+appliedPreset+" using a runtime pipeline.");
+#endif
+            }
+            runtimePipeline.renderScale=Data.RenderScale;
+            QualitySettings.vSyncCount=Data.VSyncCount<0?initialVsync:Data.VSyncCount;
+            Application.targetFrameRate=QualitySettings.vSyncCount>0?-1:Data.FrameCap;
+            var mode=Data.DisplayMode=="Current"?initialMode:Data.DisplayMode=="Windowed"?FullScreenMode.Windowed:Data.DisplayMode=="Fullscreen"&&display.SupportsExclusiveFullscreen?FullScreenMode.ExclusiveFullScreen:FullScreenMode.FullScreenWindow;
+            int width=initialWidth,height=initialHeight;
+            foreach(var resolution in AvailableResolutions)
+                if(resolution.width==Data.ResolutionWidth&&resolution.height==Data.ResolutionHeight){width=resolution.width;height=resolution.height;break;}
+            bool changedDisplay=displayApplied&&(requestedMode!=mode||requestedWidth!=width||requestedHeight!=height);
+            if(!displayApplied||changedDisplay)
+            {
+                if(changedDisplay||display.Mode!=mode||display.Width!=width||display.Height!=height)display.SetResolution(width,height,mode);
+                requestedMode=mode;requestedWidth=width;requestedHeight=height;displayApplied=true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[Settings] Requested display "+width+"x"+height+" "+mode+"; vsync="+QualitySettings.vSyncCount+"; saved frame cap="+Data.FrameCap+".");
+#endif
+            }
+            appliedScale=Data.RenderScale;appliedVsync=Data.VSyncCount;appliedCap=Data.FrameCap;appliedMode=Data.DisplayMode;appliedWidth=Data.ResolutionWidth;appliedHeight=Data.ResolutionHeight;
+        }
+        private static float PresetScale(string preset)=>preset=="Low"?.75f:preset=="Medium"?.9f:1;
+        public void Dispose()
+        {
+            if(runtimePipeline==null)return;
+            foreach(var entry in originalPipelines)
+            {
+                QualitySettings.SetQualityLevel(entry.Key,false);QualitySettings.renderPipeline=entry.Value;QualitySettings.vSyncCount=originalVsync[entry.Key];
+            }
+            QualitySettings.SetQualityLevel(originalQuality,false);QualitySettings.vSyncCount=initialVsync;Application.targetFrameRate=initialFrameCap;
+            if(displayApplied&&(requestedMode!=initialMode||requestedWidth!=initialWidth||requestedHeight!=initialHeight))display.SetResolution(initialWidth,initialHeight,initialMode);
+            if(Application.isPlaying)UnityEngine.Object.Destroy(runtimePipeline);else UnityEngine.Object.DestroyImmediate(runtimePipeline);
+            runtimePipeline=null;originalPipelines.Clear();originalVsync.Clear();appliedPreset=null;displayApplied=false;
         }
         // SET-1: sources apply authored gain and their bus. FestivalTrip alone applies master/focus/trip gain.
         public static float MusicGain(ProfileData data,float authoredGain=1)=>data==null?0:Mathf.Clamp01(data.MusicVolume*authoredGain);
@@ -38,6 +151,7 @@ namespace Festival.Presentation
         }
         public string Save()
         {
+            if(runtimePipeline!=null)ApplyGraphics();
             LastError=profile.Save();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(LastError=="")Debug.Log("[Settings] Saved local settings.");

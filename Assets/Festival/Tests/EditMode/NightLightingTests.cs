@@ -179,6 +179,21 @@ namespace Festival.Tests
             Assert.That(grade.saturation.value,Is.EqualTo(vivid).Within(1e-4f),"play gives the colour back");
         }
 
+        [Test]public void UserBrightnessAddsToTheSingleGradeUpdatesItsCacheAndSurvivesShowCamp()
+        {
+            root=new GameObject("impl:U34 brightness world");var world=root.AddComponent<FestivalWorld>();world.Build();
+            var volume=root.GetComponent<Volume>();Assert.That(volume.sharedProfile.TryGet(out ColorAdjustments grade),Is.True);
+            float day=grade.postExposure.value;
+            var state=Took(Round(1,"Playing",2),"ecstasy");world.SetLighting(state,"me");float trip=grade.postExposure.value,saturation=grade.saturation.value;
+            world.SetBrightness(.4f);world.SetLighting(state,"me");
+            Assert.That(grade.postExposure.value,Is.EqualTo(trip+.4f).Within(1e-5f),"brightness is additive over night, dose and Rolly Pollies");
+            Assert.That(grade.saturation.value,Is.EqualTo(saturation));
+            world.SetBrightness(-.2f);Assert.That(grade.postExposure.value,Is.EqualTo(trip-.2f).Within(1e-5f),"brightness changes invalidate the lighting cache immediately");
+            world.SetLighting(state,"me");Assert.That(grade.postExposure.value,Is.EqualTo(trip-.2f).Within(1e-5f),"the offset never accumulates");
+            world.ShowCamp();Assert.That(grade.postExposure.value,Is.EqualTo(day-.2f).Within(1e-5f),"camp clears gameplay effects and retains the user's brightness");
+            Assert.That(root.GetComponents<Volume>().Length,Is.EqualTo(1),"the existing world volume stays the only grade writer");
+        }
+
         // A round at the given level and phase. "me" carries the spinner's dose when it is above 0; a friend is always on dose 4.
         private static RoundState Round(int level,string phase,int dose=0)
         {

@@ -41,7 +41,7 @@ namespace Festival.Presentation
         private readonly Color daySky,dayEquator,dayGround,dayFog;
         private readonly float daySun,daySkyExposure,dayExposure,daySaturation,dayFogStart,dayFogEnd;
         private bool night,storm,frozen;
-        private float boost,saturation,brightness;
+        private float boost,saturation,brightness,userBrightness;
 
         public static bool IsNight(RoundState state)=>FestivalWorld.ShowsFestival(state.Phase)&&Festivals.Night(state.LevelIndex);
         // Only the local player's own dose counts; a spirit's effects are cleared, so the dead see a sober night.
@@ -69,19 +69,19 @@ namespace Festival.Presentation
             }
         }
 
-        public void Apply(RoundState state,string localPlayerId)
+        public void Apply(RoundState state,string localPlayerId,float userBrightness=0)
         {
             bool night=IsNight(state),storm=FestivalWorld.ShowsFestival(state.Phase)&&FestivalSimulation.DustStorm(state),frozen=state.Phase==FestivalSimulation.MinigamePhase;float boost=DoseExposure(state,localPlayerId);
             var trip=FestivalTrip.For(state,localPlayerId,false,0);
-            if(night==this.night&&storm==this.storm&&frozen==this.frozen&&boost==this.boost&&trip.Saturation==saturation&&trip.Brightness==brightness)return;
-            this.night=night;this.storm=storm;this.frozen=frozen;this.boost=boost;saturation=trip.Saturation;brightness=trip.Brightness;
+            if(night==this.night&&storm==this.storm&&frozen==this.frozen&&boost==this.boost&&trip.Saturation==saturation&&trip.Brightness==brightness&&userBrightness==this.userBrightness)return;
+            this.night=night;this.storm=storm;this.frozen=frozen;this.boost=boost;saturation=trip.Saturation;brightness=trip.Brightness;this.userBrightness=userBrightness;
             float share=night?NightSkyShare:1;
             RenderSettings.ambientSkyColor=Dim(daySky,share);RenderSettings.ambientEquatorColor=Dim(dayEquator,share);
             RenderSettings.ambientGroundColor=Dim(dayGround,share);RenderSettings.fogColor=Dim(storm?StormDust:dayFog,share);
             RenderSettings.fogStartDistance=storm?StormFogStart:dayFogStart;RenderSettings.fogEndDistance=storm?StormFogEnd:dayFogEnd;
             sun.intensity=daySun*share;
             if(sky!=null)sky.SetFloat("_Exposure",daySkyExposure*share);
-            grade.postExposure.Override(dayExposure+boost+brightness);grade.saturation.Override(daySaturation+boost*SaturationPerExposure+saturation+(frozen?FreezeSaturation:0));
+            grade.postExposure.Override(dayExposure+boost+brightness+userBrightness);grade.saturation.Override(daySaturation+boost*SaturationPerExposure+saturation+(frozen?FreezeSaturation:0));
             foreach(var light in neon)light.enabled=night;
         }
         private static Color Dim(Color color,float share)=>new Color(color.r*share,color.g*share,color.b*share,color.a);

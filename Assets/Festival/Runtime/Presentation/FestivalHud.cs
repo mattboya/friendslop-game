@@ -118,7 +118,7 @@ namespace Festival.Presentation
         private int heldBeforeBuy;
         private readonly HashSet<string> soldToYou=new HashSet<string>();
         private Image effectWash;
-        private float baseFov=75;
+        private float baseFov=>session?.Profile?.Data.FieldOfView??75;
         private float nextActionRefresh;
         private string lastNotice="";
         private float noticeUntil;

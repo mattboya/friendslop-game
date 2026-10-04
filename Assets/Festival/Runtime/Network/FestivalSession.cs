@@ -127,15 +127,15 @@ namespace Festival.Network
         private static NavMeshPath navigationPath;
         private Transform actorRoot;
         private FestivalWorld world;
+        public FestivalSettings Settings {get;private set;}
         private FestivalHands firstPersonHands;
         private bool closing;
         private void Awake()
         {
             Application.runInBackground=true;
-            Application.targetFrameRate=60;
             var args=Environment.GetCommandLineArgs();
             profileId=Argument(args,"--profile","default");
-            Profile=new LocalProfile(profileId);Controls=new FestivalInput(profileId);
+            Profile=new LocalProfile(profileId);Settings=new FestivalSettings(Profile);Settings.ApplyGraphics();Controls=new FestivalInput(profileId);
             gameObject.AddComponent<FestivalRhythmAudio>();
             gameObject.AddComponent<FestivalCampAudio>();
             gameObject.AddComponent<FestivalStageAudio>();
@@ -413,6 +413,8 @@ namespace Festival.Network
         static bool Finite(float x)=>!float.IsNaN(x)&&!float.IsInfinity(x);
         private void Update()
         {
+            Settings?.ApplyGraphics();
+            if(world!=null&&Profile!=null)world.SetBrightness(Profile.Data.Brightness);
             if(Controls==null)return;
             if(Connecting && Time.realtimeSinceStartupAsDouble-connectAt>15){Fail("Connection timed out. Check the host address and port.");return;}
             if(!Connected)return;
@@ -816,6 +818,6 @@ namespace Festival.Network
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
         }
-        private void OnDestroy(){Leave();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
+        private void OnDestroy(){Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
     }
 }
