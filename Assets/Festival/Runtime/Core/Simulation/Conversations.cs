@@ -8,7 +8,7 @@ namespace Festival.Core
     /// (ConversationLines),
     /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
     /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
-    /// watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
+    /// partner's and watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
     /// first asks for a dance (TrustAsk): eight beats on the talk's own chart, danced and watched like any dance. TrustScore or
     /// better wins their trust and the talk follows; less and they walk off, the talk over at 0. A chat or a buy reads the
     /// person: a reply that lands draws out a line with their role's tell, more often the smoother it was (TellOdds), and the
@@ -84,7 +84,7 @@ namespace Festival.Core
             return ConversationLines.Hunch(role,null,State.FestivalIndex);
         }
         // FinishInteraction calls this each time the talk's clock runs out (a trust dance's verdict, or a turn left silent) and
-        // after its last reply. True once the talk is over, its Score set and its watchers moved.
+        // after its last reply. True once the talk is over, its Score set and its partner or witnesses moved once each.
         bool TalkEnds(InteractionState i,PlayerState p)
         {
             if(TrustDancing(i))
@@ -97,7 +97,10 @@ namespace Festival.Core
             if(i.Turns.Count<ConversationTurns){AddTurn(i,p);return false;}
             double total=0;foreach(var turn in i.Turns){int grade=Graded(turn);total+=grade==ConversationLines.Smooth?1:grade==ConversationLines.SoSo?.5:0;}
             i.Score=total/ConversationTurns;p.LastRhythmScore=i.Score;p.Performances++;
-            int moved=RhythmDelta(i.Score);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id))Adjust(n,p,moved);
+            int moved=RhythmDelta(i.Score);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,moved);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            ChatDiagnostic?.Invoke("TalkSettled",i.Kind,State.RoundId,State.SimulationSeconds);
+#endif
             return true;
         }
         // What a finished talk settles on its Score: a sale pays in full at .75 and half at .4, and its stock comes back below;

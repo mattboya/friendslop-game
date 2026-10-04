@@ -5,8 +5,8 @@ namespace Festival.Core
 {
     // DIALOG-3: one turn of a talk (Conversations.cs): their Reaction to your last reply ("" on the first turn) and their Line,
     // then your three Replies. Grades holds each reply's grade (ConversationLines.Smooth, SoSo or Awkward); a Garbled reply's
-    // words and letters are jumbled, as a dosed player says it. Pick is the reply chosen: -1 until one is, and for good once the
-    // turn has run out, a silence.
+    // longer words' interior letters are jumbled, as a dosed player says it. Pick is the reply chosen: -1 until one is,
+    // and for good once the turn has run out, a silence.
     [Serializable] public sealed class ConversationTurn { public string Reaction="",Line=""; public string[] Replies=new string[3]; public int[] Grades=new int[3]; public bool[] Garbled=new bool[3]; public int Pick=-1; }
 
     // DIALOG-3: what's said in a talk, built by a LineGrammar (DIALOG-4) that holds FestivalLines' parts as well as these.
@@ -91,12 +91,19 @@ namespace Festival.Core
             if(history==null) return Grammar.Line(kind,festival,random);
             string line=history.Fresh(Grammar,kind,festival,random,out var key); history.Acknowledge(key); return line;
         }
-        // A dosed player's reply: its words in a new order and each word's letters jumbled, so its tone can't be read.
+        // DIALOG-8: a dosed reply stays readable. Keep word order, whitespace, punctuation, short alphabetic runs and every
+        // run's first/last letter; only shuffle the interior of runs with five or more letters, on the same seeded stream.
         public static string Garble(string text,ContentRandom random)
         {
-            var words=text.Split(' ');Shuffle(words,random);
-            for(int w=0;w<words.Length;w++) { var letters=words[w].ToCharArray(); Shuffle(letters,random); words[w]=new string(letters); }
-            return string.Join(" ",words);
+            var letters=text.ToCharArray();
+            for(int at=0;at<letters.Length;)
+            {
+                if(!char.IsLetter(letters[at])){at++;continue;}
+                int start=at;while(at<letters.Length&&char.IsLetter(letters[at]))at++;
+                if(at-start<5)continue;
+                for(int k=at-2;k>start+1;k--){int j=start+1+random.Next(k-start);var swap=letters[k];letters[k]=letters[j];letters[j]=swap;}
+            }
+            return new string(letters);
         }
         private static void Shuffle<T>(T[] items,ContentRandom random) { for(int k=items.Length-1;k>0;k--) { int j=random.Next(k+1); var swap=items[k]; items[k]=items[j]; items[j]=swap; } }
 

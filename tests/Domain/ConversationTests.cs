@@ -24,9 +24,56 @@ public static class ConversationTests
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
             ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
-            AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat})
+            AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
+            ATalkSettlesItsPartnerAndWitnessesOnce})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
+    }
+
+    // DIALOG-8: the person talking with you hears the replies even when their layout yaw faces away.
+    static void ASmoothTalkCalmsItsPartnerEvenFacingAway()
+    {
+        foreach(float yaw in new[]{0f,180f})
+        {
+            var s=Pair("Conversation");var npc=Partner(s);npc.Yaw=yaw;
+            npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});
+            var i=Start(s,"Conversation");
+            for(int turn=0;turn<3;turn++)Check(Say(s,i,Smooth).Accepted,"each smooth reply is accepted");
+            Check(i.Status=="Complete"&&i.Score==1,"three smooth replies complete the talk");
+            Check(npc.Observers[0].Suspicion==15,"the partner calms exactly once regardless of facing: yaw "+yaw+", suspicion "+npc.Observers[0].Suspicion);
+        }
+    }
+
+    static void ASlurKeepsWordsAndTheirReadableEdges()
+    {
+        foreach(var text in new[]{"Honestly?  Festival friends, community!", "\tPLUR! I'm in.\r\nA five-star neighbor's gift…", "  aérodrome — καλημέρα; 12345!", "", "\t \r\n", "aaaaa xyz I go!"})
+        {
+            var versions=new HashSet<string>();
+            for(int seed=0;seed<32;seed++)
+            {
+                string slurred=ConversationLines.Garble(text,new ContentRandom(seed));
+                Check(slurred==ConversationLines.Garble(text,new ContentRandom(seed)),"the same seed repeats its slur");
+                ReadableSlur(text,slurred);versions.Add(slurred);
+            }
+            if(text.StartsWith("Honestly?"))Check(versions.Count>1&&!versions.SetEquals(new[]{text}),"long words really slur, with seeded variation");
+        }
+    }
+    // Independent readability contract: compare positions and alphabetic runs, never the shuffle's chosen permutation.
+    static void ReadableSlur(string plain,string slurred)
+    {
+        Check(slurred.Length==plain.Length,"a slur keeps the reply's length");
+        for(int at=0;at<plain.Length;)
+        {
+            if(!char.IsLetter(plain[at])){Check(slurred[at]==plain[at],"whitespace and punctuation stay at "+at+": "+plain+" -> "+slurred);at++;continue;}
+            int start=at;while(at<plain.Length&&char.IsLetter(plain[at]))at++;
+            string word=plain.Substring(start,at-start),heard=slurred.Substring(start,at-start);
+            if(word.Length<5)Check(word==heard,"short words stay readable: "+word+" -> "+heard);
+            else
+            {
+                Check(word[0]==heard[0]&&word[word.Length-1]==heard[heard.Length-1],"first and last letters stay: "+word+" -> "+heard);
+                Check(string.Concat(word.OrderBy(c=>c))==string.Concat(heard.OrderBy(c=>c)),"a word keeps its own letters: "+word+" -> "+heard);
+            }
+        }
     }
 
     // A festivalgoer id that talks like this persona (DialogueGrammar.PersonaFor goes by the id alone).
@@ -242,30 +289,53 @@ public static class ConversationTests
         }
     }
 
-    // A dosed player garbles their replies: one a turn at dose 1-2, two at dose 3-4. A garbled reply is the same reply with its
-    // words and their letters jumbled, so its tone can't be read; it still counts at its grade.
+    // A dosed player slurs their replies: one a turn at dose 1-2, two at dose 3-4. Only interiors of long words jumble;
+    // a selected reply made of short words may stay unchanged. Its grade and the selected choices still follow the seed.
     static void ADoseGarblesReplies()
     {
-        for(int dose=0;dose<=4;dose++)
+        for(int seed=1;seed<=12;seed++)foreach(var kind in Kinds)for(int dose=0;dose<=4;dose++)
         {
-            var sober=Pair("Conversation",21);var dosed=Pair("Conversation",21);
+            var sober=Pair(kind,seed);var dosed=Pair(kind,seed);var repeat=Pair(kind,seed);
             if(dose>0)dosed.Player("p0").Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=dose,RemainingSeconds=600});
-            var plain=Start(sober,"Conversation");var jumbled=Start(dosed,"Conversation");
+            if(dose>0)repeat.Player("p0").Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=dose,RemainingSeconds=600});
+            var plain=Start(sober,kind);var jumbled=Start(dosed,kind);var replay=Start(repeat,kind);
             for(int turn=0;turn<3;turn++)
             {
                 var a=Live(plain);var b=Live(jumbled);int want=dose>=3?2:dose>=1?1:0;
                 Check(b.Garbled.Count(g=>g)==want,"dose "+dose+": "+want+" garbled a turn, got "+b.Garbled.Count(g=>g));
                 Check(a.Line==b.Line&&string.Join(",",a.Grades)==string.Join(",",b.Grades),"setup: the same seed says the same line with the replies in the same order");
+                Check(Text(b)==Text(Live(replay)),"the same seed repeats the selected choices, slurred text and grades");
                 for(int r=0;r<3;r++)
                 {
-                    Check(b.Garbled[r]==(a.Replies[r]!=b.Replies[r]),"dose "+dose+": only a garbled reply reads differently: \""+b.Replies[r]+"\"");
-                    Check(string.Concat(a.Replies[r].OrderBy(c=>c))==string.Concat(b.Replies[r].OrderBy(c=>c)),"a garbled reply keeps its letters: \""+a.Replies[r]+"\" -> \""+b.Replies[r]+"\"");
+                    if(!b.Garbled[r])Check(a.Replies[r]==b.Replies[r],"dose "+dose+": an unselected reply stays unchanged");
+                    ReadableSlur(a.Replies[r],b.Replies[r]);
                 }
                 int pick=Array.IndexOf(b.Garbled,true);if(pick<0)pick=0;
                 Act(sober,"p0","Reply",amount:pick,direction:turn);Check(Act(dosed,"p0","Reply",amount:pick,direction:turn).Accepted,"a garbled reply can be picked");
+                Check(Act(repeat,"p0","Reply",amount:pick,direction:turn).Accepted,"the repeated seeded choice is accepted");
             }
             Check(plain.Score==jumbled.Score,"a garbled reply counts at its grade ("+plain.Score+" vs "+jumbled.Score+")");
         }
+    }
+
+    static void ATalkSettlesItsPartnerAndWitnessesOnce()
+    {
+        foreach(var kind in Kinds)foreach(float yaw in new[]{0f,180f})
+            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward},3)})
+            {
+                var s=Pair(kind);var partner=Partner(s);partner.Yaw=yaw;
+                partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});
+                var watcher=new NpcState{Id="watcher",Kind="Wook",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});s.State.Npcs.Add(watcher);
+                var unseen=new NpcState{Id="unseen",Kind="Wook",X=0,Z=6,Yaw=0};unseen.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});s.State.Npcs.Add(unseen);
+                var i=Start(s,kind);
+                Check(i.WitnessIds.Contains("watcher")&&!i.WitnessIds.Contains("unseen"),"only the facing bystander witnesses the talk");
+                Check(i.WitnessIds.Contains(partner.Id)==(kind!="Police"&&yaw==180),"the partner's original visibility still decides witness membership");
+                Talk(s,i,grades);
+                Check(partner.Yaw==yaw,"settling never rotates the partner");
+                Check(partner.Observers[0].Suspicion==30+moved&&watcher.Observers[0].Suspicion==30+moved,"partner or witness settles once for "+kind+" at yaw "+yaw+" with delta "+moved);
+                Check(unseen.Observers[0].Suspicion==30,"an unseen bystander is unaffected");
+                Check(!Say(s,i,Smooth).Accepted&&partner.Observers[0].Suspicion==30+moved&&watcher.Observers[0].Suspicion==30+moved,"a completed talk never settles twice");
+            }
     }
 
     // TRIP-9: only a talk's trust dance gets the shared countdown. Its chart and the .75 s verdict window stay relative to start.
