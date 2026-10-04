@@ -47,7 +47,7 @@ namespace Festival.Tests
                 // The size a 1080p player sees: a 1920x1080 canvas at scale 1.
                 var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
                 // ECON-2: at camp, with no festival to pick, the card says where stock comes from, and draws whole.
@@ -496,9 +496,9 @@ namespace Festival.Tests
                 player.X=10;
                 yield return new WaitForSeconds(.6f);
                 Expect("away from anyone","Nearby","(hidden)");
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.Tab));yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.Tab));yield return null;yield return null;
                 if(!Shows("Map"))failures.Add("holding TAB: no map");
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return null;yield return null;
                 // You trip, and chat to check your vision about the buyer: Esc opens the menu beside the chat, its replies clickable.
                 player.X=0;buyer.X=0;buyer.Z=1.5f;buyer.Suspicion=0;buyer.Mode="Blending";
                 sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="nearby_vision",Kind="Buyer",NpcId=buyer.Id});
@@ -526,10 +526,7 @@ namespace Festival.Tests
         // through the HUD's own input handling (FestivalHud.UpdateKeyboard).
         [UnityTest]public IEnumerator TheSpinClosesTheMenuAndOffersNothingToPress()
         {
-            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
-            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
-            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-            keyboard=InputSystem.AddDevice<Keyboard>("HUD spin keyboard");
+            UseAVirtualKeyboard("HUD spin keyboard");
             var world=new GameObject("HUD spin world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("HUD spin");
             var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();
@@ -537,11 +534,6 @@ namespace Festival.Tests
             var failures=new List<string>();
             var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
             string Prompt(){foreach(var text in hud.GetComponentsInChildren<Text>(true))if(text.name=="Prompt")return text.text;return "(no prompt)";}
-            IEnumerator Press(Key key)
-            {
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
-            }
             // No prompt, nothing for E, and the gear keys send nothing for the host to refuse.
             IEnumerator NothingToPress(string where)
             {
@@ -550,7 +542,7 @@ namespace Festival.Tests
                 if(primary.GetValue(view)!=null)failures.Add(where+": E still runs an action");
                 foreach(var key in new[]{Key.Digit1,Key.Q,Key.G})
                 {
-                    yield return Press(key);
+                    yield return Tap(key);
                     if(session.Message=="Round is not interactive")failures.Add(where+": "+key+" sent a command the host refused");
                 }
             }
@@ -560,7 +552,7 @@ namespace Festival.Tests
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("spin_mate","Sam");
                 // Gear in hand and Sam within reach: at the festival the HUD would offer to hand it over.
                 player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
@@ -1124,21 +1116,6 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"First-time tips:\n"+string.Join("\n",failures));
         }
 
-        // A virtual keyboard whose keys reach the HUD's own input handling, even unfocused in the editor; RestoreTheKeyboard removes it.
-        private void UseAVirtualKeyboard(string name)
-        {
-            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
-            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
-            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-            keyboard=InputSystem.AddDevice<Keyboard>(name);
-        }
-        // A key pressed and let go, a couple of frames each.
-        private IEnumerator Tap(Key key)
-        {
-            InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
-            InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
-        }
-
         // HUD-8 (Matt, 2026-10-01: "pressing 1 2 3 did not switch between my items. pressing them should or using the scroll
         // wheel"): at camp and at the festival, 1, 2 and 3 each move what you hold, the gear bar's ● and the first-person hand to
         // that slot, and its number and item flash over the gear bar for a second; the wheel steps round the filled slots. Where
@@ -1146,25 +1123,17 @@ namespace Festival.Tests
         // through a virtual keyboard and mouse, so through the HUD's own input handling (FestivalHud.UpdateKeyboard).
         [UnityTest]public IEnumerator OneTwoThreeAndTheWheelSwitchWhatYouHold()
         {
-            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
-            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
-            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-            keyboard=InputSystem.AddDevice<Keyboard>("HUD gear keyboard");mouse=InputSystem.AddDevice<Mouse>("HUD gear mouse");
+            UseAVirtualKeyboard("HUD gear keyboard");UseAVirtualMouse("HUD gear mouse");
             var world=new GameObject("HUD gear world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("HUD gear");
             var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
             yield return null;
             var failures=new List<string>();
             PlayerState player=null;
-            IEnumerator Press(Key key)
-            {
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return new WaitForSeconds(.3f);
-            }
             // One notch of the wheel, down (-1) or up (+1); the wait outlasts the wheel's repeat window.
             IEnumerator Scroll(float notch)
             {
-                InputSystem.QueueStateEvent(mouse,new MouseState{scroll=new Vector2(0,notch)});yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,notch)});yield return null;yield return null;
                 yield return new WaitForSeconds(.3f);
             }
             // The slots the gear bar marks held (●), and what the first-person hand holds up.
@@ -1209,21 +1178,21 @@ namespace Festival.Tests
                 // At camp, 1, 2 and 3 each switch, and the line goes after a second.
                 Pack("stock_mushrooms","confetti","medical_voucher");
                 yield return new WaitForSeconds(.3f);
-                yield return Press(Key.Digit1);Holds("camp, 1","stock_mushrooms","1","1  •  FUN GUYS");
-                yield return Press(Key.Digit2);Holds("camp, 2","confetti","2","2  •  CONFETTI CANNON");
-                yield return Press(Key.Digit3);Holds("camp, 3","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
+                yield return Tap(Key.Digit1,.3f);Holds("camp, 1","stock_mushrooms","1","1  •  FUN GUYS");
+                yield return Tap(Key.Digit2,.3f);Holds("camp, 2","confetti","2","2  •  CONFETTI CANNON");
+                yield return Tap(Key.Digit3,.3f);Holds("camp, 3","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
                 yield return new WaitForSeconds(FestivalHudGear.ToastSeconds);
                 string after=Toast("camp, a second after 3");if(after!="(hidden)")failures.Add("camp, a second after 3: over the gear bar still reads \""+after+"\"");
                 // An unpaid shelf item in hand covers what you hold: 1 and the wheel say to pay or put it back, and nothing switches.
                 player.HeldOfferId="merch_bag";
-                yield return Press(Key.Digit1);Holds("camp, unpaid item, 1","medical_voucher","3",Unpaid,"merch_bag");
+                yield return Tap(Key.Digit1,.3f);Holds("camp, unpaid item, 1","medical_voucher","3",Unpaid,"merch_bag");
                 yield return Scroll(-1);Holds("camp, unpaid item, wheel","medical_voucher","3",Unpaid,"merch_bag");
                 player.HeldOfferId="";
                 // Inside a tent the host takes no Equip, and 2 says so.
                 var tent=CampFeatures.Find("tent_1");player.X=tent.X;player.Z=tent.Z;session.Command("EnterCamp",tent.Id);
                 yield return new WaitForSeconds(.3f);
                 Assert.That(player.CampVisitId,Is.EqualTo(tent.Id),"setup: inside the tent: "+session.Message);
-                yield return Press(Key.Digit2);Holds("camp, in a tent, 2","medical_voucher","3","Not inside the tent");
+                yield return Tap(Key.Digit2,.3f);Holds("camp, in a tent, 2","medical_voucher","3","Not inside the tent");
                 session.Command("ExitCamp");
 
                 yield return StartLevel(session);
@@ -1231,19 +1200,19 @@ namespace Festival.Tests
                 sim.State.Npcs.RemoveAll(n=>n.Twist!=FestivalSimulation.VipGuard);player.X=0;player.Z=0;
                 Pack("stock_mushrooms","confetti","medical_voucher");
                 yield return new WaitForSeconds(.3f);
-                yield return Press(Key.Digit1);Holds("festival, 1","stock_mushrooms","1","1  •  FUN GUYS");
-                yield return Press(Key.Digit2);Holds("festival, 2","confetti","2","2  •  CONFETTI CANNON");
-                yield return Press(Key.Digit3);Holds("festival, 3","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
+                yield return Tap(Key.Digit1,.3f);Holds("festival, 1","stock_mushrooms","1","1  •  FUN GUYS");
+                yield return Tap(Key.Digit2,.3f);Holds("festival, 2","confetti","2","2  •  CONFETTI CANNON");
+                yield return Tap(Key.Digit3,.3f);Holds("festival, 3","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
                 // The wheel: down twice from slot 1 lands on 3, once more wraps round to 1, and up steps back to 3.
-                yield return Press(Key.Digit1);
+                yield return Tap(Key.Digit1,.3f);
                 yield return Scroll(-1);Holds("festival, wheel down from 1","confetti","2","2  •  CONFETTI CANNON");
                 yield return Scroll(-1);Holds("festival, wheel down twice","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
                 yield return Scroll(-1);Holds("festival, wheel down a third time","stock_mushrooms","1","1  •  FUN GUYS");
                 yield return Scroll(1);Holds("festival, wheel up from 1","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
                 // One hand item: 3 is empty and says so, and the wheel has nothing to switch to.
                 Pack("confetti");
-                yield return Press(Key.Digit1);
-                yield return Press(Key.Digit3);Holds("festival, one item, 3","confetti","1","3  •  EMPTY");
+                yield return Tap(Key.Digit1,.3f);
+                yield return Tap(Key.Digit3,.3f);Holds("festival, one item, 3","confetti","1","3  •  EMPTY");
                 yield return new WaitForSeconds(FestivalHudGear.ToastSeconds);
                 yield return Scroll(-1);Holds("festival, one item, wheel","confetti","1","(hidden)");
                 // POLO-4's VIP rope chat has no questions, so it never swallows 1-3: they still switch while it's up.
@@ -1252,11 +1221,11 @@ namespace Festival.Tests
                 Assert.That(guard,Is.Not.Null,"setup: Palm Mirage's VIP rope has a guard");
                 // This solo host is the tripper: with no vision of the guard to check, F's chat is the rope chat.
                 sim.State.Visions.RemoveAll(v=>v.NpcId==guard.Id);player.X=guard.X+.6f;player.Z=guard.Z;
-                yield return Press(Key.Digit1);
+                yield return Tap(Key.Digit1,.3f);
                 session.Command("ConfirmChat",guard.Id);
                 yield return new WaitForSeconds(.3f);
                 Assert.That(sim.State.Interactions.Exists(i=>i.Id==player.InteractionId&&i.Kind=="ConfirmChat"&&i.Status=="Active"&&i.Chat.Questions.Length==0),"setup: talking your way past the rope: "+session.Message);
-                yield return Press(Key.Digit2);Holds("festival, in the rope chat, 2","confetti","2","2  •  CONFETTI CANNON");
+                yield return Tap(Key.Digit2,.3f);Holds("festival, in the rope chat, 2","confetti","2","2  •  CONFETTI CANNON");
                 session.Command("Cancel");
             }
             finally
@@ -1269,20 +1238,5 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"What 1-3 and the wheel switch:\n"+string.Join("\n",failures));
         }
 
-        // The virtual keyboard and mouse and the input settings go back however the test ended (an error log skips its own finally).
-        private Keyboard keyboard;
-        private Mouse mouse;
-        private InputSettings.BackgroundBehavior oldBackground;
-        private InputSettings.EditorInputBehaviorInPlayMode oldEditor;
-        [UnityTearDown]public IEnumerator RestoreTheKeyboard()
-        {
-            if(mouse!=null){InputSystem.RemoveDevice(mouse);mouse=null;}
-            if(keyboard!=null)
-            {
-                InputSystem.RemoveDevice(keyboard);keyboard=null;
-                InputSystem.settings.backgroundBehavior=oldBackground;InputSystem.settings.editorInputBehaviorInPlayMode=oldEditor;
-            }
-            yield return null;
-        }
     }
 }

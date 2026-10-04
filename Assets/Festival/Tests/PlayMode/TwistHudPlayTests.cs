@@ -53,7 +53,7 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("twist_mate","Sam");mate.Ready=true;
                 sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=1;

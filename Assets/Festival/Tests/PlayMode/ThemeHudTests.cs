@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -31,7 +30,7 @@ namespace Festival.Tests
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("theme_mate","Mate");mate.Ready=true;
                 player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});
@@ -86,7 +85,7 @@ namespace Festival.Tests
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});
                 yield return StartLevel(session);
@@ -130,7 +129,7 @@ namespace Festival.Tests
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("smoke_mate","Mate");mate.X=player.X+1;mate.Z=player.Z;
 

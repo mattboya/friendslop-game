@@ -51,7 +51,7 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("money_mate","Sam");mate.Ready=true;
                 // The weekend is at Ember Playa, so both festivals are unlocked, and you are the crew member who counts in friendship bracelets.
                 sim.State.FestivalIndex=Festivals.PlayaFestival;sim.State.UnlockedFestivalCount=2;player.Ordinal=3;

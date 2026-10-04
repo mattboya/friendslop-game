@@ -30,7 +30,7 @@ namespace Festival.Tests
             float deadline=Time.realtimeSinceStartup+30;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
-            sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+            sim=Simulation(session);
             player=sim.Player(session.LocalPlayerId);
             for(int i=0;i<4;i++)sim.AddPlayer("split_mate_"+i,"Mate "+i).Ready=true;
             sim.State.LevelIndex=1;player.X=0;player.Z=19;session.Command("Ready");

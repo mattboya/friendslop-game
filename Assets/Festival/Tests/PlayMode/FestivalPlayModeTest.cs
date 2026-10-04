@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -7,6 +9,8 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 
 namespace Festival.Tests
@@ -14,6 +18,51 @@ namespace Festival.Tests
     /// <summary>Base for every PlayMode fixture that builds a festival world or hosts a session.</summary>
     public abstract class FestivalPlayModeTest
     {
+        private string previousProfileFolder,ownedProfileFolder;
+        private string previousPreferencesScope,ownedBindingKey;
+        private readonly List<FestivalInput> ownedControls=new List<FestivalInput>();
+        private readonly HashSet<string> ownedControlKeys=new HashSet<string>();
+        protected Keyboard TestKeyboard;
+        protected Mouse TestMouse;
+        protected InputSettings.BackgroundBehavior InputBackgroundBeforeTest;
+        protected InputSettings.EditorInputBehaviorInPlayMode InputEditorBeforeTest;
+        private bool inputConfigured;
+
+        private void UseUnfocusedInput()
+        {
+            if(inputConfigured)return;
+            var input=InputSystem.settings;InputBackgroundBeforeTest=input.backgroundBehavior;InputEditorBeforeTest=input.editorInputBehaviorInPlayMode;
+            inputConfigured=true;
+            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+        }
+        protected void UseAVirtualKeyboard(string name){UseUnfocusedInput();if(TestKeyboard==null)TestKeyboard=InputSystem.AddDevice<Keyboard>(name);}
+        protected void UseAVirtualMouse(string name){UseUnfocusedInput();if(TestMouse==null)TestMouse=InputSystem.AddDevice<Mouse>(name);}
+        protected FestivalInput NewTestControls(string profile)
+        {
+            var controls=new FestivalInput(profile);ownedControls.Add(controls);
+            string scope=FestivalInput.PreferencesScope;
+            ownedControlKeys.Add("festival-bindings-"+(string.IsNullOrEmpty(scope)?"":scope+"-")+profile);
+            return controls;
+        }
+        // The events reach the real InputActions and HUD consumers. Two frames cover both input and the consumer's Update.
+        protected IEnumerator Tap(Key key,float releaseWait=0)
+        {
+            InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(key));yield return null;yield return null;
+            InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());
+            if(releaseWait>0)yield return new WaitForSeconds(releaseWait);else{yield return null;yield return null;}
+        }
+        [SetUp]public void UseThisTestsProfileFolder()
+        {
+            previousProfileFolder=LocalProfile.Folder;
+            ownedProfileFolder=Path.Combine(previousProfileFolder,"impl-U01-test-"+System.Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(ownedProfileFolder);LocalProfile.Folder=ownedProfileFolder;
+            previousPreferencesScope=FestivalInput.PreferencesScope;FestivalInput.PreferencesScope=ownedProfileFolder;
+            var args=System.Environment.GetCommandLineArgs();int at=System.Array.IndexOf(args,"--profile");
+            string profile=at>=0&&at+1<args.Length?args[at+1]:"default";
+            ownedBindingKey="festival-bindings-"+ownedProfileFolder+"-"+profile;
+        }
+
         // The port every fixture hosts its session on. 0 lets the OS pick a free one, so a PlayMode run in a snapshot and one in
         // the shared checkout can host at the same time. A fixture that joins a client hosts on FreePort instead, as a client has
         // to know the port it joins.
@@ -47,7 +96,7 @@ namespace Festival.Tests
         {
             var sim=Simulation(session);
             // CAM-1: every hosted level starts in first person, whatever this machine's saved profile says; a test that wants the view
-            // over the shoulder turns it on after. Only in memory; what a test saves goes to its run's own profile (TestProfiles).
+            // over the shoulder turns it on after. What a test saves goes to its own disposable profile folder.
             session.Profile.Data.ThirdPerson=false;
             for(float deadline=Time.realtimeSinceStartup+15;session.State.Phase=="Shopping"&&Time.realtimeSinceStartup<deadline;)
             {
@@ -86,15 +135,118 @@ namespace Festival.Tests
         // however it ended, and waits a frame so they are gone before the next test starts.
         [UnityTearDown]public IEnumerator DestroyWhatTheTestLeft()
         {
-            foreach(var session in Object.FindObjectsByType<FestivalSession>(FindObjectsInactive.Include,FindObjectsSortMode.None))Object.Destroy(session.gameObject);
-            foreach(var world in Object.FindObjectsByType<FestivalWorld>(FindObjectsInactive.Include,FindObjectsSortMode.None))Object.Destroy(world.gameObject);
-            yield return null;
+            try
+            {
+                foreach(var session in Object.FindObjectsByType<FestivalSession>(FindObjectsInactive.Include,FindObjectsSortMode.None))Object.Destroy(session.gameObject);
+                foreach(var world in Object.FindObjectsByType<FestivalWorld>(FindObjectsInactive.Include,FindObjectsSortMode.None))Object.Destroy(world.gameObject);
+                yield return null;
+            }
+            finally
+            {
+                foreach(var controls in ownedControls)controls.Dispose();ownedControls.Clear();
+                if(TestMouse!=null){InputSystem.RemoveDevice(TestMouse);TestMouse=null;}
+                if(TestKeyboard!=null){InputSystem.RemoveDevice(TestKeyboard);TestKeyboard=null;}
+                if(inputConfigured)
+                {
+                    InputSystem.settings.backgroundBehavior=InputBackgroundBeforeTest;InputSystem.settings.editorInputBehaviorInPlayMode=InputEditorBeforeTest;
+                    inputConfigured=false;
+                }
+                LocalProfile.Folder=previousProfileFolder;
+                FestivalInput.PreferencesScope=previousPreferencesScope;
+                if(ownedBindingKey!=null){PlayerPrefs.DeleteKey(ownedBindingKey);ownedBindingKey=null;}
+                foreach(string key in ownedControlKeys)PlayerPrefs.DeleteKey(key);ownedControlKeys.Clear();PlayerPrefs.Save();
+                if(ownedProfileFolder!=null&&Directory.Exists(ownedProfileFolder))Directory.Delete(ownedProfileFolder,true);
+                ownedProfileFolder=null;
+            }
         }
     }
 
     // HUD-2 (gate hazard): a PlayMode run in a snapshot and one in the shared checkout can run at the same time on one machine.
     public sealed class PlayModeIsolationTests:FestivalPlayModeTest
     {
+        private string savedFolder;
+        private FestivalInput leftControls;
+        private string leftBindingKey;
+        private InputSettings.BackgroundBehavior leftBackground;
+        private InputSettings.EditorInputBehaviorInPlayMode leftEditor;
+
+        [UnityTest,Order(7)]public IEnumerator AStoppedTestLeavesItsVirtualInputAndSavedControls()
+        {
+            leftBackground=InputSystem.settings.backgroundBehavior;leftEditor=InputSystem.settings.editorInputBehaviorInPlayMode;
+            UseAVirtualKeyboard("impl-U01 cleanup keyboard");UseAVirtualMouse("impl-U01 cleanup mouse");
+            UseAVirtualKeyboard("impl-U01 cleanup keyboard"); // Repeated setup must retain the original settings and device.
+            string id="impl-U01-cleanup-"+System.Guid.NewGuid().ToString("N");
+            leftControls=NewTestControls(id);leftBindingKey="festival-bindings-"+LocalProfile.Folder+"-"+id;
+            leftControls.Rebind(leftControls.Interact,0,null);yield return null;yield return Tap(Key.K,.3f);
+            Assert.That(PlayerPrefs.HasKey(leftBindingKey),Is.True,"the real rebind saved this test's controls");
+        }
+
+        [UnityTest,Order(8)]public IEnumerator TheNextTestHasNoVirtualInputOrSavedControlsLeft()
+        {
+            Assert.That(leftControls.Map.enabled,Is.False,"teardown disposes controls even when the test never reaches its own cleanup");
+            Assert.That(PlayerPrefs.HasKey(leftBindingKey),Is.False,"only the preceding test's saved identity is removed");
+            foreach(var device in InputSystem.devices)Assert.That(device.name.StartsWith("impl-U01 cleanup"),Is.False,"a keyboard or mouse leaked");
+            Assert.That((InputSystem.settings.backgroundBehavior,InputSystem.settings.editorInputBehaviorInPlayMode),Is.EqualTo((leftBackground,leftEditor)),"repeated setup still restores the original input settings");
+            yield break;
+        }
+
+        [UnityTest,Order(6)]public IEnumerator BindingsSaveOnlyInsideTheirDisposableScope()
+        {
+            string id="impl-U01-bindings-"+System.Guid.NewGuid().ToString("N");
+            string previousScope=FestivalInput.PreferencesScope;
+            UseAVirtualKeyboard("impl-U01 binding keyboard");
+            string scopedKey="festival-bindings-"+LocalProfile.Folder+"-"+id;
+            try
+            {
+                FestivalInput.PreferencesScope=LocalProfile.Folder;
+                var controls=NewTestControls(id);
+                controls.Rebind(controls.Interact,0,null);yield return null;yield return Tap(Key.K,.3f);
+                Assert.That(controls.Rebinding,Is.False,"the real keyboard completes the rebind");
+                Assert.That(controls.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/k"),"the real key changes the action");
+                Assert.That(PlayerPrefs.HasKey(scopedKey),Is.True,"the rebind saves only to the disposable scope's identity");
+                string saved=PlayerPrefs.GetString(scopedKey);
+                NewTestControls(id);
+                Assert.That(PlayerPrefs.GetString(scopedKey),Is.EqualTo(saved),"recreating controls preserves the same test's saved data");
+                Assert.That(PlayerPrefs.HasKey("festival-bindings-"+id),Is.False,"the unscoped identity is untouched");
+                FestivalInput.PreferencesScope=LocalProfile.Folder+"-next";
+                var fresh=NewTestControls(id);
+                Assert.That(fresh.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/e"),"another test scope starts from the default binding");
+            }
+            finally
+            {
+                // The unscoped probe identity also belongs to this GUID; the fixture retires the scoped identities.
+                PlayerPrefs.DeleteKey("festival-bindings-"+id);
+                FestivalInput.PreferencesScope=previousScope;
+            }
+        }
+
+        // Saving during one hosted test still persists within that test, including after the session is rebuilt.
+        [UnityTest,Order(4)]public IEnumerator AHostedTestCanReloadWhatItSaved()
+        {
+            var host=new GameObject("Profile saving session");var session=host.AddComponent<FestivalSession>();
+            session.Host("Tester",HostPort);yield return null;
+            savedFolder=LocalProfile.Folder;
+            session.Profile.Data.ReducedMotion=!new ProfileData().ReducedMotion;
+            session.Profile.Data.HighContrast=!new ProfileData().HighContrast;
+            session.Profile.Data.ThirdPerson=true;session.Profile.Data.SeenTips.Add("test3-saved-tip");
+            string saved=JsonUtility.ToJson(session.Profile.Data);
+            Assert.That(session.Profile.Save(),Is.Empty,"the hosted session saves its profile");
+            Object.Destroy(host);yield return null;
+            session=new GameObject("Profile reloaded session").AddComponent<FestivalSession>();
+            Assert.That(JsonUtility.ToJson(session.Profile.Data),Is.EqualTo(saved),"a new session in this test loads the saved settings");
+        }
+
+        // The previous test deliberately leaves its session alive, so teardown must close it before retiring its folder.
+        [UnityTest,Order(5)]public IEnumerator TheNextHostedTestStartsFromProfileDefaults()
+        {
+            var session=new GameObject("Fresh profile session").AddComponent<FestivalSession>();
+            Assert.That(JsonUtility.ToJson(session.Profile.Data),Is.EqualTo(JsonUtility.ToJson(new ProfileData())),"saved comfort settings, tips and camera view must not leak into another test");
+            Assert.That(LocalProfile.Folder,Is.Not.EqualTo(savedFolder),"every hosted test owns a distinct subfolder");
+            Assert.That(Directory.Exists(savedFolder),Is.False,"the preceding test's folder was retired");
+            session.Host("Tester",HostPort);yield return null;
+            Assert.That(session.LocalPlayer,Is.Not.Null,"a fresh profile still hosts");
+        }
+
         // The other run holds the port this run's fixtures host on; this run's session still opens its lobby.
         [UnityTest,Order(1)]public IEnumerator ASessionHostsWhileAnotherRunHoldsItsPort()
         {

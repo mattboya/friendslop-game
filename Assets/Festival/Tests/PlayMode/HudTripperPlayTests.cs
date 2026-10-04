@@ -71,11 +71,6 @@ namespace Festival.Tests
             var chatKey=typeof(FestivalHud).GetMethod("ChatKey",BindingFlags.NonPublic|BindingFlags.Instance);
             void PressE()=>((System.Action)primary.GetValue(view))?.Invoke();
             void PressF(){if(chatKey==null)failures.Add("the HUD has no F key handler (ChatKey)");else chatKey.Invoke(view,new object[]{session.State,session.LocalPlayer});}
-            IEnumerator Press(Key key)
-            {
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
-            }
             // The actions the HUD lists (NEARBY / CREW), first to last; E runs the first.
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
             const string CheckDance="Check by dancing  •  F CHECK BY CHAT (8 s)",CheckChat="Check by chatting (8 s, safe)",FChats="  •  F CHAT";
@@ -102,7 +97,7 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
@@ -216,7 +211,7 @@ namespace Festival.Tests
                         Expect("talk","Equipment heading",GearKeysInChat);
                         var you=session.LocalWorldCharacter;
                         if(you==null||you.Pose!="Conversation")failures.Add("talk: your character's pose is "+(you==null?"missing":you.Pose)+", not the talk's");
-                        yield return Press(Key.Digit2);
+                        yield return Tap(Key.Digit2);
                         if(turn.Pick!=1)failures.Add("talk: 2 didn't reply with the second reply (picked "+turn.Pick+"; "+session.Message+")");
                         if(player.EquippedItemId!="confetti")failures.Add("talk: 2 equipped a slot ("+player.EquippedItemId+")");
                         bool said=false;for(int i=0;i<window.Bubbles;i++)said|=!window.IsTheirs(i)&&window.Shown(i)==turn.Replies[1];
@@ -245,8 +240,8 @@ namespace Festival.Tests
                     Expect("chat check","Equipment heading",GearKeysInChat);
                     player.EquippedItemId="map";
                     // 1, then 3 while they still type their answer to 1: that answer shows whole, then theirs to 3 types out.
-                    yield return Press(Key.Digit1);
-                    yield return Press(Key.Digit3);
+                    yield return Tap(Key.Digit1);
+                    yield return Tap(Key.Digit3);
                     yield return new WaitForSeconds(FestivalChatWindow.Typed(said.Answers[2])+.2f);
                     ExpectThread("chat check, 1 then 3 asked","< "+said.Opener,"> "+said.Questions[0],"< "+said.Answers[0],"> "+said.Questions[2],"< "+said.Answers[2]);
                     ExpectReplies("chat check, 1 then 3 asked",said.Questions,false,true,false);
@@ -273,7 +268,7 @@ namespace Festival.Tests
                     if(window!=null&&window.Open)failures.Add("chat check done: the chat window still shows");
                     Expect("chat check done","Equipment heading",GearKeys);
                     // With no chat under way, 1 equips slot 1 again (and shows the keyboard reaches the HUD).
-                    yield return Press(Key.Digit1);
+                    yield return Tap(Key.Digit1);
                     yield return new WaitForSeconds(.3f);
                     if(player.EquippedItemId!="confetti")failures.Add("chat check done: 1 did not equip slot 1 ("+player.EquippedItemId+")");
                     if(!seen.Confirmed)failures.Add("chat check done: the vision is still unchecked ("+session.Message+")");
@@ -307,7 +302,7 @@ namespace Festival.Tests
                     // CHAT OVER with nothing left to ask, while 2 equips; once it is whole, G closes the window and drops nothing.
                     double end=again.StartSeconds+again.DurationSeconds;string answer=said.Answers[0];
                     while(sim.State.SimulationSeconds<end-.2)yield return null;
-                    yield return Press(Key.Digit1);
+                    yield return Tap(Key.Digit1);
                     while(sim.State.SimulationSeconds<end+1.5)yield return null;
                     string where="1.5 s after a chat ended .2 s after 1 asked";
                     if(again.Status=="Active")failures.Add(where+": the chat is still on");
@@ -318,13 +313,13 @@ namespace Festival.Tests
                         if(!window.Header.StartsWith("CHAT OVER"))failures.Add(where+": the chat window is headed \""+window.Header+"\"");
                         if(window.Bubbles!=3||window.Shown(1)!=said.Questions[0]||!window.IsTheirs(2)||!last.StartsWith(answer.Substring(0,Mathf.Min(8,answer.Length))))failures.Add(where+": their answer isn't there to read: \""+last+"\"");
                         if(window.CanReply(1)||window.CanReply(2))failures.Add(where+": questions are still on offer");
-                        yield return Press(Key.Digit2);
+                        yield return Tap(Key.Digit2);
                         if(player.EquippedItemId!="map"||window.Bubbles!=3)failures.Add(where+": 2 didn't equip slot 2 ("+player.EquippedItemId+", "+window.Bubbles+" bubbles)");
                         float typed=Time.realtimeSinceStartup+FestivalChatWindow.Typed(answer);
                         while(window.Open&&window.Shown(window.Bubbles-1)!=answer&&Time.realtimeSinceStartup<typed)yield return null;
                         if(!window.Open||window.Shown(window.Bubbles-1)!=answer)failures.Add(where+": their whole answer never shows");
                         int carried=player.Inventory.Sum(i=>i.Count),dropped=sim.State.Drops.Count;
-                        yield return Press(Key.G);
+                        yield return Tap(Key.G);
                         if(window.Open)failures.Add(where+": G doesn't close the chat window");
                         if(player.Inventory.Sum(i=>i.Count)!=carried||sim.State.Drops.Count!=dropped)failures.Add(where+": G closing the chat window dropped something");
                     }
@@ -388,26 +383,8 @@ namespace Festival.Tests
         // Every challenge the live dancer can head: the four-lane kinds, and (DIALOG-3) a sale's, a buy's and a chat's trust dance.
         private static readonly string[] DancerKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation"};
 
-        // The virtual keyboard a test presses keys on, and the input settings it changed to let the keys through without focus.
         private const string VirtualKeyboard="HUD tripper keyboard";
-        private Keyboard keyboard;
-        private InputSettings.BackgroundBehavior oldBackground;
-        private InputSettings.EditorInputBehaviorInPlayMode oldEditor;
-        private void UseAVirtualKeyboard()
-        {
-            var input=InputSystem.settings;oldBackground=input.backgroundBehavior;oldEditor=input.editorInputBehaviorInPlayMode;
-            input.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
-            input.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
-            keyboard=InputSystem.AddDevice<Keyboard>(VirtualKeyboard);
-        }
-        // TEST-1: Unity stops a test at an unexpected error log without running the test's own finally, so the fixture puts the
-        // real keyboard's input back after every test, however it ended.
-        [UnityTearDown]public IEnumerator PutTheRealKeyboardBack()
-        {
-            if(keyboard==null)yield break;
-            InputSystem.RemoveDevice(keyboard);keyboard=null;
-            var input=InputSystem.settings;input.backgroundBehavior=oldBackground;input.editorInputBehaviorInPlayMode=oldEditor;
-        }
+        private void UseAVirtualKeyboard()=>base.UseAVirtualKeyboard(VirtualKeyboard);
 
         // TEST-1: a test that stops with the virtual keyboard in (here it simply never takes it out) still leaves the next test the
         // real keyboard's input: no virtual keyboard, and the settings as they were.
@@ -420,7 +397,7 @@ namespace Festival.Tests
         {
             Assert.That(InputSystem.devices.Where(d=>d.name.StartsWith(VirtualKeyboard)).Select(d=>d.name),Is.Empty,"a virtual keyboard left by an earlier test");
             var input=InputSystem.settings;
-            Assert.That((input.backgroundBehavior,input.editorInputBehaviorInPlayMode),Is.EqualTo((oldBackground,oldEditor)),"the input settings an earlier test changed");
+            Assert.That((input.backgroundBehavior,input.editorInputBehaviorInPlayMode),Is.EqualTo((InputBackgroundBeforeTest,InputEditorBeforeTest)),"the input settings an earlier test changed");
             yield break;
         }
 
@@ -442,11 +419,6 @@ namespace Festival.Tests
             var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
             var refresh=typeof(FestivalHud).GetField("nextActionRefresh",BindingFlags.NonPublic|BindingFlags.Instance);
             T Shown<T>(string name) where T:Component{foreach(var c in hud.GetComponentsInChildren<T>(false))if(c.name==name)return c;return null;}
-            IEnumerator Tap(Key key)
-            {
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState(key));yield return null;yield return null;
-                InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
-            }
             try
             {
                 session.Host("Tester",HostPort);
@@ -471,7 +443,7 @@ namespace Festival.Tests
                 // Holds G for 1.1 s, checking halfway that the dance goes on with the fill under the prompt part grown.
                 IEnumerator HoldG(string where,InteractionState doing)
                 {
-                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.G));
+                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.G));
                     yield return new WaitForSeconds(.5f);
                     if(Doing()?.Id!=doing.Id)failures.Add(where+": half a second into holding G, it already stopped");
                     var fill=Shown<Image>("Stop hold fill");var prompt=Shown<Text>("Stop hold");
@@ -479,14 +451,14 @@ namespace Festival.Tests
                     if(filled<.2f||filled>.9f)failures.Add(where+": half a second into holding G, the fill under the prompt is "+(fill==null?"hidden":filled.ToString("0.00")+" full"));
                     yield return new WaitForSeconds(.6f);yield return null;yield return null;
                     if(Doing()!=null||sim.State.Interactions.Find(i=>i.Id==doing.Id)?.Status!="Cancelled")failures.Add(where+": holding G for 1.1 s doesn't stop it ("+session.Message+")");
-                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return null;yield return null;
                     if(!Confetti())failures.Add(where+": holding G dropped your confetti");
                     npc.Suspicion=0;
                 }
                 // Holds E for 1.1 s, checking halfway that the talk goes on with the fill across the prompt grown.
                 IEnumerator HoldE(string where,InteractionState doing)
                 {
-                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.E));
+                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.E));
                     yield return new WaitForSeconds(.5f);
                     if(Doing()?.Id!=doing.Id)failures.Add(where+": half a second into holding E, it already ended");
                     var fill=Shown<Image>("Walk hold fill");var card=Shown<RectTransform>("Action prompt");
@@ -494,7 +466,7 @@ namespace Festival.Tests
                     if(filled<.2f||filled>.9f)failures.Add(where+": half a second into holding E, the fill across the prompt is "+(fill==null?"hidden":filled.ToString("0.00")+" full"));
                     yield return new WaitForSeconds(.6f);yield return null;yield return null;
                     if(Doing()!=null||sim.State.Interactions.Find(i=>i.Id==doing.Id)?.Status!="Cancelled")failures.Add(where+": holding E for 1.1 s doesn't walk out ("+session.Message+")");
-                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());yield return null;yield return null;
+                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return null;yield return null;
                 }
 
                 // A dance: a stray E and a tap of G leave it going, and nothing is bought, offered or dropped.
@@ -604,7 +576,7 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mates=new List<PlayerState>();
                 foreach(var name in new[]{"Sam","Kim","Alexandria Longname","Jo","Riya","Kai","Lu"}){var mate=sim.AddPlayer("hud_"+name.Split(' ')[0].ToLowerInvariant(),name);mate.Ready=true;mates.Add(mate);}

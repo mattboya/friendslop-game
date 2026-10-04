@@ -44,7 +44,7 @@ namespace Festival.Tests
                 // The size a 1080p player sees: a 1920x1080 canvas at scale 1.
                 var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
                 var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("vitals_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
 

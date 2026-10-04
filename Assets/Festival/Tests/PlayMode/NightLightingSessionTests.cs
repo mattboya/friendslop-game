@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -28,7 +27,7 @@ namespace Festival.Tests
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
-                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var sim=Simulation(session);
                 Assert.That(world.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True,"world colour grade");
                 float dayExposure=grade.postExposure.value;var daySky=RenderSettings.ambientSkyColor;
 

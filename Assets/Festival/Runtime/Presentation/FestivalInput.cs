@@ -20,10 +20,17 @@ namespace Festival.Presentation
         public readonly InputAction[] Notes = new InputAction[4];
         private InputActionRebindingExtensions.RebindingOperation rebind;
         private readonly string saveKey;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // Disposable test/development runs can isolate saved controls independently of this machine's normal bindings.
+        public static string PreferencesScope {get;set;}
+#endif
         public bool Rebinding => rebind != null;
         public FestivalInput(string profile)
         {
             saveKey="festival-bindings-"+profile;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(!string.IsNullOrEmpty(PreferencesScope))saveKey="festival-bindings-"+PreferencesScope+"-"+profile;
+#endif
             Move=Map.AddAction("Move",InputActionType.Value);
             Move.AddCompositeBinding("2DVector").With("Up","<Keyboard>/w").With("Down","<Keyboard>/s").With("Left","<Keyboard>/a").With("Right","<Keyboard>/d");
             Look=Map.AddAction("Look",InputActionType.Value,"<Mouse>/delta");
