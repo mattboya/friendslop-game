@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using Festival.Core;
 
-// DANCE-5: a chart is still `count` beats long, but after two lead-in quarter notes each beat holds one of four patterns drawn
-// from the seed: a quarter note, eighths (the beat and its "and"), a jump (two lanes at once) or a sixteenth run (3 or 4 notes
+// DANCE-5: a chart is still `count` beats long, but after two lead-in quarter notes each beat holds one of five patterns drawn
+// from the seed: a quarter note, eighths (the beat and its "and"), a jump (two lanes at once), a hold, or a sixteenth run (3 or 4 notes
 // from the beat, no two neighbours in one lane). The mix gets busier level by level, and Day 1 has no runs.
 public static class RhythmChartTests
 {
     static void Check(bool pass,string message){if(!pass)throw new Exception("RhythmChart: "+message);}
-    const string Quarter="quarter",Eighths="eighths",Jump="jump",Sixteenths="run";
+    const string Quarter="quarter",Eighths="eighths",Jump="jump",Sixteenths="run",Hold="hold",Rest="rest";
     // Day 1, Night 1, Day 2, Night 2, and one past the last level (it keeps Night 2's mix).
     static readonly int[] Levels={0,1,2,3,4};
 
@@ -16,7 +16,7 @@ public static class RhythmChartTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{TheSameSeedGivesTheSameChart,DurationsAreUnchangedForABeatCount,EveryNoteSitsOnTheSixteenthGrid,
-            IdsCountUpInTimeOrder,EveryBeatIsOneOfTheFourPatterns,JumpsUseTwoDifferentLanes,NeighbouringSixteenthsNeverShareALane,
+            IdsCountUpInTimeOrder,EveryBeatIsOneOfTheFivePatterns,JumpsUseTwoDifferentLanes,NeighbouringSixteenthsNeverShareALane,
             TheFirstTwoBeatsAreQuarters,DayOneHasNoSixteenthRunsAndNightOneCan,LaterLevelsMixInMoreOfAllThree,
             AJumpScoresPerfectWhenBothKeysArePressedOnTime,AFastRunScoresEveryNotePressedInTurn,AChallengePlaysTheMixOfTheLevelItBeganOn,
             TheHostScoresTheChartThePlayerSees,TheCheckDanceStaysFourQuarterNotes,ALateGoodOnTheLastSixteenthStillCounts})
@@ -34,18 +34,19 @@ public static class RhythmChartTests
     static double Grid(RhythmNote n,double beat)=>(n.TimeSeconds-2)/beat*4;
     static int Slot(RhythmNote n,double beat)=>(int)Math.Round(Grid(n,beat));
     static string Shape(RhythmChart chart,double beat=.5){var parts=new List<string>();foreach(var n in chart.Notes)parts.Add(Slot(n,beat)+":"+n.Direction);return string.Join(" ",parts);}
-    // What beat b holds, read from where its notes sit; "?" when it is none of the four patterns.
+    // What beat b holds, read from its notes and hold endpoints; "?" for an invalid pattern.
     static string Pattern(RhythmChart chart,double beat,int b)
     {
-        var slots=new List<int>();foreach(var n in chart.Notes)if(Slot(n,beat)/4==b)slots.Add(Slot(n,beat)%4);
+        var slots=new List<int>();foreach(var n in chart.Notes)if(Slot(n,beat)/4==b){if(n.HoldSeconds>0)return Hold;slots.Add(Slot(n,beat)%4);}
+        if(slots.Count==0&&chart.Notes.Exists(n=>n.HoldSeconds>0&&n.TimeSeconds<2+b*beat&&n.TimeSeconds+n.HoldSeconds>2+b*beat))return Rest;
         string shape=string.Join(",",slots);
         return shape=="0"?Quarter:shape=="0,2"?Eighths:shape=="0,0"?Jump:shape=="0,1,2"||shape=="0,1,2,3"?Sixteenths:"?";
     }
-    // How often each pattern fills a beat after the lead-in, over 2000 sixteen-beat charts at one level.
-    const int MixCharts=2000,MixBeats=MixCharts*14;
+    // How often each pattern is selected after the lead-in, over 2000 sixteen-beat charts at one level; rests are not selections.
+    const int MixCharts=2000;
     static Dictionary<string,int> Mix(int level)
     {
-        var mix=new Dictionary<string,int>{{Quarter,0},{Eighths,0},{Jump,0},{Sixteenths,0},{"?",0}};
+        var mix=new Dictionary<string,int>{{Quarter,0},{Eighths,0},{Jump,0},{Sixteenths,0},{Hold,0},{Rest,0},{"?",0}};
         for(int seed=0;seed<MixCharts;seed++){var chart=RhythmChart.Create(unchecked(seed*7919+level),16,.5,level);for(int b=2;b<16;b++)mix[Pattern(chart,.5,b)]++;}
         return mix;
     }
@@ -56,7 +57,7 @@ public static class RhythmChartTests
         {
             var a=RhythmChart.Create(seed,16,.5,level);var b=RhythmChart.Create(seed,16,.5,level);
             Check(a.Notes.Count==b.Notes.Count&&a.DurationSeconds==b.DurationSeconds,"seed "+seed+" at level "+level+" builds the same length twice");
-            for(int i=0;i<a.Notes.Count;i++)Check(a.Notes[i].Id==b.Notes[i].Id&&a.Notes[i].Direction==b.Notes[i].Direction&&a.Notes[i].TimeSeconds==b.Notes[i].TimeSeconds,
+            for(int i=0;i<a.Notes.Count;i++)Check(a.Notes[i].Id==b.Notes[i].Id&&a.Notes[i].Direction==b.Notes[i].Direction&&a.Notes[i].TimeSeconds==b.Notes[i].TimeSeconds&&a.Notes[i].HoldSeconds==b.Notes[i].HoldSeconds,
                 "seed "+seed+" at level "+level+": note "+i+" is the same for the host and every client");
         }
         var distinct=new HashSet<string>();for(int seed=0;seed<50;seed++)distinct.Add(Shape(RhythmChart.Create(seed,8,.5,3)));
@@ -90,10 +91,10 @@ public static class RhythmChartTests
             Check(chart.Notes[i].Id==i&&(i==0||chart.Notes[i].TimeSeconds>=chart.Notes[i-1].TimeSeconds),"note ids are unique and count up in time order (level "+level+")");
     }
 
-    static void EveryBeatIsOneOfTheFourPatterns()
+    static void EveryBeatIsOneOfTheFivePatterns()
     {
         foreach(var (chart,level,beat,count) in Sample())for(int b=0;b<count;b++)
-            Check(Pattern(chart,beat,b)!="?","level "+level+" beat "+b+" is a quarter, eighths, a jump or a run of 3 or 4 sixteenths from the beat: "+Shape(chart,beat));
+            Check(Pattern(chart,beat,b)!="?","level "+level+" beat "+b+" is a quarter, eighths, a jump, hold, run or covered rest from the beat: "+Shape(chart,beat));
     }
 
     static void JumpsUseTwoDifferentLanes()
@@ -139,13 +140,14 @@ public static class RhythmChartTests
 
     static void LaterLevelsMixInMoreOfAllThree()
     {
-        // Percent of beats after the lead-in that are a quarter / eighths / a jump / a run on Day 1, Night 1, Day 2, Night 2, and past it.
-        var odds=new[]{new[]{60,25,15,0},new[]{45,25,15,15},new[]{35,30,15,20},new[]{25,30,20,25},new[]{25,30,20,25}};
-        string[] names={Quarter,Eighths,Jump,Sixteenths};
+        // Percent of selected patterns after the lead-in: quarter / eighths / jump / run / hold. Covered rests have no draw.
+        var odds=new[]{new[]{60,25,15,0,0},new[]{35,25,15,15,10},new[]{25,30,15,20,10},new[]{15,30,20,25,10},new[]{15,30,20,25,10}};
+        string[] names={Quarter,Eighths,Jump,Sixteenths,Hold};
         foreach(int level in Levels)
         {
             var mix=Mix(level);
-            for(int k=0;k<4;k++){double percent=100.0*mix[names[k]]/MixBeats;Check(Math.Abs(percent-odds[level][k])<=1.5,"level "+level+": "+names[k]+" fills "+percent.ToString("F1")+"% of beats, want "+odds[level][k]+"%");}
+            int selections=0;foreach(var name in names)selections+=mix[name];
+            for(int k=0;k<5;k++){double percent=100.0*mix[names[k]]/selections;Check(Math.Abs(percent-odds[level][k])<=1.5,"level "+level+": "+names[k]+" fills "+percent.ToString("F1")+"% of selections, want "+odds[level][k]+"%");}
         }
     }
 

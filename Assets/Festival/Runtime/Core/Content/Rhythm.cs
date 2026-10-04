@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Festival.Core
 {
-    [Serializable] public sealed class RhythmNote { public int Id,Direction; public double TimeSeconds; }
+    [Serializable] public sealed class RhythmNote { public int Id,Direction; public double TimeSeconds,HoldSeconds; }
     [Serializable] public sealed class RhythmChart
     {
         public List<RhythmNote> Notes = new List<RhythmNote>();
@@ -11,11 +11,10 @@ namespace Festival.Core
         // The chart a rhythm challenge plays, the same on the host, in the HUD and in every replay. The tripper's check dance stays
         // four quarter notes whatever the level.
         public static RhythmChart For(InteractionState i)=>Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,i.Kind=="ConfirmDance"?QuarterNotes:i.ChartDifficulty);
-        // DANCE-5: after two lead-in quarter notes each beat is a quarter note, eighths (the beat and its "and"), a jump (two lanes at
-        // once) or a sixteenth run (3 or 4 notes from the beat), drawn with these percent odds by difficulty, the level the challenge
-        // began on: Day 1, Night 1, Day 2, then Night 2 and anything after. Runs start at Night 1.
-        static readonly int[][] PatternOdds={new[]{60,25,15,0},new[]{45,25,15,15},new[]{35,30,15,20},new[]{25,30,20,25}};
-        const int Eighths=1,Jump=2,Sixteenths=3;
+        // After two lead-in quarter notes choose a quarter, eighths, jump, sixteenth run or hold. These percent odds apply to
+        // pattern selections; a two-beat hold covers the next beat with a rest. Day 1 keeps its original draws and shapes.
+        static readonly int[][] PatternOdds={new[]{60,25,15,0,0},new[]{35,25,15,15,10},new[]{25,30,15,20,10},new[]{15,30,20,25,10}};
+        const int Eighths=1,Jump=2,Sixteenths=3,Hold=4;
         // The difficulty that puts one quarter note on every beat, as charts were before DANCE-5 (the same seed, the same chart).
         public const int QuarterNotes=-1;
         // `count` beats from a 2 s lead-in. Any two notes a sixteenth apart, across a beat too, are in different lanes.
@@ -25,12 +24,18 @@ namespace Festival.Core
             if(double.IsNaN(beatSeconds)||double.IsInfinity(beatSeconds)||beatSeconds<.25||beatSeconds>1)throw new ArgumentOutOfRangeException(nameof(beatSeconds));
             var chart=new RhythmChart{DurationSeconds=2+count*beatSeconds}; var random=new ContentRandom(seed);
             var odds=difficulty<0?null:PatternOdds[Math.Min(difficulty,PatternOdds.Length-1)];
-            int before=-1; // the lane a sixteenth before this beat (a 4-note run's last note), or -1
+            int before=-1; // a preceding run's last lane or the hold lane released on this beat, or -1
             for(int beat=0;beat<count;beat++)
             {
                 int pattern=0;
                 if(odds!=null&&beat>=2)for(int roll=random.Next(100);roll>=odds[pattern];pattern++)roll-=odds[pattern];
                 int lane=Lane(random,before,-1);Add(chart,beat,0,lane,beatSeconds);
+                if(pattern==Hold)
+                {
+                    int length=Math.Min(1+random.Next(2),count-beat);
+                    chart.Notes[chart.Notes.Count-1].HoldSeconds=length*beatSeconds;
+                    before=lane;beat+=length-1;continue;
+                }
                 if(pattern==Jump)Add(chart,beat,0,Lane(random,before,lane),beatSeconds);
                 if(pattern==Eighths)Add(chart,beat,2,Lane(random,-1,-1),beatSeconds);
                 before=-1;
@@ -46,11 +51,18 @@ namespace Festival.Core
     {
         private readonly RhythmChart chart;
         private readonly HashSet<int> consumed=new HashSet<int>();
+        private readonly Dictionary<int,(int id,double pressed,double end,double credit)> holds=new Dictionary<int,(int,double,double,double)>();
         private double earned, elapsed;
         public double GoodWindowSeconds { get; }
         public int Hits { get; private set; }
         public int Misses { get; private set; }
         public int ExtraPresses { get; private set; }
+        public int Drops { get; private set; }
+        public int? LastMatchedNoteId { get; private set; }
+        public int? LastDroppedNoteId { get; private set; }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        public Action<string> Diagnostic;
+#endif
         public double LastErrorSeconds { get; private set; }
         public double Score => Math.Max(0,Math.Min(1,earned/chart.Notes.Count-ExtraPresses*0.1));
         // Like Score, but over only the notes judged so far; null before the first one (nothing to score yet).
@@ -64,6 +76,7 @@ namespace Festival.Core
         }
         public string Submit(int direction,double timeSeconds)
         {
+            LastMatchedNoteId=null;
             if(direction<0||direction>3||!Finite(timeSeconds)||timeSeconds<0) return "Miss";
             RhythmNote closest=null; double best=double.MaxValue;
             foreach(var note in chart.Notes)
@@ -74,8 +87,26 @@ namespace Festival.Core
             }
             if(closest==null) { ExtraPresses++; return "Extra"; }
             consumed.Add(closest.Id); Hits++; LastErrorSeconds=timeSeconds-closest.TimeSeconds;
-            bool perfect=best<=0.08+1e-9; earned+=perfect?1:0.6;
+            bool perfect=best<=0.08+1e-9; double credit=perfect?1:0.6;earned+=credit;LastMatchedNoteId=closest.Id;
+            if(closest.HoldSeconds>0)holds[direction]=(closest.Id,timeSeconds,closest.TimeSeconds+closest.HoldSeconds,credit);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Diagnostic?.Invoke("[Festival.RhythmJudge] head id="+closest.Id+" lane="+direction+" error="+LastErrorSeconds.ToString("F3",System.Globalization.CultureInfo.InvariantCulture));
+#endif
             return perfect?"Perfect":"Good";
+        }
+        // Releases never count as presses or new judged notes. Retire a hit hold once; a missing release keeps its head credit.
+        public void Release(int direction,double timeSeconds)
+        {
+            LastDroppedNoteId=null;
+            if(direction<0||direction>3||!Finite(timeSeconds)||timeSeconds<0||!holds.TryGetValue(direction,out var hold)||timeSeconds<hold.pressed)return;
+            holds.Remove(direction);
+            if(timeSeconds<hold.end-GoodWindowSeconds-1e-9)
+            {
+                earned-=hold.credit;Drops++;LastDroppedNoteId=hold.id;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Diagnostic?.Invoke("[Festival.RhythmJudge] drop id="+hold.id+" lane="+direction+" remaining="+(hold.end-timeSeconds).ToString("F3",System.Globalization.CultureInfo.InvariantCulture));
+#endif
+            }
         }
         // Advance only once the transport grace period expires for these chart times.
         public void Advance(double timeSeconds)

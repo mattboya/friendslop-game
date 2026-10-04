@@ -58,6 +58,8 @@ namespace Festival.Network
         // cumulative session discovery and copied only to its owner. All new fields default safely in older schema-2 rounds.
         // ECON-6: camp offers append two starter kinds with eight copies each and zero market supply.
         // PlayerState.StarterStockBought persists one paid combined allowance per fresh camp and is owner-only in views.
+        // DANCE-10 chart/judge: Night 1 onward selects one- or two-beat holds with covered rests from ChartSeed. RhythmNote
+        // carries HoldSeconds; Day 1 and explicit QuarterNotes keep their tap shapes. Hold heads remain one scored note.
         public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
