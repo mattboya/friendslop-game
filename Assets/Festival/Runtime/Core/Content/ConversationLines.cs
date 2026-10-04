@@ -36,8 +36,7 @@ namespace Festival.Core
         // line, the so-so style, the replies' order, the replies, the garbling), and given `history` each line heard lately is
         // drawn again and each line drawn is remembered (DialogueHistory.Fresh), as DialogueGrammar's chats are.
         // What a chat or a buy leaves you feeling (Conversations.cs): a hunch, never a verdict.
-        public const string HunchCop="You get the feeling they might be a cop.",HunchBuyer="You get the feeling they'd buy if you offered.",HunchMusic="You get the feeling they're just here for the music.";
-        public static string HunchClue(string landmark)=>"You get the feeling they know something about "+landmark+".";
+        public const string HunchCop="You get the feeling they might be a cop.",HunchBuyer="You get the feeling they'd buy if you offered.",HunchMusic="You get the feeling they're just here for the music.",HunchSeller="You get the feeling they've got something to sell.";
         public static ConversationTurn Turn(string topic,string persona,string role,int festival,int turn,int heard,bool clear,int garbled,ContentRandom random,DialogueHistory history=null)
         {
             if(Array.IndexOf(Topics,topic)<0||!Tastes.TryGetValue(persona,out var taste)) throw new ArgumentException("Unknown talk topic or persona: "+topic+", "+persona);
@@ -68,23 +67,12 @@ namespace Festival.Core
         }
         // The hunch a chat or a buy leaves, from its first clear line (`told`, null if none came through): their role's tell, or
         // nothing to go on.
-        public static string Hunch(string role,string told,int festival)
+        public static string Hunch(string role,string told,int festival,bool seller=false)
         {
             if(told==null) return HunchMusic;
             if(role=="Narc") return HunchCop;
             if(role=="Buyer") return HunchBuyer;
-            string landmark=role=="ClueHolder"?LandmarkIn(told,festival):"";
-            return landmark==""?HunchMusic:HunchClue(landmark);
-        }
-        // The landmark (FestivalLines' "landmark" part) a line names on this festival, or "".
-        private static string LandmarkIn(string line,int festival)
-        {
-            foreach(var entry in FestivalLines.Parts["landmark"])
-            {
-                bool tagged=entry.Length>1&&char.IsDigit(entry[0])&&entry[1]==':';string name=tagged?entry.Substring(2):entry;
-                if((!tagged||entry[0]-'0'==festival)&&line.IndexOf(name,StringComparison.OrdinalIgnoreCase)>=0) return name;
-            }
-            return "";
+            return seller?HunchSeller:HunchMusic;
         }
         private static string Say(string kind,int festival,ContentRandom random,DialogueHistory history)
         {

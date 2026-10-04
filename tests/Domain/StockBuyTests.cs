@@ -14,7 +14,7 @@ public static class StockBuyTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{CampStartersKeepGearShuffleAndMarketRefusesStock,ASellerSells,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
+        foreach(var test in new Action[]{CampStartersKeepGearShuffleAndMarketRefusesStock,ASellerSells,AClueHolderOnlySellsAtNight,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stock buy test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -83,6 +83,17 @@ public static class StockBuyTests
     // A regular by day and a clue holder by night each sell one unit of their kind for $5, talked through well or sloppily. A
     // botched buy, a cancelled one and one walked away from cost nothing. None of it is a sale, and a seller stops after
     // StockCopies(crew).
+    static void AClueHolderOnlySellsAtNight()
+    {
+        foreach(int level in new[]{0,1,2,3})
+        {
+            var s=Start(31,level);var p=s.Player("p1");var seller=Wook(s,level%2==1?"ClueHolder":"Regular");
+            Check(seller!=null,"setup: a candidate is present");seller.Role="ClueHolder";
+            var ask=Ask(s,p,seller);
+            Check(ask.Accepted==(level%2==1),"the host only lets a clue holder sell at night, level "+level+", accepted "+ask.Accepted);
+            if(level%2==0)Check(ask.Reason=="Not selling. They give you a funny look.","an ineligible clue holder uses the same refusal");
+        }
+    }
     static void ASellerSells()
     {
         Check(FestivalSimulation.SellerStock("wook_4")=="stock_lsd"&&FestivalSimulation.SellerStock("wook_7")=="stock_mushrooms","the number in a festivalgoer's id sets their kind: even Tongue Stamps, odd Fun Guys");

@@ -15,9 +15,9 @@ namespace Festival.Tests
         GameObject canvas;
         [TearDown] public void TearDown(){if(canvas!=null)UnityEngine.Object.DestroyImmediate(canvas);}
 
-        static FestivalSimulation Pair(int dose,out PlayerState player,out NpcState partner)
+        static FestivalSimulation Pair(int dose,out PlayerState player,out NpcState partner,int seed=21)
         {
-            var game=new FestivalSimulation(21);player=game.AddPlayer("owner","Owner");game.AddPlayer("friend","Friend");
+            var game=new FestivalSimulation(seed);player=game.AddPlayer("owner","Owner");game.AddPlayer("friend","Friend");
             game.State.Phase="Playing";game.State.Npcs.Clear();game.State.TripperId=player.Id;
             player.X=0;player.Z=0;game.Player("friend").X=30;
             string id="talker_0";for(int n=1;DialogueGrammar.PersonaFor(id,"")!="Wook";n++)id="talker_"+n;
@@ -42,6 +42,34 @@ namespace Festival.Tests
         static void Follow(FestivalChatWindow window,FestivalSimulation game,PlayerState player,float now)
         {
             var view=View(game,player.Id);Assert.That(window.Follow(view,view.Players.Find(p=>p.Id==player.Id),view.SimulationSeconds,now,false),Is.True);
+        }
+
+        [TestCase("Conversation","Regular",0)] [TestCase("Buy","Regular",0)]
+        [TestCase("Conversation","ClueHolder",1)] [TestCase("Buy","ClueHolder",1)]
+        public void SellerHunchReachesOnlyTheTalkersSnapshotAndWindow(string kind,string role,int level)
+        {
+            const string hunch="You get the feeling they've got something to sell.";
+            var game=Pair(0,out var player,out var partner,7);partner.Role=role;partner.StockSold=1;game.State.LevelIndex=level;
+            var result=game.Execute(player.Id,new GameCommand{Id="seller_start",Kind=kind=="Buy"?"StartBuy":kind,TargetId=partner.Id,ItemId=FestivalSimulation.SellerStock(partner.Id)});
+            Assert.That(result.Accepted,Is.True,result.Reason);var talk=game.Interaction(player.InteractionId);var window=Window(game,player);
+            for(int turn=0;turn<3;turn++)
+            {
+                var owner=View(game,player.Id);var friend=View(game,"friend");
+                Assert.That(friend.Interactions,Is.Empty,"the hunch and conversation remain owner-only");
+                foreach(var view in new[]{owner,friend})
+                {
+                    Assert.That(view.Npcs.Find(n=>n.Id==partner.Id).Role,Is.Empty,"no public role is added for seller discovery");
+                    Assert.That(view.Npcs.Find(n=>n.Id==partner.Id).StockSold,Is.Zero,"remaining stock stays on the host");
+                }
+                if(turn==2)Assert.That(owner.Interactions.Find(i=>i.Id==talk.Id).Hunch,Is.EqualTo(hunch),"the last active snapshot carries the exact private hunch");
+                Follow(window,game,player,turn);
+                Assert.That(window.Pick(Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth)),Is.True);
+            }
+            var settled=View(game,player.Id);
+            Assert.That(window.Follow(settled,settled.Players.Find(p=>p.Id==player.Id),settled.SimulationSeconds,3,false),Is.False,"the settled talk is no longer active");
+            Assert.That(window.Lingering,Is.True,"the window stays open to read the hunch");
+            Assert.That(talk.Status,Is.EqualTo("Complete"));
+            Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.IsNote(i)&&window.Shown(i)==hunch),Is.True,"the real chat window renders the cached seller hunch after settlement");
         }
 
         [TestCase(0f)] [TestCase(180f)]

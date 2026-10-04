@@ -7,7 +7,7 @@ namespace Festival.Core
     /// never buy, so a buy is never a sale.</summary>
     public sealed partial class FestivalSimulation
     {
-        static bool Sells(NpcState n)=>(n.Role=="Regular"||n.Role=="ClueHolder"||n.Role=="Narc")&&n.Twist!=VipGuard;
+        bool Sells(NpcState n)=>SellerCategory(n)||n.Role=="Narc"&&n.Twist!=VipGuard;
         const string NarcBust="Busted! That was an undercover narc.";
         /// <summary>The one kind a festivalgoer sells, by the number their id ends in: even Tongue Stamps, odd Fun Guys. It reads
         /// nothing but the id, so the HUD can name it on every festivalgoer without the label giving a role away.</summary>

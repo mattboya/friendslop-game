@@ -80,7 +80,8 @@ namespace Festival.Core
         // buyer is buying and security is security, so neither leaves one.
         string Hunch(InteractionState i,string role)
         {
-            for(int t=1;t<i.Turns.Count;t++)if(Told(new ContentRandom(TurnSeed(i,t)),i.Turns[t-1]))return ConversationLines.Hunch(role,i.Turns[t].Line,State.FestivalIndex);
+            var npc=State.Npcs.Find(n=>n.Id==i.TargetId);bool seller=npc!=null&&SellerCategory(npc);
+            for(int t=1;t<i.Turns.Count;t++)if(Told(new ContentRandom(TurnSeed(i,t)),i.Turns[t-1]))return ConversationLines.Hunch(role,i.Turns[t].Line,State.FestivalIndex,seller);
             return ConversationLines.Hunch(role,null,State.FestivalIndex);
         }
         // FinishInteraction calls this each time the talk's clock runs out (a trust dance's verdict, or a turn left silent) and

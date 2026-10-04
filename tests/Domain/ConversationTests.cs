@@ -23,7 +23,8 @@ public static class ConversationTests
         foreach(var test in new Action[]{EachTalkIsThreeTurnsOfThreeReplies,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
             ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
-            ATalkReadsThePerson,AClueHolderNamesALandmark,OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
+            ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
+            OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -457,9 +458,10 @@ public static class ConversationTests
 
     // A chat with someone of this role on festival 0 (night 1 for a clue holder), a reply of `grade` every turn: what it left
     // you feeling, and whether any of their lines carried a narc's cop-speak.
-    static (string hunch,bool copSpeak,string lines) Read(string role,int seed,int grade,string kind="Conversation")
+    static (string hunch,bool copSpeak,string lines) Read(string role,int seed,int grade,string kind="Conversation",string twist="",int stockSold=0,int level=-1,int festival=0)
     {
-        var s=Pair(kind,seed);Partner(s).Role=role;if(role=="ClueHolder")s.State.LevelIndex=1;
+        var s=Pair(kind,seed);Partner(s).Role=role;Partner(s).Twist=twist;Partner(s).StockSold=stockSold;
+        s.State.LevelIndex=level<0?(role=="ClueHolder"?1:0):level;s.State.FestivalIndex=festival;
         var i=Talk(s,Start(s,kind),grade,grade,grade);var lines=string.Join(" / ",i.Turns.Select(t=>t.Line));
         return (i.Hunch,i.Turns.Exists(t=>DialogueGrammar.HasNarcTell(t.Line)),lines);
     }
@@ -474,8 +476,8 @@ public static class ConversationTests
         Check(narcSpeak>=.7&&regularSpeak<=.1,"after a smooth chat a narc's lines carry cop-speak "+narcSpeak.ToString("0.00")+" of the time (at least .70), a regular's "+regularSpeak.ToString("0.00")+" (at most .10)");
         double narcCop=Share("Narc",Smooth,r=>r.hunch==ConversationLines.HunchCop),regularCop=Share("Regular",Smooth,r=>r.hunch==ConversationLines.HunchCop);
         Check(narcCop>=.7&&regularCop<=.1,"after a smooth chat a narc leaves you feeling they might be a cop "+narcCop.ToString("0.00")+" of the time, a regular "+regularCop.ToString("0.00"));
-        double buyerBuys=Share("Buyer",Smooth,r=>r.hunch==ConversationLines.HunchBuyer),regularMusic=Share("Regular",Smooth,r=>r.hunch==ConversationLines.HunchMusic);
-        Check(buyerBuys>=.7&&regularMusic>=.9,"after a smooth chat a buyer feels like they'd buy "+buyerBuys.ToString("0.00")+" of the time, and a regular is just here for the music "+regularMusic.ToString("0.00"));
+        double buyerBuys=Share("Buyer",Smooth,r=>r.hunch==ConversationLines.HunchBuyer),regularSells=Share("Regular",Smooth,r=>r.hunch=="You get the feeling they've got something to sell.");
+        Check(buyerBuys>=.7&&regularSells>=.7,"after a smooth chat a buyer feels like they'd buy "+buyerBuys.ToString("0.00")+" of the time, and a regular feels like they sell "+regularSells.ToString("0.00"));
         foreach(var (role,right) in new[]{("Narc",ConversationLines.HunchCop),("Buyer",ConversationLines.HunchBuyer)})
         {
             double smooth=Share(role,Smooth,r=>r.hunch==right),soso=Share(role,SoSo,r=>r.hunch==right),awkward=Share(role,Awkward,r=>r.hunch==right);
@@ -488,17 +490,51 @@ public static class ConversationTests
             if(role!="Narc")Check(!read.copSpeak,"only a narc ever slips into cop-speak: "+read.lines);
         }
     }
-    // At night a clue holder's chat, drawn out smoothly, names a landmark, and leaves you feeling they know something about it.
+    static void ARegularTellLeavesASellerHunch()
+    {
+        foreach(var kind in new[]{"Conversation","Buy"})
+        {
+            var read=Read("Regular",7,Smooth,kind);
+            Check(read.hunch=="You get the feeling they've got something to sell.","a regular's clear "+kind+" leaves the exact seller hunch, got: "+read.hunch);
+        }
+    }
+    static void ASellerHunchUsesTheHostCategoryNotRemainingStock()
+    {
+        foreach(int festival in new[]{0,1})foreach(int level in new[]{0,1,2,3})
+        {
+            var dry=Read("Regular",7,Smooth,stockSold:99,level:level,festival:festival);
+            Check(dry.hunch=="You get the feeling they've got something to sell.","a sold-out regular still belongs to the seller category");
+            var guard=Read("Regular",7,Smooth,twist:FestivalSimulation.VipGuard,level:level,festival:festival);
+            Check(guard.hunch=="You get the feeling they're just here for the music.","the regular-role VIP guard is never a seller");
+            var clue=Read("ClueHolder",7,Smooth,level:level,festival:festival);
+            Check(clue.hunch==(level%2==1?"You get the feeling they've got something to sell.":"You get the feeling they're just here for the music."),"a clue holder is a seller only at night");
+            if(level%2==1)
+            {
+                var buy=Read("ClueHolder",7,Smooth,"Buy",level:level,festival:festival);
+                Check(buy.hunch=="You get the feeling they've got something to sell.","a nighttime clue holder's actual buy leaves the seller hunch");
+            }
+        }
+    }
+    static void ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches()
+    {
+        foreach(var role in new[]{"Regular","ClueHolder","Narc","Buyer"})
+        {
+            var vague=Read(role,7,Awkward);
+            Check(vague.hunch=="You get the feeling they're just here for the music.","no tell leaves music for "+role);
+            if(role!="Buyer")Check(Read(role,7,Awkward,"Buy").hunch==vague.hunch,"a no-tell buy leaves music for "+role);
+        }
+        Check(Read("Narc",7,Smooth).hunch=="You get the feeling they might be a cop.","a narc's hunch is unchanged");
+        Check(Read("Buyer",7,Smooth).hunch=="You get the feeling they'd buy if you offered.","a buyer's hunch is unchanged");
+    }
+    // ECON-7 replaces only the landmark hunch: the spoken random landmark remains, without exposing the real clue trail.
     static void AClueHolderNamesALandmark()
     {
         int named=0;
         for(int seed=1;seed<=200;seed++)
         {
             var read=Read("ClueHolder",seed,Smooth);if(read.hunch==ConversationLines.HunchMusic)continue;named++;
-            const string Lead="You get the feeling they know something about ";
-            Check(read.hunch.StartsWith(Lead)&&read.hunch.EndsWith("."),"a clue holder's hunch: "+read.hunch);
-            string landmark=read.hunch.Substring(Lead.Length,read.hunch.Length-Lead.Length-1);
-            Check(landmark.StartsWith("the ")&&read.lines.IndexOf(landmark,StringComparison.OrdinalIgnoreCase)>=0,"the landmark ("+landmark+") is one their lines named: "+read.lines);
+            Check(read.hunch=="You get the feeling they've got something to sell.","a night clue holder leaves the seller hunch, got: "+read.hunch);
+            Check(FestivalLines.Parts["landmark"].Any(entry=>read.lines.IndexOf(entry.Length>1&&entry[1]==':'?entry.Substring(2):entry,StringComparison.OrdinalIgnoreCase)>=0),"the clue holder still speaks an authored landmark: "+read.lines);
         }
         Check(named>=140,"a smooth chat with a clue holder names a landmark at least .70 of the time, got "+named/200.0);
     }

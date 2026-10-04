@@ -13,6 +13,50 @@ namespace Festival.Tests
 {
     public sealed class ConversationConsumerPlayTests:FestivalPlayModeTest
     {
+        [UnityTest] public IEnumerator HostedBuyWindowShowsTheSellerHunch()
+        {
+            const string hunch="You get the feeling they've got something to sell.";
+            var world=new GameObject("impl:U77 seller world");world.AddComponent<FestivalWorld>();yield return null;
+            var sessionObject=new GameObject("impl:U77 seller session");var session=sessionObject.AddComponent<FestivalSession>();yield return null;
+            GameObject canvas=null;
+            try
+            {
+                session.Host("Buyer",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);
+                game.State.Npcs.Clear();game.State.Seed=7;game.State.EntitySequence=0;player.X=0;player.Z=0;player.Effects.Clear();
+                string id="seller_0";for(int n=1;DialogueGrammar.PersonaFor(id,"")!="Wook";n++)id="seller_"+n;
+                game.State.Npcs.Add(new NpcState{Id=id,Kind="Wook",Role="Regular",X=0,Z=1.5f,Yaw=0,CanTalk=true});
+                session.Command("StartBuy",target:id,item:FestivalSimulation.SellerStock(id));
+                for(float deadline=Time.realtimeSinceStartup+5;player.InteractionId==""&&Time.realtimeSinceStartup<deadline;)yield return null;
+                var talk=game.Interaction(player.InteractionId);Assert.That(talk,Is.Not.Null,session.Message);
+                canvas=new GameObject("impl:U77 seller canvas",typeof(RectTransform),typeof(Canvas));
+                ((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);
+                var window=FestivalChatWindow.Build(canvas.transform,Resources.Load<Font>("FestivalDisplay"),null);
+                window.Send=command=>session.Command(command.Kind,target:command.TargetId,item:command.ItemId,amount:command.Amount,direction:command.Direction);
+                for(int turn=0;turn<3;turn++)
+                {
+                    InteractionState visible=null;
+                    for(float deadline=Time.realtimeSinceStartup+5;Time.realtimeSinceStartup<deadline;)
+                    {
+                        visible=session.State.Interactions.Find(i=>i.Id==talk.Id);
+                        if(visible!=null&&visible.Turns.Count==turn+1)break;
+                        yield return null;
+                    }
+                    Assert.That(visible,Is.Not.Null);Assert.That(visible.Turns.Count,Is.EqualTo(turn+1));
+                    if(turn==2)Assert.That(visible.Hunch,Is.EqualTo(hunch));
+                    Assert.That(window.Follow(session.State,session.LocalPlayer,session.State.SimulationSeconds,turn,false),Is.True);
+                    Assert.That(window.Pick(Array.IndexOf(visible.Turns[turn].Grades,ConversationLines.Smooth)),Is.True);
+                }
+                for(float deadline=Time.realtimeSinceStartup+5;talk.Status=="Active"&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(talk.Status,Is.EqualTo("Complete"));yield return null;
+                Assert.That(window.Follow(session.State,session.LocalPlayer,session.State.SimulationSeconds,3,false),Is.False,"the settled buy is no longer active");
+                Assert.That(window.Lingering,Is.True,"the hosted window stays open to read the hunch");
+                Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.IsNote(i)&&window.Shown(i)==hunch),Is.True,"the hosted Buy window renders the private seller hunch");
+            }
+            finally{session.Leave();if(canvas!=null)UnityEngine.Object.Destroy(canvas);UnityEngine.Object.Destroy(sessionObject);UnityEngine.Object.Destroy(world);}
+        }
         [UnityTest] public IEnumerator HostedSlurredWindowRepliesStillCalmAPartnerFacingAway()
         {
             var world=new GameObject("impl:U13 conversation world");world.AddComponent<FestivalWorld>();yield return null;
