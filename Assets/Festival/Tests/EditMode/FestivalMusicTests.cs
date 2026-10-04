@@ -68,6 +68,30 @@ namespace Festival.Tests
             }
         }
 
+        [Test]public void TheDecodedRecordingsAndCampApiUseThePureAuthoredGrid()
+        {
+            for(int k=0;k<FestivalMusic.Tracks.Length;k++)
+            {
+                var track=FestivalMusic.For(k+1);var grid=StageBeats.For(k+1);
+                Assert.That(track.Beats,Is.SameAs(grid),track.Clip+": a single measured grid drives host and camp");
+                Assert.That((track.Clip,track.FirstBeat,track.LoopEnd,track.LoopSeconds,track.Bpm),Is.EqualTo((grid.Clip,grid.FirstBeat,grid.LoopEnd,grid.LoopSeconds,grid.Bpm)),track.Clip+": the camp API keeps its loop and tempo");
+                Assert.That(track.Phrases,Is.SameAs(grid.Phrases),track.Clip+": phrase anchors are not duplicated");
+                Assert.That(track.Audio.frequency,Is.EqualTo(StageBeats.Rate),track.Clip+": real decode uses the pure table's sample rate");
+                var onsets=Onsets(decoded[track.Clip]);int heard=0,beats=0;
+                int first=(int)Math.Ceiling(grid.Beat(grid.FirstBeat)),end=(int)Math.Floor(grid.Beat(grid.LoopEnd));
+                for(int beat=first;beat<=end;beat++)
+                {
+                    double sample=grid.Sample(beat),quarter=StageBeats.Rate*15/grid.Bpm;
+                    double offset=StrongestOnset(onsets,sample,quarter);
+                    if(!double.IsNaN(offset)&&Math.Abs(offset)<=.03)heard++;
+                    beats++;
+                    Assert.That(track.BeatPhase((int)Math.Round(sample)),Is.EqualTo(grid.BeatPhase((int)Math.Round(sample))),track.Clip+": the playing source reads Core's conversion");
+                    Assert.That(grid.Beat(sample),Is.EqualTo(beat).Within(1e-9),track.Clip+": a measured beat converts back without rounding");
+                }
+                Assert.That(heard,Is.GreaterThanOrEqualTo(beats*.6),track.Clip+": Core's converted beats land on the decoded recording's onsets");
+            }
+        }
+
         [Test]public void EachTempoMatchesAFreshMeasurement()
         {
             foreach(var track in FestivalMusic.Tracks)
@@ -135,7 +159,7 @@ namespace Festival.Tests
             }
         }
 
-        [Test,Explicit("Prints FestivalMusic's measured table. Run it after a recording changes, and paste the result into FestivalMusic.Tracks.")]
+        [Test,Explicit("Prints StageBeats' measured table. Run it after a recording changes, and paste the result into StageBeats.Tracks.")]
         public void PrintTheMeasuredTable()
         {
             var table=new System.Text.StringBuilder();
@@ -145,7 +169,7 @@ namespace Festival.Tests
                 table.AppendLine($"            // {m.Bpm:F2} BPM on average over {m.Phrases.Length} phrase starts. {m.Notes}");
                 table.AppendLine($"            new Track(\"{track.Clip}\",{m.FirstBeat},{m.LoopEnd},{string.Join(",",m.Phrases)}),");
             }
-            Debug.Log("FestivalMusic.Tracks, measured:\n"+table);
+            Debug.Log("StageBeats.Tracks, measured:\n"+table);
         }
 
         // ---- Measuring a recording's beat ----
