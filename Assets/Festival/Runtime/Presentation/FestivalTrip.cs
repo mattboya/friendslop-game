@@ -37,7 +37,7 @@ namespace Festival.Presentation
             public float Tremolo,Reverb;
         }
 
-        /// <summary>Reduced motion (on by default) keeps every colour but cuts camera motion, the swell and the lag, to this share.</summary>
+        /// <summary>Reduced motion keeps every colour but cuts camera motion, the swell and the lag, to this share.</summary>
         public const float ReducedMotionShare=.25f;
         /// <summary>LIGHT-1 took a level-long murk off the neon night, so at night a substance's tint and haze stay this faint.</summary>
         public const float NightTint=.03f;
@@ -159,15 +159,27 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Vector3> lastDrop=new Dictionary<string,Vector3>();
         private int nextTrail;
         private float sinceDrop;
+        private ProfileData audio;
+        private bool focused=true;
+        private Perception listening;
 
         // After FestivalSession.Update has moved the first-person camera this frame.
         private void LateUpdate()
         {
-            if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;campAudio=GetComponent<FestivalCampAudio>();actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
+            if(session==null&&!TryGetComponent(out session))return;
+            if(campAudio==null)TryGetComponent(out campAudio);
+            if(actorFor==null)actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};
             Apply(session.State,session.LocalPlayerId,session.ViewCamera!=null?session.ViewCamera.transform:null,actorFor,session.Profile.Data.ReducedMotion,Time.unscaledTime,Time.unscaledDeltaTime,campAudio!=null?campAudio.Beat:null);
         }
-        // Turned off, it draws nothing and lets the sound go.
-        private void OnDisable(){if(overlay!=null)Show(default,null,null,null,null,0);}
+        // Turned off, only trip processing goes; the player's master and focus choice still apply.
+        private void OnDisable(){if(overlay!=null)Show(default,null,null,null,null,0);else Listen(null,default);}
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            focused=hasFocus;Listen(null,listening);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log("[Settings] Audio focus="+hasFocus+" listener="+AudioListener.volume);
+#endif
+        }
 
         /// <summary>Draws localPlayerId's trip in state over view; actorFor finds a person's drawn body (null when not drawn). The gas
         /// pulses on beat (For).</summary>
@@ -190,8 +202,15 @@ namespace Festival.Presentation
 
         private void Listen(Transform view,Perception look)
         {
+            if(session==null)TryGetComponent(out session);
+            if(session?.Profile!=null)audio=session.Profile.Data;
+            var settings=audio;
+            if(session!=null)FestivalSettings.ConfigureVoice(session.Voice,settings);
+            listening=look;
             // ponytail: a frame-rate tremolo on the global listener volume; an OnAudioFilterRead tremolo if it ever sounds stepped.
-            float volume=1-look.Tremolo;if(AudioListener.volume!=volume)AudioListener.volume=volume;
+            float master=settings==null?1:settings.MasterVolume;
+            float volume=(!focused&&settings!=null&&settings.MuteWhenUnfocused?0:master)*(1-look.Tremolo);
+            if(AudioListener.volume!=volume)AudioListener.volume=volume;
             // The filters need the view's AudioListener beside them; a view without one (an EditMode test) is left alone.
             if(lowPass==null&&look.Muffle>0&&Hears(view))lowPass=view.gameObject.AddComponent<AudioLowPassFilter>();
             if(lowPass!=null){lowPass.enabled=look.Muffle>0;lowPass.cutoffFrequency=LowPassHz(look.Muffle);}
@@ -301,7 +320,7 @@ namespace Festival.Presentation
         private void OnDestroy()
         {
             // The listener's volume is global and outlives this component and its scene.
-            AudioListener.volume=1;
+            Listen(null,default);
             if(lowPass!=null)Dispose(lowPass);
             if(reverb!=null)Dispose(reverb);
             foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,sprites})if(thing!=null)Dispose(thing);

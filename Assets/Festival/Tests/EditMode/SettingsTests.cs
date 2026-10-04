@@ -1,6 +1,9 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Reflection;
+using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -23,6 +26,140 @@ namespace Festival.Tests
             if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
         }
         private void Write(string json)=>File.WriteAllText(Path.Combine(ownedFolder,"settings.json"),json);
+
+        [Test]public void SessionTeardownRetainsTheLastConfiguredMasterAndFocusChoice()
+        {
+            float previousVolume=AudioListener.volume;var host=new GameObject("impl:U08 session audio teardown");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();var profile=new LocalProfile("audio");
+                typeof(FestivalSession).GetProperty("Profile").SetValue(session,profile);
+                profile.Data.MasterVolume=.3f;profile.Data.MuteWhenUnfocused=false;
+                var trip=host.AddComponent<FestivalTrip>();trip.Apply(null,"me",null,null,false,0,0);
+                Assert.That(AudioListener.volume,Is.EqualTo(.3f).Within(1e-5f));
+                UnityEngine.Object.DestroyImmediate(session);
+                typeof(FestivalTrip).GetMethod("OnDisable",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(trip,null);
+                Assert.That(AudioListener.volume,Is.EqualTo(.3f).Within(1e-5f),"trip teardown after its session still retains master");
+                profile.Data.MuteWhenUnfocused=true;
+                typeof(FestivalTrip).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(trip,new object[]{false});
+                Assert.That(AudioListener.volume,Is.Zero,"the retained profile also retains focus mute");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);AudioListener.volume=previousVolume;}
+        }
+
+        [Test]public void SavedVoiceConfigurationReachesTheProviderWithoutStartingVoice()
+        {
+            float previousVolume=AudioListener.volume;
+            var host=new GameObject("impl:U08 saved voice settings");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();var profile=new LocalProfile("audio");
+                typeof(FestivalSession).GetProperty("Profile").SetValue(session,profile);
+                var data=profile.Data;data.MasterVolume=.5f;data.VoiceVolume=.4f;data.InputGain=.2f;data.MicrophoneDevice="impl:U08 chosen microphone";data.VoiceMode="OpenMic";
+                string status=session.Voice.Status;var devices=Microphone.devices;
+                var trip=host.AddComponent<FestivalTrip>();trip.Apply(null,"me",null,null,false,0,0);
+                var configured=session.Voice.GetType().GetProperty("Configuration");
+                Assert.That(configured,Is.Not.Null,"the provider must receive saved voice configuration");
+                object value=configured.GetValue(session.Voice);
+                object Setting(string name)=>value.GetType().GetField(name).GetValue(value);
+                Assert.That(Setting("MicrophoneDevice"),Is.EqualTo("impl:U08 chosen microphone"));
+                Assert.That(Setting("InputGain"),Is.EqualTo(.2f));Assert.That(Setting("Mode"),Is.EqualTo("OpenMic"));
+                Assert.That(Setting("OutputVolume"),Is.EqualTo(.4f),"voice receives only its bus; master is already on the listener");
+                Assert.That(session.Voice.Available,Is.False);Assert.That(session.Voice.Status,Is.EqualTo(status));
+                foreach(string device in devices)Assert.That(Microphone.IsRecording(device),Is.False,"configuration never starts microphone capture");
+                data.VoiceVolume=0;data.MicrophoneDevice="";data.VoiceMode="PushToTalk";trip.Apply(null,"me",null,null,false,0,0);
+                value=configured.GetValue(session.Voice);
+                Assert.That(Setting("OutputVolume"),Is.EqualTo(0));Assert.That(Setting("MicrophoneDevice"),Is.EqualTo(""));Assert.That(Setting("Mode"),Is.EqualTo("PushToTalk"));
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);AudioListener.volume=previousVolume;}
+        }
+
+        [Test]public void CreaturePointersUseEffectsAndFollowChangesWhileTheyAreAlive()
+        {
+            var host=new GameObject("impl:U08 creature audio");var eye=new GameObject("impl:U08 creature view").AddComponent<Camera>();
+            eye.transform.position=new Vector3(0,1.65f,0);eye.fieldOfView=75;
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();var profile=new LocalProfile("audio");
+                typeof(FestivalSession).GetProperty("Profile").SetValue(session,profile);
+                profile.Data.MasterVolume=.4f;profile.Data.MusicVolume=1;profile.Data.EffectsVolume=.2f;
+                var creatures=host.AddComponent<FestivalCreatures>();var state=new RoundState{Phase="Playing",Seed=7};var me=new PlayerState{Id="me"};state.Players.Add(me);
+                me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                state.Npcs.Add(new NpcState{Id="clue",X=6,Z=30});state.Visions.Add(new VisionState{Id="hint",Kind="Clue",NpcId="clue",Hinted=true});
+                AudioSource pointer=null;
+                for(int step=0;step<2400&&pointer==null;step++)
+                {
+                    state.ElapsedSeconds=step*.05;creatures.Apply(state,"me",eye,step*.05f,.05f);
+                    pointer=host.GetComponentInChildren<AudioSource>();
+                }
+                Assert.That(pointer,Is.Not.Null,"a real hinted creature arrived and squeaked");
+                Assert.That(pointer.spatialBlend,Is.EqualTo(1),"the pointer still squeaks from its world position");
+                Assert.That(pointer.volume,Is.EqualTo(.2f).Within(1e-5f),"a creature applies effects, without another master");
+                profile.Data.MusicVolume=0;profile.Data.EffectsVolume=.7f;
+                creatures.Apply(state,"me",eye,120,.05f);
+                Assert.That(pointer.volume,Is.EqualTo(.7f).Within(1e-5f),"music mute does not mute the pointer");
+                profile.Data.EffectsVolume=0;creatures.Apply(state,"me",eye,120,.05f);
+                Assert.That(pointer.volume,Is.Zero,"effects mute applies to an existing pointer");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);UnityEngine.Object.DestroyImmediate(eye.gameObject);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+
+        [TestCase(0f)][TestCase(.2f)][TestCase(1f)]public void TheShopChimeUsesEffectsEvenWhenMusicIsMuted(float effects)
+        {
+            var host=new GameObject("impl:U08 shop audio");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();var profile=new LocalProfile("audio");
+                typeof(FestivalSession).GetProperty("Profile").SetValue(session,profile);
+                profile.Data.MasterVolume=.4f;profile.Data.MusicVolume=0;profile.Data.EffectsVolume=effects;
+                var hud=host.AddComponent<FestivalHud>();
+                typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+                var feedback=typeof(FestivalHud).GetMethod("UpdatePurchaseFeedback",BindingFlags.NonPublic|BindingFlags.Instance);
+                var state=new RoundState{RoundId="audio"};var me=new PlayerState{Cash=20};
+                feedback.Invoke(hud,new object[]{state,me});
+                me.Cash=15;me.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});feedback.Invoke(hud,new object[]{state,me});
+                var chime=(AudioSource)typeof(FestivalHud).GetField("shopAudio",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
+                Assert.That(chime.volume,Is.EqualTo(effects).Within(1e-5f),"the shop's real source applies effects; master is the listener's job");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+
+        [Test]public void MasterAndFocusMultiplyTheTripOnceAndSurviveItsTeardown()
+        {
+            float previousVolume=AudioListener.volume;
+            var host=new GameObject("impl:U08 listener settings");
+            var view=new GameObject("impl:U08 listener");view.AddComponent<AudioListener>();
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();var profile=new LocalProfile("audio");
+                typeof(FestivalSession).GetProperty("Profile").SetValue(session,profile);
+                profile.Data.MasterVolume=.4f;
+                var trip=host.AddComponent<FestivalTrip>();
+                typeof(FestivalTrip).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance)?.Invoke(trip,new object[]{true});
+                trip.Apply(null,"me",view.transform,null,false,0,0);
+                Assert.That(AudioListener.volume,Is.EqualTo(.4f).Within(1e-5f),"the saved master reaches the listener at the title");
+                var state=new RoundState{Phase="Shopping",SimulationSeconds=110};var me=new PlayerState{Id="me"};state.Players.Add(me);
+                me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=100,RemainingSeconds=FestivalSimulation.GiggleGasSeconds});
+                trip.Apply(state,"me",view.transform,null,false,0,0,0);
+                Assert.That(AudioListener.volume,Is.EqualTo(.24f).Within(1e-5f),"master .4 times the existing .6 kick gain");
+                Assert.That(view.GetComponent<AudioReverbFilter>().enabled,Is.True,"gas still reverbs");
+                typeof(FestivalTrip).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance)?.Invoke(trip,new object[]{false});
+                Assert.That(AudioListener.volume,Is.Zero,"losing focus mutes immediately");
+                trip.enabled=false;
+                typeof(FestivalTrip).GetMethod("OnDisable",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(trip,null); // EditMode does not run lifecycle callbacks.
+                Assert.That(AudioListener.volume,Is.Zero,"disabling the trip retains focus mute");
+                Assert.That(view.GetComponent<AudioReverbFilter>().enabled,Is.False,"disable clears trip processing");
+                typeof(FestivalTrip).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance)?.Invoke(trip,new object[]{true});
+                Assert.That(AudioListener.volume,Is.EqualTo(.4f).Within(1e-5f),"focus returns to configured master without the trip");
+                profile.Data.MasterVolume=.2f;profile.Data.MuteWhenUnfocused=false;
+                typeof(FestivalTrip).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance)?.Invoke(trip,new object[]{false});
+                Assert.That(AudioListener.volume,Is.EqualTo(.2f).Within(1e-5f),"focus-mute opt-out and master changes apply immediately");
+                typeof(FestivalTrip).GetMethod("OnDestroy",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(trip,null);
+                UnityEngine.Object.DestroyImmediate(trip);
+                Assert.That(AudioListener.volume,Is.EqualTo(.2f).Within(1e-5f),"destroying the trip keeps configured volume");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);UnityEngine.Object.DestroyImmediate(view);AudioListener.volume=previousVolume;}
+        }
         private static void Field(ProfileData data,string name,object expected)
         {
             var field=typeof(ProfileData).GetField(name);

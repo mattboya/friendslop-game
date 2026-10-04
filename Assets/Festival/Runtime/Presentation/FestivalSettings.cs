@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Festival.Core;
+using Festival.Integrations;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -21,6 +22,19 @@ namespace Festival.Presentation
         {
             this.profile=profile??throw new ArgumentNullException(nameof(profile));
             LastError=profile.LastError;
+        }
+        // SET-1: sources apply authored gain and their bus. FestivalTrip alone applies master/focus/trip gain.
+        public static float MusicGain(ProfileData data,float authoredGain=1)=>data==null?0:Mathf.Clamp01(data.MusicVolume*authoredGain);
+        public static float EffectsGain(ProfileData data,float authoredGain=1)=>Mathf.Clamp01((data==null?1:data.EffectsVolume)*authoredGain);
+        // New effect presenters use this adapter too; a source can follow slider changes during a one-shot.
+        public static void ApplyEffects(AudioSource source,ProfileData data,float authoredGain=1)
+        {
+            if(source!=null)source.volume=EffectsGain(data,authoredGain);
+        }
+        public static void ConfigureVoice(IVoiceSession voice,ProfileData data=null)
+        {
+            if(voice is IConfigurableVoiceSession configurable)
+                configurable.Configure(new VoiceConfiguration(data?.MicrophoneDevice??"",data?.InputGain??1,data?.VoiceMode??"PushToTalk",data?.VoiceVolume??1));
         }
         public string Save()
         {

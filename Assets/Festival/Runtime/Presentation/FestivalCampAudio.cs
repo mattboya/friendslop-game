@@ -83,15 +83,16 @@ namespace Festival.Presentation
             }
             // The other deck has taken over: it is live now, and the one that just finished waits for the next turn.
             if(track!=null&&AudioSettings.dspTime>=turnAt){live=1-live;turnAt+=track.LoopSeconds;Queue(decks[1-live]);}
-            float volume=session.Profile==null?0:session.Profile.Data.MusicVolume*.6f;
+            float volume=FestivalSettings.MusicGain(session.Profile?.Data,.6f);
             foreach(var deck in decks)deck.volume=volume;
+            FestivalSettings.ApplyEffects(foley,session.Profile?.Data);
             var player=session.LocalPlayer;
             if(player==null){lastAntics=0;return;}
             if(player.CampAntics>lastAntics&&player.CampVisitId!="")
             {
                 var site=CampFeatures.Find(player.CampVisitId);
                 int kind=site?.Kind=="Car"?0:site?.Kind=="Tent"?1:2;
-                foley.PlayOneShot(antics[kind],Mathf.Clamp01(session.Profile.Data.MusicVolume+.25f));
+                foley.PlayOneShot(antics[kind]);
             }
             lastAntics=player.CampAntics;
         }

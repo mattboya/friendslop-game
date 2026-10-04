@@ -91,7 +91,7 @@ namespace Festival.Presentation
             if(AudioSettings.dspTime>=turnAt){live=1-live;turnAt+=track.LoopSeconds;Queue(decks[1-live]);}
             level=Ease(level,Level(state,session.LocalPlayerId),Time.unscaledDeltaTime);
             // At full, as loud up front as the camp DJ (FestivalCampAudio).
-            float volume=session.Profile==null?0:session.Profile.Data.MusicVolume*.6f*level;
+            float volume=FestivalSettings.MusicGain(session.Profile?.Data,.6f*level);
             foreach(var deck in decks)deck.volume=volume;
         }
         void OnDestroy(){if(speakers!=null)Destroy(speakers);}

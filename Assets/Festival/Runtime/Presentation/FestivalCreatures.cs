@@ -153,7 +153,6 @@ namespace Festival.Presentation
         private void LateUpdate()
         {
             if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;}
-            volume=session.Profile==null?0:Mathf.Clamp01(session.Profile.Data.MusicVolume+.25f);
             Apply(session.State,session.LocalPlayerId,session.ViewCamera,Time.time,Time.unscaledDeltaTime);
         }
         // Turned off (TEST-1's pixel checks do), it shows nothing. Not while the object itself is going inactive or away: its
@@ -163,6 +162,8 @@ namespace Festival.Presentation
         /// <summary>Shows localPlayerId's creatures in state, seen through view; time drives the shimmer, deltaTime each life.</summary>
         public void Apply(RoundState state,string localPlayerId,Camera view,float time,float deltaTime)
         {
+            if(session==null)TryGetComponent(out session);
+            volume=session?.Profile==null?0:FestivalSettings.EffectsGain(session.Profile.Data);
             if(state==null||view==null||!FestivalWorld.ShowsFestival(state.Phase)){Clear();return;}
             int key=SeedFor(state,localPlayerId);if(schedule==null||key!=seed){Clear();if(key!=seed){pointed.Clear();nextTank=TankFirst;}seed=key;schedule=new Schedule(key);}
             var me=Find(state,localPlayerId);int dose=DoseOf(me),cap=dose<1?0:Caps[Math.Min(dose,Caps.Length)-1];
@@ -195,6 +196,7 @@ namespace Festival.Presentation
                 }
             foreach(var c in live)
             {
+                if(c.Voice!=null)c.Voice.volume=volume;
                 bool drawn=!c.InView||c.Seen;if(c.Root.gameObject.activeSelf!=drawn)c.Root.gameObject.SetActive(drawn);
                 if(!drawn)continue;
                 var ahead=c.Goal-c.Spot;ahead.y=0;
@@ -347,7 +349,7 @@ namespace Festival.Presentation
                 // 3-D so it says which way to look, but heard in full anywhere a pointer appears (out to Far); no Doppler, like the stage.
                 c.Voice=c.Root.gameObject.AddComponent<AudioSource>();c.Voice.playOnAwake=false;c.Voice.spatialBlend=1;c.Voice.minDistance=Far;c.Voice.dopplerLevel=0;
             }
-            c.Trail.gameObject.SetActive(true);c.Voice.PlayOneShot(Squeak,volume);
+            c.Trail.gameObject.SetActive(true);c.Voice.volume=volume;c.Voice.PlayOneShot(Squeak);
         }
         // The sparkles' one material: cream, hue-shifted like everything the dose invents, and glowing.
         private Material Glint()

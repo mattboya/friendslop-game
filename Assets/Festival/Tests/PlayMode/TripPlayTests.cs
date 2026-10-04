@@ -19,6 +19,74 @@ namespace Festival.Tests
     // In a live dance, the rhythm arrows take the substance's look-ahead.
     public sealed class TripPlayTests:FestivalPlayModeTest
     {
+        [UnityTest]public IEnumerator SettingsRouteTheLiveSourcesAndKeepMasterAfterLeaving()
+        {
+            float previousVolume=AudioListener.volume;
+            var world=new GameObject("impl:U08 audio world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl:U08 audio session");var session=host.AddComponent<FestivalSession>();var hud=host.AddComponent<FestivalHud>();
+            session.Profile.Data.MuteWhenUnfocused=false;yield return null;yield return null;
+            try
+            {
+                var trip=host.GetComponent<FestivalTrip>();var camp=host.GetComponent<FestivalCampAudio>();
+                var chime=(AudioSource)typeof(FestivalHud).GetField("shopAudio",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
+                var foley=(AudioSource)typeof(FestivalCampAudio).GetField("foley",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(camp);
+                Assert.That(camp.Music.volume,Is.EqualTo(.21f).Within(1e-5f),"the title keeps the default music loudness");
+                Assert.That(chime.volume,Is.EqualTo(.6f).Within(1e-5f),"the chime has the default effects gain");
+                Assert.That(foley.volume,Is.EqualTo(.6f).Within(1e-5f),"camp antics have the default effects gain");
+                var data=session.Profile.Data;data.MasterVolume=.4f;data.MusicVolume=.8f;data.EffectsVolume=.2f;
+                yield return null;yield return null;
+                Assert.That(AudioListener.volume,Is.EqualTo(.4f).Within(1e-5f));
+                Assert.That(camp.Music.volume,Is.EqualTo(.48f).Within(1e-5f),"the music source applies bus and authored .6 gain only");
+                Assert.That(camp.Music.volume*AudioListener.volume,Is.EqualTo(.192f).Within(1e-5f),"master multiplies music once");
+                Assert.That(chime.volume*AudioListener.volume,Is.EqualTo(.08f).Within(1e-5f),"master multiplies effects once");
+                Assert.That(foley.volume,Is.EqualTo(.2f).Within(1e-5f));
+
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"the real audio consumer hosts: "+session.Message);
+                yield return null;yield return null;
+                Assert.That(camp.Music.volume,Is.EqualTo(.48f).Within(1e-5f),"camp uses the same music bus as the title");
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                int shelf=sim.State.VendorOffers.IndexOf("poi_practice");Assert.That(shelf,Is.GreaterThanOrEqualTo(0));
+                var point=Catalog.ShopPoint(true,shelf);player.X=point.X;player.Z=point.Z;player.Cash=100;
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="audio-hold",Kind="HoldOffer",ItemId="poi_practice"}).Accepted,Is.True);
+                yield return null;yield return null;
+                player.X=0;player.Z=7;
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="audio-buy",Kind="Buy",ItemId="poi_practice"}).Accepted,Is.True);
+                yield return null;yield return null;
+                Assert.That(chime.isPlaying,Is.True,"a real purchase plays the routed chime");
+                Assert.That(chime.volume,Is.EqualTo(.2f).Within(1e-5f));
+
+                data.MusicVolume=1;data.EffectsVolume=.6f;
+                yield return StartLevel(session);
+                var stage=host.GetComponent<FestivalStageAudio>();yield return new WaitForSeconds(.4f);
+                Assert.That(stage.Music.volume,Is.EqualTo(.6f).Within(1e-5f),"the stage uses authored gain and music, without another master");
+                Assert.That(camp.Music,Is.Null,"the camp stays silent in the festival");
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float x=npc.X,z=npc.Z;player.X=x+.8f;player.Z=z;
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="audio-dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True);
+                yield return null;yield return null;
+                var pulse=host.GetComponents<AudioSource>().Single(s=>s.clip!=null&&s.clip.name=="Original festival pulse");
+                Assert.That(pulse.volume,Is.EqualTo(.35f).Within(1e-5f),"rhythm feedback keeps its old default loudness on the effects bus");
+                data.MusicVolume=0;data.EffectsVolume=.3f;npc.X=x;npc.Z=z;yield return null;yield return null;
+                Assert.That(pulse.volume,Is.EqualTo(.175f).Within(1e-5f),"music mute leaves feedback on the effects bus");
+                Assert.That(stage.Music.volume,Is.Zero,"music mute silences the stage");
+                data.EffectsVolume=0;npc.X=x;npc.Z=z;yield return null;yield return null;
+                Assert.That(pulse.volume,Is.Zero,"effects mute silences rhythm feedback");
+                Assert.That(chime.volume,Is.Zero);Assert.That(foley.volume,Is.Zero);
+                session.Leave();yield return null;yield return null;
+                Assert.That(AudioListener.volume,Is.EqualTo(.4f).Within(1e-5f),"leaving clears the trip while keeping master");
+                trip.enabled=false;yield return null;
+                Assert.That(AudioListener.volume,Is.EqualTo(.4f).Within(1e-5f),"the real disable callback keeps master");
+                data.MuteWhenUnfocused=true;typeof(FestivalTrip).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(trip,new object[]{false});yield return null;
+                Assert.That(AudioListener.volume,Is.Zero);
+                Object.Destroy(trip);yield return null;
+                Assert.That(AudioListener.volume,Is.Zero,"the real destroy callback keeps focus mute");
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world);AudioListener.volume=previousVolume;}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator TheLocalDoseReachesTheScreenThroughTheSingleWriters()
         {
             var world=new GameObject("Trip world");world.AddComponent<FestivalWorld>();yield return null;

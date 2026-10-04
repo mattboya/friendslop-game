@@ -641,6 +641,7 @@ namespace Festival.Presentation
         private void Update()
         {
             if(session==null)return;
+            FestivalSettings.ApplyEffects(shopAudio,session.Profile?.Data);
             // MENU-1: a game that ends, by LEAVE SESSION or a drop, comes back to the title as the game opened: the camp in its own
             // light (the session drives the world only while connected), and the settings put away so the title shows why it ended.
             if(wasConnected&&!session.Connected){settingsOpen=false;if(world!=null)world.ShowCamp();}
@@ -1549,10 +1550,11 @@ namespace Festival.Presentation
         }
         private void UpdatePurchaseFeedback(RoundState state,PlayerState player)
         {
+            FestivalSettings.ApplyEffects(shopAudio,session.Profile?.Data);
             int units=0;foreach(var item in player.Inventory)units+=item.Count;
             if(previousRound==state.RoundId&&previousCash>=0&&player.Cash<previousCash&&units>previousUnits)
             {
-                shopAudio.PlayOneShot(shopChime,Mathf.Clamp01(session.Profile.Data.MusicVolume+.25f));
+                shopAudio.PlayOneShot(shopChime);
                 session.SetMessage("Oh, hey, thanks!  •  POCKET UPDATED");
             }
             previousRound=state.RoundId;previousCash=player.Cash;previousUnits=units;

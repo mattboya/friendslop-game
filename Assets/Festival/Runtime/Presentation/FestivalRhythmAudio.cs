@@ -8,6 +8,8 @@ namespace Festival.Presentation
     /// <summary>Original synthesized beat scheduled on the audio clock, aligned to chart time.</summary>
     public sealed class FestivalRhythmAudio : MonoBehaviour
     {
+        // The .6 effects default sounds exactly as loud as the old .35 music default.
+        const float FeedbackGain=.35f/.6f;
         AudioSource beat;
         AudioClip clip;
         FestivalSession session;
@@ -31,7 +33,7 @@ namespace Festival.Presentation
             var i=p==null?null:session.State.Interactions.Find(x=>x.Id==p.InteractionId&&x.Status=="Active");
             bool rhythm=FestivalInput.IsRhythm(i);
             if(!rhythm){beat.Stop();phrase="";return;}
-            beat.volume=session.Profile.Data.MusicVolume;
+            FestivalSettings.ApplyEffects(beat,session.Profile?.Data,FeedbackGain);
             string key=i.Id+":"+i.Phrase;if(phrase==key)return;phrase=key;
             beat.Stop();beat.pitch=(float)(.5/i.BeatSeconds);
             double now=session.EstimatedSimulationSeconds-i.StartSeconds;
