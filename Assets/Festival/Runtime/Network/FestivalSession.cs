@@ -67,6 +67,9 @@ namespace Festival.Network
         // DANCE-10 release wire: Rhythm Amount 0 presses and 1 releases; RhythmInput.Release defaults false in older rounds.
         // Both share the finite timing envelope and 128-input cap in reliable sequenced arrival order. Only presses step the
         // dancer; final challenges, live group scores and trust dances replay releases through the same hold judge.
+        // MINI-5: connected body carriers hold the booth countdown. IsOnCamera keeps the owner's VisualFilmedBy during
+        // games and result banners while Films remains Playing-only. Move intent preserves VisualPoiSpin throughout that
+        // pause; ordinary fresh/stale intent resumes afterward. These corrections reuse the existing wire fields.
         public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -526,7 +529,8 @@ namespace Festival.Network
                 var player=simulation.Player(pair.Key);if(player==null)continue;var input=pair.Value.Intent;
                 bool fresh=Time.realtimeSinceStartupAsDouble-pair.Value.ReceivedAt<=.25;
                 // POI-1: every step, before a stale input skips the move, so a silent client or a new interaction stops the spin.
-                player.VisualPoiSpin=fresh&&input.SpinPoi&&FestivalSimulation.CanSpinPoi(player);
+                // MINI-5: fresh presses, releases and stale input preserve the pre-game spin throughout the freeze and banner.
+                if(simulation.State.Phase!=FestivalSimulation.MinigamePhase)player.VisualPoiSpin=fresh&&input.SpinPoi&&FestivalSimulation.CanSpinPoi(player);
                 if(!fresh)continue;
                 var active=simulation.Interaction(player.InteractionId);
                 float speed=(input.Sprint?6:4)*Intoxication.MovementMultiplier(player);if(player.InteractionId!="")speed=1;if(player.DragTargetId!="")speed=2;if(player.Life=="Downed")speed=.8f;
@@ -545,7 +549,8 @@ namespace Festival.Network
                     nextMovementDiagnostic=Time.unscaledTimeAsDouble+1;
                     var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
                     DevelopmentDiagnostics.GraphicsEvent("Movement","sample","dose="+Mathf.Clamp(dose?.Intensity??0,0,4)
-                        +" substance="+(dose?.Substance??"")+" speed="+speed.ToString("F3")+" drift="+drift.ToString("F3")+" accepted="+moved);
+                        +" substance="+(dose?.Substance??"")+" speed="+speed.ToString("F3")+" drift="+drift.ToString("F3")+" accepted="+moved
+                        +" phase="+simulation.State.Phase+" spin_requested="+input.SpinPoi+" spin="+player.VisualPoiSpin);
                 }
 #endif
                 if(moved&&previousCamp!=""&&player.CampVisitId=="")
@@ -630,7 +635,7 @@ namespace Festival.Network
                 // POLO-5: when their turn on the Ferris wheel began, for every client to seat them in the same gondola; -1 off it.
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
-                copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.Films(n,p)).ConvertAll(n=>n.Id):new List<string>();
+                copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
                 if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
             }
             if(!spirit)

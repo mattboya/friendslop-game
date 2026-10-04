@@ -170,3 +170,80 @@ namespace Festival.Tests
         }
     }
 }
+
+namespace Festival.Tests
+{
+    public sealed class MinigamePoiIntentPlayTests:FestivalPlayModeTest
+    {
+        [UnityTest]public IEnumerator APreheldSpinIgnoresReleaseAndStaleIntentsDuringThePause(){return FrozenIntent(true);}
+        [UnityTest]public IEnumerator ANewSpinIntentIsIgnoredDuringTheGameAndBanner(){return FrozenIntent(false);}
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        [UnityTest]public IEnumerator DebugMovementSamplingExplainsIgnoredPoiIntent(){return FrozenIntent(false,true);}
+#endif
+
+        // Send a move intent through the actual host's acceptance and movement consumers, with its client-owned sequence.
+        private IEnumerator FrozenIntent(bool before,bool diagnostics=false)
+        {
+            var world=new GameObject("impl:U23 poi world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl:U23 poi host");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var friend=sim.AddPlayer("impl:U23-poi-friend","Sam");friend.Ready=true;
+                yield return StartLevel(session);session.enabled=false;sim.State.Npcs.Clear();
+                var me=sim.Player(session.LocalPlayerId);me.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
+                Assert.That(sim.Execute(me.Id,new GameCommand{Id="impl:U23-equip",Kind="Equip",ItemId="poi_practice"}).Accepted,Is.True);
+                var inputs=(System.Collections.IDictionary)typeof(FestivalSession).GetField("inputs",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var peer=inputs[me.Id];var intentType=typeof(FestivalSession).Assembly.GetType("Festival.Network.MoveIntent");
+                int sequence=(int)intentType.GetField("Sequence").GetValue(peer.GetType().GetField("Intent").GetValue(peer));
+                void Move()=>typeof(FestivalSession).GetMethod("ApplyMovement",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new object[]{.1});
+                void Intent(bool held,float z=0)
+                {
+                    var type=typeof(FestivalSession).Assembly.GetType("Festival.Network.MoveIntent");var intent=System.Activator.CreateInstance(type);
+                    type.GetField("SpinPoi").SetValue(intent,held);type.GetField("Z").SetValue(intent,z);type.GetField("Sequence").SetValue(intent,++sequence);
+                    typeof(FestivalSession).GetMethod("AcceptInput",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new[]{(object)me.Id,intent});
+                    Assert.That(type.GetField("Sequence").GetValue(peer.GetType().GetField("Intent").GetValue(peer)),Is.EqualTo(sequence),"setup: the host accepts this fresh input");Move();
+                }
+                void Frozen(string stage)
+                {
+                    Assert.That(me.VisualPoiSpin,Is.EqualTo(before),stage+": host intent cannot change the spin held in the freeze-frame");
+                    Assert.That(FestivalSession.ViewFor(sim,friend.Id).Players.Find(p=>p.Id==me.Id).VisualPoiSpin,Is.EqualTo(before),stage+": the friend's snapshot preserves the frozen spin");
+                }
+                Intent(before);Assert.That(me.VisualPoiSpin,Is.EqualTo(before),"setup: the actual host applied the pre-game intent");
+                var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null);
+                foreach(var p in sim.State.Players){p.X=at.X;p.Z=at.Z;}
+                sim.Tick(3.1);Assert.That(sim.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"the actual ring countdown starts the game");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if(diagnostics)
+                {
+                    var samples=new System.Collections.Generic.List<string>();bool visible=DevelopmentDiagnostics.Visible;
+                    Application.LogCallback capture=(message,trace,type)=>{if(message.StartsWith("[Festival.Movement]"))samples.Add(message);};
+                    Application.logMessageReceived+=capture;
+                    try
+                    {
+                        DevelopmentDiagnostics.Visible=false;Intent(true,1);Assert.That(samples,Is.Empty,"debug sampling is opt-in");
+                        DevelopmentDiagnostics.Visible=true;Intent(true,1);Assert.That(samples.Count,Is.EqualTo(1));
+                        Assert.That(samples[0],Does.Contain("phase=Minigame").And.Contain("spin_requested=True").And.Contain("spin=False").And.Contain("accepted=False"),"the actual host sample explains why the held click cannot change its frozen spin");
+                        Intent(true,1);Assert.That(samples.Count,Is.EqualTo(1),"repeated ignored intent does not flood the log");
+                    }
+                    finally{DevelopmentDiagnostics.Visible=visible;Application.logMessageReceived-=capture;}
+                }
+#endif
+                Intent(!before);Frozen("game");
+                peer.GetType().GetField("ReceivedAt").SetValue(peer,Time.realtimeSinceStartupAsDouble-1);Move();Frozen("stale input in game");
+                Assert.That(sim.Execute(FestivalSimulation.CupsTurn(sim.State),new GameCommand{Id="impl:U23-call-poi",Kind=FestivalSimulation.MinigameKind,ItemId=FestivalSimulation.CallCups}).Accepted,Is.True);
+                Intent(!before);Frozen("result banner");
+                sim.Tick(FestivalSimulation.MinigameBannerSeconds+.1);Assert.That(sim.State.Phase,Is.EqualTo("Playing"));
+                Intent(true);Assert.That(me.VisualPoiSpin,Is.True,"fresh held intent spins again after play resumes");
+                Intent(false);Assert.That(me.VisualPoiSpin,Is.False,"fresh release stops it again after play resumes");
+                Intent(true);peer.GetType().GetField("ReceivedAt").SetValue(peer,Time.realtimeSinceStartupAsDouble-1);Move();
+                Assert.That(me.VisualPoiSpin,Is.False,"stale input still stops the spin during ordinary play");
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
+            yield return null;
+        }
+    }
+}

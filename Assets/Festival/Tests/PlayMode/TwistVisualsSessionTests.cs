@@ -91,6 +91,46 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // MINI-5: the running recipient view keeps the phone recording throughout the game and its result banner.
+        [UnityTest]public IEnumerator AFilmingPhoneKeepsRecordingDuringTheGameAndItsBanner()
+        {
+            var world=new GameObject("impl:U23 camera world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl:U23 camera host");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var sim=Simulation(session);var me=sim.Player(session.LocalPlayerId);var cam=sim.State.Npcs.Find(n=>n.Twist==FestivalSimulation.Influencer);
+                Assert.That(cam,Is.Not.Null);sim.State.Npcs.RemoveAll(n=>n!=cam);me.Effects.Clear();
+                var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null);
+                me.X=at.X+2;me.Z=at.Z;cam.X=me.X;cam.Z=me.Z-1.5f;cam.Yaw=0;
+                Assert.That(sim.Films(cam,me),Is.True,"setup: the production frame and line of sight put you on camera");
+                sim.State.Booth.RingSeconds=FestivalSimulation.MinigameRingSeconds-.01;sim.Tick(.02);cam.Yaw=0;
+                Assert.That(sim.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"the real ring countdown starts the game");
+                yield return new WaitForSecondsRealtime(.4f);
+                Transform Part(string name){var body=GameObject.Find(cam.Id);if(body!=null)foreach(var t in body.GetComponentsInChildren<Transform>(true))if(t.name==name)return t;return null;}
+                void Recording(string stage)
+                {
+                    var label=Part(FestivalFilmingPhone.LabelName);Assert.That(label,Is.Not.Null);
+                    Assert.That(label.gameObject.activeInHierarchy,Is.True,stage+": the phone still shows REC in the frozen frame");
+                    Assert.That(label.GetComponent<TextMesh>().text,Is.EqualTo("• REC"));
+                    Assert.That(Part(FestivalFilmingPhone.LightName).GetComponent<Renderer>().enabled,Is.True,stage+": the recording light stays lit");
+                    Assert.That(session.LocalPlayer.VisualFilmedBy,Does.Contain(cam.Id));
+                    Assert.That(FestivalHudText.Condition(session.State,session.LocalPlayer),Does.StartWith("ON CAMERA • "));
+                    Assert.That(sim.Films(cam,me),Is.False,stage+": the camera flag never reactivates danger");
+                }
+                Recording("game");var heat=cam.Observers.ConvertAll(o=>o.Suspicion);
+                sim.Execute(me.Id,new GameCommand{Id="impl:U23-call",Kind=FestivalSimulation.MinigameKind,ItemId=FestivalSimulation.CallCups});
+                Assert.That(sim.State.Booth.ScoredAt,Is.GreaterThanOrEqualTo(0),"the production command starts the result banner");
+                yield return new WaitForSecondsRealtime(.4f);Recording("result banner");
+                Assert.That(cam.Observers.ConvertAll(o=>o.Suspicion),Is.EqualTo(heat),"danger stays frozen through the game and banner");
+                Assert.That(Time.timeScale,Is.Zero);
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
+            yield return null;
+        }
+
         // POLO-5: friends watch a ride from the ground, so every rider sits inside their gondola as it goes round, under its roof,
         // alone or beside a friend, whatever their body's shape (FestivalAppearance.Shape 0, 1 or 2, the last the widest and deepest).
         // Three crews of two put each shape on each side of a friend (riders sharing a gondola sit in id order), and the deepest look

@@ -63,9 +63,11 @@ namespace Festival.Core
                 foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Distance(n.X,n.Z,p.X,p.Z)<=Festivals.FilmWitnessRadius){var o=Observe(n,p);o.Suspicion=Math.Min(100,o.Suspicion+gain);o.LastSeenSeconds=State.SimulationSeconds;}
             }
         }
-        /// <summary>POLO-6: whether influencer cam has p on camera: p is live, connected and in its frame during a level. Film puts
-        /// the crowd round p on alert while it holds, and FestivalSession.ViewFor tells p's client alone who has them.</summary>
-        public bool Films(NpcState cam,PlayerState p)=>State.Phase=="Playing"&&cam.Twist==Influencer&&p.Connected&&InFrame(cam,p);
+        /// <summary>Whether influencer cam has p in its frame during play or its minigame freeze, including the result banner.
+        /// FestivalSession.ViewFor tells p's client alone who has them; this visual evidence never advances danger.</summary>
+        public bool IsOnCamera(NpcState cam,PlayerState p)=>(State.Phase=="Playing"||State.Phase==MinigamePhase)&&cam.Twist==Influencer&&p.Connected&&InFrame(cam,p);
+        /// <summary>POLO-6: passive filming danger runs only during play, even when the frozen frame still shows REC.</summary>
+        public bool Films(NpcState cam,PlayerState p)=>State.Phase=="Playing"&&IsOnCamera(cam,p);
         // The phone looks along the influencer's facing: FilmRange deep, FilmConeDegrees wide, blocked by walls.
         bool InFrame(NpcState cam,PlayerState p)
         {

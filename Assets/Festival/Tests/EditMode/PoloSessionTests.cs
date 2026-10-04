@@ -128,7 +128,8 @@ namespace Festival.Tests
 
         // POLO-6: an influencer filming you is no secret to you: your card says ON CAMERA, and the phone that has you shows REC. So
         // your own copy in your own view names every influencer filming you. Nobody else's view says so, and the host never holds it.
-        [Test] public void OnlyThePlayerOnCameraKnowsWhoIsFilmingThem()
+        [TestCase("Playing")][TestCase(FestivalSimulation.MinigamePhase)]
+        public void OnlyThePlayerOnCameraKnowsWhoIsFilmingThem(string phase)
         {
             var game=Level(0);var me=game.State.Players[0];var cam=game.State.Npcs.Find(n=>n.Twist==FestivalSimulation.Influencer);
             double yaw=cam.Yaw*System.Math.PI/180;
@@ -137,12 +138,16 @@ namespace Festival.Tests
             Stand(me,2);foreach(var p in game.State.Players)if(p!=me)Stand(p,-2);
             Assert.That(game.State.Npcs.FindAll(n=>game.Films(n,me)),Is.EqualTo(new[]{cam}),"setup: "+cam.Id+", and only "+cam.Id+", films me");
             Assert.That(game.State.Players.TrueForAll(p=>p==me||!game.State.Npcs.Exists(n=>game.Films(n,p))),Is.True,"setup: nobody films the rest of the crew");
+            game.State.Phase=phase;
+            Assert.That(game.Films(cam,me),Is.EqualTo(phase=="Playing"),"camera evidence must never activate danger during a pause");
             foreach(var viewer in game.State.Players)
             {
                 var view=Wire(game,viewer.Id);
                 Assert.That(view.Players.Find(p=>p.Id==me.Id).VisualFilmedBy,Is.EqualTo(viewer==me?new[]{cam.Id}:new string[0]),viewer==me?"my client knows "+cam.Id+" has me on camera":viewer.Id+"'s client can't tell I'm on camera");
                 Assert.That(view.Players.TrueForAll(p=>p.Id==me.Id||p.VisualFilmedBy.Count==0),Is.True,viewer.Id+"'s client has nobody else on camera");
             }
+            var own=Wire(game,me.Id);
+            Assert.That(FestivalHudText.Condition(own,own.Players.Find(p=>p.Id==me.Id)),Does.StartWith("ON CAMERA • "),"the recipient HUD retains its camera warning in "+phase);
             Assert.That(me.VisualFilmedBy,Is.Empty,"the host's own state never holds it");
             Stand(me,-3);
             Assert.That(Wire(game,me.Id).Players.Find(p=>p.Id==me.Id).VisualFilmedBy,Is.Empty,"behind the phone, I'm off camera");
