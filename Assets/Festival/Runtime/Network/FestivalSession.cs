@@ -17,7 +17,7 @@ namespace Festival.Network
     [Serializable] internal sealed class Hello { public string Name="Friend", Token=""; public int Protocol=FestivalSession.ProtocolVersion; }
     [Serializable] internal sealed class Welcome { public string PlayerId="", Token=""; }
     [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); }
-    [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint; public int Sequence; }
+    [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint,SpinPoi; public int Sequence; }
     [Serializable] internal sealed class SnapshotPacket { public RoundState State; public double ServerSeconds; }
     internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt; public int Commands; public double Window; }
 
@@ -47,7 +47,8 @@ namespace Festival.Network
         // so only builds on the same version show the same shape at the same moment.
         // 5: wave 2026-10-03: VISION-6: the tripper's snapshot marks the visions a creature hints at (VisionState.Hinted). Only
         // true ones are hinted, so the mark tells a truth before it is checked. TRIP-8: snapshots name who found the cloud's stash
-        // (RoundState.CloudStashFinderId), for their notice.
+        // (RoundState.CloudStashFinderId), for their notice. POI-1: a move intent says whether its player holds the poi spin
+        // (MoveIntent.SpinPoi), and snapshots show who is spinning (PlayerState.VisualPoiSpin).
         public const int ProtocolVersion=5;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -449,7 +450,10 @@ namespace Festival.Network
             foreach(var pair in inputs)
             {
                 var player=simulation.Player(pair.Key);if(player==null)continue;var input=pair.Value.Intent;
-                if(Time.realtimeSinceStartupAsDouble-pair.Value.ReceivedAt>.25)continue;
+                bool fresh=Time.realtimeSinceStartupAsDouble-pair.Value.ReceivedAt<=.25;
+                // POI-1: every step, before a stale input skips the move, so a silent client or a new interaction stops the spin.
+                player.VisualPoiSpin=fresh&&input.SpinPoi&&FestivalSimulation.CanSpinPoi(player);
+                if(!fresh)continue;
                 var active=simulation.Interaction(player.InteractionId);
                 float speed=(input.Sprint?6:4)*Intoxication.MovementMultiplier(player);if(player.InteractionId!="")speed=1;if(player.DragTargetId!="")speed=2;if(player.Life=="Downed")speed=.8f;
                 speed=Mathf.Min(speed,(float)simulation.CarrySpeed(player));
