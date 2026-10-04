@@ -110,7 +110,7 @@ namespace Festival.Presentation
             prop.transform.localPosition=position;prop.transform.localRotation=resource.StartsWith("FestivalStock",System.StringComparison.Ordinal)?Quaternion.Euler(0,180,0):Quaternion.identity;prop.transform.localScale=Vector3.one*scale;
             return prop;
         }
-        public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false)
+        public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false,bool spinning=false)
         {
             if(player!=null&&receiptSequence!=player.VisualReceiptSequence)
             {
@@ -150,6 +150,7 @@ namespace Festival.Presentation
             }
             // Poi are a pair: one per hand. Held or equipped poi hang still, wheel beside
             // the hands while walking, and a poi performance switches both to the butterfly.
+            // POI-1: so does holding left click (spinning), and the hands swing round with them as in the performance (POI-2).
             bool alive=player!=null&&player.Life=="Alive";
             bool poi=player!=null && player.VisualPose=="Poi";
             string carried=IsPoi(held)?held:held==""&&IsPoi(equipped)?equipped:"";
@@ -164,8 +165,8 @@ namespace Festival.Presentation
             }
             bool showPoi=wanted!=""&&(alive||poi);
             foreach(var rig in new[]{leftPoi,rightPoi})
-                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi;}
-            carryPoi=!poi;performing=poi;
+                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi||spinning;}
+            carryPoi=!poi&&!spinning;performing=poi||spinning;
             if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !showPoi && held=="");
             if(unpaidProp!=null)unpaidProp.SetActive(alive&&!poi);
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&alive);

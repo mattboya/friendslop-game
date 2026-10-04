@@ -92,6 +92,9 @@ namespace Festival.Presentation
         public bool HighlyIntoxicated { get; private set; }
         /// <summary>GAS-1: on Giggle Gas, so they giggle (FestivalSession sets it from the view's VisualGiggling).</summary>
         public bool Giggling;
+        /// <summary>POI-1: spinning the poi in hand, held on left click (FestivalSession sets it from the view's VisualPoiSpin, and
+        /// from the click itself for your own body). Only for show: it shows while carrying poi standing or walking.</summary>
+        public bool SpinningPoi;
         public bool RedEyes { get; private set; }
         FestivalFilmingPhone phone;
         FestivalPoiRig poiLeft,poiRight;
@@ -328,6 +331,9 @@ namespace Festival.Presentation
             // dance as butterflies on its beat. Rebuild only when the poi type changes.
             bool carryingPoi=carriedPoi!=""&&!Crowd&&(Pose=="Idle"||Pose=="Walk"||Pose=="");
             bool dancingPoi=carriedPoi!=""&&Pose=="Dance";
+            // POI-1: held left click spins the carried pair standing or walking, the arms up as in the performance; let go and they
+            // carry or hang again.
+            bool spinningPoi=carryingPoi&&SpinningPoi;
             bool poiShown=performingPoi||carryingPoi||dancingPoi;
             string pair=carriedPoi!=""?carriedPoi:performingPoi?(poiPairItem==""?"poi_led":poiPairItem):"";
             if(pair!=""&&pair!=poiPairItem)
@@ -337,8 +343,8 @@ namespace Festival.Presentation
                 poiPairItem=pair;PreparePoi(pair=="poi_led");
             }
             float spinRate=dancingPoi?DanceAngularSpeed(danceStyle):9f;
-            if(poiLeft!=null){poiLeft.gameObject.SetActive(poiShown);poiLeft.Spinning=performingPoi||dancingPoi;poiLeft.Carrying=carryingPoi&&speed>.4f;poiLeft.SpinRate=spinRate;}
-            if(poiRight!=null){poiRight.gameObject.SetActive(poiShown);poiRight.Spinning=performingPoi||dancingPoi;poiRight.Carrying=carryingPoi&&speed>.4f;poiRight.SpinRate=spinRate;}
+            if(poiLeft!=null){poiLeft.gameObject.SetActive(poiShown);poiLeft.Spinning=performingPoi||dancingPoi||spinningPoi;poiLeft.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiLeft.SpinRate=spinRate;}
+            if(poiRight!=null){poiRight.gameObject.SetActive(poiShown);poiRight.Spinning=performingPoi||dancingPoi||spinningPoi;poiRight.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiRight.SpinRate=spinRate;}
             var delta=hasPrevious?transform.position-previous:Vector3.zero;previous=transform.position;hasPrevious=true;
             float yaw=transform.eulerAngles.y;
             float yawChange=hasFacingSample?Mathf.DeltaAngle(previousYaw,yaw):0;
@@ -602,7 +608,8 @@ namespace Festival.Presentation
             }
             // Carry a prop with a bent elbow instead of swinging it through the
             // thigh. Keep dedicated interaction and performance poses in charge.
-            if(!dance&&(Pose=="Idle"||Pose=="Walk"||Pose=="")&&carriedPoi!="")
+            if(spinningPoi)PoiArms(Time.time*9f+phase);
+            else if(!dance&&(Pose=="Idle"||Pose=="Walk"||Pose=="")&&carriedPoi!="")
             {
                 // Both hands lead the wheeling heads at waist height, wrists rolling with each turn.
                 float roll=Mathf.Sin(Time.time*7.5f+phase)*Mathf.Clamp01(speed/1.2f);
@@ -689,9 +696,9 @@ namespace Festival.Presentation
                 var target=Vector3.Lerp(hand.position,exchangeTarget+hand.up*.05f,exchangeWeight);
                 FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],hand,target,1);
             }
-            // POI-2: performing poi, or dancing with them, each wrist swings round its own loop in step with its head, and the
-            // shoulder and elbow follow it (elbows down and in, as at the DJ deck). It eases in and out over a quarter second.
-            poiSwing=Mathf.MoveTowards(poiSwing,performingPoi||dancingPoi?1:0,animationDelta*4);
+            // POI-2: performing poi, dancing with them or spinning them (POI-1), each wrist swings round its own loop in step with its
+            // head, and the shoulder and elbow follow it (elbows down and in, as at the DJ deck). It eases in and out over a quarter second.
+            poiSwing=Mathf.MoveTowards(poiSwing,performingPoi||dancingPoi||spinningPoi?1:0,animationDelta*4);
             if(poiSwing>.001f&&bones.Count==15&&poiLeft!=null&&poiRight!=null)
             {
                 FestivalDjHandContact.Reach(transform,bones["ArmL"],bones["ForearmL"],bones["HandL"],Vector3.Lerp(bones["HandL"].position,poiLeft.Wrist(),poiSwing),-1);

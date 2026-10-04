@@ -346,6 +346,95 @@ namespace Festival.Tests
             finally{Object.Destroy(cameraObject);}
         }
 
+        // POI-1: hold left click with poi in hand and you spin them. Friends see both heads circle up over the grips with the arms up
+        // as in the performance, the wrists riding their loops; walking keeps stepping; let go and the poi hang again. Each window
+        // spans at least one full turn (9 rad/s is .7 s), so the actor's own phase cannot flake it.
+        [UnityTest]public IEnumerator HoldingClickSpinsCarriedPoiThenTheyHangOnRelease()
+        {
+            var root=new GameObject("Poi spin test");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var actor=Walker(root,"Poi spin actor");
+                actor.SetEquippedItem("poi_led");actor.SpinningPoi=true;
+                yield return new WaitForSeconds(.5f);
+                var rigs=actor.GetComponentsInChildren<FestivalPoiRig>().Where(r=>r.gameObject.activeInHierarchy).ToArray();
+                Assert.That(rigs.Length,Is.EqualTo(2),"Spun poi are the pair in your hands");
+                var cords=rigs.Select(r=>r.GetComponent<LineRenderer>()).ToArray();
+                float low=1,high=-1,spinHands=0;int samples=0;var sweep=new Bounds(actor.transform.InverseTransformPoint(rigs[1].transform.parent.position),Vector3.zero);
+                for(float start=Time.time;Time.time-start<1.5f;)
+                {
+                    yield return null;
+                    foreach(var cord in cords){float y=(cord.GetPosition(1)-cord.GetPosition(0)).normalized.y;low=Mathf.Min(low,y);high=Mathf.Max(high,y);}
+                    spinHands+=Local(actor,"HandL",1)+Local(actor,"HandR",1);samples++;
+                    sweep.Encapsulate(actor.transform.InverseTransformPoint(rigs[1].transform.parent.position));
+                }
+                spinHands/=2*samples;
+                // Walking while spinning still steps.
+                var leg=new List<float>();float walkLow=1,walkHigh=-1;
+                for(float start=Time.time;Time.time-start<1.5f;)
+                {
+                    actor.transform.position+=Vector3.forward*(1.4f*Time.deltaTime);
+                    yield return null;
+                    if(Time.time-start<.5f)continue;
+                    leg.Add(Local(actor,"FootL",2)-Local(actor,"FootR",2));
+                    foreach(var cord in cords){float y=(cord.GetPosition(1)-cord.GetPosition(0)).normalized.y;walkLow=Mathf.Min(walkLow,y);walkHigh=Mathf.Max(walkHigh,y);}
+                }
+                bool spinning=rigs.All(r=>r.Spinning&&!r.Carrying);
+                // Let go: standing, the heads settle and hang again, the hands back down at the waist.
+                actor.SpinningPoi=false;
+                var swing=new float[1];
+                yield return new WaitForSeconds(2f);
+                float hangHands=Local(actor,"HandL",1)+Local(actor,"HandR",1);hangHands/=2;
+                yield return HangSwing(cords,.8f,swing);
+                Debug.Log($"[Festival.Test] poi spin vertical={low:F2}..{high:F2} hands={spinHands:F2} hanging={hangHands:F2} right hand sweep={sweep.size.x:F3}/{sweep.size.y:F3}/{sweep.size.z:F3} walking vertical={walkLow:F2}..{walkHigh:F2} stride={leg.Max()-leg.Min():F2} released swing={swing[0]:F0}deg");
+                Assert.That(low,Is.LessThan(-.5f));Assert.That(high,Is.GreaterThan(.5f),"Held, both heads circle up over the grips and down");
+                Assert.That(spinHands-hangHands,Is.GreaterThan(.15f),"Spinning raises the arms, as in the performance");
+                int directions=(sweep.size.x>=.1f?1:0)+(sweep.size.y>=.1f?1:0)+(sweep.size.z>=.1f?1:0);
+                Assert.That(directions,Is.GreaterThanOrEqualTo(2),"The wrist swings round its loop with the head: "+sweep.size.ToString("F3"));
+                Assert.That(spinning,Is.True,"Walking while held, the pair spin rather than wheel");
+                Assert.That(walkLow,Is.LessThan(-.5f));Assert.That(walkHigh,Is.GreaterThan(.5f),"Walking while held, the heads keep circling");
+                Assert.That(leg.Max()-leg.Min(),Is.GreaterThan(.2f),"Walking while spinning still steps");
+                Assert.That(swing[0],Is.LessThan(20f),"Let go, standing, the poi hang again");
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(root);}
+        }
+
+        // POI-1: your own hands spin the poi while you hold left click, with the camera still, and they hang again once you let go.
+        // Measured on a new profile's reduced-motion setting, what players get (POI-3).
+        [UnityTest]public IEnumerator FirstPersonPoiSpinWhileHeld()
+        {
+            var cameraObject=new GameObject("First-person poi spin camera");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(cameraObject.AddComponent<Camera>(),"spin_hands_player");
+                Assert.That(hands,Is.Not.Null);
+                hands.ReducedMotion=new ProfileData().ReducedMotion;
+                var player=new PlayerState{Id="spin_hands_player",Life="Alive",EquippedItemId="poi_practice"};
+                hands.SetState(player,spinning:true);
+                yield return new WaitForSeconds(.8f);
+                var rigs=Object.FindObjectsByType<FestivalPoiRig>(FindObjectsSortMode.None).Where(r=>r.gameObject.activeInHierarchy).ToArray();
+                Assert.That(rigs.Length,Is.EqualTo(2),"First-person poi are a pair, one per hand");
+                var cords=rigs.Select(r=>r.GetComponent<LineRenderer>()).ToArray();
+                float low=1,high=-1;var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);
+                for(float start=Time.time;Time.time-start<1.5f;)
+                {
+                    yield return null;
+                    sweep.Encapsulate(hands.transform.localPosition);
+                    foreach(var cord in cords){float y=(cord.GetPosition(1)-cord.GetPosition(0)).normalized.y;low=Mathf.Min(low,y);high=Mathf.Max(high,y);}
+                }
+                hands.SetState(player);
+                var swing=new float[1];
+                yield return new WaitForSeconds(2f);
+                yield return HangSwing(cords,1f,swing);
+                float reach=Mathf.Max(sweep.size.x,sweep.size.y,sweep.size.z);
+                Debug.Log($"[Festival.Test] first-person poi spin vertical={low:F2}..{high:F2} hand sweep={reach:F3} released swing={swing[0]:F0}deg");
+                Assert.That(low,Is.LessThan(-.5f));Assert.That(high,Is.GreaterThan(.5f),"Held, the heads circle with the camera still");
+                Assert.That(reach,Is.GreaterThanOrEqualTo(.05f),"Held, your hands swing the poi round");
+                Assert.That(swing[0],Is.LessThan(25f),"Let go, standing, the poi hang again");
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(cameraObject);}
+        }
+
         [UnityTest]public IEnumerator DanceWithEquippedPoiSpinsThePairAsPartOfTheDance()
         {
             var root=new GameObject("Poi dance test");
