@@ -24,7 +24,7 @@ public sealed partial class FestivalSimulation {
     static double PressedAt(InteractionState x)=>x.StartSeconds-ChallengeLeadIn;
     static double VerdictAt(InteractionState x)=>x.StartSeconds+x.DurationSeconds+.75;
     static bool Overlap(InteractionState a,InteractionState b)=>PressedAt(a)<=VerdictAt(b)&&PressedAt(b)<=VerdictAt(a);
-    double? ScoreSoFar(InteractionState x){var judge=new RhythmJudge(RhythmChart.For(x),x.GoodWindowSeconds);foreach(var input in x.Inputs)judge.Submit(input.Direction,input.TimeSeconds);judge.Advance(State.SimulationSeconds-x.StartSeconds);return judge.ScoreSoFar;}
+    double? ScoreSoFar(InteractionState x){var judge=ReplayRhythm(x,RhythmChart.For(x));judge.Advance(State.SimulationSeconds-x.StartSeconds);return judge.ScoreSoFar;}
     // CROWD-1: big packs draw attention. Every positive suspicion gain on a player (passive gains in WookTick, rhythm results
     // through Adjust) is multiplied by 1 + PackStep for each connected crew member standing within PackRadius of them beyond
     // the first, so a pair counts x1 and four bunched x1.7, up to MaxPackFactor. WookTick stacks it with the level's

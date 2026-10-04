@@ -64,7 +64,7 @@ namespace Festival.Core
         public int StockSold;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();
     }
-    [Serializable] public sealed class RhythmInput { public int Direction; public double TimeSeconds; }
+    [Serializable] public sealed class RhythmInput { public int Direction; public double TimeSeconds; public bool Release; }
     [Serializable] public sealed class InteractionState {
         public string Id="",PlayerId="",TargetId="",Kind="",Status="Active",ReservedItemId="",DialogueId="",DialogueText="",PartnerId="";
         public int ChartSeed,NoteCount=8,Phrase,ReservedCash; public double StartSeconds,DurationSeconds,GoodWindowSeconds=.15,Score,BeatSeconds=.5;

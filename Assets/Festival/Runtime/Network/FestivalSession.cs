@@ -64,6 +64,9 @@ namespace Festival.Network
         // carries HoldSeconds; Day 1 and explicit QuarterNotes keep their tap shapes. Hold heads remain one scored note.
         // TRIP-13 walking: positive Couch Lock doses multiply dose speed by .9; positive Tongue Stamps/Fun Guys doses add
         // their own-start shop sway. The .65 floor and .24 clamp remain; Rolly Pollies/Pony Dust add no world twist.
+        // DANCE-10 release wire: Rhythm Amount 0 presses and 1 releases; RhythmInput.Release defaults false in older rounds.
+        // Both share the finite timing envelope and 128-input cap in reliable sequenced arrival order. Only presses step the
+        // dancer; final challenges, live group scores and trust dances replay releases through the same hold judge.
         public const int ProtocolVersion=6;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
