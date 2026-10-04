@@ -177,7 +177,7 @@ namespace Festival.Tests
                 session.Command("ConfirmChat",checkee.Id);
                 Assert.That(Doing(sim,player)?.Kind,Is.EqualTo("ConfirmChat"),"setup: you chat to check your vision ("+session.Message+"), after:\n"+string.Join("\n",failures));
                 yield return new WaitForSeconds(.6f);
-                OnlyItsWayOut("mid chat check","Cancel current action");
+                OnlyItsWayOut("mid chat check","Finish chat check");
                 session.Command("Cancel");sim.State.Npcs.Clear();sim.State.Visions.Clear();
                 npc.Mode="Blending";sim.State.Npcs.Add(npc);
                 session.Command("Conversation",npc.Id);
