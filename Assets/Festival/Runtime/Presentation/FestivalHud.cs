@@ -1555,7 +1555,11 @@ namespace Festival.Presentation
             if(previousRound==state.RoundId&&previousCash>=0&&player.Cash<previousCash&&units>previousUnits)
             {
                 shopAudio.PlayOneShot(shopChime);
-                session.SetMessage("Oh, hey, thanks!  •  POCKET UPDATED");
+                // POI-4: the purchase reply teaches players how to spin their poi; the chime must leave that reply visible.
+                if(!FestivalSimulation.IsPoi(player.VisualReceivedItem))session.SetMessage("Oh, hey, thanks!  •  POCKET UPDATED");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[Festival.Hud] Purchase notice: "+session.Message);
+#endif
             }
             previousRound=state.RoundId;previousCash=player.Cash;previousUnits=units;
         }

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Linq;
+using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -8,6 +9,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
 
 namespace Festival.Tests
 {
@@ -105,5 +107,66 @@ namespace Festival.Tests
             InputSystem.settings.backgroundBehavior=oldBackground;InputSystem.settings.editorInputBehaviorInPlayMode=oldEditor;
         }
         [UnityTearDown]public IEnumerator RestoreTheDevices(){Restore();yield return null;}
+    }
+}
+
+namespace Festival.Tests
+{
+    public sealed class PoiPurchaseHudPlayTests:FestivalPlayModeTest
+    {
+        [UnityTest]public IEnumerator PayingForPoiKeepsTheSpinHintInTheDrawnHud()
+        {
+            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. Hold left click to spin them.",true);
+        }
+
+        [UnityTest]public IEnumerator PayingForAStarterKeepsItsPocketToast()
+        {
+            return Purchase("stock_lsd","TONGUE STAMPS","Oh, hey, thanks!  •  POCKET UPDATED",false);
+        }
+
+        private IEnumerator Purchase(string item,string title,string receipt,bool spin)
+        {
+            UseAVirtualKeyboard("fix:U15#1-keyboard");UseAVirtualMouse("fix:U15#1-mouse");
+            var worldObject=new GameObject("fix:U15#1-world");worldObject.AddComponent<FestivalWorld>();yield return null;
+            var hudObject=new GameObject("fix:U15#1-HUD");var session=hudObject.AddComponent<FestivalSession>();hudObject.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("fix:U15#1-host",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);player.Cash=20;
+                string Read(string name)
+                {
+                    foreach(var text in hudObject.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;
+                    return "(hidden)";
+                }
+                // Only reach and camera are fixtures. E travels through the real input, HUD, session and payment rules.
+                int slot=sim.State.VendorOffers.IndexOf(item);Assert.That(slot,Is.GreaterThanOrEqualTo(0));
+                var point=Catalog.ShopPoint(true,slot);player.X=point.X;player.Z=6.3f;
+                typeof(FestivalSession).GetField("yaw",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,0f);
+                typeof(FestivalSession).GetField("pitch",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,-Mathf.Atan2((slot<4?1.17f:2.05f)-1.65f,9f-6.3f)*Mathf.Rad2Deg);
+                yield return new WaitForSeconds(.4f);
+                Assert.That(Read("Prompt"),Does.StartWith("PICK UP "+title));
+                yield return Tap(Key.E,.25f);
+                Assert.That(player.HeldOfferId,Is.EqualTo(item));
+                if(spin)Assert.That(Read("Notice"),Does.EndWith("Hold left click to spin them."));
+                player.X=0;player.Z=7;yield return new WaitForSeconds(.35f);
+                Assert.That(Read("Prompt"),Does.StartWith("SHOW "+title+" TO SELLER"));
+                yield return Tap(Key.E,.25f);Assert.That(Read("Prompt"),Does.StartWith("PAY $5"));
+                yield return Tap(Key.E,.35f);
+                Assert.That(player.Cash,Is.EqualTo(15));
+                Assert.That(player.EquippedItemId,Is.EqualTo(item));
+                Assert.That(player.Inventory.Find(x=>x.ItemId==item)?.Count,Is.EqualTo(1));
+                Assert.That(Read("Notice"),Is.EqualTo(receipt),"the running HUD must show the item's intended purchase notice");
+                if(spin)
+                {
+                    InputSystem.QueueStateEvent(TestMouse,new MouseState().WithButton(MouseButton.Left,true));yield return new WaitForSeconds(.35f);
+                    Assert.That(player.VisualPoiSpin,Is.True,"following the purchase hint spins the equipped poi through real mouse input");
+                    Assert.That(Read("Notice"),Is.EqualTo(receipt),"later HUD updates keep the purchase hint visible");
+                    InputSystem.QueueStateEvent(TestMouse,new MouseState());yield return null;
+                }
+            }
+            finally{session.Leave();Object.Destroy(hudObject);Object.Destroy(worldObject);}
+        }
     }
 }
