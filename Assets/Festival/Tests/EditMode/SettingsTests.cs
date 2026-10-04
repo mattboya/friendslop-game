@@ -478,15 +478,15 @@ namespace Festival.Tests
         {
             Assert.That(FestivalSettings.SupportsExclusiveDisplay(platform,graphics),Is.EqualTo(supported));
         }
-        private string previousFolder,ownedFolder;
+        private string previousFolder,ownedFolder,previousPreferencesScope;
         [SetUp]public void OwnGraphicsProfile()
         {
-            previousFolder=LocalProfile.Folder;ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U34-graphics-"+Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;
+            previousPreferencesScope=FestivalInput.PreferencesScope;previousFolder=LocalProfile.Folder;ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U34-graphics-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;
         }
         [TearDown]public void RestoreGraphicsProfile()
         {
-            LocalProfile.Folder=previousFolder;if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
+            FestivalInput.PreferencesScope=previousPreferencesScope;LocalProfile.Folder=previousFolder;if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
         }
         private static void Update(FestivalSession session)=>typeof(FestivalSession).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
         private static FestivalSession Session(GameObject host)
@@ -723,6 +723,36 @@ namespace Festival.Tests
             {
                 Close(host,session);QualitySettings.SetQualityLevel(originalLevel,false);QualitySettings.renderPipeline=originalPipeline;
                 QualitySettings.vSyncCount=originalVsync;Application.targetFrameRate=originalCap;
+            }
+        }
+    }
+    public sealed class GraphicsPreferencesIsolationTests
+    {
+        [Test]public void GraphicsFixturePreservesCallerPreferencesAndRestoresItsScope()
+        {
+            string previousScope=FestivalInput.PreferencesScope,previousFolder=LocalProfile.Folder;
+            string callerScope="fix:U34#1-caller-preferences-"+Guid.NewGuid().ToString("N");
+            string callerKey="festival-bindings-"+callerScope+"-default",savedBindings="{invalid";
+            var fixture=new GraphicsApplicationTests();bool ownsProfile=false;
+            try
+            {
+                FestivalInput.PreferencesScope=callerScope;PlayerPrefs.SetString(callerKey,savedBindings);
+                fixture.OwnGraphicsProfile();ownsProfile=true;
+                string ownedScope=FestivalInput.PreferencesScope,ownedFolder=LocalProfile.Folder;
+                fixture.FrameCapAppliesWithoutVsyncAndVsyncTakesPriority(60);
+                Assert.That(PlayerPrefs.HasKey(callerKey),Is.True,"the real graphics session must not delete its caller's malformed saved bindings");
+                Assert.That(PlayerPrefs.GetString(callerKey),Is.EqualTo(savedBindings),"caller data survives unchanged, even when production input rejects it");
+                Assert.That(ownedScope,Is.Not.EqualTo(callerScope),"graphics sessions use their fixture's own preferences scope");
+                Assert.That(FestivalInput.PreferencesScope,Is.EqualTo(ownedScope),"the fixture keeps its scope until the real session has disposed");
+                fixture.RestoreGraphicsProfile();ownsProfile=false;
+                Assert.That(FestivalInput.PreferencesScope,Is.EqualTo(callerScope),"teardown restores the scope owned by the caller");
+                Assert.That(LocalProfile.Folder,Is.EqualTo(previousFolder));Assert.That(Directory.Exists(ownedFolder),Is.False);
+                Assert.That(PlayerPrefs.GetString(callerKey),Is.EqualTo(savedBindings),"teardown leaves the caller's saved controls intact");
+            }
+            finally
+            {
+                if(ownsProfile)fixture.RestoreGraphicsProfile();
+                PlayerPrefs.DeleteKey(callerKey);FestivalInput.PreferencesScope=previousScope;LocalProfile.Folder=previousFolder;
             }
         }
     }
