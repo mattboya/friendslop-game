@@ -43,12 +43,68 @@ public static class GroupDanceTests
         }
         Check(done(),"the live dance reaches its checkpoint");
     }
+    // Stop at an exact production-clock boundary, rather than rounding the late press to the next tenth.
+    static void LiveTo(FestivalSimulation s,double seconds,params InteractionState[] dances)
+    {
+        Live(s,()=>s.State.SimulationSeconds>=seconds-.1-1e-9,dances);
+        double remaining=seconds-s.State.SimulationSeconds;if(remaining>0)s.Tick(remaining);
+        Check(Math.Abs(s.State.SimulationSeconds-seconds)<1e-8,"the late press reaches its exact clock boundary");
+    }
     static void Finish(FestivalSimulation s,InteractionState i){while(i.Status=="Active"&&i.Turns.Count>0&&i.Kind!="Police"){var turn=i.Turns[i.Turns.Count-1];Check(s.Execute(i.PlayerId,new GameCommand{Id="group"+(sequence++),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Awkward),Direction=i.Turns.Count-1}).Accepted,"finish an ordinary talk with awkward replies");}for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);Check(i.Status=="Complete",i.Kind+" completes");}
     // DIALOG-3: the talker gives the smooth reply on every turn left in their talk.
     static void Smooth(FestivalSimulation s,InteractionState i){while(i.Status=="Active"&&i.Turns.Count>0){var t=i.Turns[i.Turns.Count-1];Check(s.Execute(i.PlayerId,new GameCommand{Id="group"+(sequence++),Kind="Reply",Amount=Array.IndexOf(t.Grades,ConversationLines.Smooth),Direction=i.Turns.Count-1}).Accepted,i.PlayerId+" replies smoothly");}}
 
+    // DANCE-11 reverse order: b's earlier verdict must include a's visible press, although a's first note is still ahead.
+    static void ALastMomentDanceStillOverlapsTheEarlierVerdict()
+    {
+        var alone=Crew();Place(alone,"a",-20,0);var reference=Start(alone,"b");Live(alone,()=>reference.Status!="Active",reference);
+        double solo=Heat(alone,"b");Check(reference.Score==1&&solo<20,"reverse setup: perfect solo Dance lowers suspicion");
+        foreach(double early in new[]{.6,.3})
+        {
+            var s=Crew();var earlier=Start(s,"b");double press=earlier.StartSeconds+earlier.DurationSeconds+.75-early;
+            LiveTo(s,press,earlier);
+            var late=Start(s,"a");Live(s,()=>earlier.Status!="Active",earlier,late);
+            Check(late.Status=="Active"&&late.Inputs.Count==0&&s.Player("b").Performances==1&&s.Player("a").Performances==0&&Heat(s,"b")==solo&&Heat(s,"a")==20,
+                "reverse Dance pressed "+early+" s before b's verdict: earlier settles alone, late lead-in is uncharged (a="+Heat(s,"a")+", b="+Heat(s,"b")+", solo="+solo+")");
+            Live(s,()=>late.Status!="Active",late);
+            Check(late.Score==1&&earlier.Score==1&&s.Player("a").Performances==1&&s.Player("b").Performances==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,"reverse perfect Dances settle each player once");
+            s.Tick(1);Check(s.Player("a").Performances==1&&s.Player("b").Performances==1&&Heat(s,"a")==solo&&Heat(s,"b")==solo,"reverse "+early+" s verdicts are not settled again on later ticks");
+        }
+    }
+    // DIALOG-9: a sale/chat has no timed verdict. Keep it active until an actual final Reply, with a Dance just pressed.
+    // Police remains timed, so its last smooth Reply is sent before its real deadline. A completed talk is idle by the later Dance verdict.
+    static void ALastMomentDanceBesideATalkUsesItsActualSettlement()
+    {
+        foreach(var kind in new[]{"StartSale","Conversation","Police"})foreach(double early in new[]{.6,.3})
+        {
+            var s=Crew(kind);var talk=Start(s,"b",kind);
+            Check(!FestivalSimulation.Dancing(talk)&&talk.StageTrack==0&&talk.Inputs.Count==0,kind+" ordinary replies have no active rhythm chart");
+            Check(!s.Execute("b",new GameCommand{Id="group"+(sequence++),Kind="Rhythm",Direction=0,TimeSeconds=0}).Accepted,kind+" cannot submit rhythm input while talking");
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns-1;turn++)
+            {
+                var choices=talk.Turns[talk.Turns.Count-1];
+                Check(s.Execute("b",new GameCommand{Id="group"+(sequence++),Kind="Reply",Amount=Array.IndexOf(choices.Grades,ConversationLines.Smooth),Direction=talk.Turns.Count-1}).Accepted,"reverse "+kind+" replies before last turn");
+            }
+            double deadline=talk.StartSeconds+talk.DurationSeconds;
+            Check(talk.Turns.Count==FestivalSimulation.ConversationTurns&&talk.Turns[talk.Turns.Count-1].Pick<0,"reverse "+kind+" waits on the actual final reply");
+            Check(kind=="Police"?deadline>s.State.SimulationSeconds:talk.DurationSeconds==0,kind+" uses its real Police deadline or untimed talk lifecycle");
+            double press=kind=="Police"?deadline-early:s.State.SimulationSeconds+FestivalSimulation.ReplySeconds+2;
+            LiveTo(s,press);
+            Check(talk.Status=="Active"&&s.Player("b").Performances==0&&Heat(s,"b")==20,kind+" stays active and uncharged before its final reply");
+            var late=Start(s,"a");s.Tick(early/2);
+            Check(kind!="Police"||s.State.SimulationSeconds<deadline,"Police final reply precedes its actual deadline");
+            Smooth(s,talk);
+            Check(talk.Status=="Complete"&&talk.Score==1&&s.Player("b").Performances==1&&s.Player("a").Performances==0&&s.Player("b").ConversationOutcomes.Count==1&&Heat(s,"b")==5&&Heat(s,"a")==20,kind+" settles the smooth reply once while late Dance leads in");
+            Live(s,()=>late.Status!="Active",late);
+            Check(late.Score==1&&s.Player("a").Performances==1&&s.Player("b").Performances==1&&Heat(s,"a")==40&&Heat(s,"b")==25,kind+" completed before the late Dance verdict is now idle, not a completed rhythm challenge");
+            s.Tick(1);Check(s.Player("a").Performances==1&&s.Player("b").Performances==1&&s.Player("b").ConversationOutcomes.Count==1&&Heat(s,"a")==40&&Heat(s,"b")==25,kind+" settlement and terminal outcome are not repeated on later ticks");
+        }
+    }
+
     public static void Run()
     {
+        ALastMomentDanceStillOverlapsTheEarlierVerdict();
+        ALastMomentDanceBesideATalkUsesItsActualSettlement();
         var clock=Crew();clock.State.SimulationSeconds=10.123;var anchored=Start(clock,"a");
         var pressed=typeof(FestivalSimulation).GetMethod("PressedAt",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
         Check(pressed!=null&&(double)pressed.Invoke(null,new object[]{anchored})==10.123,"GroupDance.PressedAt uses the real command time, not the later musical first head");
