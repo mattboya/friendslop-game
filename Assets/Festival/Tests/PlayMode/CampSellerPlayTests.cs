@@ -16,7 +16,7 @@ namespace Festival.Tests
     {
         // CAMP-1 (Matt, 2026-10-01: "i should be able to talk to the camp vendor."): at camp, beside Marigold the strip under the
         // prompt says F talks to her, and F opens her talk on the chat window: 1-3 ask her three questions and she answers, turned to
-        // face you in the Talk pose; G closes it and she turns back. Holding an unpaid item shows the pay prompt and no talk, and
+        // face you in the Talk pose; Escape closes it and she turns back. Holding an unpaid item shows the pay prompt and no talk, and
         // the host's Day 1 festival switch is still F anywhere else at camp. Hosts a real round; the keys go through a virtual
         // keyboard, so through the HUD's own input handling (FestivalHud.UpdateKeyboard).
         [UnityTest]public IEnumerator FTalksToMarigoldBesideHerAndSwitchesTheFestivalAnywhereElse()
@@ -86,11 +86,12 @@ namespace Festival.Tests
                 if(window.Bubbles<2||window.Shown(window.Bubbles-2)!=CampSellerTalk.Questions[2]||!window.IsTheirs(window.Bubbles-1)||window.Shown(window.Bubbles-1).Length<20)
                     failures.Add("3: the thread ends \""+(window.Bubbles<2?"":window.Shown(window.Bubbles-2))+"\" then \""+Last()+"\", not your question and a tip");
 
-                // G closes her talk, and she turns back to the camp and idles.
+                // Escape closes her talk, and she turns back to the camp and idles.
                 int packed=player.Inventory.Count;
-                yield return Tap(Key.G);yield return new WaitForSeconds(1f);
-                if(window.Open)failures.Add("G leaves her talk open");
-                if(player.Inventory.Count!=packed)failures.Add("G dropped something instead of closing her talk ("+session.Message+")");
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(1f);
+                if(window.Open)failures.Add("Escape leaves her talk open");
+                if(session.MenuOpen)failures.Add("Escape opens the menu instead of dismissing Marigold");
+                if(player.Inventory.Count!=packed)failures.Add("Escape dropped something instead of closing her talk ("+session.Message+")");
                 if(Quaternion.Angle(world.CampSeller.transform.localRotation,Quaternion.Euler(0,CampSellerTalk.RestYaw,0))>1)failures.Add("after the talk Marigold still faces "+world.CampSeller.transform.localEulerAngles.y.ToString("0")+" degrees");
                 if(world.CampSeller.Pose!="Idle")failures.Add("after the talk Marigold's pose is "+world.CampSeller.Pose);
 

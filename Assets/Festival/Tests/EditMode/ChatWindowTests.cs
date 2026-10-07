@@ -49,6 +49,20 @@ namespace Festival.Tests
         static string[] Thread(FestivalChatWindow window){var lines=new List<string>();for(int i=0;i<window.Bubbles;i++)lines.Add((window.IsTheirs(i)?"< ":"> ")+window.Shown(i));return lines.ToArray();}
         static Button ReplyButton(FestivalChatWindow window,int i){foreach(var b in window.GetComponentsInChildren<Button>(true))if(b.name=="Reply "+(i+1))return b;return null;}
 
+        [Test] public void AnEndedChatWaitsForExplicitDismissalAfterThirtySeconds()
+        {
+            var window=Window();window.Begin("untimed_terminal","TEST","T",0);
+            window.TheySay("This final line keeps typing after the chat ends.",true);
+            Assert.That(window.Linger(0,false,false),Is.True);
+            Assert.That(window.Linger(30,false,false),Is.True,"a finished chat must wait for an explicit close, regardless of reading time");
+            Assert.That(window.Open,Is.True);
+            Assert.That(window.Header,Is.EqualTo("CHAT OVER  •  ESC CLOSE"));
+            Assert.That(window.Shown(0),Is.EqualTo("This final line keeps typing after the chat ends."));
+            window.Dismiss();Assert.That(window.Linger(31,false,false),Is.False);
+            window.Begin("next_terminal","TEST","T",32);window.TheySay("Bye.",false);
+            Assert.That(window.Linger(33,false,true),Is.False,"leaving reach still closes a terminal thread");
+        }
+
         [Test] public void ItOpensOnTheirOpenerWithTheQuestionsAsReplies()
         {
             var game=Day(out var tripper);var said=Chat(game,tripper);var window=Window();
@@ -155,7 +169,8 @@ namespace Festival.Tests
             Assert.That(FestivalChatWindow.TakesReplies(view,Me(view,tripper.Id)),Is.False,"the chat is over: 1-3 equip again, on the frame the view says so");
             // DIALOG-6: an ended chat lingers until its last line is read (HudTripperTests), long before 30 s.
             Assert.That(Follow(window,game,tripper.Id,30),Is.False,"no chat, no window");
-            Assert.That(window.Open,Is.False);
+            Assert.That(window.Open,Is.True,"the terminal transcript persists until Escape");
+            window.Dismiss();Assert.That(window.Open,Is.False);
         }
 
         // ViewFor sends only Active interactions, so the thread lives in the window: it outlasts the chat (DIALOG-6 shows it
@@ -165,7 +180,7 @@ namespace Festival.Tests
             var game=Day(out var tripper);var said=Chat(game,tripper);var window=Window();
             Follow(window,game,tripper.Id,0);window.Pick(0);Follow(window,game,tripper.Id,FestivalChatWindow.Typed(said.Answers[0])+.01f);
             Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_check_"+tripper.InteractionId,Kind="EndChat",TargetId=tripper.InteractionId}).Accepted,Is.True);Follow(window,game,tripper.Id,30);
-            Assert.That(window.Open,Is.False,"setup: the chat is over, and its last line long read (DIALOG-6)");
+            Assert.That(window.Open,Is.True,"the terminal transcript is still readable after thirty seconds");
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+said.Opener,"> "+said.Questions[0],"< "+said.Answers[0]}),"the thread is still on this client");
             var next=Chat(game,tripper,"next_chat");
             Follow(window,game,tripper.Id,31);

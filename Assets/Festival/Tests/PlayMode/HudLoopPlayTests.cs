@@ -467,7 +467,9 @@ namespace Festival.Tests
                     var sale=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
                     if(sale?.Kind!="Sale"||sale.TargetId!=buyer.Id)failures.Add("Esc, then the offer: it starts "+(sale?.Kind??"nothing")+" ("+session.Message+")");
                     if(session.MenuOpen)failures.Add("Esc, then the offer: the menu stays open over the sale");
-                    session.Command("Cancel");
+                    session.Command("Cancel");yield return null;yield return null;
+                    yield return Tap(Key.Escape);
+                    if(session.MenuOpen||hud.GetComponentInChildren<FestivalChatWindow>(true).Open)failures.Add("Esc after cancelling the sale: terminal chat or menu remains open");
                 }
                 // K1: a dance chosen there takes your arrow keys. By day it is the list's only way to the dance How to Play asks for;
                 // left open, the menu dropped every press and the pass offered only CANCEL ACTION, which costs suspicion.
@@ -499,15 +501,19 @@ namespace Festival.Tests
                 InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.Tab));yield return null;yield return null;
                 if(!Shows("Map"))failures.Add("holding TAB: no map");
                 InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return null;yield return null;
-                // You trip, and chat to check your vision about the buyer: Esc opens the menu beside the chat, its replies clickable.
+                // You trip and chat to check your vision: Escape finishes and dismisses it, then the next Escape opens nearby actions.
                 player.X=0;buyer.X=0;buyer.Z=1.5f;buyer.Suspicion=0;buyer.Mode="Blending";
                 sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="nearby_vision",Kind="Buyer",NpcId=buyer.Id});
                 session.Command("ConfirmChat",buyer.Id);
-                Assert.That(sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active")?.Kind,Is.EqualTo("ConfirmChat"),"setup: you chat to check your vision ("+session.Message+"), after:\n"+string.Join("\n",failures));
+                var check=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                Assert.That(check?.Kind,Is.EqualTo("ConfirmChat"),"setup: you chat to check your vision ("+session.Message+"), after:\n"+string.Join("\n",failures));
                 yield return new WaitForSeconds(.4f);
                 yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
                 var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
-                if(!session.MenuOpen||window==null||!window.Open||Shows("Actions"))failures.Add("Esc mid-chat: menu "+(session.MenuOpen?"open":"shut")+", chat window "+(window!=null&&window.Open?"open":"shut")+", action list "+(Shows("Actions")?"over it":"hidden"));
+                if(session.MenuOpen||window==null||window.Open||Shows("Actions"))failures.Add("Esc mid-chat: menu "+(session.MenuOpen?"open":"shut")+", chat window "+(window!=null&&window.Open?"open":"shut")+", action list "+(Shows("Actions")?"over it":"hidden"));
+                if(check.Status!="Complete"||!sim.State.Visions.Find(v=>v.Id=="nearby_vision").Confirmed)failures.Add("Esc mid-check: the check did not complete and confirm the vision");
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                if(!session.MenuOpen||!Listed().Contains("Dance with festivalgoer"))failures.Add("Esc after the check: nearby menu did not open (listed: "+Listed()+")");
                 session.MenuOpen=false;
             }
             finally

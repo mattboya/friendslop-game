@@ -97,16 +97,16 @@ namespace Festival.Presentation
         /// <summary>DANCE-12: whether p is mid four-lane challenge (FestivalInput.IsRhythm: a dance, a check dance, the poi circle, the
         /// deck, or a talk's trust dance). E sits between the W and D lanes, so then E runs nothing and a tap of G drops nothing: only
         /// holding G for HoldToStopSeconds stops it, as HoldToStop says. Anything else keeps its cancel on E, and lying down gets up
-        /// first. DIALOG-3: a talk is replied to on 1-3, and E, held, walks out of it (WalksOutByHold).</summary>
+        /// first. DIALOG-3: a talk is replied to on 1-3, and the effective Menu binding walks out of it.</summary>
         public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythm(i);return false;}
         public const string HoldToStop="HOLD G TO STOP DANCING";
         public const float HoldToStopSeconds=1;
         /// <summary>K2 (batch call 9: "you can walk away (E-hold, or moving off)"): whether p is mid talk, replying on 1-3 (its trust
         /// dance is on the lanes: StopsByHold). A talk holds you still and walking out of it (Cancel) puts every watcher on edge, so a
-        /// tap of E runs nothing then, not even the cancel listed first, and holding E for HoldToStopSeconds walks out, as WalkAway
-        /// says on the prompt.</summary>
+        /// tap of E runs nothing then, not even the cancel listed first. The effective Menu binding walks out, as WalkAway
+        /// says on the prompt. The legacy method name remains for callers that suppress E during a talk.</summary>
         public static bool WalksOutByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalSimulation.Talks(i.Kind)&&!FestivalSimulation.TrustDancing(i);return false;}
-        public const string WalkAway="HOLD E TO WALK AWAY";
+        public const string WalkAway="ESC TO WALK AWAY";
         /// <summary>POLO-2: a Ferris wheel rider's prompt, in place of an action: what the turn has left at `now` (the view's
         /// simulation clock), in whole seconds rounded up like Clock. "" off the wheel.</summary>
         public static string WheelPrompt(RoundState s,PlayerState p,double now)

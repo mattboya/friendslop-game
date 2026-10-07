@@ -16,6 +16,146 @@ namespace Festival.Tests
 {
     public sealed class HudTripperPlayTests:FestivalPlayModeTest
     {
+        [UnityTest] public IEnumerator EscapeConsumesLiveAndTerminalPrivateThreadsBeforeOpeningTheMenu()
+        {
+            UseAVirtualKeyboard();
+            var world=new GameObject("Escape lifecycle world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Escape lifecycle HUD");var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Escape tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);session.Profile.Data.ReducedMotion=true;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);sim.AddPlayer("escape_friend","Friend").Ready=true;
+                yield return StartLevel(session);
+                string id="escape_talker2";Assert.That(DialogueGrammar.PersonaFor(id,""),Is.EqualTo("Wook"),"fixed safe persona fixture");
+                var npc=new NpcState{Id=id,Kind="Wook",Role="Regular",CanTalk=true,X=12,Z=12};sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();
+                player.X=12.3f;player.Z=12;sim.State.Doses.Clear();
+                session.Command("Conversation",npc.Id);yield return null;yield return null;
+                var talk=sim.Interaction(player.InteractionId);var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                Assert.That(window.Open,Is.True);
+                yield return Tap(Key.Escape);
+                Assert.That(talk.Status,Is.EqualTo("Cancelled"),"effective Menu must send the owned EndChat before toggling menu");
+                Assert.That(session.MenuOpen||window.Open,Is.False,"the first Escape ends and dismisses");
+                yield return Tap(Key.Escape);Assert.That(session.MenuOpen,Is.True,"the next press opens the menu");
+                yield return Tap(Key.Escape);Assert.That(session.MenuOpen,Is.False);
+                npc.Observers.Clear();session.Command("Conversation",npc.Id);yield return null;yield return null;
+                talk=sim.Interaction(player.InteractionId);
+                for(int t=0;t<3;t++){var turn=talk.Turns[t];window.Pick(System.Array.IndexOf(turn.Grades,ConversationLines.Smooth));yield return null;yield return null;}
+                yield return new WaitForSeconds(.8f);
+                var outcome=player.ConversationOutcomes.Last();
+                Assert.That(window.Lingering,Is.True);
+                Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.Shown(i)==outcome.Reaction),Is.True,"the retained authoritative third-reply reaction is shown without a fourth reply");
+                Assert.That(window.Replies,Is.EqualTo(0));Assert.That(talk.Turns.Count,Is.EqualTo(3));
+                Assert.That(player.Dialogue.Seen,Is.Not.Empty,"actually displayed turns/outcome acknowledge private grammar");
+                yield return Tap(Key.G);Assert.That(window.Open,Is.True,"G no longer owns chat dismissal");
+                yield return Tap(Key.Escape);Assert.That(window.Open||session.MenuOpen,Is.False);
+                Assert.That(player.ConversationDismissedId,Is.EqualTo(outcome.InteractionId),"Escape dismisses authoritatively for reconnect");
+                yield return Tap(Key.Escape);Assert.That(session.MenuOpen,Is.True);
+                view.enabled=false;session.MenuOpen=false;yield return Tap(Key.Escape);
+                Assert.That(session.MenuOpen,Is.True,"disabled HUD unregisters the Menu consumer");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;yield return null;
+        }
+
+        [UnityTest] public IEnumerator MissedActiveViewsStillShowPrivateReactionsWalkOffAndNarcReason()
+        {
+            UseAVirtualKeyboard();
+            var world=new GameObject("Retained outcome world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Retained outcome HUD");var session=hud.AddComponent<FestivalSession>();var view=hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Outcome tester",HostPort);float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);sim.AddPlayer("private_friend","Friend").Ready=true;
+                yield return StartLevel(session);session.Profile.Data.ReducedMotion=true;
+                session.Controls.Menu.ApplyBindingOverride("<Keyboard>/f10");
+                string id="retained_talker";Assert.That(DialogueGrammar.PersonaFor(id,""),Is.Not.EqualTo("Raver").And.Not.EqualTo("Burner"),"fixed safe persona fixture");
+                var npc=new NpcState{Id=id,Kind="Wook",Role="Regular",CanTalk=true,X=14,Z=14};sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();sim.State.Doses.Clear();
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                foreach(string scenario in new[]{"smooth","so-so","awkward","Sale trust","Buy trust","Conversation trust","narc"})
+                {
+                    view.enabled=false;player.Life="Alive";player.X=14.3f;player.Z=14;player.Cash=50;player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});npc.StockSold=0;npc.Observers.Clear();npc.Role=scenario=="narc"?"Narc":scenario=="Sale trust"?"Buyer":"Regular";
+                    bool trust=scenario.EndsWith("trust");if(trust)npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
+                    string kind=scenario=="narc"||scenario=="Buy trust"?"Buy":scenario=="Sale trust"?"Sale":"Conversation";
+                    session.Command(kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,item:kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");yield return null;
+                    var talk=sim.Interaction(player.InteractionId);Assert.That(talk,Is.Not.Null,scenario+": "+session.Message);
+                    if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;talk.Status=="Active"&&n<400;n++)sim.Tick(.1);}
+                    else for(int t=0;t<3;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
+                    Assert.That(player.InteractionId,Is.Empty);var outcome=player.ConversationOutcomes.Last();
+                    if(trust){Assert.That(outcome.Notice,Is.EqualTo("They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
+                    if(scenario=="narc")Assert.That(player.Life,Is.EqualTo("Detained"));
+                    view.enabled=true;yield return null;yield return new WaitForSeconds(.7f);
+                    Assert.That(window.Open&&window.Lingering,Is.True,scenario+": a terminal delivery survives an entirely missed live view");
+                    var lines=Enumerable.Range(0,window.Bubbles).Select(i=>window.Shown(i)).ToArray();
+                    Assert.That(lines,Does.Contain(outcome.Reaction),scenario+": authored final reaction");
+                    if(outcome.Notice!="")Assert.That(lines,Does.Contain(outcome.Notice));
+                    Assert.That(window.Header,Is.EqualTo("CHAT OVER  •  F10 CLOSE"));Assert.That(window.Replies,Is.EqualTo(0));
+                    Assert.That(session.Profile.Data.SeenDialogue,Is.SupersetOf(outcome.GrammarKeys),"displayed terminal grammar is remembered privately");
+                    Assert.That(JsonUtility.ToJson(FestivalSession.ViewFor(sim,"private_friend")),Does.Not.Contain(outcome.DeliveryId).And.Not.Contain(outcome.Reaction));
+                    if(scenario=="smooth")
+                    {
+                        player.X=24;yield return null;yield return null;
+                        Assert.That(window.Open,Is.False,"retained source identity enforces reach after a missed active snapshot");
+                    }
+                    else{yield return Tap(Key.F10);Assert.That(session.MenuOpen||window.Open,Is.False);}
+                    Assert.That(player.ConversationDismissedId,Is.EqualTo(outcome.InteractionId));
+                }
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;yield return null;
+        }
+
+        [UnityTest] public IEnumerator EffectiveMenuEndsChecksRefundsTalksAndDismissesMarigold()
+        {
+            UseAVirtualKeyboard();var world=new GameObject("Menu route world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Menu route HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Menu tester",HostPort);float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=5;
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);yield return null;yield return null;
+                yield return Tap(Key.F);Assert.That(window.Open,Is.True,"Marigold opens through the actual chat binding");
+                yield return Tap(Key.G);Assert.That(window.Open,Is.True,"G leaves Marigold open");
+                yield return Tap(Key.Escape);Assert.That(window.Open||session.MenuOpen,Is.False,"one Escape dismisses Marigold");
+                yield return Tap(Key.Escape);Assert.That(session.MenuOpen,Is.True);yield return Tap(Key.Escape);
+                sim.AddPlayer("menu_friend","Friend").Ready=true;yield return StartLevel(session);
+                session.Controls.Menu.ApplyBindingOverride("<Keyboard>/f10");
+                var npc=new NpcState{Id="escape_talker2",Kind="Wook",Role="Regular",CanTalk=true,X=16,Z=16,Yaw=90};sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();
+                var witness=new NpcState{Id="menu_witness",Kind="Wook",Role="Regular",X=16,Z=16.5f,Yaw=150};sim.State.Npcs.Add(witness);
+                foreach(string kind in new[]{"Sale","Buy","Conversation","Police","ConfirmChat"})
+                {
+                    player.Life="Alive";player.X=16.3f;player.Z=16;player.Cash=50;player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});npc.StockSold=0;npc.Observers.Clear();npc.Role=kind=="Sale"?"Buyer":"Regular";npc.Kind=kind=="Police"?"Cop":"Wook";
+                    npc.Observers.Add(new ObserverState{PlayerId=player.Id});witness.Observers.Clear();witness.Observers.Add(new ObserverState{PlayerId=player.Id});player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                    VisionState vision=null;
+                    if(kind=="ConfirmChat")
+                    {
+                        sim.State.TripperId=player.Id;player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1});
+                        vision=new VisionState{Id="menu_check",Kind="Buyer",NpcId=npc.Id};sim.State.Visions.Add(vision);
+                    }
+                    session.Command(kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,item:kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");yield return null;yield return null;
+                    var action=sim.Interaction(player.InteractionId);Assert.That(action,Is.Not.Null,kind+": "+session.Message);
+                    Assert.That(window.Open,Is.True);Assert.That(window.transform.Find("Time left track").gameObject.activeSelf,Is.EqualTo(kind=="Police"));
+                    yield return Tap(Key.Escape);Assert.That(action.Status,Is.EqualTo("Active"),"the old physical Escape is no longer the effective binding");
+                    yield return Tap(Key.F10);
+                    Assert.That(action.Status,Is.EqualTo(kind=="ConfirmChat"?"Complete":"Cancelled"));
+                    Assert.That(window.Open||session.MenuOpen,Is.False,kind+": the effective Menu ends and dismisses before opening the menu");
+                    if(kind=="Sale")Assert.That(player.Inventory.Find(i=>i.ItemId=="stock_lsd")?.Count,Is.EqualTo(1),"reserved stock is returned");
+                    if(kind=="Buy")Assert.That(player.Cash,Is.EqualTo(50),"held payment is returned");
+                    if(vision!=null)Assert.That(vision.Confirmed,Is.True,"ending a check confirms it");
+                    else Assert.That(witness.Observers.Find(o=>o.PlayerId==player.Id).Suspicion,Is.GreaterThanOrEqualTo(20),"walk-away witness cost stays authoritative");
+                    yield return Tap(Key.F10);Assert.That(session.MenuOpen,Is.True);yield return Tap(Key.F10);
+                }
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;yield return null;
+        }
+
         // HUD-2: the running HUD puts FestivalHudText's tripper lines on screen. Hosts a real two-player Day 1, pins the spin,
         // and reads what a player sees: who trips and on how many doses, the tripper's one hint, the checks beside a festivalgoer
         // they have a vision about (E dances, F chats), the chat picker, and nothing to check for the sober friend.
@@ -266,7 +406,7 @@ namespace Festival.Tests
                     session.Command("EndChat",player.InteractionId);
                     float gone=Time.realtimeSinceStartup+15;
                     while(window!=null&&window.Open&&Time.realtimeSinceStartup<gone)yield return null;
-                    if(window!=null&&window.Open)failures.Add("chat check done: the chat window still shows");
+                    if(window==null||!window.Open)failures.Add("chat check done: the terminal transcript disappeared");
                     Expect("chat check done","Equipment heading",GearKeys);
                     // With no chat under way, 1 equips slot 1 again (and shows the keyboard reaches the HUD).
                     yield return Tap(Key.Digit1);
@@ -321,9 +461,9 @@ namespace Festival.Tests
                         while(window.Open&&window.Shown(window.Bubbles-1)!=answer&&Time.realtimeSinceStartup<typed)yield return null;
                         if(!window.Open||window.Shown(window.Bubbles-1)!=answer)failures.Add(where+": their whole answer never shows");
                         int carried=player.Inventory.Sum(i=>i.Count),dropped=sim.State.Drops.Count;
-                        yield return Tap(Key.G);
-                        if(window.Open)failures.Add(where+": G doesn't close the chat window");
-                        if(player.Inventory.Sum(i=>i.Count)!=carried||sim.State.Drops.Count!=dropped)failures.Add(where+": G closing the chat window dropped something");
+                        yield return Tap(Key.Escape);
+                        if(window.Open||session.MenuOpen)failures.Add(where+": Escape did not dismiss before the menu");
+                        if(player.Inventory.Sum(i=>i.Count)!=carried||sim.State.Drops.Count!=dropped)failures.Add(where+": Escape closing the chat window dropped something");
                     }
                     // That chat was ended explicitly and checked them, so you get a new vision about them to check.
                     sim.State.Visions.Add(new VisionState{Id="hud_vision_again",Kind="Buyer",NpcId=npc.Id});
@@ -458,17 +598,11 @@ namespace Festival.Tests
                     npc.Suspicion=0;
                 }
                 // Holds E for 1.1 s, checking halfway that the talk goes on with the fill across the prompt grown.
-                IEnumerator HoldE(string where,InteractionState doing)
+                IEnumerator EndWithEscape(string where,InteractionState doing)
                 {
-                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.E));
-                    yield return new WaitForSeconds(.5f);
-                    if(Doing()?.Id!=doing.Id)failures.Add(where+": half a second into holding E, it already ended");
-                    var fill=Shown<Image>("Walk hold fill");var card=Shown<RectTransform>("Action prompt");
-                    float filled=fill==null||card==null?0:fill.rectTransform.rect.width/card.rect.width;
-                    if(filled<.2f||filled>.9f)failures.Add(where+": half a second into holding E, the fill across the prompt is "+(fill==null?"hidden":filled.ToString("0.00")+" full"));
-                    yield return new WaitForSeconds(.6f);yield return null;yield return null;
-                    if(Doing()!=null||sim.State.Interactions.Find(i=>i.Id==doing.Id)?.Status!="Cancelled")failures.Add(where+": holding E for 1.1 s doesn't walk out ("+session.Message+")");
-                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return null;yield return null;
+                    yield return Tap(Key.Escape);
+                    if(Doing()!=null||sim.State.Interactions.Find(i=>i.Id==doing.Id)?.Status!="Cancelled")failures.Add(where+": Escape does not walk out ("+session.Message+")");
+                    if(session.MenuOpen)failures.Add(where+": ending the conversation opens the menu");
                 }
 
                 // A dance: a stray E and a tap of G leave it going, and nothing is bought, offered or dropped.
@@ -522,7 +656,7 @@ namespace Festival.Tests
                 if(walk?.text!=FestivalHudText.WalkAway)failures.Add("buying: the prompt reads \""+(walk?.text??"(hidden)")+"\", not "+FestivalHudText.WalkAway);
                 yield return Tap(Key.E);
                 if(Doing()?.Id!=buy.Id)failures.Add("buying: a tap of E walked out of the talk ("+session.Message+")");
-                if(Doing()?.Id==buy.Id)yield return HoldE("buying",buy);
+                if(Doing()?.Id==buy.Id)yield return EndWithEscape("buying",buy);
                 if(player.Cash!=cash)failures.Add("buying, walked out by holding E: you hold $"+player.Cash+", not the $"+cash+" you had");
                 // A seller wary of you asks for a dance first, on the lanes: there a stray E does nothing, and holding G for a second
                 // stops it, the price back.

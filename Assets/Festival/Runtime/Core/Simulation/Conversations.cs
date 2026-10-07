@@ -143,7 +143,7 @@ namespace Festival.Core
             if(p.ConversationThreadId=="")p.ConversationThreadId=i.Id;
             if(p.ConversationOutcomes==null)p.ConversationOutcomes=new System.Collections.Generic.List<ConversationOutcome>();
             if(p.ConversationOutcomes.Exists(o=>o.RoundId==State.RoundId&&o.InteractionId==i.Id))return;
-            var outcome=new ConversationOutcome{RoundId=State.RoundId,InteractionId=i.Id,DeliveryId=State.RoundId+":"+i.Id,Kind=i.Kind,Speaker=i.Kind=="Police"?"SECURITY":"FESTIVALGOER",Hunch=i.Hunch,Sequence=++p.ConversationOutcomeSequence};
+            var outcome=new ConversationOutcome{RoundId=State.RoundId,InteractionId=i.Id,DeliveryId=State.RoundId+":"+i.Id,Kind=i.Kind,TargetId=i.TargetId,Speaker=i.Kind=="Police"?"SECURITY":"FESTIVALGOER",Hunch=i.Hunch,Sequence=++p.ConversationOutcomeSequence};
             if(i.TrustDance&&i.Turns.Count==0){outcome.Reaction="Nah. Not feeling it.";outcome.Notice="They walk off.";}
             else
             {

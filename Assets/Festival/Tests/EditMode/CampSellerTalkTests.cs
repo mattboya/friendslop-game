@@ -78,6 +78,27 @@ namespace Festival.Tests
             Assert.That(Last(window),Is.EqualTo("< "+CampSellerTalk.Grab(s,you)).And.Contain("Sold out"),"asked again, she answers from the view as it is now");
         }
 
+        [Test] public void MarigoldWaitsWithoutAClockAndNamesEscape()
+        {
+            var s=Camp(Festivals.PoloFestival,0,out var you);var talk=new CampSellerTalk(8);var window=Window();
+            talk.Begin(window,s,you,0);talk.Follow(s,you,60,false);
+            Assert.That(window.Header,Does.Contain("ESC CLOSE"));
+            Assert.That(window.transform.Find("Time left track").gameObject.activeSelf,Is.False,"Marigold has no timed reply");
+            Assert.That(window.Open&&talk.Open,Is.True);
+            talk.End();Assert.That(talk.Follow(s,you,61,false)||window.Open,Is.False);
+        }
+
+        [TestCase(false,false)] [TestCase(false,true)] [TestCase(true,false)] [TestCase(true,true)]
+        public void NewActionsClearHerTalkAndRetainedSignOff(bool lingering,bool heldOffer)
+        {
+            var s=Camp(Festivals.PoloFestival,0,out var you);var talk=new CampSellerTalk(8);var window=Window();
+            talk.Begin(window,s,you,0);talk.Follow(s,you,1,true);
+            if(lingering){you.Z=CampSellerTalk.Z-FestivalChatWindow.LeaveReach-.3f;talk.Follow(s,you,2,true);}
+            Assert.That(talk.Visible&&window.Open,Is.True,"setup: her live talk or walk-off is displayed");
+            if(heldOffer)you.HeldOfferId="merch_bag";else you.InteractionId="next_action";
+            Assert.That(talk.Follow(s,you,3,true)||window.Open||talk.Visible,Is.False,"a new purchase or authoritative action owns the screen");
+        }
+
         [Test] public void WalkingOffEndsTheTalkOnHerSignOffWhichStaysUpUntilRead()
         {
             var s=Camp(Festivals.PlayaFestival,0,out var you);var talk=new CampSellerTalk(8);var twin=new CampSellerTalk(8);var window=Window();
@@ -91,11 +112,12 @@ namespace Festival.Tests
             Assert.That(talk.Follow(s,you,8,true)&&window.Lingering,Is.True,"it lingers, read-only");
             Assert.That(Last(window),Is.EqualTo("< "+twin.SignOff(s.FestivalIndex)),"her sign-off, called after you");
             for(int i=0;i<3;i++)Assert.That(window.CanReply(i),Is.False,"nothing to ask once it is over");
-            Assert.That(talk.Follow(s,you,60,true),Is.False,"read, it goes");
+            Assert.That(talk.Follow(s,you,60,true),Is.True,"the sign-off stays until an explicit close");
+            talk.End();
             Assert.That(window.Open,Is.False);
         }
 
-        [Test] public void GoingInsideTheSpinStartingOrGClosesItAtOnce()
+        [Test] public void GoingInsideTheSpinStartingOrEscapeClosesItAtOnce()
         {
             var s=Camp(Festivals.PoloFestival,0,out var you);var talk=new CampSellerTalk(2);var window=Window();
             void Talk(float now){talk.Begin(window,s,you,now);Assert.That(talk.Follow(s,you,now+.1f,false)&&talk.Open&&window.Open,Is.True,"setup: talking to her");}
@@ -104,7 +126,7 @@ namespace Festival.Tests
             you.CampVisitId="";Talk(2);s.Phase="Spinning";
             Assert.That(talk.Follow(s,you,3,false)||window.Open||talk.Open,Is.False,"the spin starting");
             s.Phase="Shopping";Talk(4);talk.End();
-            Assert.That(window.Open||talk.Open,Is.False,"G");
+            Assert.That(window.Open||talk.Open,Is.False,"Escape");
             Assert.That(talk.Follow(s,you,5,false),Is.False,"closed stays closed");
         }
 

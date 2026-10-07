@@ -58,6 +58,48 @@ namespace Festival.Tests
         static string[] Thread(FestivalChatWindow window){var lines=new List<string>();for(int i=0;i<window.Bubbles;i++)lines.Add((window.IsNote(i)?"= ":window.IsTheirs(i)?"< ":"> ")+window.Shown(i));return lines.ToArray();}
         static int Smooth(ConversationTurn turn)=>System.Array.IndexOf(turn.Grades,ConversationLines.Smooth);
 
+        [Test] public void OfferedSlurredRepliesHaveAnExplanatoryPrivateLabel()
+        {
+            var game=Day(out var you,out var them);you.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=3});
+            var talk=Talk(game,you,them);Assert.That(System.Array.Exists(talk.Turns[0].Garbled,g=>g),Is.True,"fixture offers actual slurred replies");var window=Window(game,you);Follow(window,game,you.Id,0);
+            Assert.That(System.Array.Exists(window.GetComponentsInChildren<Text>(false),t=>t.text=="TRIPPING • SOME REPLIES SLUR"),Is.True);
+        }
+
+        [Test] public void RetainedOutcomeCarriesItsSourceNpcOnlyInTheOwnerSnapshot()
+        {
+            var game=Day(out var you,out var them);var talk=Talk(game,you,them);
+            for(int t=0;t<3;t++)Assert.That(game.Execute(you.Id,new GameCommand{Id="target_reply_"+t,Kind="Reply",Amount=Smooth(talk.Turns[t]),Direction=t}).Accepted,Is.True);
+            var outcome=you.ConversationOutcomes[0];
+            Assert.That(JsonUtility.ToJson(outcome),Does.Contain("\"TargetId\":\""+them.Id+"\""),"a retained outcome needs source identity after the active interaction is gone");
+            string owner=JsonUtility.ToJson(View(game,you.Id)),other=JsonUtility.ToJson(View(game,"friend"));
+            Assert.That(owner,Does.Contain(outcome.DeliveryId));Assert.That(other,Does.Not.Contain(outcome.DeliveryId));
+            var older=JsonUtility.FromJson<ConversationOutcome>("{\"DeliveryId\":\"old\"}");
+            Assert.That(JsonUtility.ToJson(older),Does.Contain("\"TargetId\":\"\""),"older snapshots default to no invented source");
+        }
+
+        [Test] public void OrdinaryChatsHideTheWholeCountdownTrackAndExplainSlurredChoices()
+        {
+            var game=Day(out var you,out var them);you.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=3});
+            var talk=Talk(game,you,them);var window=Window(game,you);Follow(window,game,you.Id,0);
+            var track=window.transform.Find("Time left track");
+            Assert.That(track.gameObject.activeSelf,Is.False,"an untimed chat must hide the track, not show an empty deadline");
+            var labels=window.GetComponentsInChildren<Text>(false);
+            Assert.That(System.Array.Exists(labels,t=>t.text=="TRIPPING • SOME REPLIES SLUR"),Is.True,"the actual offered slurs need their private explanatory label");
+            var first=talk.Turns[0];
+            for(int i=0;i<3;i++)Assert.That(window.ReplyLabel(i),Is.EqualTo(first.Replies[i]),"no grade hint may be added to the choice");
+        }
+
+        [Test] public void DismissedLiveIdentityCannotReopenFromAStaleSnapshot()
+        {
+            var game=Day(out var you,out var them);Talk(game,you,them);var window=Window(game,you);
+            var stale=View(game,you.Id);var me=Me(stale,you.Id);
+            window.Follow(stale,me,stale.SimulationSeconds,0,false);window.Dismiss();
+            Assert.That(window.Follow(stale,me,stale.SimulationSeconds,1,false),Is.False,"the same dismissed interaction must remain consumed while its host acknowledgment is in flight");
+            Assert.That(window.Open,Is.False);
+            stale.RoundId+="next";
+            Assert.That(window.Follow(stale,me,stale.SimulationSeconds,2,false),Is.True,"an interaction id/start reused in another round is a new thread");
+        }
+
         [Test] public void ASecurityTalkOpensOnTheirLineWithThreeNumberedRepliesAndACountdown()
         {
             var game=Day(out var you,out _);var them=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=them.X+.3f;you.Z=them.Z;
@@ -154,7 +196,8 @@ namespace Festival.Tests
             float readBy=over+FestivalChatWindow.Lingers(talk.Hunch);
             for(int t=0;t<FestivalSimulation.ConversationTurns;t++){var turn=talk.Turns[t];foreach(var line in new[]{turn.Reaction,turn.Line,turn.Replies[Smooth(turn)]})readBy=Mathf.Max(readBy,t+FestivalChatWindow.Lingers(line));}
             Follow(window,game,you.Id,readBy+FestivalChatWindow.FadeSeconds+.01f);
-            Assert.That(window.Open,Is.False,"then the window goes");
+            Assert.That(window.Open,Is.True,"the hunch stays until an explicit close");
+            window.Dismiss();Assert.That(window.Open,Is.False);
         }
 
         // A talk with security leaves no hunch (security is security), so it ends on your last reply.
@@ -215,7 +258,7 @@ namespace Festival.Tests
         // on. While you talk (FestivalHudText.WalksOutByHold) a tap of E runs nothing, and holding it HoldToStopSeconds walks out, as
         // the prompt says (WalkAway); a talk's trust dance stops by holding G instead (StopsByHold). HudTripperPlayTests presses
         // the keys.
-        [Test] public void YouWalkOutOfATalkByHoldingE()
+        [Test] public void EscapeGuidanceLeavesTrustDanceHoldGIntact()
         {
             var game=Day(out var you,out var them);
             bool Walks(string id){var view=View(game,id);return FestivalHudText.WalksOutByHold(view,Me(view,id));}
@@ -225,7 +268,7 @@ namespace Festival.Tests
             Assert.That(Walks(you.Id),Is.True,"talking, a tap of E runs nothing: holding it walks out");
             Assert.That(Stops(you.Id),Is.False,"and holding G doesn't");
             Assert.That(Walks("friend"),Is.False,"a friend's E is their own");
-            Assert.That(FestivalHudText.WalkAway,Is.EqualTo("HOLD E TO WALK AWAY"),"the prompt says so");
+            Assert.That(FestivalHudText.WalkAway,Is.EqualTo("ESC TO WALK AWAY"),"the prompt says so");
             Assert.That(game.Execute(you.Id,new GameCommand{Id="walk_away",Kind="Cancel"}).Accepted,Is.True,"setup: you walk out");
             Assert.That(Walks(you.Id),Is.False,"a talk over holds nothing back");
             var seen=them.Observers.Find(o=>o.PlayerId==you.Id);if(seen==null)them.Observers.Add(seen=new ObserverState{PlayerId=you.Id});

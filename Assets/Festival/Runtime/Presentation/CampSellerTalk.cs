@@ -12,7 +12,7 @@ namespace Festival.Presentation
     /// never the one she gave last (Tip). Her greetings and sign-offs are built on DIALOG-4's LineGrammar. Everything reads only
     /// the view the client already has, and none of it changes the game.
     /// The talk itself runs on DIALOG-5's chat window, on the client alone (FestivalHud): beside her at camp F opens it (Begin),
-    /// 1-3 ask, G closes it (End), walking off ends it on her sign-off (Follow), and she faces you while you talk (Face). The host
+    /// 1-3 ask, Escape closes it (End), walking off ends it on her sign-off (Follow), and she faces you while you talk (Face). The host
     /// never hears of it, so no other player sees her turn.
     /// </summary>
     public sealed class CampSellerTalk
@@ -25,14 +25,15 @@ namespace Festival.Presentation
         public CampSellerTalk(int seed){random=new ContentRandom(seed);}
 
         // What the HUD shows beside her (the strip under the prompt), her talk's title and the initial on her bubbles. The title says
-        // G closes it, as an ended chat's does (FestivalChatWindow.OverHeader).
-        public const string TalkPrompt="F  TALK TO MARIGOLD",Header="MARIGOLD  •  CAMP SUPPLIES  •  G CLOSE",Mark="M";
+        // Escape closes it, as an ended chat's does (FestivalChatWindow.OverHeader).
+        public const string TalkPrompt="F  TALK TO MARIGOLD",Header="MARIGOLD  •  CAMP SUPPLIES  •  ESC CLOSE",Mark="M";
         // Where she stands, in front of the supplies table (FestivalWorld puts her there), and which way she faces when nobody talks
         // to her: the camp. F reaches her from as far as the checkout takes payment (Economy.cs: 2.7 m from 0, 7). She turns to
         // face whoever talks to her at TurnDegreesPerSecond.
         public const float X=0,Z=7,RestYaw=180,Reach=2.7f,TurnDegreesPerSecond=240;
-        /// <summary>Whether a talk with her is under way: 1-3 ask her questions, G closes it.</summary>
+        /// <summary>Whether a talk with her is under way: 1-3 ask her questions, Escape closes it.</summary>
         public bool Open{get;private set;}
+        public bool Visible=>Open||lingering;
         // An ended talk still up on the window with her sign-off; which talk this is, for the window's thread; the window it is on,
         // and the view and player her answers read, as of this frame.
         bool lingering;int talks;string thread="";FestivalChatWindow window;RoundState state;PlayerState player;
@@ -49,7 +50,7 @@ namespace Festival.Presentation
         public void Begin(FestivalChatWindow window,RoundState s,PlayerState p,float now)
         {
             this.window=window;state=s;player=p;Open=true;lingering=false;thread="Marigold "+(++talks);
-            window.Begin(thread,Header,Mark,now);
+            window.Begin(thread,Header.Replace("ESC CLOSE",window.CloseKey+" CLOSE"),Mark,now);
             window.TheySay(Greeting(s.FestivalIndex),true);
             Ask();
         }
@@ -58,22 +59,22 @@ namespace Festival.Presentation
 
         /// <summary>
         /// Each frame at `now`: keeps her talk on the window while p stays within FestivalChatWindow.LeaveReach of her, the reach at
-        /// which the host ends a chat. Walking off past it ends the talk on her sign-off, which stays up read-only until read
-        /// (FestivalChatWindow.Linger); the spin starting or going inside a tent, car or potty closes it at once. False once nothing
+        /// which the host ends a chat. Walking off past it ends the talk on her sign-off, which stays up read-only until dismissed
+        /// (FestivalChatWindow.Linger); the spin starting, a new purchase/action or going inside a tent, car or potty closes it at once. False once nothing
         /// of the talk is up, which leaves the window to the host's chats (FestivalChatWindow.Follow).
         /// </summary>
         public bool Follow(RoundState s,PlayerState p,float now,bool reducedMotion)
         {
-            bool gone=s.Phase!="Shopping"||p.CampVisitId!="";
+            bool gone=s.Phase!="Shopping"||p.CampVisitId!=""||p.HeldOfferId!=""||p.InteractionId!="";
             if(lingering)return lingering=window.Linger(now,reducedMotion,gone);
             if(!Open)return false;
             if(gone){End();return false;}
             state=s;player=p;
             if(!Within(p,FestivalChatWindow.LeaveReach)){Open=false;window.TheySay(SignOff(s.FestivalIndex),true);return lingering=window.Linger(now,reducedMotion,false);}
-            window.Begin(thread,Header,Mark,now);window.Advance(now,1,reducedMotion);
+            window.Begin(thread,Header.Replace("ESC CLOSE",window.CloseKey+" CLOSE"),Mark,now);window.Advance(now,1,reducedMotion);
             return true;
         }
-        /// <summary>Closes her talk at once, with no sign-off (G, or the session going).</summary>
+        /// <summary>Closes her talk at once, with no sign-off (Escape, or the session going).</summary>
         public void End(){if(Open||lingering)window.Dismiss();Open=lingering=false;}
 
         /// <summary>Each frame: while you talk to her, or her sign-off is still up, she turns to face p (TurnDegreesPerSecond, dt

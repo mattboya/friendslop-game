@@ -110,7 +110,7 @@ namespace Festival.Presentation
         {
             "Move"=>"move","Look"=>"look around","Sprint"=>"run (the crowd notices)","Interact"=>"the top action on your list",
             "Chat"=>"talk to someone • the tripper checks a vision","Use"=>"use what's in your hand","Drop"=>"drop it • in a stop, ditch your stock • hold to stop dancing",
-            "Objectives"=>"hold for the map","Menu"=>"menu and settings","View"=>"first or third person",
+            "Objectives"=>"hold for the map","Menu"=>"end or close chat • menu and settings","View"=>"first or third person",
             "Slot1"=>"hand 1 • reply 1 in a talk or chat • vote 1 at the campfire","Slot2"=>"hand 2 • reply 2 in a talk or chat • vote 2 at the campfire",
             "Slot3"=>"hand 3 • reply 3 in a talk or chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
             "Spin"=>"hold to spin the poi in your hand",

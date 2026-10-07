@@ -48,7 +48,7 @@ namespace Festival.Core
         public List<ConversationOutcome> ConversationOutcomes=new List<ConversationOutcome>();
     }
     [Serializable] public sealed class ConversationOutcome {
-        public string RoundId="",InteractionId="",DeliveryId="",Kind="",Speaker="",Reaction="",Notice="",Hunch="";
+        public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="";
         public long Sequence; public List<string> GrammarKeys=new List<string>();
     }
     [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }

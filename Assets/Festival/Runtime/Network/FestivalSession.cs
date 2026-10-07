@@ -77,6 +77,7 @@ namespace Festival.Network
         // DIALOG-8: authenticated owner-only acknowledged grammar updates carry a session epoch/revision; TalkAck names
         // turns 0-2 or retained terminal delivery 3; terminal Amount 1 dismisses it authoritatively. Private bounded
         // ConversationOutcomes survive active interaction removal.
+        // Retained private conversation outcomes also carry TargetId for reach cleanup after missed active views.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -104,6 +105,17 @@ namespace Festival.Network
         private readonly Dictionary<string,long> publishedHistory=new Dictionary<string,long>();
         public IVoiceSession Voice {get;}=new UnavailableVoiceSession();
         public bool MenuOpen=true;
+        public Func<bool> ConsumeMenuPress;
+        public int ConnectionGeneration{get;private set;}
+        public void HandleMenuPress()
+        {
+            if(Controls?.Rebinding==true)return;
+            bool consumed=ConsumeMenuPress?.Invoke()==true;
+            if(!consumed)MenuOpen=!MenuOpen;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            simulation?.ChatDiagnostic?.Invoke(consumed?"MenuConsumed":"MenuToggled","Chat",State?.RoundId??"",State?.SimulationSeconds??0);
+#endif
+        }
         /// <summary>The pointer is free, and the view holds still, for the menu and for clicking a friend at the debrief (HUD-3).</summary>
         public bool PointerFree=>MenuOpen||State!=null&&FestivalHudText.VoteOpen(State);
         public Camera ViewCamera {get;private set;}
@@ -507,7 +519,7 @@ namespace Festival.Network
             // HUD-4: never while a key is being rebound, so the menu does not close on a player in the middle of it.
             if(MenuOpen&&!Controls.Rebinding&&ClosesMenu(State.Phase,lastPhase))MenuOpen=false;
             lastPhase=State.Phase;
-            if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)MenuOpen=!MenuOpen;
+            if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)HandleMenuPress();
             // CAM-1: V flips your view between first person and over the shoulder, and remembers it; never in the menu or mid-rebind.
             if(Controls.View.WasPressedThisFrame()&&!MenuOpen&&!Controls.Rebinding){Profile.Data.ThirdPerson=!Profile.Data.ThirdPerson;string error=Profile.Save();if(error!="")Message=error;}
             Cursor.lockState=PointerFree?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=PointerFree;
@@ -968,7 +980,7 @@ namespace Festival.Network
         // straight away. ponytail: OnClientStopped alone, as a session is always a host or a client, never a dedicated server.
         public void Leave()
         {
-            closing=true;Connecting=false;Voice.Leave();
+            closing=true;Connecting=false;Voice.Leave();ConnectionGeneration++;
             if(manager!=null)
             {
                 var stopping=manager;manager=null;

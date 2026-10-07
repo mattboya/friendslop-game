@@ -103,6 +103,7 @@ namespace Festival.Presentation
         // DIALOG-5: the chat window, the reply 1-3 picked this frame for it to take once it has followed the chat (-1: none), and
         // whether it sits beside the pass (the menu is open) rather than in play's spot.
         private FestivalChatWindow chatWindow;
+        private int chatConnectionGeneration=-1;
         // CAMP-1: Marigold's talk at camp, on the chat window, and the world she stands in (FestivalWorld.CampSeller).
         private readonly CampSellerTalk sellerTalk=new CampSellerTalk(Environment.TickCount);
         private FestivalWorld world;
@@ -274,7 +275,7 @@ namespace Festival.Presentation
             // The upper-left information rail keeps both palms, held props and
             // the ground immediately ahead visible during close interactions.
             promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.777f),new Vector2(.355f,.844f),true);
-            // K2: mid-talk the prompt says to hold E to walk away, and this fill grows across it while E is held (ShowStopHold).
+            // Legacy prompt fill is kept for ShowStopHold callers; live chats now leave through the effective Menu binding.
             walkHoldFill=Panel(promptPanel.transform,"Walk hold fill",new Color(Orange.r,Orange.g,Orange.b,.35f),Vector2.zero,new Vector2(0,1)).GetComponent<Image>();walkHoldFill.raycastTarget=false;walkHoldFill.gameObject.SetActive(false);
             promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
             prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
@@ -641,6 +642,7 @@ namespace Festival.Presentation
         private void Update()
         {
             if(session==null)return;
+            ResetChatForSession();
             FestivalSettings.ApplyEffects(shopAudio,session.Profile?.Data);
             // MENU-1: a game that ends, by LEAVE SESSION or a drop, comes back to the title as the game opened: the camp in its own
             // light (the session drives the world only while connected), and the settings put away so the title shows why it ended.
@@ -876,8 +878,6 @@ namespace Festival.Presentation
 
         private void UpdateKeyboard(RoundState state,PlayerState player)
         {
-            // ECON-3: Esc opens the menu on the action list, not behind CREW + NEARBY, unless a chat is under way: its replies take that spot.
-            if(session.Controls.Menu.WasPressedThisFrame()&&!session.Controls.Rebinding)crewOpen=state.Phase=="Playing"&&FestivalChatWindow.LiveChat(state,player)==null;
             if(state.Phase=="CampReview"&&!session.MenuOpen)
             {
                 int award=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
@@ -906,7 +906,7 @@ namespace Festival.Presentation
             // DIALOG-5: while the chat window has questions to ask this frame, or a talk's replies (DIALOG-3), 1-3 pick them instead of
             // equipping (never in a rope chat, which has none, nor once the conversation is over).
             // CAMP-1: so do Marigold's questions while you talk to her.
-            if(equipSlot>=0&&!session.MenuOpen&&(FestivalChatWindow.TakesReplies(state,player)||sellerTalk.Open)){chatReply=equipSlot;equipSlot=-1;}
+            if(equipSlot>=0&&!session.MenuOpen&&(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open)){chatReply=equipSlot;equipSlot=-1;}
             // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
             bool gearKeys=FestivalSimulation.Interactive(state.Phase);
             // HUD-8: a notch of the wheel steps round the filled hand slots, then switches like the key for the slot it lands on.
@@ -926,14 +926,10 @@ namespace Festival.Presentation
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             // DANCE-12: E sits between the W and D lanes, so mid-dance it runs nothing, even in the moment before UpdateActions
             // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop). K2: mid-talk a
-            // tap of E runs nothing either, and holding E walks out of it.
+            // tap of E runs nothing either; the effective Menu binding walks out of it.
             bool dancing=FestivalHudText.StopsByHold(state,player),talking=FestivalHudText.WalksOutByHold(state,player);
             if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen&&!dancing&&!talking)primaryAction?.Invoke();
-            HoldToStop(dancing?session.Controls.Drop:talking?session.Controls.Interact:null);
-            // DIALOG-6: G closes a chat left up after it ended, as its header says, and drops nothing.
-            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&chatWindow.Lingering){chatWindow.Dismiss();return;}
-            // CAMP-1: G closes a talk with Marigold, as its header says.
-            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&sellerTalk.Open){sellerTalk.End();return;}
+            HoldToStop(dancing?session.Controls.Drop:null);
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
             if(handGear.Count>0&&gearKeys)
@@ -949,7 +945,7 @@ namespace Festival.Presentation
             }
         }
 
-        // DANCE-12: G pressed mid-dance (`key`; K2: E mid-talk; null otherwise) and held FestivalHudText.HoldToStopSeconds stops it,
+        // DANCE-12: G pressed mid-dance (`key`; null otherwise) and held FestivalHudText.HoldToStopSeconds stops it,
         // once; the fill shows how far along. A key already down as it began, or the menu opening, starts the hold over.
         private void HoldToStop(InputAction key)
         {
@@ -1006,20 +1002,62 @@ namespace Festival.Presentation
         // picked this frame (a click picks one itself). In play its top stays under Night 2's lowest crew card (.660, a crew of 8) and
         // the notice it pushes down, its foot above the gear bar (.148). With the menu open it moves beside the pass, over the dimmer,
         // so the freed pointer can click a reply, unless the crew list holds that spot.
+        private void OnEnable(){if(session!=null)session.ConsumeMenuPress=ConsumeChatMenu;}
+        private void OnDisable()
+        {
+            if(session!=null&&session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;
+            sellerTalk.End();chatWindow?.ResetSession();
+        }
+        private void ResetChatForSession()
+        {
+            if(chatConnectionGeneration==session.ConnectionGeneration)return;
+            chatConnectionGeneration=session.ConnectionGeneration;sellerTalk.End();chatWindow?.ResetSession();
+        }
+        private bool ConsumeChatMenu()
+        {
+            ResetChatForSession();
+            var state=session.State;var player=session.LocalPlayer;
+            if(state==null||player==null)return false;
+            chatWindow.CloseKey=session.Controls.Label(session.Controls.Menu).ToUpperInvariant();
+            if(sellerTalk.Visible){sellerTalk.End();session.MenuOpen=false;return true;}
+            var live=FestivalChatWindow.LiveChat(state,player);
+            if(live!=null&&!chatWindow.IsDismissed(state,live))
+            {
+                chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion);
+                chatWindow.Dismiss();session.Command("EndChat",live.Id);session.MenuOpen=false;return true;
+            }
+            var outcome=session.PendingConversationOutcome;
+            if(outcome!=null){session.DismissConversationOutcome(outcome.DeliveryId);chatWindow.Dismiss();session.MenuOpen=false;return true;}
+            if(chatWindow.Open){chatWindow.Dismiss();session.MenuOpen=false;return true;}
+            if(!session.MenuOpen)crewOpen=state.Phase=="Playing";
+            return false;
+        }
+
         private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
         {
             if(chatBesidePass!=showMenu){chatBesidePass=showMenu;Place(Rect(chatWindow.gameObject),showMenu?.735f:.60f,.155f,showMenu?.985f:.975f,.652f);}
             bool covered=showMenu&&crewOpen;
             // CAMP-1: at camp the window may be Marigold's talk instead, which the host knows nothing of; she faces whoever talks to her.
+            chatWindow.CloseKey=session.Controls.Label(session.Controls.Menu).ToUpperInvariant();
+            var outcome=session.PendingConversationOutcome;
             bool live=!covered&&(sellerTalk.Follow(state,player,Time.unscaledTime,session.Profile.Data.ReducedMotion)
-                ||chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
+                ||outcome==null&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
+            if(!covered&&outcome!=null)
+            {
+                bool leave=state.Phase!="Playing"||player.InteractionId!=""||!chatWindow.OutcomeWithinReach(outcome,state,player)&&player.Life!="Detained";
+                chatWindow.FollowOutcome(outcome,Time.unscaledTime,session.Profile.Data.ReducedMotion,leave);
+                if(chatWindow.OutcomeDisplayed)session.AcknowledgeConversationOutcome(outcome);
+                if(!chatWindow.Open)session.DismissConversationOutcome(outcome.DeliveryId);
+            }
+            var shown=FestivalChatWindow.LiveChat(state,player);
+            if(live&&chatWindow.Open&&shown!=null)session.AcknowledgeConversationTurn(shown);
             if(world!=null&&world.CampSeller!=null)sellerTalk.Face(world.CampSeller,player,Time.unscaledDeltaTime);
             if(covered)chatWindow.Close();
             if(chatReply>=0){if(live)chatWindow.Pick(chatReply);chatReply=-1;}
             if(chatWindow.Open)dialoguePanel.SetActive(false);
             // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
             // equip.
-            inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)||sellerTalk.Open?"":"1–3 EQUIP     ")+"Q USE     G DROP";
+            inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open?"":"1–3 EQUIP     ")+"Q USE     G DROP";
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)
@@ -1123,8 +1161,8 @@ namespace Festival.Presentation
             noteViews.Add(note);note.gameObject.SetActive(false);
         }
 
-        // DANCE-12: the fill under "HOLD G TO STOP DANCING", `held` of the way to the stop; none at 0. K2: and the one across the
-        // prompt's "HOLD E TO WALK AWAY". Only one shows: the lanes are up for a dance, the prompt for a talk.
+        // DANCE-12: the fill under "HOLD G TO STOP DANCING", `held` of the way to the stop; none at 0.
+        // The legacy prompt fill shares this API, but chat input never starts a hold.
         public void ShowStopHold(float held)
         {
             stopHoldFill.gameObject.SetActive(held>0);walkHoldFill.gameObject.SetActive(held>0);
@@ -1456,13 +1494,13 @@ namespace Festival.Presentation
             }
             // DANCE-12: mid-dance E runs nothing, not even the cancel listed first, so a stray E can't stop it or start a buy, a
             // dance or a gear offer from the list; the lane's bottom line says to hold G (UpdateKeyboard). The list stays clickable.
-            // K2: mid-talk too, and the prompt says to hold E to walk away.
+            // Mid-talk E also runs nothing; the prompt names the effective Menu binding to walk away.
             bool talking=FestivalHudText.WalksOutByHold(state,player);
             if(FestivalHudText.StopsByHold(state,player)||talking)primaryAction=null;
             // POLO-2: up on the Ferris wheel nothing is worth E; the prompt counts the turn down instead.
             string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
             if(riding!=""){prompt.text=riding;primaryAction=null;}
-            else if(talking)prompt.text=FestivalHudText.WalkAway;
+            else if(talking)prompt.text=session.Controls.Label(session.Controls.Menu).ToUpperInvariant()+" TO WALK AWAY";
             else prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
             // ECON-3: beside a festivalgoer or a cop, the strip lists what else there is, each a click away in the Esc menu's list.
             nearbyLabels.Clear();
@@ -1592,7 +1630,7 @@ namespace Festival.Presentation
             rosterPanel.GetComponent<Image>().color=high?new Color(.01f,.025f,.03f,1):new Color(.025f,.064f,.071f,.95f);
             reticle.GetComponent<Image>().color=high?new Color(1,.95f,.71f,1):new Color(.88f,.90f,.74f,.65f);
         }
-        private void OnDestroy(){if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
+        private void OnDestroy(){if(session!=null&&session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
         private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(null);session.Host(nameField.text,port);}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(addressField.text);session.Join(nameField.text,addressField.text,port);}

@@ -216,7 +216,8 @@ namespace Festival.Tests
             Assert.That(game.Execute(tripper.Id,new GameCommand{Id="end_check_"+tripper.InteractionId,Kind="EndChat",TargetId=tripper.InteractionId}).Accepted,Is.True);
             mine=FestivalSession.ViewFor(game,tripper.Id);
             // DIALOG-6: an ended chat stays up only until its last answer is read (below), long before 30 s.
-            Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,30,false)||window.Open,Is.False,"the window closes after the chat");
+            Assert.That(window.Follow(mine,Me(mine,tripper.Id),mine.SimulationSeconds,30,false),Is.False,"the chat has ended");
+            Assert.That(window.Open,Is.True,"the terminal transcript stays until an explicit close");
             var dance=game.Execute(tripper.Id,new GameCommand{Id="hud_dance",Kind="Dance",TargetId=npc.Id});
             Assert.That(dance.Accepted,Is.True,"setup: the tripper dances with them: "+dance.Reason);
             mine=FestivalSession.ViewFor(game,tripper.Id);
@@ -255,11 +256,13 @@ namespace Festival.Tests
             Assert.That(window.Open&&window.Shown(window.Bubbles-1)==answer,Is.True,"their answer is up, whole, until it has been for its reading time");
             window.Follow(view,me,view.SimulationSeconds,read+FestivalChatWindow.FadeSeconds/2,false);
             var fade=window.GetComponent<UnityEngine.CanvasGroup>();
-            Assert.That(window.Open&&fade!=null&&fade.alpha>.1f&&fade.alpha<.9f,Is.True,"then the window fades");
+            Assert.That(window.Open&&fade!=null&&fade.alpha==1,Is.True,"the terminal window stays at full opacity");
             window.Follow(view,me,view.SimulationSeconds,read+FestivalChatWindow.FadeSeconds+.01f,false);
-            Assert.That(window.Open,Is.False,"and hides");
+            Assert.That(window.Open,Is.True,"it still stays after the old fade deadline");
             window.Follow(view,me,view.SimulationSeconds,read+10,false);
-            Assert.That(window.Open,Is.False,"for good");
+            Assert.That(window.Open,Is.True,"typing and reading have no terminal deadline");
+            window.Dismiss();window.Follow(view,me,view.SimulationSeconds,read+30,false);
+            Assert.That(window.Open,Is.False,"explicit dismissal stays dismissed");
         }
 
         // A chat check that completes .1 s after a question was asked leaves the answer up to read.
@@ -308,7 +311,7 @@ namespace Festival.Tests
             tripper.X=npc.X+.3f;tripper.Z=npc.Z;Ask(game,tripper,npc,window,40,"hud_last");Leave(game,tripper,"hud_last_leave");Follow(window,game,tripper,40.1f);
             Assert.That(window.Open&&window.Lingering,Is.True,"setup: the last ended chat is up");
             window.Dismiss();
-            Assert.That(window.Open||window.Lingering,Is.False,"G closes it");
+            Assert.That(window.Open||window.Lingering,Is.False,"Escape closes it");
             Follow(window,game,tripper,40.2f);
             Assert.That(window.Open,Is.False,"for good");
         }
