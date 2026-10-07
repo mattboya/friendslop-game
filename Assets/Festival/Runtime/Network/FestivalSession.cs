@@ -81,6 +81,8 @@ namespace Festival.Network
         // MUSIC-4: stage-linked charts carry StageTrack (0 preserves legacy timing), a world-time first head, its chart-relative
         // delay and half/one/two authored beat stride. Host, HUD and replay remap the same tuned draws and hold endpoints through
         // exact sample loop joins. Simulation countdown and the late-input verdict retain their separate clock semantics.
+        // Public speech retains eight sequenced utterances with real speaker IDs, world-time expiry and same-ID retractions.
+        // Public snapshots/projected latest lines contain only accepted spoken turns/replies/barks; checks and outcomes stay private.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -794,7 +796,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
+                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
             }
             if(!spirit)
             {
@@ -809,6 +811,24 @@ namespace Festival.Network
                 view.Drops=source.Drops;view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
                 // GAS-2: the level's Giggle Tank, public to all but spirits.
                 view.GiggleTankSpot=source.GiggleTankSpot;view.GiggleTankFound=source.GiggleTankFound;
+            }
+            // Only explicit accepted publishers feed this whitelist. Legacy/private NpcSpeech is never promoted into public speech.
+            view.SpeechSequence=spirit?0:source.SpeechSequence;
+            foreach(var delivery in (source.PublicSpeech??new List<PublicSpeechState>()).TakeLast(FestivalSimulation.PublicSpeechLimit))
+            {
+                var speakerPlayer=view.Players.Find(p=>p.Id==delivery.SpeakerId);
+                bool playerVisible=speakerPlayer!=null&&speakerPlayer.Connected&&(spirit==(speakerPlayer.Life=="Spirit"));
+                if(!playerVisible&&!view.Npcs.Exists(n=>n.Id==delivery.SpeakerId))continue;
+                view.PublicSpeech.Add(new PublicSpeechState{DeliveryId=delivery.DeliveryId,Sequence=delivery.Sequence,SpeakerId=delivery.SpeakerId,Speaker=delivery.Speaker,Text=delivery.Retracted?"":delivery.Text,StartedAtWorldSeconds=delivery.StartedAtWorldSeconds,ExpiresAtWorldSeconds=delivery.ExpiresAtWorldSeconds,Retracted=delivery.Retracted});
+            }
+            foreach(var copy in view.Players)
+            {
+                var latest=source.PublicSpeech?.FindLast(d=>d.OwnerId==copy.Id);if(latest==null||!view.PublicSpeech.Exists(d=>d.DeliveryId==latest.DeliveryId))continue;
+                copy.SpeechDeliveryId=latest.DeliveryId;copy.SpeechSequence=latest.Sequence;copy.SpeechById=latest.SpeakerId;
+                copy.SpeechAtWorldSeconds=latest.StartedAtWorldSeconds;copy.SpeechUntilWorldSeconds=latest.ExpiresAtWorldSeconds;
+                // Ordinary expiry retains the literal for an already-shown compatibility caption; only a retraction clears it.
+                if(!latest.Retracted){copy.NpcSpeech=latest.Text;copy.NpcSpeaker=latest.Speaker;}
+                copy.NpcSpeechUntil=source.SimulationSeconds+(FestivalSimulation.SpeechActive(source,latest)?FestivalSimulation.SpeechRemainingSeconds(source,copy):0);
             }
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then

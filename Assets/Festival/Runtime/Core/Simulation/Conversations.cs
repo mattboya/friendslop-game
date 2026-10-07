@@ -35,7 +35,7 @@ namespace Festival.Core
             if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
-            if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;}else AddTurn(i,p);
+            if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;PublishSpeech(p,npc.Id,"FESTIVALGOER",TrustAsk,i.StartSeconds+i.DurationSeconds-State.SimulationSeconds,i.Id);}else AddTurn(i,p);
             return Ok();
         }
         // A festivalgoer this wary of p, or one of the 1 in 4 ravers and burners who always want a dance first (by their id and the
@@ -56,7 +56,7 @@ namespace Festival.Core
             if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject("Too late: that moment has passed");
             if(c.Amount<0||c.Amount>2)return Reject("Pick reply 1, 2 or 3");
             AcknowledgeGrammar(p,turn.GrammarKeys,i.Id+":"+(i.Turns.Count-1));
-            turn.Pick=c.Amount;
+            turn.Pick=c.Amount;PublishSpeech(p,p.Id,p.Name,turn.Replies[c.Amount],7,i.Id);
             if(i.Turns.Count<ConversationTurns)AddTurn(i,p);else FinishInteraction(i,p);
             return Ok(i.Status=="Police bust"?NarcBust:"Accepted");
         }
@@ -70,6 +70,7 @@ namespace Festival.Core
             int dose=DoseOf(p);var random=new ContentRandom(TurnSeed(i,t));bool clear=t>0&&Told(random,i.Turns[t-1]);
             var history=new DialogueHistory{Seen=new System.Collections.Generic.List<string>(p.Dialogue.Seen??new System.Collections.Generic.List<string>())};
             i.Turns.Add(ConversationLines.Turn(ConversationLines.Topic(i.Kind),persona,role,State.FestivalIndex,t,t==0?-1:Graded(i.Turns[t-1]),clear,dose>=3?2:dose>=1?1:0,random,history));
+            PublishSpeech(p,i.TargetId,i.Kind=="Police"?"SECURITY":"FESTIVALGOER",i.Turns[t].Line,7,i.Id);
             i.DurationSeconds=UntimedChat(i)?0:Math.Min(State.SimulationSeconds,i.StartSeconds+i.DurationSeconds)+ReplySeconds-i.StartSeconds;
             if(t==ConversationTurns-1&&(i.Kind=="Conversation"||i.Kind=="Buy"))i.Hunch=Hunch(i,role);
         }
@@ -95,7 +96,7 @@ namespace Festival.Core
             {
                 double danced=Judge(i);int delta=RhythmDelta(danced);
                 foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,delta);
-                if(danced<TrustScore){i.Score=0;p.LastRhythmScore=0;p.Performances++;p.NpcSpeaker="FESTIVALGOER";p.NpcSpeech="Nah. Not feeling it.";p.NpcSpeechUntil=State.SimulationSeconds+7;return true;}
+                if(danced<TrustScore){i.Score=0;p.LastRhythmScore=0;p.Performances++;PublishSpeech(p,i.TargetId,"FESTIVALGOER","Nah. Not feeling it.",7,i.Id);return true;}
                 i.DialogueText="";i.DurationSeconds=State.SimulationSeconds-i.StartSeconds;AddTurn(i,p);return false;
             }
             if(i.Turns.Count<ConversationTurns){AddTurn(i,p);return false;}
@@ -153,7 +154,7 @@ namespace Festival.Core
                 if(i.Status=="Police bust")outcome.Notice=NarcBust;
             }
             p.ConversationOutcomes.Add(outcome);while(p.ConversationOutcomes.Count>8)p.ConversationOutcomes.RemoveAt(0);
-            if(i.Kind!="Police"){p.NpcSpeaker=outcome.Speaker;p.NpcSpeech=outcome.Notice==NarcBust?NarcBust:outcome.Reaction;p.NpcSpeechUntil=State.SimulationSeconds+7;}
+            if(i.Kind!="Police"&&!(i.TrustDance&&i.Turns.Count==0)){p.SpeechDeliveryId="";p.SpeechById="";p.SpeechSequence=0;p.SpeechAtWorldSeconds=p.SpeechUntilWorldSeconds=-1;p.NpcSpeaker=outcome.Speaker;p.NpcSpeech=outcome.Notice==NarcBust?NarcBust:outcome.Reaction;p.NpcSpeechUntil=State.SimulationSeconds+7;}
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ChatDiagnostic?.Invoke("OutcomeDelivered",i.Kind,State.RoundId,State.SimulationSeconds);
 #endif

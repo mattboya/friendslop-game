@@ -95,7 +95,14 @@ namespace Festival.Tests
                     if(outcome.Notice!="")Assert.That(lines,Does.Contain(outcome.Notice));
                     Assert.That(window.Header,Is.EqualTo("CHAT OVER  •  F10 CLOSE"));Assert.That(window.Replies,Is.EqualTo(0));
                     Assert.That(session.Profile.Data.SeenDialogue,Is.SupersetOf(outcome.GrammarKeys),"displayed terminal grammar is remembered privately");
-                    Assert.That(JsonUtility.ToJson(FestivalSession.ViewFor(sim,"private_friend")),Does.Not.Contain(outcome.DeliveryId).And.Not.Contain(outcome.Reaction));
+                    var friendView=FestivalSession.ViewFor(sim,"private_friend");string friendJson=JsonUtility.ToJson(friendView);
+                    Assert.That(friendJson,Does.Not.Contain(outcome.DeliveryId));
+                    if(trust)Assert.That(friendView.PublicSpeech.Any(d=>d.SpeakerId==npc.Id&&d.Text==outcome.Reaction&&!d.Retracted),Is.True,"the neutral failed-trust rejection is intentionally spoken publicly");
+                    else Assert.That(friendJson,Does.Not.Contain(outcome.Reaction),"authored final grades remain private");
+                    var remoteOwner=friendView.Players.Find(p=>p.Id==player.Id);Assert.That(remoteOwner.ConversationOutcomes,Is.Empty);Assert.That(remoteOwner.Dialogue.Seen,Is.Empty);
+                    foreach(string key in outcome.GrammarKeys)Assert.That(friendJson,Does.Not.Contain(key),"private terminal grammar is never public speech metadata");
+                    if(outcome.Notice!="")Assert.That(friendJson,Does.Not.Contain(outcome.Notice));
+                    if(outcome.Hunch!="")Assert.That(friendJson,Does.Not.Contain(outcome.Hunch));
                     if(scenario=="smooth")
                     {
                         player.X=24;yield return null;yield return null;

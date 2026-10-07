@@ -35,7 +35,10 @@ namespace Festival.Core
         public int Performances, CampAntics; public double LastRhythmScore=-1;
         // CAMP-3: shared last poke; the cumulative session discovery mask reaches only this player's own view.
         public string LastCampEggId="",LastCampEggLine=""; public int CampEggSequence,FoundCampEggMask; public double LastCampEggAt=-1;
-        public int EscapeProgress; public string VisualPose="Idle",NpcSpeech="",NpcSpeaker=""; public double NpcSpeechUntil;
+        public int EscapeProgress; public string VisualPose="Idle",NpcSpeech="",NpcSpeaker="",SpeechById=""; public double NpcSpeechUntil;
+        // Public speech identity is independent of text/expiry. -1 world timestamps preserve legacy snapshots.
+        public string SpeechDeliveryId=""; public long SpeechSequence;
+        public double SpeechAtWorldSeconds=-1,SpeechUntilWorldSeconds=-1;
         public int VisualDanceStepSequence,VisualDanceStepDirection=-1;
         public string VisualOfferItem="",VisualOfferTarget="",VisualReceivedItem="";
         public int VisualReceiptSequence;
@@ -46,6 +49,12 @@ namespace Festival.Core
         public long DialogueRevision,ConversationOutcomeSequence,ConversationDismissedSequence;
         public string ConversationThreadId="",ConversationDismissedId="";
         public List<ConversationOutcome> ConversationOutcomes=new List<ConversationOutcome>();
+    }
+    [Serializable] public sealed class PublicSpeechState {
+        public string DeliveryId="",SpeakerId="",Speaker="",Text="";
+        public long Sequence; public double StartedAtWorldSeconds,ExpiresAtWorldSeconds; public bool Retracted;
+        // Host routing only. ViewFor copies the public delivery fields explicitly.
+        public string OwnerId="",InteractionId="";
     }
     [Serializable] public sealed class ConversationOutcome {
         public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="";
@@ -154,6 +163,7 @@ namespace Festival.Core
         // VISION-6: when a creature next hints at a true vision (HintVisions), on the level clock; 0, not armed (older snapshots arm
         // on their first step). Host-only: ViewFor builds the view field by field and leaves it out.
         public double NextVisionHintAt;
+        public long SpeechSequence; public List<PublicSpeechState> PublicSpeech=new List<PublicSpeechState>();
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();
         public List<CommittedCommand> Commands=new List<CommittedCommand>(); public List<DropState> Drops=new List<DropState>();

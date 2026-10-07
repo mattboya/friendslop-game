@@ -4,8 +4,8 @@ namespace Festival.Core
     /// player out and stops them. Stowing or concealing the stock ends visibility evidence; a talk scoring .75 waves them on,
     /// ditching every unit in sight lets the cop claim it, and keeping out of sight for BoltSeconds loses the stop (Sees: 12 m,
     /// 5 m in a dust storm, and walls). Stronger witnessed-deal and ignored-stop evidence survives concealment. Ignored
-    /// for StopArrestSeconds in its sight with the stock, it becomes an arrest warning, warned at StopWarnSeconds. The cop's lines
-    /// reach only the stopped player, as festivalgoers' chat does (NpcSpeech).</summary>
+    /// for StopArrestSeconds in its sight with the stock, it becomes an arrest warning, warned at StopWarnSeconds. The cop's accepted barks
+    /// are public speech from the actual cop; case/evidence state remains private.</summary>
     public sealed partial class FestivalSimulation
     {
         /// <summary>How long a stop may be ignored in the cop's sight before it is an arrest warning (the HUD's stop notice says so).</summary>
@@ -17,11 +17,11 @@ namespace Festival.Core
         static bool Arrests(EvidenceState e)=>e.Kind=="WitnessedDeal"||e.Kind=="IgnoredStop";
         bool Stopped(PlayerState p)=>State.Npcs.Exists(n=>n.Kind=="Cop"&&n.Evidence.Exists(e=>e.PlayerId==p.Id&&e.Kind=="VisibleStock"));
         bool TalkingTo(PlayerState p,NpcState cop){var i=Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&i.Kind=="Police"&&i.TargetId==cop.Id;}
-        void Bark(PlayerState p,string line){p.NpcSpeaker="SECURITY";p.NpcSpeech=line;p.NpcSpeechUntil=State.SimulationSeconds+BarkSeconds;}
+        void Bark(NpcState cop,PlayerState p,string line){RetractSpeech(p,"",true);PublishSpeech(p,cop.Id,"SECURITY",line,BarkSeconds);}
         // K2: a stop over without a word (waved on, bolted, ditched unseen) takes back what the guard said, so the HUD's card drops a
         // call-out or a warning it still holds unread (FestivalTalkLine).
-        static void Hush(PlayerState p){if(p.NpcSpeaker=="SECURITY")p.NpcSpeech="";}
-        EvidenceState StartStop(NpcState cop,PlayerState p){var e=new EvidenceState{PlayerId=p.Id,Kind="VisibleStock",StartSeconds=State.SimulationSeconds,SeenSeconds=State.SimulationSeconds};cop.Evidence.Add(e);Bark(p,StopBark);
+        void Hush(PlayerState p){RetractSpeech(p,"",true);var talk=Interaction(p.InteractionId);if(talk!=null&&talk.Kind=="Police")RetractSpeech(p,talk.Id);if(p.NpcSpeaker=="SECURITY")p.NpcSpeech="";}
+        EvidenceState StartStop(NpcState cop,PlayerState p){var e=new EvidenceState{PlayerId=p.Id,Kind="VisibleStock",StartSeconds=State.SimulationSeconds,SeenSeconds=State.SimulationSeconds};cop.Evidence.Add(e);Bark(cop,p,StopBark);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ChatDiagnostic?.Invoke("StockVisibility","stop:"+cop.Id+":"+p.Id,State.RoundId,State.SimulationSeconds);
 #endif
@@ -30,7 +30,7 @@ namespace Festival.Core
         void WaveOn(string copId,PlayerState p){var e=StopBy(copId,p);if(e!=null){e.Kind="WavedOn";Hush(p);}}
         // K2: a talk that doesn't wave p on leaves the stop as it was, and the warning Pursue held back for it comes as it ends, if
         // the stop is past StopWarnSeconds and not yet an arrest warning.
-        void HeardOut(string copId,PlayerState p){var e=StopBy(copId,p);if(e==null)return;double held=State.SimulationSeconds-e.StartSeconds;if(held>=StopWarnSeconds&&held<StopArrestSeconds)Bark(p,WarnBark);}
+        void HeardOut(string copId,PlayerState p){var e=StopBy(copId,p);if(e==null)return;double held=State.SimulationSeconds-e.StartSeconds;if(held>=StopWarnSeconds&&held<StopArrestSeconds)Bark(State.Npcs.Find(n=>n.Id==copId),p,WarnBark);}
         EvidenceState StopBy(string copId,PlayerState p)=>State.Npcs.Find(n=>n.Id==copId)?.Evidence.Find(x=>x.PlayerId==p.Id&&x.Kind=="VisibleStock");
 
         // Whether cop goes after p this tick on evidence e, turned to face them. Concealment retracts the call-out; ditching all
@@ -46,7 +46,7 @@ namespace Festival.Core
             // A stop saved before ESC-2 has no start: it is timed from the load, the first tick after it.
             if(e.StartSeconds<0)e.StartSeconds=e.SeenSeconds=now;
             bool seen=Sees(cop,p);if(seen)e.SeenSeconds=now;
-            if(!StockVisible(p)){if(seen&&!CarriesStock(p)&&!ReservedStockOut(p)){Bark(p,DitchBark);ClaimDitchedStock(cop);}else Hush(p);cop.Evidence.Remove(e);
+            if(!StockVisible(p)){if(seen&&!CarriesStock(p)&&!ReservedStockOut(p)){Bark(cop,p,DitchBark);ClaimDitchedStock(cop);}else Hush(p);cop.Evidence.Remove(e);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 ChatDiagnostic?.Invoke("StockVisibility","cleared:"+cop.Id+":"+p.Id,State.RoundId,now);
 #endif
@@ -54,7 +54,7 @@ namespace Festival.Core
             if(now-e.SeenSeconds>=BoltSeconds){Hush(p);cop.Evidence.Remove(e);return false;}
             double held=now-e.StartSeconds;
             // K2: mid-talk the warning waits for the talk's end (HeardOut), as the arrest warning does.
-            if(held>=StopWarnSeconds&&held-dt<StopWarnSeconds&&!TalkingTo(p,cop))Bark(p,WarnBark);
+            if(held>=StopWarnSeconds&&held-dt<StopWarnSeconds&&!TalkingTo(p,cop))Bark(cop,p,WarnBark);
             // The usual 4 s from an arrest warning to detention, as for a witnessed deal (RecordDeal).
             if(held>=StopArrestSeconds&&seen&&!TalkingTo(p,cop)){e.Kind="IgnoredStop";e.DetainAt=now+4;}
             return true;
