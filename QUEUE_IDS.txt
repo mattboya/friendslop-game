@@ -1,0 +1,37 @@
+NET-2 — A version guard: changing charts or the spin without raising ProtocolVersion fails a test
+TRIP-11 — Tongue Stamps and Fun Guys make the tripper's world wiggle and turn more colourful
+PLAYA-6 — Ember Playa art car leftovers from wave 2026-10-01 (2)
+DANCE-11 — Group-dance tests guard a check dance or Dance pressed at the last moment
+TRIP-14 — The clue cloud's landmark is loose and patchy, different each level, so the tripper has to work out what it shows
+LOOP-4 — Dying spins a small corner wheel everyone sees: 1 in 4, your cash drops where you fell for friends to pick up
+DIALOG-2 — Lines pop up in crisp TextMeshPro speech bubbles over whoever says them, typed out, each voice its own babble
+GAS-4 — Back-to-back Giggle Balloons build from gentle to strong, then ease back as each wears off
+MINI-2 — Drum Circle: everyone plays a part, and the worst drummer decides
+MINI-3 — Light Show: a stranger's show distracts you; remember what happened around it
+TRIP-9 — Trip presentation leftovers from wave 2026-09-30 (2)
+PLAYA-5 — Art-car riders dance four-lane deck sets, and festivalgoers the car passes tip toward the day's quota
+TEST-3 — Test flakes and test-helper leftovers from wave 2026-10-01
+TRIP-13 — Each substance moves the rhythm arrows its own way, more so with every dose, and three of them change how a dosed player walks
+GAS-3 — A grabbed Giggle Tank fills a hand slot and pays $25 into the camp stash only once it reaches the camp gate; the whole crew hears a deep "oh yeah!" when it is grabbed
+DANCE-10 — From Night 1, some arrows are holds: press on the beat and keep the key down until the tail ends
+SET-1 — A real settings screen: audio, graphics, controls with key rebinding, accessibility and voice, reachable from the title screen and in game
+SPIN-4 — SPIN-3 leftovers from wave 2026-10-01 (2)
+MINI-5 — MINI-1 leftovers from wave 2026-10-01 (2)
+MINI-6 — MINI-4 leftovers from wave 2026-10-01 (2)
+ECON-5 — ECON-3 leftovers from wave 2026-10-01 (2)
+DIALOG-9 — Chats wait for you: no reply timer, nothing closes on its own, and Esc ends the conversation
+ECON-6 — Camp always has a little stock: each player can buy one starter unit per level, so the first sale never depends on finding a seller
+HUD-12 — You can put your stock away: empty slots and the wheel give you free hands, and security only sees stock that's out
+DIALOG-8 — DIALOG-3 leftovers from wave 2026-10-01 (2)
+CROWD-6 — A swarm surrounds you instead of piling into one spot: festivalgoers closing in keep their own place and never stand inside each other
+LOOP-7 — Your gear never vanishes without a word: a stray G can't throw it away, and dying or a restart says what you lost
+MUSIC-4 — Dances ride the stage music: the arrows land on the beat of the track the festival is playing
+CROWD-7 — The main stage looks like a show: a crew of performers dances up there with the DJ
+CAMP-3 — Camp is full of dumb little secrets: a hidden gnome, a DO NOT PRESS button, a sad flamingo and more, each with its own gag
+GAS-6 — Taking a Giggle Balloon makes a big, silly inhale that everyone nearby hears
+POI-5 — Walking with poi, the heads wheel beside the body, never through it
+GEAR-1 — The confetti cannon goes off with a bang: a burst everyone sees, a pop, and a line saying who it fooled
+DEV-1 — In a development build the host can pick either festival at camp, without clearing Palm Mirage first
+ECON-8 — Now and then you spot cash lying on the ground at the festival, and whoever grabs it first keeps it
+POI-4 — POI-1 leftovers from wave 2026-10-03
+MUSIC-5 — All seven supplied music loops are playable in the game
