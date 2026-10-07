@@ -24,6 +24,8 @@ namespace Festival.Presentation
             public string action="",id="",path=null,interactions=null,processors=null;
         }
         private readonly LocalProfile profile;
+        private FestivalInput input;
+        private FestivalTapCalibration calibration;
         private readonly IFestivalDisplay display;
         private sealed class PlatformDisplay:IFestivalDisplay
         {
@@ -65,6 +67,22 @@ namespace Festival.Presentation
         {
             this.profile=profile??throw new ArgumentNullException(nameof(profile));
             LastError=profile.LastError;this.display=display??new PlatformDisplay();
+        }
+        public void AttachInput(FestivalInput controls){input=controls;input?.SynchronizeBindings();}
+        // Positive milliseconds mean the taps arrive late: subtract only at the judgment boundary.
+        public static double JudgmentSeconds(double chartSeconds,ProfileData data)
+        {
+            float offset=FiniteClamp(data?.TimingCalibrationMs??0,-200,200,0);
+            return Math.Max(0,chartSeconds-offset/1000.0);
+        }
+        public FestivalTapCalibration StartTapCalibration(AudioSource source)
+        {
+            calibration?.Dispose();calibration=new FestivalTapCalibration(this,source);return calibration;
+        }
+        internal string SaveCalibration(float milliseconds)
+        {
+            if(profile.ReadOnly)return Save();
+            Data.TimingCalibrationMs=FiniteClamp(milliseconds,-200,200,0);return Save();
         }
         // Only runtime clones are edited; every touched quality slot is restored on teardown.
         public void ApplyGraphics()
@@ -126,6 +144,7 @@ namespace Festival.Presentation
         private static float PresetScale(string preset)=>preset=="Low"?.75f:preset=="Medium"?.9f:1;
         public void Dispose()
         {
+            calibration?.Dispose();calibration=null;
             if(runtimePipeline==null)return;
             foreach(var entry in originalPipelines)
             {
@@ -152,6 +171,7 @@ namespace Festival.Presentation
         public string Save()
         {
             if(runtimePipeline!=null)ApplyGraphics();
+            input?.SynchronizeBindings();
             LastError=profile.Save();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(LastError=="")Debug.Log("[Settings] Saved local settings.");
@@ -175,7 +195,7 @@ namespace Festival.Presentation
                     break;
                 case "Controls":
                     Data.MouseSensitivity=defaults.MouseSensitivity;Data.InvertY=defaults.InvertY;Data.ThirdPerson=defaults.ThirdPerson;
-                    Data.TimingCalibrationMs=defaults.TimingCalibrationMs;Data.BindingOverridesJson=defaults.BindingOverridesJson;
+                    Data.TimingCalibrationMs=defaults.TimingCalibrationMs;Data.BindingOverridesJson="{\"bindings\":[]}";
                     break;
                 case "Accessibility":
                     Data.ReducedMotion=defaults.ReducedMotion;Data.HighContrast=defaults.HighContrast;Data.CameraShake=defaults.CameraShake;Data.TextScale=defaults.TextScale;
@@ -269,4 +289,80 @@ namespace Festival.Presentation
             catch(ArgumentException){return false;}
         }
     }
+    /// <summary>A short, scheduled local audio exercise. Its samples never read a microphone or shift music/chart transport.</summary>
+    public sealed class FestivalTapCalibration:IDisposable
+    {
+        public const int BeatCount=8;
+        public const double BeatSeconds=.5;
+        private readonly FestivalSettings settings;
+        private readonly AudioSource source;
+        private readonly AudioClip originalClip,clip;
+        private readonly float originalPitch,originalVolume,originalSpatialBlend;
+        private readonly bool originalLoop,originalPlayOnAwake;
+        private readonly bool[] tapped=new bool[BeatCount];
+        private readonly List<double> offsets=new List<double>();
+        private bool disposed,completed;
+        public double ScheduledStartDspSeconds {get;}
+        public int SampleCount=>offsets.Count;
+        public bool Completed=>completed;
+        internal FestivalTapCalibration(FestivalSettings settings,AudioSource source)
+        {
+            this.settings=settings;this.source=source??throw new ArgumentNullException(nameof(source));
+            if(source.isPlaying)throw new InvalidOperationException("Use an idle audio source for calibration.");
+            originalClip=source.clip;originalPitch=source.pitch;originalVolume=source.volume;originalLoop=source.loop;
+            originalSpatialBlend=source.spatialBlend;originalPlayOnAwake=source.playOnAwake;
+            const int rate=24000;var samples=new float[rate*4];
+            for(int beat=0;beat<BeatCount;beat++)for(int sample=0;sample<rate/10;sample++)
+            {
+                double time=sample/(double)rate;
+                samples[beat*rate/2+sample]=(float)(Math.Sin(2*Math.PI*880*time)*Math.Exp(-time*70)*.5);
+            }
+            clip=AudioClip.Create("Festival calibration pulses",samples.Length,1,rate,false);clip.SetData(samples,0);
+            source.clip=clip;source.pitch=1;source.loop=false;source.playOnAwake=false;source.spatialBlend=0;source.volume=FestivalSettings.EffectsGain(settings.Data);
+            ScheduledStartDspSeconds=AudioSettings.dspTime+.25;source.PlayScheduled(ScheduledStartDspSeconds);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log("[Settings] Scheduled local tap calibration; microphone unused.");
+#endif
+        }
+        // The UI passes the audio-clock timestamp captured on the actual tap, not its chart or frame time.
+        public bool Tap(double dspSeconds)
+        {
+            if(disposed||completed||double.IsNaN(dspSeconds)||double.IsInfinity(dspSeconds))return false;
+            double elapsed=dspSeconds-ScheduledStartDspSeconds;
+            if(elapsed<-.25||elapsed>(BeatCount-1)*BeatSeconds+.25)return false;
+            int beat=(int)Math.Round(elapsed/BeatSeconds,MidpointRounding.AwayFromZero);
+            if(beat<0||beat>=BeatCount||tapped[beat])return false;
+            double offset=(elapsed-beat*BeatSeconds)*1000;
+            if(Math.Abs(offset)>250)return false;
+            tapped[beat]=true;offsets.Add(offset);return true;
+        }
+        public string Complete()
+        {
+            if(disposed)return "Calibration has closed.";
+            if(completed)return "";
+            if(offsets.Count<4)return "Tap at least four beats before saving calibration.";
+            var sorted=new List<double>(offsets);sorted.Sort();int middle=sorted.Count/2;
+            float offset=(float)(sorted.Count%2==0?(sorted[middle-1]+sorted[middle])/2:sorted[middle]);
+            string error=settings.SaveCalibration(offset);
+            if(error=="")
+            {
+                completed=true;source.Stop();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[Settings] Tap calibration saved; samples="+offsets.Count+" judgment_offset_ms="+settings.Data.TimingCalibrationMs.ToString("F1")+".");
+#endif
+            }
+            return error;
+        }
+        public void Dispose()
+        {
+            if(disposed)return;disposed=true;
+            if(source!=null&&source.clip==clip)
+            {
+                source.Stop();source.clip=originalClip;source.pitch=originalPitch;source.volume=originalVolume;source.loop=originalLoop;
+                source.spatialBlend=originalSpatialBlend;source.playOnAwake=originalPlayOnAwake;
+            }
+            if(Application.isPlaying)UnityEngine.Object.Destroy(clip);else UnityEngine.Object.DestroyImmediate(clip);
+        }
+    }
+
 }

@@ -51,7 +51,7 @@ namespace Festival.Presentation
         {
             string act=input.Label(input.Interact),chat=input.Label(input.Chat),drop=input.Label(input.Drop),reply=input.Label(input.Slot1)+"-"+input.Label(input.Slot3);
             var keys=new List<string>();
-            foreach(var action in input.Map.actions)keys.Add((action==input.Look?"Mouse":input.Label(action))+"  "+KeyUse(action.name));
+            foreach(var action in input.Map.actions)keys.Add(input.Label(action)+"  "+KeyUse(action.name));
             return new[]
             {
                 ("THE WEEKEND","A weekend is four levels: Day 1, Night 1, Day 2, Night 2. By day the crew sells its quota before sundown; by night it"
@@ -114,6 +114,7 @@ namespace Festival.Presentation
             "Slot1"=>"hand 1 • reply 1 in a talk or chat • vote 1 at the campfire","Slot2"=>"hand 2 • reply 2 in a talk or chat • vote 2 at the campfire",
             "Slot3"=>"hand 3 • reply 3 in a talk or chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
             "Spin"=>"hold to spin the poi in your hand",
+            "PushToTalk"=>"hold to talk (voice provider required)",
             "Rhythm0"=>"dance lane: left","Rhythm1"=>"dance lane: down","Rhythm2"=>"dance lane: up","Rhythm3"=>"dance lane: right",_=>"",
         };
     }

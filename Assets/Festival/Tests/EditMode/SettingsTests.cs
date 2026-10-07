@@ -1,6 +1,7 @@
 using UnityEngine.Rendering.Universal;
 using UnityEngine.Rendering;
 using System.Linq;
+using System.Collections;
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -11,24 +12,299 @@ using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
+using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
     public sealed class SettingsTests
     {
-        private string previousFolder,ownedFolder;
+        private string previousFolder,ownedFolder,previousPreferencesScope;
+        private readonly List<string> ownedBindingKeys=new List<string>();
         [SetUp]public void OwnATemporaryProfile()
         {
             previousFolder=LocalProfile.Folder;
             ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U04-settings-"+Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;
+            previousPreferencesScope=FestivalInput.PreferencesScope;FestivalInput.PreferencesScope="impl-U35-"+Guid.NewGuid().ToString("N");
+            ownedBindingKeys.Add("festival-bindings-"+FestivalInput.PreferencesScope+"-settings");
         }
         [TearDown]public void RemoveOnlyThisTestsProfile()
         {
-            LocalProfile.Folder=previousFolder;
+            LocalProfile.Folder=previousFolder;FestivalInput.PreferencesScope=previousPreferencesScope;
+            foreach(string key in ownedBindingKeys)PlayerPrefs.DeleteKey(key);ownedBindingKeys.Clear();
             if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
         }
+        [UnityTearDown]public IEnumerator LeaveOwnedPlayMode()
+        {
+            if(Application.isPlaying)yield return new ExitPlayMode();
+        }
         private void Write(string json)=>File.WriteAllText(Path.Combine(ownedFolder,"settings.json"),json);
+
+        [Test]public void SavedProfileBindingsAreAuthoritativeAcrossInputRecreation()
+        {
+            var profile=new LocalProfile("settings");
+            using(var input=new FestivalInput("settings"))
+            {
+                input.Move.ApplyBindingOverride(1,"<Keyboard>/i");
+                input.Interact.ApplyBindingOverride(0,"<Keyboard>/x");
+                input.Notes[2].ApplyBindingOverride(0,"<Keyboard>/u");
+                input.Notes[2].ApplyBindingOverride(1,"<Keyboard>/j");
+                input.Cycle.ApplyBindingOverride(0,"<Mouse>/scroll/x");
+                input.View.ApplyBindingOverride(0,"<Keyboard>/b");
+                profile.Data.BindingOverridesJson=input.Map.SaveBindingOverridesAsJson();Assert.That(profile.Save(),Is.Empty);
+            }
+            string key="festival-bindings-"+FestivalInput.PreferencesScope+"-settings";ownedBindingKeys.Add(key);
+            using(var legacy=new FestivalInput("unused"))
+            {
+                legacy.Interact.ApplyBindingOverride(0,"<Keyboard>/f");PlayerPrefs.SetString(key,legacy.Map.SaveBindingOverridesAsJson());
+            }
+            using(var input=new FestivalInput("settings"))
+            {
+                Assert.That(input.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/x"),"profile JSON takes priority over stale machine preferences");
+                Assert.That(input.Move.bindings[1].effectivePath,Is.EqualTo("<Keyboard>/i"));
+                Assert.That(input.Notes[2].bindings[0].effectivePath,Is.EqualTo("<Keyboard>/u"));
+                Assert.That(input.NoteKey(2),Is.EqualTo("J"));
+                Assert.That(input.Cycle.bindings[0].effectivePath,Is.EqualTo("<Mouse>/scroll/x"));
+                Assert.That(input.View.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/b"));
+                Assert.That(FestivalHudText.HowToPlay(input)[1].Text,Does.Contain("(X)"),"the actual how-to consumer names the effective action");
+            }
+        }
+
+        [Test]public void AuthoredActionAndBindingIdentitiesRemainStableAndUnique()
+        {
+            using(var first=new FestivalInput("settings"))using(var second=new FestivalInput("settings"))
+            {
+                var identities=new HashSet<Guid>();
+                foreach(var action in first.Map.actions)
+                {
+                    var next=second.Map.FindAction(action.name,true);
+                    Assert.That(next.id,Is.EqualTo(action.id),"authored action "+action.name);
+                    Assert.That(identities.Add(action.id),Is.True);
+                    for(int index=0;index<action.bindings.Count;index++)
+                    {
+                        Assert.That(next.bindings[index].id,Is.EqualTo(action.bindings[index].id),action.name+" binding "+index);
+                        Assert.That(identities.Add(action.bindings[index].id),Is.True);
+                    }
+                }
+            }
+        }
+
+        [Test]public void LegacyPreferencesImportOnlyUnambiguousActionsAndRemainUnchanged()
+        {
+            string key="festival-bindings-"+FestivalInput.PreferencesScope+"-settings";ownedBindingKeys.Add(key);
+            string legacy;
+            using(var map=new InputActionMap("Festival"))
+            {
+                map.AddAction("Interact",InputActionType.Button,"<Keyboard>/e").ApplyBindingOverride("<Keyboard>/x");
+                var move=map.AddAction("Move",InputActionType.Value);move.AddCompositeBinding("2DVector").With("Up","<Keyboard>/w");move.ApplyBindingOverride(1,"<Keyboard>/i");
+                var rhythm=map.AddAction("Rhythm2",InputActionType.Button,"<Keyboard>/upArrow");rhythm.AddBinding("<Keyboard>/w");rhythm.ApplyBindingOverride(1,"<Keyboard>/j");
+                map.AddAction("Cycle",InputActionType.Value,"<Mouse>/scroll/y").ApplyBindingOverride("<Mouse>/scroll/x");
+                legacy=map.SaveBindingOverridesAsJson();
+            }
+            PlayerPrefs.SetString(key,legacy);
+            using(var input=new FestivalInput("settings"))
+            {
+                Assert.That(input.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/x"));
+                Assert.That(input.Cycle.bindings[0].effectivePath,Is.EqualTo("<Mouse>/scroll/x"));
+                Assert.That(input.Move.bindings[1].effectivePath,Is.EqualTo("<Keyboard>/w"),"old random IDs do not identify a composite part");
+                Assert.That(input.NoteKey(2),Is.EqualTo("W"),"old rhythm IDs cannot identify which alternate to replace");
+            }
+            Assert.That(PlayerPrefs.GetString(key),Is.EqualTo(legacy),"migration is read-only for legacy storage");
+            Assert.That(new LocalProfile("settings").Data.BindingOverridesJson,Is.Not.Empty,"the official map JSON becomes authoritative");
+            var profile=new LocalProfile("settings");profile.Data.BindingOverridesJson="{\"bindings\":[]}";Assert.That(profile.Save(),Is.Empty);
+            using(var input=new FestivalInput("settings"))Assert.That(input.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/e"),"an explicit empty profile override blocks legacy reimport");
+            PlayerPrefs.SetString(key,"not json");
+            using(var input=new FestivalInput("other")) { }
+            Assert.That(PlayerPrefs.GetString(key),Is.EqualTo("not json"));
+        }
+
+        [Test]public void InteractiveRebindSavesTheProfileAndCancelPreservesIt()
+        {
+            var keyboard=InputSystem.AddDevice<Keyboard>();
+            try
+            {
+                bool completed=false;
+                using(var input=new FestivalInput("settings"))
+                {
+                    input.Rebind(input.Interact,0,()=>completed=true);
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.X));InputSystem.Update();
+                    System.Threading.Thread.Sleep(160);InputSystem.Update();
+                    Assert.That(completed,Is.True,"a real injected keyboard completes the production rebind");
+                    Assert.That(input.Rebinding,Is.False);Assert.That(input.Map.enabled,Is.True);
+                }
+                var profile=new LocalProfile("settings");Assert.That(profile.Data.BindingOverridesJson,Is.Not.Empty,"completion saves into the profile, not PlayerPrefs");
+                string saved=profile.Data.BindingOverridesJson;
+                using(var input=new FestivalInput("settings"))
+                {
+                    Assert.That(input.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/x"));
+                    input.Map.Disable();input.Rebind(input.Chat,0,null);
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.Escape));InputSystem.Update();
+                    Assert.That(input.Rebinding,Is.False);Assert.That(input.Map.enabled,Is.False,"cancel restores the caller's map state");
+                }
+                Assert.That(new LocalProfile("settings").Data.BindingOverridesJson,Is.EqualTo(saved));
+            }
+            finally{InputSystem.RemoveDevice(keyboard);}
+        }
+
+        [Test]public void BindingClashesRespectMovementSharingAndControlsResetIsLive()
+        {
+            var profile=new LocalProfile("settings");using(var input=new FestivalInput("settings",profile))
+            {
+                var clashes=typeof(FestivalInput).GetMethod("BindingClashes");Assert.That(clashes,Is.Not.Null,"the settings consumer needs real overlap warnings");
+                string Warn(InputAction action,int index,string path)=>(string)clashes.Invoke(input,new object[]{action,index,path});
+                Assert.That(Warn(input.Interact,0,"<Keyboard>/f"),Does.Contain("Chat"));
+                Assert.That(Warn(input.Move,1,"<Keyboard>/w"),Is.Empty,"movement and lanes are intentionally separate contexts");
+                Assert.That(Warn(input.Notes[0],1,"<Keyboard>/s"),Does.Contain("Rhythm1"));
+                input.Interact.ApplyBindingOverride("<Keyboard>/x");profile.Data.BindingOverridesJson=input.Map.SaveBindingOverridesAsJson();
+                var settings=new FestivalSettings(profile);
+                var attach=typeof(FestivalSettings).GetMethod("AttachInput");Assert.That(attach,Is.Not.Null);attach.Invoke(settings,new object[]{input});
+                Assert.That(settings.Save(),Is.Empty);Assert.That(settings.ResetTab("Controls"),Is.Empty);
+                Assert.That(input.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/e"),"reset reaches the actual live action map");
+                Assert.That(profile.Data.BindingOverridesJson,Is.EqualTo("{\"bindings\":[]}"),"persist empty official JSON to prevent reimport");
+                using(var recreated=new FestivalInput("settings"))Assert.That(recreated.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/e"));
+            }
+        }
+
+        [Test]public void ScheduledTapCalibrationMeasuresAudioAndRestoresItsSource()
+        {
+            var source=new GameObject("impl-U35 calibration audio").AddComponent<AudioSource>();
+            var original=AudioClip.Create("impl-U35 caller audio",240,1,24000,false);source.clip=original;source.volume=.3f;source.pitch=.7f;source.loop=true;
+            var profile=new LocalProfile("settings");profile.Data.TimingCalibrationMs=-20;
+            using(var settings=new FestivalSettings(profile))
+            {
+                var start=typeof(FestivalSettings).GetMethod("StartTapCalibration");Assert.That(start,Is.Not.Null,"calibration must schedule actual audio, not ask for a manual guess");
+                IDisposable calibration=null;
+                try
+                {
+                    double before=AudioSettings.dspTime;calibration=(IDisposable)start.Invoke(settings,new object[]{source});
+                    var type=calibration.GetType();double at=(double)type.GetProperty("ScheduledStartDspSeconds").GetValue(calibration);
+                    Assert.That(at,Is.GreaterThan(before));Assert.That(source.clip,Is.Not.SameAs(original));Assert.That(source.loop,Is.False);Assert.That(source.pitch,Is.EqualTo(1));
+                    var samples=new float[source.clip.samples];source.clip.GetData(samples,0);
+                    Assert.That(samples[24],Is.Not.Zero,"the scheduled clip contains a real first pulse");Assert.That(samples[12024],Is.Not.Zero,"a second pulse is half a second later");Assert.That(samples[6000],Is.Zero,"the space between pulses stays silent");
+                    var tap=type.GetMethod("Tap");
+                    Assert.That((bool)tap.Invoke(calibration,new object[]{double.NaN}),Is.False);
+                    Assert.That((bool)tap.Invoke(calibration,new object[]{at-.5}),Is.False);
+                    Assert.That((string)type.GetMethod("Complete").Invoke(calibration,null),Is.Not.Empty,"one accidental tap cannot set calibration");
+                    foreach(double time in new[]{at+.06,at+.56,at+1.06,at+1.56,at+2.06,at+2.56,at+3.06,at+3.56})Assert.That((bool)tap.Invoke(calibration,new object[]{time}),Is.True);
+                    Assert.That((bool)tap.Invoke(calibration,new object[]{at+3.56}),Is.False,"a beat counts once");
+                    Assert.That((string)type.GetMethod("Complete").Invoke(calibration,null),Is.Empty);
+                    Assert.That(new LocalProfile("settings").Data.TimingCalibrationMs,Is.EqualTo(60).Within(.01));
+                }
+                finally{calibration?.Dispose();UnityEngine.Object.DestroyImmediate(source.gameObject);UnityEngine.Object.DestroyImmediate(original);}
+            }
+        }
+
+        [Test]public void CalibrationCancellationRestoresCallerAudioAndNeverSaves()
+        {
+            var source=new GameObject("impl-U35 cancelled calibration").AddComponent<AudioSource>();
+            var original=AudioClip.Create("impl-U35 original",240,1,24000,false);source.clip=original;source.pitch=.8f;source.volume=.2f;source.loop=true;source.spatialBlend=.4f;
+            var profile=new LocalProfile("settings");profile.Data.TimingCalibrationMs=37;Assert.That(profile.Save(),Is.Empty);
+            try
+            {
+                var settings=new FestivalSettings(profile);var start=typeof(FestivalSettings).GetMethod("StartTapCalibration");Assert.That(start,Is.Not.Null);
+                start.Invoke(settings,new object[]{source});settings.Dispose();
+                Assert.That(source.clip,Is.SameAs(original));Assert.That(source.pitch,Is.EqualTo(.8f));Assert.That(source.volume,Is.EqualTo(.2f));Assert.That(source.loop,Is.True);Assert.That(source.spatialBlend,Is.EqualTo(.4f));
+                Assert.That(new LocalProfile("settings").Data.TimingCalibrationMs,Is.EqualTo(37));
+            }
+            finally{UnityEngine.Object.DestroyImmediate(source.gameObject);UnityEngine.Object.DestroyImmediate(original);}
+        }
+
+        [TestCase(false,.173648f)] [TestCase(true,-.173648f)]
+        public void SavedInvertYChangesTheActualViewCamera(bool inverted,float expectedHeight)
+        {
+
+            var host=new GameObject("impl-U35 inverted camera");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
+                session.Profile.Data.InvertY=inverted;session.Profile.Data.MouseSensitivity=.1f;session.Profile.Data.ThirdPerson=false;
+                session.ApplyLook(new Vector2(0,100));
+                typeof(FestivalSession).GetMethod("UpdateCamera",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new object[]{new PlayerState{Id="me"}});
+                Assert.That(session.ViewCamera.transform.forward.y,Is.EqualTo(expectedHeight).Within(.001));
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);}
+        }
+
+        [UnityTest]public IEnumerator SavedPushToTalkUsesTAndStopsAtFocusMenuAndRebindBoundaries()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U35-voice-live-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;
+            var previousMode=InputSystem.settings.updateMode;InputSystem.settings.updateMode=InputSettings.UpdateMode.ProcessEventsManually;
+            var previousEditor=InputSystem.settings.editorInputBehaviorInPlayMode;var previousBackground=InputSystem.settings.backgroundBehavior;
+            InputSystem.settings.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;InputSystem.settings.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            var keyboard=InputSystem.AddDevice<Keyboard>();var host=new GameObject("impl-U35 local voice input");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
+                session.enabled=false;session.Host("Input test",8641);Assert.That(session.Connected,Is.True,session.Message);session.MenuOpen=false;
+                session.Profile.Data.VoiceMode="PushToTalk";
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.T));InputSystem.Update();
+                Assert.That(keyboard.tKey.isPressed,Is.True,"fixture delivered the player T key");Assert.That(session.Controls.PushToTalk.IsPressed(),Is.True);
+                Assert.That(session.UpdateLocalVoice(true),Is.True);
+                Assert.That(session.UpdateLocalVoice(false),Is.False);
+                session.MenuOpen=true;Assert.That(session.UpdateLocalVoice(true),Is.False);session.MenuOpen=false;
+                var talk=session.Controls.PushToTalk;
+                Assert.That(session.Controls.Label(talk),Is.EqualTo("T"));talk.ApplyBindingOverride("<Keyboard>/y");
+                session.Profile.Data.BindingOverridesJson=session.Controls.Map.SaveBindingOverridesAsJson();Assert.That(session.Profile.Save(),Is.Empty);
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.T));InputSystem.Update();Assert.That(session.UpdateLocalVoice(true),Is.False);
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.Y));InputSystem.Update();Assert.That(session.UpdateLocalVoice(true),Is.True);
+                session.Controls.Rebind(session.Controls.Interact,0,null);Assert.That(session.UpdateLocalVoice(true),Is.False);session.Controls.CancelRebind();
+                InputSystem.QueueStateEvent(keyboard,new KeyboardState());InputSystem.Update();session.Profile.Data.VoiceMode="OpenMic";
+                Assert.That(session.UpdateLocalVoice(true),Is.True);Assert.That(session.UpdateLocalVoice(false),Is.False);
+                Assert.That(session.Voice.Available,Is.False,"input never makes the unconfigured voice provider available");
+                foreach(string device in Microphone.devices)Assert.That(Microphone.IsRecording(device),Is.False,"push-to-talk config never captures room audio");
+                using(var recreated=new FestivalInput("default"))Assert.That(recreated.Map.FindAction("PushToTalk").bindings[0].effectivePath,Is.EqualTo("<Keyboard>/y"));
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);InputSystem.RemoveDevice(keyboard);InputSystem.settings.updateMode=previousMode;InputSystem.settings.editorInputBehaviorInPlayMode=previousEditor;InputSystem.settings.backgroundBehavior=previousBackground;LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
+        [Test]public void HowToPlayNamesTheEffectiveReboundPointerAction()
+        {
+            using(var input=new FestivalInput("settings"))
+            {
+                input.Look.ApplyBindingOverride("<Gamepad>/rightStick");
+                Assert.That(FestivalHudText.HowToPlay(input)[5].Text,Does.Contain(input.Label(input.Look)+"  look"),"the live how-to consumer must use the effective pointer binding");
+            }
+        }
+
+        [UnityTest]public IEnumerator PointerAxesAndCompositeRebindsReadRealInjectedDevices()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U35-pointer-live-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;
+            var previousMode=InputSystem.settings.updateMode;InputSystem.settings.updateMode=InputSettings.UpdateMode.ProcessEventsManually;
+            var previousEditor=InputSystem.settings.editorInputBehaviorInPlayMode;var previousBackground=InputSystem.settings.backgroundBehavior;
+            InputSystem.settings.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;InputSystem.settings.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
+            var mouse=InputSystem.AddDevice<Mouse>();var keyboard=InputSystem.AddDevice<Keyboard>();
+            try
+            {
+                using(var input=new FestivalInput("settings"))
+                {
+                    bool completed=false;input.Rebind(input.Look,0,()=>completed=true);
+                    InputSystem.QueueStateEvent(mouse,new MouseState{delta=new Vector2(20,10)});InputSystem.Update();System.Threading.Thread.Sleep(160);InputSystem.Update();
+                    Assert.That(completed,Is.True,"look rebinding must accept actual mouse delta instead of excluding it");
+                    completed=false;input.Rebind(input.Cycle,0,()=>completed=true);
+                    InputSystem.QueueStateEvent(mouse,new MouseState{scroll=new Vector2(120,0)});InputSystem.Update();System.Threading.Thread.Sleep(160);InputSystem.Update();
+                    Assert.That(completed,Is.True);Assert.That(input.Cycle.bindings[0].effectivePath,Is.EqualTo("<Mouse>/scroll/x"));
+                    InputSystem.QueueStateEvent(mouse,new MouseState{scroll=new Vector2(60,0)});InputSystem.Update();Assert.That(mouse.scroll.x.ReadValue(),Is.EqualTo(60),"fixture delivered the player scroll event");Assert.That(input.Cycle.ReadValue<float>(),Is.EqualTo(60));
+                    completed=false;input.Rebind(input.Move,1,()=>completed=true);
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.I));InputSystem.Update();System.Threading.Thread.Sleep(160);InputSystem.Update();
+                    Assert.That(completed,Is.True);
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState());InputSystem.Update();InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.I));InputSystem.Update();
+                    Assert.That(input.Move.ReadValue<Vector2>().y,Is.EqualTo(1),"the real composite reads the rebound Up key");
+                }
+                using(var input=new FestivalInput("settings"))
+                {
+                    Assert.That(input.Move.bindings[1].effectivePath,Is.EqualTo("<Keyboard>/i"));Assert.That(input.Cycle.bindings[0].effectivePath,Is.EqualTo("<Mouse>/scroll/x"));
+                }
+            }
+            finally{InputSystem.RemoveDevice(mouse);InputSystem.RemoveDevice(keyboard);InputSystem.settings.updateMode=previousMode;InputSystem.settings.editorInputBehaviorInPlayMode=previousEditor;InputSystem.settings.backgroundBehavior=previousBackground;
+                LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
 
         [Test]public void DiscoveryMergeFiltersDeduplicatesAndDoesNotWriteAnUnchangedCollection()
         {
@@ -348,7 +624,7 @@ namespace Festival.Tests
             {
                 case "Audio":expected.MasterVolume=1;expected.MusicVolume=.35f;expected.EffectsVolume=.6f;expected.VoiceVolume=1;expected.MuteWhenUnfocused=true;break;
                 case "Graphics":expected.DisplayMode="Current";expected.ResolutionWidth=0;expected.ResolutionHeight=0;expected.VSyncCount=-1;expected.FrameCap=60;expected.QualityPreset="High";expected.RenderScale=1;expected.FieldOfView=75;expected.Brightness=0;break;
-                case "Controls":expected.MouseSensitivity=.12f;expected.InvertY=false;expected.ThirdPerson=false;expected.TimingCalibrationMs=0;expected.BindingOverridesJson="";break;
+                case "Controls":expected.MouseSensitivity=.12f;expected.InvertY=false;expected.ThirdPerson=false;expected.TimingCalibrationMs=0;expected.BindingOverridesJson="{\"bindings\":[]}";break;
                 case "Accessibility":expected.ReducedMotion=false;expected.HighContrast=false;expected.CameraShake=true;expected.TextScale=1;break;
                 case "Voice":expected.MicrophoneDevice="";expected.InputGain=1;expected.VoiceMode="PushToTalk";break;
             }

@@ -109,7 +109,7 @@ namespace Festival.Tests
             Assert.That(next.Profile.Data.SeenDialogue,Is.Empty,"retired smoke data cannot leak into a repeated run");Destroy(next);AssertRestored(nextOwned);
             // Ordinary bootstrap retains its existing caller load/save behavior.
             var ordinary=Session("");Assert.That(LocalProfile.Folder,Is.EqualTo(caller));Assert.That(FestivalInput.PreferencesScope,Is.EqualTo(caller));
-            Assert.That(ordinary.Profile.Data.PlayerName,Is.EqualTo("Caller sentinel"));Assert.That(PlayerPrefs.HasKey(callerKey),Is.False,"normal input still removes its own malformed saved controls");
+            Assert.That(ordinary.Profile.Data.PlayerName,Is.EqualTo("Caller sentinel"));Assert.That(PlayerPrefs.GetString(callerKey),Is.EqualTo(Bindings),"normal input preserves legacy preferences byte-for-byte");
             Acknowledge(ordinary,"normal-ack");Assert.That(File.ReadAllBytes(CallerPath).SequenceEqual(callerBytes),Is.False,"ordinary acknowledgement still persists normally");Destroy(ordinary);
         }
 

@@ -1,15 +1,65 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
     public sealed class RhythmInputContractTests
     {
+        private string previousFolder,previousScope,ownedFolder;
+        [SetUp]public void OwnInputStorage()
+        {
+            previousFolder=LocalProfile.Folder;previousScope=FestivalInput.PreferencesScope;
+            ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U35-rhythm-"+Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;
+        }
+        [TearDown]public void RestoreCallerStorage()
+        {
+            LocalProfile.Folder=previousFolder;FestivalInput.PreferencesScope=previousScope;
+            if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
+        }
+
+        [UnityTearDown]public IEnumerator LeaveOwnedPlayMode()
+        {
+            if(Application.isPlaying)yield return new ExitPlayMode();
+        }
+        [UnityTest]public IEnumerator CalibratedPressAndReleaseReachTheHostJudgeWithoutMovingChartTime()
+        {
+            var rhythm=typeof(FestivalSession).GetMethod("Rhythm");Assert.That(rhythm,Is.Not.Null,"the real session accepts a raw timestamp and calibrates both input edges");
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U35-rhythm-live-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;
+            var host=new GameObject("impl-U35 calibrated host");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();session.enabled=false;
+                session.Host("Calibration test",8641);Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
+                foreach(var sample in new[]{(Offset:60f,Raw:2.06),(Offset:-80f,Raw:1.92),(Offset:350f,Raw:2.2)})
+                {
+                    var game=Floor();var interaction=game.Interaction(game.Player("p0").InteractionId);var before=RhythmChart.For(interaction).Notes[0].TimeSeconds;
+                    game.State.SimulationSeconds=interaction.StartSeconds+2.2;
+                    typeof(FestivalSession).GetField("simulation",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,game);
+                    typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,"p0");typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(game,"p0"));
+                    session.Profile.Data.TimingCalibrationMs=sample.Offset;
+                    session.Rhythm(1,sample.Raw);session.Rhythm(1,sample.Raw,true);
+                    Assert.That(interaction.Inputs.Count,Is.EqualTo(2),session.Message);
+                    Assert.That(interaction.Inputs[0].TimeSeconds,Is.EqualTo(2).Within(.00001));Assert.That(interaction.Inputs[1].TimeSeconds,Is.EqualTo(2).Within(.00001));
+                    Assert.That(interaction.Inputs[0].Release,Is.False);Assert.That(interaction.Inputs[1].Release,Is.True);
+                    Assert.That(RhythmChart.For(interaction).Notes[0].TimeSeconds,Is.EqualTo(before));Assert.That(game.State.SimulationSeconds,Is.EqualTo(interaction.StartSeconds+2.2));
+                }
+            }
+            finally{UnityEngine.Object.DestroyImmediate(host);LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
         private static FestivalSimulation Floor()
         {
             var game=new FestivalSimulation(7);var player=game.AddPlayer("p0","Tester");game.AddPlayer("p1","Friend");

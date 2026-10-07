@@ -159,7 +159,7 @@ namespace Festival.Network
         }
         private void LoadPreferences()
         {
-            Profile=new LocalProfile(profileId);Settings=new FestivalSettings(Profile);Settings.ApplyGraphics();Controls=new FestivalInput(profileId);
+            Profile=new LocalProfile(profileId);Settings=new FestivalSettings(Profile);Settings.ApplyGraphics();Controls=new FestivalInput(profileId,Profile);Settings.AttachInput(Controls);
         }
         private void Awake()
         {
@@ -392,6 +392,9 @@ namespace Festival.Network
             }
             else SendJson("festival.command",NetworkManager.ServerClientId,command);
         }
+        // Raw chart-relative seconds in; calibrated judgment seconds alone go to the unchanged host command envelope.
+        public void Rhythm(int direction,double chartSeconds,bool release=false)
+            =>Command("Rhythm",amount:release?1:0,direction:direction,time:FestivalSettings.JudgmentSeconds(chartSeconds,Profile?.Data));
         public string PreviewItem(string itemId)
         {
             var definition=Catalog.FindItem(itemId);
@@ -456,6 +459,7 @@ namespace Festival.Network
             Settings?.ApplyGraphics();
             if(world!=null&&Profile!=null)world.SetBrightness(Profile.Data.Brightness);
             if(Controls==null)return;
+            Controls.SynchronizeBindings();UpdateLocalVoice(Application.isFocused);
             if(Connecting && Time.realtimeSinceStartupAsDouble-connectAt>15){Fail("Connection timed out. Check the host address and port.");return;}
             if(!Connected)return;
             if(!IsHost && LastSnapshotAge>5 && State!=null){Message="Host updates stalled. Inputs paused; leave or wait for recovery.";if(LastSnapshotAge>20){Fail("Host stopped responding. No host migration is available in this prototype.");return;}}
@@ -502,7 +506,7 @@ namespace Festival.Network
             spinHeld=Controls.Spin.IsPressed()&&!PointerFree;
             if(!PointerFree && Application.isFocused)
             {
-                var look=Controls.Look.ReadValue<Vector2>();yaw+=look.x*Profile.Data.MouseSensitivity;pitch=Mathf.Clamp(pitch-look.y*Profile.Data.MouseSensitivity,-80,80);
+                ApplyLook(Controls.Look.ReadValue<Vector2>());
             }
             if(Time.realtimeSinceStartupAsDouble>=nextInput && (IsHost||LastSnapshotAge<5))
             {
@@ -514,6 +518,19 @@ namespace Festival.Network
             }
             if(player.HasCosmetic)Profile.AwardFirstRescue();
             UpdateActors();UpdateCamera(player);
+        }
+        public void ApplyLook(Vector2 delta)
+        {
+            if(Profile==null)return;
+            yaw+=delta.x*Profile.Data.MouseSensitivity;
+            pitch=Mathf.Clamp(pitch+(Profile.Data.InvertY?delta.y:-delta.y)*Profile.Data.MouseSensitivity,-80,80);
+        }
+        public bool UpdateLocalVoice(bool focused)
+        {
+            FestivalSettings.ConfigureVoice(Voice,Profile?.Data);
+            bool requested=Connected&&focused&&!MenuOpen&&Controls!=null&&!Controls.Rebinding
+                &&(Profile?.Data.VoiceMode=="OpenMic"||Controls.PushToTalk.IsPressed());
+            Voice.SetLocalMute(!requested);return requested;
         }
         private string lastPhase="";
         private bool spinHeld;
