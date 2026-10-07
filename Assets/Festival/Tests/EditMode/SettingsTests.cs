@@ -41,6 +41,15 @@ namespace Festival.Tests
         }
         private void Write(string json)=>File.WriteAllText(Path.Combine(ownedFolder,"settings.json"),json);
 
+        [Test]public void AuthoredGrammarKeysSurviveSaveWithoutWideningOtherIds()
+        {
+            const string key="reply.talk.cosmic_0123456789abcdef";
+            var profile=new LocalProfile("settings");profile.Data.SeenDialogue=new List<string>{key,key,"bad/key",new string('x',65),"with space"};
+            profile.Data.SeenTips=new List<string>{key,"safe_tip"};Assert.That(profile.Save(),Is.Empty);
+            var reloaded=new LocalProfile("settings");Assert.That(reloaded.Data.SeenDialogue,Is.EqualTo(new[]{key}),"actual authored dotted grammar keys survive Save and reload");
+            Assert.That(reloaded.Data.SeenTips,Is.EqualTo(new[]{"safe_tip"}),"only dialogue keys admit dots");
+        }
+
         [Test]public void SavedProfileBindingsAreAuthoritativeAcrossInputRecreation()
         {
             var profile=new LocalProfile("settings");

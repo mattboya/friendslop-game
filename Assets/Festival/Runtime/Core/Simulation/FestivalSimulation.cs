@@ -81,7 +81,8 @@ namespace Festival.Core
             if(c.Kind=="ChooseFestival")return ChooseFestival(p,c);
             if(c.Kind=="CampEgg")return CampEgg(p,c);
             if(c.Kind=="EnterCamp"||c.Kind=="ExitCamp"||c.Kind=="CampAntic"||c.Kind=="ChooseCampTrack")return CampAction(p,c);
-            if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");p.Dialogue.Acknowledge(c.TargetId,current.Id);return Ok();}
+            if(c.Kind=="TalkAck")return AcknowledgeTalk(p,c);
+            if(c.Kind=="DialogueAck") {var current=Interaction(p.InteractionId);if(current==null||current.DialogueId!=c.TargetId)return Reject("Dialogue is not active");AcknowledgeGrammar(p,new List<string>{c.TargetId},current.Id);return Ok();}
             if(c.Kind=="Cancel") {if(OnWheel(State,p.Id))return Reject("You're stuck until the wheel comes round");ReleaseCampSeat(p.Id);Cancel(p,"Cancelled");return Ok();}
             if(c.Kind=="Rhythm")return Submit(p,c);
             if(c.Kind=="Reply")return Reply(p,c);

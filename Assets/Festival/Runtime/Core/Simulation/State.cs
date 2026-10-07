@@ -42,6 +42,14 @@ namespace Festival.Core
         public double VisualReceiptAt;
         public List<ItemStack> Inventory=new List<ItemStack>(); public List<ActiveEffect> Effects=new List<ActiveEffect>();
         public List<string> Wristbands=new List<string>(); public DialogueHistory Dialogue=new DialogueHistory();
+        // Owner-only acknowledged history revision and bounded terminal deliveries, additive in schema 2.
+        public long DialogueRevision,ConversationOutcomeSequence,ConversationDismissedSequence;
+        public string ConversationThreadId="",ConversationDismissedId="";
+        public List<ConversationOutcome> ConversationOutcomes=new List<ConversationOutcome>();
+    }
+    [Serializable] public sealed class ConversationOutcome {
+        public string RoundId="",InteractionId="",DeliveryId="",Kind="",Speaker="",Reaction="",Notice="",Hunch="";
+        public long Sequence; public List<string> GrammarKeys=new List<string>();
     }
     [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }
     // A cop's case on a player (Danger.cs, SecurityStops.cs): Kind VisibleStock is a security stop, WavedOn one talked down,

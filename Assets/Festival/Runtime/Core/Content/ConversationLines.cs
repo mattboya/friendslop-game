@@ -7,7 +7,7 @@ namespace Festival.Core
     // then your three Replies. Grades holds each reply's grade (ConversationLines.Smooth, SoSo or Awkward); a Garbled reply's
     // longer words' interior letters are jumbled, as a dosed player says it. Pick is the reply chosen: -1 until one is,
     // and for good once the turn has run out, a silence.
-    [Serializable] public sealed class ConversationTurn { public string Reaction="",Line=""; public string[] Replies=new string[3]; public int[] Grades=new int[3]; public bool[] Garbled=new bool[3]; public int Pick=-1; }
+    [Serializable] public sealed class ConversationTurn { public string Reaction="",Line=""; public string[] Replies=new string[3]; public int[] Grades=new int[3]; public bool[] Garbled=new bool[3]; public int Pick=-1; public List<string> GrammarKeys=new List<string>(); }
 
     // DIALOG-3: what's said in a talk, built by a LineGrammar (DIALOG-4) that holds FestivalLines' parts as well as these.
     // - Topics: a chat (Conversation) is "talk", a sale "sale", a buy "buy" and a talk with security "security".
@@ -41,12 +41,12 @@ namespace Festival.Core
         {
             if(Array.IndexOf(Topics,topic)<0||!Tastes.TryGetValue(persona,out var taste)) throw new ArgumentException("Unknown talk topic or persona: "+topic+", "+persona);
             var said=new ConversationTurn();
-            if(turn>0) said.Reaction=Say(heard==Silence?"react.silence":"react."+persona+"."+heard,festival,random,history);
-            said.Line=Say(turn>0?Body(topic,role,clear):persona==Security?"police":"opener."+persona,festival,random,history);
+            if(turn>0) said.Reaction=Say(heard==Silence?"react.silence":"react."+persona+"."+heard,festival,random,history,said.GrammarKeys);
+            said.Line=Say(turn>0?Body(topic,role,clear):persona==Security?"police":"opener."+persona,festival,random,history,said.GrammarKeys);
             int skip=random.Next(3),soso=-1;
             for(int style=0;soso<0;style++) if(style!=taste.liked&&style!=taste.hated&&skip--==0) soso=style;
             var styles=new[]{taste.liked,soso,taste.hated};var grades=new[]{Smooth,SoSo,Awkward};Shuffle(grades,random);
-            for(int r=0;r<3;r++) { said.Grades[r]=grades[r]; said.Replies[r]=Say("reply."+topic+"."+Styles[styles[grades[r]]],festival,random,history); }
+            for(int r=0;r<3;r++) { said.Grades[r]=grades[r]; said.Replies[r]=Say("reply."+topic+"."+Styles[styles[grades[r]]],festival,random,history,said.GrammarKeys); }
             if(garbled>0)
             {
                 var spots=new[]{0,1,2};Shuffle(spots,random);
@@ -74,10 +74,16 @@ namespace Festival.Core
             if(role=="Buyer") return HunchBuyer;
             return seller?HunchSeller:HunchMusic;
         }
-        private static string Say(string kind,int festival,ContentRandom random,DialogueHistory history)
+        public static string Reaction(string persona,int grade,int festival,ContentRandom random,DialogueHistory history,out string key)
         {
-            if(history==null) return Grammar.Line(kind,festival,random);
-            string line=history.Fresh(Grammar,kind,festival,random,out var key); history.Acknowledge(key); return line;
+            if(!Tastes.ContainsKey(persona)||grade<Smooth||grade>Silence)throw new ArgumentException("Unknown reaction persona or grade");
+            string kind=grade==Silence?"react.silence":"react."+persona+"."+grade;
+            var keys=new List<string>();string line=Say(kind,festival,random,history,keys);key=keys[0];return line;
+        }
+        private static string Say(string kind,int festival,ContentRandom random,DialogueHistory history,ICollection<string> keys=null)
+        {
+            history=history??new DialogueHistory();
+            string line=history.Fresh(Grammar,kind,festival,random,out var key);history.Acknowledge(key);keys?.Add(key);return line;
         }
         // DIALOG-8: a dosed reply stays readable. Keep word order, whitespace, punctuation, short alphabetic runs and every
         // run's first/last letter; only shuffle the interior of runs with five or more letters, on the same seeded stream.

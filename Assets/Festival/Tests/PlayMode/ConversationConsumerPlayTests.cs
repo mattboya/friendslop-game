@@ -13,6 +13,68 @@ namespace Festival.Tests
 {
     public sealed class ConversationConsumerPlayTests:FestivalPlayModeTest
     {
+        [UnityTest] public IEnumerator JoinedOwnerReceivesReliableHistoryAndDurableNarcOutcome()
+        {
+            var world=new GameObject("impl-U14 joined world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("impl-U14 host");var host=hostObject.AddComponent<FestivalSession>();
+            var clientObject=new GameObject("impl-U14 client");var client=clientObject.AddComponent<FestivalSession>();yield return null;
+            string hostProfile="impl-U14-host-"+Guid.NewGuid().ToString("N"),clientProfile="impl-U14-client-"+Guid.NewGuid().ToString("N");
+            typeof(FestivalSession).GetProperty("Profile").SetValue(host,new LocalProfile(hostProfile));
+            typeof(FestivalSession).GetProperty("Profile").SetValue(client,new LocalProfile(clientProfile));
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);client.Join("Owner","127.0.0.1",port);
+                while(client.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(client.LocalPlayer,Is.Not.Null,client.Message);
+                var game=Simulation(host);var owner=game.Player(client.LocalPlayerId);owner.X=0;owner.Z=19;client.Command("Ready");
+                while(!owner.Ready&&Time.realtimeSinceStartup<deadline)yield return null;yield return StartLevel(host,owner.Id);
+                game.State.Npcs.Clear();game.HasLineOfSight=(ax,az,bx,bz)=>false;owner.X=0;owner.Z=0;owner.Effects.Clear();
+                string id="narc_0";for(int n=1;DialogueGrammar.PersonaFor(id,"")!="Wook";n++)id="narc_"+n;
+                game.State.Npcs.Add(new NpcState{Id=id,Kind="Wook",Role="Narc",Z=1.5f,CanTalk=true});
+                host.MenuOpen=client.MenuOpen=false;client.Command("StartBuy",target:id,item:FestivalSimulation.SellerStock(id));deadline=Time.realtimeSinceStartup+10;
+                while(owner.InteractionId==""&&Time.realtimeSinceStartup<deadline)yield return null;
+                var talk=game.Interaction(owner.InteractionId);Assert.That(talk,Is.Not.Null,client.Message);
+                for(int turn=0;turn<3;turn++)
+                {
+                    InteractionState visible=null;
+                    while(Time.realtimeSinceStartup<deadline)
+                    {
+                        visible=client.State.Interactions.Find(i=>i.Id==talk.Id);if(visible!=null&&visible.Turns.Count==turn+1)break;yield return null;
+                    }
+                    Assert.That(visible,Is.Not.Null);Assert.That(visible.Turns.Count,Is.EqualTo(turn+1));
+                    client.AcknowledgeConversationTurn(visible);
+                    client.Command("Reply",amount:Array.IndexOf(visible.Turns[turn].Grades,ConversationLines.Smooth),direction:turn);
+                    while(talk.Status=="Active"&&talk.Turns.Count==turn+1&&Time.realtimeSinceStartup<deadline)yield return null;
+                }
+                Assert.That(owner.Life,Is.EqualTo("Detained"));game.State.Interactions.Clear();
+                while((client.PendingConversationOutcome==null||client.Profile.Data.SeenDialogue.Count==0)&&Time.realtimeSinceStartup<deadline)yield return null;
+                var outcome=client.PendingConversationOutcome;Assert.That(outcome,Is.Not.Null,"the skipped terminal interaction still reaches its owner's real session consumer");
+                Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));Assert.That(client.LocalPlayer.X,Is.EqualTo(27));Assert.That(client.LocalPlayer.Z,Is.EqualTo(5));
+                Assert.That(new LocalProfile(clientProfile).Data.SeenDialogue,Is.Not.Empty,"joined owner's reliable history reaches the isolated real profile");
+                Assert.That(host.Profile.Data.SeenDialogue,Is.Empty,"host player receives no remote-owner grammar payload");
+                Assert.That(JsonUtility.ToJson(host.State),Does.Not.Contain(outcome.Notice));
+                foreach(string key in owner.Dialogue.Seen)Assert.That(JsonUtility.ToJson(host.State),Does.Not.Contain(key));
+                string ownerId=owner.Id,deliveryId=outcome.DeliveryId;client.Leave();deadline=Time.realtimeSinceStartup+10;
+                while(owner.Connected&&Time.realtimeSinceStartup<deadline)yield return null;Assert.That(owner.Connected,Is.False);yield return null;
+                client.Join("Owner","127.0.0.1",port);deadline=Time.realtimeSinceStartup+30;
+                while((client.LocalPlayer==null||client.PendingConversationOutcome==null)&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(client.LocalPlayerId,Is.EqualTo(ownerId),"the real reconnect retains authenticated ownership");outcome=client.PendingConversationOutcome;
+                Assert.That(outcome?.DeliveryId,Is.EqualTo(deliveryId),"an undismissed terminal outcome survives real reconnect");
+                client.AcknowledgeConversationOutcome(outcome);client.DismissConversationOutcome(outcome.DeliveryId);
+                Assert.That(client.PendingConversationOutcome,Is.Null,"Escape's production dismissal consumer suppresses a stale snapshot immediately");
+                while(owner.ConversationOutcomes.Count>0&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(owner.ConversationOutcomes,Is.Empty,"the authority remembers dismissal for reconnect");
+                client.Leave();deadline=Time.realtimeSinceStartup+10;while(owner.Connected&&Time.realtimeSinceStartup<deadline)yield return null;yield return null;
+                client.Join("Owner","127.0.0.1",port);deadline=Time.realtimeSinceStartup+30;
+                while(client.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(client.LocalPlayerId,Is.EqualTo(ownerId));Assert.That(client.PendingConversationOutcome,Is.Null,"dismissed outcomes stay closed across real reconnect");
+            }
+            finally{client.Leave();host.Leave();UnityEngine.Object.Destroy(clientObject);UnityEngine.Object.Destroy(hostObject);UnityEngine.Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest] public IEnumerator HostedBuyWindowShowsTheSellerHunch()
         {
             const string hunch="You get the feeling they've got something to sell.";
@@ -116,6 +178,10 @@ namespace Festival.Tests
                 }
                 for(float deadline=Time.realtimeSinceStartup+5;talk.Status=="Active"&&Time.realtimeSinceStartup<deadline;)yield return null;
                 Assert.That(talk.Status,Is.EqualTo("Complete"));Assert.That(talk.Score,Is.EqualTo(1));
+                for(float deadline=Time.realtimeSinceStartup+5;session.Profile.Data.SeenDialogue.Count==0&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.Profile.Data.SeenDialogue,Is.Not.Empty,"host-acknowledged reply grammar reaches the real owning profile");
+                Assert.That(player.NpcSpeech,Is.Not.Empty,"the hosted third reply leaves a final reaction");
+                var reload=new LocalProfile("default");Assert.That(reload.Data.SeenDialogue,Is.Not.Empty,"acknowledged grammar survives profile reload");
                 Assert.That(partner.Observers[0].Suspicion,Is.EqualTo(15),"the hosted window's third reply calms its unseen partner once");
                 Assert.That(partner.Yaw,Is.Zero,"settlement preserves the NPC's facing");
             }

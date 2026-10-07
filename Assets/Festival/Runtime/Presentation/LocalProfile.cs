@@ -170,6 +170,16 @@ namespace Festival.Presentation
 #endif
             return message;
         }
+        // Only authenticated host acknowledgments reach this API. Keep the existing bounded schema-2 representation.
+        public string RememberDialogue(List<string> keys)
+        {
+            if(!Festival.Network.FestivalSession.SafeDialogueKeys(keys))return "Invalid conversation history.";
+            var previous=Data.SeenDialogue;var merged=new List<string>(previous??new List<string>());
+            foreach(string key in keys){merged.RemoveAll(value=>value==key);merged.Add(key);}
+            while(merged.Count>512)merged.RemoveAt(0);
+            if(previous!=null&&System.Linq.Enumerable.SequenceEqual(previous,merged))return "";
+            Data.SeenDialogue=merged;string error=Save();if(error!="")Data.SeenDialogue=previous;return error;
+        }
         // A hosted session starts with this machine's unlocks and saves them back whenever they grow.
         public void ApplyUnlocks(RoundState state) { state.UnlockedFestivalCount=Math.Max(state.UnlockedFestivalCount,Data.UnlockedFestivalCount); }
         public void RememberUnlocks(RoundState state)

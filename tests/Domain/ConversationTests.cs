@@ -26,9 +26,29 @@ public static class ConversationTests
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
-            ATalkSettlesItsPartnerAndWitnessesOnce})
+            ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheThirdReplyHasAClosingReaction})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
+    }
+
+    static void GrammarDrawsWaitForOwnerAcknowledgment()
+    {
+        var game=Pair("Conversation");Start(game,"Conversation");
+        Check(game.Player("p0").Dialogue.Seen.Count==0,"drawing a turn must not acknowledge unread choices");
+    }
+    static void TheThirdReplyHasAClosingReaction()
+    {
+        foreach(int grade in new[]{Smooth,SoSo,Awkward})
+        {
+            var game=Pair("Conversation");var talk=Start(game,"Conversation");
+            for(int turn=0;turn<3;turn++)Check(Say(game,talk,grade).Accepted,"the reply is accepted");
+            var player=game.Player("p0");
+            Check(talk.Turns.Count==3&&talk.Status=="Complete","the final reaction creates no fourth turn");
+            Check(player.NpcSpeech!="","the final reply of grade "+grade+" gets its authored closing reaction");
+            Check(player.ConversationOutcomes[0].GrammarKeys.Single().StartsWith("react.Wook."+grade+"_",StringComparison.Ordinal),"the actual closing reaction uses the chosen reply grade's authored grammar family");
+            var wire=JsonSerializer.Serialize(player,new JsonSerializerOptions{IncludeFields=true});
+            Check(JsonNode.Parse(wire)["ConversationOutcomes"]?.AsArray().Count==1&&JsonNode.Parse(wire)["ConversationOutcomes"][0]["Reaction"].GetValue<string>()==player.NpcSpeech,"the closing reaction stays durable after InteractionId clears");
+        }
     }
 
     // DIALOG-8: the person talking with you hears the replies even when their layout yaw faces away.
@@ -103,7 +123,7 @@ public static class ConversationTests
         foreach(int grade in grades)
         {
             int turn=i.Turns.Count;
-            if(grade==Silence&&i.Kind=="Police"){for(int guard=0;i.Status=="Active"&&i.Turns.Count==turn&&guard<100;guard++)s.Tick(.1);continue;}
+            if(grade==Silence&&i.Kind=="Police"){Check(Act(s,"p0","TalkAck",i.Id,direction:turn-1).Accepted,"the displayed Police turn is acknowledged");for(int guard=0;i.Status=="Active"&&i.Turns.Count==turn&&guard<100;guard++)s.Tick(.1);continue;}
             var said=Say(s,i,grade);Check(said.Accepted,"setup: reply "+grade+" on turn "+turn+": "+said.Reason);
         }
         for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
@@ -415,6 +435,7 @@ public static class ConversationTests
             foreach(var note in notes.Take(under))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
             for(int guard=0;i.Status=="Active"&&guard<100;guard++)s.Tick(.1);
             Check(i.Status=="Complete"&&i.Score==0&&i.Turns.Count==0,"a "+kind+" danced under .6 ends at 0 with no talk ("+i.Status+", "+i.Score+")");
+            Check(p.NpcSpeech=="Nah. Not feeling it."&&p.NpcSpeaker=="FESTIVALGOER"&&p.NpcSpeechUntil>s.State.SimulationSeconds,"failed trust dance gives the owner a readable partner rejection for "+kind+": speech=\""+p.NpcSpeech+"\"");
             Check(p.Cash==cash&&p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(kind=="Sale")&&p.Inventory.Count==(kind=="Sale"?1:0),"they walk off: the stock or the cash comes back");
             double score=(double)under/notes.Count;int moved=(int)Math.Round(20-35*score,MidpointRounding.AwayFromZero);
             Check(watcher.Observers[0].Suspicion==20+moved&&Partner(s).Observers[0].Suspicion==40+moved,"the watcher and they move once, by the dance's RhythmDelta "+moved+" (watcher "+watcher.Observers[0].Suspicion+", partner "+Partner(s).Observers[0].Suspicion+")");
@@ -583,8 +604,10 @@ public static class ConversationTests
         var s=Pair("Conversation");var i=Start(s,"Conversation");
         var json=JsonNode.Parse(JsonSerializer.Serialize(s.State,new JsonSerializerOptions{IncludeFields=true}));
         foreach(var talk in json["Interactions"].AsArray()){var o=talk.AsObject();o.Remove("Turns");o.Remove("TrustDance");o.Remove("Hunch");}
+        foreach(var player in json["Players"].AsArray()){var o=player.AsObject();foreach(var field in new[]{"DialogueRevision","ConversationOutcomeSequence","ConversationDismissedSequence","ConversationThreadId","ConversationDismissedId","ConversationOutcomes"})o.Remove(field);}
         var saved=JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),new JsonSerializerOptions{IncludeFields=true});
         var restored=new FestivalSimulation();restored.Restore(saved);var old=restored.Interaction(i.Id);
+        Check(restored.Player("p0").ConversationOutcomes!=null&&restored.Player("p0").ConversationOutcomes.Count==0&&restored.Player("p0").ConversationDismissedSequence==0,"older owner outcome fields keep safe defaults");
         Check(old.Turns!=null&&old.Turns.Count==1&&!old.TrustDance,"an old talk restores at its first turn ("+old.Turns?.Count+")");
         restored.Tick(60);Check(old.Status=="Active"&&old.Turns.Count==1&&Live(old).Pick==-1,"a restored legacy talk waits for its first reply");
         Talk(restored,old,Awkward,Awkward,Awkward);Check(old.Status=="Complete"&&old.Turns.Count==3&&old.Score==0,"three accepted awkward replies settle the restored talk");

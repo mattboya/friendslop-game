@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Festival.Core;
 using Festival.Network;
@@ -42,6 +44,135 @@ namespace Festival.Tests
         static void Follow(FestivalChatWindow window,FestivalSimulation game,PlayerState player,float now)
         {
             var view=View(game,player.Id);Assert.That(window.Follow(view,view.Players.Find(p=>p.Id==player.Id),view.SimulationSeconds,now,false),Is.True);
+        }
+
+        static object Call(object target,string method,params object[] args)=>target.GetType().GetMethod(method,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(target,args);
+        static FestivalSession Consumer(FestivalSimulation game,PlayerState player,out GameObject root)
+        {
+            root=new GameObject("impl-U14 terminal consumer");var session=root.AddComponent<FestivalSession>();
+            typeof(FestivalSession).GetProperty("State").SetValue(session,View(game,player.Id));
+            typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,player.Id);return session;
+        }
+        static void Finish(FestivalSimulation game,PlayerState player,InteractionState talk)
+        {
+            for(int turn=0;turn<3;turn++)Assert.That(game.Execute(player.Id,new GameCommand{Id="finish_"+talk.Id+"_"+turn,Kind="Reply",Direction=turn,Amount=Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth)}).Accepted,Is.True);
+        }
+        [Test] public void ANewCancelledThreadCannotReopenThePreviousOutcome()
+        {
+            var game=Pair(0,out var player,out var partner);var first=Start(game,player,partner);Finish(game,player,first);
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="new_thread",Kind="Conversation",TargetId=partner.Id}).Accepted,Is.True);
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="cancel_thread",Kind="Cancel"}).Accepted,Is.True);
+            var session=Consumer(game,player,out var root);
+            try{Assert.That(session.PendingConversationOutcome,Is.Null,"even a skipped new-thread snapshot must not reopen an old outcome");}
+            finally{UnityEngine.Object.DestroyImmediate(root);}
+        }
+        [Test] public void AcknowledgmentsAreOwnedIdempotentAndDismissalSurvivesReconnect()
+        {
+            var game=Pair(0,out var player,out var partner);var talk=Start(game,player,partner);
+            Assert.That(game.Execute("friend",new GameCommand{Id="foreign_ack",Kind="TalkAck",TargetId=talk.Id,Direction=0}).Accepted,Is.False);
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="oversized_ack",Kind="TalkAck",TargetId=talk.Id,Direction=512}).Accepted,Is.False);
+            Assert.That(player.Dialogue.Seen,Is.Empty);
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="owned_ack",Kind="TalkAck",TargetId=talk.Id,Direction=0}).Accepted,Is.True);
+            var seen=player.Dialogue.Seen.ToArray();long revision=player.DialogueRevision;
+            Assert.That(seen,Is.EqualTo(talk.Turns[0].GrammarKeys));
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="duplicate_ack",Kind="TalkAck",TargetId=talk.Id,Direction=0}).Accepted,Is.True);
+            Assert.That(player.DialogueRevision,Is.EqualTo(revision));Assert.That(player.Dialogue.Seen,Is.EqualTo(seen));Finish(game,player,talk);
+            var outcome=player.ConversationOutcomes.Single();game.State.Interactions.Clear();
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="terminal_ack",Kind="TalkAck",TargetId=outcome.InteractionId,Direction=3}).Accepted,Is.True,"terminal acknowledgment survives interaction retention loss");
+            Assert.That(player.Dialogue.Seen,Does.Contain(outcome.GrammarKeys.Single()));
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="dismiss",Kind="TalkAck",TargetId=outcome.InteractionId,Direction=3,Amount=1}).Accepted,Is.True);
+            game.Disconnect(player.Id);game.AddPlayer(player.Id,"Owner");
+            var session=Consumer(game,player,out var root);
+            try{Assert.That(session.PendingConversationOutcome,Is.Null,"host acknowledgment keeps the dismissed outcome closed after reconnect");}
+            finally{UnityEngine.Object.DestroyImmediate(root);}
+        }
+        [TestCase("Sale")] [TestCase("Buy")] [TestCase("Conversation")]
+        public void FailedTrustRefundsAndRetainsThePrivateWalkOff(string kind)
+        {
+            var game=Pair(0,out var player,out var partner);partner.Role=kind=="Sale"?"Buyer":"Regular";
+            partner.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=40});game.HasLineOfSight=(ax,az,bx,bz)=>false;
+            if(kind=="Sale")player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int cash=player.Cash;
+            var result=game.Execute(player.Id,new GameCommand{Id="trust_start",Kind=kind=="Conversation"?kind:"Start"+kind,TargetId=partner.Id,ItemId=kind=="Sale"?"stock_lsd":FestivalSimulation.SellerStock(partner.Id)});
+            Assert.That(result.Accepted,Is.True,result.Reason);var talk=game.Interaction(player.InteractionId);Assert.That(talk.TrustDance,Is.True);
+            for(int n=0;talk.Status=="Active"&&n<100;n++)game.Tick(.1);
+            Assert.That(talk.Status,Is.EqualTo("Complete"));Assert.That(player.Cash,Is.EqualTo(cash));
+            Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
+            var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));Assert.That(outcome.Notice,Is.EqualTo("They walk off."));
+            game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Notice,Is.EqualTo(outcome.Notice));
+            Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Notice));
+        }
+        [Test] public void ExplicitNarcBustKeepsItsExplanationAfterDetentionTeleport()
+        {
+            var game=Pair(0,out var player,out var partner);partner.Role="Narc";
+            Assert.That(game.Execute(player.Id,new GameCommand{Id="narc",Kind="StartBuy",TargetId=partner.Id,ItemId=FestivalSimulation.SellerStock(partner.Id)}).Accepted,Is.True);
+            var talk=game.Interaction(player.InteractionId);Finish(game,player,talk);
+            Assert.That(player.Life,Is.EqualTo("Detained"));Assert.That(player.X,Is.EqualTo(27));Assert.That(player.Z,Is.EqualTo(5));
+            var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));
+            game.State.Interactions.Clear();game.Tick(20);
+            Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Notice,Is.EqualTo(outcome.Notice));
+            Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Notice));
+        }
+        [Test] public void RetainedOutcomesAndAcknowledgedKeysStayBounded()
+        {
+            var game=Pair(0,out var player,out var partner);game.HasLineOfSight=(ax,az,bx,bz)=>false;
+            for(int key=0;key<512;key++)player.Dialogue.Seen.Add("prior_"+key);
+            for(int thread=0;thread<12;thread++)
+            {
+                var result=game.Execute(player.Id,new GameCommand{Id="bounded_"+thread,Kind="Conversation",TargetId=partner.Id});Assert.That(result.Accepted,Is.True,result.Reason);
+                var talk=game.Interaction(player.InteractionId);Finish(game,player,talk);
+                Assert.That(player.Dialogue.Seen.Count,Is.LessThanOrEqualTo(512));Assert.That(player.Dialogue.Seen.Distinct().Count(),Is.EqualTo(player.Dialogue.Seen.Count));
+            }
+            Assert.That(player.ConversationOutcomes.Count,Is.EqualTo(8));Assert.That(player.ConversationOutcomes.Select(o=>o.DeliveryId).Distinct().Count(),Is.EqualTo(8));
+            Assert.That(View(game,"friend").Players.Find(p=>p.Id==player.Id).ConversationOutcomes,Is.Empty);
+        }
+
+        [Test] public void AuthenticatedHistoryRejectsForeignDelayedAndUnsafePacketsAndRetriesSaving()
+        {
+            string previous=LocalProfile.Folder,owned=Path.Combine(Path.GetTempPath(),"impl-U14-history-"+Guid.NewGuid().ToString("N"));GameObject root=null;
+            try
+            {
+                Directory.CreateDirectory(owned);LocalProfile.Folder=Path.Combine(owned,"blocked");File.WriteAllText(LocalProfile.Folder,"owned blocker");
+                root=new GameObject("impl-U14 history consumer");var session=root.AddComponent<FestivalSession>();Call(session,"InitializePreferences",(object)new[]{"--profile","default"});
+                typeof(FestivalSession).GetField("historyEpoch",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,"epoch");
+                Type packetType=typeof(FestivalSession).Assembly.GetType("Festival.Network.DialogueHistoryPacket");
+                object Packet(long revision,params string[] keys)=>JsonUtility.FromJson(JsonUtility.ToJson(new History{Revision=revision,Seen=keys.ToList()}),packetType);
+                var packet=Packet(1,"reply.talk.cosmic_0123456789abcdef");
+                Assert.That(Call(session,"ReceiveAcknowledgedHistory",1UL,packet,false),Is.False,"only the authenticated host can update history");
+                var oldEpoch=JsonUtility.FromJson(JsonUtility.ToJson(new History{Epoch="old_epoch",Revision=2,Seen=new List<string>{"older"}}),packetType);
+                Assert.That(Call(session,"ReceiveAcknowledgedHistory",0UL,oldEpoch,false),Is.False,"an earlier session epoch cannot alter this profile");
+                Assert.That(Call(session,"ReceiveAcknowledgedHistory",0UL,Packet(2,"bad/key"),false),Is.False);
+                Assert.That(Call(session,"ReceiveAcknowledgedHistory",0UL,Packet(2,Enumerable.Repeat("safe",513).ToArray()),false),Is.False);
+                Assert.That(Call(session,"ReceiveAcknowledgedHistory",0UL,packet,false),Is.True);Assert.That(Call(session,"ReceiveAcknowledgedHistory",0UL,packet,false),Is.False,"duplicate revision cannot save twice");
+                Call(session,"SaveAcknowledgedHistory");Assert.That(session.Profile.Data.SeenDialogue,Is.Empty,"failed Save rolls back only the attempted merge");
+                File.Delete(LocalProfile.Folder);Directory.CreateDirectory(LocalProfile.Folder);
+                typeof(FestivalSession).GetField("nextHistorySave",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,0d);Call(session,"SaveAcknowledgedHistory");
+                Assert.That(new LocalProfile("default").Data.SeenDialogue,Is.EqualTo(new[]{"reply.talk.cosmic_0123456789abcdef"}));
+                Assert.That(Call(session,"ReceiveAcknowledgedHistory",0UL,Packet(0,"older"),false),Is.False,"delayed history never replaces newer acknowledged history");
+                var player=new PlayerState();player.Dialogue.Seen.Add("live_key");player.DialogueRevision=4;
+                Assert.That(typeof(FestivalSession).GetMethod("MergeHistorySeed",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{player,new List<string>{"seed_key","seed_key"}}),Is.True);
+                Assert.That(player.Dialogue.Seen,Is.EqualTo(new[]{"seed_key","live_key"}),"late seed merges behind newer live history");
+            }
+            finally{if(root!=null)UnityEngine.Object.DestroyImmediate(root);LocalProfile.Folder=previous;if(Directory.Exists(owned))Directory.Delete(owned,true);}
+        }
+        [Serializable] sealed class History { public string Epoch="epoch"; public long Revision; public List<string> Seen=new List<string>(); }
+
+        [TestCase(ConversationLines.Smooth)] [TestCase(ConversationLines.SoSo)] [TestCase(ConversationLines.Awkward)]
+        public void ClosingReactionIsDurableAndPrivateAfterTheActiveThreadDisappears(int grade)
+        {
+            var game=Pair(0,out var player,out var partner);var talk=Start(game,player,partner);
+            for(int turn=0;turn<3;turn++)Assert.That(game.Execute(player.Id,new GameCommand{Id="close_"+turn,Kind="Reply",Direction=turn,Amount=Array.IndexOf(talk.Turns[turn].Grades,grade)}).Accepted,Is.True);
+            Assert.That(player.InteractionId,Is.Empty);Assert.That(talk.Turns.Count,Is.EqualTo(3));
+            Assert.That(player.NpcSpeech,Is.Not.Empty,"the actual third reply has a closing reaction");
+            Assert.That(player.ConversationOutcomes.Single().GrammarKeys.Single(),Does.StartWith("react.Wook."+grade+"_"),"the private final delivery uses the actual chosen reply grade's authored family");
+            game.State.Interactions.Clear();game.Tick(20);
+            string owner=JsonUtility.ToJson(View(game,player.Id)),friend=JsonUtility.ToJson(View(game,"friend"));
+            Assert.That(owner,Does.Contain("ConversationOutcomes"));Assert.That(owner,Does.Contain(player.NpcSpeech));
+            Assert.That(friend,Does.Not.Contain(player.NpcSpeech),"a wire JSON search finds no remote owner's private outcome");
+        }
+        [Test] public void GeneratingAReplyTurnDoesNotSaveUnreadGrammar()
+        {
+            var game=Pair(0,out var player,out var partner);Start(game,player,partner);
+            Assert.That(player.Dialogue.Seen,Is.Empty,"unseen generated choices are not host acknowledgments");
         }
 
         [TestCase("Conversation","Regular",0)] [TestCase("Buy","Regular",0)]
@@ -126,12 +257,12 @@ namespace Festival.Tests
             var events=new List<string>();game.ChatDiagnostic=(eventKind,status,round,seconds)=>events.Add(eventKind+" "+status);
             for(int turn=0;turn<3;turn++)
             {
-                Assert.That(events.Count,Is.Zero,"there is no settlement before the final reply");
+                Assert.That(events.Any(e=>e.StartsWith("TalkSettled")),Is.False,"there is no settlement before the final reply");
                 Assert.That(game.Execute(player.Id,new GameCommand{Id="reply_"+turn,Kind="Reply",Direction=turn,Amount=0}).Accepted,Is.True);
             }
-            Assert.That(events,Is.EqualTo(new[]{"TalkSettled Conversation"}),"debugging emits only the event and kind, without dialogue, grade or identity");
+            Assert.That(events.Where(e=>e.StartsWith("TalkSettled")),Is.EqualTo(new[]{"TalkSettled Conversation"}),"debugging emits only the event and kind, without dialogue, grade or identity");
             Assert.That(game.Execute(player.Id,new GameCommand{Id="late",Kind="Reply",Direction=2,Amount=0}).Accepted,Is.False);
-            Assert.That(events.Count,Is.EqualTo(1));Assert.That(talk.Status,Is.EqualTo("Complete"));
+            Assert.That(events.Count(e=>e.StartsWith("TalkSettled")),Is.EqualTo(1));Assert.That(events.All(e=>e=="TalkSettled Conversation"||e=="HistoryAcknowledged Talk"||e=="OutcomeDelivered Conversation"),Is.True,"lifecycle diagnostics carry no private contents");Assert.That(talk.Status,Is.EqualTo("Complete"));
         }
     }
 }

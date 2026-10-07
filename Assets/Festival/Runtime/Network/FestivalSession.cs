@@ -15,8 +15,8 @@ using UnityEngine.Rendering.Universal;
 namespace Festival.Network
 {
     [Serializable] internal sealed class Hello { public string Name="Friend", Token=""; public int Protocol=FestivalSession.ProtocolVersion; }
-    [Serializable] internal sealed class Welcome { public string PlayerId="", Token=""; }
-    [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); }
+    [Serializable] internal sealed class Welcome { public string PlayerId="", Token="",HistoryEpoch=""; }
+    [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); public string Epoch=""; public long Revision; }
     [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint,SpinPoi; public int Sequence; }
     [Serializable] internal sealed class SnapshotPacket { public RoundState State; public double ServerSeconds; }
     internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt; public int Commands; public double Window; }
@@ -74,6 +74,9 @@ namespace Festival.Network
         // Subsequent units append only the version-7 changes they actually land; chart/timeline recordings follow integration.
         // MUSIC-5: ChooseCampTrack and CampMusicTrack append DESERT RHYTHM (6) and INDUSTRIAL TECHNO (7);
         // the original five choices and SILENCE keep their indexes. Version-6 peers do not carry these recordings.
+        // DIALOG-8: authenticated owner-only acknowledged grammar updates carry a session epoch/revision; TalkAck names
+        // turns 0-2 or retained terminal delivery 3; terminal Amount 1 dismisses it authoritatively. Private bounded
+        // ConversationOutcomes survive active interaction removal.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -94,6 +97,11 @@ namespace Festival.Network
         private readonly Dictionary<string,(long Sequence,double At)> campEggCursor=new Dictionary<string,(long,double)>();
         private string campEggRound="",campDiscoveryError="";
         private double nextCampDiscoverySave;
+        private string historyEpoch="",historyError="",outcomeRound="",acknowledgedOutcome="";
+        private long historyRevision=-1,dismissedOutcomeSequence;
+        private DialogueHistoryPacket pendingHistory;
+        private double nextHistorySave;
+        private readonly Dictionary<string,long> publishedHistory=new Dictionary<string,long>();
         public IVoiceSession Voice {get;}=new UnavailableVoiceSession();
         public bool MenuOpen=true;
         /// <summary>The pointer is free, and the view holds still, for the menu and for clicking a friend at the debrief (HUD-3).</summary>
@@ -217,6 +225,7 @@ namespace Festival.Network
         private void Configure(ushort port,string address,bool host)
         {
             if(manager!=null)throw new InvalidOperationException("Leave the existing session first.");
+            if(host)historyEpoch=Guid.NewGuid().ToString("N");
             var go=new GameObject("Festival native session");
             var transport=go.AddComponent<UnityTransport>();
             transport.SetConnectionData(address,port,host?"0.0.0.0":null);
@@ -300,9 +309,10 @@ namespace Festival.Network
                 var p=simulation.AddPlayer(id,CleanName(hello.Name));peers[clientId]=id;inputs[id]=new PeerInput();
                 if(clientId==manager.LocalClientId)
                 {
-                    LocalPlayerId=id;token=hello.Token;p.Dialogue.Seen=new List<string>(Profile.Data.SeenDialogue);
+                    LocalPlayerId=id;token=hello.Token;MergeHistorySeed(p,Profile.Data.SeenDialogue);
                 }
-                else SendJson("festival.welcome",clientId,new Welcome{PlayerId=id,Token=hello.Token});
+                else SendJson("festival.welcome",clientId,new Welcome{PlayerId=id,Token=hello.Token,HistoryEpoch=historyEpoch});
+                publishedHistory.Remove(id);
             }
             if(clientId==manager.LocalClientId)
             {
@@ -325,7 +335,7 @@ namespace Festival.Network
             var messages=manager.CustomMessagingManager;
             messages.RegisterNamedMessageHandler("festival.welcome",(sender,reader)=>{
                 if(sender!=NetworkManager.ServerClientId||IsHost)return;
-                var w=ReadJson<Welcome>(reader,1024);if(w==null)return;LocalPlayerId=w.PlayerId;token=w.Token;
+                var w=ReadJson<Welcome>(reader,1024);if(w==null)return;LocalPlayerId=w.PlayerId;token=w.Token;historyEpoch=w.HistoryEpoch;historyRevision=-1;
             });
             messages.RegisterNamedMessageHandler("festival.snapshot",(sender,reader)=>{
                 if(sender!=NetworkManager.ServerClientId||IsHost)return;
@@ -351,11 +361,11 @@ namespace Festival.Network
             });
             messages.RegisterNamedMessageHandler("festival.history",(sender,reader)=>{
                 if(!IsHost||!peers.TryGetValue(sender,out var id))return;
-                var packet=ReadJson<DialogueHistoryPacket>(reader,65536);var player=simulation.Player(id);
-                if(packet?.Seen==null||player==null||packet.Seen.Count>512)return;
-                var safe=new List<string>();
-                foreach(var line in packet.Seen)if(!string.IsNullOrEmpty(line)&&line.Length<=64&&!safe.Contains(line))safe.Add(line);
-                player.Dialogue.Seen=safe;
+                var packet=ReadJson<DialogueHistoryPacket>(reader,96*1024);var player=simulation.Player(id);
+                if(packet==null||player==null)return;MergeHistorySeed(player,packet.Seen);
+            });
+            messages.RegisterNamedMessageHandler("festival.history-update",(sender,reader)=>{
+                ReceiveAcknowledgedHistory(sender,ReadJson<DialogueHistoryPacket>(reader,96*1024));
             });
         }
         bool Admit(string id,int limit)
@@ -468,7 +478,7 @@ namespace Festival.Network
                 accumulator+=Math.Min(Time.unscaledDeltaTime,.2f);int steps=0;
                 while(accumulator>=1.0/30 && steps++<6){ApplyMovement(1.0/30);simulation.Tick(1.0/30);accumulator-=1.0/30;}
                 State=ViewFor(simulation,LocalPlayerId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=manager.ServerTime.Time;
-                Profile.RememberUnlocks(simulation.State);
+                Profile.RememberUnlocks(simulation.State);PublishAcknowledgedHistory();
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
             var player=LocalPlayer;if(player==null)return;
@@ -486,6 +496,7 @@ namespace Festival.Network
                     campDiscoveryError="";nextCampDiscoverySave=0;
                 }
             }
+            SaveAcknowledgedHistory();
             FollowCampEggs(State);
             if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetTwists(State);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State,player);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
@@ -560,13 +571,99 @@ namespace Festival.Network
         }
         public void AcknowledgeDisplayedDialogue(InteractionState interaction)
         {
-            if(interaction==null||string.IsNullOrEmpty(interaction.DialogueId)||acknowledgedDialogue==interaction.Id+interaction.DialogueId)return;
-            acknowledgedDialogue=interaction.Id+interaction.DialogueId;
-            Command("DialogueAck",interaction.DialogueId);
-            Profile.Data.SeenDialogue.RemoveAll(id=>id==interaction.DialogueId);
-            Profile.Data.SeenDialogue.Add(interaction.DialogueId);
-            while(Profile.Data.SeenDialogue.Count>512)Profile.Data.SeenDialogue.RemoveAt(0);
-            Profile.Save();
+            if(interaction==null||interaction.PlayerId!=LocalPlayerId)return;
+            if(FestivalSimulation.Talks(interaction.Kind)&&interaction.Turns.Count>0){AcknowledgeConversationTurn(interaction);return;}
+            if(string.IsNullOrEmpty(interaction.DialogueId)||acknowledgedDialogue==interaction.Id+interaction.DialogueId)return;
+            acknowledgedDialogue=interaction.Id+interaction.DialogueId;Command("DialogueAck",interaction.DialogueId);
+        }
+        public void AcknowledgeConversationTurn(InteractionState interaction)
+        {
+            if(interaction==null||interaction.PlayerId!=LocalPlayerId||interaction.Turns.Count==0)return;
+            string delivery=interaction.Id+":"+(interaction.Turns.Count-1);
+            if(acknowledgedDialogue==delivery)return;acknowledgedDialogue=delivery;
+            Command("TalkAck",interaction.Id,direction:interaction.Turns.Count-1);
+        }
+        // Screen owners consume this delivery after the chart/thread closes, then dismiss it explicitly on Escape.
+        public ConversationOutcome PendingConversationOutcome
+        {
+            get
+            {
+                if(State==null||LocalPlayer==null)return null;
+                if(outcomeRound!=State.RoundId){outcomeRound=State.RoundId;dismissedOutcomeSequence=0;}
+                dismissedOutcomeSequence=Math.Max(dismissedOutcomeSequence,LocalPlayer.ConversationDismissedSequence);
+                if(LocalPlayer.InteractionId!="")
+                {
+                    foreach(var previous in LocalPlayer.ConversationOutcomes??new List<ConversationOutcome>())dismissedOutcomeSequence=Math.Max(dismissedOutcomeSequence,previous.Sequence);
+                    return null;
+                }
+                return LocalPlayer.ConversationOutcomes?.FindLast(o=>o.RoundId==State.RoundId&&o.InteractionId==LocalPlayer.ConversationThreadId&&o.Sequence>dismissedOutcomeSequence);
+            }
+        }
+        public void AcknowledgeConversationOutcome(ConversationOutcome outcome)
+        {
+            if(outcome==null||outcome.RoundId!=State?.RoundId||LocalPlayer?.ConversationOutcomes?.Exists(o=>o.DeliveryId==outcome.DeliveryId)!=true)return;
+            if(acknowledgedOutcome==outcome.DeliveryId)return;acknowledgedOutcome=outcome.DeliveryId;
+            Command("TalkAck",outcome.InteractionId,direction:FestivalSimulation.ConversationTurns);
+        }
+        public void DismissConversationOutcome(string deliveryId)
+        {
+            var outcome=LocalPlayer?.ConversationOutcomes?.Find(o=>o.DeliveryId==deliveryId&&o.RoundId==State.RoundId);
+            if(outcome==null)return;outcomeRound=State.RoundId;dismissedOutcomeSequence=Math.Max(dismissedOutcomeSequence,outcome.Sequence);
+            Command("TalkAck",outcome.InteractionId,amount:1,direction:FestivalSimulation.ConversationTurns);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            simulation?.ChatDiagnostic?.Invoke("OutcomeDismissed","Talk",State.RoundId,State.SimulationSeconds);
+#endif
+        }
+        internal static bool SafeDialogueKeys(List<string> keys)
+        {
+            if(keys==null||keys.Count>512)return false;
+            foreach(string key in keys)
+            {
+                if(string.IsNullOrEmpty(key)||key.Length>64)return false;
+                foreach(char c in key)if(!(c>='a'&&c<='z'||c>='A'&&c<='Z'||c>='0'&&c<='9'||c=='_'||c=='-'||c=='.'))return false;
+            }
+            return true;
+        }
+        internal static bool MergeHistorySeed(PlayerState player,List<string> keys)
+        {
+            if(player==null||!SafeDialogueKeys(keys))return false;
+            if(player.Dialogue==null)player.Dialogue=new DialogueHistory();
+            var merged=new List<string>();foreach(string key in keys)if(!merged.Contains(key)&&player.Dialogue.Seen?.Contains(key)!=true)merged.Add(key);
+            if(player.Dialogue.Seen!=null)merged.AddRange(player.Dialogue.Seen);
+            while(merged.Count>512)merged.RemoveAt(0);
+            if(player.Dialogue.Seen!=null&&player.Dialogue.Seen.SequenceEqual(merged))return true;
+            player.Dialogue.Seen=merged;player.DialogueRevision++;return true;
+        }
+        private void PublishAcknowledgedHistory()
+        {
+            foreach(var peer in peers)
+            {
+                var player=simulation.Player(peer.Value);if(player==null)continue;
+                if(publishedHistory.TryGetValue(player.Id,out long revision)&&revision==player.DialogueRevision)continue;
+                var packet=new DialogueHistoryPacket{Epoch=historyEpoch,Revision=player.DialogueRevision,Seen=new List<string>(player.Dialogue.Seen??new List<string>())};
+                if(peer.Key==manager.LocalClientId)ReceiveAcknowledgedHistory(NetworkManager.ServerClientId,packet,true);
+                else SendJson("festival.history-update",peer.Key,packet);
+                publishedHistory[player.Id]=player.DialogueRevision;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                simulation.ChatDiagnostic?.Invoke("HistoryDelivered","Talk",simulation.State.RoundId,simulation.State.SimulationSeconds);
+#endif
+            }
+        }
+        private bool ReceiveAcknowledgedHistory(ulong sender,DialogueHistoryPacket packet,bool localHost=false)
+        {
+            if(sender!=NetworkManager.ServerClientId||IsHost&&!localHost||packet==null||packet.Epoch!=historyEpoch||string.IsNullOrEmpty(historyEpoch)||packet.Revision<0||packet.Revision<=historyRevision||!SafeDialogueKeys(packet.Seen))return false;
+            historyRevision=packet.Revision;pendingHistory=packet;nextHistorySave=0;return true;
+        }
+        private void SaveAcknowledgedHistory()
+        {
+            if(pendingHistory==null||Profile==null||Time.unscaledTimeAsDouble<nextHistorySave)return;
+            string error=Profile.RememberDialogue(pendingHistory.Seen);
+            if(error!=""){Message=error;historyError=error;nextHistorySave=Time.unscaledTimeAsDouble+2;return;}
+            if(historyError!=""&&Message==historyError)Message="Conversation history saved.";
+            historyError="";pendingHistory=null;nextHistorySave=0;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            simulation?.ChatDiagnostic?.Invoke("HistorySaved","Talk",State?.RoundId??"",State?.SimulationSeconds??0);
+#endif
         }
         private void ApplyMovement(double dt)
         {
@@ -669,7 +766,7 @@ namespace Festival.Network
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
-                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active") switch{null=>p.Effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect)?"Intoxicated":"Idle",var doing when FestivalSimulation.Dancing(doing)=>"Dance",var doing=>doing.Kind};
+                var copy=JsonUtility.FromJson<PlayerState>(JsonUtility.ToJson(p));copy.Dialogue=new DialogueHistory();copy.DialogueRevision=0;copy.VisualPose=p.Ready&&source.Phase=="Shopping"?"Dance":p.DragTargetId!=""||p.CarryBodyId!=""?"Drag":source.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active") switch{null=>p.Effects.Exists(e=>e.Id!=FestivalSimulation.GiggleGasEffect)?"Intoxicated":"Idle",var doing when FestivalSimulation.Dancing(doing)=>"Dance",var doing=>doing.Kind};
                 if(FestivalSimulation.CampSeated(source,p.Id))copy.VisualPose=FestivalSimulation.CampChairPose;
                 var pendingOffer=source.Transfers.Find(t=>t.FromId==p.Id);
                 copy.VisualOfferItem=pendingOffer?.ItemId??"";copy.VisualOfferTarget=pendingOffer?.ToId??"";
@@ -682,7 +779,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
+                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.FoundCampEggMask=0;}view.Players.Add(copy);
             }
             if(!spirit)
             {
@@ -880,7 +977,7 @@ namespace Festival.Network
             }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
             FollowCampEggs(null);
-            nextCampDiscoverySave=0;campDiscoveryError="";
+            nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
             Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;

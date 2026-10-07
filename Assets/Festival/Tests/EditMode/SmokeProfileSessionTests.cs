@@ -64,7 +64,26 @@ namespace Festival.Tests
             Assert.That(File.ReadAllBytes(CallerPath),Is.EqualTo(callerBytes),"the real acknowledgement/save cannot change caller bytes");
             Assert.That(PlayerPrefs.GetString(callerKey),Is.EqualTo(Bindings),"input load cannot delete caller controls");
         }
-        static void Acknowledge(FestivalSession session,string id)=>session.AcknowledgeDisplayedDialogue(new InteractionState{Id=id,DialogueId="line-"+id});
+        static void Acknowledge(FestivalSession session,string id)
+        {
+            var game=new FestivalSimulation(19);var owner=game.AddPlayer("smoke_owner","Owner");game.AddPlayer("smoke_friend","Friend");
+            game.State.Phase="Playing";game.State.Npcs.Clear();owner.X=owner.Z=0;
+            game.State.Npcs.Add(new NpcState{Id="smoke_partner",Kind="Wook",Z=1.5f,Yaw=180,CanTalk=true});
+            Assert.That(game.Execute(owner.Id,new GameCommand{Id="dance",Kind="Dance",TargetId="smoke_partner"}).Accepted,Is.True);
+            var interaction=game.Interaction(owner.InteractionId);
+            // A stable storage sentinel on a real active dance; no disconnected UI call can save it optimistically.
+            interaction.DialogueId="line-"+id;
+            Assert.That(game.Execute("smoke_friend",new GameCommand{Id="foreign_ack",Kind="DialogueAck",TargetId=interaction.DialogueId}).Accepted,Is.False);
+            Assert.That(game.Execute(owner.Id,new GameCommand{Id="owner_ack",Kind="DialogueAck",TargetId=interaction.DialogueId}).Accepted,Is.True);
+            string epoch=Guid.NewGuid().ToString("N");typeof(FestivalSession).GetField("historyEpoch",Private).SetValue(session,epoch);
+            typeof(FestivalSession).GetField("historyRevision",Private).SetValue(session,-1L);
+            Type packetType=typeof(FestivalSession).Assembly.GetType("Festival.Network.DialogueHistoryPacket");var packet=Activator.CreateInstance(packetType);
+            packetType.GetField("Epoch").SetValue(packet,epoch);packetType.GetField("Revision").SetValue(packet,owner.DialogueRevision);packetType.GetField("Seen").SetValue(packet,new List<string>(owner.Dialogue.Seen));
+            var receive=typeof(FestivalSession).GetMethod("ReceiveAcknowledgedHistory",Private);
+            Assert.That(receive.Invoke(session,new object[]{1UL,packet,false}),Is.False,"foreign sender cannot save the fixture marker");
+            Assert.That(receive.Invoke(session,new object[]{0UL,packet,false}),Is.True,"only validated host acknowledgment reaches persistence");
+            typeof(FestivalSession).GetMethod("SaveAcknowledgedHistory",Private).Invoke(session,null);
+        }
         static string SeedOwnedKey(string folder,string profile)
         {
             string key="festival-bindings-"+folder+"-"+profile;PlayerPrefs.SetString(key,"owned-smoke-controls");PlayerPrefs.Save();return key;

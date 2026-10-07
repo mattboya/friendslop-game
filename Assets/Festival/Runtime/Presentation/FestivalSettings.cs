@@ -241,11 +241,17 @@ namespace Festival.Presentation
             if(string.IsNullOrWhiteSpace(data.LastHost)||data.LastHost.Length>128)data.LastHost=ProfileData.DefaultHost;
             // "first_shuttle" is the persisted award ID even though the HUD now calls it a rescue.
             data.Cosmetics=Ids(data.Cosmetics,1,id=>id=="first_shuttle");
-            data.SeenDialogue=Ids(data.SeenDialogue,512,ValidId);
+            data.SeenDialogue=Ids(data.SeenDialogue,512,ValidDialogueId);
             data.SeenTips=Ids(data.SeenTips,512,ValidId);
             data.FoundCampEggIds=Ids(data.FoundCampEggIds,8,IsCampEggId);
         }
         public static bool IsCampEggId(string id)=>id=="gnome"||id=="button"||id=="chair"||id=="lost_found"||id=="hammock"||id=="flamingo"||id=="cone"||id=="wash_me";
+        private static bool ValidDialogueId(string id)
+        {
+            if(string.IsNullOrEmpty(id)||id.Length>64)return false;
+            foreach(char c in id)if(!(c>='a'&&c<='z'||c>='A'&&c<='Z'||c>='0'&&c<='9'||c=='_'||c=='-'||c=='.'))return false;
+            return true;
+        }
         private static bool ValidId(string id)
         {
             if(string.IsNullOrEmpty(id)||id.Length>64)return false;
