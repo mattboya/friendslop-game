@@ -21,6 +21,7 @@ public sealed partial class FestivalSimulation {
     bool OverlappingDance(PlayerState q,InteractionState i,out double? worst){worst=null;bool dancing=false;foreach(var x in State.Interactions){if(x==i||!DancesVisibly(x.Kind)||x.PlayerId!=q.Id||(x.Status!="Active"&&x.Status!="Complete")||!Overlap(x,i))continue;dancing=true;double? score=x.Kind=="ConfirmDance"?null:x.Status=="Complete"?x.Score:ScoreSoFar(x);if(score!=null)worst=worst==null?score:Math.Min(worst.Value,score.Value);}return dancing;}
     bool Talking(PlayerState q){var x=Interaction(q.InteractionId);return x!=null&&x.Status=="Active"&&Talks(x.Kind);}
     const double ChallengeLeadIn=2;
+    // The authored first-head anchor never moves the command/visible-overlap boundary.
     static double PressedAt(InteractionState x)=>x.StartSeconds-ChallengeLeadIn;
     static double VerdictAt(InteractionState x)=>x.StartSeconds+x.DurationSeconds+.75;
     static bool Overlap(InteractionState a,InteractionState b)=>PressedAt(a)<=VerdictAt(b)&&PressedAt(b)<=VerdictAt(a);

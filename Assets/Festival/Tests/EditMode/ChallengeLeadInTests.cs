@@ -1,11 +1,15 @@
 using System;
+using System.Collections;
+using System.IO;
 using System.Collections.Generic;
 using System.Reflection;
 using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace Festival.Tests
@@ -47,6 +51,7 @@ namespace Festival.Tests
         public void TheFirstPonyDustArrowEntersAtTheBottom(string kind)
         {
             var game=Pair();double pressed=game.State.SimulationSeconds;var interaction=Start(game,kind);
+            Assert.That(JsonUtility.ToJson(interaction),Does.Contain("\"StageTrack\":"),"the real HUD interaction carries the stage grid");
             var chart=RhythmChart.For(interaction);
             made=new GameObject("impl:U06 lane entry");var hud=made.AddComponent<FestivalHud>();
             typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
@@ -64,6 +69,58 @@ namespace Festival.Tests
             hud.DrawChart(chart.Notes[0].TimeSeconds,2.4,"ketamine",false);
             var target=(RectTransform)made.transform.Find("Festival HUD/Rhythm lane/Receptor well "+chart.Notes[0].Direction+"/Target arrow");
             Assert.That(Vector3.Distance(note.rectTransform.TransformPoint(note.rectTransform.rect.center),target.TransformPoint(target.rect.center)),Is.LessThan(1),"the scheduled note still lands on its receptor");
+        }
+
+        [Test]public void IncomingStageAnchorChangesTheRealHudChartAndSurvivesTheOwnerView()
+        {
+            var incoming=JsonUtility.FromJson<InteractionState>("{\"Kind\":\"Dance\",\"ChartSeed\":17,\"NoteCount\":16,\"ChartDifficulty\":3,\"BeatSeconds\":0.5,\"StageTrack\":1,\"StageFirstHeadWorldSeconds\":10,\"StageFirstHeadDelaySeconds\":2.23,\"StageBeatStride\":1}");
+            var chart=RhythmChart.For(incoming);Assert.That(chart.Notes[0].TimeSeconds,Is.EqualTo(2.23).Within(.000001),"JSON drives the production For entry point");
+            var game=Pair();game.State.Players.Add(new PlayerState{Id="p1",Name="Friend"});var interaction=Start(game,"ConfirmDance");
+            var owner=JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,"p0")));
+            Assert.That(JsonUtility.ToJson(owner.Interactions[0]),Does.Contain("\"StageTrack\":2"));
+            Assert.That(JsonUtility.ToJson(RhythmChart.For(owner.Interactions[0])),Is.EqualTo(JsonUtility.ToJson(RhythmChart.For(interaction))),"host and owner decode the same chart");
+            Assert.That(FestivalSession.ViewFor(game,"p1").Interactions,Is.Empty,"private check charts remain owner-only");
+            var restored=new FestivalSimulation();restored.Restore(JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(game.State)));
+            Assert.That(JsonUtility.ToJson(RhythmChart.For(restored.Interaction(interaction.Id))),Is.EqualTo(JsonUtility.ToJson(RhythmChart.For(interaction))));
+        }
+
+        [UnityTearDown]public IEnumerator LeaveOwnedPlayMode(){if(Application.isPlaying)yield return new ExitPlayMode();}
+        [UnityTest]public IEnumerator HostedCalibratedStageHoldsUseMappedHeadsAndTails()
+        {
+            yield return new EnterPlayMode();
+            string priorFolder=LocalProfile.Folder,priorScope=FestivalInput.PreferencesScope;
+            string folder=Path.Combine(Path.GetTempPath(),"impl-U25-stage-input-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+            LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;var host=new GameObject("impl-U25 stage host");
+            try
+            {
+                var session=host.AddComponent<FestivalSession>();session.enabled=false;session.Host("Stage test",8610);
+                Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
+                var game=Pair();game.State.LevelIndex=3;var interaction=Start(game,"Conversation");
+                Assert.That(JsonUtility.ToJson(interaction),Does.Contain("\"StageTrack\":1"),"real trust command selected the night stage");
+                interaction.NoteCount=16;interaction.ChartSeed=0;interaction.DurationSeconds=RhythmChart.For(interaction).DurationSeconds;
+                var chart=RhythmChart.For(interaction);var hold=chart.Notes.Find(n=>n.HoldSeconds>0);Assert.That(hold,Is.Not.Null,"production-verified seed 0 contains a hold at ID 2");Assert.That(hold.Id,Is.EqualTo(2));
+                typeof(FestivalSession).GetField("simulation",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,game);
+                typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,"p0");typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(game,"p0"));
+                session.Profile.Data.TimingCalibrationMs=60;
+                foreach(var note in chart.Notes)
+                {
+                    game.State.SimulationSeconds=interaction.StartSeconds+note.TimeSeconds+.06;session.Rhythm(note.Direction,note.TimeSeconds+.06);
+                    Assert.That(interaction.Inputs[interaction.Inputs.Count-1].TimeSeconds,Is.EqualTo(note.TimeSeconds).Within(.000001),session.Message);
+                    if(note.HoldSeconds>0)
+                    {
+                        game.State.SimulationSeconds=interaction.StartSeconds+note.TimeSeconds+note.HoldSeconds+.06;
+                        session.Rhythm(note.Direction,note.TimeSeconds+note.HoldSeconds+.06,true);
+                        Assert.That(interaction.Inputs[interaction.Inputs.Count-1].Release,Is.True,session.Message);
+                    }
+                }
+                game.State.SimulationSeconds=interaction.StartSeconds+chart.DurationSeconds+.74;game.Tick(.001);
+                Assert.That(interaction.Turns,Is.Empty,"the mapped duration still has a late verdict window");
+                game.Tick(.02);Assert.That(interaction.Turns.Count,Is.EqualTo(1),"the real mapped hold judge unlocks the conversation");
+                Assert.That(game.State.Npcs[0].Observers[0].Suspicion,Is.EqualTo(25).Within(.001),"every calibrated head and retained tail scores perfect");
+                Assert.That(JsonUtility.ToJson(RhythmChart.For(interaction)),Is.EqualTo(JsonUtility.ToJson(chart)),"calibration never moves chart time");
+            }
+            finally{Object.DestroyImmediate(host);LocalProfile.Folder=priorFolder;FestivalInput.PreferencesScope=priorScope;Directory.Delete(folder,true);}
+            yield return new ExitPlayMode();
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

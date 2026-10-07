@@ -4,6 +4,14 @@ namespace Festival.Core
     {
         // TRIP-9: checks and trust dances leave time for the first arrow to enter even the longest-look-ahead lane.
         // Chart times and the late-input verdict window remain relative to the future start.
+        void ScheduleStageRhythm(InteractionState i)
+        {
+            ScheduleChallengeLeadIn(i);
+            RhythmChart.InitializeStage(i,RhythmChart.StageTrackFor(State.FestivalIndex,State.LevelIndex),WorldSeconds(State)+ChallengeLeadIn);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            RhythmDiagnostic?.Invoke("[Festival.StageChart] track="+i.StageTrack+" anchor="+i.StageFirstHeadWorldSeconds.ToString("F6",System.Globalization.CultureInfo.InvariantCulture)+" stride="+i.StageBeatStride.ToString("F1",System.Globalization.CultureInfo.InvariantCulture));
+#endif
+        }
         void ScheduleChallengeLeadIn(InteractionState i)
         {
             i.StartSeconds+=ChallengeLeadIn;

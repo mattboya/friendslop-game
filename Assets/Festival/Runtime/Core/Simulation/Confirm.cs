@@ -9,8 +9,8 @@ namespace Festival.Core
         // Legacy reading estimate retained for source compatibility; DIALOG-9 checks have no deadline.
         // The tripper stands within ConfirmReach of the festivalgoer to start either check.
         public const double ConfirmChatSeconds=8,ConfirmReach=2.5;
-        // Four notes half a second apart: 2 s of steps after the chart's lead-in and the shared 2 s countdown.
-        // The verdict lands in 6.75 s: the countdown, the chart's 4 s and the .75 s late-input window.
+        // Four logical quarter notes keep the .5 s tuning; the nearest approved stage stride supplies their actual times.
+        // The verdict follows the simulation countdown, mapped chart duration and .75 s late-input window.
         const int ConfirmDanceNotes=4;const double ConfirmDanceBeat=.5;
 
         /// <summary>Whether p may check n: only the tripper, and only someone they still have an unchecked vision about. POLO-1's one
@@ -42,8 +42,7 @@ namespace Festival.Core
                 return Ok();
             }
             GiveDanceRoom(p,npc);
-            var dance=NewInteraction(p,c.Kind,npc.Id,0);ScheduleChallengeLeadIn(dance);dance.NoteCount=ConfirmDanceNotes;dance.BeatSeconds=ConfirmDanceBeat;
-            dance.DurationSeconds=RhythmChart.For(dance).DurationSeconds;
+            var dance=NewInteraction(p,c.Kind,npc.Id,0);dance.NoteCount=ConfirmDanceNotes;dance.BeatSeconds=ConfirmDanceBeat;ScheduleStageRhythm(dance);
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))dance.WitnessIds.Add(n.Id);
             return Ok();
         }

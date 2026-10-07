@@ -33,6 +33,17 @@ public static class RhythmChartTests
     // A note's place on the sixteenth grid: 0 is the first beat, 4 the second, 5 a sixteenth after it.
     static double Grid(RhythmNote n,double beat)=>(n.TimeSeconds-2)/beat*4;
     static int Slot(RhythmNote n,double beat)=>(int)Math.Round(Grid(n,beat));
+    static string LogicalShape(InteractionState i)
+    {
+        var chart=RhythmChart.For(i);var parts=new List<string>();var track=StageBeats.For(i.StageTrack);
+        double first=i.StageTrack==0?0:RhythmChart.StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds);
+        foreach(var n in chart.Notes)
+        {
+            double slot=i.StageTrack==0?Grid(n,i.BeatSeconds):(RhythmChart.StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds+n.TimeSeconds-i.StageFirstHeadDelaySeconds)-first)/i.StageBeatStride*4;
+            parts.Add((int)Math.Round(slot)+":"+n.Direction);
+        }
+        return string.Join(" ",parts);
+    }
     static string Shape(RhythmChart chart,double beat=.5){var parts=new List<string>();foreach(var n in chart.Notes)parts.Add(Slot(n,beat)+":"+n.Direction);return string.Join(" ",parts);}
     // What beat b holds, read from its notes and hold endpoints; "?" for an invalid pattern.
     static string Pattern(RhythmChart chart,double beat,int b)
@@ -209,8 +220,8 @@ public static class RhythmChartTests
             var s=Floor(level);if(kind=="Conversation")s.State.Npcs[0].Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
             var i=Start(s,kind);Check(kind=="Dance"||i.TrustDance,"setup: the wary festivalgoer asks for a dance before the chat");
             Check(i.ChartDifficulty==level,kind+" begun on level "+level+" keeps that level's chart difficulty (got "+i.ChartDifficulty+")");
-            Check(Shape(RhythmChart.For(i))==Shape(RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,level)),kind+" plays level "+level+"'s mix from its seed");
-            Check(Math.Abs(i.DurationSeconds-(2+i.NoteCount*i.BeatSeconds))<1e-9,kind+" lasts the lead-in and its beats");
+            Check(LogicalShape(i)==Shape(RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,level)),kind+" plays level "+level+"'s mix from its seed");
+            Check(i.DurationSeconds==RhythmChart.For(i).DurationSeconds,kind+" lasts its actual mapped lead-in, heads and holds");
         }
     }
 
@@ -229,16 +240,17 @@ public static class RhythmChartTests
         {
             i.ChartSeed=seed;var chart=RhythmChart.For(i);
             Check(chart.Notes.Count==4,"a Night 2 check dance is four notes (seed "+seed+": "+Shape(chart)+")");
-            for(int b=0;b<4;b++)Check(Pattern(chart,i.BeatSeconds,b)==Quarter,"a Night 2 check dance is all quarter notes (seed "+seed+": "+Shape(chart)+")");
+            Check(LogicalShape(i)==Shape(RhythmChart.Create(seed,4,i.BeatSeconds,RhythmChart.QuarterNotes)),"a Night 2 check dance keeps all four logical quarter notes on the music grid");
         }
     }
 
     // A 4-note run's last note sits a sixteenth before the chart ends, so a Good press on it can land after the end.
     static void ALateGoodOnTheLastSixteenthStillCounts()
     {
-        var s=Floor(3);var i=Start(s,"Dance");i.ChartDifficulty=3;RhythmChart chart=null; // Night 2's mix (stored at the start; set here so this checks only the press)
-        for(int seed=0;seed<1000&&chart==null;seed++){i.ChartSeed=seed;var c=RhythmChart.For(i);if(Slot(c.Notes[c.Notes.Count-1],i.BeatSeconds)==4*i.NoteCount-1)chart=c;}
-        Check(chart!=null,"setup: a chart whose last note is the last sixteenth");
+        var s=Floor(3);var i=Start(s,"Dance");i.ChartDifficulty=3;i.ChartSeed=0;var chart=RhythmChart.For(i);
+        var logical=RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,i.ChartDifficulty);
+        Check(Slot(logical.Notes[logical.Notes.Count-1],i.BeatSeconds)==4*i.NoteCount-1,"setup: production-verified final sixteenth fixture");
+        i.DurationSeconds=chart.DurationSeconds;
         var last=chart.Notes[chart.Notes.Count-1];double press=last.TimeSeconds+.14;
         Check(press>i.DurationSeconds,"setup: a press .14 s after the last note comes after the chart ends");
         foreach(var n in chart.Notes)if(n!=last)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});

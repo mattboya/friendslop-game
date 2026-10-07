@@ -9,14 +9,83 @@ namespace Festival.Core
         public List<RhythmNote> Notes = new List<RhythmNote>();
         public double DurationSeconds;
         // The chart a rhythm challenge plays, the same on the host, in the HUD and in every replay. The tripper's check dance stays
-        // four quarter notes whatever the level.
-        public static RhythmChart For(InteractionState i)=>Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,i.Kind=="ConfirmDance"?QuarterNotes:i.ChartDifficulty);
+        // four logical quarter notes whatever the level.
+        public static RhythmChart For(InteractionState i)
+        {
+            int difficulty=i.Kind=="ConfirmDance"?QuarterNotes:i.ChartDifficulty;
+            if(i.StageTrack==0)return Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty);
+            if(!ValidStageAnchor(i))throw new ArgumentException("Invalid stage chart anchor.",nameof(i));
+            var track=StageBeats.For(i.StageTrack);var chart=CreateOnStage(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty,track,StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds),i.StageBeatStride);
+            double shift=i.StageFirstHeadDelaySeconds-2;
+            foreach(var note in chart.Notes)note.TimeSeconds+=shift;
+            chart.DurationSeconds+=shift;return chart;
+        }
         // After two lead-in quarter notes choose a quarter, eighths, jump, sixteenth run or hold. These percent odds apply to
         // pattern selections; a two-beat hold covers the next beat with a rest. Day 1 keeps its original draws and shapes.
         static readonly int[][] PatternOdds={new[]{60,25,15,0,0},new[]{35,25,15,15,10},new[]{25,30,15,20,10},new[]{15,30,20,25,10}};
         const int Eighths=1,Jump=2,Sixteenths=3,Hold=4;
         // The difficulty that puts one quarter note on every beat, as charts were before DANCE-5 (the same seed, the same chart).
         public const int QuarterNotes=-1;
+        // Catalog choices (one-based): existing day/night sets stay unchanged; 0 is reserved for fixed legacy timing.
+        public static int StageTrackFor(int festival,int level)=>festival==0?(Festivals.Night(level)?1:2):(Festivals.Night(level)?4:5);
+        public static bool ValidStageAnchor(InteractionState i)=>i.StageTrack==0||(i.StageTrack==1||i.StageTrack==2||i.StageTrack==4||i.StageTrack==5)&&Finite(i.StageFirstHeadWorldSeconds)&&i.StageFirstHeadWorldSeconds>=0&&Finite(i.StageFirstHeadDelaySeconds)&&i.StageFirstHeadDelaySeconds>=0&&i.StageFirstHeadDelaySeconds<=60&&(i.StageBeatStride==.5||i.StageBeatStride==1||i.StageBeatStride==2);
+        static bool Finite(double value)=>!double.IsNaN(value)&&!double.IsInfinity(value);
+        static double LoopBeatSpan(StageBeats.Track track)=>track.Beat(track.LoopEnd)-track.Beat(track.FirstBeat);
+        // Preserve the click-free sample joins exactly. Their offsets from phrase anchors are not whole beat counts.
+        // Unwrapped fractional beats carry the exact measured span, so a head or tail crossing a join stays invertible.
+        public static double StageSampleAtWorld(StageBeats.Track track,double worldSeconds)
+        {
+            if(track==null)throw new ArgumentNullException(nameof(track));
+            if(!Finite(worldSeconds)||worldSeconds<0)throw new ArgumentOutOfRangeException(nameof(worldSeconds));
+            return track.FirstBeat+(worldSeconds-Math.Floor(worldSeconds/track.LoopSeconds)*track.LoopSeconds)*StageBeats.Rate;
+        }
+        public static double StageBeatAtWorld(StageBeats.Track track,double worldSeconds)=>Math.Floor(worldSeconds/track.LoopSeconds)*LoopBeatSpan(track)+track.Beat(StageSampleAtWorld(track,worldSeconds));
+        public static double StageWorldAtBeat(StageBeats.Track track,double beat)
+        {
+            if(track==null)throw new ArgumentNullException(nameof(track));
+            if(!Finite(beat))throw new ArgumentOutOfRangeException(nameof(beat));
+            double first=track.Beat(track.FirstBeat),span=LoopBeatSpan(track),cycle=Math.Floor((beat-first)/span);
+            return cycle*track.LoopSeconds+(track.Sample(beat-cycle*span)-track.FirstBeat)/StageBeats.Rate;
+        }
+        public static double NearestStageStride(StageBeats.Track track,double firstBeat,double tunedSeconds)
+        {
+            if(!Finite(tunedSeconds)||tunedSeconds<=0)throw new ArgumentOutOfRangeException(nameof(tunedSeconds));
+            double origin=StageWorldAtBeat(track,firstBeat),best=double.MaxValue,picked=.5;
+            foreach(double stride in new[]{.5,1.0,2.0})
+            {
+                double distance=Math.Abs(StageWorldAtBeat(track,firstBeat+stride)-origin-tunedSeconds);
+                if(distance<=best+1e-9){best=distance;picked=stride;}
+            }
+            return picked;
+        }
+        // Shared by world dances and advancing minigame charts: the caller owns its clock and preparation start.
+        // First head waits through the chart's existing 2 s arrow lead, then chooses the next eligible authored whole beat.
+        public static void InitializeStage(InteractionState i,int stageTrack,double startWorldSeconds,double firstHeadLeadSeconds=2)
+        {
+            var track=StageBeats.For(stageTrack);
+            if(track==null||stageTrack==3||stageTrack>5||!Finite(startWorldSeconds)||startWorldSeconds<0||!Finite(firstHeadLeadSeconds)||firstHeadLeadSeconds<0||firstHeadLeadSeconds>59)throw new ArgumentOutOfRangeException(nameof(stageTrack));
+            double earliest=startWorldSeconds+firstHeadLeadSeconds,cycle=Math.Floor(earliest/track.LoopSeconds);
+            double beat=Math.Ceiling(track.Beat(StageSampleAtWorld(track,earliest))-1e-10),sample=track.Sample(beat);
+            if(sample>=track.LoopEnd){cycle++;sample=track.Sample(Math.Ceiling(track.Beat(track.FirstBeat)-1e-10));}
+            double anchor=cycle*track.LoopSeconds+(sample-track.FirstBeat)/StageBeats.Rate;
+            i.StageTrack=stageTrack;i.StageFirstHeadWorldSeconds=anchor;i.StageFirstHeadDelaySeconds=anchor-startWorldSeconds;
+            i.StageBeatStride=NearestStageStride(track,StageBeatAtWorld(track,anchor),i.BeatSeconds);
+            i.DurationSeconds=For(i).DurationSeconds;
+        }
+        // Generate tuned logical draws once, then remap each head and hold endpoint on the same fractional authored grid.
+        public static RhythmChart CreateOnStage(int seed,int count,double beatSeconds,int difficulty,StageBeats.Track track,double firstBeat,double stride)
+        {
+            if(track==null)throw new ArgumentNullException(nameof(track));
+            if(!Finite(firstBeat)||stride!=.5&&stride!=1&&stride!=2)throw new ArgumentOutOfRangeException(nameof(firstBeat));
+            var chart=Create(seed,count,beatSeconds,difficulty);double origin=StageWorldAtBeat(track,firstBeat);
+            foreach(var note in chart.Notes)
+            {
+                double headBeat=firstBeat+(note.TimeSeconds-2)/beatSeconds*stride,tailBeat=headBeat+note.HoldSeconds/beatSeconds*stride;
+                double head=StageWorldAtBeat(track,headBeat);note.TimeSeconds=2+head-origin;
+                note.HoldSeconds=StageWorldAtBeat(track,tailBeat)-head;
+            }
+            chart.DurationSeconds=2+StageWorldAtBeat(track,firstBeat+count*stride)-origin;return chart;
+        }
         // `count` beats from a 2 s lead-in. Any two notes a sixteenth apart, across a beat too, are in different lanes.
         public static RhythmChart Create(int seed,int count,double beatSeconds,int difficulty)
         {

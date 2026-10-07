@@ -45,6 +45,7 @@ namespace Festival.Core
             // as Night 1, the night it was, with the way to its friend open, as it holds no tripper's clue trail. Either way it is
             // a current round from here on, so saving it again does not re-read a weekend Day 1 as an old rescue.
             if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
+            foreach(var interaction in state.Interactions)if(interaction==null||!RhythmChart.ValidStageAnchor(interaction))throw new ArgumentException("Invalid snapshot stage chart");
             state.SchemaVersion=RoundState.CurrentSchemaVersion;
             RestoreCampEggs(state);
             RestoreStarterShelf(state);

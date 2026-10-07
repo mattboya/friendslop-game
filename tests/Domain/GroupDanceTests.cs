@@ -27,7 +27,7 @@ public static class GroupDanceTests
     // b's partner is a cop for a security talk (Police), a festivalgoer otherwise.
     static FestivalSimulation Crew(string bKind){var s=Crew();if(bKind=="Police")s.State.Npcs.Find(n=>n.Id=="partner_b").Kind="Cop";return s;}
     // Enter the correct input for every note in beats [from,to) of the chart (DANCE-5: a beat can hold up to four notes).
-    static void Hit(InteractionState i,int from,int to){foreach(var n in RhythmChart.For(i).Notes)if(n.TimeSeconds>=2+from*i.BeatSeconds-1e-9&&n.TimeSeconds<2+to*i.BeatSeconds-1e-9)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
+    static void Hit(InteractionState i,int from,int to){var logical=RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,i.ChartDifficulty);foreach(var n in RhythmChart.For(i).Notes)if(logical.Notes[n.Id].TimeSeconds>=2+from*i.BeatSeconds-1e-9&&logical.Notes[n.Id].TimeSeconds<2+to*i.BeatSeconds-1e-9)i.Inputs.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});}
     // Tick until done, entering each note's correct input through the Rhythm command once the clock reaches it, as a player would.
     static void Live(FestivalSimulation s,Func<bool> done,params InteractionState[] dances)
     {
@@ -49,6 +49,10 @@ public static class GroupDanceTests
 
     public static void Run()
     {
+        var clock=Crew();clock.State.SimulationSeconds=10.123;var anchored=Start(clock,"a");
+        var pressed=typeof(FestivalSimulation).GetMethod("PressedAt",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
+        Check(pressed!=null&&(double)pressed.Invoke(null,new object[]{anchored})==10.123,"GroupDance.PressedAt uses the real command time, not the later musical first head");
+        Check(anchored.StageFirstHeadWorldSeconds>anchored.StartSeconds+2,"setup: this stage head is quantized after its countdown");
         // Reference: a perfect dancer with no crew member nearby.
         var s=Crew();Place(s,"b",-20,0);var dance=Start(s,"a");Hit(dance,0,8);Finish(s,dance);
         double solo=Heat(s,"a");Check(dance.Score==1&&solo<20,"a perfect solo dance lowers suspicion");

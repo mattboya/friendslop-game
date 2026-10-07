@@ -35,7 +35,7 @@ namespace Festival.Core
             if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
-            if(wary){i.TrustDance=true;ScheduleChallengeLeadIn(i);i.DialogueText=TrustAsk;i.DurationSeconds=RhythmChart.For(i).DurationSeconds;}else AddTurn(i,p);
+            if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;}else AddTurn(i,p);
             return Ok();
         }
         // A festivalgoer this wary of p, or one of the 1 in 4 ravers and burners who always want a dance first (by their id and the

@@ -78,6 +78,9 @@ namespace Festival.Network
         // turns 0-2 or retained terminal delivery 3; terminal Amount 1 dismisses it authoritatively. Private bounded
         // ConversationOutcomes survive active interaction removal.
         // Retained private conversation outcomes also carry TargetId for reach cleanup after missed active views.
+        // MUSIC-4: stage-linked charts carry StageTrack (0 preserves legacy timing), a world-time first head, its chart-relative
+        // delay and half/one/two authored beat stride. Host, HUD and replay remap the same tuned draws and hold endpoints through
+        // exact sample loop joins. Simulation countdown and the late-input verdict retain their separate clock semantics.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";

@@ -78,6 +78,10 @@ namespace Festival.Core
         public int ChartSeed,NoteCount=8,Phrase,ReservedCash; public double StartSeconds,DurationSeconds,GoodWindowSeconds=.15,Score,BeatSeconds=.5;
         // DANCE-5: how busy a rhythm challenge's chart is (RhythmChart.For), the level it began on; 0 in older snapshots.
         public int ChartDifficulty;
+        // The authored stage transport uses world time, independent of StartSeconds' simulation countdown.
+        // Track 0 keeps pre-grid snapshots and the takeover's own fixed chart. Delay is relative to StartSeconds, so pauses
+        // shift only that simulation start; the world anchor, chart delay and musical stride never move.
+        public int StageTrack; public double StageFirstHeadWorldSeconds,StageFirstHeadDelaySeconds,StageBeatStride;
         public List<RhythmInput> Inputs=new List<RhythmInput>(); public List<string> WitnessIds=new List<string>();
         // TRIP-3: a ConfirmChat's conversation (DialogueGrammar). A view carries only its own player's interactions, so only the tripper reads it.
         public Conversation Chat=new Conversation();

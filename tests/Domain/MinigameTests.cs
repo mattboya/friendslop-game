@@ -252,6 +252,8 @@ public static class MinigameTests
         {"PlayerState.LastCampEggAt","historical camp-only last-gag time: retains its age through festival minigames, like the prop event"},
         {"ObserverState.Suspicion","suspicion"},{"NpcState.Suspicion","suspicion"},
         {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"InteractionState.BeatSeconds","a length"},
+        {"InteractionState.StageFirstHeadWorldSeconds","authored stage world clock: the pause leaves music at the same position"},
+        {"InteractionState.StageFirstHeadDelaySeconds","chart-relative lead, independent of simulation pause"},{"InteractionState.StageBeatStride","musical beat count, not a timestamp"},
         {"RhythmInput.TimeSeconds","seconds into its interaction"},
         {"MinigameState.RingSeconds","the ring's own countdown"},{"MinigameState.Seconds","the game's own clock, the pause's length"},
         {"MinigameState.ScoredAt","on the game's own clock"},{"MinigameState.ClockChange","seconds paid to the level's length"},

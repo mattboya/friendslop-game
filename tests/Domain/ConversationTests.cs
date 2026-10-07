@@ -368,7 +368,7 @@ public static class ConversationTests
             Partner(s).Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});
             double pressed=s.State.SimulationSeconds;var i=Start(s,kind);var chart=RhythmChart.For(i);
             Check(i.StartSeconds-pressed==2,kind+": a trust dance gives the lane its shared 2 s countdown");
-            Check(i.NoteCount==8&&chart.Notes.Count>=8&&chart.Notes[0].TimeSeconds==2&&chart.Notes[chart.Notes.Count-1].TimeSeconds>=5.5&&chart.DurationSeconds==6,kind+": the eight chart beats, authored subdivisions and duration stay unchanged");
+            Check(i.NoteCount==8&&chart.Notes.Count==RhythmChart.Create(i.ChartSeed,8,i.BeatSeconds,i.ChartDifficulty).Notes.Count&&chart.Notes[0].TimeSeconds>=2&&i.StageTrack==2&&chart.DurationSeconds==i.DurationSeconds,kind+": the eight logical beats and patterns map to the day stage with their actual duration");
             Check(i.StartSeconds+chart.Notes[0].TimeSeconds-pressed>=Catalog.FindEffect("ketamine").LeadSeconds,kind+": the first Pony Dust arrow can enter at the bottom");
             Check(!Act(s,p.Id,"Rhythm",direction:chart.Notes[0].Direction).Accepted,kind+": the countdown does not admit an early press");
             int next=0;
@@ -380,7 +380,7 @@ public static class ConversationTests
                     var note=chart.Notes[next++];
                     Check(s.Execute(p.Id,new GameCommand{Id="talk"+(sequence++),Kind="Rhythm",Direction=note.Direction,TimeSeconds=note.TimeSeconds}).Accepted,kind+": the original hit time is accepted through Rhythm");
                 }
-                s.Tick(.1);
+                s.Tick(Math.Min(.05,i.StartSeconds+i.DurationSeconds+.7-s.State.SimulationSeconds));
             }
             Check(i.Status=="Active"&&i.Turns.Count==0,kind+": the .75 s verdict window has not ended");
             s.Tick(.1);Check(i.Status=="Active"&&i.Turns.Count==1&&i.DurationSeconds==0,kind+": a perfect trust dance opens an untimed reply");
@@ -411,7 +411,7 @@ public static class ConversationTests
             Check(i.TrustDance&&i.Turns.Count==0&&i.DialogueText==FestivalSimulation.TrustAsk&&FestivalSimulation.TrustDancing(i)&&FestivalSimulation.Dancing(i),"a wary partner opens a "+kind+" with \""+FestivalSimulation.TrustAsk+"\" and a dance, got \""+i.DialogueText+"\"");
             Check(Math.Abs(1.5-p.Z-FestivalSimulation.DanceSpacing)<1e-3&&p.X==0&&p.Yaw==0,"the trust dance gives the dancer room and turns them to face their partner, as any dance (at "+p.X+", "+p.Z+", yaw "+p.Yaw+")");
             Check(i.NoteCount==8&&i.DurationSeconds==RhythmChart.For(i).DurationSeconds,"eight beats on the talk's chart");
-            var notes=RhythmChart.For(i).Notes;s.Tick(i.StartSeconds-s.State.SimulationSeconds+2);
+            var notes=RhythmChart.For(i).Notes;s.Tick(i.StartSeconds-s.State.SimulationSeconds+notes[0].TimeSeconds);
             var hit=s.Execute("p0",new GameCommand{Id="talk"+(sequence++),Kind="Rhythm",Direction=notes[0].Direction,TimeSeconds=notes[0].TimeSeconds});
             Check(hit.Accepted&&p.VisualDanceStepSequence>0,"the trust dance takes notes, each a step");
             foreach(var note in notes.Skip(1))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
