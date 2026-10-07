@@ -399,6 +399,97 @@ namespace Festival.Tests
             var list="";foreach(var hit in hits)list+="\n  "+hit.Key+" (nearest "+hit.Value.Gap.ToString("0.000")+" m from their middle, "+hit.Value.Where+")";
             Assert.That(hits.Keys,Is.Empty,"the rules route each loop clear of where the crowd stands, however a crew's jitter falls, so the car drawn on it must pass them by too:"+list);
         }
+        // The crowd clock and level clock are independent. Combine every sampled walker position over 100 seconds
+        // (longer than the slowest authored lap) with every rendered car position over a full 40-second lap.
+        [Test]public void ArtCarsClearAmbientWalkersAndEveryFixedSpotAtIndependentClockPhases()
+        {
+            var grounds=Grounds();var crowd=grounds.gameObject.AddComponent<FestivalAmbientCrowd>();crowd.Build();
+            Assert.That(crowd.MemberCount,Is.EqualTo(62));Assert.That(crowd.WalkerCount,Is.EqualTo(12));
+            var actors=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith("ambient_walk_"))actors.Add(child);
+            Assert.That(actors.Count,Is.EqualTo(12),"sample the actual twelve walker actors");
+            var people=new List<(Vector2 Feet,string Who,float Clock)>();
+            foreach(var spot in FestivalAmbientCrowd.FixedSpots)people.Add((Flat(spot.Position),spot.Zone,0));
+            for(int frame=0;frame<=1000;frame++)
+            {
+                float clock=frame*.1f;UpdateCrowd(crowd,clock);
+                foreach(var actor in actors)people.Add((Flat(actor.position),actor.name,clock));
+            }
+            var twists=new FestivalTwistVisuals(grounds);var state=Round(Festivals.PlayaFestival);
+            var playa=Part(grounds,FestivalTwistVisuals.PlayaRootName);var hits=new SortedDictionary<string,double>();float nearest=100;
+            for(int frame=0;frame<=400;frame++)
+            {
+                float clock=frame*.1f;state.ElapsedSeconds=clock;twists.Apply(state,.1f);
+                for(int k=0;k<Festivals.ArtCars;k++)
+                {
+                    var car=Part(playa,"Art car "+k);var parts=new List<Box>();
+                    foreach(var renderer in car.GetComponentsInChildren<Renderer>())parts.Add(Box.Of(renderer,PathOf(renderer.transform,car)));
+                    Assert.That(parts.Exists(part=>part.Name.StartsWith("Party deck")),Is.True,"actual deck bounds");
+                    Assert.That(parts.Exists(part=>part.Name.StartsWith("FestivalCampVan")),Is.True,"actual van bounds");
+                    foreach(var person in people)
+                    {
+                        if(Vector2.Distance(Flat(car.position),person.Feet)>CarReach+Shoulders+.1f)continue;
+                        foreach(var part in parts)
+                        {
+                            float gap=part.Gap(person.Feet,Standing,Shoulders+.1f);nearest=Mathf.Min(nearest,gap);
+                            if(gap>=Shoulders+.1f)continue;
+                            string hit="car "+k+" "+part.Name.Split('/')[0]+" / "+person.Who;
+                            if(!hits.ContainsKey(hit))hits[hit]=clock;
+                        }
+                    }
+                }
+            }
+            TestContext.WriteLine("Ambient/car nearest sampled body-axis gap: "+nearest.ToString("0.000")+" m");
+            Assert.That(hits.Keys,Is.Empty,"cars must clear all independent crowd phases, with 10 cm sampling margin:"+Listed(hits));
+        }
+
+        [TestCase(Festivals.PoloFestival)][TestCase(Festivals.PlayaFestival)]
+        public void EastWalkersClearRenderedSceneryAndAllFixedSpotsThroughFullLaps(int festival)
+        {
+            var world=Made("Clearance world").AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");world.SetTwists(Round(festival));
+            var grounds=Part(world.transform,FestivalWorld.RootName);var crowd=grounds.GetComponent<FestivalAmbientCrowd>();
+            var east=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith("ambient_walk_east_lane_"))east.Add(child);
+            Assert.That(east.Count,Is.EqualTo(2));Assert.That(crowd.MemberCount,Is.EqualTo(62));Assert.That(crowd.WalkerCount,Is.EqualTo(12));
+            UpdateCrowd(crowd,137.5f);
+            typeof(FestivalAmbientCrowd).GetMethod("Update",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(crowd,null);
+            var live=new List<Vector3>();foreach(var actor in east)live.Add(actor.position);
+            UpdateCrowd(crowd,Time.time);
+            for(int i=0;i<east.Count;i++)Assert.That(east[i].position,Is.EqualTo(live[i]),"live Update uses the same authored movement at the current clock");
+            var scenery=new List<Box>();
+            foreach(var renderer in grounds.GetComponentsInChildren<Renderer>())
+            {
+                var b=renderer.bounds;string path=PathOf(renderer.transform,grounds);
+                if(!renderer.enabled||path.StartsWith("ambient_")||b.size.x>20||b.size.z>20||b.max.y<.12f||b.min.y>Standing)continue;
+                scenery.Add(Box.Of(renderer,path));
+            }
+            Assert.That(scenery.Exists(part=>part.Name.StartsWith("FestivalTree")||part.Name.Contains("Palm")),Is.True,"actual trees, including their low branches");
+            Assert.That(scenery.Exists(part=>part.Name.StartsWith("FestivalGroveDetail")),Is.True,"actual fern and rock detail is included");
+            var hits=new SortedDictionary<string,double>();float nearest=100;
+            for(int frame=0;frame<=1000;frame++)
+            {
+                float clock=frame*.1f;UpdateCrowd(crowd,clock);
+                foreach(var actor in east)
+                {
+                    var feet=Flat(actor.position);
+                    foreach(var part in scenery)
+                    {
+                        float gap=part.Gap(feet,Standing,Shoulders+.1f);nearest=Mathf.Min(nearest,gap);
+                        if(gap<Shoulders+.1f&&!hits.ContainsKey(part.Name))
+                        {
+                            hits[part.Name]=clock;TestContext.WriteLine("Obstacle "+part.Name+" centre="+part.Centre.ToString("F3")+" extents="+part.Extents.ToString("F3")+" bounds="+part.Aabb.ToString("F3"));
+                        }
+                    }
+                    foreach(var spot in FestivalAmbientCrowd.FixedSpots)
+                        if(Vector2.Distance(feet,Flat(spot.Position))<2*Shoulders+.1f&&!hits.ContainsKey("fixed "+spot.Zone))hits["fixed "+spot.Zone]=clock;
+                }
+            }
+            TestContext.WriteLine(Festivals.Name(festival)+" east/scenery nearest sampled body-axis gap: "+nearest.ToString("0.000")+" m");
+            Assert.That(hits.Keys,Is.Empty,"the east route must clear scenery and all fixed social placements:"+Listed(hits));
+        }
+
+        internal static void UpdateCrowd(FestivalAmbientCrowd crowd,float elapsed)=>crowd.UpdateWalkers(elapsed);
+
+        internal static float RendererBodyGap(Renderer renderer,Vector3 feet)=>Box.Of(renderer,renderer.name).Gap(Flat(feet),Standing,Shoulders+.1f);
+
         // A standing festivalgoer, as the rules place them: this tall, and this far round their middle (shoulders and hanging arms).
         // Nothing of a car reaches further than CarReach from its point.
         private const float Standing=1.8f,Shoulders=.3f,CarReach=5;

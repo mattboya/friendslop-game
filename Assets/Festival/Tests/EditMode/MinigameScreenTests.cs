@@ -102,6 +102,36 @@ namespace Festival.Tests
             state.Booth.ScoredAt=-1;state.Phase="Playing";Assert.That(FestivalMinigameView.AimedCup(state,view),Is.EqualTo(-1),"none before it runs");
         }
 
+        [TestCase(Festivals.PoloFestival)][TestCase(Festivals.PlayaFestival)]
+        public void AmbientWalkersClearTheLargestRenderedCupsBoothForFullLaps(int festival)
+        {
+            root=new GameObject("Booth route test");var crowd=root.AddComponent<FestivalAmbientCrowd>();crowd.Build();
+            var booth=FestivalMinigameView.Build(root.transform);
+            var state=new RoundState{Phase=FestivalSimulation.MinigamePhase,FestivalIndex=festival,
+                Booth=new MinigameState{Kind=FestivalSimulation.MysteryCupsGame,Spot=1,Cups=FestivalSimulation.CupsFor(8)}};
+            FestivalMinigameView.Show(booth,state);FestivalMinigameView.ShowCups(booth,state,-1,null);
+            var table=booth.Find(FestivalMinigameView.CupsName).Find("Cup table").GetComponent<Renderer>();
+            Assert.That(table.bounds.size.magnitude,Is.GreaterThan(3),"the largest crew's actual rendered table");
+            Assert.That(Shown(booth.Find(FestivalMinigameView.CupsName)).Length,Is.EqualTo(FestivalSimulation.CupsFor(8)));
+            var actors=new System.Collections.Generic.List<Transform>();
+            foreach(Transform child in root.transform)if(child.name.StartsWith("ambient_walk_"))actors.Add(child);
+            Assert.That(actors.Count,Is.EqualTo(12));
+            var parts=booth.GetComponentsInChildren<Renderer>();float nearest=100;string worst="";
+            for(int frame=0;frame<=1000;frame++)
+            {
+                float clock=frame*.1f;TwistVisualsTests.UpdateCrowd(crowd,clock);
+                foreach(var actor in actors)foreach(var part in parts)
+                {
+                    // The flat ring is a walking invitation, rather than a solid obstacle.
+                    if(part.bounds.max.y<.12f||part.bounds.min.y>1.8f)continue;
+                    float gap=TwistVisualsTests.RendererBodyGap(part,actor.position);
+                    if(gap<nearest){nearest=gap;worst=actor.name+" / "+part.name+" at "+clock.ToString("0.0")+" s";}
+                }
+            }
+            TestContext.WriteLine(Festivals.Name(festival)+" largest cups booth nearest sampled body-axis gap: "+nearest.ToString("0.000")+" m ("+worst+")");
+            Assert.That(nearest,Is.GreaterThanOrEqualTo(.4f),"a 30 cm body and 10 cm sampling margin clear the rendered booth: "+worst);
+        }
+
         private static int[] Shown(Transform cups)
         {
             var shown=new System.Collections.Generic.List<int>();

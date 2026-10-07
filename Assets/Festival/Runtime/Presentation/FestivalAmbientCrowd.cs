@@ -98,8 +98,10 @@ namespace Festival.Presentation
                 new Vector3(3.6f,0,14),new Vector3(3.6f,0,-30)},4,1.31f);
             AddRoute("market_lane",new[]{new Vector3(-4.5f,0,-22),new Vector3(-21.8f,0,-22),
                 new Vector3(-21.8f,0,-15.5f),new Vector3(-5.0f,0,-15.5f)},2,1.17f);
-            AddRoute("east_lane",new[]{new Vector3(4.5f,0,-4),new Vector3(22.8f,0,-4),
-                new Vector3(22.8f,0,-9.0f),new Vector3(5.1f,0,-9.0f)},2,1.24f);
+            // Keep the east walkers between the grove at (14,-5), the tree at (18,-7),
+            // the art-car loops and the largest cups table at booth 1.
+            AddRoute("east_lane",new[]{new Vector3(16.4f,0,-4),new Vector3(20f,0,-4),
+                new Vector3(20f,0,-4.5f),new Vector3(16.4f,0,-4.5f)},2,1.24f);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log("[Festival.Crowd] " + members.Count + " ambient attendees, " + walkers.Count + " walkers, " + fixedSpots.Length + " social placements.");
 #endif
@@ -167,10 +169,15 @@ namespace Festival.Presentation
             float inverse=1-t;
             return inverse*inverse*a+2*inverse*t*vertex+t*t*c;
         }
+        /// <summary>Place the authored walkers on the same elapsed clock used by the live crowd.</summary>
+        public void UpdateWalkers(float elapsed)
+        {
+            for(int i=0;i<walkers.Count;i++)Move(walkers[i],elapsed);
+        }
         void Update()
         {
             float now=Time.time;
-            for(int i=0;i<walkers.Count;i++)Move(walkers[i],now);
+            UpdateWalkers(now);
             if(now<nextVisibilityCheck)return;
             nextVisibilityCheck=now+.25f;
             var view=FestivalCharacter.ViewTransform;
