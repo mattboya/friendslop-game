@@ -22,10 +22,11 @@ namespace Festival.Tests
             Assert.That(events,Does.Contain("ChatTimeout|Police"),"Police silence is diagnosable in editor/development builds");
         }
 
-        [Test] public void ChatsRequireVersionSixAndRejectPreviousClients()
+        [Test] public void ChatsRequireTheCurrentVersionAndRejectPreviousClients()
         {
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":5}"),Is.False,"version five peers still time out chats and cannot join");
-            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Current\",\"Token\":\"\",\"Protocol\":6}"),Is.True,"the combined version-six wave accepts its peers");
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Checkpoint\",\"Token\":\"\",\"Protocol\":6}"),Is.False,"version six checkpoint peers cannot join the new semantic boundary");
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Current\",\"Token\":\"\",\"Protocol\":"+FestivalSession.ProtocolVersion+"}"),Is.True,"the current build accepts its peers");
         }
 
         [Test] public void TheOwnedClientEndsItsUntimedCheckAndAloneLearnsTruth()

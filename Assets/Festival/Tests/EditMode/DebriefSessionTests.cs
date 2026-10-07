@@ -68,5 +68,20 @@ namespace Festival.Tests
         {
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":3}"),Is.False,"a client with the 7% dose sliver is told its version is incompatible");
         }
+
+        [Test] public void ThisBuildAdvertisesTheVersionSevenBoundary()
+        {
+            Assert.That(FestivalSession.ProtocolVersion,Is.EqualTo(7),"the new semantic boundary is version 7");
+        }
+
+        [Test] public void ACheckpointVersionSixBuildCannotJoin()
+        {
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Checkpoint\",\"Token\":\"\",\"Protocol\":6}"),Is.False,"the published checkpoint must not join the new semantic boundary");
+        }
+
+        [Test] public void AVersionSevenBuildCanJoin()
+        {
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Current\",\"Token\":\"\",\"Protocol\":7}"),Is.True,"version 7 peers agree on the new semantic boundary");
+        }
     }
 }

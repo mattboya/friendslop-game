@@ -70,7 +70,9 @@ namespace Festival.Network
         // MINI-5: connected body carriers hold the booth countdown. IsOnCamera keeps the owner's VisualFilmedBy during
         // games and result banners while Films remains Playing-only. Move intent preserves VisualPoiSpin throughout that
         // pause; ordinary fresh/stale intent resumes afterward. These corrections reuse the existing wire fields.
-        public const int ProtocolVersion=6;
+        // 7: wave 2026-10-07 starts a new semantic boundary; published version-6 checkpoint peers are rejected.
+        // Subsequent units append only the version-7 changes they actually land; chart/timeline recordings follow integration.
+        public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
