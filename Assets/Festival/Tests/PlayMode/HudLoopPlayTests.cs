@@ -15,6 +15,139 @@ namespace Festival.Tests
 {
     public sealed class HudLoopPlayTests:FestivalPlayModeTest
     {
+        // The camera, HUD E handler, session commands and authoritative movement/purchase rules are the real consumers.
+        // Batchmode has no focused window for WASD, so bounded TryMove steps walk the route instead of teleporting.
+        [UnityTest]public IEnumerator CameraSelectsBothStarterSlotsAndWalksToCheckoutAcrossCampVisits()
+        {
+            UseAVirtualKeyboard("Starter shelf keyboard");
+            var worldObject=new GameObject("Starter shelf journey world");var world=worldObject.AddComponent<FestivalWorld>();yield return null;
+            var hudObject=new GameObject("Starter shelf journey HUD");var session=hudObject.AddComponent<FestivalSession>();hudObject.AddComponent<FestivalHud>();yield return null;
+            Text Find(string name){foreach(var t in hudObject.GetComponentsInChildren<Text>(false))if(t.name==name)return t;return null;}
+            IEnumerator Walk(FestivalSimulation game,PlayerState p,float x,float z)
+            {
+                for(int guard=0;Vector2.Distance(new Vector2(p.X,p.Z),new Vector2(x,z))>.02f&&guard<600;guard++)
+                {
+                    var next=Vector2.MoveTowards(new Vector2(p.X,p.Z),new Vector2(x,z),.15f);
+                    Assert.That(game.TryMove(p.Id,next.x,next.y,p.Yaw,.05),Is.True,"production walking step to "+x+","+z+" from "+p.X+","+p.Z);
+                    yield return null;
+                }
+                Assert.That(Vector2.Distance(new Vector2(p.X,p.Z),new Vector2(x,z)),Is.LessThan(.03f),"bounded route reached its destination");
+                yield return new WaitForSeconds(.3f);
+            }
+            IEnumerator Aim(Vector3 target)
+            {
+                var delta=target-session.EyePosition;float yaw=Mathf.Atan2(delta.x,delta.z)*Mathf.Rad2Deg;
+                float pitch=-Mathf.Atan2(delta.y,new Vector2(delta.x,delta.z).magnitude)*Mathf.Rad2Deg;
+                var angle=session.ViewCamera.transform.eulerAngles;float sensitivity=session.Profile.Data.MouseSensitivity;
+                session.ApplyLook(new Vector2(Mathf.DeltaAngle(angle.y,yaw)/sensitivity,-Mathf.DeltaAngle(angle.x,pitch)/sensitivity));
+                yield return new WaitForSeconds(.5f);
+            }
+            IEnumerator Pick(FestivalSimulation game,PlayerState p,int slot)
+            {
+                string item=game.State.VendorOffers[slot];var point=Catalog.ShopPoint(true,slot);
+                yield return Walk(game,p,point.X,point.Z-.8f);yield return Aim(new Vector3(point.X,2.05f,9));
+                Assert.That(Find("Prompt")?.text,Does.Contain("PICK UP "+Catalog.FindItem(item).Name.ToUpperInvariant()),"actual camera selects slot "+slot);
+                yield return Tap(Key.E,.3f);Assert.That(p.HeldOfferId,Is.EqualTo(item),"HUD E sends HoldOffer: "+session.Message);
+                Assert.That(p.StarterStockBought,Is.Zero,"pickup is unpaid");
+                yield return Walk(game,p,0,7);Assert.That(Find("Prompt")?.text,Does.Contain("SHOW"));
+                yield return Tap(Key.E,.3f);Assert.That(Find("Prompt")?.text,Does.Contain("PAY"));
+                yield return Tap(Key.E,.3f);Assert.That(p.HeldOfferId,Is.Empty);Assert.That(p.StarterStockBought,Is.EqualTo(1));
+                Assert.That(p.Inventory.Find(i=>i.ItemId==item)?.Count,Is.EqualTo(1));Assert.That(p.Cash,Is.EqualTo(15));
+            }
+            try
+            {
+                session.Host("Shelf tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);session.Profile.Data.ThirdPerson=false;
+                var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
+                Assert.That(game.State.VendorOffers[6],Is.EqualTo("stock_lsd"));Assert.That(game.State.VendorOffers[7],Is.EqualTo("stock_mushrooms"));
+                yield return Pick(game,p,6);
+                var second=Catalog.ShopPoint(true,7);yield return Walk(game,p,second.X,second.Z-.8f);yield return Aim(new Vector3(second.X,2.05f,9));
+                yield return Tap(Key.E,.3f);Assert.That(session.Message,Is.EqualTo("One starter each: buy more from festivalgoers"));Assert.That(p.HeldOfferId,Is.Empty);Assert.That(p.Cash,Is.EqualTo(15));
+                var mate=game.AddPlayer("starter-mate","Another owner");yield return Walk(game,mate,second.X,second.Z);
+                Assert.That(game.Execute(mate.Id,new GameCommand{Id="mate-hold",Kind="HoldOffer",ItemId="stock_mushrooms"}).Accepted,Is.True);
+                yield return Walk(game,mate,0,7);Assert.That(game.Execute(mate.Id,new GameCommand{Id="mate-buy",Kind="Buy",ItemId="stock_mushrooms"}).Accepted,Is.True);
+                Assert.That(mate.StarterStockBought,Is.EqualTo(1));Assert.That(p.StarterStockBought,Is.EqualTo(1));
+                // A real NextRound -> camp transition resets this owner's allowance before a night.
+                mate.Connected=false;game.State.Phase="Results";game.State.Result="Success";session.Command("Reset");yield return new WaitForSeconds(.3f);
+                Assert.That(game.State.Phase,Is.EqualTo("CampReview"));session.Command("FinishReview");yield return new WaitForSeconds(.3f);
+                Assert.That(game.State.Phase,Is.EqualTo("Shopping"));Assert.That(game.State.LevelIndex,Is.EqualTo(1));p=game.Player(session.LocalPlayerId);Assert.That(p.StarterStockBought,Is.Zero);
+                p.Cash=20; // Isolate payment assertions from the previous camp's earned/spent cash.
+                yield return Pick(game,p,7);
+                yield return StartLevel(session);
+                game.State.Npcs.Clear();game.State.Visions.Clear();p.Effects.Clear();game.State.Doses.Clear();
+                var market=Catalog.ShopPoint(false,6);yield return Walk(game,p,market.X,market.Z-.8f);yield return Aim(new Vector3(market.X,2.05f,-20.05f));
+                var focused=(string)typeof(FestivalHud).GetMethod("FocusedOffer",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hudObject.GetComponent<FestivalHud>(),new object[]{session.State,session.LocalPlayer});
+                Assert.That(Catalog.FindItem(focused)?.Category,Is.Not.EqualTo("Stock"),"night camera cannot focus a starter");
+                foreach(var t in world.GetComponentsInChildren<Transform>(true))if(t.parent!=null&&t.parent.name=="Night market goods")Assert.That(t.name,Does.Not.Contain("stock_lsd").And.Not.Contain("stock_mushrooms"),"market has no starter holders/tags");
+            }
+            finally{session.Leave();Object.Destroy(hudObject);Object.Destroy(worldObject);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator CampHelpReadsTheViewersMoneyAndUsedAllowance()
+        {
+            var world=new GameObject("Camp help world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Camp help HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Camp reader",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);game.State.FestivalIndex=1;
+                var p=game.Player(session.LocalPlayerId);p.Ordinal=1;p.StarterStockBought=1;yield return new WaitForSeconds(.3f);
+                session.MenuOpen=true;yield return null;
+                Button help=null;foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="HOW TO PLAY"&&b.transform.parent.name=="Pass home")help=b;
+                Assert.That(help,Is.Not.Null,"actual Escape menu How to Play button");help.onClick.Invoke();yield return null;
+                Text camp=null;foreach(var t in hud.GetComponentsInChildren<Text>(false))if(t.name=="How to play text 5")camp=t;
+                Assert.That(camp,Is.Not.Null);Assert.That(camp.text,Does.Contain("Starter bought this camp").And.Contain("5 ramen packets").And.Not.Contain("$"));
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator RealGearKeysAndWheelOfferTheHeldStockAndLastUnitSaysFinish()
+        {
+            UseAVirtualKeyboard("Held stock keyboard");UseAVirtualMouse("Held stock mouse");
+            var world=new GameObject("Held stock world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Held stock HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var t in hud.GetComponentsInChildren<Text>(false))if(t.name==name)return t.text;return "(hidden)";}
+            try
+            {
+                session.Host("Stock tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
+                var mate=game.AddPlayer("held-stock-mate","Sam");mate.Ready=true;yield return StartLevel(session);
+                game.State.TripperId=mate.Id;game.State.Npcs.Clear();game.State.Visions.Clear();game.State.Doses.Clear();p.Effects.Clear();
+                string buyerId="";
+                for(int candidate=0;candidate<64&&buyerId=="";candidate++)
+                {
+                    string id="held_stock_buyer_"+candidate,persona=DialogueGrammar.PersonaFor(id,"");
+                    if(persona!="Raver"&&persona!="Burner")buyerId=id;
+                }
+                Assert.That(buyerId,Is.Not.Empty,"bounded real persona lookup yields a buyer who does not demand a trust dance");
+                var buyer=new NpcState{Id=buyerId,Kind="Wook",Role="Buyer",CanTalk=true,X=0,Z=1.5f,Yaw=180};game.State.Npcs.Add(buyer);p.X=0;p.Z=0;
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
+                yield return Tap(Key.Digit2,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"));
+                Assert.That(Read("Prompt"),Does.StartWith("Offer Fun Guys"));yield return Tap(Key.E,.3f);
+                var sale=game.Interaction(p.InteractionId);Assert.That(sale?.ReservedItemId,Is.EqualTo("stock_mushrooms"),"real HUD E sells the held kind");
+                session.Command("Cancel");yield return new WaitForSeconds(.3f);
+                var window=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud.GetComponent<FestivalHud>());
+                if(window.Open){yield return Tap(Key.Escape,.3f);Assert.That(window.Open,Is.False,"Escape closes the displayed cancelled thread");}
+                Assert.That(session.MenuOpen,Is.False);
+                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});yield return null;yield return new WaitForSeconds(.3f);
+                Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"));Assert.That(Read("Prompt"),Does.StartWith("Offer Fun Guys"));
+                // Remove the other kind: selling the actual last unit retains truthful guidance until refund or completion.
+                p.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");buyer.Mode="Blending";buyer.Suspicion=0;buyer.Observers.Clear();
+                yield return Tap(Key.E,.3f);sale=game.Interaction(p.InteractionId);Assert.That(sale,Is.Not.Null);
+                Assert.That(new[]{sale.Kind,sale.Status,sale.PlayerId,sale.ReservedItemId},Is.EqualTo(new[]{"Sale","Active",p.Id,"stock_mushrooms"}));
+                Assert.That(p.Inventory.Find(i=>i.ItemId=="stock_mushrooms")?.Count??0,Is.Zero,"the real last unit is reserved, not still in a pocket");
+                Assert.That(Read("Objective detail"),Does.Contain("Finish this deal").And.Not.Contain("nothing to sell"));
+                Assert.That(Read("Prompt"),Does.Not.Contain("Buy"),"the interaction still exposes only its way out");
+                session.Command("Cancel");yield return new WaitForSeconds(.3f);Assert.That(p.Inventory.Find(i=>i.ItemId=="stock_mushrooms")?.Count,Is.EqualTo(1));
+                Assert.That(Read("Objective detail"),Does.Not.Contain("Finish this deal").And.Not.Contain("nothing to sell"));
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
         // HUD-1: the running HUD puts FestivalHudText's lines on screen. Hosts a real two-player round and
         // reads the labels a player sees on Day 1, on Night 2 with a body out in the field, and at results.
         // Labels are laid out on a 1920x1080 canvas, so a line its box cuts off fails, and E runs the HUD's first action.
@@ -50,9 +183,9 @@ namespace Festival.Tests
                 var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
-                // ECON-2: at camp, with no festival to pick, the card says where stock comes from, and draws whole.
+                // At camp, with no festival to pick, the card teaches the paid starter and crowd stock source, drawn whole.
                 sim.State.UnlockedFestivalCount=1;yield return new WaitForSeconds(.4f);
-                Expect("camp","Objective detail","Browse gear • pay the seller • stock comes from festivalgoers • meet at the trailhead");
+                Expect("camp","Objective detail","Browse shelves • pay the seller • One starter each at camp: Tongue Stamps or Fun Guys for $5. Buy more from festivalgoers ($5 each; some are narcs). Keep some money for more stock. • meet at the trailhead");
                 Fits("camp","Objective detail");
                 yield return StartLevel(session);
 
@@ -65,6 +198,12 @@ namespace Festival.Tests
                 // the tripper who sees the buyers. Both draw whole.
                 Expect("day","Objective detail","Sell $18 more before sundown. You have nothing to sell: buy from festivalgoers, and some are narcs.");
                 Fits("day","Objective detail");
+                player.Cash=4;sim.State.StashCash=5;yield return new WaitForSeconds(.3f);
+                Expect("day, low cash with stash","Objective detail","Sell $18 more before sundown. You have nothing to sell. Withdraw $5 from the shared stash, then buy from festivalgoers; some are narcs.");
+                Fits("day, low cash with stash","Objective detail");
+                sim.State.StashCash=4;yield return new WaitForSeconds(.3f);
+                Expect("day, low cash without affordable stash","Objective detail","Sell $18 more before sundown. You have nothing to sell: return lost property at the lost-property desk for $5, then buy from festivalgoers; some are narcs.");
+                Fits("day, low cash without affordable stash","Objective detail");player.Cash=20;sim.State.StashCash=0;
                 string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
                 yield return new WaitForSeconds(.6f);
                 Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer.");
@@ -1166,7 +1305,7 @@ namespace Festival.Tests
                 if(Hand()!=(hand??item))failures.Add(where+": the hand holds up \""+Hand()+"\", not "+(hand??item));
                 string shown=Toast(where);if(shown!=toast)failures.Add(where+": over the gear bar reads \""+shown+"\", not \""+toast+"\"");
             }
-            // Hand items, given out (shelves sell gear only and stock comes from festivalgoers), with nothing yet in hand.
+            // Hand items, given out to isolate switching from the paid camp and crowd purchases, with nothing yet in hand.
             void Pack(params string[] items){player.Inventory.Clear();player.EquippedItemId="";foreach(var item in items)player.Inventory.Add(new ItemStack{ItemId=item,Count=1});}
             const string Unpaid="Holding an unpaid item: pay or put it back (G)";
             try

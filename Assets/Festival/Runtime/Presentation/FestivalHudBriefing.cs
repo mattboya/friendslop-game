@@ -47,7 +47,7 @@ namespace Festival.Presentation
         /// check says it found are VISION-5's own words (FestivalVisionMarkers.ClaimText, VerdictText). Like the rest of the game it
         /// never names a fake's tells: the design's one hint about them is "Trust, but verify." (Briefing).
         /// </summary>
-        public static (string Title,string Text)[] HowToPlay(FestivalInput input)
+        public static (string Title,string Text)[] HowToPlay(FestivalInput input,RoundState state=null,PlayerState viewer=null)
         {
             string act=input.Label(input.Interact),chat=input.Label(input.Chat),drop=input.Label(input.Drop),reply=input.Label(input.Slot1)+"-"+input.Label(input.Slot3);
             var keys=new List<string>();
@@ -70,7 +70,7 @@ namespace Festival.Presentation
                     +" (a merch bag hides it): talk ("+act+"), ditch it ("+drop+") or walk away out of its sight. A downed friend can be rescued or"
                     +" dragged; a spirit walks to the medical tent. In an Ember Playa dust storm nobody sees past "+Festivals.DustStormSightRange+" m."
                     +" Palm Mirage's influencers film the crowd: while your card says ON CAMERA, festivalgoers near you grow suspicious."),
-                ("CAMP","The shelves sell gear only: pick it up ("+act+"), carry it to the seller and pay. At the campfire, vote the silly"
+                ("CAMP","The shelves sell gear. "+CampStockGuidance(state,viewer).Replace("One starter each","Buy one starter each")+" Pick it up ("+act+"), carry it to the seller and pay. At the campfire, vote the silly"
                     +" awards; the worst take a shot. Ready up at the lit trailhead ("+act+")."),
                 ("KEYS",string.Join("\n",keys)),
             };

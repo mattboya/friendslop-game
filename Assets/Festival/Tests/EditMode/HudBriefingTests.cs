@@ -148,7 +148,7 @@ namespace Festival.Tests
                 Assert.That(danger,Does.Contain("SWARMING"),"HUD-5's swarm on the card");
                 Assert.That(danger,Does.Contain("dust storm").And.Contain(Festivals.DustStormSightRange+" m"),"PLAYA-3");
                 Assert.That(danger,Does.Contain("influencers film").And.Contain("ON CAMERA"),"POLO-6: who films and what the card says while they film you");
-                Assert.That(camp,Does.Contain("gear only"),"shelves sell no stock");
+                Assert.That(camp,Does.Contain("one starter").And.Contain("$5").And.Contain("festivalgoers").And.Contain("narcs").And.Contain("Keep some money").And.Not.Contain("gear only"),"the paid camp starter and crowd risk");
                 Assert.That(Block(input,"KEYS"),Does.Contain(input.Label(input.View)+"  first or third person"),"CAM-1's view key");
                 // The design's one hint about fakes is "Trust, but verify.": How to Play never gives their tells away.
                 foreach(var b in FestivalHudText.HowToPlay(input))Assert.That(b.Text.ToLowerInvariant(),Does.Not.Contain("shadow").And.Not.Contain("shimmer"),b.Title);

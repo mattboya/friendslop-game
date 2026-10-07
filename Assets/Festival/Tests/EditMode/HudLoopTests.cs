@@ -208,21 +208,50 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.BodyAction(s,kim,first),Is.Empty,"no carrying while dragging a downed friend");
         }
 
-        // ECON-2: no shelf sells stock, so whoever is at camp reads where it comes from: the host beside Day 1's festival pick,
-        // everyone else on the camp line. ECON-3: only while they hold none and a day is next; a night has no quota to sell.
-        const string CampLine="Browse gear • pay the seller • stock comes from festivalgoers • meet at the trailhead";
-        [Test] public void CampSaysStockComesFromFestivalgoers()
+        const string CampLine="Browse shelves • pay the seller • One starter each at camp: Tongue Stamps or Fun Guys for $5. Buy more from festivalgoers ($5 each; some are narcs). Keep some money for more stock. • meet at the trailhead";
+        [Test] public void CampShowsTheViewersAllowanceAndStockSourceBeforeDaysAndNights()
         {
             var s=Level(0,0,"Shopping");var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");s.UnlockedFestivalCount=2;
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked) • stock comes from festivalgoers"));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Does.StartWith("F  switch to Ember Playa (2 of 2 unlocked)").And.Contain("One starter each at camp").And.Contain("$5"));
             Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(CampLine));
-            you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});sam.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("F  switch to Ember Playa (2 of 2 unlocked)"),"stock in hand: the host reads only the pick");
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo("Browse gear • pay the seller • meet at the trailhead"),"stock in hand");
-            you.Inventory.Clear();s.LevelIndex=2;
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(CampLine),"mid-weekend the host has no festival to pick");
-            s.LevelIndex=1;
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo("Browse gear • pay the seller • meet at the trailhead"),"before a night");
+            you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});you.StarterStockBought=1;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Does.Contain("Starter bought this camp").And.Contain("festivalgoers").And.Not.Contain("One starter each"));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Does.Contain("One starter each"),"another owner's purchase never spends your allowance");
+            s.LevelIndex=1;s.FestivalIndex=1;sam.Ordinal=1;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Does.Contain("rescue").And.Contain("One starter each").And.Contain("5 ramen packets").And.Not.Contain("$").And.Not.Contain("quota"));
+        }
+
+        [Test] public void SaleSelectionUsesPositiveEquippedStockThenPositivePocketFallback()
+        {
+            var s=Level(0,0);var p=Crew(s,"you","You");var n=new NpcState{Id="goer_2",CanTalk=true};s.Npcs.Add(n);
+            p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=2});
+            foreach(string equipped in new[]{"stock_mushrooms","stock_lsd","","confetti","stale"})
+            {
+                p.EquippedItemId=equipped;string expected=equipped=="stock_mushrooms"?equipped:"stock_lsd";
+                var offer=FestivalHudText.FestivalgoerActions(s,p,n)[0];Assert.That(offer.Command.Kind,Is.EqualTo("StartSale"));
+                Assert.That(offer.Command.ItemId,Is.EqualTo(expected));Assert.That(offer.Label,Does.StartWith("Offer "+Catalog.FindItem(expected).Name));
+                Assert.That(p.EquippedItemId,Is.EqualTo(equipped),"guidance does not silently equip another item");
+            }
+            p.Inventory[0].Count=0;p.EquippedItemId="stock_lsd";
+            Assert.That(FestivalHudText.FestivalgoerActions(s,p,n)[0].Command.ItemId,Is.EqualTo("stock_mushrooms"));
+            p.Inventory[1].Count=0;Assert.That(FestivalHudText.FestivalgoerActions(s,p,n)[0].Command.Kind,Is.EqualTo("StartBuy"));
+        }
+
+        [Test] public void OwnReservedSaleSaysFinish()
+        {
+            var s=Level(0,0);var p=Crew(s,"you","You");p.InteractionId="sale";
+            var sale=new InteractionState{Id="sale",PlayerId=p.Id,Kind="Sale",Status="Active",ReservedItemId="stock_lsd"};s.Interactions.Add(sale);
+            Assert.That(FestivalHudText.ObjectiveDetail(s,p),Does.Contain("Finish this deal").And.Not.Contain("nothing to sell"));
+            sale.PlayerId="other";Assert.That(FestivalHudText.ObjectiveDetail(s,p),Does.Contain("nothing to sell"));
+        }
+
+        [Test] public void LowCashPointsAtAnAffordableExistingRecoveryInTheViewersMoney()
+        {
+            var s=Level(0,0);var p=Crew(s,"you","You");p.Cash=4;s.StashCash=5;s.Stashes.Add(new StashState{Id="stash",X=-25,Z=-8});
+            Assert.That(FestivalHudText.ObjectiveDetail(s,p),Does.Contain("Withdraw $5").And.Contain("shared stash"));
+            s.StashCash=4;Assert.That(FestivalHudText.ObjectiveDetail(s,p),Does.Contain("lost-property desk").And.Contain("$5").And.Not.Contain("Withdraw"));
+            s.StashCash=5;s.Stashes.Clear();Assert.That(FestivalHudText.ObjectiveDetail(s,p),Does.Contain("lost-property desk"),"cash without an existing stash is not withdrawable");
+            s.FestivalIndex=1;p.Ordinal=1;Assert.That(FestivalHudText.ObjectiveDetail(s,p),Does.Contain("5 ramen packets").And.Not.Contain("$"));
         }
 
         [Test] public void OnlyTheHostIsOfferedTheFestivalBeforeDayOne()

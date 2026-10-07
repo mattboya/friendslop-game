@@ -664,7 +664,9 @@ namespace Festival.Presentation
                 for(int i=0;i<state.VendorOffers.Count;i++)
                 {
                     BuildShopItem(campShopRoot,campProps,campTags,state.VendorOffers[i],i,true);
-                    BuildShopItem(marketShopRoot,marketProps,marketTags,state.VendorOffers[i],i,false);
+                    // Keep offer indices aligned with authoritative ShopPoint without making market stock holders/tags.
+                    if(Catalog.StarterStock(state.VendorOffers[i])){marketProps.Add(null);marketTags.Add(null);}
+                    else BuildShopItem(marketShopRoot,marketProps,marketTags,state.VendorOffers[i],i,false);
                 }
             }
             for(int i=0;i<state.VendorOffers.Count&&i<campProps.Count;i++)
@@ -677,7 +679,7 @@ namespace Festival.Presentation
                 string campText=Catalog.ShopTag(item.Id)+"\n"+price+"   "+(campCount>0?campCount+" LEFT":"SOLD OUT");
                 string marketText=Catalog.ShopTag(item.Id)+"\n"+price+"   "+(marketCount>0?marketCount+" LEFT":"SOLD OUT");
                 if(campTags[i].text!=campText)campTags[i].text=campText;
-                if(marketTags[i].text!=marketText)marketTags[i].text=marketText;
+                if(marketTags[i]!=null&&marketTags[i].text!=marketText)marketTags[i].text=marketText;
             }
         }
         private static void ClearShop(Transform root,List<GameObject> props,List<TextMesh> tags)

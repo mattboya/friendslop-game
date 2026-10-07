@@ -68,23 +68,35 @@ namespace Festival.Presentation
         public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s,p):FestivalGuidance.Headline(s,p);
 
         /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line;
-        /// either way the card says where stock comes from (ECON-2: no shelf sells it) while p has none for a day (ECON-3,
-        /// FestivalGuidance.NeedsStock). This card, not FestivalGuidance.Hint, is what camp reads. By day the quota's line is followed
+        /// either way the card says the viewer's paid starter allowance and the crowd stock source. This card, not FestivalGuidance.Hint, is what camp reads. By day the quota's line is followed
         /// by p's next step to a sale (NextStep). A Ferris wheel rider reads what they spot from up there instead (FestivalGuidance.Hint, POLO-1).</summary>
         public static string ObjectiveDetail(RoundState s,PlayerState p)
         {
             if(s.Phase=="Results")return OutcomeDetail(s);
-            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=FestivalGuidance.NeedsStock(s,p)?" • "+StockSource:"";return choice!=""?choice+stock:"Browse gear • pay the seller"+stock+" • meet at the trailhead";}
+            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);return choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";}
             if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return FestivalGuidance.Hint(s,p);
             return FestivalSimulation.DayQuotaMet(s)?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p);
         }
-        const string StockSource="stock comes from festivalgoers";
+        /// <summary>Shared camp allowance/source teaching, always in the viewer's money, even before a rescue.</summary>
+        public static string CampStockGuidance(RoundState s,PlayerState p)
+        {
+            string price=s!=null&&p!=null?Money(s,p,5):"$5";
+            return (p!=null&&p.StarterStockBought>0?"Starter bought this camp.":"One starter each at camp: Tongue Stamps or Fun Guys for "+price+".")
+                +" Buy more from festivalgoers ("+price+" each; some are narcs). Keep some money for more stock.";
+        }
         // ECON-3 (Matt: "i dont even know how to sell"): with no stock, where it comes from (ECON-2: festivalgoers, some of them narcs).
         // Holding some, the tripper is pointed at a buyer vision (a green ball) whose check came back true (a green ring, VISION-5): a
         // true narc vision is ringed green too, so the ring alone would send them to a narc. The crew stick with the tripper.
         static string NextStep(RoundState s,PlayerState p)
         {
-            if(FestivalGuidance.NeedsStock(s,p))return "You have nothing to sell: buy from festivalgoers, and some are narcs.";
+            if(FestivalGuidance.HasReservedSale(s,p))return "Finish this deal: your offered unit is reserved until it ends.";
+            if(FestivalGuidance.NeedsStock(s,p))
+            {
+                if(p.Cash<5)return s.StashCash>=5&&s.Stashes.Count>0
+                    ?"You have nothing to sell. Withdraw "+Money(s,p,5)+" from the shared stash, then buy from festivalgoers; some are narcs."
+                    :"You have nothing to sell: return lost property at the lost-property desk for "+Money(s,p,5)+", then buy from festivalgoers; some are narcs.";
+                return "You have nothing to sell: buy from festivalgoers, and some are narcs.";
+            }
             if(p.Id==s.TripperId)return "A green ball in a green ring is a real buyer: walk up and press E to offer.";
             return "Stick with "+(s.Players.Find(x=>x.Id==s.TripperId)?.Name??"the tripper")+": they see the buyers. Walk up to one and press E to offer.";
         }
@@ -412,7 +424,8 @@ namespace Festival.Presentation
         {
             var actions=new List<(string Label,GameCommand Command)>{("Dance with festivalgoer",new GameCommand{Kind="Dance",TargetId=n.Id})};
             if(n.CanTalk)actions.Add(("Talk with festivalgoer",new GameCommand{Kind="Conversation",TargetId=n.Id}));
-            var stock=p.Inventory.Find(i=>Catalog.FindItem(i.ItemId)?.Category=="Stock");
+            var stock=p.Inventory.Find(i=>i.ItemId==p.EquippedItemId&&i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock")
+                ??p.Inventory.Find(i=>i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock");
             bool day=!Festivals.For(s).Night;
             if(stock!=null)actions.Insert(day&&!soldToYou?0:actions.Count,("Offer "+Catalog.FindItem(stock.ItemId).Name,new GameCommand{Kind="StartSale",TargetId=n.Id,ItemId=stock.ItemId}));
             actions.Insert(FestivalGuidance.NeedsStock(s,p)||day&&soldToYou?0:actions.Count,(BuyAction(s,p,n.Id),new GameCommand{Kind="StartBuy",TargetId=n.Id,ItemId=FestivalSimulation.SellerStock(n.Id)}));

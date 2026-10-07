@@ -88,16 +88,15 @@ namespace Festival.Presentation
         }
 
         /// <summary>"What should I grab?" for p's next level. Before a day with no stock in hand: something to sell, both kinds at
-        /// their price in p's money, bought from festivalgoers, some of them narcs (ECON-2). Stocked up, or before a night (a rescue,
-        /// so no stock pitch): the first three extras on her shelf that are left, and why. Then whatever on it is sold out.</summary>
+        /// their price in p's money, one paid camp starter plus more from festivalgoers, some of them narcs. Nights explain the rescue
+        /// and retain the camp allowance status. Then the first three extras on her shelf that are left, and why. Then whatever on it is sold out.</summary>
         public static string Grab(RoundState s,PlayerState p)
         {
-            bool night=Festivals.For(s).Night;
-            // ponytail: both stock kinds cost the same (Catalog), so one price; name each one's if they ever differ.
-            string line=!night&&FestivalGuidance.NeedsStock(s,p)
-                ?"You'll want something to sell: "+Catalog.FindItem("stock_lsd").Name+" or "+Catalog.FindItem("stock_mushrooms").Name+", "+FestivalHudText.Money(s,p,Catalog.FindItem("stock_lsd").Price)
-                    +" each. I can't stock them anymore, so buy off festivalgoers, and mind: some of them are narcs."
-                :(night?"No selling tonight, hon: it's a rescue. Find whoever's gone missing and bring them back to camp.":"You're stocked up, sugar.")+Extras(s);
+            bool night=Festivals.For(s).Night,needsStock=FestivalGuidance.NeedsStock(s,p);
+            string line=(night?"No selling tonight, hon: rescue your missing friend and bring them home. "
+                :needsStock?"Start here, sugar. ":"You're stocked up, sugar. ")
+                +FestivalHudText.CampStockGuidance(s,p).Replace("One starter each","I sell one starter each")
+                +(night||!needsStock?Extras(s):"");
             var soldOut=new List<string>();
             foreach(var id in s.VendorOffers)if((s.ShopStock.Find(x=>x.ItemId==id)?.CampAvailable??0)<=0)soldOut.Add(Catalog.FindItem(id).Name);
             return soldOut.Count==0?line:line+" Sold out: "+string.Join(", ",soldOut)+".";
@@ -168,8 +167,8 @@ namespace Festival.Presentation
             ["parting"]=new[]{"Drink some water.","Stay out of trouble. Or at least out of sight.","Don't do anything I wouldn't do. Which isn't much.","Have fun out there.",
                 "Bring everybody home.","Come back and tell me everything.","Mind the narcs.","0:Smile for the influencers. Or don't.","1:Keep your goggles handy."},
             ["tip"]=new[]{
-                "Stock only comes from festivalgoers now. Some of them are narcs, and finishing a buy with a narc gets you busted.",
-                "My shelves are gear only these days. Nobody at camp sells stock anymore.",
+                "Buy more stock from festivalgoers for $5 each. Some of them are narcs, and finishing a buy with a narc gets you busted.",
+                "My shelves sell gear and one starter each at camp: Tongue Stamps or Fun Guys for $5. Keep some money for more stock from festivalgoers.",
                 "Talk to folks before you deal. Answer the way they like to be talked to, and a smooth talk leaves you a hunch about who they are.",
                 "Somebody wary of you wants a dance before they'll talk, and so do some ravers and burners. Dance it well and they open right up.",
                 "Chat with folks before you buy, and listen close: narcs slip into cop talk.",

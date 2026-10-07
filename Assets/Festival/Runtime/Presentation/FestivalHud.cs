@@ -568,7 +568,7 @@ namespace Festival.Presentation
         // HUD-7: How to Play reads the keys as bound when it opens, so a rebind shows.
         private void OpenHowToPlay()
         {
-            var blocks=FestivalHudText.HowToPlay(session.Controls);
+            var blocks=FestivalHudText.HowToPlay(session.Controls,session.State,session.LocalPlayer);
             for(int i=0;i<howToPlayTexts.Length;i++){howToPlayTitles[i].text=i<blocks.Length?blocks[i].Title:"";howToPlayTexts[i].text=i<blocks.Length?blocks[i].Text:"";}
             howToPlayOpen=true;
         }
@@ -1575,6 +1575,7 @@ namespace Festival.Presentation
             string best="";float bestScore=.77f;
             for(int i=0;i<state.VendorOffers.Count;i++)
             {
+                if(!camp&&Catalog.StarterStock(state.VendorOffers[i]))continue;
                 var point=Catalog.ShopPoint(camp,i);
                 if(Distance(player.X,player.Z,point.X,point.Z)>3.3f)continue;
                 var target=new Vector3(point.X,i<4?1.17f:2.05f,camp?9.0f:i<4?-21.15f:-20.05f);

@@ -26,10 +26,12 @@ namespace Festival.Core
             return trail>0?"FOLLOW THE CLUE TRAIL "+state.CluesRead+" / "+trail:"SELL THE DAY'S QUOTA";
         }
 
-        /// <summary>ECON-3: player holds no stock and the level (the one coming up, at camp) is a day, whose quota needs some. Only then
-        /// do the camp lines and the day's objective card say where stock comes from. ponytail: a unit on the table in a sale counts
-        /// as gone, as the card is hidden while you dance it; count the sale's ReservedItemId if a sale ever leaves the card up.</summary>
-        public static bool NeedsStock(RoundState state, PlayerState player) => !Festivals.For(state).Night&&!player.Inventory.Exists(i=>Catalog.FindItem(i.ItemId)?.Category=="Stock");
+        /// <summary>A day needs stock only when none is held or reserved in the viewer's own active sale.</summary>
+        public static bool NeedsStock(RoundState state,PlayerState player) => !Festivals.For(state).Night
+            &&!player.Inventory.Exists(i=>i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock")
+            &&!HasReservedSale(state,player);
+
+        public static bool HasReservedSale(RoundState state,PlayerState player)=>player.InteractionId!=""&&state.Interactions.Exists(i=>i.Id==player.InteractionId&&i.PlayerId==player.Id&&i.Status=="Active"&&i.Kind=="Sale"&&Catalog.FindItem(i.ReservedItemId)?.Category=="Stock");
 
         public static string Hint(RoundState state, PlayerState player)
         {

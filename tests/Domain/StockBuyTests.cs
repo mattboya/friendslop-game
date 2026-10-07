@@ -14,9 +14,31 @@ public static class StockBuyTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{CampStartersKeepGearShuffleAndMarketRefusesStock,ASellerSells,AClueHolderOnlySellsAtNight,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
+        foreach(var test in new Action[]{AReservedSaleStillCountsAsStock,CampStartersKeepGearShuffleAndMarketRefusesStock,ASellerSells,AClueHolderOnlySellsAtNight,ARefusedBuyLeavesSuspicionAlone,TheReplyNeverTellsThemApart,FinishingABuyWithANarcIsABust,ACopSeesTheBuy,TheDealIsUnchanged})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stock buy test(s) failed:\n"+string.Join("\n",failures));
+    }
+
+    static void AReservedSaleStillCountsAsStock()
+    {
+        var s=Start(31,0);s.HasLineOfSight=(ax,az,bx,bz)=>false;
+        var seller=s.Player("p1");var other=s.Player("p0");var buyer=Wook(s,"Buyer");
+        Check(buyer!=null,"setup: buyer exists");
+        seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});seller.X=buyer.X;seller.Z=buyer.Z-1;
+        Check(Act(s,seller.Id,"StartSale",buyer.Id,"stock_lsd").Accepted,"setup: last stock enters a sale");
+        var sale=s.Interaction(seller.InteractionId);
+        Check(sale!=null&&sale.Kind=="Sale"&&sale.ReservedItemId=="stock_lsd"&&Count(seller,"stock_lsd")==0,"setup: unit is reserved in the real active sale");
+        Check(!FestivalGuidance.NeedsStock(s.State,seller),"last unit reserved in own active sale still counts as stock");
+        Check(FestivalGuidance.NeedsStock(s.State,other),"another player's reserved sale cannot supply your stock");
+        Check(Act(s,seller.Id,"Cancel").Accepted,"setup: cancel returns reserved unit");
+        Check(!FestivalGuidance.NeedsStock(s.State,seller),"cancelled sale returned stock still counts");
+        seller.Inventory.Clear();seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        Check(Act(s,seller.Id,"StartSale",buyer.Id,"stock_lsd").Accepted,"setup: returned last unit is offered again");
+        var finished=Talk(s,seller,Smooth,Smooth,Smooth);
+        Check(finished.Status!="Active"&&seller.InteractionId==""&&Count(seller,"stock_lsd")==0,"setup: successful last-unit sale settled through real replies");
+        Check(FestivalGuidance.NeedsStock(s.State,seller),"completed reservation cannot conceal missing stock");
+        seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=0});
+        Check(FestivalGuidance.NeedsStock(s.State,seller),"zero-count stock does not count");
     }
 
     // The crew readies at camp for this level of Palm Mirage, the wheels land and everyone loads into the real crowd, dealt its

@@ -38,6 +38,46 @@ namespace Festival.Tests
         static string[] Thread(FestivalChatWindow window){var lines=new List<string>();for(int i=0;i<window.Bubbles;i++)lines.Add((window.IsTheirs(i)?"< ":"> ")+window.Shown(i));return lines.ToArray();}
         static string Last(FestivalChatWindow window)=>Thread(window)[window.Bubbles-1];
 
+        [Test] public void GrabNamesOnePaidStarterAndTheFestivalgoerSource()
+        {
+            var s=Camp(Festivals.PoloFestival,0,out var you);
+            string grab=CampSellerTalk.Grab(s,you);
+            Assert.That(grab,Does.Contain("one starter").And.Contain("at camp"),"Marigold must explain the paid starter already supported by the host");
+            Assert.That(grab,Does.Contain("Tongue Stamps").And.Contain("Fun Guys").And.Contain("$5"));
+            Assert.That(grab,Does.Contain("festivalgoers").And.Contain("narcs"));
+            Assert.That(grab,Does.Not.Contain("can't stock them"));
+        }
+
+        [Test] public void UsedStarterAndBothReplacementTipsReadInTheViewersMoney()
+        {
+            var s=Camp(Festivals.PlayaFestival,1,out var you,ordinal:1);you.StarterStockBought=1;
+            Assert.That(CampSellerTalk.Grab(s,you),Does.Contain("Starter bought this camp").And.Contain("5 ramen packets").And.Contain("rescue").And.Not.Contain("$"));
+            var talk=new CampSellerTalk(7);var tips=new HashSet<string>();
+            for(int n=0;n<500;n++)tips.Add(talk.Tip(s,you));
+            string all=string.Join("\n",tips);
+            Assert.That(all,Does.Not.Contain("gear only").And.Not.Contain("Nobody at camp sells stock").And.Not.Contain("Stock only comes"));
+            Assert.That(all,Does.Contain("one starter").And.Contain("5 ramen packets").And.Contain("Keep some money"));
+        }
+
+        [Test] public void NightMarketHasNoStarterHoldersOrTagsAndGearKeepsItsOriginalSlots()
+        {
+            worldObject=new GameObject("Shelf presentation world");var world=worldObject.AddComponent<FestivalWorld>();world.Build();
+            var s=Camp(0,0,out var you);s.RoundId="shelf-presentation";
+            foreach(string id in new[]{"stock_lsd","stock_mushrooms"}){s.VendorOffers.Add(id);s.ShopStock.Add(new ShopStockState{ItemId=id,CampAvailable=8});}
+            world.UpdateShop(s,you);
+            var camp=world.transform.Find("Festival campsite lobby/Campsite shelf goods");
+            var market=world.GetComponentsInChildren<Transform>(true);
+            Transform shelves=null;foreach(var t in market)if(t.name=="Night market goods")shelves=t;
+            Assert.That(camp,Is.Not.Null);Assert.That(shelves,Is.Not.Null,"setup: production market display root");
+            for(int i=0;i<s.VendorOffers.Count;i++)
+            {
+                string id=s.VendorOffers[i];Assert.That(camp.Find("Shop item "+id),Is.Not.Null,"camp retains all offers");
+                var holder=shelves.Find("Shop item "+id);
+                if(Catalog.FindItem(id).Category=="Stock")Assert.That(holder,Is.Null,"stock has no market holder or price tag");
+                else{Assert.That(holder,Is.Not.Null);Assert.That(holder.localPosition.x,Is.EqualTo(Catalog.ShopPoint(false,i).X));Assert.That(holder.GetComponentInChildren<TextMesh>().text,Does.Contain(Catalog.ShopTag(id)));}
+            }
+        }
+
         [Test] public void FTalksBesideHerAtCampWithNothingUnpaidInHand()
         {
             var s=Camp(Festivals.PoloFestival,0,out var you);
@@ -64,12 +104,12 @@ namespace Festival.Tests
             for(int i=0;i<3;i++)Assert.That(window.ReplyLabel(i),Is.EqualTo(CampSellerTalk.Questions[i]));
             Assert.That(talk.Follow(s,you,10,false),Is.True,"the talk goes on while you stand there");
             Assert.That(Thread(window),Is.EqualTo(new[]{"< "+twin.Greeting(s.FestivalIndex)}),"her greeting, typed out");
-            string[] answers={CampSellerTalk.Grab(s,you),CampSellerTalk.Today(s,you),twin.Tip(s,you)};
+            string[] answers={CampSellerTalk.Grab(s,you),CampSellerTalk.Today(s,you),twin.Tip(s,you)};float answeredAt=10;
             for(int ask=0;ask<3;ask++)
             {
                 Assert.That(window.Pick(ask),Is.True,"question "+(ask+1)+" can be asked");
                 Assert.That(Thread(window)[window.Bubbles-2],Is.EqualTo("> "+CampSellerTalk.Questions[ask]),"you ask it");
-                talk.Follow(s,you,20+10*ask,false);
+                answeredAt+=FestivalChatWindow.Typed(answers[ask])+.1f;talk.Follow(s,you,answeredAt,false);
                 Assert.That(Last(window),Is.EqualTo("< "+answers[ask]),"she answers question "+(ask+1));
                 for(int i=0;i<3;i++)Assert.That(window.CanReply(i),Is.True,"question "+(i+1)+" can be asked again after question "+(ask+1));
             }
@@ -168,7 +208,7 @@ namespace Festival.Tests
         {
             var s=Camp(Festivals.PoloFestival,0,out var you);you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});
             string grab=CampSellerTalk.Grab(s,you);
-            Assert.That(grab,Does.Not.Contain("Tongue Stamps or Fun Guys"),"stocked up, so no stock pitch");
+            Assert.That(grab,Does.Contain("one starter").And.Contain("at camp"),"stock already held does not spend this camp allowance");
             Assert.That(grab,Does.Contain("merch bag").And.Contain("security"),"a merch bag hides stock from security");
             Assert.That(grab,Does.Contain("medical tent"),"a voucher for the medical tent");
             Assert.That(grab,Does.Contain("poi"),"poi for dances");
@@ -185,7 +225,7 @@ namespace Festival.Tests
             {
                 var s=Camp(Festivals.PlayaFestival,1,out var you);if(stocked)you.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
                 string grab=CampSellerTalk.Grab(s,you),why=stocked?"holding stock":"holding nothing";
-                Assert.That(grab,Does.Not.Contain("Tongue Stamps").And.Not.Contain("Fun Guys"),"no stock pitch before a night, "+why);
+                Assert.That(grab,Does.Contain("one starter").And.Contain("at camp"),"night camp still has its entitlement, "+why);
                 Assert.That(grab,Does.Contain("rescue"),"the night's job, "+why);
                 Assert.That(grab,Does.Contain("medical tent"),"the shelf's extras still, "+why);
             }
@@ -231,7 +271,7 @@ namespace Festival.Tests
             Assert.That(tips.Count,Is.GreaterThanOrEqualTo(20),"a pool of at least 20 tips");
             bool stock=false;foreach(var tip in tips)stock|=tip.Contains("festivalgoers")&&tip.Contains("narc");
             Assert.That(stock,Is.True,"stock comes from festivalgoers, some of them narcs");
-            Assert.That(all,Does.Contain("gear only"),"the shelves sell gear only");
+            Assert.That(all,Does.Contain("one starter").And.Not.Contain("gear only").And.Not.Contain("only comes from festivalgoers"),"both old gear-only tips are gone");
             Assert.That(all,Does.Contain("dance").And.Contain("hunch"),"talks, their trust dances and hunches");
             Assert.That(all,Does.Contain(FestivalVisionMarkers.VerdictText("Narc",false)),"what a checked vision says, in VISION-5's words");
             Assert.That(all,Does.Contain("ditch").And.Contain("walk").And.Contain("talk"),"a security stop's three ways out");
