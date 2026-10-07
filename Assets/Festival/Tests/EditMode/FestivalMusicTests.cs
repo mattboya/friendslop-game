@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Festival.Tests
 {
-    // MUSIC-2: the camp DJ's five recorded tracks. Each streams from Resources/Music, and FestivalMusic's beat grid and loop are
+    // MUSIC-2: the camp DJ's seven recorded tracks. Each streams from Resources/Music, and FestivalMusic's beat grid and loop are
     // measured from the recording itself (Measure, below, printed the table). These tests decode each track the way the game plays
     // it and hold the table to it: the tempo, BeatPhase on the beats all the way through the loop, and a loop join with no gap and
     // no click.
@@ -21,7 +21,7 @@ namespace Festival.Tests
         // The tempo range each style is measured in, from the queue's expectations, widened: house about 115-135 BPM, drum and bass
         // 160-185, and dub reggae's one-drop 70-95 (its off-beat skank doubles that).
         private static readonly Dictionary<string,(double Low,double High)> Styles=new Dictionary<string,(double,double)>{
-            {"tech-house-loop",(115,135)},{"disco-house-loop",(115,135)},{"organic-house-loop",(115,135)},{"drum-and-bass-loop",(160,185)},{"dub-reggae-loop",(70,95)}};
+            {"tech-house-loop",(115,135)},{"disco-house-loop",(115,135)},{"organic-house-loop",(115,135)},{"drum-and-bass-loop",(160,185)},{"dub-reggae-loop",(70,95)},{"desert-rhythm-loop",(110,135)},{"industrial-techno-loop",(135,155)}};
         private static readonly Dictionary<string,float[]> decoded=new Dictionary<string,float[]>();
 
         [OneTimeSetUp]public void Decode()
@@ -42,14 +42,28 @@ namespace Festival.Tests
         }
         [OneTimeTearDown]public void Remove(){AssetDatabase.DeleteAsset(Probe);decoded.Clear();}
 
-        [Test]public void TheCampDjPlaysSilenceThenTheFiveTracks()
+        [Test]public void TheCampDjPlaysSilenceThenTheSevenTracks()
         {
-            Assert.That(CampFeatures.Tracks,Is.EqualTo(new[]{"SILENCE","TECH HOUSE","DISCO HOUSE","ORGANIC HOUSE","DRUM & BASS","DUB REGGAE"}),"the DJ's choices");
+            Assert.That(CampFeatures.Tracks,Is.EqualTo(new[]{"SILENCE","TECH HOUSE","DISCO HOUSE","ORGANIC HOUSE","DRUM & BASS","DUB REGGAE","DESERT RHYTHM","INDUSTRIAL TECHNO"}),"the DJ's choices");
             Assert.That(FestivalMusic.For(0),Is.Null,"SILENCE plays nothing");
-            string[] clips={"tech-house-loop","disco-house-loop","organic-house-loop","drum-and-bass-loop","dub-reggae-loop"};
+            string[] clips={"tech-house-loop","disco-house-loop","organic-house-loop","drum-and-bass-loop","dub-reggae-loop","desert-rhythm-loop","industrial-techno-loop"};
             for(int i=1;i<CampFeatures.Tracks.Length;i++)Assert.That(FestivalMusic.For(i)?.Clip,Is.EqualTo(clips[i-1]),CampFeatures.Tracks[i]+" plays its recording");
             Assert.That(FestivalMusic.For(CampFeatures.Tracks.Length),Is.Null,"no track past the list");
             Assert.That(FestivalMusic.For(new RoundState().CampMusicTrack)?.Clip,Is.EqualTo("tech-house-loop"),"a new camp starts on TECH HOUSE");
+        }
+
+        [TestCase("desert-rhythm-loop",6,21230,8330191,122.00764138066708,8641152)]
+        [TestCase("industrial-techno-loop",7,3183890,8247779,145.5924677621046,8629632)]
+        public void TheAdditionalRecordingLoadsWithItsValidatedBodyLoop(string clip,int choice,int first,int end,double bpm,int samples)
+        {
+            var audio=Resources.Load<AudioClip>("Music/"+clip);
+            Assert.That(audio,Is.Not.Null,"the additional recording ships in Resources");
+            var track=FestivalMusic.For(choice);
+            Assert.That(track,Is.Not.Null,"the camp choice selects the additional recording");
+            Assert.That((track.Clip,track.FirstBeat,track.LoopEnd),Is.EqualTo((clip,first,end)),"the validated sample anchors are retained");
+            Assert.That(track.Bpm,Is.EqualTo(bpm).Within(1e-10));
+            if(choice==6)Assert.That(352*60/track.LoopSeconds,Is.EqualTo(122.00803445821927).Within(1e-10),"the desert measurement counts 352 whole beats; grid tempo keeps fractional join nudges");
+            Assert.That(audio.samples,Is.EqualTo(samples),"the shipped decode retains the full introductory passage");
         }
 
         [Test]public void EveryTrackStreamsFromResourcesAsTheGamePlaysIt()
@@ -63,6 +77,8 @@ namespace Festival.Tests
                 Assert.That((clip.frequency,clip.channels),Is.EqualTo((FestivalMusic.Rate,2)),track.Clip+": stereo at the table's rate, not forced to mono");
                 var importer=(AudioImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(clip));var settings=importer.defaultSampleSettings;
                 Assert.That((settings.loadType,settings.compressionFormat,settings.preloadAudioData,importer.forceToMono),Is.EqualTo((AudioClipLoadType.Streaming,AudioCompressionFormat.Vorbis,false,false)),track.Clip+"'s .meta: streamed Vorbis, not preloaded, stereo");
+                Assert.That(settings.sampleRateSetting,Is.EqualTo(AudioSampleRateSetting.PreserveSampleRate),track.Clip+": source sample rate is preserved");
+                Assert.That((importer.loadInBackground,importer.ambisonic),Is.EqualTo((false,false)),track.Clip+": matching import flags");
                 Assert.That(settings.quality,Is.EqualTo(.7f).Within(.005f),track.Clip+": Vorbis quality 70");
                 Assert.That(decoded[track.Clip].Length/2,Is.EqualTo(clip.samples),track.Clip+": the decoded copy is the shipped clip, sample for sample");
             }
@@ -96,10 +112,21 @@ namespace Festival.Tests
         {
             foreach(var track in FestivalMusic.Tracks)
             {
-                var style=Styles[track.Clip];var measured=Measure(decoded[track.Clip],style.Low,style.High);
+                var style=Styles[track.Clip];var measured=Measure(decoded[track.Clip],style.Low,style.High,(int)Math.Round(track.Beats.Beat(track.FirstBeat)));
                 Assert.That(track.Bpm,Is.InRange(style.Low,style.High),track.Clip+"'s tempo is in its style's range");
                 Assert.That(track.Bpm,Is.EqualTo(measured.Bpm).Within(1),track.Clip+"'s tempo, measured again from its samples");
             }
+        }
+
+        [Test]public void TheMeasurementPrinterRetainsTheIndustrialBodyLoop()
+        {
+            var track=FestivalMusic.For(7);
+            Assert.That(track,Is.Not.Null,"the authored industrial track exists");
+            var style=Styles[track.Clip];var measured=Measure(decoded[track.Clip],style.Low,style.High,(int)Math.Round(track.Beats.Beat(track.FirstBeat)));
+            Assert.That(measured.FirstBeat,Is.EqualTo(track.FirstBeat),"remeasurement keeps phrase 5 rather than repeating the sparse intro");
+            Assert.That(measured.LoopEnd,Is.EqualTo(track.LoopEnd),"the body join is measured against the selected start");
+            Assert.That(measured.Phrases,Is.EqualTo(track.Phrases),"the first-pass introductory anchors are preserved too");
+            Assert.That(measured.Bpm,Is.EqualTo(track.Bpm).Within(1e-10),"printed average includes the measured fractional join positions");
         }
 
         // The beats BeatPhase marks (where it wraps to 0) against the onsets heard in the recording, phrase by phrase through the loop.
@@ -165,7 +192,7 @@ namespace Festival.Tests
             var table=new System.Text.StringBuilder();
             foreach(var track in FestivalMusic.Tracks)
             {
-                var style=Styles[track.Clip];var m=Measure(decoded[track.Clip],style.Low,style.High);
+                var style=Styles[track.Clip];var m=Measure(decoded[track.Clip],style.Low,style.High,(int)Math.Round(track.Beats.Beat(track.FirstBeat)));
                 table.AppendLine($"            // {m.Bpm:F2} BPM on average over {m.Phrases.Length} phrase starts. {m.Notes}");
                 table.AppendLine($"            new Track(\"{track.Clip}\",{m.FirstBeat},{m.LoopEnd},{string.Join(",",m.Phrases)}),");
             }
@@ -232,9 +259,9 @@ namespace Festival.Tests
         // A recording's beat. The tempo is the strongest beat frequency in the style's range. Then, from the first sound, each 8-bar
         // phrase start is fitted to the onsets of the 16 beats either side of it, at a tempo within 0.6% of the last phrase's, because
         // the tracks drift. The loop runs from the first beat to the same beat of the last phrase whose final bar is still at least
-        // three quarters as loud as the bar before it (so not fading out). Last, each end moves up to 5 ms to where the samples either
-        // side of the join match in value and slope.
-        private static Measured Measure(float[] pcm,double low,double high)
+        // three quarters as loud as the bar before it (so not fading out). An authored start retains a later body loop.
+        // Last, each end moves up to 5 ms to where the samples either side of the join match in value and slope.
+        private static Measured Measure(float[] pcm,double low,double high,int authoredFirstBeat=-1)
         {
             var onsets=Onsets(pcm);double bpm=Tempo(onsets,low,high),period=60/bpm*FestivalMusic.Rate/Hop;long frames=pcm.Length/2;
             int firstSound=0;while(firstSound<frames/Hop&&Rms(pcm,(long)firstSound*Hop,(long)(firstSound+1)*Hop)<=.01)firstSound++;
@@ -253,15 +280,29 @@ namespace Festival.Tests
             int lastBeat=-1;
             for(int n=firstBeat+FestivalMusic.PhraseBeats;Beat(n)<=frames;n+=FestivalMusic.PhraseBeats)
                 if(Rms(pcm,(long)Beat(n-4),(long)Beat(n))>=.75*Rms(pcm,(long)Beat(n-8),(long)Beat(n-4)))lastBeat=n;
-            long start=(long)Math.Round(Beat(firstBeat)),stop=(long)Math.Round(Beat(lastBeat)),joinStart=start,joinStop=stop;
-            const int Nudge=FestivalMusic.Rate/200;double miss=double.MaxValue;
-            for(long e=stop-Nudge;e<=stop+Nudge;e++)for(long s=Math.Max(1,start-Nudge);s<=start+Nudge;s++)
+            (long Start,long Stop) Join(long start,long stop)
             {
-                double m=0;
-                for(int c=0;c<2;c++){double v=pcm[2*e+c]-pcm[2*s+c],slope=pcm[2*e+c]-pcm[2*(e-1)+c]-(pcm[2*s+c]-pcm[2*(s-1)+c]);m+=v*v+4*slope*slope;}
-                if(m<miss){miss=m;joinStart=s;joinStop=e;}
+                const int Nudge=FestivalMusic.Rate/200;double miss=double.MaxValue;long joinedStart=start,joinedStop=stop;
+                for(long e=stop-Nudge;e<=stop+Nudge;e++)for(long a=Math.Max(1,start-Nudge);a<=start+Nudge;a++)
+                {
+                    double m=0;
+                    for(int c=0;c<2;c++){double v=pcm[2*e+c]-pcm[2*a+c],slope=pcm[2*e+c]-pcm[2*(e-1)+c]-(pcm[2*a+c]-pcm[2*(a-1)+c]);m+=v*v+4*slope*slope;}
+                    if(m<miss){miss=m;joinedStart=a;joinedStop=e;}
+                }
+                return (joinedStart,joinedStop);
             }
-            return new Measured{Bpm=60.0*(lastBeat-firstBeat)/((joinStop-joinStart)/(double)FestivalMusic.Rate),Phrases=anchors.Select(a=>(int)Math.Round(a*Hop)).ToArray(),
+            var join=Join((long)Math.Round(Beat(firstBeat)),(long)Math.Round(Beat(lastBeat)));
+            var phrases=anchors.Select(a=>(int)Math.Round(a*Hop)).ToArray();
+            // Honor a later authored body start using the printed integer phrase grid, then refit against the measured end.
+            // This matches the validated two-step measurement while retaining the introduction's anchors for the first pass.
+            if(authoredFirstBeat>firstBeat)
+            {
+                var introductoryGrid=new StageBeats.Track("measured",(int)join.Start,(int)join.Stop,phrases);
+                join=Join((long)Math.Round(introductoryGrid.Sample(authoredFirstBeat)),join.Stop);firstBeat=authoredFirstBeat;
+            }
+            long joinStart=join.Start,joinStop=join.Stop;
+            var grid=new StageBeats.Track("measured",(int)joinStart,(int)joinStop,phrases);
+            return new Measured{Bpm=grid.Bpm,Phrases=phrases,
                 FirstBeat=(int)joinStart,LoopEnd=(int)joinStop,Notes=$"Strongest beat {bpm:F2} BPM; the loop is {(lastBeat-firstBeat)/FestivalMusic.PhraseBeats} phrases from beat {firstBeat}."};
         }
     }

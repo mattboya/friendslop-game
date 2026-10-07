@@ -2,7 +2,7 @@ using System;
 
 namespace Festival.Core
 {
-    /// <summary>The five recordings' authored phrase grid and click-free loop joins, measured from Unity's shipped decode.
+    /// <summary>The seven recordings' authored phrase grid and click-free loop joins, measured from Unity's shipped decode.
     /// Pure sample positions: host rules and presentation share the same drifting beat grid.</summary>
     public static class StageBeats
     {
@@ -31,7 +31,7 @@ namespace Festival.Core
         }
 
         // Measured by FestivalMusicTests.PrintTheMeasuredTable from Unity's decode at the shipped quality. Each loop runs from the
-        // first beat to the same beat of the last whole phrase before the fade.
+        // authored first loop beat to the same beat of the last whole phrase before the fade.
         public static readonly Track[] Tracks={
             // 129.39 BPM on average, speeding up from 128.1 to 130.7; the loop is 12 phrases from beat 0.
             new Track("tech-house-loop",23399,8570337,23317,743034,1462270,2180185,2896025,3609993,4322800,5033984,5743137,6451277,7158477,7865267,8570570),
@@ -43,6 +43,10 @@ namespace Festival.Core
             new Track("drum-and-bass-loop",10970,7938879,10970,538343,1066351,1594495,2122751,2651000,3179324,3707759,4236328,4765030,5293779,5822576,6351565,6884679,7409741,7939012,8468891),
             // 83.47 BPM on average (the one-drop beat; the off-beat skank is twice that); the loop is 7 phrases from beat 0.
             new Track("dub-reggae-loop",17576,7746504,17712,1122274,2228711,3335259,4439896,5542379,6644428,7746660),
+            // Strongest beat 122.07 BPM; the loop is 11 phrases from beat 1.
+            new Track("desert-rhythm-loop",21230,8330191,-2617,755887,1511303,2266599,3021772,3776823,4531675,5286527,6041439,6796412,7551385,8306478),
+            // 145.59 BPM on average; strongest beat 145.40 BPM. The loop repeats 8 phrases from phrase 5 (beat 160), after the sparse intro.
+            new Track("industrial-techno-loop",3183890,8247779,11516,648174,1284815,1919939,2550634,3183660,3816251,4450598,5084089,5716630,6351227,6983015,7614198,8247658),
         };
 
         /// <summary>The camp DJ choice, or null for SILENCE and choices outside the list.</summary>

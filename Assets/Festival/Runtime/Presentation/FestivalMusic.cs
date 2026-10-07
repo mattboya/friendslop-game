@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>MUSIC-2: Matt's five recorded tracks, in the camp DJ's order (CampFeatures.Tracks after SILENCE), with each one's beat
+    /// <summary>MUSIC-2: Matt's seven recorded tracks, in the camp DJ's order (CampFeatures.Tracks after SILENCE), with each one's beat
     /// and loop measured from the recording itself (FestivalMusicTests.Measure). The tracks are not one steady tempo (tech house
     /// speeds up from about 128 to 130.5 BPM as it plays), so a track's beat is a grid that starts again every 8 bars.</summary>
     public static class FestivalMusic
@@ -19,7 +19,7 @@ namespace Festival.Presentation
             public readonly string Clip;
             /// <summary>Where each 8-bar phrase starts. The beats between two phrase starts are evenly spaced.</summary>
             public readonly int[] Phrases;
-            /// <summary>The loop: the first beat, and the same beat in the last phrase before the fade. Each end sits up to 5 ms
+            /// <summary>The loop: the authored body start beat, and the same beat in the last phrase before the fade. Each end sits up to 5 ms
             /// off the beat, where the samples either side of the join match, so the join doesn't click.</summary>
             public readonly int FirstBeat,LoopEnd;
             /// <summary>The pure authored grid shared with the host's rules.</summary>

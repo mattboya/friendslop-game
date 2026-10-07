@@ -910,6 +910,17 @@ namespace Festival.Presentation
             yield return new WaitForSeconds(.3f);
             var campMusic=session.GetComponent<FestivalCampAudio>().Music;
             if(campMusic==null||!campMusic.isPlaying||campMusic.clip!=FestivalMusic.For(2).Audio){Fail("solo DJ plays DISCO HOUSE");yield break;}
+            // Both appended choices must play in the native build, retaining the full recording before their authored body loops.
+            foreach(int choice in new[]{6,7})
+            {
+                session.Command("ChooseCampTrack",amount:choice);
+                if(sim.State.CampMusicTrack!=choice){Fail("solo DJ additional track selection "+choice);yield break;}
+                yield return new WaitForSeconds(.3f);
+                var supplied=FestivalMusic.For(choice);campMusic=session.GetComponent<FestivalCampAudio>().Music;
+                if(supplied?.Audio==null||campMusic==null||!campMusic.isPlaying||campMusic.clip!=supplied.Audio||campMusic.timeSamples>=FestivalMusic.Rate)
+                {Fail("solo DJ additional recording from intro "+choice);yield break;}
+            }
+            Debug.Log("FESTIVAL SMOKE CAMP MUSIC PASSED: desert-rhythm-loop and industrial-techno-loop play from their introductions");
             // ECON-2: the camp shelves sell gear only, so the solo crew buys the practice poi it spins on Day 1.
             var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("poi_practice"));
             player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"poi_practice");

@@ -7,7 +7,7 @@ public static class StageBeatTests
     public static void Run()
     {
         Check(StageBeats.Rate==48000&&StageBeats.PhraseBeats==32,"the measured recordings use 48 kHz samples and 8-bar phrases");
-        Check(StageBeats.Tracks.Length==5,"all five recorded camp choices remain available");
+        Check(StageBeats.Tracks.Length==7,"all seven recorded camp choices are available");
         string[] clips={"tech-house-loop","disco-house-loop","organic-house-loop","drum-and-bass-loop","dub-reggae-loop"};
         int[] first={23399,21627,8403,10970,17576},end={8570337,7859530,8456350,7938879,7746504};
         // Independent baseline from the shipped, decode-measured table before extraction.
@@ -18,7 +18,7 @@ public static class StageBeatTests
             new[]{10970,538343,1066351,1594495,2122751,2651000,3179324,3707759,4236328,4765030,5293779,5822576,6351565,6884679,7409741,7939012,8468891},
             new[]{17712,1122274,2228711,3335259,4439896,5542379,6644428,7746660},
         };
-        for(int k=0;k<StageBeats.Tracks.Length;k++)
+        for(int k=0;k<clips.Length;k++)
         {
             var track=StageBeats.For(k+1);
             Check(track==StageBeats.Tracks[k]&&track.Clip==clips[k],"recording order remains unchanged");
@@ -35,7 +35,22 @@ public static class StageBeatTests
             double jump=track.BeatPhase(track.LoopEnd)-track.BeatPhase(track.FirstBeat);jump-=Math.Round(jump);
             Check(Math.Abs(jump)*60/track.Bpm<.01,clips[k]+": the existing loop joins within 10 ms of the same beat phase");
         }
-        foreach(int choice in new[]{int.MinValue,-1,0,6,int.MaxValue})Check(StageBeats.For(choice)==null,"silence and invalid camp choices play nothing");
+        foreach(int choice in new[]{int.MinValue,-1,0,8,int.MaxValue})Check(StageBeats.For(choice)==null,"silence and invalid camp choices play nothing");
+        string[] added={"desert-rhythm-loop","industrial-techno-loop"};
+        for(int k=0;k<added.Length;k++)
+        {
+            var track=StageBeats.For(k+6);
+            Check(track==StageBeats.Tracks[k+5]&&track.Clip==added[k],"additional camp choices append after the existing five");
+            Check(track.Phrases.Length>2&&track.FirstBeat>0&&track.LoopEnd>track.FirstBeat,"additional tracks have an authored loop and phrase grid");
+            for(int j=1;j<track.Phrases.Length;j++)Check(track.Phrases[j]>track.Phrases[j-1],"additional phrase anchors increase");
+            for(double b=-1;b<=track.Phrases.Length*32;b+=.25)
+                Check(Math.Abs(track.Beat(track.Sample(b))-b)<1e-9,added[k]+": fractional beat subdivisions round trip");
+            double jump=track.BeatPhase(track.LoopEnd)-track.BeatPhase(track.FirstBeat);jump-=Math.Round(jump);
+            Check(Math.Abs(jump)*60/track.Bpm<.01,added[k]+": loop joins on the same beat within 10 ms");
+        }
+        Check(StageBeats.For(6).FirstBeat==21230&&StageBeats.For(6).LoopEnd==8330191,"desert keeps its validated join");
+        Check(StageBeats.For(7).FirstBeat==3183890&&StageBeats.For(7).LoopEnd==8247779,"industrial repeats the measured body after its intro");
+        Check(Math.Abs(StageBeats.For(7).Beat(StageBeats.For(7).FirstBeat)-160)<.02,"industrial loop begins at phrase 5, beat 160");
         var tech=StageBeats.For(1);
         Check(Math.Abs(tech.Beat(383175.5)-16)<1e-9,"half of tech house's first measured phrase is beat 16");
         Check(Math.Abs(tech.Sample(40)-922843)<1e-9,"beat 40 follows the second measured phrase's tempo");

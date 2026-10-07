@@ -20,7 +20,7 @@ child.on('error',error=>{clearTimeout(timeout);console.error(error);process.exit
 child.on('exit',code=>{
   clearTimeout(timeout);
   const output=existsSync(log)?readFileSync(log,'utf8'):'';
-  if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(output)||!output.includes('FESTIVAL SOLO SMOKE PASSED')){
+  if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(output)||!output.includes('FESTIVAL SOLO SMOKE PASSED')||!output.includes('FESTIVAL SMOKE CAMP MUSIC PASSED')){
     console.error('Solo native smoke failed; inspect '+log);
     process.exitCode=1;
     return;

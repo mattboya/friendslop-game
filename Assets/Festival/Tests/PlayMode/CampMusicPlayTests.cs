@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    // MUSIC-2 at camp, in a hosted session: the camp plays TECH HOUSE to start, the DJ table's E steps through the five recorded
+    // MUSIC-2 at camp, in a hosted session: the camp plays TECH HOUSE to start, the DJ table's E steps through the seven recorded
     // tracks and SILENCE, and SILENCE stops the music. The loop joins on the audio clock: two decks take turns, and at the loop's end
     // the other deck is already playing from the first beat.
     public sealed class CampMusicPlayTests:FestivalPlayModeTest
@@ -53,28 +53,38 @@ namespace Festival.Tests
                     if(source.clip!=null&&Array.Exists(FestivalMusic.Tracks,t=>t.Clip==source.clip.name))Assert.That(source.isPlaying,Is.False,"SILENCE stops every deck ("+source.clip.name+")");
                 Assert.That(FestivalMusic.BeatPhase(camp.Music),Is.Null,"in SILENCE there is no beat to follow");
 
-                // The loop: TECH HOUSE cued half a second before its loop's end. At the end the other deck takes over, already playing
+                // Each loop: a track cued half a second before its loop's end. At the end the other deck takes over, already playing
                 // from the first beat, as far in as the audio clock has run since the turn (within a mixer buffer or two).
                 yield return new WaitForSeconds(.3f);
                 ((Action)primary.GetValue(hud))();
                 for(deadline=Time.realtimeSinceStartup+2;session.State.CampMusicTrack!=1&&Time.realtimeSinceStartup<deadline;)yield return null;
                 yield return null;
-                var track=FestivalMusic.Tracks[0];
-                typeof(FestivalCampAudio).GetMethod("Play",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(camp,new object[]{1,track.LoopEnd-FestivalMusic.Rate/2});
-                var turn=typeof(FestivalCampAudio).GetField("turnAt",BindingFlags.NonPublic|BindingFlags.Instance);
-                double turnAt=(double)turn.GetValue(camp);
-                yield return new WaitForSeconds(.3f);
-                var cued=camp.Music;
-                Assert.That(AudioSettings.dspTime,Is.LessThan(turnAt),"setup: before the loop's end");
-                Assert.That(Playing(),Is.EqualTo("tech-house-loop"),"setup: TECH HOUSE is cued");
-                for(deadline=Time.realtimeSinceStartup+5;AudioSettings.dspTime<turnAt+.3&&Time.realtimeSinceStartup<deadline;)yield return null;
-                Assert.That(AudioSettings.dspTime,Is.GreaterThan(turnAt+.3),"setup: the audio clock runs past the loop's end");
-                var looped=camp.Music;double since=AudioSettings.dspTime-turnAt;
-                Assert.That(looped,Is.Not.SameAs(cued),"the other deck plays after the loop's end");
-                Assert.That(Playing(),Is.EqualTo("tech-house-loop"),"still TECH HOUSE");
-                Assert.That((looped.timeSamples-track.FirstBeat)/(double)FestivalMusic.Rate,Is.EqualTo(since).Within(.05),"from the first beat, on the audio clock");
-                Assert.That(FestivalMusic.BeatPhase(looped),Is.EqualTo(track.BeatPhase(looped.timeSamples)).Within(.02f),"the beat API follows the deck that is playing");
-                Assert.That((double)turn.GetValue(camp),Is.EqualTo(turnAt+track.LoopSeconds).Within(1e-6),"and the next turn is one loop later");
+                foreach(int choice in new[]{1,6,7})
+                {
+                    player.X=CampFeatures.DjX;player.Z=CampFeatures.DjZ;
+                    session.Command("ChooseCampTrack",amount:choice);
+                    for(deadline=Time.realtimeSinceStartup+2;session.State.CampMusicTrack!=choice&&Time.realtimeSinceStartup<deadline;)yield return null;
+                    Assert.That(session.State.CampMusicTrack,Is.EqualTo(choice),"host accepts the camp choice");
+                    yield return new WaitForSeconds(.3f);
+                    var track=FestivalMusic.For(choice);
+                    Assert.That(Playing(),Is.EqualTo(track.Clip),"the chosen recording plays from its introduction");
+                    Assert.That(camp.Music.timeSamples,Is.LessThan(FestivalMusic.Rate),"first pass starts at file sample zero, retaining the intro");
+                    typeof(FestivalCampAudio).GetMethod("Play",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(camp,new object[]{choice,track.LoopEnd-FestivalMusic.Rate/2});
+                    var turn=typeof(FestivalCampAudio).GetField("turnAt",BindingFlags.NonPublic|BindingFlags.Instance);
+                    double turnAt=(double)turn.GetValue(camp);
+                    yield return new WaitForSeconds(.3f);
+                    var cued=camp.Music;
+                    Assert.That(AudioSettings.dspTime,Is.LessThan(turnAt),"setup: before the loop's end");
+                    Assert.That(Playing(),Is.EqualTo(track.Clip),"setup: selected track is cued");
+                    for(deadline=Time.realtimeSinceStartup+5;AudioSettings.dspTime<turnAt+.3&&Time.realtimeSinceStartup<deadline;)yield return null;
+                    Assert.That(AudioSettings.dspTime,Is.GreaterThan(turnAt+.3),"setup: the audio clock runs past the loop's end");
+                    var looped=camp.Music;double since=AudioSettings.dspTime-turnAt;
+                    Assert.That(looped,Is.Not.SameAs(cued),"the other deck plays after the loop's end");
+                    Assert.That(Playing(),Is.EqualTo(track.Clip),"still the selected recording");
+                    Assert.That((looped.timeSamples-track.FirstBeat)/(double)FestivalMusic.Rate,Is.EqualTo(since).Within(.05),"from the first beat, on the audio clock");
+                    Assert.That(FestivalMusic.BeatPhase(looped),Is.EqualTo(track.BeatPhase(looped.timeSamples)).Within(.02f),"the beat API follows the deck that is playing");
+                    Assert.That((double)turn.GetValue(camp),Is.EqualTo(turnAt+track.LoopSeconds).Within(1e-6),"and the next turn is one loop later");
+                }
             }
             finally
             {

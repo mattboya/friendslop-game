@@ -78,7 +78,7 @@ namespace Festival.Presentation
             {
                 Play(selected,0);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","camp_music","track="+selected);
+                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","camp_music","track="+selected+" clip="+(track?.Clip??"silence")+" loop="+(track==null?"none":track.FirstBeat+".."+track.LoopEnd));
 #endif
             }
             // The other deck has taken over: it is live now, and the one that just finished waits for the next turn.

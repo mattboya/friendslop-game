@@ -72,6 +72,8 @@ namespace Festival.Network
         // pause; ordinary fresh/stale intent resumes afterward. These corrections reuse the existing wire fields.
         // 7: wave 2026-10-07 starts a new semantic boundary; published version-6 checkpoint peers are rejected.
         // Subsequent units append only the version-7 changes they actually land; chart/timeline recordings follow integration.
+        // MUSIC-5: ChooseCampTrack and CampMusicTrack append DESERT RHYTHM (6) and INDUSTRIAL TECHNO (7);
+        // the original five choices and SILENCE keep their indexes. Version-6 peers do not carry these recordings.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
