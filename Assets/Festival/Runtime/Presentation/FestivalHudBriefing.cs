@@ -56,7 +56,7 @@ namespace Festival.Presentation
             {
                 ("THE WEEKEND","A weekend is four levels: Day 1, Night 1, Day 2, Night 2. By day the crew sells its quota before sundown; by night it"
                     +" finds a lost friend and brings them back to camp. On Night 2 everyone has to make it home, carrying the fallen. Lose a"
-                    +" level and the festival starts over at Day 1. Cash and gear carry through the weekend."),
+                    +" level and the festival starts over at Day 1. "+ResetDisclosure(state,viewer)+". Cash and gear carry through the weekend. A new festival: "+FreshPocketsDisclosure(state,viewer)+". Cosmetics are kept."),
                 ("THE TRIPPER","Each level the slot machine picks one friend to trip. Only they see visions: buyers and narcs by day, the clue trail"
                     +" by night, and some of them lie. Check one by chatting ("+chat+") or dancing ("+act+") with them: it gets a green ring if"
                     +" true, a red one if fake, and says what it found, like "+FestivalVisionMarkers.VerdictText("Narc",false)+".\n"
@@ -66,7 +66,7 @@ namespace Festival.Presentation
                     +" Talk to someone first: a smooth talk can tell you they sell. Dance together to blend in: the worst dancer near the crowd sets"
                     +" everyone's suspicion."),
                 ("DANGER","Some festivalgoers are narcs: buy from or sell to one and you're busted. One who suspects you turns zombie-green; if"
-                    +" a crowd swarms you, your card says SWARMING and their hits can down you. Security stops anyone it sees carrying stock"
+                    +" a crowd swarms you, your card says SWARMING and their hits can down you. Security sees stock out in your hand or an active deal"
                     +" (a merch bag hides it): talk ("+act+"), ditch it ("+drop+") or walk away out of its sight. A downed friend can be rescued or"
                     +" dragged; a spirit walks to the medical tent. In an Ember Playa dust storm nobody sees past "+Festivals.DustStormSightRange+" m."
                     +" Palm Mirage's influencers film the crowd: while your card says ON CAMERA, festivalgoers near you grow suspicious."),
@@ -93,7 +93,7 @@ namespace Festival.Presentation
             foreach(var n in s.Npcs)if(n.TargetId==p.Id){swarmed|=n.Kind=="Wook"&&n.Mode=="Swarming";stopped|=n.Kind=="Cop"&&n.Mode=="Stop";}
             foreach(var v in s.Visions)verdict|=v.Confirmed;
             if(swarmed&&!seen.Contains("swarm"))return ("swarm","Your card says SWARMING: the crowd is after you, and their hits can down you.\nRun, and keep well clear of them until they lose interest.");
-            if(stopped&&!seen.Contains("stop"))return ("stop","Security stopped you: they saw your stock.\nTalk to them (E), ditch it (G) or walk away out of sight, or they arrest you.");
+            if(stopped&&!seen.Contains("stop"))return ("stop","Security stopped you: stock out in hand or a deal; a merch bag hides it.\nTalk to them (E), ditch it (G) or walk away out of sight, or they arrest you.");
             // A view holds visions only for its tripper (FestivalSimulation.VisibleVisions).
             if(tripper&&s.Visions.Count>0&&!seen.Contains("vision"))return ("vision","Your visions: green ball buyer, red cube narc, blue pill clue, gold drum secret.\nSome lie: walk up and press F to chat or E to dance to check one.");
             if(tripper&&verdict&&!seen.Contains("verdict"))return ("verdict","Checked! A green ring means it's true, a red ring that it's fake.\nAim at it to read what you found, like "
@@ -109,7 +109,7 @@ namespace Festival.Presentation
         static string KeyUse(string action)=>action switch
         {
             "Move"=>"move","Look"=>"look around","Sprint"=>"run (the crowd notices)","Interact"=>"the top action on your list",
-            "Chat"=>"talk to someone • the tripper checks a vision","Use"=>"use what's in your hand","Drop"=>"drop it • in a stop, ditch your stock • hold to stop dancing",
+            "Chat"=>"talk to someone • the tripper checks a vision","Use"=>"use what's in your hand","Drop"=>"hold 0.5 s to drop what's in your hand • in a stop, ditch your stock • hold 1 s to stop dancing",
             "Objectives"=>"hold for the map","Menu"=>"end or close chat • menu and settings","View"=>"first or third person",
             "Slot1"=>"hand 1 • reply 1 in a talk or chat • vote 1 at the campfire","Slot2"=>"hand 2 • reply 2 in a talk or chat • vote 2 at the campfire",
             "Slot3"=>"hand 3 • reply 3 in a talk or chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",

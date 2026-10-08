@@ -72,8 +72,8 @@ namespace Festival.Presentation
         /// by p's next step to a sale (NextStep). A Ferris wheel rider reads what they spot from up there instead (FestivalGuidance.Hint, POLO-1).</summary>
         public static string ObjectiveDetail(RoundState s,PlayerState p)
         {
-            if(s.Phase=="Results")return OutcomeDetail(s);
-            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);return choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";}
+            if(s.Phase=="Results")return OutcomeDetail(s,p);
+            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
             if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return FestivalGuidance.Hint(s,p);
             return FestivalSimulation.DayQuotaMet(s)?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p);
         }
@@ -184,6 +184,13 @@ namespace Festival.Presentation
         /// <summary>The festival F picks: the next unlocked one, wrapping round to the first.</summary>
         public static int NextFestival(RoundState s)=>(s.FestivalIndex+1)%s.UnlockedFestivalCount;
 
+        /// <summary>The existing twenty-unit restart rule, read in the viewer's money.</summary>
+        public static string FreshPocketsDisclosure(RoundState s,PlayerState viewer=null)=>"EVERYONE STARTS OVER WITH "+(s!=null&&viewer!=null?Money(s,viewer,20):"$20").ToUpperInvariant()+" AND EMPTY POCKETS";
+        public static string ResetDisclosure(RoundState s,PlayerState viewer=null)=>"BACK TO DAY 1"+Dot+FreshPocketsDisclosure(s,viewer);
+        private static string CampResetDisclosure(RoundState s,PlayerState viewer)=>s.ReviewResult==""?"":s.ReviewResult!="Success"?ResetDisclosure(s,viewer):s.LevelIndex==0?"NEW WEEKEND"+Dot+FreshPocketsDisclosure(s,viewer):"";
+        /// <summary>Only a ground gear drop offers pickup; stop ditch and shared-stash results keep their destination.</summary>
+        public static string DropNotice(string message,FestivalInput input)=>message.StartsWith("Dropped ",StringComparison.Ordinal)?message+Dot+input.Label(input.Interact).ToUpperInvariant()+" to pick it up":message;
+
         /// <summary>Results heading: the level the crew cleared, or that the weekend is over.</summary>
         public static string OutcomeTitle(RoundState s)
         {
@@ -196,11 +203,11 @@ namespace Festival.Presentation
         static string NextUp(RoundState s)=>s.LevelIndex<Festivals.LevelCount-1?Festivals.Level(s.FestivalIndex,s.LevelIndex+1,s.EncoreTier).Name:s.FestivalIndex+1<Festivals.Count?Festivals.Name(s.FestivalIndex+1):"an encore at "+Festivals.Name(0);
 
         /// <summary>Results detail: why the weekend ended, or what comes next and what the crew keeps.</summary>
-        public static string OutcomeDetail(RoundState s)
+        public static string OutcomeDetail(RoundState s,PlayerState viewer=null)
         {
-            if(s.Result!="Success")return s.Result+". "+Festivals.Name(s.FestivalIndex)+" restarts at Day 1 with fresh cash.";
+            if(s.Result!="Success")return s.Result+". "+ResetDisclosure(s,viewer);
             if(s.LevelIndex<Festivals.LevelCount-1)return "Next up: "+NextUp(s)+". Cash and gear carry over.";
-            return "Next up: "+NextUp(s)+(s.FestivalIndex+1<Festivals.Count?"":", harder")+". A new weekend starts with fresh cash.";
+            return "Next up: "+NextUp(s)+(s.FestivalIndex+1<Festivals.Count?"":", harder")+". A new weekend starts. "+FreshPocketsDisclosure(s,viewer);
         }
 
         /// <summary>LOOP-5: the results banner's heading, in the middle of the screen for the whole results: why the weekend is over
@@ -216,9 +223,9 @@ namespace Festival.Presentation
         public static string ResultsBannerDetail(RoundState s,PlayerState viewer)
         {
             if(s.Phase!="Results")return "";
-            if(s.Result=="Success")return ("Next: "+NextUp(s)).ToUpperInvariant();
+            if(s.Result=="Success")return ("Next: "+NextUp(s)).ToUpperInvariant()+(s.LevelIndex==Festivals.LevelCount-1?"\nNEW WEEKEND"+Dot+FreshPocketsDisclosure(s,viewer):"");
             string sold=Festivals.For(s).Night?"":"You sold "+Money(s,viewer,s.LevelSales)+" of "+Money(s,viewer,FestivalSimulation.DayQuota(s))+"\n";
-            return sold+(Festivals.Name(s.FestivalIndex)+" restarts at Day 1"+Dot+"fresh cash").ToUpperInvariant();
+            return sold+ResetDisclosure(s,viewer);
         }
 
         /// <summary>The prompt at results: only the host can bring the crew back to camp.</summary>
@@ -234,7 +241,11 @@ namespace Festival.Presentation
 
         /// <summary>The debrief card's heading: the verdict on the round just played and how it went. Its sales read in the money of the
         /// festival it was played at (PLAYA-2: clearing a weekend has already moved camp on), or camp's own for an older host's view.</summary>
-        public static string ReviewHeadline(RoundState s,PlayerState viewer)=>"THE VERY OFFICIAL ROUND REVIEW\n"+ReviewOutcome(s)+Dot+"SALES "+Festivals.CurrencyName(s.ReviewFestivalIndex>=0?s.ReviewFestivalIndex:s.FestivalIndex,viewer.Ordinal,s.ReviewSales).ToUpperInvariant()+Dot+"SURVIVORS "+s.ReviewSurvivors+Dot+"CAMP ANTICS "+s.ReviewAntics;
+        public static string ReviewHeadline(RoundState s,PlayerState viewer)
+        {
+            string reset=CampResetDisclosure(s,viewer);
+            return "THE VERY OFFICIAL ROUND REVIEW\n"+ReviewOutcome(s)+Dot+"SALES "+Festivals.CurrencyName(s.ReviewFestivalIndex>=0?s.ReviewFestivalIndex:s.FestivalIndex,viewer.Ordinal,s.ReviewSales).ToUpperInvariant()+Dot+"SURVIVORS "+s.ReviewSurvivors+Dot+"CAMP ANTICS "+s.ReviewAntics+(reset==""?"":"\n"+reset);
+        }
 
         /// <summary>The debrief vote is open: every award drawn, not every vote in. The pointer is free to click a friend.</summary>
         public static bool VoteOpen(RoundState s)=>s.Phase=="CampReview"&&!FestivalSimulation.ReviewRevealed(s);

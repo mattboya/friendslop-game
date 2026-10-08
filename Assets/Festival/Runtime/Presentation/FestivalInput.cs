@@ -36,6 +36,12 @@ namespace Festival.Presentation
         public static string PreferencesScope {get;set;}
 #endif
         public bool Rebinding => rebind != null;
+        // Cancellation survives a disable/re-enable between HUD frames. The physical latch prevents a held key becoming a new press.
+        public int DropCancellationSequence {get;private set;}
+        public bool DropPhysicallyPressed
+        {
+            get{foreach(var control in Drop.controls)if(control is UnityEngine.InputSystem.Controls.ButtonControl button&&button.isPressed)return true;return false;}
+        }
         public FestivalInput(string profile,LocalProfile savedProfile=null)
         {
             this.profile=savedProfile??new LocalProfile(profile);
@@ -89,6 +95,7 @@ namespace Festival.Presentation
                 Notes[lane].performed+=context=>noteHeld[direction]=context.ReadValueAsButton();
                 Notes[lane].canceled+=context=>{if(noteHeld[direction])noteReleased[direction]=true;noteHeld[direction]=false;};
             }
+            Drop.canceled+=context=>DropCancellationSequence++;
             if(string.IsNullOrEmpty(this.profile.Data.BindingOverridesJson))ImportLegacy();
             SynchronizeBindings();
             Map.Enable();
@@ -110,6 +117,7 @@ namespace Festival.Presentation
         {
             string json=profile.Data.BindingOverridesJson;
             if(appliedJson==json)return;
+            DropCancellationSequence++;
             Map.RemoveAllBindingOverrides();
             if(!string.IsNullOrEmpty(json))Map.LoadBindingOverridesFromJson(json);
             appliedJson=json;

@@ -22,6 +22,34 @@ namespace Festival.Tests
             var p=new PlayerState{Id=id,Name=name,X=x,Z=z,Life=life};s.Players.Add(p);return p;
         }
 
+        [Test] public void FailedWeekendDisclosesTheExactResetInEveryViewersMoney()
+        {
+            foreach(int festival in new[]{0,1})foreach(int ordinal in new[]{0,1})
+            {
+                var state=Level(festival,2,"Results");state.Result="Missed the quota";var player=Crew(state,"you","You");player.Ordinal=ordinal;
+                string reset="BACK TO DAY 1  •  EVERYONE STARTS OVER WITH "+FestivalHudText.Money(state,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                Assert.That(FestivalHudText.ResultsBannerDetail(state,player),Does.Contain(reset));
+                Assert.That(FestivalHudText.ObjectiveDetail(state,player),Does.Contain(reset));
+                state.Phase="CampReview";state.LevelIndex=0;state.ReviewResult=state.Result;
+                Assert.That(FestivalHudText.ReviewHeadline(state,player),Does.Contain(reset));
+                state.Phase="Shopping";Assert.That(FestivalHudText.ObjectiveDetail(state,player),Does.Contain(reset));
+            }
+        }
+
+        [Test] public void ANewFestivalDisclosesEmptyPocketsWhileSameWeekendWinsKeepTheirCarryMessage()
+        {
+            foreach(int festival in new[]{0,1})foreach(int ordinal in new[]{0,1})
+            {
+                var state=Level(festival,3,"Results");state.Result="Success";var player=Crew(state,"you","You");player.Ordinal=ordinal;
+                string fresh="EVERYONE STARTS OVER WITH "+FestivalHudText.Money(state,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                Assert.That(FestivalHudText.ObjectiveDetail(state,player),Does.Contain(fresh));Assert.That(FestivalHudText.ResultsBannerDetail(state,player),Does.Contain(fresh));
+                state.ReviewResult="Success";state.ReviewFestivalIndex=festival;state.FestivalIndex=(festival+1)%2;state.LevelIndex=0;state.Phase="CampReview";
+                fresh="EVERYONE STARTS OVER WITH "+FestivalHudText.Money(state,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                Assert.That(FestivalHudText.ReviewHeadline(state,player),Does.Contain(fresh));state.Phase="Shopping";Assert.That(FestivalHudText.ObjectiveDetail(state,player),Does.Contain(fresh));
+                state.Phase="Results";state.LevelIndex=0;Assert.That(FestivalHudText.ObjectiveDetail(state,player),Is.EqualTo("Next up: Night 1. Cash and gear carry over."));
+            }
+        }
+
         [Test] public void TheWheelIncludesAllThreeSlotsWithOneItemOrNone()
         {
             var s=Level(0,0);var you=Crew(s,"you","You",0,0);
@@ -311,12 +339,12 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.OutcomeTitle(night),Is.EqualTo("FRIENDS RESCUED  •  NIGHT 1 CLEARED"),"a big crew's night rescues two friends");
             var finale=Level(0,3,"Results");finale.Result="Success";
             Assert.That(FestivalHudText.OutcomeTitle(finale),Is.EqualTo("EVERYONE HOME  •  PALM MIRAGE CLEARED"));
-            Assert.That(FestivalHudText.OutcomeDetail(finale),Is.EqualTo("Next up: Ember Playa. A new weekend starts with fresh cash."));
+            Assert.That(FestivalHudText.OutcomeDetail(finale),Is.EqualTo("Next up: Ember Playa. A new weekend starts. EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS"));
             var last=Level(1,3,"Results");last.Result="Success";
-            Assert.That(FestivalHudText.OutcomeDetail(last),Is.EqualTo("Next up: an encore at Palm Mirage, harder. A new weekend starts with fresh cash."));
+            Assert.That(FestivalHudText.OutcomeDetail(last),Is.EqualTo("Next up: an encore at Palm Mirage, harder. A new weekend starts. EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS"));
             var missed=Level(1,2,"Results");missed.Result="Missed the quota";
             Assert.That(FestivalHudText.OutcomeTitle(missed),Is.EqualTo("WEEKEND OVER  •  BACK TO DAY 1"));
-            Assert.That(FestivalHudText.OutcomeDetail(missed),Is.EqualTo("Missed the quota. Ember Playa restarts at Day 1 with fresh cash."));
+            Assert.That(FestivalHudText.OutcomeDetail(missed),Is.EqualTo("Missed the quota. BACK TO DAY 1  •  EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS"));
             Assert.That(FestivalHudText.ResultsPrompt(missed,"you"),Is.EqualTo("ESC MENU  •  NEXT CAMP"),"the host brings the crew back");
             Assert.That(FestivalHudText.ResultsPrompt(missed,"sam"),Is.EqualTo("WAITING FOR THE HOST"));
         }
@@ -368,15 +396,15 @@ namespace Festival.Tests
         {
             var missed=Level(0,0,"Results");var you=Crew(missed,"you","You");missed.Result="Missed the quota";
             Assert.That(FestivalHudText.ResultsBannerTitle(missed),Is.EqualTo("MISSED THE QUOTA"));
-            Assert.That(FestivalHudText.ResultsBannerDetail(missed,you),Is.EqualTo("You sold $0 of $15\nPALM MIRAGE RESTARTS AT DAY 1  •  FRESH CASH"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(missed,you),Is.EqualTo("You sold $0 of $15\nBACK TO DAY 1  •  EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS"));
             Assert.That(FestivalHudText.ObjectiveTitle(missed,you),Is.EqualTo("WEEKEND OVER  •  BACK TO DAY 1"),"the objective card keeps its lines");
             Crew(missed,"sam","Sam");missed.LevelSales=9;
             Assert.That(FestivalHudText.ResultsBannerDetail(missed,you),Does.StartWith("You sold $9 of $30\n"),"the whole crew's sales against its quota");
             var playaDay=Level(1,0,"Results");var sam=new PlayerState{Id="sam",Name="Sam",Ordinal=1};playaDay.Players.Add(sam);playaDay.Result="Missed the quota";playaDay.LevelSales=4;
-            Assert.That(FestivalHudText.ResultsBannerDetail(playaDay,sam),Is.EqualTo("You sold 4 ramen packets of 22 ramen packets\nEMBER PLAYA RESTARTS AT DAY 1  •  FRESH CASH"),"in the viewer's money");
+            Assert.That(FestivalHudText.ResultsBannerDetail(playaDay,sam),Is.EqualTo("You sold 4 ramen packets of 22 ramen packets\nBACK TO DAY 1  •  EVERYONE STARTS OVER WITH 20 RAMEN PACKETS AND EMPTY POCKETS"),"in the viewer's money");
             var night=Level(1,1,"Results");Crew(night,"you","You");night.Result="Time expired";
             Assert.That(FestivalHudText.ResultsBannerTitle(night),Is.EqualTo("TIME EXPIRED"));
-            Assert.That(FestivalHudText.ResultsBannerDetail(night,night.Players[0]),Is.EqualTo("EMBER PLAYA RESTARTS AT DAY 1  •  FRESH CASH"),"a night has no sales to count");
+            Assert.That(FestivalHudText.ResultsBannerDetail(night,night.Players[0]),Is.EqualTo("BACK TO DAY 1  •  EVERYONE STARTS OVER WITH 20 BUTTONS AND EMPTY POCKETS"),"a night has no sales to count");
             night.Result=FestivalSimulation.WipedOut;
             Assert.That(FestivalHudText.ResultsBannerTitle(night),Is.EqualTo("THE CREW WAS WIPED OUT"));
 
@@ -385,9 +413,9 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.ResultsBannerDetail(day,day.Players[0]),Is.EqualTo("NEXT: NIGHT 1"));
             var finale=Level(0,3,"Results");Crew(finale,"you","You");finale.Result="Success";
             Assert.That(FestivalHudText.ResultsBannerTitle(finale),Is.EqualTo("PALM MIRAGE CLEARED"));
-            Assert.That(FestivalHudText.ResultsBannerDetail(finale,finale.Players[0]),Is.EqualTo("NEXT: EMBER PLAYA"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(finale,finale.Players[0]),Is.EqualTo("NEXT: EMBER PLAYA\nNEW WEEKEND  •  EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS"));
             var last=Level(1,3,"Results");Crew(last,"you","You");last.Result="Success";
-            Assert.That(FestivalHudText.ResultsBannerDetail(last,last.Players[0]),Is.EqualTo("NEXT: AN ENCORE AT PALM MIRAGE"));
+            Assert.That(FestivalHudText.ResultsBannerDetail(last,last.Players[0]),Is.EqualTo("NEXT: AN ENCORE AT PALM MIRAGE\nNEW WEEKEND  •  EVERYONE STARTS OVER WITH 20 BUTTONS AND EMPTY POCKETS"));
 
             var playing=Level(0,0);Crew(playing,"you","You");
             Assert.That(FestivalHudText.ResultsBannerTitle(playing),Is.Empty,"only at results");

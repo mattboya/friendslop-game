@@ -275,7 +275,7 @@ namespace Festival.Presentation
             string itemId=exchanging?offeredItem:manualEquipment?manualItem:Time.time-receiptAt<.85f?receivedItem:requestedItem;
             if(equippedId==itemId)return;
             equippedId=itemId;
-            if(equippedProp!=null)Destroy(equippedProp);
+            if(equippedProp!=null){equippedProp.SetActive(false);Destroy(equippedProp);}
             equippedProp=null;carriedPoi="";
             if(itemId==""||itemId=="little_spoon"||!bones.TryGetValue("HandR",out var hand))return;
             // Poi are a pair; LateUpdate keeps one in each hand.

@@ -93,6 +93,32 @@ namespace Festival.Tests
         // How to Play: the panel the main menu and the Escape menu open, as titled blocks.
         static string Block(FestivalInput input,string title){foreach(var (t,text) in FestivalHudText.HowToPlay(input))if(t==title)return text;Assert.Fail("How to Play has no "+title+" block");return "";}
 
+        [Test] public void HelpExplainsIntentionalGearDropsAndTheViewersEmptyPocketRestart()
+        {
+            using(var input=new FestivalInput("impl-U53-help"))
+            {
+                input.Drop.ApplyBindingOverride(0,"<Keyboard>/j");
+                foreach(int festival in new[]{0,1})foreach(int ordinal in new[]{0,1})
+                {
+                    var state=Start(festival,0);var player=state.Players[0];player.Ordinal=ordinal;
+                    var blocks=FestivalHudText.HowToPlay(input,state,player);
+                    string weekend=Array.Find(blocks,b=>b.Title=="THE WEEKEND").Text;
+                    string reset="BACK TO DAY 1  •  EVERYONE STARTS OVER WITH "+FestivalHudText.Money(state,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                    Assert.That(weekend,Does.Contain(reset).And.Contain("Cash and gear carry through the weekend"));
+                    string keys=Array.Find(blocks,b=>b.Title=="KEYS").Text;
+                    Assert.That(keys,Does.Contain(input.Label(input.Drop)+"  hold 0.5 s to drop what's in your hand"));
+                    Assert.That(Array.Find(blocks,b=>b.Title=="DANGER").Text,Does.Contain("stock out in your hand or an active deal").And.Contain("merch bag"));
+                }
+            }
+        }
+
+        [Test] public void TheStopTipNamesVisibleStockActiveDealsAndTheConcealingBag()
+        {
+            var state=Under();var player=state.Players[0];state.Npcs.Add(new NpcState{Id="impl_U53_tip_cop",Kind="Cop",Mode="Stop",TargetId=player.Id});
+            var tip=FestivalHudText.Tip(state,player,new List<string>());
+            Assert.That(tip.Text,Does.Contain("stock out in hand").And.Contain("deal").And.Contain("merch bag"));
+        }
+
         [Test] public void HowToPlayIsSixShortBlocks()
         {
             using(var input=new FestivalInput("hud-briefing-test"))

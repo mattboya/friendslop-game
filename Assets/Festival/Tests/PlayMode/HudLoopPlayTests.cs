@@ -15,6 +15,253 @@ namespace Festival.Tests
 {
     public sealed class HudLoopPlayTests:FestivalPlayModeTest
     {
+        static Text DropText(GameObject root,string name)
+        {
+            foreach(var text in root.GetComponentsInChildren<Text>(false))if(text.name==name)return text;
+            return null;
+        }
+        static void QuietDropGround(FestivalSimulation game,PlayerState player)
+        {
+            game.State.Npcs.Clear();game.State.Doses.Clear();game.State.Visions.Clear();game.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.Effects.Clear();player.X=0;player.Z=0;
+            game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);game.HasLineOfSight=(x,z,tx,tz)=>true;
+        }
+        IEnumerator DropKeyDown(Key key=Key.G){InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(key));yield return null;yield return null;}
+        IEnumerator DropKeyUp(){InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return null;yield return null;}
+        static void GiveDropGear(PlayerState player,string item="poi_practice",int count=2)
+        {
+            player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId=item,Count=count});player.EquippedItemId=item;
+        }
+
+        [UnityTest]public IEnumerator StowingRetiresBothEquippedPropsBeforeTheFrameEnds()
+        {
+            UseAVirtualKeyboard("impl-U53 retiring props keyboard");
+            var world=new GameObject("impl-U53 retiring props world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U53 retiring props HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            string Props(Transform parent){var names=new List<string>();foreach(var t in parent.GetComponentsInChildren<Transform>(true))if(t.name.StartsWith("Held grip ")&&t.gameObject.activeSelf)names.Add(t.name.Substring(10));return string.Join(",",names);}
+            try
+            {
+                session.Host("Retiring props",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);GiveDropGear(player,"stock_lsd");yield return new WaitForSeconds(.3f);
+                var hands=session.ViewCamera.GetComponentInChildren<FestivalHands>(true);var palms=session.ViewCamera.transform.Find("First-person hand attachments");var character=session.LocalWorldCharacter;
+                Assert.That(Props(palms)+" / "+Props(character.transform),Is.EqualTo("stock_lsd / stock_lsd"),"both production presenters start with equipped stock");
+                Assert.That(game.Execute(player.Id,new GameCommand{Id="impl_U53_retire",Kind="Equip"}).Accepted,Is.True);
+                var free=FestivalSession.ViewFor(game,player.Id).Players.Find(p=>p.Id==player.Id);Assert.That(free.EquippedItemId,Is.Empty);
+                hands.SetState(free,game.State.SimulationSeconds);character.SetEquippedItem(free.EquippedItemId);
+                Assert.That(Props(palms)+" / "+Props(character.transform),Is.EqualTo(" / "),"stowed props are inactive immediately, before deferred destruction runs");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator DeliberateGearDropRequiresHalfASecondAndNamesTheBoundPickupKey()
+        {
+            UseAVirtualKeyboard("impl-U53 deliberate keyboard");
+            var world=new GameObject("impl-U53 deliberate world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U53 deliberate HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Drop tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);GiveDropGear(player);yield return new WaitForSeconds(.3f);
+                int before=game.State.Commands.Count;yield return Tap(Key.G,.1f);
+                Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"a real G tap keeps the poi");Assert.That(game.State.Commands.Count,Is.EqualTo(before),"a tap issues no Drop");
+                yield return DropKeyDown();yield return new WaitForSeconds(.2f);
+                Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"the half-second threshold has not been reached");
+                Assert.That(DropText(root,"Prompt")?.text,Does.Contain("HOLD G TO DROP PRACTICE POI"));
+                var fill=root.transform.Find("Festival HUD/Action prompt/Walk hold fill");Assert.That(fill.gameObject.activeInHierarchy,Is.True,"the production prompt shows hold progress");
+                yield return DropKeyUp();yield return new WaitForSeconds(.4f);Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"release cancels an incomplete hold");
+                session.Controls.Interact.ApplyBindingOverride(0,"<Keyboard>/r");session.Controls.Drop.ApplyBindingOverride(0,"<Keyboard>/j");yield return null;
+                yield return Tap(Key.G,.1f);Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"the old drop key is inert");
+                yield return DropKeyDown(Key.J);yield return new WaitForSeconds(.65f);
+                Assert.That(player.Inventory[0].Count,Is.EqualTo(1));Assert.That(game.State.Drops.FindAll(d=>d.ItemId=="poi_practice").Count,Is.EqualTo(1));
+                Assert.That(DropText(root,"Notice")?.text,Is.EqualTo("Dropped Practice poi  •  R to pick it up"),"actual Drop result reads the effective pickup key");
+                yield return new WaitForSeconds(.7f);Assert.That(player.Inventory.Find(i=>i.ItemId=="poi_practice")?.Count??0,Is.EqualTo(1),"one press drops once even when another unit remains");
+                yield return DropKeyUp();yield return DropKeyDown(Key.J);yield return new WaitForSeconds(.65f);yield return DropKeyUp();Assert.That(player.Inventory,Is.Empty,"a new eligible press may drop the next unit");
+                GiveDropGear(player,"stock_lsd");yield return new WaitForSeconds(.2f);yield return Tap(Key.J,.1f);Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"stock outside a stop is also safe from a tap");
+                yield return DropKeyDown(Key.J);yield return new WaitForSeconds(.65f);yield return DropKeyUp();Assert.That(player.Inventory[0].Count,Is.EqualTo(1),"an intentional hold drops equipped stock outside a stop");
+                Assert.That(DropText(root,"Notice")?.text,Is.EqualTo("Dropped Tongue Stamps  •  R to pick it up"));
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator GearHoldCancelsOnContextChangesAndNeverStartsFromAnAlreadyHeldKey()
+        {
+            UseAVirtualKeyboard("impl-U53 contexts keyboard");
+            var world=new GameObject("impl-U53 contexts world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U53 contexts HUD");var session=root.AddComponent<FestivalSession>();var hud=root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Context tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);
+                foreach(string change in new[]{"menu","map","life","phase","selection","equipment","rebind","action map","focus","HUD disable","round"})
+                {
+                    GiveDropGear(player);yield return new WaitForSeconds(.25f);yield return DropKeyDown();yield return new WaitForSeconds(.15f);
+                    switch(change)
+                    {
+                        case "menu":session.MenuOpen=true;break;
+                        case "map":hud.DevelopmentMapVisible=true;break;
+                        case "life":player.Life="Detained";break;
+                        case "phase":game.State.Phase="Results";game.State.Result="Success";break;
+                        case "selection":InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.G,Key.Digit2));break;
+                        case "equipment":player.EquippedItemId="";break;
+                        case "rebind":session.Controls.Rebind(session.Controls.Use,0,null);break;
+                        case "action map":session.Controls.Map.Disable();break;
+                        case "focus":typeof(FestivalHud).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{false});break;
+                        case "HUD disable":hud.enabled=false;break;
+                        case "round":game.State.RoundId+="-changed";break;
+                    }
+                    yield return new WaitForSeconds(.4f);
+                    session.MenuOpen=false;hud.DevelopmentMapVisible=false;player.Life="Alive";game.State.Phase="Playing";player.EquippedItemId="poi_practice";
+                    session.Controls.CancelRebind();session.Controls.Map.Enable();hud.enabled=true;typeof(FestivalHud).GetMethod("OnApplicationFocus",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{true});
+                    yield return new WaitForSeconds(.65f);
+                    Assert.That(player.Inventory.Find(i=>i.ItemId=="poi_practice")?.Count,Is.EqualTo(2),change+" cancels and requires release before a new hold");
+                    yield return DropKeyUp();
+                }
+                GiveDropGear(player);player.EquippedItemId="";yield return new WaitForSeconds(.2f);yield return DropKeyDown();yield return new WaitForSeconds(.2f);
+                player.EquippedItemId="poi_practice";yield return new WaitForSeconds(.65f);Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"free hands becoming eligible while G is down cannot start a hold");yield return DropKeyUp();
+                yield return DropKeyDown();yield return new WaitForSeconds(.65f);yield return DropKeyUp();Assert.That(player.Inventory[0].Count,Is.EqualTo(1),"a fresh eligible press still works after cancellation");
+                yield return DropKeyDown();yield return new WaitForSeconds(.15f);session.Leave();yield return null;session.Host("New session",HostPort);
+                for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);game=Simulation(session);player=game.Player(session.LocalPlayerId);GiveDropGear(player);yield return new WaitForSeconds(.75f);
+                Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"a session replacement cannot reuse the held press to leave gear in the new camp stash");yield return DropKeyUp();
+                yield return DropKeyDown();yield return new WaitForSeconds(.65f);yield return DropKeyUp();Assert.That(player.Inventory[0].Count,Is.EqualTo(1));
+                Assert.That(game.State.Stashes.Find(stash=>stash.Id=="stash").Items.Find(item=>item.ItemId=="poi_practice")?.Count,Is.EqualTo(1));
+                Assert.That(DropText(root,"Notice")?.text,Is.EqualTo("Practice poi left in the shared stash"),"camp leave names the stash and offers no ground pickup");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator ContextualDropTapsOwnTheWholePressIncludingTheLastStockAndDanceStop()
+        {
+            UseAVirtualKeyboard("impl-U53 tap priority keyboard");
+            var world=new GameObject("impl-U53 tap priority world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U53 tap priority HUD");var session=root.AddComponent<FestivalSession>();var hud=root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Tap priority",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var player=game.Player(session.LocalPlayerId);GiveDropGear(player,"poi_practice",1);
+                var shelf=Catalog.ShopPoint(true,game.State.VendorOffers.IndexOf("medical_voucher"));player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"medical_voucher");Assert.That(player.HeldOfferId,Is.EqualTo("medical_voucher"));yield return new WaitForSeconds(.2f);
+                yield return DropKeyDown();yield return new WaitForSeconds(.7f);Assert.That(player.HeldOfferId,Is.Empty);Assert.That(player.Inventory[0].Count,Is.EqualTo(1),"returning an unpaid item consumes the press");yield return DropKeyUp();
+                typeof(FestivalHud).GetField("checkoutItem",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(hud,"medical_voucher");
+                player.HeldOfferId="medical_voucher";player.X=0;player.Z=7;yield return new WaitForSeconds(.2f);
+                yield return DropKeyDown();yield return new WaitForSeconds(.7f);Assert.That(player.HeldOfferId,Is.EqualTo("medical_voucher"),"checkout cancel does not also return the unpaid item");Assert.That(player.Inventory[0].Count,Is.EqualTo(1));yield return DropKeyUp();session.Command("ReturnOffer");
+                var tent=CampFeatures.Find("tent_1");player.X=tent.X;player.Z=tent.Z;session.Command("EnterCamp",tent.Id);Assert.That(player.CampVisitId,Is.EqualTo(tent.Id));yield return new WaitForSeconds(.2f);
+                yield return DropKeyDown();yield return new WaitForSeconds(.7f);Assert.That(player.CampVisitId,Is.Empty);Assert.That(player.Inventory[0].Count,Is.EqualTo(1),"exit cannot fall through to camp stash leave");yield return DropKeyUp();
+                yield return StartLevel(session);QuietDropGround(game,player);GiveDropGear(player,"poi_practice",1);player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                var cop=new NpcState{Id="impl_U53_cop_0",Kind="Cop",Mode="Stop",TargetId=player.Id,X=0,Z=0};player.EquippedItemId="stock_lsd";game.State.Npcs.Add(cop);yield return new WaitForSeconds(.2f);Assert.That(cop.Mode,Is.EqualTo("Stop"),"the actual stock-out authority starts the stop");session.enabled=false;
+                yield return DropKeyDown();yield return new WaitForSeconds(.7f);Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.False,"a tap still ditches the last stock");Assert.That(player.Inventory[0].ItemId,Is.EqualTo("poi_practice"));yield return DropKeyUp();
+                session.Command("Equip",item:"poi_practice");typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(game,player.Id));yield return new WaitForSeconds(.1f);yield return DropKeyDown();yield return new WaitForSeconds(.7f);Assert.That(player.Inventory.Find(i=>i.ItemId=="poi_practice")?.Count??0,Is.EqualTo(1),"a stop with no stock consumes G without gear fallback");yield return DropKeyUp();
+                session.enabled=true;game.State.Npcs.Clear();var wook=new NpcState{Id="impl_U53_wook_0",Kind="Wook",Role="Regular",CanTalk=true,X=0,Z=1.5f,Yaw=180};game.State.Npcs.Add(wook);session.Command("Dance",wook.Id);Assert.That(player.InteractionId,Is.Not.Empty);yield return new WaitForSeconds(.2f);
+                yield return DropKeyDown();yield return new WaitForSeconds(.6f);Assert.That(player.InteractionId,Is.Not.Empty,"dance stop retains its separate one-second threshold");
+                yield return new WaitForSeconds(.6f);Assert.That(player.InteractionId,Is.Empty);yield return new WaitForSeconds(.7f);Assert.That(player.Inventory[0].Count,Is.EqualTo(1),"holding after dance Cancel cannot drop the poi");yield return DropKeyUp();
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator JoinedDropWaitsForConfirmedEquipmentAndRequiresAFreshPress()
+        {
+            UseAVirtualKeyboard("impl-U53 joined drop keyboard");
+            var world=new GameObject("impl-U53 joined drop world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("impl-U53 joined authority");var host=hostRoot.AddComponent<FestivalSession>();var hostHud=hostRoot.AddComponent<FestivalHud>();yield return null;
+            var root=new GameObject("impl-U53 joined owner");var friend=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Authority",port);for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);hostHud.enabled=false;host.Controls.Map.Disable();friend.Join("Drop owner","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);var game=Simulation(host);var player=game.Player(friend.LocalPlayerId);player.X=0;player.Z=19;friend.Command("Ready");yield return new WaitForSeconds(.3f);yield return StartLevel(host,friend.LocalPlayerId);
+                QuietDropGround(game,player);GiveDropGear(player);friend.Controls.Interact.ApplyBindingOverride(0,"<Keyboard>/r");yield return new WaitForSeconds(.4f);
+                yield return Tap(Key.G,.15f);Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"an actual joined G tap keeps the owner's gear");
+                var nextSnapshot=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                yield return Tap(Key.Digit2,.15f);Assert.That(player.EquippedItemId,Is.Empty);Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("poi_practice"),"the old owner view is intentionally stale");
+                int before=game.State.Commands.Count;yield return DropKeyDown();yield return new WaitForSeconds(2.3f);
+                Assert.That(player.Inventory[0].Count,Is.EqualTo(2));Assert.That(game.State.Commands.Count,Is.EqualTo(before),"pending stow and its timeout cannot start a stale gear Drop");
+                nextSnapshot.SetValue(host,0d);yield return new WaitForSeconds(.35f);player.EquippedItemId="poi_practice";yield return new WaitForSeconds(.35f);
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("poi_practice"));yield return new WaitForSeconds(.65f);Assert.That(player.Inventory[0].Count,Is.EqualTo(2),"confirmation while the key is held still requires release");
+                yield return DropKeyUp();yield return DropKeyDown();yield return new WaitForSeconds(.75f);
+                Assert.That(player.Inventory[0].Count,Is.EqualTo(1));Assert.That(DropText(root,"Notice")?.text,Is.EqualTo("Dropped Practice poi  •  R to pick it up"));
+                yield return new WaitForSeconds(.65f);Assert.That(player.Inventory[0].Count,Is.EqualTo(1),"the remote hold fires once");yield return DropKeyUp();
+                GiveDropGear(player);player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});yield return new WaitForSeconds(.35f);
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);yield return Tap(Key.Digit2,.15f);
+                Assert.That(player.EquippedItemId,Is.EqualTo("confetti"));Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("poi_practice"));
+                before=game.State.Commands.Count;yield return DropKeyDown();yield return new WaitForSeconds(.65f);yield return DropKeyUp();
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"a pending switch cannot drop either the displayed or stale server item");
+                yield return new WaitForSeconds(1.5f);yield return DropKeyDown();yield return new WaitForSeconds(.65f);yield return DropKeyUp();
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"a fresh press after timeout still needs a newer canonical equipment view");
+                Assert.That(player.Inventory.Find(i=>i.ItemId=="poi_practice")?.Count,Is.EqualTo(2));Assert.That(player.Inventory.Find(i=>i.ItemId=="confetti")?.Count,Is.EqualTo(1));
+                nextSnapshot.SetValue(host,0d);yield return new WaitForSeconds(.35f);Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("confetti"));
+                yield return DropKeyDown();yield return new WaitForSeconds(.7f);yield return DropKeyUp();Assert.That(player.Inventory.Exists(i=>i.ItemId=="confetti"),Is.False,"the newly confirmed equipped item can be dropped by a fresh hold");
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(root);Object.Destroy(hostRoot);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator OwnerGearLossWaitsBehindCoverAndNeverReplaysAnAlreadyShownSequence()
+        {
+            UseAVirtualKeyboard("impl-U53 loss keyboard");
+            var world=new GameObject("impl-U53 loss world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U53 loss HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Loss owner",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var mate=game.AddPlayer("impl-U53-loss-mate","Living friend");mate.X=0;mate.Z=19;game.Execute(mate.Id,new GameCommand{Id="impl_U53_mate_ready",Kind="Ready"});yield return StartLevel(session);
+                var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);GiveDropGear(player,"poi_practice",1);player.Cash=0;session.MenuOpen=true;player.Life="Downed";player.DownedRemaining=.01;yield return new WaitForSeconds(.3f);
+                Assert.That(player.Life,Is.EqualTo("Spirit"));Assert.That(player.GearLossSequence,Is.EqualTo(1));Assert.That(FestivalSession.ViewFor(game,player.Id).Players.Find(p=>p.Id==player.Id).GearLossNotice,Is.EqualTo("Your gear dropped where you fell: a friend can grab it"));
+                Assert.That(FestivalSession.ViewFor(game,mate.Id).Players.Find(p=>p.Id==player.Id).GearLossSequence,Is.Zero,"the living friend cannot inspect the owner's loss event");
+                yield return new WaitForSeconds(5.2f);session.MenuOpen=false;yield return null;yield return null;
+                Assert.That(DropText(root,"Notice")?.text,Is.EqualTo(player.GearLossNotice),"the owner notice has not aged away behind the menu");
+                Canvas.ForceUpdateCanvases();var visibleNotice=DropText(root,"Notice");Assert.That(visibleNotice.cachedTextGenerator.characterCountVisible,Is.GreaterThanOrEqualTo(visibleNotice.text.Length),"the full owner gear loss line is rendered");
+                yield return new WaitForSeconds(5.2f);Assert.That(DropText(root,"Notice"),Is.Null,"a shown loss notice expires without replaying its retained sequence");
+                player.Life="Alive";player.Health=100;GiveDropGear(player,"confetti",1);player.Life="Downed";player.DownedRemaining=.01;yield return new WaitForSeconds(.3f);
+                Assert.That(player.GearLossSequence,Is.EqualTo(2));Assert.That(DropText(root,"Notice")?.text,Is.EqualTo(player.GearLossNotice),"another real loss delivers another notice even with identical wording");
+                player.Life="Alive";player.Health=100;player.Life="Downed";player.DownedRemaining=.01;yield return new WaitForSeconds(.3f);Assert.That(player.GearLossSequence,Is.EqualTo(2),"empty pockets add no loss event");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator ResetDisclosuresFitActualResultsCampReviewShoppingAndHelpInBothCurrencies()
+        {
+            var world=new GameObject("impl-U53 reset world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U53 reset HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            void Fits(string name,string reset)
+            {
+                var text=DropText(root,name);Assert.That(text,Is.Not.Null,name);Assert.That(text.text,Does.Contain(reset),name);
+                Canvas.ForceUpdateCanvases();Assert.That(text.cachedTextGenerator.characterCountVisible,Is.GreaterThanOrEqualTo(text.text.Length),name+" must render the entire disclosure: festival="+session.State.FestivalIndex+" ordinal="+session.LocalPlayer.Ordinal+" box="+text.rectTransform.rect.size+" font="+text.fontSize+" min="+text.resizeTextMinSize+" lines="+text.cachedTextGenerator.lineCount);
+            }
+            try
+            {
+                session.Host("Reset reader",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var player=game.Player(session.LocalPlayerId);
+                foreach(int festival in new[]{0,1})foreach(int ordinal in new[]{0,1,2,3,4,5,6,7})
+                {
+                    game.State.FestivalIndex=festival;player.Ordinal=ordinal;game.State.LevelIndex=0;game.State.Result="Missed the quota";game.State.Phase="Results";yield return new WaitForSeconds(.3f);
+                    string reset="BACK TO DAY 1  •  EVERYONE STARTS OVER WITH "+FestivalHudText.Money(game.State,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                    Fits("Results detail",reset);Fits("Objective detail",reset);
+                    game.State.ReviewResult="Missed the quota";game.State.ReviewFestivalIndex=festival;game.State.Phase="CampReview";yield return new WaitForSeconds(.3f);Fits("Review text",reset);
+                    game.State.Phase="Shopping";yield return new WaitForSeconds(.3f);Fits("Objective detail",reset);
+                    session.MenuOpen=true;yield return null;Button help=null;foreach(var button in root.GetComponentsInChildren<Button>(false))if(button.name=="HOW TO PLAY"&&button.transform.parent.name=="Pass home")help=button;
+                    Assert.That(help,Is.Not.Null);help.onClick.Invoke();yield return null;Fits("How to play text 1",reset);session.MenuOpen=false;yield return null;
+                }
+                foreach(int festival in new[]{0,1})foreach(int ordinal in new[]{0,1,2,3,4,5,6,7})
+                {
+                    game.State.FestivalIndex=festival;player.Ordinal=ordinal;game.State.LevelIndex=3;game.State.Result="Success";game.State.Phase="Results";yield return new WaitForSeconds(.2f);
+                    string fresh="EVERYONE STARTS OVER WITH "+FestivalHudText.Money(game.State,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                    Fits("Results detail",fresh);Fits("Objective detail",fresh);
+                    game.State.ReviewResult="Success";game.State.ReviewFestivalIndex=festival;game.State.FestivalIndex=(festival+1)%2;game.State.LevelIndex=0;game.State.Phase="CampReview";yield return new WaitForSeconds(.2f);
+                    fresh="EVERYONE STARTS OVER WITH "+FestivalHudText.Money(game.State,player,20).ToUpperInvariant()+" AND EMPTY POCKETS";
+                    Fits("Review text",fresh);game.State.Phase="Shopping";yield return new WaitForSeconds(.2f);Fits("Objective detail",fresh);
+                }
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator ThreeSlotCursorStowsStockAndFreeHandsNeverUseOrDropPocketGear()
         {
             UseAVirtualKeyboard("impl-U52 cursor keyboard");UseAVirtualMouse("impl-U52 cursor mouse");
@@ -250,7 +497,9 @@ namespace Festival.Tests
                 var admit=typeof(FestivalSession).GetMethod("Admit",BindingFlags.NonPublic|BindingFlags.Instance);for(int i=0;i<61;i++)admit.Invoke(host,new object[]{friend.LocalPlayerId,60});
                 before=game.State.Commands.Count;yield return Tap(Key.Digit2,.15f);Hands("");
                 Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Assert.That(game.State.Commands.Count,Is.EqualTo(before),"the real host admission gate drops this command without dispatching a result");
-                yield return new WaitForSeconds(2.1f);Hands("stock_lsd");yield return Tap(Key.G,.15f);
+                yield return new WaitForSeconds(2.1f);Hands("stock_lsd");
+                nextSnapshot.SetValue(host,0d);yield return new WaitForSeconds(.3f);Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("stock_lsd"));
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);yield return DropKeyDown();yield return new WaitForSeconds(.65f);yield return DropKeyUp();
                 Assert.That(p.Inventory[0].Count,Is.EqualTo(2),"ordinary drop follows the authoritative held item after unconfirmed selection expires");
                 yield return Tap(Key.Digit1,.2f);Assert.That(p.EquippedItemId,Is.Empty);
                 nextSnapshot.SetValue(host,0d);for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!=""&&Time.realtimeSinceStartup<until;)yield return null;
@@ -575,11 +824,11 @@ namespace Festival.Tests
                 sim.State.LevelIndex=0;sim.State.Result="Missed the quota";sim.State.Phase="Results";
                 yield return new WaitForSeconds(.6f);
                 Expect("results","Objective title","WEEKEND OVER  •  BACK TO DAY 1");
-                Expect("results","Objective detail","Missed the quota. Palm Mirage restarts at Day 1 with fresh cash.");
+                Expect("results","Objective detail","Missed the quota. BACK TO DAY 1  •  EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS");
                 Expect("results","Prompt","ESC MENU  •  NEXT CAMP");
                 sim.State.FestivalIndex=1;sim.State.LevelIndex=3;sim.State.Result="Success";
                 yield return new WaitForSeconds(.6f);
-                Expect("results, last festival cleared","Objective detail","Next up: an encore at Palm Mirage, harder. A new weekend starts with fresh cash.");
+                Expect("results, last festival cleared","Objective detail","Next up: an encore at Palm Mirage, harder. A new weekend starts. EVERYONE STARTS OVER WITH 20 BUTTONS AND EMPTY POCKETS");
                 Fits("results, last festival cleared","Objective detail");
                 sim.State.LevelIndex=1;sim.State.Result="No living free teammate can complete a rescue";
                 yield return new WaitForSeconds(.6f);
@@ -774,7 +1023,7 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.4f);
                 Expect("results","Sundown","(hidden)");
                 Expect("results","Results title","MISSED THE QUOTA");
-                Expect("results","Results detail","You sold $0 of $30\nPALM MIRAGE RESTARTS AT DAY 1  •  FRESH CASH");
+                Expect("results","Results detail","You sold $0 of $30\nBACK TO DAY 1  •  EVERYONE STARTS OVER WITH $20 AND EMPTY POCKETS");
                 Fits("results","Results title");Fits("results","Results detail");
                 Expect("results","Objective title","WEEKEND OVER  •  BACK TO DAY 1");
                 // Under the menus, catching no clicks: the host opens the menu over it and clicks NEXT CAMP.

@@ -145,7 +145,7 @@ namespace Festival.Presentation
             if(equipped=="little_spoon")equipped=""; // Passive neck item, never a hand prop.
             if(equipped!=equippedId)
             {
-                if(equippedProp!=null)Destroy(equippedProp);
+                if(equippedProp!=null){equippedProp.SetActive(false);Destroy(equippedProp);}
                 equippedProp=null;equippedId=equipped;
                 if(!IsPoi(equipped))
                 {

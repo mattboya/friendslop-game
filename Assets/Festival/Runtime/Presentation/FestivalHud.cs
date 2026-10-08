@@ -60,6 +60,17 @@ namespace Festival.Presentation
         private Image rhythmProgressFill,stopHoldFill,walkHoldFill;
         // When G went down mid-dance (Time.unscaledTime), or -1 while it isn't held.
         private float stopHeldSince=-1;
+        private float gearHeldSince=-1;
+        private bool dropPressConsumed;
+        private string dropHeldItem="",dropRound="",dropPhase="";
+        private int dropGeneration=-1,dropCancellationSequence=-1;
+        // After a manual choice, an old snapshot cannot authorize a Drop even if its two-second prop confirmation expires.
+        private long manualEquipmentTick=-1;
+        private string gearLossRound="",gearLossNotice="";
+        private int gearLossGeneration=-1;
+        private long gearLossSequence;
+        private float gearLossShown;
+        public const float GearDropHoldSeconds=.5f;
         private RhythmChart displayedChart;
         private RhythmJudge feedbackJudge;
         private readonly List<RhythmInput> replayedRhythmInputs=new List<RhythmInput>();
@@ -301,7 +312,7 @@ namespace Festival.Presentation
             // the verdict read out award by award where the ballot was.
             reviewPanel=Card(root.transform,"Camp round review",new Vector2(.25f,.20f),new Vector2(.75f,.84f),true);
             Accent(reviewPanel.transform,Orange);
-            reviewText=Label(reviewPanel.transform,"Review text",21,TextAnchor.MiddleCenter);Place(reviewText.rectTransform,.05f,.82f,.95f,.96f);
+            reviewText=Label(reviewPanel.transform,"Review text",21,TextAnchor.MiddleCenter);Place(reviewText.rectTransform,.05f,.82f,.95f,.96f);ShrinkToFit(reviewText,16);
             reviewReveal=Label(reviewPanel.transform,"Review reveal",25,TextAnchor.MiddleCenter);reviewReveal.fontStyle=FontStyle.Normal;Place(reviewReveal.rectTransform,.05f,.20f,.95f,.80f);
             reviewStatus=Label(reviewPanel.transform,"Review status",18,TextAnchor.MiddleCenter);reviewStatus.color=MutedPaper;Place(reviewStatus.rectTransform,.05f,.03f,.95f,.18f);
             for(int award=0;award<3;award++)
@@ -658,6 +669,7 @@ namespace Festival.Presentation
         {
             if(session==null)return;
             ResetChatForSession();
+            FollowDropLifecycle();
             if(rhythmConnectionGeneration!=session.ConnectionGeneration){rhythmConnectionGeneration=session.ConnectionGeneration;ResetRhythm();}
             if(!session.Connected)ResetRhythm();
             FestivalSettings.ApplyEffects(shopAudio,session.Profile?.Data);
@@ -667,6 +679,7 @@ namespace Festival.Presentation
             wasConnected=session.Connected;
             // The host's replies name money in dollars; each player reads their own (PLAYA-1).
             string message=session.State!=null&&session.LocalPlayer!=null?FestivalHudText.MoneyText(session.State,session.LocalPlayer,session.Message):session.Message;
+            message=FestivalHudText.DropNotice(message,session.Controls);
             status.text=connectionError==""?message:connectionError;
             status.color=connectionError==""?new Color(.25f,.35f,.32f):new Color(.58f,.16f,.12f);
             if(session.Message!=lastNotice){lastNotice=session.Message;noticeUntil=Time.unscaledTime+5;}
@@ -749,6 +762,7 @@ namespace Festival.Presentation
             // TRIP-8: whoever walks onto the cloud's stash is told so the same way, once.
             if(state.CloudStashFinderId!=player.Id)stashNoticed=false;
             else if(!stashNoticed&&uncovered){stashNoticed=true;session.SetMessage(FestivalHudText.CloudStashNotice);lastNotice="";}
+            UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
@@ -907,13 +921,14 @@ namespace Festival.Presentation
 
         private void UpdateKeyboard(RoundState state,PlayerState player)
         {
-            if(session.Controls.Rebinding){stopHeldSince=-1;return;}
+            bool dropTap=TakeDropPress(state);
+            if(session.Controls.Rebinding){CancelGearHold();stopHeldSince=-1;ShowStopHold(0);return;}
             if(state.Phase=="CampReview"&&!session.MenuOpen)
             {
                 int award=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
                 if(award>=0&&award<state.ReviewAwards.Count)session.Command("ReviewVote",NextReviewPick(state,player,award),amount:award);
             }
-            if(player.CampVisitId!=""&&!session.MenuOpen&&session.Controls.Drop.WasPressedThisFrame())
+            if(player.CampVisitId!=""&&!DropCovered()&&dropTap)
             {
                 session.Command("ExitCamp");return;
             }
@@ -948,11 +963,12 @@ namespace Festival.Presentation
             }
             if(equipSlot>=0&&!session.MenuOpen&&gearKeys)
             {
+                CancelGearHold();
                 // HUD-8: the switch flashes over the gear bar, or why not: inside a tent, or behind an unpaid item, nothing switches.
                 string toast=FestivalHudGear.Toast(player,handGear,equipSlot);if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
                 if(FestivalHudGear.Blocked(player)=="")
                 {
-                    selectedSlot=equipSlot;selectedThisFrame=true;
+                    selectedSlot=equipSlot;selectedThisFrame=true;manualEquipmentTick=state.Tick;
                     string item=equipSlot<handGear.Count&&handGear[equipSlot].Count>0?handGear[equipSlot].ItemId:"";
                     bool stowing=!fromWheel&&item!=""&&item==EquippedItem(player);
                     if(stowing)item="";
@@ -979,13 +995,14 @@ namespace Festival.Presentation
             // tap of E runs nothing either; the effective Menu binding walks out of it.
             bool dancing=FestivalHudText.StopsByHold(state,player),talking=FestivalHudText.WalksOutByHold(state,player);
             if(session.Controls.Interact.WasPressedThisFrame()&&!session.MenuOpen&&!dancing&&!talking)primaryAction?.Invoke();
-            HoldToStop(dancing?session.Controls.Drop:null);
-            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
-            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
-            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&gearKeys&&player.InteractionId==""&&FestivalHudText.StoppedBy(state,player)!=null)
+            HoldToStop(dancing&&!DropCovered()&&rhythmFocused?session.Controls.Drop:null);
+            if(dropTap&&!DropCovered()&&checkoutItem!=""){checkoutItem="";return;}
+            if(dropTap&&!DropCovered()&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
+            if(dropTap&&!DropCovered()&&gearKeys&&player.InteractionId==""&&FestivalHudText.StoppedBy(state,player)!=null)
             {
                 var stock=player.Inventory.Find(i=>i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock");
-                if(stock!=null){session.Command("Drop",item:stock.ItemId);return;}
+                if(stock!=null)session.Command("Drop",item:stock.ItemId);
+                return; // Even an empty stop owns this press; it never falls through to equipped gear.
             }
             string heldItem=handGear.Find(i=>i.Count>0&&i.ItemId==EquippedItem(player))?.ItemId??"";
             if(heldItem=="")qAsked="";
@@ -998,8 +1015,97 @@ namespace Festival.Presentation
                     // ECON-3: the first Q on stock asks; the notice stays up as long as a second Q would take it.
                     else{qAsked=item;qAskedAt=Time.unscaledTime;session.SetMessage(TakeStockAgain);lastNotice=session.Message;noticeUntil=qAskedAt+TakeStockSeconds;}
                 }
-                if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&!dancing)session.Command("Drop",item:item);
             }
+            bool dropEligible=heldItem!=""&&heldItem==player.EquippedItemId&&!pendingEquipment&&state.Tick>manualEquipmentTick&&gearKeys&&!selectedThisFrame
+                &&player.InteractionId==""&&!sellerTalk.Open&&!chatWindow.Open&&FestivalHudGear.Blocked(player)==""&&FestivalHudText.StoppedBy(state,player)==null
+                &&checkoutItem==""&&!DropCovered()&&rhythmFocused&&!session.Controls.Use.WasPressedThisFrame()&&!session.Controls.Interact.WasPressedThisFrame()&&!session.Controls.Chat.WasPressedThisFrame();
+            HoldGearDrop(state,player,dropTap,dropEligible);
+        }
+
+        private void FollowDropLifecycle()
+        {
+            var state=session.State;
+            if(!session.Connected||state==null||dropGeneration!=session.ConnectionGeneration||dropRound!=state.RoundId)
+            {
+                CancelGearHold();dropPressConsumed=session.Controls.DropPhysicallyPressed;
+                dropGeneration=session.ConnectionGeneration;dropRound=state?.RoundId??"";manualEquipmentTick=-1;stopHeldSince=-1;
+            }
+            if(!session.Connected){gearLossRound="";gearLossGeneration=-1;gearLossSequence=0;gearLossNotice="";}
+        }
+        private bool DropCovered()
+        {
+            bool covered=session.MenuOpen||mapPanel.activeSelf||session.Controls.Objectives.IsPressed()||settingsOpen;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            covered|=DevelopmentMapVisible;
+#endif
+            return covered;
+        }
+        private bool TakeDropPress(RoundState state)
+        {
+            var key=session.Controls.Drop;
+            if(dropCancellationSequence!=session.Controls.DropCancellationSequence){dropCancellationSequence=session.Controls.DropCancellationSequence;CancelGearHold();}
+            if(!session.Controls.DropPhysicallyPressed&&!key.IsPressed()){dropPressConsumed=false;CancelGearHold();}
+            bool fresh=key.WasPressedThisFrame()&&!dropPressConsumed;
+            if(fresh)dropPressConsumed=true;
+            if(gearHeldSince>=0&&(DropCovered()||!rhythmFocused||dropPhase!=state.Phase))CancelGearHold();
+            return fresh;
+        }
+        private void HoldGearDrop(RoundState state,PlayerState player,bool fresh,bool eligible)
+        {
+            if(!eligible||!session.Controls.Drop.IsPressed()||gearHeldSince>=0&&dropHeldItem!=player.EquippedItemId)CancelGearHold();
+            else if(fresh)
+            {
+                gearHeldSince=Time.unscaledTime;dropHeldItem=player.EquippedItemId;dropPhase=state.Phase;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DropHoldDiagnostic("start","fresh eligible press");
+#endif
+            }
+            if(gearHeldSince<0)return;
+            float progress=(Time.unscaledTime-gearHeldSince)/GearDropHoldSeconds;
+            if(progress>=1)
+            {
+                string item=dropHeldItem;gearHeldSince=-1;dropHeldItem="";ShowStopHold(0);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DropHoldDiagnostic("fire","threshold");
+#endif
+                session.Command("Drop",item:item);return;
+            }
+            prompt.text="HOLD "+session.Controls.Label(session.Controls.Drop).ToUpperInvariant()+" TO DROP "+ItemName(dropHeldItem).ToUpperInvariant();
+            promptPanel.SetActive(true);promptKeycap.SetActive(false);nearbyPanel.SetActive(false);ShowStopHold(progress);
+        }
+        private void CancelGearHold()
+        {
+            if(gearHeldSince<0)return;
+            gearHeldSince=-1;dropHeldItem="";ShowStopHold(0);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DropHoldDiagnostic("cancel","input or context changed");
+#endif
+        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private static void DropHoldDiagnostic(string action,string reason)
+        {
+            if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","gear_hold_"+action,"reason="+reason);
+        }
+#endif
+        private void UpdateGearLossNotice(RoundState state,PlayerState player,bool uncovered)
+        {
+            if(gearLossRound!=state.RoundId||gearLossGeneration!=session.ConnectionGeneration)
+            {
+                gearLossRound=state.RoundId;gearLossGeneration=session.ConnectionGeneration;gearLossSequence=0;gearLossNotice="";gearLossShown=0;
+            }
+            if(player.GearLossSequence>gearLossSequence&&player.GearLossKind=="Death"&&!string.IsNullOrEmpty(player.GearLossNotice))
+            {
+                gearLossSequence=player.GearLossSequence;gearLossNotice=player.GearLossNotice;gearLossShown=0;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","gear_loss_delivery","pending=true");
+#endif
+            }
+            if(gearLossNotice==""||!uncovered)return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(gearLossShown==0&&DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","gear_loss_visible","uncovered=true");
+#endif
+            notice.text=gearLossNotice;noticePanel.SetActive(true);gearLossShown+=Time.unscaledDeltaTime;
+            if(gearLossShown>=5)gearLossNotice="";
         }
 
         private void EquipmentCommandResult(CommandResult result)
@@ -1110,6 +1216,7 @@ namespace Festival.Presentation
         {
             if(session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}ResetRhythm();
             if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}
+            CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;
             ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
         }
         private void ResetChatForSession()
@@ -1229,6 +1336,7 @@ namespace Festival.Presentation
         private void OnApplicationFocus(bool focused)
         {
             rhythmFocused=focused;
+            if(!focused){CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;}
             if(!focused&&session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}
         }
         private void ReleaseRhythmInputs()
