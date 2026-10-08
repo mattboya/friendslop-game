@@ -23,6 +23,8 @@ namespace Festival.Core
         public List<string> PlayerIds=new List<string>();
         // Captured once at the common start, in participant order. Older snapshots keep an empty roster, never backfilled.
         public List<MinigameParticipant> Participants=new List<MinigameParticipant>();
+        // Public scalar drum progress/result only; private charts and inputs remain on each owner's InteractionState.
+        public List<DrumAccuracy> DrumAccuracies=new List<DrumAccuracy>(); public double DrumWorstScore=-1;
         // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
         // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
         // clock. Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
@@ -34,6 +36,7 @@ namespace Festival.Core
         internal MinigameState Copy()
         {
             var b=(MinigameState)MemberwiseClone();b.PlayerIds=new List<string>(PlayerIds);b.Drunk=new List<int>(Drunk);b.Turns=new List<string>(Turns);
+            b.DrumAccuracies=(DrumAccuracies??new List<DrumAccuracy>()).ConvertAll(p=>new DrumAccuracy{PlayerId=p.PlayerId,Accuracy=p.Accuracy});
             b.Participants=(Participants??new List<MinigameParticipant>()).ConvertAll(p=>new MinigameParticipant{Id=p.Id,Name=p.Name});return b;
         }
     }
@@ -92,7 +95,7 @@ namespace Festival.Core
             State.Booth.RingSeconds=0;State.Booth.Seconds=0;State.Booth.ScoredAt=-1;State.Booth.ClockChange=0;State.Booth.PlayerIds=crew.ConvertAll(p=>p.Id);
             State.Booth.Participants=crew.ConvertAll(p=>new MinigameParticipant{Id=p.Id,Name=p.Name});
             State.Phase=MinigamePhase;
-            if(State.Booth.Kind==MysteryCupsGame)PourCups();
+            if(State.Booth.Kind==MysteryCupsGame)PourCups();else if(State.Booth.Kind==DrumCircleGame)StartDrumCircle();
         }
         // Each step of the game, in place of everything else Step does: the game's own clock, the cap, then the banner and the end.
         void MinigameTick(double dt)
@@ -100,12 +103,17 @@ namespace Festival.Core
             var b=State.Booth;b.Seconds+=dt;
             // A game's own tick scores it when it ends, at the cap too (Mystery Cups calls it). One this build doesn't know (a snapshot
             // from a build with other games) has no moves here, so the cap scores it +0 s.
-            if(b.ScoredAt<0){if(b.Kind==MysteryCupsGame)CupsTick();if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
+            if(b.ScoredAt<0){if(b.Kind==MysteryCupsGame)CupsTick();else if(b.Kind==DrumCircleGame)DrumCircleTick();if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
             if(b.Seconds<b.ScoredAt+MinigameBannerSeconds)return;
-            ShiftClock(b.Seconds);b.Spent=true;State.Phase="Playing";
+            CloseDrumParts();ShiftClock(b.Seconds);b.Spent=true;State.Phase="Playing";
         }
         // Apply, while the game runs: only the game's own commands go through (MINI-2's drum parts will be Rhythm).
-        CommandResult Paused(PlayerState p,GameCommand c)=>c.Kind==MinigameKind?PlayMinigame(p,c):c.Kind=="Rhythm"?Submit(p,c):Reject("Wait: the festival is paused for a minigame");
+        CommandResult Paused(PlayerState p,GameCommand c)
+        {
+            var i=Interaction(p.InteractionId);
+            if(c.Kind=="Cancel"&&i!=null&&i.Kind==DrumPartKind&&i.Status=="Active"){Cancel(p,"Cancelled");return Ok("Withdrew from drum part");}
+            return c.Kind==MinigameKind?PlayMinigame(p,c):c.Kind=="Rhythm"&&p.Life=="Alive"?Submit(p,c):Reject("Wait: the festival is paused for a minigame");
+        }
         CommandResult PlayMinigame(PlayerState p,GameCommand c)
         {
             var b=State.Booth;
@@ -125,7 +133,7 @@ namespace Festival.Core
             var b=State.Booth;if(State.Phase!=MinigamePhase||b.ScoredAt>=0)return;
             double left=State.DurationSeconds-State.ElapsedSeconds;
             b.ClockChange=seconds>=0?seconds:Math.Max(seconds,Math.Min(0,MinigameFloorSeconds-left));b.ScoredAt=b.Seconds;
-            State.DurationSeconds+=b.ClockChange;
+            CloseDrumParts();State.DurationSeconds+=b.ClockChange;
             if(b.ClockChange>0)foreach(var p in State.Players)foreach(var e in p.Effects)if(e.Id==DoseEffect)e.RemainingSeconds+=b.ClockChange;
         }
         // As play resumes: every absolute time on the simulation clock, which ran on through the pause, moves on by it, so each

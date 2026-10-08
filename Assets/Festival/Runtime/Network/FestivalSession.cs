@@ -97,6 +97,8 @@ namespace Festival.Network
         // Personal random cash piles carry CashFind; host-only attempt index/deadline and DealSeed remain omitted.
         // Minigame snapshots carry only immutable participant ID/name records captured at the common start; old snapshots
         // default to an empty roster. Every recipient receives detached booth lists without broadening spirit Players.
+        // Drum Circle carries public scalar per-participant accuracies/result; each owner alone receives a detached 24-tap
+        // DrumPart chart/input log on the advancing game clock, sharing the held stage grid. Cancel withdraws without shrinking roster.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -155,6 +157,8 @@ namespace Festival.Network
             +(State.Phase=="Results"||manager==null?0:Math.Max(0,Math.Min(.4,manager.ServerTime.Time-serverClockAtSnapshot)));
         public double EstimatedWorldSeconds => State==null?0:FestivalSimulation.WorldSeconds(State)
             +(State.Phase==FestivalSimulation.MinigamePhase?0:EstimatedSimulationSeconds-State.SimulationSeconds);
+        public double EstimatedMinigameSeconds => State==null?0:State.Booth.Seconds
+            +(State.Phase==FestivalSimulation.MinigamePhase?EstimatedSimulationSeconds-State.SimulationSeconds:0);
         public double LastSnapshotAge => Time.realtimeSinceStartupAsDouble-snapshotReceivedAt;
         public float RoundTripMs => manager!=null && Connected ? manager.GetComponent<UnityTransport>().GetCurrentRtt(NetworkManager.ServerClientId) : 0;
         private NetworkManager manager;
@@ -888,7 +892,7 @@ namespace Festival.Network
             var receiptOwner=view.Players.Find(p=>p.Id==viewer);string tip=FestivalSimulation.DeckTipSpeech(source,local);
             if(receiptOwner!=null&&tip!=""&&receiptOwner.SpeechDeliveryId=="")
             {receiptOwner.NpcSpeech=tip;receiptOwner.NpcSpeaker="FESTIVALGOERS";receiptOwner.NpcSpeechUntil=source.Phase==FestivalSimulation.MinigamePhase?local.DeckTipUntilWorldSeconds:local.DeckTipUntilWorldSeconds+source.Booth.Seconds;}
-            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
+            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>i.Kind==FestivalSimulation.DrumPartKind?JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(i)):i);return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
             // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map, not even from
             // the Ferris wheel (POLO-3, WheelFriendAreas above).
