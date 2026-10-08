@@ -3,6 +3,12 @@ using System.Collections.Generic;
 
 namespace Festival.Core
 {
+    /// <summary>A name captured when a minigame starts; public to spectators without any player state.</summary>
+    [Serializable] public sealed class MinigameParticipant
+    {
+        public string Id="",Name="";
+    }
+
     /// <summary>MINI-1: a level's minigame booth, public round state every view carries (FestivalSession.ViewFor).</summary>
     [Serializable] public sealed class MinigameState
     {
@@ -15,6 +21,8 @@ namespace Festival.Core
         public double RingSeconds,Seconds,ScoredAt=-1,ClockChange;
         // Who plays: the connected living players as the game began. Spirits and the detained watch.
         public List<string> PlayerIds=new List<string>();
+        // Captured once at the common start, in participant order. Older snapshots keep an empty roster, never backfilled.
+        public List<MinigameParticipant> Participants=new List<MinigameParticipant>();
         // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
         // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
         // clock. Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
@@ -22,8 +30,12 @@ namespace Festival.Core
         // alone, -1 in everyone else's view (FestivalSimulation.VisibleBooth).
         public int Cups,Turn,Pot,Spiked=-1,Hint=-1; public double TurnAt; public string SpikedBy="";
         public List<int> Drunk=new List<int>(); public List<string> Turns=new List<string>();
-        // A copy for a view to filter: its lists are shared, as a view never changes them.
-        internal MinigameState Copy()=>(MinigameState)MemberwiseClone();
+        // Detached public data before recipient-private cup filtering: no recipient can rewrite the host or another view.
+        internal MinigameState Copy()
+        {
+            var b=(MinigameState)MemberwiseClone();b.PlayerIds=new List<string>(PlayerIds);b.Drunk=new List<int>(Drunk);b.Turns=new List<string>(Turns);
+            b.Participants=(Participants??new List<MinigameParticipant>()).ConvertAll(p=>new MinigameParticipant{Id=p.Id,Name=p.Name});return b;
+        }
     }
 
     /// <summary>MINI-1 (docs/MINIGAMES_2026-09-30.md): each level has one booth, a stranger with a sign at one of
@@ -78,6 +90,7 @@ namespace Festival.Core
             State.Booth.RingSeconds=ready?State.Booth.RingSeconds+dt:0;
             if(State.Booth.RingSeconds<MinigameRingSeconds)return;
             State.Booth.RingSeconds=0;State.Booth.Seconds=0;State.Booth.ScoredAt=-1;State.Booth.ClockChange=0;State.Booth.PlayerIds=crew.ConvertAll(p=>p.Id);
+            State.Booth.Participants=crew.ConvertAll(p=>new MinigameParticipant{Id=p.Id,Name=p.Name});
             State.Phase=MinigamePhase;
             if(State.Booth.Kind==MysteryCupsGame)PourCups();
         }

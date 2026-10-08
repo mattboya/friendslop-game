@@ -34,23 +34,61 @@ public static class MinigameTests
         foreach(var test in new Action[]{EveryLevelPlacesOneBoothOnASeededSpot,BoothGamesComeOutOfAWeekendBag,TheBoothSpotsKeepClearOfEveryRoute,TheCashFindSpotsKeepFullRouteMargins,
             TheCountdownNeedsEveryLivingPlayerInTheRing,NobodyDownedOrBusyMayStartIt,ABodyCarrierPassingThroughTheRingDoesNotOptIn,TheClockStopsForEverything,AHandoffKeepsItsSecondsThroughAMinuteLongGame,
             EveryClockDeadlineMovesOnByThePause,TheGameEndsAtNinetySecondsAndItsResultShowsForFour,ALossNeverLeavesUnderFifteenSeconds,ThePlayedBoothIsSpent,
-            SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame})
+            SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame,TheCommonStartCapturesOnlyParticipantNames,ParticipantNamesSurviveSnapshotsAndLegacyDefaults})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" minigame test(s) failed:\n"+string.Join("\n",failures));
     }
 
+    static void TheCommonStartCapturesOnlyParticipantNames()
+    {
+        for(int crew=1;crew<=8;crew++)foreach(string kind in new[]{FestivalSimulation.MysteryCupsGame,"FutureGame"})
+        {
+            var s=Play(130+crew,crew,spectators:crew<=6);s.State.Booth.Kind=kind;
+            if(crew<=6){s.Player("ghost").Connected=true;s.Player("ghost").Life="Spirit";}
+            Check(!JsonSerializer.SerializeToNode(s.State.Booth,Json).AsObject().ContainsKey("Participants")||JsonSerializer.SerializeToNode(s.State.Booth,Json)["Participants"].AsArray().Count==0,"names start empty before opt-in");
+            Ring(s,Enumerable.Range(0,crew).Select(k=>"p"+k).ToArray());Check(StartsWithin(s,3.5),"setup: common start");
+            var booth=JsonSerializer.SerializeToNode(s.State.Booth,Json).AsObject();
+            Check(booth.ContainsKey("Participants"),"common start must capture the public Participants roster");
+            var names=booth["Participants"].AsArray();Check(names.Count==crew,"only the connected living participants, crew "+crew);
+            for(int k=0;k<crew;k++)
+            {
+                var name=names[k].AsObject();Check(name.Count==2&&name["Id"].GetValue<string>()=="p"+k&&name["Name"].GetValue<string>()=="P"+k,"each participant carries only ID and captured name");
+                s.Player("p"+k).Name="Changed";
+            }
+            Check(JsonSerializer.SerializeToNode(s.State.Booth,Json)["Participants"].ToJsonString()==names.ToJsonString(),"later player names cannot rewrite the captured roster");
+            s.Player("p0").Connected=false;s.Tick(.1);
+            Check(JsonSerializer.SerializeToNode(s.State.Booth,Json)["Participants"].ToJsonString()==names.ToJsonString(),"disconnect retains the captured name");
+        }
+    }
+
+    static void ParticipantNamesSurviveSnapshotsAndLegacyDefaults()
+    {
+        var s=Started(151,3);var json=JsonSerializer.SerializeToNode(s.State,Json).AsObject();
+        Check(json["Booth"].AsObject().ContainsKey("Participants"),"snapshot must serialize captured participant names");
+        string names=json["Booth"]["Participants"].ToJsonString();
+        var saved=new FestivalSimulation();saved.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),Json));
+        Check(JsonSerializer.SerializeToNode(saved.State.Booth,Json)["Participants"].ToJsonString()==names,"restore retains captured names");
+        Check(CallIt(saved).Accepted,"setup: call the restored game");
+        Check(JsonSerializer.SerializeToNode(saved.State.Booth,Json)["Participants"].ToJsonString()==names,"banner keeps names");
+        Check(ResumesWithin(saved,4.5),"setup: resume");
+        Check(JsonSerializer.SerializeToNode(saved.State.Booth,Json)["Participants"].ToJsonString()==names,"spent booth keeps its names");
+        json["Booth"].AsObject().Remove("Participants");var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),Json));
+        Check(JsonSerializer.SerializeToNode(old.State.Booth,Json)["Participants"].AsArray().Count==0,"old snapshots have an empty roster without backfill");
+    }
+
     // A crew readies up at the trailhead and the wheels spin: the level, and its booth, are rolled as they leave camp.
-    static FestivalSimulation Leave(int seed,int crew=2,int festival=0,int level=0)
+    static FestivalSimulation Leave(int seed,int crew=2,int festival=0,int level=0,bool spectators=false)
     {
         var s=new FestivalSimulation(seed);for(int k=0;k<crew;k++)s.AddPlayer("p"+k,"P"+k);
+        if(spectators){s.AddPlayer("ghost","Watcher").Connected=false;s.AddPlayer("gone","Disconnected").Connected=false;}
         s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.LevelIndex=level;s.State.DurationSeconds=Festivals.For(s.State).DurationSeconds;
         Ready(s);return s;
     }
     static void Ready(FestivalSimulation s){foreach(var p in s.State.Players)if(p.Connected){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,"setup: "+p.Id+" readies");}s.Tick(5.2);Check(s.State.Phase=="Spinning","setup: the crew leaves camp");}
     // The crew reaches the festival with the crowd cleared, so nobody but the test's own festivalgoers moves a thing.
-    static FestivalSimulation Play(int seed,int crew=2)
+    static FestivalSimulation Play(int seed,int crew=2,bool spectators=false)
     {
-        var s=Leave(seed,crew);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
+        var s=Leave(seed,crew,spectators:spectators);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
         Check(s.State.Phase=="Playing","setup: the crew is at the festival");s.State.Npcs.Clear();Check(FestivalSimulation.BoothAt(s.State)!=null,"setup: the level has a booth");return s;
     }
     // The level is won; the host brings everyone back and the next level's camp opens.

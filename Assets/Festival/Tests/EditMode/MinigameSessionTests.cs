@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Linq;
 using Festival.Core;
 using Festival.Network;
 using NUnit.Framework;
@@ -44,6 +46,42 @@ namespace Festival.Tests
             Assert.That(new[]{b.Spiked,b.Hint},Is.EqualTo(new[]{2,3}),"the host's own game keeps both");
             var old=JsonUtility.FromJson<RoundState>("{\"Phase\":\"Minigame\",\"Booth\":{\"Kind\":\"Stub\",\"Spot\":1}}").Booth;
             Assert.That(new object[]{old.Cups,old.Spiked,old.Hint,old.Drunk.Count,old.Turns.Count},Is.EqualTo(new object[]{0,-1,-1,0,0}),"a snapshot from before Mystery Cups has none poured");
+        }
+
+        [Test] public void ASpiritGetsCapturedNamesWithoutLivingPlayerStateOrPrivateAnswers()
+        {
+            var game=StartedWithSpirit();var b=game.State.Booth;
+            var field=typeof(MinigameState).GetField("Participants");Assert.That(field,Is.Not.Null,"common start captures the minimal public participant roster");
+            var host=(IList)field.GetValue(b);Assert.That(host.Count,Is.EqualTo(2));
+            Assert.That(host[0].GetType().GetFields().Select(f=>f.Name),Is.EquivalentTo(new[]{"Id","Name"}),"no inventory, cash, effects, roles or answers on name records");
+            game.Player("p0").Name="Changed";game.Player("p1").Connected=false;
+            foreach(string viewer in new[]{"p0","p1","ghost"})
+            {
+                var view=Wire(game,viewer);var names=(IList)field.GetValue(view.Booth);
+                Assert.That(names.Count,Is.EqualTo(2));
+                Assert.That(names[0].GetType().GetField("Name").GetValue(names[0]),Is.EqualTo("P0"),"immutable captured name");
+                Assert.That(view.Booth.Spiked,Is.EqualTo(-1));Assert.That(view.Booth.Hint,Is.EqualTo(viewer==game.State.TripperId?b.Hint:-1));
+                Assert.That(view.DealSeed,Is.Zero);
+                if(viewer=="ghost")Assert.That(view.Players.Select(p=>p.Id),Is.EqualTo(new[]{"ghost"}),"spirit player visibility stays filtered");
+            }
+            var detached=FestivalSession.ViewFor(game,"ghost");var detachedNames=(IList)field.GetValue(detached.Booth);
+            detachedNames[0].GetType().GetField("Name").SetValue(detachedNames[0],"Tampered");detachedNames.Clear();detached.Booth.PlayerIds.Clear();detached.Booth.Turns.Clear();
+            Assert.That(host.Count,Is.EqualTo(2));Assert.That(host[0].GetType().GetField("Name").GetValue(host[0]),Is.EqualTo("P0"));
+            Assert.That(b.PlayerIds.Count,Is.EqualTo(2));Assert.That(b.Turns.Count,Is.EqualTo(2));
+            var old=JsonUtility.FromJson<RoundState>("{\"Phase\":\"Minigame\",\"Booth\":{\"Kind\":\"MysteryCups\",\"PlayerIds\":[\"p0\"]}}");
+            Assert.That(((IList)field.GetValue(old.Booth)).Count,Is.Zero,"missing legacy names default empty");
+        }
+
+        private static FestivalSimulation StartedWithSpirit()
+        {
+            var game=new FestivalSimulation(157){DealSecret=()=>12345};game.AddPlayer("p0","P0");game.AddPlayer("p1","P1");var ghost=game.AddPlayer("ghost","Watcher");ghost.Connected=false;
+            foreach(var p in game.State.Players.Where(p=>p.Connected)){p.X=0;p.Z=19;Assert.That(game.Execute(p.Id,new GameCommand{Id="ready"+p.Id,Kind="Ready"}).Accepted,Is.True);}
+            game.Tick(5.2);game.Tick(game.State.SpinEndsAt-game.State.SimulationSeconds+.1);
+            foreach(var p in game.State.Players.Where(p=>p.Connected))Assert.That(game.Execute(p.Id,new GameCommand{Id="map"+p.Id,Kind="MapReady"}).Accepted,Is.True);
+            game.State.Npcs.Clear();ghost.Connected=true;ghost.Life="Spirit";
+            var at=FestivalSimulation.BoothAt(game.State);foreach(var p in game.State.Players){p.X=at.X;p.Z=at.Z;}
+            for(int k=0;k<35&&game.State.Phase!=FestivalSimulation.MinigamePhase;k++)game.Tick(.1);
+            Assert.That(game.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase));return game;
         }
 
         // What viewer's client receives, through the wire format.

@@ -30,9 +30,19 @@ public static class MysteryCupsTests
         var failures=new List<string>();
         foreach(var test in new Action[]{OneCupIsSpikedBySeedAmongTwoMoreThanTheCrew,TurnsGoRoundInASeededOrder,ATurnThatRunsOutCallsIt,
             ThePotGrowsByFiveDollarsTimesTheCupsDrunk,TheSpikedCupLosesThePotAndDosesTheDrinker,CallingItPaysTheCrewByDayAndTheStashByNight,
-            TheLastSafeCupCallsIt,TheCapCallsIt,TheHintIsRightAtTheTrippersReliability,OnlyTheTrippersViewIsShownTheHint,ASnapshotKeepsTheCupsGame})
+            TheLastSafeCupCallsIt,TheCapCallsIt,TheHintIsRightAtTheTrippersReliability,OnlyTheTrippersViewIsShownTheHint,ASnapshotKeepsTheCupsGame,AVisibleBoothCannotRewriteHostOrAnotherViewer})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" Mystery Cups test(s) failed:\n"+string.Join("\n",failures));
+    }
+
+    static void AVisibleBoothCannotRewriteHostOrAnotherViewer()
+    {
+        var s=Poured(1201,3);Check(Drink(s,Safe(s)).Accepted,"setup: safe cup");
+        string before=JsonSerializer.Serialize(s.State.Booth,Json);var other=FestivalSimulation.VisibleBooth(s.State,s.State.TripperId);
+        string otherBefore=JsonSerializer.Serialize(other,Json);var view=FestivalSimulation.VisibleBooth(s.State,"p1");
+        view.PlayerIds.Clear();view.Turns.Clear();view.Drunk.Clear();
+        Check(JsonSerializer.Serialize(s.State.Booth,Json)==before,"a detached public booth cannot rewrite host lists or secrets");
+        Check(JsonSerializer.Serialize(other,Json)==otherBefore,"one viewer cannot rewrite another viewer's booth");
     }
 
     // A crew of `crew` readies up and the wheels spin; level 0 is Day 1 and 1 Night 1. `deal` is the host's secret deal seed.

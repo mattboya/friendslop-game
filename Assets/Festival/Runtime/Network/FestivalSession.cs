@@ -95,6 +95,8 @@ namespace Festival.Network
         // Frozen positive-cash death summaries retain every round-local event in immutable world time for all viewers,
         // including spirits; current balances/gear/positions and owner gear-loss notices keep their existing privacy filters.
         // Personal random cash piles carry CashFind; host-only attempt index/deadline and DealSeed remain omitted.
+        // Minigame snapshots carry only immutable participant ID/name records captured at the common start; old snapshots
+        // default to an empty roster. Every recipient receives detached booth lists without broadening spirit Players.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -567,6 +569,10 @@ namespace Festival.Network
             }
             // HUD-4: never while a key is being rebound, so the menu does not close on a player in the middle of it.
             if(MenuOpen&&!Controls.Rebinding&&ClosesMenu(State.Phase,lastPhase))MenuOpen=false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible&&State.Phase!=lastPhase&&(State.Phase==FestivalSimulation.MinigamePhase||lastPhase==FestivalSimulation.MinigamePhase))
+                DevelopmentDiagnostics.GraphicsEvent("Minigame","phase","phase="+State.Phase+" participants="+State.Booth.Participants.Count);
+#endif
             lastPhase=State.Phase;
             if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)HandleMenuPress();
             // CAM-1: V flips your view between first person and over the shoulder, and remembers it; never in the menu or mid-rebind.
@@ -824,6 +830,7 @@ namespace Festival.Network
                 CloudStashFinderId=source.CloudStashFinderId,
                 // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here. MINI-4: all but
                 // which Mystery Cup is spiked, which stays here too, and the cup the tripper is shown as spiked, sent to them alone.
+                // Captured participant names reach spectators through this detached booth, never through extra PlayerState.
                 Booth=FestivalSimulation.VisibleBooth(source,viewer)};
             foreach(var spin in source.DeathSpins)
                 view.DeathSpins.Add(new DeathSpinState{Id=spin.Id,RoundId=spin.RoundId,PlayerId=spin.PlayerId,Name=spin.Name,Sequence=spin.Sequence,Amount=spin.Amount,Seed=spin.Seed,CashDropped=spin.CashDropped,AtWorldSeconds=spin.AtWorldSeconds});
