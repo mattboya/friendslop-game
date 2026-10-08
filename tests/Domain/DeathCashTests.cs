@@ -8,6 +8,12 @@ public static class DeathCashTests
     static void Check(bool pass,string message){if(!pass)throw new Exception("DeathCash: "+message);}
     public static void Run()
     {
+        var failures=new List<string>();
+        foreach(var test in new Action[]{PublicHistoryRetainsTwentyFourActualDeathsAndResets,PublicHistoryUsesImmutableWorldTimeThroughARealBooth,LegacySnapshotsDoNotSynthesizePublicDeaths})
+            try{test();}catch(Exception error){failures.Add(test.Method.Name+": "+error.Message);}
+        Check(failures.Count==0,string.Join("\n",failures));
+        EveryDeathEmitsItsFrozenPublicRecord();
+        PublicHistoryRejectsMalformedSnapshots();
         SeededDeathsConserveCash();
         FullPocketsCanClaimCashOnce();
         EarlyPickupWaitsForLanding();
@@ -18,6 +24,117 @@ public static class DeathCashTests
         CashPilesRejectInvalidAmountsWithoutSpendingThePile();
         RefundsAndReturnedGearSettleBeforeDeath();
         ZeroCashAndRealRevivalLimits();
+    }
+    static void EveryDeathEmitsItsFrozenPublicRecord()
+    {
+        var s=Crew(4);var owner=s.Player("owner");owner.Cash=40;Die(s,owner);
+        var wire=JsonSerializer.SerializeToElement(s.State,new JsonSerializerOptions{IncludeFields=true});
+        Check(wire.TryGetProperty("DeathSpins",out var spins)&&spins.GetArrayLength()==1,"a real positive-cash death emits one persisted public record immediately, before any viewer polls");
+        var spin=spins[0];
+        Check(spin.GetProperty("Id").GetString()==s.State.RoundId+":death:owner:1"&&spin.GetProperty("RoundId").GetString()==s.State.RoundId,"the public record carries stable round and event identity");
+        Check(spin.GetProperty("PlayerId").GetString()=="owner"&&spin.GetProperty("Name").GetString()=="Owner"&&spin.GetProperty("Amount").GetInt32()==40,"only frozen owner identity, name and amount are published");
+        Check(spin.GetProperty("AtWorldSeconds").GetDouble()==.1&&spin.GetProperty("Seed").GetInt32()==276&&spin.GetProperty("CashDropped").GetInt32()==40,"the independent death emission retains its exact world time, seed and DROP outcome");
+    }
+    static void PublicHistoryRejectsMalformedSnapshots()
+    {
+        var s=Crew(4);s.Player("owner").Cash=40;Die(s,s.Player("owner"));
+        var corruptions=new Action<RoundState>[]
+        {
+            state=>state.DeathSpins=null,
+            state=>state.DeathSpins[0]=null,
+            state=>state.DeathSpins[0].RoundId="older-round",
+            state=>state.DeathSpins[0].Id="wrong-identity",
+            state=>state.DeathSpins[0].PlayerId="unknown-player",
+            state=>state.DeathSpins[0].Name=null,
+            state=>state.DeathSpins[0].Name=new string('n',25),
+            state=>state.DeathSpins[0].Sequence=0,
+            state=>state.DeathSpins[0].Sequence=4,
+            state=>state.DeathSpins[0].Amount=0,
+            state=>state.DeathSpins[0].CashDropped=39,
+            state=>state.DeathSpins[0].AtWorldSeconds=-1,
+            state=>state.DeathSpins[0].AtWorldSeconds=double.NaN,
+            state=>state.DeathSpins[0].AtWorldSeconds=double.PositiveInfinity,
+            state=>state.DeathSpins[0].AtWorldSeconds=1,
+            state=>state.DeathSpins.Add(state.DeathSpins[0]),
+            state=>state.DeathSpins[0].Name="Rewritten",
+            state=>state.DeathSpins[0].Amount=state.DeathSpins[0].CashDropped=41,
+            state=>state.DeathSpins[0].Seed=0,
+            state=>{for(int k=1;k<25;k++)state.DeathSpins.Add(state.DeathSpins[0]);},
+        };
+        for(int k=0;k<corruptions.Length;k++)
+        {
+            var bad=Saved(s.State);corruptions[k](bad);var target=new FestivalSimulation();var before=target.State;
+            bool refused=false;try{target.Restore(bad);}catch(ArgumentException){refused=true;}
+            Check(refused&&ReferenceEquals(target.State,before),"Restore refuses malformed public death history before replacing state, case "+k);
+        }
+        var zero=Saved(s.State);zero.DeathSpins[0].AtWorldSeconds=zero.Players[0].DeathSpinAt=zero.SimulationSeconds=0;zero.Drops.Find(d=>d.ItemId=="cash").LandsAt=2.5;
+        var restored=new FestivalSimulation();restored.Restore(zero);
+        Check(restored.State.DeathSpins.Count==1&&restored.State.DeathSpins[0].AtWorldSeconds==0&&restored.State.DeathSpins[0].Seed==276,"a valid time-zero public death restores without normalization or a new RNG draw");
+    }
+    static void PublicHistoryRetainsTwentyFourActualDeathsAndResets()
+    {
+        var s=new FestivalSimulation(43);
+        for(int k=0;k<8;k++)s.AddPlayer("player-"+k,"Friend "+k);
+        s.State.Phase="Playing";s.State.Npcs.Clear();s.State.SpinSeed=4;
+        string firstId="";double firstAt=0;int firstSeed=0,firstOutcome=0;
+        for(int death=1;death<=3;death++)for(int k=0;k<8;k++)
+        {
+            // A multiplayer wipe ends before the last downed expiry. Disconnect the seven spirits before the final solo death.
+            if(death==3&&k==7)for(int gone=0;gone<7;gone++)s.Disconnect("player-"+gone);
+            var owner=s.Player("player-"+k);var helper=s.Player(k==0?"player-1":"player-0");owner.Cash=40;owner.X=helper.X=0;owner.Z=helper.Z=0;
+            Die(s,owner);
+            Check(s.State.DeathSpins.Count==(death-1)*8+k+1,"each real death is appended even when no view polls between deaths");
+            if(death==1&&k==0){firstId=s.State.DeathSpins[0].Id;firstAt=s.State.DeathSpins[0].AtWorldSeconds;firstSeed=s.State.DeathSpins[0].Seed;firstOutcome=s.State.DeathSpins[0].CashDropped;owner.Name="Changed";}
+            if(death<3)
+            {
+                var band=s.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==owner.Id);
+                Check(s.Execute(helper.Id,new GameCommand{Id="band-"+death+"-"+k,Kind="Pickup",TargetId=band.Id}).Accepted,"setup: living helper claims the actual wristband");
+                helper.X=owner.X=24;helper.Z=owner.Z=-20;
+                Check(s.Execute(helper.Id,new GameCommand{Id="revive-"+death+"-"+k,Kind="BeginRevival",TargetId=owner.Id}).Accepted,"setup: the actual free revival starts");
+                s.Tick(10.1);Check(owner.Life=="Alive"&&owner.RevivalCount==death,"the actual revival completes without consuming death history");
+            }
+        }
+        Check(s.State.DeathSpins.Count==24,"eight players with two actual revivals retain the full bounded twenty-four-event history");
+        var first=s.State.DeathSpins[0];Check(first.Id==firstId&&first.AtWorldSeconds==firstAt&&first.Name=="Friend 0"&&first.Amount==40&&first.Seed==firstSeed&&first.CashDropped==firstOutcome,"later positive deaths and name changes cannot rewrite earlier immutable records");
+        s.Disconnect("player-0");s.AddPlayer("player-0","Rejoined");
+        var restored=new FestivalSimulation();restored.Restore(Saved(s.State));
+        Check(restored.State.DeathSpins.Count==24&&restored.State.DeathSpins[0].Id==firstId,"disconnect, reconnect and System.Text.Json restore retain every emitted record");
+        string round=s.State.RoundId;s.State.Phase="Results";s.State.Result="Failure";
+        Check(s.Execute("player-0",new GameCommand{Id="new-round",Kind="Reset"}).Accepted&&s.State.RoundId!=round&&s.State.DeathSpins.Count==0,"the actual round reset discards old public deaths");
+    }
+    static void PublicHistoryUsesImmutableWorldTimeThroughARealBooth()
+    {
+        var s=Crew(4);var owner=s.Player("owner");var friend=s.Player("friend");owner.Cash=40;
+        s.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;s.State.Booth.Spot=0;s.State.Booth.RingSeconds=2.95;
+        var at=Festivals.BoothSpots[0];owner.X=friend.X=at.X;owner.Z=friend.Z=at.Z;Die(s,owner);
+        Check(s.State.Phase==FestivalSimulation.MinigamePhase,"setup: the real physical booth starts on the death tick");
+        var spin=s.State.DeathSpins[0];string frozen=JsonSerializer.Serialize(spin,Json);double world=FestivalSimulation.WorldSeconds(s.State);
+        s.Tick(3);Check(Math.Abs(FestivalSimulation.WorldSeconds(s.State)-world)<1e-6&&JsonSerializer.Serialize(spin,Json)==frozen,"the actual booth freezes public death age and never rewrites the summary");
+        Check(s.Execute(friend.Id,new GameCommand{Id="end-public-cups",Kind=FestivalSimulation.MinigameKind,ItemId=FestivalSimulation.CallCups}).Accepted,"setup: actual booth command scores the game");
+        s.Tick(4.1);Check(s.State.Phase=="Playing"&&JsonSerializer.Serialize(spin,Json)==frozen,"resuming translates deadlines without translating immutable public world time");
+        var restored=new FestivalSimulation();restored.Restore(Saved(s.State));
+        Check(JsonSerializer.Serialize(restored.State.DeathSpins[0],Json)==frozen,"the same immutable event restores after the physical pause");
+        var cash=s.State.Drops.Find(d=>d.ItemId=="cash");s.State.SimulationSeconds=cash.LandsAt-1e-6;
+        Check(FestivalSimulation.WorldSeconds(s.State)-spin.AtWorldSeconds<2.5&&!FestivalSimulation.VisibleDrops(s.State).Contains(cash),"public world age and authoritative pile visibility agree just before landing");
+        s.State.SimulationSeconds=cash.LandsAt;
+        Check(Math.Abs(FestivalSimulation.WorldSeconds(s.State)-spin.AtWorldSeconds-2.5)<1e-6&&FestivalSimulation.VisibleDrops(s.State).Contains(cash),"the exact landing occurs at public event world age 2.5 seconds");
+    }
+    static void LegacySnapshotsDoNotSynthesizePublicDeaths()
+    {
+        var s=Crew(4);s.Player("owner").Cash=40;Die(s,s.Player("owner"));
+        var legacy=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json));legacy.AsObject().Remove("DeathSpins");
+        var old=JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json);var restored=new FestivalSimulation();restored.Restore(old);
+        Check(restored.State.DeathSpins!=null&&restored.State.DeathSpins.Count==0&&restored.Player("owner").DeathSpinSequence==1,"a missing public collection defaults quiet even when an old latest owner record exists; never fabricate partial history");
+        var owner=restored.Player("owner");var friend=restored.Player("friend");
+        var band=restored.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==owner.Id);
+        Check(restored.Execute(friend.Id,new GameCommand{Id="legacy-band",Kind="Pickup",TargetId=band.Id}).Accepted,"setup: legacy saved owner can still be recovered");
+        owner.X=friend.X=24;owner.Z=friend.Z=-20;
+        Check(restored.Execute(friend.Id,new GameCommand{Id="legacy-revive",Kind="BeginRevival",TargetId=owner.Id}).Accepted,"setup: actual revival works after additive restore");
+        restored.Tick(10.1);owner.Cash=55;Die(restored,owner);
+        Check(restored.State.DeathSpins.Count==1&&restored.State.DeathSpins[0].Sequence==2&&restored.State.DeathSpins[0].Amount==55,"the later real death emits only its new event; it never backfills the missing old death");
+        new FestivalSimulation().Restore(Saved(restored.State));
+        var zero=Crew(4);zero.Player("owner").Cash=0;Die(zero,zero.Player("owner"));
+        Check(zero.State.DeathSpins.Count==0,"zero cash deaths publish no event");
     }
     static FestivalSimulation Crew(int seed=1)
     {
@@ -60,7 +177,7 @@ public static class DeathCashTests
         var at=Festivals.BoothSpots[0];owner.X=friend.X=at.X;owner.Z=friend.Z=at.Z;Die(s,owner);
         Check(s.State.Phase==FestivalSimulation.MinigamePhase,"setup: remaining living crew enters the real booth as the death settles");
         var cash=s.State.Drops.Find(d=>d.ItemId=="cash");
-        if(deathAtZero){owner.DeathSpinAt=0;cash.LandsAt=2.5;s.State.SimulationSeconds=0;var restored=new FestivalSimulation();restored.Restore(Saved(s.State));s=restored;owner=s.Player("owner");friend=s.Player("friend");cash=s.State.Drops.Find(d=>d.ItemId=="cash");}
+        if(deathAtZero){s.State.DeathSpins[0].AtWorldSeconds=0;owner.DeathSpinAt=0;cash.LandsAt=2.5;s.State.SimulationSeconds=0;var restored=new FestivalSimulation();restored.Restore(Saved(s.State));s=restored;owner=s.Player("owner");friend=s.Player("friend");cash=s.State.Drops.Find(d=>d.ItemId=="cash");}
         double death=owner.DeathSpinAt;int seed=owner.DeathSpinSeed;
         s.Tick(3);Check(!FestivalSimulation.VisibleDrops(s.State).Contains(cash),"cash cannot reveal its result while the booth pauses the world");
         Check(s.Execute(friend.Id,new GameCommand{Id="call-cups",Kind=FestivalSimulation.MinigameKind,ItemId=FestivalSimulation.CallCups}).Accepted,"setup: the actual booth command ends the game");

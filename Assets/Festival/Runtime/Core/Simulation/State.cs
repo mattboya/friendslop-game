@@ -114,6 +114,11 @@ namespace Festival.Core
     // older snapshots).
     // Cash LandsAt is a simulation-clock deadline translated across booth pauses; zero keeps legacy drops immediate.
     [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId="",ClaimedBy=""; public int Count; public float X,Z; public double ClaimAt,LandsAt; }
+    // A frozen positive-cash death, retained for every viewer without publishing the player's current private state.
+    // AtWorldSeconds is immutable world time: compare it directly with WorldSeconds/EstimatedWorldSeconds, never ShiftClock it.
+    [Serializable] public sealed class DeathSpinState {
+        public string Id="",RoundId="",PlayerId="",Name=""; public long Sequence; public int Amount,Seed,CashDropped; public double AtWorldSeconds=-1;
+    }
     [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
     [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); }
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }
@@ -175,6 +180,7 @@ namespace Festival.Core
         // VISION-6: when a creature next hints at a true vision (HintVisions), on the level clock; 0, not armed (older snapshots arm
         // on their first step). Host-only: ViewFor builds the view field by field and leaves it out.
         public double NextVisionHintAt;
+        public List<DeathSpinState> DeathSpins=new List<DeathSpinState>();
         public long CrowdArrivalEpoch;
         public long SpeechSequence; public List<PublicSpeechState> PublicSpeech=new List<PublicSpeechState>();
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();

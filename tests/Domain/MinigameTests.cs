@@ -248,6 +248,7 @@ public static class MinigameTests
         {"PlayerState.DownedRemaining","a countdown that runs only in play"},{"PlayerState.LastRhythmScore","a score"},
         {"PlayerState.DeckTipAtWorldSeconds","owner deck receipt creation on the pause-safe world clock"},{"PlayerState.DeckTipUntilWorldSeconds","owner deck receipt expiry on the pause-safe world clock"},
         {"PlayerState.SpeechAtWorldSeconds","public utterance time on the pause-safe world clock"},{"PlayerState.SpeechUntilWorldSeconds","public utterance expiry on the pause-safe world clock"},
+        {"DeathSpinState.AtWorldSeconds","frozen public death creation on the pause-safe world clock; never translated on resume"},
         {"PublicSpeechState.StartedAtWorldSeconds","accepted public delivery time on the pause-safe world clock"},{"PublicSpeechState.ExpiresAtWorldSeconds","accepted public delivery expiry on the pause-safe world clock"},
         {"PlayerState.VisualWheelSince","view-only: ViewFor copies the ride's StartSeconds"},{"ActiveEffect.RemainingSeconds","a countdown that runs only in play"},
         {"CampEggState.LastActivationAt","historical camp-only gag time: camp never pauses, and festival minigames must not make an old gag recent"},

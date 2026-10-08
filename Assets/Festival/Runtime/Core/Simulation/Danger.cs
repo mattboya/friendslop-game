@@ -68,6 +68,7 @@ public sealed partial class FestivalSimulation {
     void Detain(PlayerState p){if(p.Life!="Alive")return;var i=Interaction(p.InteractionId);if(i!=null&&i.Kind=="Sale")i.ReservedItemId="";Cancel(p,"Police bust");ReturnOffers(p.Id);p.Inventory.RemoveAll(x=>Stock(x.ItemId));if(!p.Inventory.Exists(x=>x.ItemId==p.EquippedItemId))p.EquippedItemId="";p.Cash-=Math.Min(p.Cash,10);p.Life="Detained";p.EscapeProgress=0;p.X=27;p.Z=5;p.DragTargetId="";}
     void ClearEvidence(string id){foreach(var n in State.Npcs)n.Evidence.RemoveAll(e=>e.PlayerId==id);}
     public const double DeathWheelSeconds=2.5;
+    public const int DeathSpinLimit=24; // Eight players, each with at most two revivals and three deaths per round.
     // The independent death stream freezes only after cancellation/refunds and returned handoffs.
     void FreezeDeathCash(PlayerState p)
     {
@@ -75,6 +76,7 @@ public sealed partial class FestivalSimulation {
         p.DeathSpinAt=State.SimulationSeconds;p.DeathSpinSeed=unchecked(State.SpinSeed*67+(int)State.Tick*8+p.Ordinal);
         p.DeathSpinAmount=p.Cash;p.DeathCashDropped=new ContentRandom(p.DeathSpinSeed).Next(4)==0?p.Cash:0;p.DeathSpinSequence++;
         p.DeathSpinRoundId=State.RoundId;p.DeathSpinId=State.RoundId+":death:"+p.Id+":"+p.DeathSpinSequence;p.DeathSpinName=p.Name;
+        State.DeathSpins.Add(new DeathSpinState{Id=p.DeathSpinId,RoundId=p.DeathSpinRoundId,PlayerId=p.Id,Name=p.DeathSpinName,Sequence=p.DeathSpinSequence,Amount=p.DeathSpinAmount,Seed=p.DeathSpinSeed,CashDropped=p.DeathCashDropped,AtWorldSeconds=WorldSeconds(State)});
         if(p.DeathCashDropped>0){p.Cash=0;State.Drops.Add(new DropState{Id=Id("cash"),ItemId="cash",OwnerId=p.Id,Count=p.DeathCashDropped,X=p.X,Z=p.Z,LandsAt=p.DeathSpinAt+DeathWheelSeconds});}
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         ChatDiagnostic?.Invoke("DeathCash","Frozen",State.RoundId,State.SimulationSeconds);
@@ -92,6 +94,19 @@ public sealed partial class FestivalSimulation {
                 ||spin&&(p.DeathSpinAt<0||p.DeathSpinAmount==0||p.DeathSpinRoundId!=state.RoundId||p.DeathSpinId!=state.RoundId+":death:"+p.Id+":"+p.DeathSpinSequence)
                 ||!spin&&(p.DeathSpinAt!=-1||p.DeathSpinAmount!=0||p.DeathCashDropped!=0||p.DeathSpinSeed!=0||p.DeathSpinId!=""||p.DeathSpinRoundId!=""||p.DeathSpinName!="")
                 ||p.GearLossSequence<0||p.GearLossSequence>3||p.GearLossKind!=(p.GearLossSequence>0?"Death":"")||p.GearLossNotice!=(p.GearLossSequence>0?DeathGearLossNotice:""))throw new ArgumentException("Invalid snapshot death event");
+        }
+        if(state.DeathSpins==null||state.DeathSpins.Count>DeathSpinLimit)throw new ArgumentException("Invalid snapshot death history");
+        var deathIds=new HashSet<string>();var deathSequences=new Dictionary<string,long>();double lastDeathAt=-1,now=WorldSeconds(state);
+        foreach(var spin in state.DeathSpins)
+        {
+            var owner=spin==null?null:state.Players.Find(p=>p.Id==spin.PlayerId);
+            if(spin==null||owner==null||string.IsNullOrEmpty(spin.RoundId)||spin.RoundId!=state.RoundId||spin.Sequence<1||spin.Sequence>3||spin.Sequence>owner.DeathSpinSequence
+                ||spin.Id!=state.RoundId+":death:"+spin.PlayerId+":"+spin.Sequence||!deathIds.Add(spin.Id)||string.IsNullOrEmpty(spin.Name)||spin.Name.Length>24
+                ||spin.Amount<=0||spin.CashDropped!=0&&spin.CashDropped!=spin.Amount||!Finite(spin.AtWorldSeconds)||spin.AtWorldSeconds<0||!Finite(now)||spin.AtWorldSeconds>now+1e-6||spin.AtWorldSeconds<lastDeathAt
+                ||deathSequences.TryGetValue(spin.PlayerId,out var previous)&&spin.Sequence<=previous)throw new ArgumentException("Invalid snapshot death history event");
+            if(spin.Sequence==owner.DeathSpinSequence&&(spin.Id!=owner.DeathSpinId||spin.Name!=owner.DeathSpinName||spin.Amount!=owner.DeathSpinAmount||spin.Seed!=owner.DeathSpinSeed||spin.CashDropped!=owner.DeathCashDropped
+                ||Math.Abs(spin.AtWorldSeconds-WorldSeconds(state,owner.DeathSpinAt))>1e-6))throw new ArgumentException("Invalid snapshot latest death summary");
+            deathSequences[spin.PlayerId]=spin.Sequence;lastDeathAt=spin.AtWorldSeconds;
         }
         var cashIds=new HashSet<string>();
         foreach(var drop in state.Drops)

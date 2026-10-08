@@ -91,6 +91,8 @@ namespace Festival.Network
         // Death cash freezes an owner event after refunds and returns; cash piles debit immediately, land after 2.5 world
         // seconds and credit once independently of inventory capacity. Living views carry only landed drops. Latest frozen
         // death fields and sequenced semantic gear-loss notices reach only their owner; ground Drop replies name the item.
+        // Frozen positive-cash death summaries retain every round-local event in immutable world time for all viewers,
+        // including spirits; current balances/gear/positions and owner gear-loss notices keep their existing privacy filters.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -821,6 +823,8 @@ namespace Festival.Network
                 // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here. MINI-4: all but
                 // which Mystery Cup is spiked, which stays here too, and the cup the tripper is shown as spiked, sent to them alone.
                 Booth=FestivalSimulation.VisibleBooth(source,viewer)};
+            foreach(var spin in source.DeathSpins)
+                view.DeathSpins.Add(new DeathSpinState{Id=spin.Id,RoundId=spin.RoundId,PlayerId=spin.PlayerId,Name=spin.Name,Sequence=spin.Sequence,Amount=spin.Amount,Seed=spin.Seed,CashDropped=spin.CashDropped,AtWorldSeconds=spin.AtWorldSeconds});
             foreach(var p in source.Players)
             {
                 if(spirit && p.Life!="Spirit")continue;
