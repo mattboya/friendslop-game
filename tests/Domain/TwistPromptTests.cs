@@ -55,7 +55,9 @@ public static class TwistPromptTests
         Check(Offered(s,other,Car)==null,"away from both cars no ride is offered: "+Listed(s,other));
         Check(Offered(s,p,Car)!=null,"beside a passing art car the HUD offers a ride: "+Listed(s,p));
         Check(Taken(s,p,Offered(s,p,Car))&&FestivalSimulation.ArtCarOf(s.State,p.Id)==1,"and the rules put them aboard that car");
-        Check(FestivalGuidance.TwistActions(s.State,p).Count==0,"aboard, nothing more is offered: "+Listed(s,p));
+        Check(Offered(s,p,"Play a deck set")!=null&&FestivalGuidance.TwistActions(s.State,p).Count==1,"aboard, offer only the deck set: "+Listed(s,p));
+        Check(Taken(s,p,Offered(s,p,"Play a deck set"))&&s.Interaction(p.InteractionId).Kind=="DeckSet","the offered command replaces the plain ride");
+        Check(FestivalGuidance.TwistActions(s.State,p).Count==0,"during the set nothing more is offered: "+Listed(s,p));
         var polo=Start(0,Festivals.PoloFestival);var q=polo.Player("p1");var there=Festivals.ArtCarAt(1,polo.State.ElapsedSeconds);q.X=there.X+1;q.Z=there.Z;
         Check(Offered(polo,q,Car)==null,"Palm Mirage has no art cars to offer: "+Listed(polo,q));
     }

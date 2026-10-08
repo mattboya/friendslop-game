@@ -66,6 +66,10 @@ namespace Festival.Core
         public const int ArtCars=2;
         public const float ArtCarSpeed=1.2f,ArtCarReach=3;
         public const double ArtCarTrailSeconds=8;
+        // A deck set keeps 16 logical beats on the shared stage grid; each fresh spectator tips the crew once per level.
+        public const int DeckSetNotes=16;
+        public const double DeckBeatSeconds=.4,DeckTipPerHead=.75;
+        public const float DeckFanRange=6;
         static readonly float[][] ArtCarLoops={new float[]{-8,-10,-8,8,-13,8,-13,-10},new float[]{8,8,8,-10,13,-10,13,8}};
         /// <summary>Where art car `car` is `seconds` into the level. It depends on the level clock alone, so a client works it out
         /// from its own view exactly as the host does.</summary>

@@ -50,6 +50,7 @@ namespace Festival.Core
             RestoreCampEggs(state);
             RestoreStarterShelf(state);
             State=state;
+            RestoreDeckSets();
             RestoreChats();
             CampEggTick();
         }
@@ -104,6 +105,7 @@ namespace Festival.Core
             if(c.Kind=="Drop"&&State.Phase=="Shopping")return LeaveAtCamp(p,c);
             if(c.Kind==TakeGiggleBalloonKind)return TakeGiggleBalloon(p);
             if(State.Phase!="Playing")return Reject("Start the round first");
+            if(c.Kind==DeckSetKind)return BeginDeckSet(p);
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
             switch(c.Kind) {
                 case "Consume": return Consume(p,c);

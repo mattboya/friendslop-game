@@ -159,8 +159,8 @@ namespace Festival.Core
         // an arrest to make still chases you (PoliceTick).
         double SightRange(NpcState n)=>DustStorm(State)?Festivals.DustStormSightRange:Festivals.SightRange;
         /// <summary>Which art car playerId is riding (0 to ArtCars-1), or -1. Reads a client's view too, since a view carries its
-        /// own player's interactions; everyone else sees a rider's VisualPose "RideCar".</summary>
-        public static int ArtCarOf(RoundState s,string playerId)=>Car(s.Interactions.Find(i=>i.PlayerId==playerId&&i.Kind==RideCarKind&&i.Status=="Active"));
+        /// own player's interactions; everyone else sees the literal "RideCar" or "DeckSet" VisualPose.</summary>
+        public static int ArtCarOf(RoundState s,string playerId)=>Car(s.Interactions.Find(i=>i.PlayerId==playerId&&(i.Kind==RideCarKind||i.Kind==DeckSetKind)&&i.Status=="Active"));
         /// <summary>The Ember Playa art car rolling past within ArtCarReach of p, which RideCar boards (0 to ArtCars-1), or -1. Like
         /// the storms it reads only the view's festival and clock, so the HUD offers the ride by it.</summary>
         public static int ArtCarBeside(RoundState s,PlayerState p)
@@ -183,9 +183,9 @@ namespace Festival.Core
             return Ok("Aboard the art car: the crowd can't see you up here. Hop off any time");
         }
         // Every Playing step, before anyone looks around, each rider is wherever their car has rolled to.
-        void RideArtCars(){foreach(var ride in State.Interactions){var p=ride.Status=="Active"&&ride.Kind==RideCarKind?Player(ride.PlayerId):null;if(p!=null&&Car(ride)>=0)RideArtCar(p,Car(ride));}}
+        void RideArtCars(){foreach(var ride in State.Interactions){var p=ride.Status=="Active"&&(ride.Kind==RideCarKind||ride.Kind==DeckSetKind)?Player(ride.PlayerId):null;if(ride.Status=="Active"&&ride.Kind==DeckSetKind){if(!OwnsDeck(ride,p)){RetireDeck(ride,p);continue;}RideArtCar(p,Car(ride));CollectDeckWitnesses(ride,p);}else if(p!=null&&Car(ride)>=0)RideArtCar(p,Car(ride));}}
         void RideArtCar(PlayerState p,int car){var at=Festivals.ArtCarAt(car,State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;}
-        bool Hidden(NpcState n,PlayerState p)=>n.Kind=="Wook"&&p.InteractionId!=""&&ArtCarOf(State,p.Id)>=0;
+        bool Hidden(NpcState n,PlayerState p)=>n.Kind=="Wook"&&Interaction(p.InteractionId)?.Kind==RideCarKind&&ArtCarOf(State,p.Id)>=0;
         // PLAYA-4: whether the rider boarded under ArtCarTrailSeconds ago, so a festivalgoer already after them still trails the
         // car (WookTick). The boarding is the ride's StartSeconds: a ride is one RideCar from climbing aboard to hopping off.
         bool Trailed(PlayerState rider){var ride=State.Interactions.Find(i=>i.PlayerId==rider.Id&&i.Kind==RideCarKind&&i.Status=="Active");return ride!=null&&State.SimulationSeconds-ride.StartSeconds<Festivals.ArtCarTrailSeconds;}

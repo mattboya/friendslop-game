@@ -101,7 +101,8 @@ namespace Festival.Core
         public static List<(string Label,GameCommand Command)> TwistActions(RoundState state,PlayerState player)
         {
             var actions=new List<(string Label,GameCommand Command)>();
-            if(state==null||player==null||state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return actions;
+            if(state==null||player==null||state.Phase!="Playing"||player.Life!="Alive")return actions;
+            if(player.InteractionId!=""){if(FestivalSimulation.CanPlayDeckSet(state,player))actions.Add(("Play a deck set",new GameCommand{Kind=FestivalSimulation.DeckSetKind}));return actions;}
             if(FestivalSimulation.AtWheel(state,player))actions.Add(("Ride the Ferris wheel ("+Festivals.WheelRideSeconds+" s)",new GameCommand{Kind=FestivalSimulation.RideWheelKind}));
             if(FestivalSimulation.ArtCarBeside(state,player)>=0)actions.Add(("Climb aboard the art car",new GameCommand{Kind=FestivalSimulation.RideCarKind}));
             var band=Catalog.FindItem(FestivalSimulation.VipWristband);

@@ -32,6 +32,8 @@ namespace Festival.Core
         // ECON-6: successful starter payments this camp, shared across both kinds; zero in older snapshots. Owner-only in views.
         public int StarterStockBought;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
+        // Latest deck tip receipt is copied only to its owner; no public speech delivery or transcript. Legacy defaults are empty.
+        public int DeckTipAmount; public string DeckTipDeliveryId=""; public double DeckTipAtWorldSeconds=-1,DeckTipUntilWorldSeconds=-1;
         public int Performances, CampAntics; public double LastRhythmScore=-1;
         // CAMP-3: shared last poke; the cumulative session discovery mask reaches only this player's own view.
         public string LastCampEggId="",LastCampEggLine=""; public int CampEggSequence,FoundCampEggMask; public double LastCampEggAt=-1;
@@ -79,6 +81,8 @@ namespace Festival.Core
         public double Suspicion, DistractedUntil, AttackAt, AttackCooldownUntil, LastTalkSeconds=-100; public int Sales,TalkCount;
         // ECON-2: units this seller has sold the crew this level (StockBuys.cs). Host-only like Role: ViewFor never copies it. 0 in older snapshots.
         public int StockSold;
+        // Global once-per-level art-car tip flag. Host snapshots persist it; ViewFor omits it. False in older snapshots.
+        public bool Tipped;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();
     }
     [Serializable] public sealed class RhythmInput { public int Direction; public double TimeSeconds; public bool Release; }

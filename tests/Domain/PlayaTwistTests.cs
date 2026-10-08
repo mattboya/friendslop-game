@@ -22,7 +22,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
+            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,APlainRiderStartsAnExclusiveDeckSet,DeckOwnershipIsRequired,DeckChartsUseTheSharedGridAndHolds,DeckWitnessesAccumulateByRangeAndLos,StormsLimitDeckWitnesses,DeckTipsSettleExactlyOnce,AnotherRiderCannotCollectOldTips,TheFullTipThresholdIsInclusive,TheMinimumTipThresholdIsInclusive,HalfAndFailedDecksKeepTheirRules,CancellingADeckNeverPays,PoliceAndLifecycleInterruptionsNeverPay,InvalidRestoredDecksAreRetired,OldAndTippedSnapshotsRestore,DecksStayOutsideGroupJudging,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
             TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -192,6 +192,163 @@ public static class PlayaTwistTests
         s.State.Npcs.Add(new NpcState{Id="wook",X=p.X,Z=p.Z+2,Yaw=180});s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="Patrol",X=p.X+.5f,Z=p.Z+2,Yaw=180});
     }
     static double Heat(FestivalSimulation s,string npc,string player)=>s.State.Npcs.Find(n=>n.Id==npc).Observers.Find(o=>o.PlayerId==player)?.Suspicion??0;
+
+
+    // Deck start authorization, one deck per car and rolling/movement ownership.
+    static void APlainRiderStartsAnExclusiveDeckSet()
+    {
+        var s=Cars();var p=s.Player("p0");var q=s.Player("p1");
+        Check(!Act(s,q.Id,"DeckSet").Accepted,"someone on the ground cannot play a deck set");
+        Check(Act(s,p.Id,"RideCar").Accepted,"setup: board car 0");
+        var ride=s.Interaction(p.InteractionId);
+        Check(Act(s,p.Id,"DeckSet").Accepted,"a plain art-car rider must be able to replace the ride with a deck set");
+        var deck=s.Interaction(p.InteractionId);
+        Check(deck.Kind=="DeckSet"&&deck.TargetId=="0"&&ride.Status!="Active","the deck owns the same car and retires the plain ride");
+        Check(FestivalSimulation.ArtCarOf(s.State,p.Id)==0,"playing the deck still counts as riding");
+        Check(deck.NoteCount==16&&Math.Abs(deck.BeatSeconds-.4)<1e-9&&deck.ChartDifficulty==s.State.LevelIndex,"16 logical beats at this level's difficulty");
+        var at=Festivals.ArtCarAt(0,s.State.ElapsedSeconds);q.X=at.X;q.Z=at.Z;
+        Check(Act(s,q.Id,"RideCar").Accepted,"setup: second rider boards same car");
+        var denied=Act(s,q.Id,"DeckSet");
+        Check(!denied.Accepted&&denied.Reason=="Someone's already on this deck","one active player per car deck");
+        Check(!s.TryMove(p.Id,p.X+.1f,p.Z,p.Yaw,.1),"playing the deck cannot walk off the moving car");
+        s.Tick(.1);Check(At(p,Festivals.ArtCarAt(0,s.State.ElapsedSeconds)),"the deck rider keeps rolling with car 0");
+        var polo=Cars(0);Check(!Act(polo,"p0","DeckSet").Accepted,"Palm Mirage refuses deck sets");
+    }
+
+    static FestivalSimulation DeckFloor(int level=0,int crew=2,int fans=2,int seed=3)
+    {
+        var s=new FestivalSimulation(seed);for(int k=0;k<crew;k++)s.AddPlayer("p"+k,"P"+k);
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=1;s.State.LevelIndex=level;s.State.DurationSeconds=Festivals.For(s.State).DurationSeconds;
+        s.State.Phase="Playing";s.State.SpinSeed=StormSpin;s.State.ElapsedSeconds=10;s.State.Npcs.Clear();
+        var at=Festivals.ArtCarAt(0,10);var p=s.Player("p0");p.X=at.X;p.Z=at.Z;
+        foreach(var q in s.State.Players)if(q!=p){q.X=30;q.Z=-25;}
+        for(int k=0;k<fans;k++)s.State.Npcs.Add(new NpcState{Id="fan"+k,X=at.X+2+k*.1f,Z=at.Z,Yaw=90,Observers=new List<ObserverState>{new ObserverState{PlayerId=p.Id,Suspicion=40}}});
+        Check(Act(s,p.Id,"RideCar").Accepted,"setup: rider boards");return s;
+    }
+    static InteractionState Deck(FestivalSimulation s){Check(Act(s,"p0","DeckSet").Accepted,"setup: start deck");return s.Interaction(s.Player("p0").InteractionId);}
+    static bool Tipped(NpcState n)=>JsonNode.Parse(JsonSerializer.Serialize(n,Json))["Tipped"]?.GetValue<bool>()??false;
+    static void Play(FestivalSimulation s,InteractionState i,double fraction=1)
+    {
+        var chart=RhythmChart.For(i);int hits=(int)Math.Floor(chart.Notes.Count*fraction);var edges=new List<RhythmInput>();
+        for(int k=0;k<hits;k++){var n=chart.Notes[k];edges.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds});if(n.HoldSeconds>0)edges.Add(new RhythmInput{Direction=n.Direction,TimeSeconds=n.TimeSeconds+n.HoldSeconds,Release=true});}
+        edges.Sort((a,b)=>a.TimeSeconds.CompareTo(b.TimeSeconds));
+        foreach(var edge in edges){s.State.SimulationSeconds=i.StartSeconds+edge.TimeSeconds;var result=s.Execute(i.PlayerId,new GameCommand{Id="edge"+(sequence++),Kind="Rhythm",Direction=edge.Direction,TimeSeconds=edge.TimeSeconds,Amount=edge.Release?1:0});Check(result.Accepted,"real rhythm edge accepted: "+result.Reason);}
+    }
+    static void FinishDeck(FestivalSimulation s,InteractionState i){s.State.SimulationSeconds=i.StartSeconds+i.DurationSeconds+.75;s.Tick(.1);}
+    static void DeckOwnershipIsRequired()
+    {
+        var s=DeckFloor();var p=s.Player("p0");var q=s.Player("p1");q.InteractionId=p.InteractionId;
+        Check(!Act(s,q.Id,"DeckSet").Accepted,"a foreign ride ID never authorizes a deck");q.InteractionId="";
+        p.Life="Downed";Check(!Act(s,p.Id,"DeckSet").Accepted,"downed riders cannot start");p.Life="Alive";
+        var old=s.Interaction(p.InteractionId);Check(Act(s,p.Id,"DeckSet").Accepted,"own plain ride starts");Check(Heat(s,"fan0",p.Id)==40,"replacement adds no cancel penalty");
+        Check(!Act(s,p.Id,"DeckSet").Accepted&&old.Status=="Complete","a deck cannot replace itself");
+    }
+    static void DeckChartsUseTheSharedGridAndHolds()
+    {
+        foreach(int level in new[]{0,1,2,3})
+        {
+            var s=DeckFloor(level);double started=s.State.SimulationSeconds,world=FestivalSimulation.WorldSeconds(s.State);var i=Deck(s);
+            Check(i.StageTrack==RhythmChart.StageTrackFor(1,level),"deck uses the serialized one-based current stage track");
+            Check(i.StartSeconds==started,"deck preparation belongs only to its chart, without a duplicate external countdown");
+            var expected=new InteractionState{Kind="DeckSet",ChartSeed=i.ChartSeed,ChartDifficulty=level,NoteCount=16,BeatSeconds=.4};RhythmChart.InitializeStage(expected,i.StageTrack,world,2.4);
+            Check(i.StageFirstHeadWorldSeconds>=world+2.4&&i.StageFirstHeadWorldSeconds<world+3.4,"one window admits the longest2.4s arrow look-ahead and the next authored beat");
+            foreach(var effect in Catalog.Effects)Check(i.StageFirstHeadWorldSeconds-world>=effect.LeadSeconds,"the first head can enter every current substance lane");
+            var chart=RhythmChart.For(i);var wanted=RhythmChart.For(expected);
+            Check(i.StageFirstHeadWorldSeconds==expected.StageFirstHeadWorldSeconds&&i.StageBeatStride==expected.StageBeatStride,"shared initializer owns the first-head and nearest .4 grid stride");
+            Check(chart.Notes.Count==wanted.Notes.Count&&i.DurationSeconds==wanted.DurationSeconds,"full mapped duration and logical difficulty");
+            foreach(var n in chart.Notes){var other=wanted.Notes[n.Id];Check(n.Direction==other.Direction&&n.TimeSeconds==other.TimeSeconds&&n.HoldSeconds==other.HoldSeconds&&n.TimeSeconds+n.HoldSeconds<=i.DurationSeconds+1e-8,"every real head and hold tail survives the chart map");}
+            if(level==1)Check(chart.Notes.Exists(n=>n.HoldSeconds>0),"setup: fixed seed deck has a real hold");
+            Play(s,i);FinishDeck(s,i);Check(i.Score==1,"real presses/releases replay a perfect deck including holds");
+        }
+    }
+    static void DeckWitnessesAccumulateByRangeAndLos()
+    {
+        var s=DeckFloor(fans:0);var p=s.Player("p0");var at=Festivals.ArtCarAt(0,10);
+        s.State.Npcs.Add(new NpcState{Id="back",X=at.X+6,Z=at.Z,Yaw=90});s.State.Npcs.Add(new NpcState{Id="blocked",X=at.X+2,Z=at.Z+1});s.State.Npcs.Add(new NpcState{Id="later",X=at.X,Z=at.Z+9});s.State.Npcs.Add(new NpcState{Id="far",X=30,Z=-30});s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",X=at.X+1,Z=at.Z});
+        s.HasLineOfSight=(x,z,xx,zz)=>z!=at.Z+1;var i=Deck(s);
+        Check(i.WitnessIds.Contains("back")&&!i.WitnessIds.Contains("blocked")&&!i.WitnessIds.Contains("later")&&!i.WitnessIds.Contains("cop"),"start witnesses use inclusive 6m LOS without a facing cone, excluding cops");
+        s.Tick(3);Check(i.WitnessIds.Contains("later")&&!i.WitnessIds.Contains("far")&&i.WitnessIds.Count==2,"the moving car collects a new fan exactly once");
+        var later=s.State.Npcs.Find(n=>n.Id=="later");later.X=30;later.Z=30;Play(s,i);FinishDeck(s,i);
+        Check(Tipped(later)&&Heat(s,"later",p.Id)==0,"departed accumulated witnesses still settle score and tips");
+        Check(s.Interaction(p.InteractionId).Kind=="RideCar","completion returns to a fresh hidden plain ride");
+    }
+    static void StormsLimitDeckWitnesses()
+    {
+        var s=DeckFloor(fans:0);s.State.ElapsedSeconds=MidStorm();var p=s.Player("p0");var at=Festivals.ArtCarAt(0,s.State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;
+        Check(FestivalSimulation.DustStorm(s.State),"setup: an actual seeded storm");
+        s.State.Npcs.Add(new NpcState{Id="edge",X=p.X,Z=p.Z+5});s.State.Npcs.Add(new NpcState{Id="outside",X=p.X+5.1f,Z=p.Z});
+        var i=Deck(s);Check(i.WitnessIds.Count==1&&i.WitnessIds.Contains("edge"),"storm includes 5m and excludes 5.1m");
+    }
+    static void DeckTipsSettleExactlyOnce()
+    {
+        var s=DeckFloor(crew:4,fans:3);s.State.EncoreTier=2;s.State.ConnectedCrewCount=3;var p=s.Player("p0");int paid=10;int cash=p.Cash;s.State.LevelSales=FestivalSimulation.DayQuota(s.State)-paid;s.State.GrossSales=27;var i=Deck(s);Play(s,i);FinishDeck(s,i);
+        Check(i.Score==1&&p.Cash==cash+paid&&s.State.GrossSales==37&&FestivalSimulation.DayQuotaMet(s.State),"round(.75*3 fresh*live quota crew3*encore1.5) atomically credits cash/gross/day quota once");
+        Check(s.State.Npcs.TrueForAll(Tipped),"successful fresh fans are globally tipped");var ride=s.Interaction(p.InteractionId);Check(ride.Kind=="RideCar"&&ride.TargetId=="0"&&ride.Id!=i.Id&&ride.StartSeconds==s.State.SimulationSeconds,"completion creates a fresh same-car ride");
+        var next=Deck(s);Play(s,next);FinishDeck(s,next);s.Tick(.3);Check(p.Cash==cash+paid&&s.State.GrossSales==37,"no fan pays twice on a second set or later tick");
+    }
+    static void AnotherRiderCannotCollectOldTips()
+    {
+        var s=DeckFloor();var i=Deck(s);Play(s,i);FinishDeck(s,i);var q=s.Player("p1");var at=Festivals.ArtCarAt(0,s.State.ElapsedSeconds);q.X=at.X;q.Z=at.Z;
+        Check(Act(s,q.Id,"RideCar").Accepted&&Act(s,q.Id,"DeckSet").Accepted,"another rider takes the same completed deck");var other=s.Interaction(q.InteractionId);Play(s,other);FinishDeck(s,other);
+        Check(q.Cash==20&&s.State.LevelSales==3&&s.State.GrossSales==3,"the global tip flag also prevents another player collecting old fans");
+    }
+    static void TheFullTipThresholdIsInclusive()=>AtTheTipThreshold(.75,3);
+    static void TheMinimumTipThresholdIsInclusive()=>AtTheTipThreshold(.4,2);
+    static void AtTheTipThreshold(double score,int paid)
+    {
+        var s=DeckFloor(seed:9);var i=Deck(s);Check(i.ChartSeed==11&&RhythmChart.For(i).Notes.Count==20,"setup: fixed seed9 creates chart11 with20 real tap heads");
+        Play(s,i,score);FinishDeck(s,i);Check(i.Score==score&&s.State.LevelSales==paid,"exact "+score+" score includes its tip threshold");
+    }
+    static void HalfAndFailedDecksKeepTheirRules()
+    {
+        var s=DeckFloor(fans:4);var p=s.Player("p0");int cash=p.Cash;var i=Deck(s);Play(s,i,.6);FinishDeck(s,i);
+        Check(i.Score>=.4&&i.Score<.75&&p.Cash==cash+3&&s.State.LevelSales==3&&s.State.GrossSales==3,"a passing lower deck pays round(.75*4*2*.5)");
+        var failed=DeckFloor();var f=Deck(failed);Play(failed,f,.25);FinishDeck(failed,f);
+        Check(f.Score<.4&&failed.Player("p0").Cash==20&&failed.State.LevelSales==0&&!failed.State.Npcs.Exists(Tipped),"below .4 neither pays nor marks fans");
+        var retry=Deck(failed);Play(failed,retry);FinishDeck(failed,retry);Check(failed.State.LevelSales==3&&failed.State.Npcs.TrueForAll(Tipped),"failed fans remain eligible for a later passing set");
+    }
+    static void CancellingADeckNeverPays()
+    {
+        var s=DeckFloor();var i=Deck(s);Play(s,i);Check(Act(s,"p0","Cancel").Accepted,"explicit stop accepted");
+        Check(i.Status=="Cancelled"&&s.Player("p0").InteractionId==""&&FestivalSimulation.ArtCarOf(s.State,"p0")==-1,"cancel ends both deck and ride");
+        Check(Heat(s,"fan0","p0")==60&&Heat(s,"fan1","p0")==60,"cancel adds20 to accumulated witnesses");FinishDeck(s,i);Check(s.State.LevelSales==0&&!s.State.Npcs.Exists(Tipped),"cancel never later pays or marks fans");
+    }
+    static void PoliceAndLifecycleInterruptionsNeverPay()
+    {
+        foreach(string reason in new[]{"police","disconnect","down","round"})
+        {
+            var s=DeckFloor();var p=s.Player("p0");var i=Deck(s);Play(s,i);
+            if(reason=="police")s.State.Npcs.Add(new NpcState{Id="arrest",Kind="Cop",X=p.X,Z=p.Z,Evidence=new List<EvidenceState>{new EvidenceState{PlayerId=p.Id,Kind="WitnessedDeal",DetainAt=i.StartSeconds+i.DurationSeconds+.75}}});
+            if(reason=="disconnect")s.Disconnect(p.Id);if(reason=="down")p.Life="Downed";if(reason=="round")s.State.ElapsedSeconds=s.State.DurationSeconds;
+            FinishDeck(s,i);Check(i.Status!="Active"&&p.InteractionId==""&&s.State.LevelSales==0&&!s.State.Npcs.Exists(Tipped),reason+" ends the deck before payout or ride recreation");
+            if(reason=="police")Check(p.Life=="Detained"&&p.Cash==10,"police fine precedes financial settlement");
+        }
+    }
+    static void InvalidRestoredDecksAreRetired()
+    {
+        foreach(string invalid in new[]{"missing","disconnected","downed","detained","foreign","car","phase"})
+        {
+            var s=DeckFloor();var i=Deck(s);Play(s,i);var p=s.Player("p0");
+            if(invalid=="missing")s.State.Players.Remove(p);if(invalid=="disconnected")p.Connected=false;if(invalid=="downed")p.Life="Downed";if(invalid=="detained")p.Life="Detained";if(invalid=="foreign")p.InteractionId="other";if(invalid=="car")i.TargetId="99";if(invalid=="phase")s.State.Phase="Results";
+            var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
+            Check(restored.Interaction(i.Id).Status!="Active",invalid+" restored deck is retired immediately");restored.State.SimulationSeconds=i.StartSeconds+i.DurationSeconds+1;restored.Tick(.1);
+            Check(restored.State.LevelSales==0&&!restored.State.Interactions.Exists(x=>x.Status=="Active"&&x.Kind=="RideCar"),invalid+" never pays or recreates ride");
+        }
+    }
+    static void OldAndTippedSnapshotsRestore()
+    {
+        var s=DeckFloor();var i=Deck(s);Play(s,i);FinishDeck(s,i);var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
+        Check(restored.State.Npcs.TrueForAll(Tipped),"host snapshots retain the once-per-level flags");var repeat=Deck(restored);Play(restored,repeat);FinishDeck(restored,repeat);Check(restored.State.LevelSales==3,"restored flags prevent replay tips");
+        var old=JsonNode.Parse(JsonSerializer.Serialize(DeckFloor().State,Json));foreach(var npc in old["Npcs"].AsArray())npc.AsObject().Remove("Tipped");restored.Restore(JsonSerializer.Deserialize<RoundState>(old.ToJsonString(),Json));
+        Check(!restored.State.Npcs.Exists(Tipped),"older snapshots default untipped");var fresh=Deck(restored);Play(restored,fresh);FinishDeck(restored,fresh);Check(restored.State.LevelSales==3,"older restored untipped fans may tip");
+    }
+    static void DecksStayOutsideGroupJudging()
+    {
+        var s=DeckFloor(fans:0);var p=s.Player("p0");var q=s.Player("p1");q.X=p.X;q.Z=p.Z+.5f;
+        var n=new NpcState{Id="partner",X=p.X,Z=p.Z+2,Yaw=180,CanTalk=true,Observers=new List<ObserverState>{new ObserverState{PlayerId=p.Id,Suspicion=40},new ObserverState{PlayerId=q.Id,Suspicion=40}}};s.State.Npcs.Add(n);var deck=Deck(s);
+        Check(!FestivalSimulation.DancesVisibly(deck.Kind)&&!FestivalSimulation.Dancing(deck),"deck retains riding identity outside spacing/steps");Check(Act(s,q.Id,"Dance",n.Id).Accepted,"setup: ground friend starts actual dance");var dance=s.Interaction(q.InteractionId);Play(s,dance);FinishDeck(s,dance);
+        Check(deck.Status=="Active","setup: longer deck still active at friend's verdict");Check(Heat(s,n.Id,p.Id)==40&&Heat(s,n.Id,q.Id)==25,"deck rider neither sets idle worst nor receives a friend's group verdict");
+    }
 
     static void ArtCarsCarryRidersOutOfSight()
     {

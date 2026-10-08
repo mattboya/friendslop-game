@@ -85,6 +85,9 @@ namespace Festival.Network
         // Public snapshots/projected latest lines contain only accepted spoken turns/replies/barks; checks and outcomes stay private.
         // Early command rejections with no result identity echo only the bounded issued command ID in a detached reply;
         // validation, admission, command limits and authoritative dedupe receipts keep their existing behavior.
+        // PLAYA-5: DeckSet replaces an owned plain RideCar before the busy gate, carries the shared 16-beat stage chart,
+        // remains visibly DeckSet/riding and settles accumulated spectators once. NpcState.Tipped persists only on the host;
+        // the latest deck tip amount/delivery/world lifetime is owner-only and never enters public speech.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -831,7 +834,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
+                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
             }
             if(!spirit)
             {
@@ -865,6 +868,10 @@ namespace Festival.Network
                 if(!latest.Retracted){copy.NpcSpeech=latest.Text;copy.NpcSpeaker=latest.Speaker;}
                 copy.NpcSpeechUntil=source.SimulationSeconds+(FestivalSimulation.SpeechActive(source,latest)?FestivalSimulation.SpeechRemainingSeconds(source,copy):0);
             }
+            // A current owner receipt supplements only empty compatibility speech. Retained public identity/text stay together.
+            var receiptOwner=view.Players.Find(p=>p.Id==viewer);string tip=FestivalSimulation.DeckTipSpeech(source,local);
+            if(receiptOwner!=null&&tip!=""&&receiptOwner.SpeechDeliveryId=="")
+            {receiptOwner.NpcSpeech=tip;receiptOwner.NpcSpeaker="FESTIVALGOERS";receiptOwner.NpcSpeechUntil=source.Phase==FestivalSimulation.MinigamePhase?local.DeckTipUntilWorldSeconds:local.DeckTipUntilWorldSeconds+source.Booth.Seconds;}
             view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active");return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
             // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map, not even from
