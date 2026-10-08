@@ -130,6 +130,11 @@ namespace Festival.Presentation
         }
         /// <summary>Only new glyphs on a continuously visible bubble. Creating/reopening a bubble never plays a backlog.</summary>
         public event Action<FestivalSpeechDeliveryTracker.Delivery,int,int> GlyphsRevealed;
+        FestivalBabble babble;
+        public FestivalBabble Babble
+        {
+            get{if(babble==null){babble=new FestivalBabble(transform);GlyphsRevealed+=babble.PlayRevealed;}return babble;}
+        }
         TMP_FontAsset font;
         Material backing;
 
@@ -137,14 +142,15 @@ namespace Festival.Presentation
         {
             if(session==null)session=GetComponent<FestivalSession>();
             if(session==null||!session.enabled||session.State==null)return;
-            Apply(session.State,id=>session.WorldCharacter(id)?.transform,session.ViewCamera.transform,session.EyePosition,session.LocalPlayerId,session.Profile.Data.ReducedMotion,session.ConnectionGeneration,session.MenuOpen,session.EstimatedWorldSeconds);
+            Apply(session.State,id=>session.WorldCharacter(id)?.transform,session.ViewCamera.transform,session.EyePosition,session.LocalPlayerId,session.Profile.Data.ReducedMotion,session.ConnectionGeneration,session.MenuOpen,session.EstimatedWorldSeconds,session.Profile.Data);
         }
         /// <summary>Draw the filtered session view after its actors, vision markers and camera have moved.</summary>
-        public void Apply(RoundState state,Func<string,Transform> actorFor,Transform view,Vector3 eye,string localPlayerId,bool reducedMotion,int generation=0,bool hidden=false,double? worldSeconds=null)
+        public void Apply(RoundState state,Func<string,Transform> actorFor,Transform view,Vector3 eye,string localPlayerId,bool reducedMotion,int generation=0,bool hidden=false,double? worldSeconds=null,ProfileData profile=null)
         {
             if(state==null){Clear();return;}
             if(cacheRound!=state.RoundId||cacheGeneration!=generation){ClearAssets();cacheRound=state.RoundId;cacheGeneration=generation;}
             Deliveries.Follow(state,generation,worldSeconds??FestivalSimulation.WorldSeconds(state));
+            Babble.Follow(state,actorFor,eye,localPlayerId,hidden||view==null||!enabled,profile,Deliveries.Deliveries);
             shown.Clear();stack.Clear();
             if(!hidden&&view!=null&&enabled)foreach(var speech in Deliveries.Deliveries)
             {
@@ -227,6 +233,7 @@ namespace Festival.Presentation
         }
         void ClearAssets()
         {
+            if(babble!=null){GlyphsRevealed-=babble.PlayRevealed;babble.Dispose();babble=null;}
             foreach(var bubble in bubbles.Values)if(bubble.Root!=null){bubble.Root.gameObject.SetActive(false);Dispose(bubble.Root.gameObject);}bubbles.Clear();
             foreach(var bubble in pool)if(bubble.Root!=null)Dispose(bubble.Root.gameObject);pool.Clear();
             if(backing!=null)Dispose(backing);backing=null;

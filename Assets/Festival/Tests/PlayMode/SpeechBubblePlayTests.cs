@@ -203,5 +203,62 @@ namespace Festival.Tests
             session.Profile.Data.ThirdPerson=true;yield return null;yield return null;
             Assert.That(root.GetComponentsInChildren<TextMeshPro>(false),Has.Length.EqualTo(1),"third person also hides your own-head speech");
         }
+        [UnityTest]public IEnumerator AHostedTalkUsesEffectsAndMasterAndDisposesItsAudioOnDisableAndLeave()
+        {
+            var world=new GameObject("Babble hosted world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Babble hosted session");var session=root.AddComponent<FestivalSession>();yield return null;
+            session.Host("Tester",HostPort);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+            yield return StartLevel(session);
+            var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+            var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");Assert.That(npc,Is.Not.Null);
+            npc.X=player.X+.6f;npc.Z=player.Z;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.LastTalkSeconds=-10;
+            float master=session.Profile.Data.MasterVolume,listener=AudioListener.volume;
+            AudioSource[] Voices()=>Array.FindAll(root.GetComponentsInChildren<AudioSource>(true),source=>source.gameObject.name=="Festival babble");
+            try
+            {
+                session.Profile.Data.EffectsVolume=.4f;session.Profile.Data.MasterVolume=0;session.Profile.Data.MuteWhenUnfocused=false;
+                session.Command("Talk",npc.Id);Assert.That(player.NpcSpeech,Is.Not.Empty,session.Message);
+                float deadline=Time.realtimeSinceStartup+5;
+                while(Array.Find(Voices(),source=>source.clip!=null)==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                var voices=Voices();Assert.That(voices,Has.Length.EqualTo(2),"the actual session reveal creates one bounded pair of spatial sources");
+                Assert.That(Array.Find(voices,source=>source.clip!=null),Is.Not.Null);
+                foreach(var source in voices){Assert.That(source.spatialBlend,Is.EqualTo(1));Assert.That(source.volume,Is.EqualTo(.12f).Within(.0001f));}
+                Assert.That(AudioListener.volume,Is.Zero,"the existing master listener mutes speech without a second master multiplication");
+                session.Profile.Data.EffectsVolume=0;yield return null;yield return null;
+                foreach(var source in voices)Assert.That(source.volume,Is.Zero,"the active source follows the real Effects slider");
+                var clips=new System.Collections.Generic.HashSet<AudioClip>();foreach(var source in voices)if(source.clip!=null)clips.Add(source.clip);
+                Assert.That(clips.Count,Is.GreaterThan(0));session.enabled=false;yield return null;yield return null;
+                foreach(var source in voices)Assert.That(source==null,Is.True,"disable destroys each owned source once");
+                foreach(var clip in clips)Assert.That(clip==null,Is.True,"disable releases generated samples too");
+                session.enabled=true;yield return null;yield return null;
+                Assert.That(Voices(),Is.Empty,"reenabling cannot replay a retired accepted delivery");
+                session.Leave();yield return null;Assert.That(Voices(),Is.Empty);
+            }
+            finally{session.Profile.Data.MasterVolume=master;session.Leave();AudioListener.volume=listener;}
+        }
+        [UnityTest]public IEnumerator LateVisibleSpeechAndMenuOrRangeReturnsNeverPlayAnAudioBacklog()
+        {
+            var root=new GameObject("Babble visibility");var presenter=root.AddComponent<FestivalSpeechBubbles>();
+            var body=new GameObject("Babble visible actor");var camera=new GameObject("Babble visibility camera");
+            var state=new RoundState{RoundId="babble-visibility",Phase="Playing"};state.Npcs.Add(new NpcState{Id="speaker"});
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="babble-visibility:speech:1",Sequence=1,SpeakerId="speaker",Text="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",ExpiresAtWorldSeconds=7});
+            void Draw(double time,bool hidden=false){state.SimulationSeconds=time;presenter.Apply(state,id=>body.transform,camera.transform,Vector3.zero,"you",true,hidden:hidden);}
+            AudioSource[] Voices()=>root.GetComponentsInChildren<AudioSource>(true);
+            try
+            {
+                Draw(.2);Assert.That(Voices(),Is.Empty,"late first observation is silent");
+                Draw(.24);Assert.That(Array.Find(Voices(),source=>source.isPlaying),Is.Not.Null,"a subsequent visible glyph really plays audio");
+                Draw(.3,true);Assert.That(Array.Exists(Voices(),source=>source.isPlaying),Is.False);
+                Draw(.4);Assert.That(Array.Exists(Voices(),source=>source.isPlaying),Is.False,"reopening the menu skips missed glyphs");
+                Draw(.44);Assert.That(Array.Exists(Voices(),source=>source.isPlaying),Is.True);
+                body.transform.position=Vector3.right*15.001f;Draw(.5);Assert.That(Array.Exists(Voices(),source=>source.isPlaying),Is.False);
+                body.transform.position=Vector3.right*2;Draw(.6);Assert.That(Array.Exists(Voices(),source=>source.isPlaying),Is.False,"walking back into range skips missed glyphs");
+                Draw(.64);Assert.That(Array.Exists(Voices(),source=>source.isPlaying),Is.True);
+                state.PublicSpeech[0].Retracted=true;Draw(.65);yield return null;
+                Assert.That(Voices(),Is.Empty,"retraction retires this speaker's only cache");
+            }
+            finally{presenter.Clear();UnityEngine.Object.Destroy(root);UnityEngine.Object.Destroy(body);UnityEngine.Object.Destroy(camera);}
+            yield return null;
+        }
     }
 }
