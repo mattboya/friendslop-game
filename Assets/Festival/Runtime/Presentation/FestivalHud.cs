@@ -1022,7 +1022,7 @@ namespace Festival.Presentation
         {
             var hands=session.ViewCamera?.GetComponentInChildren<FestivalHands>(true);
             hands?.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);
-            hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.Controls.Spin.IsPressed()&&!session.PointerFree&&FestivalSimulation.CanSpinPoi(player));
+            hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.Controls.Spin.IsPressed()&&!session.PointerFree&&FestivalSimulation.CanSpinPoi(player),FestivalSimulation.ArtCarOf(state,player.Id)>=0);
             session.LocalWorldCharacter?.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);
         }
         private void ClearPendingEquipment()
@@ -1031,7 +1031,7 @@ namespace Festival.Presentation
             pendingEquipment=false;pendingEquipmentItem="";pendingEquipmentRound="";pendingEquipmentCommand="";
             var hands=session?.ViewCamera?.GetComponentInChildren<FestivalHands>(true);hands?.ClearManualEquipment();
             var state=session?.State;var player=session?.LocalPlayer;
-            if(state!=null&&player!=null)hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.Controls.Spin.IsPressed()&&!session.PointerFree&&FestivalSimulation.CanSpinPoi(player));
+            if(state!=null&&player!=null)hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.Controls.Spin.IsPressed()&&!session.PointerFree&&FestivalSimulation.CanSpinPoi(player),FestivalSimulation.ArtCarOf(state,player.Id)>=0);
             if(player!=null)session?.LocalWorldCharacter?.SetEquippedItem(player.EquippedItemId);
             session?.LocalWorldCharacter?.ClearManualEquipment();
         }

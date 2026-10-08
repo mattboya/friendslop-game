@@ -1,8 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Festival.Core;
 using Festival.Presentation;
+using Festival.Network;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -399,6 +403,113 @@ namespace Festival.Tests
             finally{Time.captureDeltaTime=0;Object.Destroy(root);}
         }
 
+        [UnityTest]public IEnumerator ReceivingHandoffSuppressesHiddenPoiHandLoops()
+        {
+            var cameraObject=new GameObject("POI-4 hidden pair camera");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(cameraObject.AddComponent<Camera>(),"hidden_pair_player");
+                Assert.That(hands,Is.Not.Null,"actual first-person hands are available");
+                var player=new PlayerState{Id="hidden_pair_player",Life="Alive",EquippedItemId="poi_practice"};
+                hands.SetState(player,receiving:true,spinning:true);
+                yield return new WaitForSeconds(.8f);
+                var rigs=Object.FindObjectsByType<FestivalPoiRig>(FindObjectsInactive.Include,FindObjectsSortMode.None);
+                Assert.That(rigs.Length,Is.EqualTo(2),"the paired rig exists");
+                Assert.That(rigs.All(r=>!r.gameObject.activeInHierarchy),Is.True,"pending handoff hides both poi");
+                var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);
+                for(float start=Time.time;Time.time-start<1.5f;){yield return null;sweep.Encapsulate(hands.transform.localPosition);}
+                Assert.That(sweep.size.x,Is.LessThan(.012f),"POI-4: hidden poi must not circle empty first-person hands");
+                hands.SetState(player,spinning:true);
+                yield return new WaitForSeconds(.8f);
+                rigs=Object.FindObjectsByType<FestivalPoiRig>(FindObjectsSortMode.None);
+                Assert.That(rigs.Length,Is.EqualTo(2));
+                Assert.That(rigs.All(r=>r.gameObject.activeInHierarchy&&r.Spinning),Is.True,"visible poi resume their ordinary spin after receipt ends");
+            }
+            finally{Object.Destroy(cameraObject);Time.captureDeltaTime=0;}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator RidingFreezesWalkingPhaseAndKeepsDismountMotionBaselinesCurrent()
+        {
+            var ridingCamera=new GameObject("impl:U55 phase rider");var standingCamera=new GameObject("impl:U55 phase reference");float capture=Time.captureDeltaTime;Time.captureDeltaTime=1/60f;
+            try
+            {
+                var rider=FestivalHands.Create(ridingCamera.AddComponent<Camera>(),"impl:U55-phase");var reference=FestivalHands.Create(standingCamera.AddComponent<Camera>(),"impl:U55-phase");
+                var player=new PlayerState{Id="impl:U55-phase",EquippedItemId="poi_practice"};rider.SetState(player);reference.SetState(player);
+                for(float start=Time.time;Time.time-start<.8f;)
+                {var step=Vector3.forward*(1.2f*Time.deltaTime);ridingCamera.transform.position+=step;standingCamera.transform.position+=step;yield return null;}
+                rider.SetState(player,riding:true);
+                for(float start=Time.time;Time.time-start<.6f;)
+                {
+                    ridingCamera.transform.position+=Vector3.forward*(1.2f*Time.deltaTime);
+                    ridingCamera.transform.rotation=standingCamera.transform.rotation=Quaternion.Euler(0,(Time.time-start)*40,0);
+                    yield return null;
+                }
+                rider.SetState(player);yield return null;yield return null;
+                float difference=Vector3.Distance(rider.transform.localPosition,reference.transform.localPosition);
+                for(float start=Time.time;Time.time-start<1f;)
+                {
+                    var step=Vector3.forward*(1.2f*Time.deltaTime);ridingCamera.transform.position+=step;standingCamera.transform.position+=step;
+                    yield return null;difference=Mathf.Max(difference,Vector3.Distance(rider.transform.localPosition,reference.transform.localPosition));
+                }
+                Assert.That(difference,Is.LessThan(.00005f),"riding preserves the stationary reference's walking phase and current camera baselines through dismount");
+            }
+            finally{Object.Destroy(ridingCamera);Object.Destroy(standingCamera);Time.captureDeltaTime=capture;}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator RidingPreservesDeliberatePoiSpinPerformanceAndReducedMotion()
+        {
+            var cameraObject=new GameObject("impl:U55 deliberate rider spin camera");float capture=Time.captureDeltaTime;Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(cameraObject.AddComponent<Camera>(),"impl:U55-deliberate");
+                var player=new PlayerState{Id="impl:U55-deliberate",EquippedItemId="poi_practice"};
+                var spans=new float[2];
+                for(int mode=0;mode<2;mode++)
+                {
+                    hands.ReducedMotion=mode==1;hands.SetState(player,spinning:true,riding:true);yield return new WaitForSeconds(.8f);
+                    var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);
+                    for(float start=Time.time;Time.time-start<1.2f;)
+                    {cameraObject.transform.position+=Vector3.forward*(1.2f*Time.deltaTime);yield return null;sweep.Encapsulate(hands.transform.localPosition);}
+                    spans[mode]=sweep.size.x;
+                    Assert.That(cameraObject.GetComponentsInChildren<FestivalPoiRig>().All(r=>r.Spinning&&!r.Carrying),Is.True,"deliberate spin remains independent of riding locomotion");
+                    Assert.That(spans[mode],Is.GreaterThan(.04f),"riding may suppress walking, while visible spinning still swings the hands");
+                }
+                Assert.That(spans[1],Is.InRange(spans[0]*.6f,spans[0]*.9f),"reduced motion still shrinks deliberate riding hand loops");
+                player.VisualPose="Poi";player.EquippedItemId="";hands.SetState(player,receiving:true,riding:true);yield return new WaitForSeconds(.8f);
+                var performance=new Bounds(hands.transform.localPosition,Vector3.zero);
+                for(float start=Time.time;Time.time-start<1f;){yield return null;performance.Encapsulate(hands.transform.localPosition);}
+                Assert.That(cameraObject.GetComponentsInChildren<FestivalPoiRig>().All(r=>r.Spinning),Is.True,"the legitimate Q performance remains visible independently of held-click intent");
+                Assert.That(performance.size.x,Is.GreaterThan(.04f),"the Q performance still drives its deliberate hand loop");
+            }
+            finally{Object.Destroy(cameraObject);Time.captureDeltaTime=capture;}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator LittleSpoonReceiptSuppressesHiddenPoiUntilThePairReturns()
+        {
+            var cameraObject=new GameObject("impl:U55 receipt camera");float capture=Time.captureDeltaTime;Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(cameraObject.AddComponent<Camera>(),"impl:U55-receipt");
+                var player=new PlayerState{Id="impl:U55-receipt",EquippedItemId="poi_practice"};
+                hands.SetState(player,spinning:true);yield return new WaitForSeconds(.8f);
+                player.VisualReceiptSequence=1;player.VisualReceivedItem="little_spoon";player.VisualReceiptAt=10;
+                hands.SetState(player,10,spinning:true);yield return new WaitForSeconds(.25f);
+                var rigs=cameraObject.GetComponentsInChildren<FestivalPoiRig>(true);
+                Assert.That(rigs.Length,Is.EqualTo(2));Assert.That(rigs.All(r=>!r.gameObject.activeInHierarchy),Is.True,"the passive neck receipt hides equipped poi for .85 seconds");
+                var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);
+                for(float start=Time.time;Time.time-start<.4f;){yield return null;sweep.Encapsulate(hands.transform.localPosition);}
+                Assert.That(sweep.size.x,Is.LessThan(.012f),"a Little Spoon receipt cannot spin empty first-person hands");
+                yield return new WaitForSeconds(.3f);hands.SetState(player,11,spinning:true);yield return null;
+                rigs=cameraObject.GetComponentsInChildren<FestivalPoiRig>(true);
+                Assert.That(rigs.All(r=>r.gameObject.activeInHierarchy&&r.Spinning),Is.True,"the visible equipped pair resumes after the exact receipt window");
+            }
+            finally{Object.Destroy(cameraObject);Time.captureDeltaTime=capture;}
+            yield return null;
+        }
+
         // POI-1: your own hands spin the poi while you hold left click, with the camera still, and they hang again once you let go.
         // Measured on a new profile's reduced-motion setting, what players get (POI-3).
         [UnityTest]public IEnumerator FirstPersonPoiSpinWhileHeld()
@@ -482,6 +593,143 @@ namespace Festival.Tests
                 Assert.That(later,Is.GreaterThan(first*8f),"A new pose should start slowly and accelerate");
             }
             finally{Object.Destroy(root);Application.targetFrameRate=rate;}
+        }
+    }
+
+    [DefaultExecutionOrder(200)]
+    public sealed class HandMotionFrameProbe:MonoBehaviour
+    {
+        public System.Action Observe;
+        void LateUpdate(){Observe?.Invoke();}
+    }
+
+    public sealed class HandSessionMotionTests:FestivalPlayModeTest
+    {
+        static FestivalPoiRig[] Pair(FestivalSession session)=>session.ViewCamera.GetComponentsInChildren<FestivalPoiRig>(true);
+        static FestivalHands Hands(FestivalSession session)=>session.ViewCamera.GetComponentInChildren<FestivalHands>(true);
+        static IEnumerator Sweep(FestivalHands hands,float seconds,Bounds[] result)
+        {
+            result[0]=new Bounds(hands.transform.localPosition,Vector3.zero);
+            for(float until=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<until;)
+            {yield return null;result[0].Encapsulate(hands.transform.localPosition);}
+        }
+
+        [UnityTest]public IEnumerator MovingArtCarRideKeepsHandsAndPoiAtRestThenWalkingRecovers(){yield return ArtCarHands(false);}
+        [UnityTest]public IEnumerator MovingDeckSetKeepsHandsAndPoiAtRestThenDismountRecovers(){yield return ArtCarHands(true);}
+        IEnumerator ArtCarHands(bool deck)
+        {
+            var world=new GameObject("impl:U55 rider world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl:U55 rider host");var session=root.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                session.Host("Rider tester",HostPort);
+                for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var sim=Simulation(session);var p=sim.Player(session.LocalPlayerId);
+                sim.State.FestivalIndex=Festivals.PlayaFestival;sim.State.UnlockedFestivalCount=2;
+                yield return StartLevel(session);sim.State.Npcs.Clear();p.Effects.Clear();p.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});session.Command("Equip",item:"poi_practice");
+                var at=Festivals.ArtCarAt(0,sim.State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;session.Command(FestivalSimulation.RideCarKind);
+                Assert.That(FestivalSimulation.ArtCarOf(sim.State,p.Id),Is.EqualTo(0),session.Message);
+                if(deck){session.Command(FestivalSimulation.DeckSetKind);Assert.That(sim.Interaction(p.InteractionId)?.Kind,Is.EqualTo(FestivalSimulation.DeckSetKind),session.Message);}
+                yield return new WaitForSeconds(.8f);
+                var hands=Hands(session);Assert.That(hands.gameObject.activeInHierarchy,Is.True,"rider's actual first-person hands remain visible");
+                var startEye=session.ViewCamera.transform.position;float start=Time.realtimeSinceStartup;var sweep=new Bounds[1];yield return Sweep(hands,1.8f,sweep);
+                float travelled=Vector3.Distance(startEye,session.ViewCamera.transform.position);float speed=travelled/(Time.realtimeSinceStartup-start);
+                Assert.That(speed,Is.InRange(.95f,1.4f),"the actual authority and session camera travel at the car's 1.2 m/s, without fixture teleports");
+                Assert.That(sweep[0].size.x,Is.LessThan(.002f),"car travel must not become camera-local walking bob");
+                Assert.That(Pair(session).All(r=>r.gameObject.activeInHierarchy&&!r.Carrying&&!r.Spinning),Is.True,"ridden poi hang instead of wheeling");
+                var cords=Pair(session).Select(r=>r.GetComponent<LineRenderer>()).ToArray();
+                Assert.That(cords.Max(c=>Vector3.Angle(c.GetPosition(1)-c.GetPosition(0),Vector3.down)),Is.LessThan(25f),"rider's weighted heads settle under gravity");
+                // A completed riding frame updates both motion baselines, so stopping and looking on dismount creates no stale travel kick.
+                session.ApplyLook(new Vector2(80,0));yield return new WaitForSeconds(.8f);session.Command("Cancel");yield return null;yield return null;
+                Assert.That(FestivalSimulation.ArtCarOf(sim.State,p.Id),Is.EqualTo(-1));
+                yield return Sweep(hands,.4f,sweep);Assert.That(sweep[0].size.x,Is.LessThan(.002f),"dismount at rest has no accumulated travel or yaw spike");
+                Assert.That(Pair(session).All(r=>!r.Carrying),Is.True,"dismount at rest does not invent walking");
+                // Frame-sized authoritative ground steps exercise the same camera writer at walking speed.
+                var walking=new Bounds(hands.transform.localPosition,Vector3.zero);
+                for(float until=Time.realtimeSinceStartup+1.8f;Time.realtimeSinceStartup<until;)
+                {p.Z+=1.2f*Time.unscaledDeltaTime;yield return null;walking.Encapsulate(hands.transform.localPosition);}
+                Assert.That(walking.size.x,Is.GreaterThan(.007f),"ordinary camera travel still bobs at the same 1.2 m/s after dismount");
+                Assert.That(Pair(session).All(r=>r.Carrying),Is.True,"walking poi resume their ordinary carry wheels");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator JoinedPendingEquipmentClearsOnTheFirstRenderedRideWithoutWalkingPoi()
+        {
+            UseAVirtualKeyboard("impl:U55 pending rider keyboard");
+            var world=new GameObject("impl:U55 pending rider world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("impl:U55 pending rider authority");var host=hostRoot.AddComponent<FestivalSession>();yield return null;
+            var friendRoot=new GameObject("impl:U55 pending rider owner");var friend=friendRoot.AddComponent<FestivalSession>();var hud=friendRoot.AddComponent<FestivalHud>();yield return null;
+            var nextSnapshot=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);
+            var pending=typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance);
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);host.Controls.Map.Disable();
+                var sim=Simulation(host);sim.State.FestivalIndex=Festivals.PlayaFestival;sim.State.UnlockedFestivalCount=2;
+                // A joined owner uses a real issued Equip, result, stale view and subsequent riding snapshot.
+                friend.Join("Rider","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);var p=sim.Player(friend.LocalPlayerId);p.X=0;p.Z=19;friend.Command("Ready");yield return new WaitForSeconds(.2f);yield return StartLevel(host,friend.LocalPlayerId);
+                sim.State.Npcs.Clear();p.Effects.Clear();p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});p.EquippedItemId="confetti";
+                var at=Festivals.ArtCarAt(0,sim.State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;yield return new WaitForSeconds(.3f);
+                for(float until=Time.realtimeSinceStartup+1;Time.realtimeSinceStartup<until;)
+                {at=Festivals.ArtCarAt(0,sim.State.ElapsedSeconds);p.X=at.X;p.Z=at.Z;yield return null;}
+                Assert.That(friend.LocalPlayer.Inventory.Count,Is.EqualTo(2));Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("confetti"));
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);yield return Tap(Key.Digit2,.1f);
+                Assert.That(p.EquippedItemId,Is.EqualTo("poi_practice"));Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("confetti"));Assert.That(pending.GetValue(hud),Is.True,"real accepted intent remains pending against the stale view");
+                Assert.That(sim.Execute(p.Id,new GameCommand{Id="impl:U55-pending-board",Kind=FestivalSimulation.RideCarKind}).Accepted,Is.True);
+                bool sampled=false,carrying=false,cleared=false;var probe=friendRoot.AddComponent<HandMotionFrameProbe>();
+                probe.Observe=()=>
+                {
+                    if(sampled||friend.State==null||FestivalSimulation.ArtCarOf(friend.State,p.Id)<0)return;
+                    sampled=true;carrying=Pair(friend).Any(r=>r.Carrying);cleared=!(bool)pending.GetValue(hud);
+                };
+                nextSnapshot.SetValue(host,0d);
+                for(float until=Time.realtimeSinceStartup+3;!sampled&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(sampled,Is.True,"the real joined ride reaches a completed production LateUpdate frame");
+                Assert.That(cleared,Is.True,"the actual HUD retires pending intent on the first ride view");
+                Assert.That(carrying,Is.False,"the same rendered frame keeps riding context when HUD clears the pending hand override");
+                probe.Observe=null;
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendRoot);Object.Destroy(hostRoot);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator HeldMouseHandoffAndLittleSpoonReceiptKeepHiddenHandsStill()
+        {
+            UseAVirtualMouse("impl:U55 handoff mouse");
+            var world=new GameObject("impl:U55 handoff world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl:U55 handoff host");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            void Hold(bool down)=>InputSystem.QueueStateEvent(TestMouse,new MouseState().WithButton(MouseButton.Left,down));
+            try
+            {
+                session.Host("Hands tester",HostPort);
+                for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var friend=sim.AddPlayer("impl:U55-donor","Sam");friend.Ready=true;
+                yield return StartLevel(session);sim.State.Npcs.Clear();player.Effects.Clear();player.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});session.Command("Equip",item:"poi_practice");
+                friend.X=player.X+1;friend.Z=player.Z;friend.Inventory.Add(new ItemStack{ItemId="little_spoon",Count=1});
+                Hold(true);yield return new WaitForSeconds(.8f);
+                Assert.That(player.VisualPoiSpin,Is.True,"the real input/host path sees the held mouse");Assert.That(Pair(session).All(r=>r.gameObject.activeInHierarchy&&r.Spinning),Is.True);
+                Assert.That(sim.Execute(friend.Id,new GameCommand{Id="impl:U55-offer-spoon",Kind="Transfer",TargetId=player.Id,ItemId="little_spoon",Amount=1}).Accepted,Is.True);
+                yield return new WaitForSeconds(.3f);
+                Assert.That(session.State.Transfers.Count,Is.EqualTo(1));Assert.That(Pair(session).All(r=>!r.gameObject.activeInHierarchy),Is.True,"actual pending transfer hides the pair");
+                var sweep=new Bounds[1];yield return Sweep(Hands(session),.6f,sweep);
+                Assert.That(sweep[0].size.x,Is.LessThan(.012f),"real pending input cannot animate hidden poi");
+                session.Command("AcceptTransfer",sim.State.Transfers[0].Id);yield return new WaitForSeconds(.25f);
+                Assert.That(player.VisualReceivedItem,Is.EqualTo("little_spoon"));Assert.That(player.EquippedItemId,Is.EqualTo("poi_practice"));
+                Assert.That(Pair(session).All(r=>!r.gameObject.activeInHierarchy),Is.True,"real Little Spoon receipt temporarily wins over equipped poi");
+                yield return Sweep(Hands(session),.35f,sweep);
+                Assert.That(sweep[0].size.x,Is.LessThan(.012f),"real receipt input cannot animate hidden poi");
+                yield return new WaitForSeconds(.5f);
+                Assert.That(Pair(session).All(r=>r.gameObject.activeInHierarchy&&r.Spinning),Is.True,"the visible pair resumes while the mouse is still held");
+                Hold(false);yield return new WaitForSeconds(.2f);Assert.That(Pair(session).All(r=>!r.Spinning),Is.True,"release still stops the real spin");
+            }
+            finally{Hold(false);session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
         }
     }
 }

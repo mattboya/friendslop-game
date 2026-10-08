@@ -29,7 +29,7 @@ namespace Festival.Presentation
         Transform attachments;
         FestivalPoiRig leftPoi,rightPoi;
         string pairItem="poi_led";
-        bool carryPoi;
+        bool carryPoi,riding;
         GameObject carriedBand;
         GameObject unpaidProp,equippedProp;
         string unpaidId="",equippedId="";
@@ -112,8 +112,9 @@ namespace Festival.Presentation
             prop.transform.localPosition=position;prop.transform.localRotation=resource.StartsWith("FestivalStock",System.StringComparison.Ordinal)?Quaternion.Euler(0,180,0):Quaternion.identity;prop.transform.localScale=Vector3.one*scale;
             return prop;
         }
-        public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false,bool spinning=false)
+        public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false,bool spinning=false,bool riding=false)
         {
+            this.riding=riding;
             if(player!=null&&receiptSequence!=player.VisualReceiptSequence)
             {
                 receiptSequence=player.VisualReceiptSequence;receiptItem=player.VisualReceivedItem;receiptEquipped=player.EquippedItemId;
@@ -171,9 +172,10 @@ namespace Festival.Presentation
                 rightPoi=FestivalPoiRig.Create(attachments,RightPalm,1,wanted=="poi_led",true);
             }
             bool showPoi=wanted!=""&&(alive||poi);
+            bool spin=spinning&&showPoi;
             foreach(var rig in new[]{leftPoi,rightPoi})
-                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi||spinning;}
-            carryPoi=!poi&&!spinning;performing=poi||spinning;
+                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi||spin;}
+            carryPoi=!riding&&!poi&&!spin;performing=poi||spin;
             if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !showPoi && held=="");
             if(unpaidProp!=null)unpaidProp.SetActive(alive&&!poi);
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&alive);
@@ -229,9 +231,10 @@ namespace Festival.Presentation
             }
             var camera=transform.parent;
             float distance=Vector3.Distance(camera.position,previousCameraPosition);previousCameraPosition=camera.position;
-            float speed=distance<1?distance/Mathf.Max(.001f,Time.deltaTime):0;
+            float speed=!riding&&distance<1?distance/Mathf.Max(.001f,Time.deltaTime):0;
+            // Art-car/deck travel moves the view, while the rider stands on the deck. Keep camera baselines current for dismount.
             movement=Mathf.Lerp(movement,Mathf.Clamp01(speed/3),blendPose);
-            if(distance<1)walkPhase+=distance*5;
+            if(!riding&&distance<1)walkPhase+=distance*5;
             float yaw=camera.eulerAngles.y;
             turnSway=Mathf.Lerp(turnSway,Mathf.Clamp(Mathf.DeltaAngle(previousCameraYaw,yaw),-3,3)*-.003f,blendPose);previousCameraYaw=yaw;
             float handoff=Mathf.Clamp01((Time.time-handoffAt)/.65f);

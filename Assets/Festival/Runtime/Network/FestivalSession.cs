@@ -1010,7 +1010,7 @@ namespace Festival.Network
                 wasLying=lying;
             }
             ThirdPersonView=FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),spinHeld&&FestivalSimulation.CanSpinPoi(player));}
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),spinHeld&&FestivalSimulation.CanSpinPoi(player),FestivalSimulation.ArtCarOf(State,player.Id)>=0);}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
             // the eye's glide (rate 20) so it keeps it there as it turns, at any frame rate (POLO-7); the mouse still aims it, and the
