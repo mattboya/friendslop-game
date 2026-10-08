@@ -47,6 +47,7 @@ namespace Festival.Core
             if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
             foreach(var interaction in state.Interactions)if(interaction==null||!RhythmChart.ValidStageAnchor(interaction))throw new ArgumentException("Invalid snapshot stage chart");
             ValidateDeathState(state);
+            ValidateCashFindState(state);
             state.SchemaVersion=RoundState.CurrentSchemaVersion;
             RestoreCampEggs(state);
             RestoreStarterShelf(state);
@@ -191,7 +192,7 @@ namespace Festival.Core
             foreach(var offer in State.Transfers.ToArray())ReturnOffer(offer);
             foreach(var player in connected){ReturnHeldOffer(player);player.MapReady=false;player.Ready=false;}
             // The level runs the table's length whatever the round was saved with (a snapshot from before weekends held 600 s).
-            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;ClearGiggleGas();Spin(connected);DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();PlaceBooth();
+            State.LaunchAtSeconds=0;State.DurationSeconds=Festivals.For(State).DurationSeconds;ClearGiggleGas();ResetCashFinds();Spin(connected);ArmCashFinds();DealRoles();DealTwists();RollGiggleTank();PlaceCloudClue();PlaceBooth();
         }
         void BeginCampReview()
         {

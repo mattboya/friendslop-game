@@ -93,6 +93,7 @@ namespace Festival.Network
         // death fields and sequenced semantic gear-loss notices reach only their owner; ground Drop replies name the item.
         // Frozen positive-cash death summaries retain every round-local event in immutable world time for all viewers,
         // including spirits; current balances/gear/positions and owner gear-loss notices keep their existing privacy filters.
+        // Personal random cash piles carry CashFind; host-only attempt index/deadline and DealSeed remain omitted.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -853,7 +854,7 @@ namespace Festival.Network
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
-                view.Drops=FestivalSimulation.VisibleDrops(source);view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
+                view.Drops=FestivalSimulation.VisibleDrops(source).ConvertAll(d=>new DropState{Id=d.Id,ItemId=d.ItemId,OwnerId=d.OwnerId,ClaimedBy=d.ClaimedBy,Count=d.Count,X=d.X,Z=d.Z,ClaimAt=d.ClaimAt,LandsAt=d.LandsAt,CashFind=d.CashFind});view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
                 // GAS-2: the level's Giggle Tank, public to all but spirits.
                 view.GiggleTankSpot=source.GiggleTankSpot;view.GiggleTankFound=source.GiggleTankFound;
             }

@@ -113,7 +113,7 @@ namespace Festival.Core
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).
     // Cash LandsAt is a simulation-clock deadline translated across booth pauses; zero keeps legacy drops immediate.
-    [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId="",ClaimedBy=""; public int Count; public float X,Z; public double ClaimAt,LandsAt; }
+    [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId="",ClaimedBy=""; public int Count; public float X,Z; public double ClaimAt,LandsAt; public bool CashFind; }
     // A frozen positive-cash death, retained for every viewer without publishing the player's current private state.
     // AtWorldSeconds is immutable world time: compare it directly with WorldSeconds/EstimatedWorldSeconds, never ShiftClock it.
     [Serializable] public sealed class DeathSpinState {
@@ -137,6 +137,8 @@ namespace Festival.Core
         // the roles, the clue trails, the lost friends' spots and the cloud's landmark. No view carries it (FestivalSession.ViewFor),
         // so no client can rebuild them from the public seeds. 0, no secret (tests, previews, older snapshots), deals as before.
         public int DealSeed;
+        // Personal cash attempts use private event draws and Playing elapsed time; zero lazily arms legacy snapshots.
+        public int CashFindIndex; public double NextCashFindAt;
         public double ElapsedSeconds,DurationSeconds=600,SimulationSeconds,LaunchAtSeconds; public long Tick,TransactionSequence,EntitySequence;
         public int CluesRead, ObjectiveReward, SurvivorBonus, Survivors, ConnectedCrewCount;
         // The night's clue trail is complete (Visions.cs): the lost friend can be found.

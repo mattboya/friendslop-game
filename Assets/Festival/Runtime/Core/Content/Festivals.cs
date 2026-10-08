@@ -101,6 +101,11 @@ namespace Festival.Core
         // edge, its 4 m ring clear of anywhere players routinely stand, south of the backstage line and off the art cars' loops
         // (MinigameTests checks), so nobody starts a game just by going about the level.
         public static readonly WorldPoint[] BoothSpots={new WorldPoint(-30,3),new WorldPoint(24,-4),new WorldPoint(12,-18)};
+        // Small windfalls on open lawns, outside every route/booth/car margin. Both maps currently share collision ground.
+        public static readonly WorldPoint[][] CashFindSpots={
+            new[]{new WorldPoint(-34,-32),new WorldPoint(-25,-32),new WorldPoint(-16,-35),new WorldPoint(-34,-22),new WorldPoint(-34,-12),new WorldPoint(-34,-5),new WorldPoint(-34,23),new WorldPoint(-20,-2),new WorldPoint(-29,-24),new WorldPoint(35,23),new WorldPoint(35,5),new WorldPoint(35,-5),new WorldPoint(35,-16),new WorldPoint(35,-20),new WorldPoint(33,-32),new WorldPoint(-29,-14)},
+            new[]{new WorldPoint(-34,-32),new WorldPoint(-25,-32),new WorldPoint(-16,-35),new WorldPoint(-34,-22),new WorldPoint(-34,-12),new WorldPoint(-34,-5),new WorldPoint(-34,23),new WorldPoint(-20,-2),new WorldPoint(-29,-24),new WorldPoint(35,23),new WorldPoint(35,5),new WorldPoint(35,-5),new WorldPoint(35,-16),new WorldPoint(35,-20),new WorldPoint(33,-32),new WorldPoint(-29,-14)},
+        };
         /// <summary>How an amount of money reads for crew member playerOrdinal: "$12" at Palm Mirage, "12 ramen packets" (etc.) on Ember Playa.</summary>
         public static string CurrencyName(int festival,int playerOrdinal,int amount)=>festival!=PlayaFestival?"$"+amount:amount+" "+OddObjects[(playerOrdinal%OddObjects.Length+OddObjects.Length)%OddObjects.Length]+(amount==1?"":"s");
         public static bool InVipZone(int festival,float x,float z){if(festival!=PoloFestival)return false;foreach(var zone in VipZones)if(zone.Contains(x,z))return true;return false;}

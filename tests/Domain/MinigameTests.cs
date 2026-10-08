@@ -31,7 +31,7 @@ public static class MinigameTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{EveryLevelPlacesOneBoothOnASeededSpot,BoothGamesComeOutOfAWeekendBag,TheBoothSpotsKeepClearOfEveryRoute,
+        foreach(var test in new Action[]{EveryLevelPlacesOneBoothOnASeededSpot,BoothGamesComeOutOfAWeekendBag,TheBoothSpotsKeepClearOfEveryRoute,TheCashFindSpotsKeepFullRouteMargins,
             TheCountdownNeedsEveryLivingPlayerInTheRing,NobodyDownedOrBusyMayStartIt,ABodyCarrierPassingThroughTheRingDoesNotOptIn,TheClockStopsForEverything,AHandoffKeepsItsSecondsThroughAMinuteLongGame,
             EveryClockDeadlineMovesOnByThePause,TheGameEndsAtNinetySecondsAndItsResultShowsForFour,ALossNeverLeavesUnderFifteenSeconds,ThePlayedBoothIsSpent,
             SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame})
@@ -113,9 +113,8 @@ public static class MinigameTests
     // A crew opts in by standing in the ring, so nobody walking their usual routes may do so by accident: every spot keeps its
     // 4 m ring clear of where players routinely stand (and the PlayMode spawn row), south of the backstage line where standing
     // draws suspicion, off the main path, the art cars' loops, the Ferris wheel and the VIP ropes.
-    static void TheBoothSpotsKeepClearOfEveryRoute()
+    static List<(string Name,float X,float Z,double Reach)> RouteStands()
     {
-        double ring=FestivalSimulation.MinigameRingRadius;
         var stands=new List<(string Name,float X,float Z,double Reach)>{("the crew stash",-25,-8,2.5),("the medical tent",24,-20,2.5),("security",27,5,2.5),("lost property",-28,16,2.5),
             ("the way back to camp",Festivals.CampGateX,Festivals.CampGateZ,Festivals.CampGateRadius),("the DJ takeover",Catalog.StageTakeoverX,Catalog.StageTakeoverZ,2.5),
             ("the VIP stall",Festivals.VipStallX,Festivals.VipStallZ,Festivals.VipStallRange),("the VIP guard",Festivals.VipGuardPostX,Festivals.VipGuardPostZ,2.5),("the effigy",Festivals.EffigyX,Festivals.EffigyZ,Festivals.BurnRingRadius+2.5),
@@ -127,6 +126,12 @@ public static class MinigameTests
         foreach(var landmark in CloudShapes.Landmarks)stands.Add(("the "+landmark.Name+"'s cloud stash",landmark.Stash.X,landmark.Stash.Z,2.5));
         // Festivalgoers start up to .3 m off their places, and a sale or a dance is made within 2.5 m of them.
         for(int i=0;i<FestivalCrowdLayout.Count;i++){var at=FestivalCrowdLayout.Get(i,0);stands.Add(("festivalgoer "+i+"'s place",at.X,at.Z,2.8));}
+        return stands;
+    }
+    static void TheBoothSpotsKeepClearOfEveryRoute()
+    {
+        double ring=FestivalSimulation.MinigameRingRadius;
+        var stands=RouteStands();
         foreach(var spot in Festivals.BoothSpots)
         {
             string where="("+spot.X+", "+spot.Z+")";
@@ -138,6 +143,29 @@ public static class MinigameTests
             for(double t=0;t<40;t+=.25)for(int k=0;k<Festivals.ArtCars;k++){var car=Festivals.ArtCarAt(k,t);Check(Math.Sqrt((spot.X-car.X)*(spot.X-car.X)+(spot.Z-car.Z)*(spot.Z-car.Z))>ring+2,where+" is well off art car "+k+"'s loop");}
             foreach(var stand in stands){double dx=spot.X-stand.X,dz=spot.Z-stand.Z;Check(Math.Sqrt(dx*dx+dz*dz)>ring+stand.Reach,where+"'s ring keeps clear of "+stand.Name+" ("+stand.X+", "+stand.Z+")");}
             foreach(var other in Festivals.BoothSpots){double dx=spot.X-other.X,dz=spot.Z-other.Z;Check(other==spot||Math.Sqrt(dx*dx+dz*dz)>10,where+" is a place of its own, not beside ("+other.X+", "+other.Z+")");}
+        }
+    }
+
+    static void TheCashFindSpotsKeepFullRouteMargins()
+    {
+        const double ring=4;
+        var stands=RouteStands();foreach(var booth in Festivals.BoothSpots)stands.Add(("a minigame booth",booth.X,booth.Z,4));
+        // Actual full footpath/stage rectangles, rather than a few sampled interaction points.
+        var routes=new[]{new Festivals.Area(-3.5f,-31,3.5f,27),new Festivals.Area(-22.5f,-24,.5f,-20),new Festivals.Area(0,-22,24,-18),new Festivals.Area(-28,3.5f,0,6.5f),new Festivals.Area(0,-5.5f,26,-2.5f),new Festivals.Area(-11,27,11,37)};
+        Check(Festivals.CashFindSpots.Length==Festivals.Count,"both festivals author a cash table");
+        foreach(var spots in Festivals.CashFindSpots)
+        {
+            Check(spots.Length==16,"sixteen authored windfall points per festival");
+            foreach(var spot in spots)
+            {
+                string where="cash ("+spot.X+", "+spot.Z+")";
+                Check(Math.Abs(spot.X)+ring<=39&&Math.Abs(spot.Z)+ring<=39&&spot.Z+ring<=30,where+" has its full margin inside safe ground");
+                foreach(var route in routes){double dx=Math.Max(route.MinX-spot.X,Math.Max(0,spot.X-route.MaxX)),dz=Math.Max(route.MinZ-spot.Z,Math.Max(0,spot.Z-route.MaxZ));Check(Math.Sqrt(dx*dx+dz*dz)>ring,where+" clears the full route rectangle");}
+                foreach(var stand in stands)Check(Math.Sqrt(Math.Pow(spot.X-stand.X,2)+Math.Pow(spot.Z-stand.Z,2))>ring+stand.Reach,where+" clears "+stand.Name);
+                for(float x=spot.X-4;x<=spot.X+4;x+=.5f)for(float z=spot.Z-4;z<=spot.Z+4;z+=.5f)Check(!Festivals.InVipZone(0,x,z),where+" stays off VIP ropes");
+                for(double t=0;t<40;t+=.25)for(int car=0;car<Festivals.ArtCars;car++){var at=Festivals.ArtCarAt(car,t);Check(Math.Sqrt(Math.Pow(spot.X-at.X,2)+Math.Pow(spot.Z-at.Z,2))>ring+2,where+" clears art-car loop");}
+                Check(Array.FindAll(spots,p=>p.X==spot.X&&p.Z==spot.Z).Length==1,where+" is unique");
+            }
         }
     }
 
@@ -254,6 +282,7 @@ public static class MinigameTests
         {"CampEggState.LastActivationAt","historical camp-only gag time: camp never pauses, and festival minigames must not make an old gag recent"},
         {"CampEggState.SeatedUntil","camp-only chair deadline: ownership/deadline are cleared when leaving camp, before any festival minigame"},
         {"PlayerState.LastCampEggAt","historical camp-only last-gag time: retains its age through festival minigames, like the prop event"},
+        {"RoundState.NextCashFindAt","Playing elapsed deadline: never a simulation timestamp"},
         {"ObserverState.Suspicion","suspicion"},{"NpcState.Suspicion","suspicion"},
         {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"InteractionState.BeatSeconds","a length"},
         {"InteractionState.StageFirstHeadWorldSeconds","authored stage world clock: the pause leaves music at the same position"},
