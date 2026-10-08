@@ -15,14 +15,19 @@ namespace Festival.Presentation
         bool initialized;
         bool firstPerson;
         int side;
-        Transform performer;
+        Transform performer,shoulderLeft,shoulderRight;
+        float weightedRadius;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        bool diagnosticCarrying;
+        float diagnosticSide,nextCarryDiagnostic;
+#endif
         float motionPhase;
         public bool Spinning;
         /// <summary>Walking spin while poi are equipped: each head wheels beside its hand.</summary>
         public bool Carrying;
         /// <summary>Butterfly speed in radians per second; a dance sets its own beat.</summary>
         public float SpinRate=9f;
-        float carryAngle,spinUp;
+        float carryAngle,spinUp,carrySide=1;
         // POI-2: the hand holding a poi runs this far (radians) ahead of its head's orbit round its own loop. With the head's own
         // lag behind that orbit, the hand leads the head by about 50 degrees, so it reads as pulling the head round, not chasing it.
         const float HandLead=.5f;
@@ -61,6 +66,11 @@ namespace Festival.Presentation
             // attachment frame still drives the same opposed orbit in first person.
             rig.performer=actor!=null?actor.transform:firstPerson?parent:null;
             rig.motionPhase=actor!=null?actor.MotionPhase:0;
+            if(actor!=null)foreach(var bone in actor.GetComponentsInChildren<Transform>())
+            {
+                if(bone.name=="ArmL")rig.shoulderLeft=bone;
+                else if(bone.name=="ArmR")rig.shoulderRight=bone;
+            }
             // Handle and heads are Blender models from scripts/generate_poi_parts.py.
             var handle=FestivalArtView.Create(root.transform,"FestivalPoiHandle");
             if(handle!=null)handle.name="Poi handle held in palm";
@@ -69,6 +79,10 @@ namespace Festival.Presentation
             // First-person props are drawn smaller so a head passing near the camera stays readable.
             if(firstPerson)headObject.transform.localScale=Vector3.one*.7f;
             rig.head=headObject.transform;
+            // Imported heads are not CPU-readable meshes. Their rendered bounds give a
+            // conservative sphere about the tether end, including any off-centre geometry.
+            foreach(var renderer in headObject.GetComponentsInChildren<Renderer>())
+                rig.weightedRadius=Mathf.Max(rig.weightedRadius,Vector3.Distance(renderer.bounds.center,rig.head.position)+renderer.bounds.extents.magnitude);
             rig.rope=root.AddComponent<LineRenderer>();
             rig.rope.useWorldSpace=true;rig.rope.positionCount=2;
             // A 16 mm line reads as a rigid stick at character scale. Real
@@ -127,12 +141,33 @@ namespace Festival.Presentation
                     spinUp=Mathf.MoveTowards(spinUp,1,2.5f*dt);
                     carryAngle+=7.5f*spinUp*(1-.35f*current.y)*dt;
                     Vector3 outward=Vector3.Cross(Vector3.up,forward)*(side==0?-1f:1f);
+                    if(!firstPerson)
+                    {
+                        float actualSide=Vector3.Dot(grip-performer.position,performer.right);
+                        if(Mathf.Abs(actualSide)>.001f)carrySide=Mathf.Sign(actualSide);
+                        outward=performer.right*carrySide;
+                    }
                     // In first person the wheel leans outward and down so heads sweep beside
                     // and below the hands, topping out just under the eyeline.
                     Vector3 orbit=Vector3.up*Mathf.Cos(carryAngle)+forward*Mathf.Sin(carryAngle)+
                         (firstPerson?outward*1.1f-Vector3.up*.35f:outward*.28f);
+                    Vector3 direction=Vector3.Slerp(current,orbit.normalized,1-Mathf.Exp(-30f*dt));
+                    if(!firstPerson)
+                    {
+                        // A lateral plane outside the shoulders' capsule clears its whole
+                        // height. Apply the required unit component after normalization and
+                        // smoothing: the hanging start and a turn must obey the same clearance.
+                        float radius=shoulderLeft!=null&&shoulderRight!=null
+                            ?Mathf.Abs(Vector3.Dot(shoulderLeft.position-shoulderRight.position,performer.right))*.5f:0;
+                        float gripReach=Vector3.Dot(grip-performer.position,outward);
+                        float minimum=Mathf.Clamp01((radius+weightedRadius+.004f-gripReach)/length);
+                        direction=ClearCarryDirection(direction,outward,minimum);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                        CarryDiagnostic(radius,gripReach,minimum);
+#endif
+                    }
                     Vector3 previousBall=ball;
-                    ball=grip+Vector3.Slerp(current,orbit.normalized,1-Mathf.Exp(-30f*dt))*length;
+                    ball=grip+direction*length;
                     velocity=(ball-previousBall)/dt;
                 }
                 else
@@ -158,7 +193,32 @@ namespace Festival.Presentation
             head.position=ball;
             rope.SetPosition(0,grip);rope.SetPosition(1,ball);
             previousGrip=grip;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(!Carrying||Spinning)diagnosticCarrying=false;
+#endif
         }
+        static Vector3 ClearCarryDirection(Vector3 direction,Vector3 outward,float minimum)
+        {
+            direction.Normalize();
+            float lateral=Vector3.Dot(direction,outward);
+            if(lateral>=minimum)return direction;
+            Vector3 plane=direction-outward*lateral;
+            if(plane.sqrMagnitude<.0001f)plane=Vector3.down;
+            return outward*minimum+plane.normalized*Mathf.Sqrt(Mathf.Max(0,1-minimum*minimum));
+        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        void CarryDiagnostic(float radius,float gripReach,float minimum)
+        {
+            if(!DevelopmentDiagnostics.Visible)return;
+            if((!diagnosticCarrying||diagnosticSide!=carrySide)&&Time.unscaledTime>=nextCarryDiagnostic)
+            {
+                diagnosticCarrying=true;diagnosticSide=carrySide;nextCarryDiagnostic=Time.unscaledTime+1;
+                DevelopmentDiagnostics.GraphicsEvent("Motion","poi_carry_clearance",
+                    "side="+carrySide+" shoulder_radius="+radius.ToString("F3")+" head_radius="+weightedRadius.ToString("F3")
+                    +" grip_reach="+gripReach.ToString("F3")+" minimum_lateral="+minimum.ToString("F3"));
+            }
+        }
+#endif
         void OnDisable(){initialized=false;if(head!=null)head.gameObject.SetActive(false);if(rope!=null)rope.enabled=false;}
         void OnEnable(){if(head!=null)head.gameObject.SetActive(true);if(rope!=null)rope.enabled=true;}
         void OnDestroy(){if(head!=null)Destroy(head.gameObject);}

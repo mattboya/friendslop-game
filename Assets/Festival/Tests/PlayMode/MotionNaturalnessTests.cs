@@ -30,6 +30,124 @@ namespace Festival.Tests
             return actor;
         }
 
+        // Sample after both the real character (order 0) and tether (order 100) finish LateUpdate.
+        [UnityTest]public IEnumerator WalkingPracticePoiHeadsClearEveryGeneratedBodyThroughStartupAndTurns(){yield return CarryClearance("poi_practice");}
+        [UnityTest]public IEnumerator WalkingLedPoiHeadsClearEveryGeneratedBodyThroughStartupAndTurns(){yield return CarryClearance("poi_led");}
+        IEnumerator CarryClearance(string item)
+        {
+            var root=new GameObject("impl:U57 carry clearance");float capture=Time.captureDeltaTime;Time.captureDeltaTime=1/60f;
+            var actors=new List<FestivalCharacter>();var rigs=new Dictionary<FestivalCharacter,FestivalPoiRig[]>();
+            var sides=new Dictionary<FestivalPoiRig,float>();var radii=new Dictionary<FestivalPoiRig,float>();
+            var samplesByRig=new Dictionary<FestivalPoiRig,int>();
+            int samples=0;float minimum=float.MaxValue,leastReach=float.MaxValue;string failure=null;
+            var probe=root.AddComponent<HandMotionFrameProbe>();
+            try
+            {
+                var names=new Dictionary<int,string>();
+                for(int n=0;n<256&&names.Count<6;n++)
+                {
+                    string name="impl:U57 carry shape "+n;var look=FestivalAppearance.For(name);
+                    names[look.Gender*3+look.Shape]=name;
+                }
+                Assert.That(names.Count,Is.EqualTo(6),"setup: both genders and all three generated shapes");
+                foreach(var pair in names.OrderBy(p=>p.Key))
+                {
+                    var actor=FestivalCharacter.Create(root.transform,pair.Value,Color.white);
+                    actor.transform.localScale=Vector3.Scale(Vector3.one*.82f,actor.ShapeScale);
+                    actor.transform.position=new Vector3(pair.Key*4,0,0);actor.transform.rotation=Quaternion.Euler(0,pair.Key*57,0);
+                    actor.SetEquippedItem(item);actors.Add(actor);
+                }
+                yield return null;yield return null;
+                foreach(var actor in actors)
+                {
+                    rigs[actor]=actor.GetComponentsInChildren<FestivalPoiRig>().ToArray();Assert.That(rigs[actor].Length,Is.EqualTo(2));
+                    foreach(var rig in rigs[actor])
+                    {
+                        sides[rig]=Mathf.Sign(Vector3.Dot(rig.GetComponent<LineRenderer>().GetPosition(0)-actor.transform.position,actor.transform.right));
+                        var weighted=(Transform)typeof(FestivalPoiRig).GetField("head",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(rig);
+                        float radius=0;
+                        foreach(var renderer in weighted.GetComponentsInChildren<Renderer>())
+                            radius=Mathf.Max(radius,Vector3.Distance(renderer.bounds.center,weighted.position)+renderer.bounds.extents.magnitude);
+                        Assert.That(radius,Is.GreaterThan(.01f),"setup: measured actual weighted head geometry");radii[rig]=radius;samplesByRig[rig]=0;
+                    }
+                }
+                probe.Observe=()=>
+                {
+                    foreach(var actor in actors)
+                    {
+                        var left=Bone(actor,"ArmL");var right=Bone(actor,"ArmR");
+                        float radius=Mathf.Abs(Vector3.Dot(left.position-right.position,actor.transform.right))*.5f;
+                        float bottom=Mathf.Min(Bone(actor,"FootL").position.y,Bone(actor,"FootR").position.y)+radius;
+                        float top=Mathf.Max(left.position.y,right.position.y)-radius;
+                        foreach(var rig in rigs[actor])
+                        {
+                            if(!rig.Carrying)continue;
+                            samplesByRig[rig]++;samples++;
+                            var rope=rig.GetComponent<LineRenderer>();var grip=rope.GetPosition(0);var head=rope.GetPosition(1);
+                            float dot=Vector3.Dot(grip-actor.transform.position,actor.transform.right);
+                            if(Mathf.Abs(dot)>.001f)sides[rig]=Mathf.Sign(dot);
+                            var nearest=new Vector3(actor.transform.position.x,Mathf.Clamp(head.y,bottom,Mathf.Max(bottom,top)),actor.transform.position.z);
+                            float clearance=Vector3.Distance(head,nearest)-radius-radii[rig];minimum=Mathf.Min(minimum,clearance);
+                            leastReach=Mathf.Min(leastReach,Mathf.Abs(dot)+.62f-radius-radii[rig]);
+                            if(failure==null&&clearance<-.001f)failure=actor.name+" "+item+" head enters shoulder-to-feet capsule at sample "+samples+" clearance="+clearance;
+                            if(failure==null&&Vector3.Dot(head-actor.transform.position,actor.transform.right)*sides[rig]<radii[rig]-.001f)failure="head crosses actual grip side at sample "+samples;
+                            if(failure==null&&Mathf.Abs(Vector3.Distance(grip,head)-.62f)>.001f)failure="carry changes the .62m cord at sample "+samples;
+                        }
+                    }
+                };
+                for(int frame=0;frame<184;frame++)
+                {
+                    for(int n=0;n<actors.Count;n++)
+                    {
+                        var actor=actors[n];
+                        actor.transform.Rotate(0,(n%2==0?95:-130)*Time.deltaTime,0,Space.World);
+                        if(frame==60||frame==120)actor.transform.Rotate(0,n%2==0?90:-90,0,Space.World);
+                        actor.transform.position+=actor.transform.forward*(1.6f*Time.deltaTime);
+                    }
+                    yield return null;
+                }
+                probe.Observe=null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[Festival.Test] impl:U57 item="+item+" samples="+samples+" clearance="+minimum+" available lateral reach="+leastReach);
+#endif
+                Assert.That(samples,Is.GreaterThan(2000),"three seconds of every actual carry pair, including startup");
+                Assert.That(samplesByRig.Values.Min(),Is.GreaterThanOrEqualTo(180),"every rig was observed from its first completed carry frame through at least three seconds");
+                Assert.That(failure,Is.Null,failure);
+            }
+            finally{probe.Observe=null;Object.Destroy(root);Time.captureDeltaTime=capture;}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator CarryKeepsItsLastGripSideAtTheMidlineAndFollowsAMovedGrip()
+        {
+            var root=new GameObject("impl:U57 carry midline");float capture=Time.captureDeltaTime;Time.captureDeltaTime=1/60f;
+            try
+            {
+                var actor=Walker(root,"impl:U57 midline actor");actor.SetEquippedItem("poi_led");
+                for(int frame=0;frame<35;frame++){actor.transform.position+=actor.transform.forward*(1.6f*Time.deltaTime);yield return null;}
+                var rigs=actor.GetComponentsInChildren<FestivalPoiRig>();Assert.That(rigs.Length,Is.EqualTo(2));
+                // Freeze only the arm writer after real walking frames. Move each actual grip to
+                // its midline, then across it, and execute the unchanged production tether writer.
+                actor.enabled=false;
+                var late=typeof(FestivalPoiRig).GetMethod("LateUpdate",BindingFlags.NonPublic|BindingFlags.Instance);
+                var remembered=typeof(FestivalPoiRig).GetField("carrySide",BindingFlags.NonPublic|BindingFlags.Instance);
+                foreach(var rig in rigs)
+                {
+                    Assert.That(rig.Carrying,Is.True);float side=(float)remembered.GetValue(rig);
+                    var centre=actor.transform.position+Vector3.up;
+                    rig.transform.position=centre+rig.transform.up*.085f;late.Invoke(rig,null);
+                    var cord=rig.GetComponent<LineRenderer>();
+                    Assert.That(Vector3.Dot(cord.GetPosition(0)-actor.transform.position,actor.transform.right),Is.EqualTo(0).Within(.0001f),"setup: actual grip at the midline");
+                    Assert.That(Vector3.Dot(cord.GetPosition(1)-actor.transform.position,actor.transform.right)*side,Is.GreaterThan(.1f),"zero dot retains the last actual grip side");
+                    rig.transform.position=centre-actor.transform.right*(side*.12f)+rig.transform.up*.085f;late.Invoke(rig,null);
+                    Assert.That(Vector3.Dot(cord.GetPosition(1)-actor.transform.position,actor.transform.right)*-side,Is.GreaterThan(.1f),"a nonzero moved grip replaces remembered handedness");
+                    Assert.That(Vector3.Distance(cord.GetPosition(0),cord.GetPosition(1)),Is.EqualTo(.62f).Within(.001f));
+                }
+            }
+            finally{Object.Destroy(root);Time.captureDeltaTime=capture;}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator WalkingArmsSwingOppositeTheForwardFootAndShouldersCounterRotate()
         {
             var root=new GameObject("Gait opposition test");int rate=Application.targetFrameRate;Application.targetFrameRate=60;
