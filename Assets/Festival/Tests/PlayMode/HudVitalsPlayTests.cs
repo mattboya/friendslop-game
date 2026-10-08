@@ -8,6 +8,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -119,7 +120,32 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.4f);
                 Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: security stops you over the stock ("+session.Message+")");
                 Expect("stopped","Notice",StopNotice);
-                Expect("stopped","Speaker","SECURITY");Expect("stopped","Dialogue line","HEY! What's in the bag?");
+                // Security now speaks through its identified public TMP delivery, on the shared reveal clock.
+                FestivalSpeechDeliveryTracker.Delivery stopSpeech=null;
+                foreach(var delivery in session.SpeechDeliveries.Deliveries)if(delivery.IsPublic&&delivery.SpeakerId==cop.Id&&delivery.Text=="HEY! What's in the bag?")stopSpeech=delivery;
+                Assert.That(stopSpeech,Is.Not.Null,"the actual stopping cop owns the public warning delivery");
+                Assert.That(stopSpeech.Speaker,Is.EqualTo("SECURITY"));Assert.That(stopSpeech.Retracted,Is.False);
+                float unread=(float)System.Math.Max(0,stopSpeech.CharacterCount/FestivalSpeechDeliveryTracker.LettersPerSecond-stopSpeech.AgeSeconds);
+                if(unread>0)yield return new WaitForSeconds(unread);
+                yield return null;yield return null;
+                TextMeshPro stopBubble=null;
+                foreach(var text in hud.GetComponentsInChildren<TextMeshPro>(false))if(text.text==stopSpeech.Text)stopBubble=text;
+                Assert.That(stopBubble,Is.Not.Null,"the cop's literal renders in the current world bubble");
+                Assert.That(stopBubble.enabled&&stopBubble.gameObject.activeInHierarchy,Is.True);
+                Assert.That(stopBubble.fontSharedMaterial.shader.isSupported,Is.True);
+                Assert.That(stopBubble.maxVisibleCharacters,Is.EqualTo(stopSpeech.VisibleCharacters));
+                Assert.That(stopSpeech.VisibleCharacters,Is.EqualTo(stopSpeech.CharacterCount),"the authored 30-glyph read duration reveals the whole warning");
+                stopBubble.ForceMeshUpdate();int visibleGlyphs=0;
+                foreach(var character in stopBubble.textInfo.characterInfo)
+                {
+                    if(!character.isVisible)continue;visibleGlyphs++;
+                    Assert.That(character.bottomLeft.x,Is.GreaterThanOrEqualTo(stopBubble.rectTransform.rect.xMin-.01f));
+                    Assert.That(character.topRight.x,Is.LessThanOrEqualTo(stopBubble.rectTransform.rect.xMax+.01f));
+                    Assert.That(character.bottomLeft.y,Is.GreaterThanOrEqualTo(stopBubble.rectTransform.rect.yMin-.01f));
+                    Assert.That(character.topRight.y,Is.LessThanOrEqualTo(stopBubble.rectTransform.rect.yMax+.01f));
+                }
+                Assert.That(visibleGlyphs,Is.GreaterThan(10),"rendered warning glyphs fit the readable bubble bounds");
+                Assert.That(stopBubble.GetComponent<MeshRenderer>().enabled,Is.True);
                 Expect("stopped","Vitals",Stop);
                 Expect("stopped","Prompt","Talk to security");
 

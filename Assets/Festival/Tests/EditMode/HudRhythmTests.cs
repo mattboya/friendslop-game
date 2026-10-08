@@ -166,6 +166,83 @@ namespace Festival.Tests
             Assert.That(fill.gameObject.activeSelf,Is.False,"let go, the fill empties");
         }
 
+        [Test]public void HoldReleaseFeedbackMatchesTheJudgeAndIgnoresUnmatchedReleases()
+        {
+            var hud=Hud();var chart=new RhythmChart{DurationSeconds=4};
+            chart.Notes.Add(new RhythmNote{Id=0,Direction=0,TimeSeconds=2,HoldSeconds=1});
+            var interaction=new InteractionState{Id="hold-feedback",Kind="Dance",NoteCount=1,BeatSeconds=.5};
+            hud.ShowChart(interaction,chart);
+            var flags=BindingFlags.NonPublic|BindingFlags.Instance;
+            var feedback=typeof(FestivalHud).GetMethod("ProcessRhythmFeedback",flags);
+            string Judgment()=>(string)typeof(FestivalHud).GetField("lastRhythmJudgment",flags).GetValue(hud);
+            int Combo()=>(int)typeof(FestivalHud).GetField("rhythmComboCount",flags).GetValue(hud);
+            interaction.Inputs.Add(new RhythmInput{Direction=0,TimeSeconds=2});
+            feedback.Invoke(hud,new object[]{interaction,2.0});
+            Assert.That(Judgment(),Is.EqualTo("PERFECT"));Assert.That(Combo(),Is.EqualTo(1));
+            interaction.Inputs.Add(new RhythmInput{Direction=3,TimeSeconds=2.1,Release=true});
+            feedback.Invoke(hud,new object[]{interaction,2.1});
+            Assert.That(Judgment(),Is.EqualTo("PERFECT"),"a release outside a hold must be ignored, as on the host");
+            Assert.That(Combo(),Is.EqualTo(1));
+            interaction.Inputs.Add(new RhythmInput{Direction=0,TimeSeconds=2.2,Release=true});
+            feedback.Invoke(hud,new object[]{interaction,2.2});
+            Assert.That(Judgment(),Is.EqualTo("LET GO"));Assert.That(Combo(),Is.Zero);
+        }
+
+        [Test]public void AHoldShowsATailThatShrinksOnceHit()
+        {
+            var hud=Hud();var lane=LaneOf(hud);var chart=new RhythmChart{DurationSeconds=4};
+            chart.Notes.Add(new RhythmNote{Id=41,Direction=0,TimeSeconds=2,HoldSeconds=1});
+            var interaction=new InteractionState{Id="hold-tail",Kind="Dance",NoteCount=1,BeatSeconds=.5};
+            hud.ShowChart(interaction,chart);hud.DrawChart(1,2,"lsd",false);
+            var tail=lane.Find("Hold tails/Tail 0")?.GetComponent<Image>();
+            Assert.That(tail,Is.Not.Null,"a hold gets a plain pooled tail below its arrow");
+            var head=(RectTransform)lane.Find("Notes/Note 0");var target=(RectTransform)lane.Find("Receptor well 0/Target arrow");
+            Assert.That(tail.gameObject.activeSelf,Is.True);Assert.That(tail.sprite,Is.Null);Assert.That(tail.raycastTarget,Is.False);
+            Assert.That(tail.color.a,Is.EqualTo(.5f));Assert.That(tail.transform.parent,Is.Not.SameAs(head));
+            Assert.That(tail.transform.parent.GetSiblingIndex(),Is.LessThan(head.parent.GetSiblingIndex()));
+            Assert.That(Centre(lane,tail.rectTransform).x,Is.EqualTo(Centre(lane,target).x).Within(.01f));
+            Assert.That(Quaternion.Angle(lane.rotation,tail.transform.rotation),Is.LessThan(.01f),"tails never inherit arrow wobble");
+            float before=tail.rectTransform.rect.height;
+            interaction.Inputs.Add(new RhythmInput{Direction=0,TimeSeconds=2});
+            Feedback(hud,interaction,2.5);hud.DrawChart(2.5,2,"lsd",false);
+            Assert.That(head.gameObject.activeSelf,Is.True,"the hit hold head stays visible");
+            Assert.That(Vector2.Distance(Centre(lane,head),Centre(lane,target)),Is.LessThan(.01f),"a hit head pins to its receptor");
+            Assert.That(tail.rectTransform.rect.height,Is.LessThan(before));Assert.That(tail.rectTransform.rect.height,Is.GreaterThan(0));
+            interaction.Inputs.Add(new RhythmInput{Direction=0,TimeSeconds=2.5,Release=true});
+            Feedback(hud,interaction,2.5);hud.DrawChart(2.5,2,"lsd",false);
+            Assert.That(Judgment(hud),Is.EqualTo("LET GO"));Assert.That(tail.color.r,Is.EqualTo(tail.color.g));Assert.That(tail.color.g,Is.EqualTo(tail.color.b));
+            Assert.That(tail.color.a,Is.EqualTo(.5f));
+            hud.DrawChart(3,2,"lsd",false);Assert.That(head.gameObject.activeSelf||tail.gameObject.activeSelf,Is.False,"both retire at the authored end");
+            var tap=new RhythmChart{DurationSeconds=4};tap.Notes.Add(new RhythmNote{Id=7,Direction=3,TimeSeconds=2});
+            hud.ShowChart(new InteractionState{Id="tap",BeatSeconds=.5},tap);hud.DrawChart(1,2,"",false);
+            Assert.That(lane.Find("Hold tails/Tail 0").GetComponent<Image>(),Is.SameAs(tail),"the next chart reuses the tail pool");
+            Assert.That(tail.gameObject.activeSelf,Is.False,"a reused tap has no stale hold tail");
+        }
+
+        [Test]public void ReplacedInputLogsRebuildTheRealJudgeAndDroppedTail()
+        {
+            var hud=Hud();var lane=LaneOf(hud);var chart=new RhythmChart{DurationSeconds=4};
+            chart.Notes.Add(new RhythmNote{Id=91,Direction=2,TimeSeconds=2,HoldSeconds=1});
+            var interaction=new InteractionState{Id="rollback",Kind="Dance",NoteCount=1,BeatSeconds=.5};hud.ShowChart(interaction,chart);
+            interaction.Inputs.Add(new RhythmInput{Direction=2,TimeSeconds=2});
+            interaction.Inputs.Add(new RhythmInput{Direction=2,TimeSeconds=2.2,Release=true});
+            Feedback(hud,interaction,2.2);hud.DrawChart(2.2,2,"",false);Assert.That(Judgment(hud),Is.EqualTo("LET GO"));
+            interaction.Inputs[1]=new RhythmInput{Direction=2,TimeSeconds=2.9,Release=true};
+            Feedback(hud,interaction,2.9);hud.DrawChart(2.9,2,"",false);
+            Assert.That(Judgment(hud),Is.EqualTo("PERFECT"),"a rollback can replace a same-size log with a valid release");
+            Assert.That(lane.Find("Tempo and steps").GetComponent<Text>().text,Does.StartWith("1 / 1"));
+            var tail=lane.Find("Hold tails/Tail 0").GetComponent<Image>();Assert.That(tail.color.r,Is.Not.EqualTo(tail.color.g),"the old drop cannot grey the rebuilt tail");
+            interaction.Inputs.Clear();Feedback(hud,interaction,1);hud.DrawChart(1,2,"",false);
+            Assert.That(Judgment(hud),Is.Empty);Assert.That(lane.Find("Tempo and steps").GetComponent<Text>().text,Does.StartWith("0 / 1"));
+            interaction.Inputs.Add(new RhythmInput{Direction=2,TimeSeconds=2});Feedback(hud,interaction,2);hud.DrawChart(2.2,2,"",false);
+            Assert.That(Judgment(hud),Is.EqualTo("PERFECT"),"the same head is eligible again after real log rollback");
+            interaction.ChartSeed++;interaction.Phrase++;interaction.Id="next";hud.ShowChart(interaction,chart);Feedback(hud,interaction,2.2);hud.DrawChart(2.2,2,"",false);
+            Assert.That(Judgment(hud),Is.EqualTo("PERFECT"));Assert.That(lane.Find("Tempo and steps").GetComponent<Text>().text,Does.StartWith("1 / 1"));
+        }
+
+        private static void Feedback(FestivalHud hud,InteractionState interaction,double now)=>typeof(FestivalHud).GetMethod("ProcessRhythmFeedback",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{interaction,now});
+        private static string Judgment(FestivalHud hud)=>(string)typeof(FestivalHud).GetField("lastRhythmJudgment",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
+
         // A 16-beat chart of nothing but sixteenth runs is 64 notes, twice the lane's first pool of note views.
         [Test]public void TheLaneShowsEveryNoteOfAChartOfSixteenthRuns()
         {

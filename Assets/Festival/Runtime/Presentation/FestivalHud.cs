@@ -50,16 +50,21 @@ namespace Festival.Presentation
         private FestivalTitleScreen titleScreen;
         private Text settingsBack;
         private readonly List<Image> noteViews = new List<Image>();
-        private Transform noteContainer;
+        private readonly List<Image> holdTails=new List<Image>();
+        private Transform noteContainer,tailContainer;
         private readonly Image[] rhythmReceptors=new Image[4];
         private readonly Image[] rhythmReceptorWells=new Image[4];
         private readonly Text[] rhythmKeys=new Text[4];
         private readonly float[] rhythmFlashUntil=new float[4];
-        private bool[] rhythmConsumed=Array.Empty<bool>();
+        private bool[] rhythmConsumed=Array.Empty<bool>(),rhythmHeld=Array.Empty<bool>(),rhythmDropped=Array.Empty<bool>();
         private Image rhythmProgressFill,stopHoldFill,walkHoldFill;
         // When G went down mid-dance (Time.unscaledTime), or -1 while it isn't held.
         private float stopHeldSince=-1;
         private RhythmChart displayedChart;
+        private RhythmJudge feedbackJudge;
+        private readonly List<RhythmInput> replayedRhythmInputs=new List<RhythmInput>();
+        private int rhythmConnectionGeneration=-1;
+        private bool rhythmFocused=true;
         private string displayedInteractionId="";
         private int displayedSeed=-1,displayedNoteCount=-1,displayedPhrase=-1,processedRhythmInputs,rhythmComboCount,rhythmHitCount;
         private int shownRhythmHits=-1,shownRhythmBpm=-1,shownRhythmCount=-1,shownRhythmCombo=-1;
@@ -412,6 +417,7 @@ namespace Festival.Presentation
                 key.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);rhythmKeys[lane]=key;
             }
             // Notes come after the wells, so they draw over the wells and their outlines, and before the judgment, combo and timing text.
+            var tails=new GameObject("Hold tails",typeof(RectTransform));tails.transform.SetParent(rhythmPanel.transform,false);Fill(Rect(tails),0);tailContainer=tails.transform;
             var notes=new GameObject("Notes",typeof(RectTransform));notes.transform.SetParent(rhythmPanel.transform,false);Fill(Rect(notes),0);noteContainer=notes.transform;
             for(int i=0;i<32;i++)AddNoteView(); // ponytail: a typical chart's worth up front; ShowChart grows the pool for longer ones
             rhythmJudgment=Label(rhythmPanel.transform,"Judgment",45,TextAnchor.MiddleCenter);rhythmJudgment.font=displayFont;rhythmJudgment.fontStyle=FontStyle.Normal;Place(rhythmJudgment.rectTransform,.06f,.46f,.94f,.57f);
@@ -652,6 +658,8 @@ namespace Festival.Presentation
         {
             if(session==null)return;
             ResetChatForSession();
+            if(rhythmConnectionGeneration!=session.ConnectionGeneration){rhythmConnectionGeneration=session.ConnectionGeneration;ResetRhythm();}
+            if(!session.Connected)ResetRhythm();
             FestivalSettings.ApplyEffects(shopAudio,session.Profile?.Data);
             // MENU-1: a game that ends, by LEAVE SESSION or a drop, comes back to the title as the game opened: the camp in its own
             // light (the session drives the world only while connected), and the settings put away so the title shows why it ended.
@@ -1100,6 +1108,7 @@ namespace Festival.Presentation
         }
         private void OnDisable()
         {
+            if(session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}ResetRhythm();
             if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}
             ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
         }
@@ -1185,7 +1194,7 @@ namespace Festival.Presentation
             Place(dialoguePanel.GetComponent<RectTransform>(),showDancer ? .525f : .70f,showDancer ? .085f : .52f,showDancer ? .965f : .96f,showDancer ? .215f : .69f);
             dancerCaption.gameObject.SetActive(showDancer&&!showDialogue);
             if(speech!=null){dialogueSpeaker.text=speech.Speaker;dialogueLine.text=speech.Text;dialogueReveal.VisibleCharacters=speech.VisibleCharacters;}
-            if(!rhythm)return;
+            if(!rhythm||!session.enabled){ResetRhythm();return;}
             if(displayedChart==null||displayedInteractionId!=interaction.Id||displayedSeed!=interaction.ChartSeed||displayedNoteCount!=interaction.NoteCount||displayedPhrase!=interaction.Phrase||Math.Abs(displayedBeatSeconds-interaction.BeatSeconds)>.0001)
             {
                 ShowChart(interaction,RhythmChart.For(interaction));
@@ -1208,22 +1217,58 @@ namespace Festival.Presentation
             DrawChart(now,lead,effect,session.Profile.Data.ReducedMotion);
             for(int direction=0;direction<4;direction++)
             {
-                bool pressed=!session.MenuOpen&&!session.Controls.Objectives.IsPressed()&&session.Controls.Notes[direction].WasPressedThisFrame();
-                if(pressed){rhythmFlashUntil[direction]=Time.unscaledTime+.16f;if(showDancer)dancePreview.Step(direction);session.Command("Rhythm",direction:direction,time:Math.Max(0,now-session.Profile.Data.TimingCalibrationMs/1000.0));}
+                bool pressed=rhythmFocused&&!session.MenuOpen&&!session.Controls.Rebinding&&!session.Controls.Objectives.IsPressed()&&session.Controls.Notes[direction].WasPressedThisFrame();
+                if(pressed){rhythmFlashUntil[direction]=Time.unscaledTime+.16f;if(showDancer)dancePreview.Step(direction);session.Rhythm(direction,now);}
+                SendRhythmRelease(interaction,direction,now);
                 bool flashing=Time.unscaledTime<rhythmFlashUntil[direction];
                 rhythmReceptors[direction].color=flashing?RhythmColors[direction]:new Color(.76f,.85f,.84f,.9f);
                 rhythmReceptorWells[direction].color=flashing?new Color(.25f,.43f,.44f,1):new Color(.22f,.32f,.35f,1);
             }
         }
 
+        private void OnApplicationFocus(bool focused)
+        {
+            rhythmFocused=focused;
+            if(!focused&&session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}
+        }
+        private void ReleaseRhythmInputs()
+        {
+            var player=session?.LocalPlayer;
+            var interaction=player==null?null:session.State?.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
+            double now=interaction==null?0:session.EstimatedSimulationSeconds-interaction.StartSeconds;
+            for(int lane=0;lane<4;lane++)SendRhythmRelease(interaction,lane,now);
+        }
+        private void SendRhythmRelease(InteractionState interaction,int lane,double rawSeconds)
+        {
+            if(session?.Controls==null||!session.Controls.TakeNoteRelease(lane))return;
+            if(!session.enabled||!session.Connected||!FestivalInput.IsRhythm(interaction))return;
+            var chart=displayedChart!=null&&displayedInteractionId==interaction.Id?displayedChart:RhythmChart.For(interaction);
+            double judgment=FestivalSettings.JudgmentSeconds(rawSeconds,session.Profile.Data);
+            if(!chart.Notes.Exists(note=>note.Direction==lane&&note.HoldSeconds>0&&judgment>=note.TimeSeconds-interaction.GoodWindowSeconds-1e-9&&judgment<=note.TimeSeconds+note.HoldSeconds+1e-9))return;
+            session.Rhythm(lane,rawSeconds,true);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("Rhythm","hold_release","lane="+lane+" chart_seconds="+judgment.ToString("F3",System.Globalization.CultureInfo.InvariantCulture));
+#endif
+        }
+        private void ResetRhythm()
+        {
+            displayedChart=null;feedbackJudge=null;replayedRhythmInputs.Clear();displayedInteractionId="";processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
+            if(session?.Controls!=null)for(int lane=0;lane<4;lane++)session.Controls.TakeNoteRelease(lane);
+            if(rhythmJudgment!=null)rhythmJudgment.text="";
+            if(rhythmCombo!=null)rhythmCombo.text="";
+            if(rhythmTiming!=null)rhythmTiming.text="";
+            foreach(var head in noteViews)head.gameObject.SetActive(false);
+            foreach(var tail in holdTails)tail.gameObject.SetActive(false);
+        }
+
         // Readies the lane for a challenge's chart. DANCE-5: a beat can hold up to four notes, so the note pool grows (inside the
         // Notes container, keeping DANCE-7's draw order) until every note of the chart has a view, and the hit record is the chart's size.
         public void ShowChart(InteractionState interaction,RhythmChart chart)
         {
-            displayedChart=chart;
+            displayedChart=chart;feedbackJudge=new RhythmJudge(chart,interaction.GoodWindowSeconds);replayedRhythmInputs.Clear();
             displayedInteractionId=interaction.Id;displayedSeed=interaction.ChartSeed;displayedNoteCount=interaction.NoteCount;displayedPhrase=interaction.Phrase;displayedBeatSeconds=interaction.BeatSeconds;
             while(noteViews.Count<chart.Notes.Count)AddNoteView();
-            rhythmConsumed=new bool[chart.Notes.Count];processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
+            rhythmConsumed=new bool[chart.Notes.Count];rhythmHeld=new bool[chart.Notes.Count];rhythmDropped=new bool[chart.Notes.Count];processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";rhythmJudgmentUntil=0;
             shownRhythmHits=shownRhythmBpm=shownRhythmCount=shownRhythmCombo=-1;
         }
 
@@ -1239,10 +1284,21 @@ namespace Festival.Presentation
             }
             for(int i=0;i<noteViews.Count;i++)
             {
-                var view=noteViews[i];if(i>=displayedChart.Notes.Count){view.gameObject.SetActive(false);continue;}
+                var view=noteViews[i];var tail=holdTails[i];tail.gameObject.SetActive(false);
+                if(i>=displayedChart.Notes.Count){view.gameObject.SetActive(false);continue;}
                 var note=displayedChart.Notes[i];double remaining=note.TimeSeconds-now;
-                bool visible=!rhythmConsumed[i]&&remaining<=lead&&remaining>=-MissOvershootSeconds;view.gameObject.SetActive(visible);if(!visible)continue;
-                PlaceNote(view,note,remaining,lead,effect,reducedMotion);
+                bool held=rhythmHeld[i]&&now<note.TimeSeconds+note.HoldSeconds;
+                bool visible=held||!rhythmConsumed[i]&&remaining<=lead&&remaining>=-MissOvershootSeconds;view.gameObject.SetActive(visible);
+                if(!visible)continue;
+                PlaceNote(view,note,held?0:remaining,lead,effect,reducedMotion);
+                if(rhythmDropped[i])view.color=new Color(.55f,.55f,.55f,1);
+                if(note.HoldSeconds<=0)continue;
+                float top=held?NoteHitY:NoteStartY+(NoteHitY-NoteStartY)*(float)(1-remaining/lead);
+                float bottom=Mathf.Max(NoteStartY,NoteStartY+(NoteHitY-NoteStartY)*(float)(1-(remaining+note.HoldSeconds)/lead));
+                tail.gameObject.SetActive(top>bottom);
+                var color=rhythmDropped[i]?new Color(.55f,.55f,.55f):RhythmColors[note.Direction];color.a=.5f;tail.color=color;
+                var rect=tail.rectTransform;float x=.185f+note.Direction*.21f;
+                rect.anchorMin=new Vector2(x,bottom);rect.anchorMax=new Vector2(x,top);rect.anchoredPosition=Vector2.zero;rect.sizeDelta=new Vector2(28,0);
             }
         }
 
@@ -1252,6 +1308,8 @@ namespace Festival.Presentation
             var note=Panel(noteContainer,"Note "+noteViews.Count,Color.white,Vector2.zero,Vector2.zero).GetComponent<Image>();
             note.sprite=arrowSprite;note.preserveAspect=true;note.raycastTarget=false;
             var noteEdge=note.gameObject.AddComponent<Outline>();noteEdge.effectColor=new Color(.005f,.018f,.025f,.94f);noteEdge.effectDistance=new Vector2(3,-3);
+            var tail=Panel(tailContainer,"Tail "+holdTails.Count,Color.white,Vector2.zero,Vector2.zero).GetComponent<Image>();
+            tail.raycastTarget=false;holdTails.Add(tail);tail.gameObject.SetActive(false);
             noteViews.Add(note);note.gameObject.SetActive(false);
         }
 
@@ -1279,29 +1337,42 @@ namespace Festival.Presentation
 
         private void ProcessRhythmFeedback(InteractionState interaction,double now)
         {
-            if(interaction.Inputs.Count<processedRhythmInputs)
+            bool rollback=interaction.Inputs.Count<processedRhythmInputs;
+            for(int n=0;!rollback&&n<processedRhythmInputs;n++)
             {
-                Array.Clear(rhythmConsumed,0,rhythmConsumed.Length);processedRhythmInputs=0;rhythmComboCount=0;rhythmHitCount=0;lastRhythmJudgment="";
+                var current=interaction.Inputs[n];var previous=replayedRhythmInputs[n];
+                rollback=current.Direction!=previous.Direction||current.TimeSeconds!=previous.TimeSeconds||current.Release!=previous.Release;
             }
+            if(rollback)ShowChart(interaction,displayedChart);
             while(processedRhythmInputs<interaction.Inputs.Count)
             {
                 var input=interaction.Inputs[processedRhythmInputs++];
-                int closest=-1;double best=double.MaxValue;
-                for(int n=0;n<displayedChart.Notes.Count;n++)
+                replayedRhythmInputs.Add(new RhythmInput{Direction=input.Direction,TimeSeconds=input.TimeSeconds,Release=input.Release});
+                if(input.Release)
                 {
-                    var note=displayedChart.Notes[n];
-                    double error=Math.Abs(input.TimeSeconds-note.TimeSeconds);
-                    if(!rhythmConsumed[n]&&note.Direction==input.Direction&&error<=interaction.GoodWindowSeconds+1e-9&&error<best){closest=n;best=error;}
+                    feedbackJudge.Release(input.Direction,input.TimeSeconds);
+                    if(!feedbackJudge.LastDroppedNoteId.HasValue)continue;
+                    int dropped=displayedChart.Notes.FindIndex(n=>n.Id==feedbackJudge.LastDroppedNoteId.Value);
+                    if(dropped>=0)rhythmDropped[dropped]=true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("Rhythm","hold_drop","note="+feedbackJudge.LastDroppedNoteId.Value+" lane="+input.Direction);
+#endif
+                    rhythmComboCount=0;rhythmHitCount=Math.Max(0,rhythmHitCount-1);lastRhythmJudgment="LET GO";lastRhythmError=0;
                 }
-                if(closest>=0)
+                else
                 {
-                    rhythmConsumed[closest]=true;rhythmComboCount++;rhythmHitCount++;
-                    lastRhythmJudgment=best<=.08+1e-9?"PERFECT":"GOOD";
-                    lastRhythmError=input.TimeSeconds-displayedChart.Notes[closest].TimeSeconds;
+                    string verdict=feedbackJudge.Submit(input.Direction,input.TimeSeconds);
+                    int closest=feedbackJudge.LastMatchedNoteId.HasValue?displayedChart.Notes.FindIndex(n=>n.Id==feedbackJudge.LastMatchedNoteId.Value):-1;
+                    if(closest>=0)
+                    {
+                        rhythmConsumed[closest]=true;rhythmHeld[closest]=displayedChart.Notes[closest].HoldSeconds>0;rhythmComboCount++;rhythmHitCount++;
+                        lastRhythmJudgment=verdict=="Perfect"?"PERFECT":"GOOD";lastRhythmError=feedbackJudge.LastErrorSeconds;
+                    }
+                    else{rhythmComboCount=0;lastRhythmJudgment="OFF BEAT";lastRhythmError=0;}
                 }
-                else{rhythmComboCount=0;lastRhythmJudgment="OFF BEAT";lastRhythmError=0;}
                 rhythmJudgmentUntil=Time.unscaledTime+.58f;
             }
+            feedbackJudge.Advance(now-.75);
             // The same transport grace used by the simulation prevents a delayed snapshot
             // from turning a valid press into a premature visual miss.
             for(int n=0;n<displayedChart.Notes.Count;n++)

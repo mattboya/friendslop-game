@@ -26,6 +26,7 @@ namespace Festival.Presentation
         private readonly LocalProfile profile;
         private string appliedJson;
         private bool mapWasEnabled;
+        private readonly bool[] noteHeld=new bool[4],noteReleased=new bool[4];
         public string LastError {get;private set;}="";
         public string BindingNotice {get;private set;}="";
         [Serializable] private sealed class LegacyOverrides { public List<LegacyBinding> bindings=null; }
@@ -82,7 +83,12 @@ namespace Festival.Presentation
             Move=Map.FindAction("Move");Look=Map.FindAction("Look");Sprint=Map.FindAction("Sprint");Interact=Map.FindAction("Interact");Chat=Map.FindAction("Chat");
             Use=Map.FindAction("Use");Drop=Map.FindAction("Drop");Objectives=Map.FindAction("Objectives");Menu=Map.FindAction("Menu");
             Slot1=Map.FindAction("Slot1");Slot2=Map.FindAction("Slot2");Slot3=Map.FindAction("Slot3");View=Map.FindAction("View");Cycle=Map.FindAction("Cycle");Spin=Map.FindAction("Spin");PushToTalk=Map.FindAction("PushToTalk");
-            for(int lane=0;lane<4;lane++)Notes[lane]=Map.FindAction("Rhythm"+lane);
+            for(int lane=0;lane<4;lane++)
+            {
+                int direction=lane;Notes[lane]=Map.FindAction("Rhythm"+lane);
+                Notes[lane].performed+=context=>noteHeld[direction]=context.ReadValueAsButton();
+                Notes[lane].canceled+=context=>{if(noteHeld[direction])noteReleased[direction]=true;noteHeld[direction]=false;};
+            }
             if(string.IsNullOrEmpty(this.profile.Data.BindingOverridesJson))ImportLegacy();
             SynchronizeBindings();
             Map.Enable();
@@ -189,6 +195,12 @@ namespace Festival.Presentation
 #endif
             }
             if(mapWasEnabled)Map.Enable();done?.Invoke();
+        }
+        // Retain effective action cancellations across map disable/rebinding until the HUD consumes them.
+        public bool TakeNoteRelease(int lane){bool released=noteReleased[lane];noteReleased[lane]=false;return released;}
+        public void CancelHeldNotes()
+        {
+            for(int lane=0;lane<4;lane++)if(noteHeld[lane]){noteReleased[lane]=true;noteHeld[lane]=false;}
         }
         public void CancelRebind(){rebind?.Cancel();}
         public void Dispose(){rebind?.Dispose();rebind=null;Map.Dispose();}
