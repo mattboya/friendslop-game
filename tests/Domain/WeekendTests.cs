@@ -14,6 +14,8 @@ public static class WeekendTests
         DevelopmentCapabilityIsNotRestoredOrCommandSettable();
         DevelopmentSessionNeverAdvancesEarnedUnlocksOnRealWins();
         DevelopmentHostCanPickWithoutEarningUnlocks();
+        DroppedGearNamesTheItem();
+        DeathGearLossHasAnOwnerSequence();
         FestivalTable();
         EncoreScaling();
         NewCrewStartsDayOne();
@@ -143,14 +145,19 @@ public static class WeekendTests
     static void Earn(FestivalSimulation s,int cash,int confetti,int stash)
     {
         var a=s.Player("a");a.Cash=cash;a.Inventory.Clear();a.Inventory.Add(new ItemStack{ItemId="confetti",Count=confetti});a.EquippedItemId="confetti";a.HasCosmetic=true;s.State.StashCash=stash;
+        var b=s.Player("b");b.Cash=cash+7;b.Inventory.Clear();b.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});b.EquippedItemId="poi_practice";b.HasCosmetic=true;
         a.Effects.Add(new ActiveEffect{Id="weed",InstanceId="effect_x",RemainingSeconds=30});a.Wristbands.Add("b");a.Life="Detained";a.Health=40;
         s.State.Npcs[0].Observers.Add(new ObserverState{PlayerId="a",Suspicion=80});
     }
     static void Fresh(FestivalSimulation s,string why)
     {
-        var a=s.Player("a");
-        Check(a.Cash==20&&a.Inventory.Count==0&&a.EquippedItemId==""&&s.State.StashCash==0,why+": fresh $20, no gear, empty stash");
-        Check(a.HasCosmetic,why+": cosmetics are kept forever");
+        foreach(var a in s.State.Players)
+        {
+            Check(a.Cash==20&&a.Inventory.Count==0&&a.EquippedItemId==""&&s.State.StashCash==0,why+": "+a.Id+" has fresh $20, no gear, empty stash");
+            Check(a.HasCosmetic,why+": "+a.Id+" keeps cosmetics forever");
+            Check(a.DeathSpinAt==-1&&a.DeathSpinSequence==0&&a.GearLossSequence==0,why+": death and loss events belong to the previous round");
+        }
+        Check(s.State.Drops.Count==0,why+": ground drops never enter the next round");
         Check(s.State.DurationSeconds==480&&Festivals.For(s.State).Name=="Day 1",why+": back to an eight-minute Day 1");
     }
 
@@ -163,6 +170,7 @@ public static class WeekendTests
             Finish(s,"Success");var a=s.Player("a");string where=next[level-1];
             Check(Where(s)=="0/"+level+"/0"&&Festivals.For(s.State).Name==where,"clearing a level moves on to "+where);
             Check(a.Cash==30+level&&a.Inventory.Count==1&&a.Inventory[0].ItemId=="confetti"&&a.Inventory[0].Count==level&&a.EquippedItemId=="confetti","cash and gear carry into "+where);
+            var b=s.Player("b");Check(b.Cash==37+level&&Count(b,"poi_practice")==1&&b.EquippedItemId=="poi_practice","the other player also carries cash and gear into "+where);
             Check(s.State.StashCash==5*level&&a.HasCosmetic,"stash cash and cosmetics carry into "+where);
             Check(a.Effects.Count==0&&a.Wristbands.Count==0&&a.Life=="Alive"&&a.Health==100,"effects, wristbands and injuries stay behind ("+where+")");
             Check(s.State.Seed==seed+1&&s.State.Npcs[0].Observers.Count==0,"the grounds reseed and forget suspicion ("+where+")");
@@ -200,13 +208,13 @@ public static class WeekendTests
     }
     static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
 
-    // Dying costs the gear dropped where you fell and your turn as a spirit, not the weekend's savings: the cash stays with you.
+    // This seed keeps the weekend savings while death still drops the gear.
     static void DyingKeepsTheWeekendsCash()
     {
-        var s=Crew(43);var a=s.Player("a");s.State.Phase="Playing";a.Cash=87;a.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+        var s=Crew(43);var a=s.Player("a");s.State.Phase="Playing";s.State.SpinSeed=0;a.Cash=87;a.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
         a.Life="Downed";a.DownedRemaining=.05;s.Tick(.1);
         Check(a.Life=="Spirit"&&s.State.Drops.Exists(d=>d.ItemId=="confetti"),"setup: a dies and drops their gear");
-        Check(a.Cash==87,"a spirit keeps the $87 carried this weekend");
+        Check(a.Cash==87&&a.DeathCashDropped==0&&a.DeathSpinAmount==87,"the explicit KEEP seed retains the $87 carried this weekend");
         Finish(s,"Success");Check(s.Player("a").Cash==87,"and starts Night 1 with it");
     }
 
@@ -377,4 +385,32 @@ public static class WeekendTests
             Check(refused,"snapshot with an impossible weekend position is refused (case "+i+")");
         }
     }
+    static long LossSequence(PlayerState p)
+    {
+        var wire=JsonSerializer.SerializeToElement(p,Json);
+        return wire.TryGetProperty("GearLossSequence",out var sequence)?sequence.GetInt64():0;
+    }
+    static void DeathGearLossHasAnOwnerSequence()
+    {
+        var s=Crew(60);s.State.Phase="Playing";s.State.Npcs.Clear();var a=s.Player("a");var b=s.Player("b");a.Cash=0;
+        a.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});a.EquippedItemId="poi_practice";
+        a.Life="Downed";a.DownedRemaining=.05;s.Tick(.1);
+        Check(a.Inventory.Count==0&&s.State.Drops.Exists(d=>d.ItemId=="poi_practice"),"setup: real death drops the poi");
+        Check(LossSequence(a)==1&&LossSequence(b)==0,"only the dying owner receives a persistent first gear-loss sequence, even with zero cash");
+        var notice=JsonSerializer.SerializeToElement(a,Json);Check(notice.TryGetProperty("GearLossNotice",out var line)&&line.GetString()=="Your gear dropped where you fell: a friend can grab it","the semantic loss carries the promised owner notice");
+        s.Tick(.2);Check(LossSequence(a)==1,"spirit ticks do not repeat the loss event");
+        a.Life="Alive";a.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});a.Life="Downed";a.DownedRemaining=.05;s.Tick(.1);
+        Check(LossSequence(a)==2,"a second actual gear loss has a distinct owner sequence");
+        a.Life="Downed";a.DownedRemaining=.05;s.Tick(.1);
+        Check(LossSequence(a)==2,"empty inventory and wristbands alone produce no new gear-loss notice");
+    }
+    static void DroppedGearNamesTheItem()
+    {
+        var s=new FestivalSimulation(60);var p=s.AddPlayer("a","A");s.State.Phase="Playing";
+        p.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});p.EquippedItemId="poi_practice";
+        var result=s.Execute(p.Id,new GameCommand{Id="loop7_drop_notice",Kind="Drop",ItemId="poi_practice"});
+        Check(result.Accepted&&s.State.Drops.Exists(d=>d.ItemId=="poi_practice"),"setup: production Drop leaves the poi on the ground");
+        Check(result.Reason=="Dropped Practice poi","a successful gear drop names the lost item: got \""+result.Reason+"\"");
+    }
+
 }

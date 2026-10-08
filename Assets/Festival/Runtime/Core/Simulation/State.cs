@@ -31,6 +31,11 @@ namespace Festival.Core
         public float X,Z,Yaw,CampInteriorX,CampInteriorZ; public int Cash=20,Health=100,RevivalCount;
         // ECON-6: successful starter payments this camp, shared across both kinds; zero in older snapshots. Owner-only in views.
         public int StarterStockBought;
+        // Owner-only latest positive-cash death. -1 means no spin in older snapshots; logical age survives booth pauses.
+        public double DeathSpinAt=-1; public int DeathSpinSeed,DeathSpinAmount,DeathCashDropped; public long DeathSpinSequence;
+        public string DeathSpinId="",DeathSpinRoundId="",DeathSpinName="";
+        // Persistent owner-only semantic loss event; independent of cash and retained through covered screens.
+        public long GearLossSequence; public string GearLossKind="",GearLossNotice="";
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
         // Latest deck tip receipt is copied only to its owner; no public speech delivery or transcript. Legacy defaults are empty.
         public int DeckTipAmount; public string DeckTipDeliveryId=""; public double DeckTipAtWorldSeconds=-1,DeckTipUntilWorldSeconds=-1;
@@ -105,7 +110,8 @@ namespace Festival.Core
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).
-    [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId="",ClaimedBy=""; public int Count; public float X,Z; public double ClaimAt; }
+    // Cash LandsAt is a simulation-clock deadline translated across booth pauses; zero keeps legacy drops immediate.
+    [Serializable] public sealed class DropState { public string Id="", ItemId="",OwnerId="",ClaimedBy=""; public int Count; public float X,Z; public double ClaimAt,LandsAt; }
     [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
     [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); }
     [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }

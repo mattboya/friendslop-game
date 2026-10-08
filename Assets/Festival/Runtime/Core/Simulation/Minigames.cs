@@ -126,6 +126,7 @@ namespace Festival.Core
             {
                 p.RecoveryUntil=Shift(p.RecoveryUntil);p.ChimeUntil=Shift(p.ChimeUntil);p.SprintUntil=Shift(p.SprintUntil);p.HelpUntil=Shift(p.HelpUntil);
                 p.NpcSpeechUntil=Shift(p.NpcSpeechUntil);p.VisualReceiptAt=Shift(p.VisualReceiptAt);
+                p.DeathSpinAt=p.DeathSpinAt==0&&p.DeathSpinSequence>0?by:Shift(p.DeathSpinAt);
                 foreach(var e in p.Effects)e.StartSeconds=Shift(e.StartSeconds);
             }
             foreach(var n in State.Npcs)
@@ -136,7 +137,7 @@ namespace Festival.Core
             }
             foreach(var i in State.Interactions)i.StartSeconds=Shift(i.StartSeconds);
             foreach(var t in State.Transfers)t.ExpiresAt=Shift(t.ExpiresAt);
-            foreach(var d in State.Drops)d.ClaimAt=Shift(d.ClaimAt);
+            foreach(var d in State.Drops){d.ClaimAt=Shift(d.ClaimAt);d.LandsAt=Shift(d.LandsAt);}
             foreach(var v in State.Visions)v.ShowUntil=Shift(v.ShowUntil);
         }
     }

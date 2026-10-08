@@ -65,8 +65,60 @@ public sealed partial class FestivalSimulation {
     void PoliceTick(NpcState cop,double dt){foreach(var p in State.Players){var e=cop.Evidence.Find(x=>x.PlayerId==p.Id);if(!p.Connected||p.Life!="Alive"){if(e!=null&&!Arrests(e))cop.Evidence.Remove(e);continue;}if(e==null&&StockVisible(p)&&Sees(cop,p))e=StartStop(cop,p);if(e==null||!Pursue(cop,p,e,dt))continue;cop.TargetId=p.Id;cop.Mode=Arrests(e)?"ArrestWarning":"Stop";if(Arrests(e)&&State.SimulationSeconds>=e.DetainAt){Detain(p);cop.Mode="Patrol";return;}double dist=Distance(cop.X,cop.Z,p.X,p.Z);if(dist>2&&(Arrests(e)||dist<=SightRange(cop))){var point=Move(cop.X,cop.Z,p.X,p.Z,3*dt);cop.X=point.X;cop.Z=point.Z;}return;}if(!Confiscate(cop,dt))Patrol(cop,dt);}
     void Detain(PlayerState p){if(p.Life!="Alive")return;var i=Interaction(p.InteractionId);if(i!=null&&i.Kind=="Sale")i.ReservedItemId="";Cancel(p,"Police bust");ReturnOffers(p.Id);p.Inventory.RemoveAll(x=>Stock(x.ItemId));if(!p.Inventory.Exists(x=>x.ItemId==p.EquippedItemId))p.EquippedItemId="";p.Cash-=Math.Min(p.Cash,10);p.Life="Detained";p.EscapeProgress=0;p.X=27;p.Z=5;p.DragTargetId="";}
     void ClearEvidence(string id){foreach(var n in State.Npcs)n.Evidence.RemoveAll(e=>e.PlayerId==id);}
-    // A death drops gear and wristbands where the player fell. Their cash, the weekend's savings, stays with them.
-    void Die(PlayerState p){if(p.Life!="Downed")return;Cancel(p,"Death");ReturnOffers(p.Id);foreach(var stack in p.Inventory)State.Drops.Add(new DropState{Id=Id("drop"),ItemId=stack.ItemId,Count=stack.Count,X=p.X,Z=p.Z});p.Inventory.Clear();p.EquippedItemId="";foreach(var band in p.Wristbands)State.Drops.Add(new DropState{Id=Id("band"),ItemId="wristband",OwnerId=band,Count=1,X=p.X,Z=p.Z});p.Wristbands.Clear();p.Effects.Clear();p.Life="Spirit";LeaveBody(p);ClearEvidence(p.Id);if(!State.Drops.Exists(d=>d.ItemId=="wristband"&&d.OwnerId==p.Id)&&!State.Players.Exists(x=>x.Wristbands.Contains(p.Id)))State.Drops.Add(new DropState{Id=Id("band"),ItemId="wristband",OwnerId=p.Id,Count=1,X=p.X,Z=p.Z});}
+    public const double DeathWheelSeconds=2.5;
+    // The independent death stream freezes only after cancellation/refunds and returned handoffs.
+    void FreezeDeathCash(PlayerState p)
+    {
+        if(p.Cash<=0)return;
+        p.DeathSpinAt=State.SimulationSeconds;p.DeathSpinSeed=unchecked(State.SpinSeed*67+(int)State.Tick*8+p.Ordinal);
+        p.DeathSpinAmount=p.Cash;p.DeathCashDropped=new ContentRandom(p.DeathSpinSeed).Next(4)==0?p.Cash:0;p.DeathSpinSequence++;
+        p.DeathSpinRoundId=State.RoundId;p.DeathSpinId=State.RoundId+":death:"+p.Id+":"+p.DeathSpinSequence;p.DeathSpinName=p.Name;
+        if(p.DeathCashDropped>0){p.Cash=0;State.Drops.Add(new DropState{Id=Id("cash"),ItemId="cash",OwnerId=p.Id,Count=p.DeathCashDropped,X=p.X,Z=p.Z,LandsAt=p.DeathSpinAt+DeathWheelSeconds});}
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        ChatDiagnostic?.Invoke("DeathCash","Frozen",State.RoundId,State.SimulationSeconds);
+#endif
+    }
+    // A death drops gear and wristbands where the player fell; a quarter of positive-cash deaths also drops their cash.
+    // Additive snapshot fields must not invent an event, overflow a sequence, or duplicate a financial claim.
+    static void ValidateDeathState(RoundState state)
+    {
+        foreach(var p in state.Players)
+        {
+            bool spin=p.DeathSpinSequence>0;
+            if(!Finite(p.DeathSpinAt)||p.DeathSpinSequence<0||p.DeathSpinSequence>3||p.DeathSpinAmount<0||p.DeathCashDropped<0||p.DeathCashDropped!=0&&p.DeathCashDropped!=p.DeathSpinAmount
+                ||p.DeathSpinId==null||p.DeathSpinRoundId==null||p.DeathSpinName==null||p.DeathSpinName.Length>24
+                ||spin&&(p.DeathSpinAt<0||p.DeathSpinAmount==0||p.DeathSpinRoundId!=state.RoundId||p.DeathSpinId!=state.RoundId+":death:"+p.Id+":"+p.DeathSpinSequence)
+                ||!spin&&(p.DeathSpinAt!=-1||p.DeathSpinAmount!=0||p.DeathCashDropped!=0||p.DeathSpinSeed!=0||p.DeathSpinId!=""||p.DeathSpinRoundId!=""||p.DeathSpinName!="")
+                ||p.GearLossSequence<0||p.GearLossSequence>3||p.GearLossKind!=(p.GearLossSequence>0?"Death":"")||p.GearLossNotice!=(p.GearLossSequence>0?DeathGearLossNotice:""))throw new ArgumentException("Invalid snapshot death event");
+        }
+        var cashIds=new HashSet<string>();
+        foreach(var drop in state.Drops)
+        {
+            if(drop==null||!Finite(drop.LandsAt)||drop.LandsAt<0)throw new ArgumentException("Invalid snapshot drop landing");
+            if(drop.ItemId!="cash")continue;
+            if(string.IsNullOrEmpty(drop.Id)||drop.Count<=0||!Finite(drop.X)||!Finite(drop.Z)||!cashIds.Add(drop.Id)||state.Drops.Exists(other=>other!=drop&&other.Id==drop.Id))throw new ArgumentException("Invalid snapshot cash pile");
+        }
+    }
+    public const string DeathGearLossNotice="Your gear dropped where you fell: a friend can grab it";
+    void Die(PlayerState p)
+    {
+        if(p.Life!="Downed")return;
+        var active=Interaction(p.InteractionId);
+        bool dropsGear=p.Inventory.Exists(stack=>stack.Count>0)||(active!=null&&active.Status=="Active"&&active.Kind=="Sale"&&active.ReservedItemId!="")||State.Transfers.Exists(t=>t.FromId==p.Id&&t.Amount>0);
+        Cancel(p,"Death");ReturnOffers(p.Id);FreezeDeathCash(p);
+        foreach(var stack in p.Inventory)if(stack.Count>0)State.Drops.Add(new DropState{Id=Id("drop"),ItemId=stack.ItemId,Count=stack.Count,X=p.X,Z=p.Z});
+        p.Inventory.Clear();p.EquippedItemId="";
+        if(dropsGear)
+        {
+            p.GearLossSequence++;p.GearLossKind="Death";p.GearLossNotice=DeathGearLossNotice;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            ChatDiagnostic?.Invoke("GearLoss","Death",State.RoundId,State.SimulationSeconds);
+#endif
+        }
+        foreach(var band in p.Wristbands)State.Drops.Add(new DropState{Id=Id("band"),ItemId="wristband",OwnerId=band,Count=1,X=p.X,Z=p.Z});
+        p.Wristbands.Clear();p.Effects.Clear();p.Life="Spirit";LeaveBody(p);ClearEvidence(p.Id);
+        if(!State.Drops.Exists(d=>d.ItemId=="wristband"&&d.OwnerId==p.Id)&&!State.Players.Exists(x=>x.Wristbands.Contains(p.Id)))State.Drops.Add(new DropState{Id=Id("band"),ItemId="wristband",OwnerId=p.Id,Count=1,X=p.X,Z=p.Z});
+    }
     bool AttackerNear(PlayerState p,double range){return State.Npcs.Exists(n=>n.Kind=="Wook"&&n.Mode=="Swarming"&&n.DistractedUntil<=State.SimulationSeconds&&Distance(n.X,n.Z,p.X,p.Z)<=range);}
     CommandResult Drag(PlayerState p,GameCommand c){var t=Player(c.TargetId);if(t==null||t.Life!="Downed"||p.CarryBodyId!=""||!Near(p,t.X,t.Z)||State.Players.Exists(x=>x!=p&&x.DragTargetId==t.Id))return Reject("Choose nearby unclaimed downed friend");p.DragTargetId=p.DragTargetId==t.Id?"":t.Id;return Ok();}
     CommandResult Rescue(PlayerState p,GameCommand c){var t=Player(c.TargetId);if(t==null||t.Life!="Downed"||!Near(p,t.X,t.Z)||AttackerNear(t,3)||RecoveryClaimed(t.Id))return Reject("Distract attackers and reach downed friend");return BeginTask(p,"Rescue",t.Id,3);}

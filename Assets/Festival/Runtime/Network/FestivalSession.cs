@@ -88,6 +88,9 @@ namespace Festival.Network
         // PLAYA-5: DeckSet replaces an owned plain RideCar before the busy gate, carries the shared 16-beat stage chart,
         // remains visibly DeckSet/riding and settles accumulated spectators once. NpcState.Tipped persists only on the host;
         // the latest deck tip amount/delivery/world lifetime is owner-only and never enters public speech.
+        // Death cash freezes an owner event after refunds and returns; cash piles debit immediately, land after 2.5 world
+        // seconds and credit once independently of inventory capacity. Living views carry only landed drops. Latest frozen
+        // death fields and sequenced semantic gear-loss notices reach only their owner; ground Drop replies name the item.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
@@ -834,7 +837,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
+                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
             }
             if(!spirit)
             {
@@ -846,7 +849,7 @@ namespace Festival.Network
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
-                view.Drops=source.Drops;view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
+                view.Drops=FestivalSimulation.VisibleDrops(source);view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
                 // GAS-2: the level's Giggle Tank, public to all but spirits.
                 view.GiggleTankSpot=source.GiggleTankSpot;view.GiggleTankFound=source.GiggleTankFound;
             }
