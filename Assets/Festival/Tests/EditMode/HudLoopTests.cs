@@ -22,6 +22,37 @@ namespace Festival.Tests
             var p=new PlayerState{Id=id,Name=name,X=x,Z=z,Life=life};s.Players.Add(p);return p;
         }
 
+        [Test] public void TheWheelIncludesAllThreeSlotsWithOneItemOrNone()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You",0,0);
+            Assert.That(FestivalHudGear.Cycles(s,you,1),Is.True,"one held item still has two empty destinations");
+            Assert.That(FestivalHudGear.Cycles(s,you,0),Is.True,"an empty hand retains its three-slot cursor");
+            Assert.That(new[]{FestivalHudGear.NextSlot(0,1),FestivalHudGear.NextSlot(1,1),FestivalHudGear.NextSlot(2,1)},Is.EqualTo(new[]{1,2,0}));
+            Assert.That(FestivalHudGear.NextSlot(0,-1),Is.EqualTo(2));
+        }
+
+        [Test] public void TheSelectedGearMarkHasAGlyphInTheActualHudFont()
+        {
+            string previousFolder=LocalProfile.Folder,previousScope=FestivalInput.PreferencesScope;
+            string folder=Path.Combine(Path.GetTempPath(),"impl-U52-glyph-"+System.Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;
+            var go=new GameObject("impl-U52 gear glyph HUD");
+            try
+            {
+                var hud=go.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+                var state=Level(0,0);var player=Crew(state,"you","You",0,0);
+                typeof(FestivalHud).GetMethod("UpdateText",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{state,player});
+                var slots=(Text[])typeof(FestivalHud).GetField("slotTexts",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);var selected=slots[0];
+                string mark=selected.text.Split(' ')[1];Assert.That(mark.Length,Is.EqualTo(1),"the selected slot has a distinct visible mark");
+                selected.font.RequestCharactersInTexture(mark,selected.fontSize,selected.fontStyle);
+                Assert.That(selected.font.GetCharacterInfo(mark[0],out var glyph,selected.fontSize,selected.fontStyle)&&glyph.advance>0,Is.True,"the actual gear Text font must render its selected mark");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();LocalProfile.Folder=previousFolder;FestivalInput.PreferencesScope=previousScope;
+                if(Directory.Exists(folder))Directory.Delete(folder,true);
+            }
+        }
+
         [Test] public void BannerNamesTheFestivalAndLevel()
         {
             Assert.That(FestivalHudText.LevelBanner(Level(0,0)),Is.EqualTo("PALM MIRAGE  •  DAY 1"));
@@ -440,7 +471,7 @@ namespace Festival.Tests
         }
 
         // HUD-8: each notch of the wheel steps once through the filled hand slots, down to the next and up to the previous, round
-        // and round; a repeat within RepeatSeconds of a step is the same notch. It switches nothing with under two hand items, in a
+        // and round; a repeat within RepeatSeconds of a step is the same notch. It switches nothing in a
         // dance, or while a chat's questions take 1-3 (a VIP rope chat has none, so there it switches, as 1-3 do).
         [Test] public void TheWheelStepsRoundTheFilledSlotsOneNotchAtATime()
         {
@@ -456,7 +487,7 @@ namespace Festival.Tests
 
             var s=new RoundState{Phase="Playing"};var you=new PlayerState{Id="you"};s.Players.Add(you);
             Assert.That(FestivalHudGear.Cycles(s,you,2),Is.True,"two hand items: the wheel switches");
-            Assert.That(FestivalHudGear.Cycles(s,you,1),Is.False,"one: nothing to switch to");
+            Assert.That(FestivalHudGear.Cycles(s,you,1),Is.True,"one item still has empty destinations");
             s.Interactions.Add(new InteractionState{Id="dance",PlayerId="you",Kind="Dance"});you.InteractionId="dance";
             Assert.That(FestivalHudGear.Cycles(s,you,3),Is.False,"not mid-dance");
             var chat=new InteractionState{Id="chat",PlayerId="you",Kind="ConfirmChat"};chat.Chat.Questions=new[]{"Q1","Q2","Q3"};

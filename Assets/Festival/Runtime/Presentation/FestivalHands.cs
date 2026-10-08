@@ -15,7 +15,9 @@ namespace Festival.Presentation
         bool raiseLeft,raiseRight,presenting;
         SkinnedMeshRenderer[] restMeshes;
         int[] restLeftIndices,restRightIndices;
-        int receiptSequence;
+        int receiptSequence,suppressedReceiptSequence=-1;
+        string receiptEquipped="",manualItem="";
+        bool manualEquipment;
         float receiptAt=-10;
         string receiptItem="";
         static readonly Vector3 LoweredGrip=new Vector3(.0336f,-.309f,.025f);
@@ -114,10 +116,15 @@ namespace Festival.Presentation
         {
             if(player!=null&&receiptSequence!=player.VisualReceiptSequence)
             {
-                receiptSequence=player.VisualReceiptSequence;receiptItem=player.VisualReceivedItem;
+                receiptSequence=player.VisualReceiptSequence;receiptItem=player.VisualReceivedItem;receiptEquipped=player.EquippedItemId;
                 float age=simulationSeconds<0?0:(float)(simulationSeconds-player.VisualReceiptAt);
-                receiptAt=age>=0&&age<1?Time.time-age:-10;
+                if(age<0&&age>-.00001f)age=0; // Equal simulation timestamps can differ by double rounding.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","first_person_receipt","sequence="+receiptSequence+" age="+age+" suppressed="+(receiptSequence==suppressedReceiptSequence));
+#endif
+                receiptAt=receiptSequence!=suppressedReceiptSequence&&age>=0&&age<1?Time.time-age:-10;
             }
+            if(player!=null&&player.EquippedItemId!=receiptEquipped)SuppressReceipt(receiptSequence);
             string held=player?.HeldOfferId??"";
             if(player!=null&&!string.IsNullOrEmpty(player.VisualOfferItem))held=player.VisualOfferItem;
             if(held!=unpaidId)
@@ -131,8 +138,8 @@ namespace Festival.Presentation
                     if(resource!=null)unpaidProp=FestivalHeldItem.Create(attachments,held,RightPalm,true);
                 }
             }
-            string equipped=player?.EquippedItemId??"";
-            if(Time.time-receiptAt<.85f&&receiptItem!="")equipped=receiptItem;
+            string equipped=manualEquipment?manualItem:player?.EquippedItemId??"";
+            if(!manualEquipment&&Time.time-receiptAt<.85f&&receiptItem!="")equipped=receiptItem;
             if(receiving)equipped="";
             if(equipped=="little_spoon")equipped=""; // Passive neck item, never a hand prop.
             if(equipped!=equippedId)
@@ -176,6 +183,16 @@ namespace Festival.Presentation
             raiseLeft=showPoi||held=="map"||equipped=="map";
             previousCash=player?.Cash??-1;
         }
+        /// <summary>A manual gear choice wins over this receipt, including a choice that keeps already-free hands empty.</summary>
+        public void SuppressReceipt(int sequence)
+        {
+            suppressedReceiptSequence=sequence;receiptAt=-10;
+        }
+        public void SetManualEquipment(string item,int receipt)
+        {
+            manualEquipment=true;manualItem=item;SuppressReceipt(receipt);
+        }
+        public void ClearManualEquipment(){manualEquipment=false;}
         static bool IsPoi(string item)=>item=="poi_led"||item=="poi_practice";
         void SetGrip(string item,bool alive)
         {

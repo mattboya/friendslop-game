@@ -15,6 +15,307 @@ namespace Festival.Tests
 {
     public sealed class HudLoopPlayTests:FestivalPlayModeTest
     {
+        [UnityTest]public IEnumerator ThreeSlotCursorStowsStockAndFreeHandsNeverUseOrDropPocketGear()
+        {
+            UseAVirtualKeyboard("impl-U52 cursor keyboard");UseAVirtualMouse("impl-U52 cursor mouse");
+            var world=new GameObject("impl-U52 cursor world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 cursor HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            var failures=new List<string>();
+            Text Slot(int index){foreach(var t in root.GetComponentsInChildren<Text>(false))if(t.name=="Slot label"&&t.transform.parent.name=="Slot "+index)return t;return null;}
+            IEnumerator Scroll(float direction)
+            {
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,direction)});yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestMouse,new MouseState());yield return new WaitForSeconds(.18f);
+            }
+            void Check(PlayerState p,string expected,int selected,string where)
+            {
+                if(p.EquippedItemId!=expected)failures.Add(where+": equipped "+p.EquippedItemId+", expected "+expected);
+                var label=Slot(selected);if(label==null||!label.text.Contains("▸"))failures.Add(where+": selected slot "+selected+" has no cursor mark");
+                for(int i=1;i<=3;i++){var text=Slot(i);if(text!=null&&text.text.EndsWith("●")&&(expected==""||i!=selected))failures.Add(where+": wrong held marker on "+i);}
+            }
+            try
+            {
+                session.Host("Cursor tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var p=game.Player(session.LocalPlayerId);game.State.Npcs.Clear();game.State.Doses.Clear();p.Effects.Clear();p.X=0;p.Z=5;
+                game.HasLineOfSight=(x,z,tx,tz)=>true;game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});p.EquippedItemId="";yield return new WaitForSeconds(.3f);
+                yield return Tap(Key.Digit1,.18f);Check(p,"stock_lsd",1,"one item, key 1");
+                yield return Scroll(-1);Check(p,"",2,"one item, wheel to empty 2");
+                var cop=new NpcState{Id="cop_0",Kind="Cop",X=0,Z=0,Yaw=0};game.State.Npcs.Add(cop);yield return new WaitForSeconds(.3f);
+                if(cop.Evidence.Count!=0)failures.Add("free hands still caused visibility stop: "+cop.Evidence);
+                int beforeFreeHands=game.State.Commands.Count;
+                yield return Tap(Key.Q,.05f);yield return Tap(Key.Q,.05f);yield return Tap(Key.G,.05f);
+                if(p.Inventory.Find(i=>i.ItemId=="stock_lsd")?.Count!=2||p.Effects.Exists(e=>e.Id=="lsd")||game.State.Commands.Count!=beforeFreeHands)failures.Add("free-hand Q/G consumed or dropped pocket stock: count="+(p.Inventory.Find(i=>i.ItemId=="stock_lsd")?.Count??0)+" effects="+string.Join(",",p.Effects.ConvertAll(e=>e.Id))+" message="+session.Message);
+                game.State.Npcs.Clear();
+                yield return Scroll(-1);Check(p,"",3,"empty 2 to empty 3");
+                yield return Scroll(-1);Check(p,"stock_lsd",1,"empty 3 to item 1");
+                yield return Tap(Key.Digit1,.18f);Check(p,"",1,"held numeric slot stows but remains selected");
+                yield return Scroll(-1);Check(p,"",2,"stowed selected 1 advances to 2");
+                yield return Tap(Key.Digit3,.18f);Check(p,"",3,"numeric empty slot 3 frees hands");
+                p.Inventory.Clear();yield return new WaitForSeconds(.3f);yield return Scroll(-1);Check(p,"",1,"zero items keeps three slots");
+                p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});yield return new WaitForSeconds(.3f);
+                yield return Scroll(-1);Check(p,"stock_mushrooms",2,"two items, wheel uses local cursor");
+                yield return Scroll(-1);Check(p,"",3,"two items includes empty 3");
+                p.Inventory.Add(new ItemStack{ItemId="medical_voucher",Count=1});yield return new WaitForSeconds(.3f);
+                yield return Scroll(-1);Check(p,"confetti",1,"three items wraps to 1");
+                yield return Scroll(-1);Check(p,"stock_mushrooms",2,"three items advances to 2");
+                p.Inventory.RemoveAt(0);yield return new WaitForSeconds(.3f);
+                var selected=Slot(2);if(selected==null||!selected.text.Contains("▸")||!Slot(1).text.EndsWith("●"))failures.Add("inventory shift must separate selected 2 from held 1");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;Assert.That(failures,Is.Empty,string.Join("\n",failures));
+        }
+
+        [UnityTest]public IEnumerator ActualWheelConsumerSendsOnlyOneEquipWithinTheNotchWindow()
+        {
+            UseAVirtualMouse("impl-U52 notch mouse");
+            var world=new GameObject("impl-U52 notch world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 notch HUD");var session=root.AddComponent<FestivalSession>();var hud=root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Notch tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
+                p.Inventory.Clear();foreach(string item in new[]{"confetti","stock_mushrooms"})p.Inventory.Add(new ItemStack{ItemId=item,Count=1});p.EquippedItemId="confetti";
+                yield return new WaitForSeconds(.3f);hud.enabled=false;
+                var update=typeof(FestivalHud).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Instance);
+                int before=game.State.Commands.Count;
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-120)});InputSystem.Update();
+                update.Invoke(hud,null);update.Invoke(hud,null);
+                Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"),"even a large wheel delta takes one destination");
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before+1),"a second real HUD consumption in the same notch window sends no repeat Equip");
+                yield return new WaitForSeconds(FestivalHudGear.RepeatSeconds+.03f);
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});InputSystem.Update();update.Invoke(hud,null);
+                Assert.That(p.EquippedItemId,Is.Empty,"the next notch reaches the empty third slot");Assert.That(game.State.Commands.Count,Is.EqualTo(before+2));
+                yield return new WaitForSeconds(FestivalHudGear.RepeatSeconds+.03f);
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,120)});InputSystem.Update();update.Invoke(hud,null);
+                Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"),"one up notch returns to slot 2");Assert.That(game.State.Commands.Count,Is.EqualTo(before+3));
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator JoinedWheelStowsOneStockAndAuthorityClearsItsVisibilityStop()
+        {
+            UseAVirtualKeyboard("impl-U52 joined keyboard");UseAVirtualMouse("impl-U52 joined mouse");
+            var world=new GameObject("impl-U52 joined world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("impl-U52 authority");var host=hostRoot.AddComponent<FestivalSession>();var hostHud=hostRoot.AddComponent<FestivalHud>();yield return null;
+            var friendRoot=new GameObject("impl-U52 joined HUD");var friend=friendRoot.AddComponent<FestivalSession>();friendRoot.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);hostHud.enabled=false;host.Controls.Map.Disable();
+                friend.Join("Joined cursor tester","127.0.0.1",port);for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);var game=Simulation(host);var p=game.Player(friend.LocalPlayerId);p.X=0;p.Z=19;
+                friend.Command("Ready");yield return new WaitForSeconds(.3f);Assert.That(p.Ready,Is.True,friend.Message);yield return StartLevel(host,friend.LocalPlayerId);
+                game.State.Npcs.Clear();p.X=0;p.Z=5;p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="";
+                game.HasLineOfSight=(x,z,tx,tz)=>true;game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
+                var cop=new NpcState{Id="cop_0",Kind="Cop",X=0,Z=0,Yaw=0};game.State.Npcs.Add(cop);yield return new WaitForSeconds(.3f);
+                Assert.That(cop.Evidence,Is.Empty,"pocket stock starts safe");
+                yield return Tap(Key.Digit1,.25f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"joined numeric input reaches authority");
+                Assert.That(cop.Evidence.Exists(e=>e.PlayerId==p.Id&&e.Kind=="VisibleStock"),Is.True,"the authority sees stock held out");
+                InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestMouse,new MouseState());
+                for(float until=Time.realtimeSinceStartup+3;(p.EquippedItemId!=""||friend.LocalPlayer.EquippedItemId!=""||cop.Evidence.Exists(e=>e.PlayerId==p.Id&&e.Kind=="VisibleStock"))&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(p.EquippedItemId,Is.Empty,"joined wheel reaches an empty slot on the authority");Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty,"joined owner snapshot has free hands");
+                Assert.That(cop.Evidence.Exists(e=>e.PlayerId==p.Id&&e.Kind=="VisibleStock"),Is.False,"stowing clears only the visibility stop");Assert.That(p.Inventory[0].Count,Is.EqualTo(1));
+                var hands=friend.ViewCamera.transform.Find("First-person hand attachments");Assert.That(hands,Is.Not.Null);
+                foreach(Transform grip in hands)Assert.That(grip.name.StartsWith("Held grip ")&&grip.gameObject.activeInHierarchy,Is.False,"joined hand has no stale stock prop");
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendRoot);Object.Destroy(hostRoot);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator ManualStowWinsOverSameFrameUseAndDrop()
+        {
+            UseAVirtualKeyboard("impl-U52 simultaneous keyboard");
+            var world=new GameObject("impl-U52 simultaneous world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 simultaneous HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Same-frame tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var p=game.Player(session.LocalPlayerId);game.State.Npcs.Clear();p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.EquippedItemId="confetti";
+                yield return new WaitForSeconds(.3f);int before=game.State.Commands.Count;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.Digit1,Key.Q,Key.G));yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return new WaitForSeconds(.15f);
+                Assert.That(p.Inventory.Find(i=>i.ItemId=="confetti")?.Count??0,Is.EqualTo(1),"stowing and Q/G on the same frame cannot consume or drop what was just put away");
+                Assert.That(p.EquippedItemId,Is.Empty);Assert.That(game.State.Commands.Count,Is.EqualTo(before+1),"only Equip(empty) reaches the authority");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator StopDitchKeepsPriorityOverSameFrameManualStow()
+        {
+            UseAVirtualKeyboard("impl-U52 stop priority keyboard");
+            var world=new GameObject("impl-U52 stop priority world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 stop priority HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Stop tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var game=Simulation(session);var p=game.Player(session.LocalPlayerId);game.State.Npcs.Clear();p.X=0;p.Z=5;
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});p.EquippedItemId="stock_lsd";
+                game.HasLineOfSight=(x,z,tx,tz)=>true;game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
+                var cop=new NpcState{Id="cop_0",Kind="Cop",X=0,Z=0,Yaw=0};game.State.Npcs.Add(cop);yield return new WaitForSeconds(.3f);
+                Assert.That(cop.Mode,Is.EqualTo("Stop"));Assert.That(cop.TargetId,Is.EqualTo(p.Id));int before=game.State.Commands.Count;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.Digit1,Key.G));yield return null;yield return null;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return new WaitForSeconds(.15f);
+                Assert.That(p.EquippedItemId,Is.Empty);Assert.That(p.Inventory.Find(i=>i.ItemId=="stock_lsd").Count,Is.EqualTo(1),"G at an existing stop retains its stock-ditch priority over same-frame manual stow");
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before+2));Assert.That(game.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),Is.True);
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator GearSelectionHonorsEffectiveBindingsMenusLifeAndActionPriority()
+        {
+            UseAVirtualKeyboard("impl-U52 guarded keyboard");UseAVirtualMouse("impl-U52 guarded mouse");
+            var world=new GameObject("impl-U52 guarded world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 guarded HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            IEnumerator Scroll(){InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});yield return null;yield return null;InputSystem.QueueStateEvent(TestMouse,new MouseState());yield return new WaitForSeconds(.15f);}
+            try
+            {
+                session.Host("Guard tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.EquippedItemId="confetti";yield return new WaitForSeconds(.3f);
+                session.MenuOpen=true;int before=game.State.Commands.Count;yield return Tap(Key.Digit1,.15f);yield return Scroll();
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"menu input sends no gear commands");session.MenuOpen=false;
+                session.Controls.Rebind(session.Controls.Slot2,0,null);Assert.That(session.Controls.Rebinding,Is.True);before=game.State.Commands.Count;yield return Scroll();
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"rebinding input sends no gear commands");yield return Tap(Key.J,.2f);
+                Assert.That(session.Controls.Rebinding,Is.False);Assert.That(session.Controls.Slot2.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/j"));
+                before=game.State.Commands.Count;yield return Tap(Key.Digit2,.15f);Assert.That(game.State.Commands.Count,Is.EqualTo(before),"old key no longer selects slot 2");
+                yield return Tap(Key.J,.15f);Assert.That(p.EquippedItemId,Is.Empty,"effective rebound key selects empty slot 2");
+                p.Life="Detained";yield return new WaitForSeconds(.2f);before=game.State.Commands.Count;yield return Tap(Key.Digit1,.15f);yield return Scroll();
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"detained gear input sends nothing");p.Life="Alive";
+                int bag=game.State.VendorOffers.IndexOf("medical_voucher");Assert.That(bag,Is.GreaterThanOrEqualTo(0));var shelf=Catalog.ShopPoint(true,bag);p.X=shelf.X;p.Z=shelf.Z;
+                session.Command("HoldOffer",item:"medical_voucher");Assert.That(p.HeldOfferId,Is.EqualTo("medical_voucher"));yield return new WaitForSeconds(.2f);before=game.State.Commands.Count;
+                yield return Tap(Key.Digit1,.15f);yield return Scroll();Assert.That(game.State.Commands.Count,Is.EqualTo(before),"unpaid gear blocks selection");
+                yield return Tap(Key.G,.15f);Assert.That(p.HeldOfferId,Is.Empty,"G returns unpaid gear before any ordinary drop");Assert.That(p.Inventory[0].Count,Is.EqualTo(1));
+                var tent=CampFeatures.Find("tent_1");p.X=tent.X;p.Z=tent.Z;session.Command("EnterCamp",tent.Id);Assert.That(p.CampVisitId,Is.EqualTo(tent.Id));yield return new WaitForSeconds(.2f);before=game.State.Commands.Count;
+                yield return Tap(Key.Digit1,.15f);yield return Scroll();Assert.That(game.State.Commands.Count,Is.EqualTo(before),"interior gear blocks selection");yield return Tap(Key.G,.15f);Assert.That(p.CampVisitId,Is.Empty,"interior G exits before dropping gear");
+                yield return StartLevel(session);game.State.Npcs.Clear();p.X=0;p.Z=0;p.EquippedItemId="confetti";
+                var wook=new NpcState{Id="gear_guard_wook_0",Kind="Wook",Role="Regular",CanTalk=true,X=0,Z=1.5f,Yaw=180};game.State.Npcs.Add(wook);session.Command("Dance",wook.Id);
+                Assert.That(game.Interaction(p.InteractionId)?.Kind,Is.EqualTo("Dance"),session.Message);yield return new WaitForSeconds(.2f);before=game.State.Commands.Count;
+                yield return Tap(Key.Digit1,.15f);yield return Scroll();yield return Tap(Key.Q,.1f);yield return Tap(Key.G,.1f);
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"dancing consumes no gear key, wheel, Q or G tap");
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.G));yield return new WaitForSeconds(FestivalHudText.HoldToStopSeconds+.2f);InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());yield return new WaitForSeconds(.15f);
+                Assert.That(p.InteractionId,Is.Empty,"intentional G hold still cancels dance");Assert.That(p.Inventory[0].Count,Is.EqualTo(1),"the hold does not drop gear");
+                wook.Mode="Blending";wook.Suspicion=0;game.State.TripperId=p.Id;game.State.Visions.Add(new VisionState{Id="gear_guard_vision",Kind="Buyer",NpcId=wook.Id});session.Command("ConfirmChat",wook.Id);
+                var chat=game.Interaction(p.InteractionId);Assert.That(chat?.Kind,Is.EqualTo("ConfirmChat"),session.Message);Assert.That(chat.Chat.Questions.Length,Is.EqualTo(3));yield return new WaitForSeconds(.2f);before=game.State.Commands.Count;
+                yield return Scroll();yield return Tap(Key.Q,.1f);yield return Tap(Key.G,.1f);Assert.That(game.State.Commands.Count,Is.EqualTo(before),"chat wheel and ordinary Q/G preserve the conversation");
+                yield return Tap(Key.J,.15f);Assert.That(p.EquippedItemId,Is.EqualTo("confetti"),"rebound slot key answers the live chat instead of equipping");
+                bool asked=false;foreach(var text in root.GetComponentsInChildren<Text>(false))if(text.text==chat.Chat.Questions[1])asked=true;
+                Assert.That(asked,Is.True,"the real chat window displays the rebound question");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator JoinedManualSelectionOwnsHandsWhileViewsAreStaleAndRollsBackRejectedEquipment()
+        {
+            UseAVirtualKeyboard("impl-U52 pending keyboard");
+            var world=new GameObject("impl-U52 pending world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("impl-U52 pending authority");var host=hostRoot.AddComponent<FestivalSession>();var hostHud=hostRoot.AddComponent<FestivalHud>();yield return null;
+            var friendRoot=new GameObject("impl-U52 pending owner");var friend=friendRoot.AddComponent<FestivalSession>();friendRoot.AddComponent<FestivalHud>();yield return null;
+            var nextSnapshot=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);
+            string Props(Transform parent){var names=new List<string>();foreach(var t in parent.GetComponentsInChildren<Transform>(true))if(t.name.StartsWith("Held grip ")&&t.gameObject.activeSelf)names.Add(t.name.Substring(10));return string.Join(",",names);}
+            void Hands(string expected)
+            {
+                var palms=friend.ViewCamera.transform.Find("First-person hand attachments");Assert.That(palms,Is.Not.Null);
+                Assert.That(Props(palms),Is.EqualTo(expected),"owner first-person props follow the pending local selection");
+                Assert.That(Props(friend.LocalWorldCharacter.transform),Is.EqualTo(expected),"owner third-person props follow the pending local selection");
+            }
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);hostHud.enabled=false;host.Controls.Map.Disable();friend.Join("Pending tester","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);var game=Simulation(host);var p=game.Player(friend.LocalPlayerId);p.X=0;p.Z=19;friend.Command("Ready");yield return new WaitForSeconds(.3f);yield return StartLevel(host,friend.LocalPlayerId);
+                game.State.Npcs.Clear();p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});p.EquippedItemId="stock_lsd";
+                for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!="stock_lsd"&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"authority retains the initial equipped premise");
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("stock_lsd"));nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                yield return Tap(Key.Digit2,.15f);Assert.That(p.EquippedItemId,Is.Empty,"authority receives the manual stow");Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("stock_lsd"),"the old owner snapshot deliberately remains in flight");Hands("");
+                int before=game.State.Commands.Count;yield return Tap(Key.Q,.05f);yield return Tap(Key.Q,.05f);yield return Tap(Key.G,.05f);
+                Assert.That(game.State.Commands.Count,Is.EqualTo(before),"pending free hands issue no Use or ordinary Drop against stale equipped gear");Assert.That(p.Inventory[0].Count,Is.EqualTo(3));
+                yield return new WaitForSeconds(2.1f);Hands("stock_lsd");
+                string selected="",held="";foreach(var t in friendRoot.GetComponentsInChildren<Text>(false))if(t.name=="Slot label"){if(t.text.Contains("▸"))selected=t.transform.parent.name;if(t.text.EndsWith("●"))held=t.transform.parent.name;}
+                Assert.That(selected,Is.EqualTo("Slot 2"));Assert.That(held,Is.EqualTo("Slot 1"),"a stalled canonical view rolls back held equipment while keeping the local cursor");
+                nextSnapshot.SetValue(host,0d);for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!=""&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty);Hands("");
+                p.EquippedItemId="stock_lsd";for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!="stock_lsd"&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("stock_lsd"));nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                var admit=typeof(FestivalSession).GetMethod("Admit",BindingFlags.NonPublic|BindingFlags.Instance);for(int i=0;i<61;i++)admit.Invoke(host,new object[]{friend.LocalPlayerId,60});
+                before=game.State.Commands.Count;yield return Tap(Key.Digit2,.15f);Hands("");
+                Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Assert.That(game.State.Commands.Count,Is.EqualTo(before),"the real host admission gate drops this command without dispatching a result");
+                yield return new WaitForSeconds(2.1f);Hands("stock_lsd");yield return Tap(Key.G,.15f);
+                Assert.That(p.Inventory[0].Count,Is.EqualTo(2),"ordinary drop follows the authoritative held item after unconfirmed selection expires");
+                yield return Tap(Key.Digit1,.2f);Assert.That(p.EquippedItemId,Is.Empty);
+                nextSnapshot.SetValue(host,0d);for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!=""&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty);
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.EquippedItemId="confetti";
+                // Two identical rejection reasons still belong to distinct real command acknowledgments.
+                for(int attempt=0;attempt<2;attempt++)
+                {
+                    yield return Tap(Key.Digit1,.2f);Assert.That(friend.Message,Is.EqualTo("Item not owned"));Hands("");before=game.State.Commands.Count;
+                    yield return Tap(Key.Q,.05f);yield return Tap(Key.G,.05f);Assert.That(game.State.Commands.Count,Is.EqualTo(before),"rejected pending selection rolls back to the last confirmed free hands");
+                }
+                nextSnapshot.SetValue(host,0d);for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!="confetti"&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("confetti"));yield return null;Hands("confetti");
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.EquippedItemId="";
+                for(float until=Time.realtimeSinceStartup+3;(friend.LocalPlayer.EquippedItemId!=""||friend.LocalPlayer.Inventory.Count!=2)&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty);Assert.That(friend.LocalPlayer.Inventory.Count,Is.EqualTo(2));yield return null;
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);p.Inventory.RemoveAll(i=>i.ItemId=="confetti");
+                var hud=friendRoot.GetComponent<FestivalHud>();var keyboard=typeof(FestivalHud).GetMethod("UpdateKeyboard",BindingFlags.NonPublic|BindingFlags.Instance);
+                void PressNow(Key key)
+                {
+                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(key));InputSystem.Update();keyboard.Invoke(hud,new object[]{friend.State,friend.LocalPlayer});
+                    InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());InputSystem.Update();
+                }
+                PressNow(Key.Digit2);PressNow(Key.Digit1);friend.Command("Unknown");yield return new WaitForSeconds(.3f);
+                Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty);Hands("stock_lsd");
+                Assert.That(friend.Message,Is.EqualTo("Unknown action"),"an unrelated reply arrives after the coalesced older rejection and newest accepted Equip");
+                Assert.That(typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud),Is.True);
+                hud.enabled=false;yield return null;Hands("");Assert.That(typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud),Is.False);hud.enabled=true;
+                PressNow(Key.Digit1);yield return new WaitForSeconds(.2f);Hands("stock_lsd");
+                game.State.RoundId="impl-U52-next-round";p.EquippedItemId="";nextSnapshot.SetValue(host,0d);
+                for(float until=Time.realtimeSinceStartup+3;friend.State.RoundId!="impl-U52-next-round"&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.State.RoundId,Is.EqualTo("impl-U52-next-round"));yield return null;Hands("");
+                Assert.That(typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud),Is.False,"a real new-round snapshot cancels pending local equipment");
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);PressNow(Key.Digit1);yield return new WaitForSeconds(.2f);
+                Assert.That(typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud),Is.True);friend.Leave();yield return null;
+                Assert.That(typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud),Is.False,"leaving the actual session clears the pending input override");
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendRoot);Object.Destroy(hostRoot);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator SynchronousHostRejectionRestoresVisibleHands()
+        {
+            UseAVirtualKeyboard("impl-U52 synchronous keyboard");
+            var world=new GameObject("impl-U52 synchronous world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 synchronous HUD");var session=root.AddComponent<FestivalSession>();var hud=root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Sync tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.EquippedItemId="confetti";yield return null;yield return null;hud.enabled=false;
+                var gear=(List<ItemStack>)typeof(FestivalHud).GetField("handGear",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);gear.Clear();gear.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.Digit1));InputSystem.Update();
+                typeof(FestivalHud).GetMethod("UpdateKeyboard",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{game.State,p});
+                Assert.That(session.Message,Is.EqualTo("Item not owned"));Assert.That(p.EquippedItemId,Is.EqualTo("confetti"));yield return null;
+                foreach(var parent in new[]{session.ViewCamera.transform.Find("First-person hand attachments"),session.LocalWorldCharacter.transform})
+                {
+                    var props=new List<string>();foreach(var t in parent.GetComponentsInChildren<Transform>(true))if(t.name.StartsWith("Held grip ")&&t.gameObject.activeSelf)props.Add(t.name.Substring(10));
+                    Assert.That(string.Join(",",props),Is.EqualTo("confetti"),"a synchronous rejection restores the canonical prop by the next rendered frame");
+                }
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
         // The camera, HUD E handler, session commands and authoritative movement/purchase rules are the real consumers.
         // Batchmode has no focused window for WASD, so bounded TryMove steps walk the route instead of teleporting.
         [UnityTest]public IEnumerator CameraSelectsBothStarterSlotsAndWalksToCheckoutAcrossCampVisits()
@@ -130,8 +431,9 @@ namespace Festival.Tests
                 session.Command("Cancel");yield return new WaitForSeconds(.3f);
                 var window=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud.GetComponent<FestivalHud>());
                 if(window.Open){yield return Tap(Key.Escape,.3f);Assert.That(window.Open,Is.False,"Escape closes the displayed cancelled thread");}
-                Assert.That(session.MenuOpen,Is.False);
-                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));
+                Assert.That(session.MenuOpen,Is.False);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"the completed reservation/refund leaves the other stock equipped");
+                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.Empty,"the already-held numeric slot now stows");
+                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"a second press equips the selected stock before the wheel changes kind");
                 InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});yield return null;yield return new WaitForSeconds(.3f);
                 Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"));Assert.That(Read("Prompt"),Does.StartWith("Offer Fun Guys"));
                 // Remove the other kind: selling the actual last unit retains truthful guidance until refund or completion.
@@ -1354,12 +1656,12 @@ namespace Festival.Tests
                 yield return Scroll(-1);Holds("festival, wheel down twice","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
                 yield return Scroll(-1);Holds("festival, wheel down a third time","stock_mushrooms","1","1  •  FUN GUYS");
                 yield return Scroll(1);Holds("festival, wheel up from 1","medical_voucher","3","3  •  MEDICAL TENT VOUCHER");
-                // One hand item: 3 is empty and says so, and the wheel has nothing to switch to.
+                // One hand item: an empty numeric slot stows it, and the wheel still wraps through all three slots.
                 Pack("confetti");
                 yield return Tap(Key.Digit1,.3f);
-                yield return Tap(Key.Digit3,.3f);Holds("festival, one item, 3","confetti","1","3  •  EMPTY");
+                yield return Tap(Key.Digit3,.3f);Holds("festival, one item, 3","","","3  •  EMPTY  •  HANDS FREE");
                 yield return new WaitForSeconds(FestivalHudGear.ToastSeconds);
-                yield return Scroll(-1);Holds("festival, one item, wheel","confetti","1","(hidden)");
+                yield return Scroll(-1);Holds("festival, one item, wheel","confetti","1","1  •  CONFETTI CANNON");
                 // POLO-4's VIP rope chat has no questions, so it never swallows 1-3: they still switch while it's up.
                 Pack("stock_mushrooms","confetti");
                 var guard=sim.State.Npcs.Find(n=>n.Twist==FestivalSimulation.VipGuard);

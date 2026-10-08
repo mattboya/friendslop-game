@@ -70,6 +70,11 @@ namespace Festival.Presentation
         private int activeActionCount;
         private Action primaryAction;
         private int selectedSlot;
+        private bool pendingEquipment;
+        private string pendingEquipmentItem="",pendingEquipmentRound="",pendingEquipmentCommand="";
+        private const float EquipmentConfirmationSeconds=2;
+        private float pendingEquipmentAt;
+        private int pendingEquipmentGeneration,pendingEquipmentReceipt;
         // HUD-8: the line over the gear bar saying what a gear key or the wheel just switched to, or why not, until gearToastUntil;
         // and when the wheel last stepped (FestivalHudGear.Notch).
         private GameObject gearToast;
@@ -682,10 +687,11 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
+            FollowPendingEquipment(state,player);
             reviewPanel.SetActive(state.Phase=="CampReview"&&!showMenu);
             if(state.Phase=="CampReview")UpdateReview(state,player);
             var heldDefinition=state.Phase=="Shopping"?Catalog.FindItem(player.HeldOfferId):null;
@@ -758,12 +764,11 @@ namespace Festival.Presentation
             if(expandedGear!=hasGear)
             {
                 expandedGear=hasGear;
-                // A vacant three-slot bar needlessly covers the world during
-                // arrival and after the last item is used.
-                Place(Rect(inventoryPanel),hasGear ? .714f : .758f,.024f,.978f,hasGear ? .148f : .082f);
-                inventoryHeading.gameObject.SetActive(hasGear);
-                emptyGearLabel.gameObject.SetActive(!hasGear);
-                foreach(var slot in slotFrames)slot.gameObject.SetActive(hasGear);
+                // Empty destinations remain visible so the local cursor can keep moving after stowing or using the last item.
+                Place(Rect(inventoryPanel),.714f,.024f,.978f,.148f);
+                inventoryHeading.gameObject.SetActive(true);
+                emptyGearLabel.gameObject.SetActive(false);
+                foreach(var slot in slotFrames)slot.gameObject.SetActive(true);
             }
             if(!hasGear)emptyGearLabel.text="0 / 3  •  NO GEAR";
         }
@@ -804,14 +809,12 @@ namespace Festival.Presentation
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             UpdateTrippingLayout(tripping.text==""?0:tripping.text.Split('\n').Length);
             vitals.text=FestivalHudText.Vitals(state,player);
-            int equippedIndex=handGear.FindIndex(item=>item.ItemId==player.EquippedItemId);
-            if(equippedIndex>=0)selectedSlot=equippedIndex;
             for(int i=0;i<slotFrames.Length;i++)
             {
                 var item=i<handGear.Count?handGear[i]:null;
-                bool equipped=item!=null&&item.ItemId==player.EquippedItemId;
-                slotFrames[i].color=equipped?new Color(.13f,.34f,.32f,1):new Color(.07f,.13f,.15f,1);
-                slotTexts[i].text=(i+1)+"  "+(item==null?"EMPTY":ItemName(item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
+                bool equipped=item!=null&&item.ItemId==EquippedItem(player);
+                slotFrames[i].color=i==selectedSlot?new Color(.13f,.34f,.32f,1):new Color(.07f,.13f,.15f,1);
+                slotTexts[i].text=(i+1)+(i==selectedSlot?" ▸ ":"  ")+(item==null?"EMPTY":ItemName(item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
                 slotTexts[i].color=equipped?new Color(1,.79f,.53f):Paper;
             }
             int ready=state.Players.FindAll(p=>p.Ready).Count;
@@ -878,6 +881,7 @@ namespace Festival.Presentation
 
         private void UpdateKeyboard(RoundState state,PlayerState player)
         {
+            if(session.Controls.Rebinding){stopHeldSince=-1;return;}
             if(state.Phase=="CampReview"&&!session.MenuOpen)
             {
                 int award=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
@@ -908,18 +912,38 @@ namespace Festival.Presentation
             // CAMP-1: so do Marigold's questions while you talk to her.
             if(equipSlot>=0&&!session.MenuOpen&&(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open)){chatReply=equipSlot;equipSlot=-1;}
             // HUD-4: gear keys only where the host takes them (FestivalSimulation.Interactive): never at the debrief, the spin or loading.
-            bool gearKeys=FestivalSimulation.Interactive(state.Phase);
-            // HUD-8: a notch of the wheel steps round the filled hand slots, then switches like the key for the slot it lands on.
-            if(equipSlot<0&&!session.MenuOpen&&gearKeys&&FestivalHudGear.Cycles(state,player,handGear.Count))
+            bool gearKeys=FestivalSimulation.Interactive(state.Phase)&&player.Life=="Alive"&&!FestivalHudText.StopsByHold(state,player);
+            bool fromWheel=false,selectedThisFrame=false;
+            // The cursor persists through free hands and empty slots. A wheel destination always equips; a held numeric key toggles.
+            if(equipSlot<0&&!session.MenuOpen&&gearKeys&&!sellerTalk.Open&&FestivalHudGear.Cycles(state,player,handGear.Count))
             {
                 int step=FestivalHudGear.Notch(session.Controls.Cycle.ReadValue<float>(),Time.unscaledTime,ref lastGearStep);
-                if(step!=0)equipSlot=FestivalHudGear.Next(handGear.FindIndex(item=>item.ItemId==player.EquippedItemId),step,handGear.Count);
+                if(step!=0){equipSlot=FestivalHudGear.NextSlot(selectedSlot,step);fromWheel=true;}
             }
             if(equipSlot>=0&&!session.MenuOpen&&gearKeys)
             {
                 // HUD-8: the switch flashes over the gear bar, or why not: inside a tent, or behind an unpaid item, nothing switches.
                 string toast=FestivalHudGear.Toast(player,handGear,equipSlot);if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
-                if(FestivalHudGear.Blocked(player)==""){selectedSlot=equipSlot;if(equipSlot<handGear.Count)session.Command("Equip",item:handGear[equipSlot].ItemId);}
+                if(FestivalHudGear.Blocked(player)=="")
+                {
+                    selectedSlot=equipSlot;selectedThisFrame=true;
+                    string item=equipSlot<handGear.Count&&handGear[equipSlot].Count>0?handGear[equipSlot].ItemId:"";
+                    bool stowing=!fromWheel&&item!=""&&item==EquippedItem(player);
+                    if(stowing)item="";
+                    if(stowing)gearToastText.text=(equipSlot+1)+"  •  STOWED  •  HANDS FREE";
+                    else if(item=="")gearToastText.text=(equipSlot+1)+"  •  EMPTY  •  HANDS FREE";
+                    qAsked="";
+                    pendingEquipment=true;pendingEquipmentItem=item;pendingEquipmentRound=state.RoundId;pendingEquipmentCommand="";
+                    pendingEquipmentAt=Time.unscaledTime;pendingEquipmentGeneration=session.ConnectionGeneration;pendingEquipmentReceipt=player.VisualReceiptSequence;
+                    ShowPendingEquipment(state,player);
+                    pendingEquipmentCommand=session.SendCommand("Equip",item:item);
+                    if(pendingEquipmentCommand=="")ClearPendingEquipment();
+                    else EquipmentCommandResult(session.LastLocalCommandResult); // A host reply can arrive before SendCommand returns.
+                    FollowPendingEquipment(state,player);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","gear_selection","source="+(fromWheel?"wheel":"key")+" cursor="+selectedSlot+" equipped="+(item==""?"none":item)+" result="+session.Message+" receipt_suppressed="+player.VisualReceiptSequence);
+#endif
+                }
             }
             // MINI-4: F calls Mystery Cups for the player who is up (MinigamePrompt says so).
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&FestivalSimulation.CupsTurn(state)==player.Id){session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);return;}
@@ -932,9 +956,16 @@ namespace Festival.Presentation
             HoldToStop(dancing?session.Controls.Drop:null);
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&checkoutItem!=""){checkoutItem="";return;}
             if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
-            if(handGear.Count>0&&gearKeys)
+            if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&gearKeys&&player.InteractionId==""&&FestivalHudText.StoppedBy(state,player)!=null)
             {
-                selectedSlot=Mathf.Clamp(selectedSlot,0,handGear.Count-1);string item=player.EquippedItemId!=""?player.EquippedItemId:handGear[selectedSlot].ItemId;
+                var stock=player.Inventory.Find(i=>i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock");
+                if(stock!=null){session.Command("Drop",item:stock.ItemId);return;}
+            }
+            string heldItem=handGear.Find(i=>i.Count>0&&i.ItemId==EquippedItem(player))?.ItemId??"";
+            if(heldItem=="")qAsked="";
+            if(heldItem!=""&&gearKeys&&!selectedThisFrame&&player.InteractionId==""&&!sellerTalk.Open&&FestivalHudGear.Blocked(player)=="")
+            {
+                string item=heldItem;
                 if(session.Controls.Use.WasPressedThisFrame()&&!session.MenuOpen)
                 {
                     if(TakesOnQ(item,qAsked,qAskedAt,Time.unscaledTime)){qAsked="";session.Command("Use",item:item);}
@@ -943,6 +974,48 @@ namespace Festival.Presentation
                 }
                 if(session.Controls.Drop.WasPressedThisFrame()&&!session.MenuOpen&&!dancing)session.Command("Drop",item:item);
             }
+        }
+
+        private void EquipmentCommandResult(CommandResult result)
+        {
+            if(!pendingEquipment||pendingEquipmentCommand==""||result==null||result.Id!=pendingEquipmentCommand)return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","gear_confirmation","cursor="+selectedSlot+" accepted="+result.Accepted);
+#endif
+            // Acceptance can precede its view. Keep intent until matching equipment, or the same bounded total lifetime.
+            if(!result.Accepted)ClearPendingEquipment();
+        }
+
+        private string EquippedItem(PlayerState player)=>pendingEquipment?pendingEquipmentItem:player.EquippedItemId;
+        private void FollowPendingEquipment(RoundState state,PlayerState player)
+        {
+            if(!pendingEquipment)return;
+            if(state.RoundId!=pendingEquipmentRound||session.ConnectionGeneration!=pendingEquipmentGeneration||!FestivalSimulation.Interactive(state.Phase)||player.Life!="Alive"||FestivalHudGear.Blocked(player)!=""||player.EquippedItemId==pendingEquipmentItem)ClearPendingEquipment();
+            else if(Time.unscaledTime-pendingEquipmentAt>=EquipmentConfirmationSeconds)
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","gear_confirmation_timeout","cursor="+selectedSlot+" equipped="+(player.EquippedItemId==""?"none":player.EquippedItemId));
+#endif
+                ClearPendingEquipment();
+            }
+            else ShowPendingEquipment(state,player);
+        }
+        private void ShowPendingEquipment(RoundState state,PlayerState player)
+        {
+            var hands=session.ViewCamera?.GetComponentInChildren<FestivalHands>(true);
+            hands?.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);
+            hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.Controls.Spin.IsPressed()&&!session.PointerFree&&FestivalSimulation.CanSpinPoi(player));
+            session.LocalWorldCharacter?.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);
+        }
+        private void ClearPendingEquipment()
+        {
+            if(!pendingEquipment)return;
+            pendingEquipment=false;pendingEquipmentItem="";pendingEquipmentRound="";pendingEquipmentCommand="";
+            var hands=session?.ViewCamera?.GetComponentInChildren<FestivalHands>(true);hands?.ClearManualEquipment();
+            var state=session?.State;var player=session?.LocalPlayer;
+            if(state!=null&&player!=null)hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.Controls.Spin.IsPressed()&&!session.PointerFree&&FestivalSimulation.CanSpinPoi(player));
+            if(player!=null)session?.LocalWorldCharacter?.SetEquippedItem(player.EquippedItemId);
+            session?.LocalWorldCharacter?.ClearManualEquipment();
         }
 
         // DANCE-12: G pressed mid-dance (`key`; null otherwise) and held FestivalHudText.HoldToStopSeconds stops it,
@@ -1002,11 +1075,15 @@ namespace Festival.Presentation
         // picked this frame (a click picks one itself). In play its top stays under Night 2's lowest crew card (.660, a crew of 8) and
         // the notice it pushes down, its foot above the gear bar (.148). With the menu open it moves beside the pass, over the dimmer,
         // so the freed pointer can click a reply, unless the crew list holds that spot.
-        private void OnEnable(){if(session!=null)session.ConsumeMenuPress=ConsumeChatMenu;}
+        private void OnEnable()
+        {
+            if(session==null)return;
+            session.ConsumeMenuPress=ConsumeChatMenu;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived+=EquipmentCommandResult;
+        }
         private void OnDisable()
         {
-            if(session!=null&&session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;
-            sellerTalk.End();chatWindow?.ResetSession();
+            if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}
+            ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();
         }
         private void ResetChatForSession()
         {
@@ -1631,7 +1708,7 @@ namespace Festival.Presentation
             rosterPanel.GetComponent<Image>().color=high?new Color(.01f,.025f,.03f,1):new Color(.025f,.064f,.071f,.95f);
             reticle.GetComponent<Image>().color=high?new Color(1,.95f,.71f,1):new Color(.88f,.90f,.74f,.65f);
         }
-        private void OnDestroy(){if(session!=null&&session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
+        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
         private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(null);session.Host(nameField.text,port);}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(addressField.text);session.Join(nameField.text,addressField.text,port);}

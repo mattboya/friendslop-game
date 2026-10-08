@@ -103,10 +103,11 @@ namespace Festival.Presentation
         string carriedPoi="",poiPairItem="";
         GameObject equippedProp;
         string equippedId="",requestedItem="",offeredItem="",receivedItem="";
-        bool exchanging;
+        bool exchanging,manualEquipment;
+        string manualItem="";
         Vector3 exchangeTarget;
         float exchangeWeight,receiptAt=-10;
-        int receiptSequence;
+        int receiptSequence,suppressedReceiptSequence=-1;
         SkinnedMeshRenderer bodyRenderer;
         int gripLeft=-1,gripRight=-1,smileIndex=-1,concernIndex=-1;
         public void SetExchange(bool active,string item,Vector3 target)
@@ -121,7 +122,11 @@ namespace Festival.Presentation
         {
             if(sequence==receiptSequence)return;
             receiptSequence=sequence;
-            if(age<0||age>1||string.IsNullOrEmpty(item))return;
+            if(age<0&&age>-.00001f)age=0; // Equal simulation timestamps can differ by double rounding.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","world_receipt","sequence="+sequence+" age="+age+" suppressed="+(sequence==suppressedReceiptSequence));
+#endif
+            if(sequence==suppressedReceiptSequence||age<0||age>1||string.IsNullOrEmpty(item))return;
             receivedItem=item;receiptAt=Time.time-age;RefreshEquipment();
         }
         public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
@@ -251,11 +256,23 @@ namespace Festival.Presentation
         }
         public void SetEquippedItem(string itemId)
         {
-            requestedItem=itemId??"";RefreshEquipment();
+            string requested=itemId??"";
+            if(requested!=requestedItem)SuppressReceipt(receiptSequence);
+            requestedItem=requested;RefreshEquipment();
         }
+        /// <summary>Suppress a recent receipt when the player explicitly stows or switches gear; handoffs retain their priority.</summary>
+        public void SuppressReceipt(int sequence)
+        {
+            suppressedReceiptSequence=sequence;receiptAt=-10;RefreshEquipment();
+        }
+        public void SetManualEquipment(string item,int receipt)
+        {
+            manualEquipment=true;manualItem=item;SuppressReceipt(receipt);
+        }
+        public void ClearManualEquipment(){manualEquipment=false;RefreshEquipment();}
         void RefreshEquipment()
         {
-            string itemId=exchanging?offeredItem:Time.time-receiptAt<.85f?receivedItem:requestedItem;
+            string itemId=exchanging?offeredItem:manualEquipment?manualItem:Time.time-receiptAt<.85f?receivedItem:requestedItem;
             if(equippedId==itemId)return;
             equippedId=itemId;
             if(equippedProp!=null)Destroy(equippedProp);

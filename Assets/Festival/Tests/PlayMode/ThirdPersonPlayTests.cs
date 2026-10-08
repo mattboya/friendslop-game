@@ -21,6 +21,56 @@ namespace Festival.Tests
     public sealed class ThirdPersonPlayTests:FestivalPlayModeTest
     {
         const int Body=1<<31;
+        [UnityTest]public IEnumerator ManualGearKeysOverrideReceiptsInFirstAndThirdPerson()
+        {
+            UseAVirtualKeyboard("impl-U52 receipt keyboard");
+            var world=new GameObject("impl-U52 receipt world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U52 receipt HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            string Props(Transform parent){var items=new List<string>();foreach(var t in parent.GetComponentsInChildren<Transform>(true))if(t.name.StartsWith("Held grip ")&&t.gameObject.activeSelf)items.Add(t.name.Substring(10));return string.Join(",",items);}
+            var failures=new List<string>();
+            void Check(string expected,string where)
+            {
+                var hands=session.ViewCamera.transform.Find("First-person hand attachments");
+                if(hands==null||Props(hands)!=expected)failures.Add(where+": first-person props="+(hands==null?"missing":Props(hands))+", expected "+expected);
+                var body=session.LocalWorldCharacter;
+                if(body==null||Props(body.transform)!=expected)failures.Add(where+": third-person props="+(body==null?"missing":Props(body.transform))+", expected "+expected);
+            }
+            try
+            {
+                session.Host("Receipt tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
+                p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="confetti";p.X=0;p.Z=0;
+                var mate=game.AddPlayer("receipt_peer","Sam");mate.X=1;mate.Z=0;mate.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=4});mate.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=4});
+                IEnumerator Receive(string item)
+                {
+                    Assert.That(game.Execute(mate.Id,new GameCommand{Id=System.Guid.NewGuid().ToString("N"),Kind="Transfer",TargetId=p.Id,ItemId=item,Amount=1}).Accepted,Is.True);
+                    yield return new WaitForSeconds(.12f);
+                    Check("", "incoming offer has empty receiving hands");
+                    var offer=game.State.Transfers.Find(t=>t.ToId==p.Id);Assert.That(offer,Is.Not.Null);
+                    session.Command("AcceptTransfer",offer.Id);
+                    for(float until=Time.realtimeSinceStartup+.5f;session.LocalPlayer.VisualReceiptSequence!=p.VisualReceiptSequence&&Time.realtimeSinceStartup<until;)yield return null;
+                    Assert.That(session.LocalPlayer.VisualReceiptSequence,Is.EqualTo(p.VisualReceiptSequence),"actual owner snapshot publishes the receipt");
+                    yield return null;yield return null;Check(item,"new receipt "+item);
+                }
+                yield return new WaitForSeconds(.3f);
+                yield return Receive("stock_lsd");
+                yield return Tap(Key.Digit1);yield return new WaitForSeconds(.12f);Assert.That(p.EquippedItemId,Is.Empty,"the held filled key stows during a receipt");Check("","manual first-person stow suppresses receipt in both presenters");
+                session.Profile.Data.ThirdPerson=true;p.EquippedItemId="confetti";yield return new WaitForSeconds(1);
+                yield return Receive("stock_mushrooms");
+                yield return Tap(Key.Digit2);yield return new WaitForSeconds(.12f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Check("stock_lsd","manual third-person switch suppresses receipt in both presenters");
+                // Repeated snapshots of the same receipt must not reinstate it.
+                yield return new WaitForSeconds(.12f);Check("stock_lsd","suppression survives the next owner snapshot");
+                p.EquippedItemId="";p.Inventory.RemoveAll(i=>i.ItemId=="stock_mushrooms");yield return new WaitForSeconds(1);yield return Receive("stock_lsd");
+                yield return Tap(Key.Digit3);yield return new WaitForSeconds(.12f);Assert.That(p.EquippedItemId,Is.Empty);Check("","empty-to-empty manual selection suppresses a receipt without an equipped change");
+                p.EquippedItemId="stock_lsd";session.Profile.Data.ThirdPerson=false;p.HeldOfferId="merch_bag";yield return new WaitForSeconds(.12f);
+                yield return Tap(Key.Digit3);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Check("merch_bag","unpaid shelf prop still outranks manual gear");
+                p.HeldOfferId="";yield return new WaitForSeconds(1);
+                session.Command("Transfer",mate.Id,"stock_lsd",1);yield return new WaitForSeconds(.12f);Check("stock_lsd","outgoing handoff still presents its offered item");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;Assert.That(failures,Is.Empty,string.Join("\n",failures));
+        }
+
 
         // The keys are pressed on a virtual keyboard, so they go through the session's own input (FestivalSession.Update).
         [UnityTest]public IEnumerator PressingVShowsYourOwnBodyFromOverTheShoulder()
