@@ -166,6 +166,8 @@ namespace Festival.Presentation
         private Text sundownText,resultsTitle,resultsDetail;
         private string sundownRound="";
         private int sundownStage;
+        private (int Festival,int Level,int Encore,int Spin) sundownLevel;
+        private readonly float[] sundownProgress=new float[3];
         private float sundownShown;
         // HUD-7: How to Play over the main menu or the pass (BuildHowToPlay), its six blocks' titles and text, and whether it's up.
         private GameObject howToPlayPanel;
@@ -877,7 +879,7 @@ namespace Festival.Presentation
             roster.text=checklist!=""?checklist:state.Players.Count+" CREW"+(state.Phase=="Shopping"?"  •  "+ready+" READY":"  •  TAB MAP");
             UpdateRosterLayout(checklist==""?0:checklist.Split('\n').Length);
             menuRoster.text=state.Players.Count+" / 8 FRIENDS\n"+string.Join("   •   ",state.Players.ConvertAll(p=>(p.Id==player.Id?"YOU":p.Name)+(p.Ready?" READY":"")));
-            menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"BACK TO CAMP":"GATHERING";
+            menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"BACK TO CAMP":state.Phase==FestivalSimulation.MinigamePhase?"MINIGAME":"GATHERING";
         }
 
         // LOOP-5: the results banner, and the sundown warning once per stage (see SundownNoticeSeconds).
@@ -887,7 +889,11 @@ namespace Festival.Presentation
             resultsDetail.text=FestivalHudText.ResultsBannerDetail(state,player);
             resultsPanel.SetActive(resultsTitle.text!="");
             int stage=FestivalHudText.SundownStage(state);
-            if(stage!=sundownStage||state.RoundId!=sundownRound){sundownStage=stage;sundownRound=state.RoundId;sundownShown=0;}
+            var level=(state.FestivalIndex,state.LevelIndex,state.EncoreTier,state.SpinSeed);
+            if(state.RoundId!=sundownRound||level!=sundownLevel)
+            {sundownRound=state.RoundId;sundownLevel=level;sundownStage=0;sundownShown=0;Array.Clear(sundownProgress,0,sundownProgress.Length);}
+            else if(sundownStage>0)sundownProgress[sundownStage]=sundownShown;
+            if(stage!=sundownStage){sundownStage=stage;sundownShown=sundownProgress[stage];}
             sundownPanel.SetActive(stage>0&&sundownShown<SundownNoticeSeconds&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             if(!sundownPanel.activeSelf)return;
             sundownText.text=FestivalHudText.SundownWarning(state,player);sundownShown+=Time.unscaledDeltaTime;
@@ -1309,7 +1315,7 @@ namespace Festival.Presentation
             else dancePreview.Hide();
             // DIALOG-6: a one-line chat stays until read, through a challenge starting (it takes the challenge's line until then) and
             // anything covering the card.
-            var speech=talkLine.Follow(session.SpeechDeliveries,player,rhythm?interaction:null,session.MenuOpen||chatWindow.Open||mapPanel.activeSelf,Time.unscaledDeltaTime);
+            var speech=talkLine.Follow(session.SpeechDeliveries,player,rhythm?interaction:null,session.MenuOpen||chatWindow.Open||mapPanel.activeSelf,Time.unscaledDeltaTime,state);
             bool chatter=speech!=null&&!talkLine.IsChallenge;
             bool showDialogue=rhythm&&speech!=null;
             dialoguePanel.SetActive(showDialogue);

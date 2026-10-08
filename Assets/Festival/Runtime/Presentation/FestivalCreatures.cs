@@ -167,10 +167,11 @@ namespace Festival.Presentation
             if(state==null||view==null||!FestivalWorld.ShowsFestival(state.Phase)){Clear();return;}
             int key=SeedFor(state,localPlayerId);if(schedule==null||key!=seed){Clear();if(key!=seed){pointed.Clear();nextTank=TankFirst;}seed=key;schedule=new Schedule(key);}
             var me=Find(state,localPlayerId);int dose=DoseOf(me),cap=dose<1?0:Caps[Math.Min(dose,Caps.Length)-1];
-            var eye=view.transform.position;float shimmer=motion.Step(view.transform,deltaTime);
+            bool paused=state.Phase==FestivalSimulation.MinigamePhase;
+            var eye=view.transform.position;float shimmer=motion.Step(view.transform,paused?0:deltaTime);
             for(int i=live.Count-1;i>=0;i--)
             {
-                var c=live[i];c.Age+=deltaTime;
+                var c=live[i];if(paused)continue;c.Age+=deltaTime;
                 if(c.Fading>=0)c.Fading+=deltaTime;else if(dose<1||!c.Persists&&c.Age>=FadeSeconds+c.Life||c.Points&&!Aim(state,me,c))c.Fading=0;
                 if(c.Points)Scurry(c,eye,deltaTime);
                 var off=eye-c.Spot;off.y=0;
@@ -198,7 +199,7 @@ namespace Festival.Presentation
             {
                 if(c.Voice!=null)c.Voice.volume=volume;
                 bool drawn=!c.InView||c.Seen;if(c.Root.gameObject.activeSelf!=drawn)c.Root.gameObject.SetActive(drawn);
-                if(!drawn)continue;
+                if(!drawn||paused)continue;
                 var ahead=c.Goal-c.Spot;ahead.y=0;
                 if(c.Points&&ahead.sqrMagnitude>1e-4f)
                 {

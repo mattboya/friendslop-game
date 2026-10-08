@@ -1,4 +1,5 @@
 using Festival.Core;
+using System.Reflection;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -10,6 +11,19 @@ namespace Festival.Tests
     {
         private GameObject root;
         [TearDown]public void Cleanup(){if(root!=null)Object.DestroyImmediate(root);}
+
+        [Test]public void WheelSeatWithoutTwistsUsesTheSameWorldClockThroughPauseAndResume()
+        {
+            root=new GameObject("impl-U58 wheel fallback");var world=root.AddComponent<FestivalWorld>();
+            var state=new RoundState{Phase="Playing",SimulationSeconds=70};var rider=new PlayerState{Id="you",VisualWheelSince=20};state.Players.Add(rider);
+            float lead=FestivalWorld.GlideLead(6,Time.unscaledDeltaTime);
+            var expected=FestivalTwistVisuals.Seat(state,rider,70+lead);
+            Assert.That(Vector3.Distance(world.WheelSeat(state,rider,6),expected),Is.LessThan(.001f),"fallback advances on world clock, not boarding timestamp");
+            state.Phase=FestivalSimulation.MinigamePhase;state.Booth.Seconds=35;state.SimulationSeconds=105;
+            Assert.That(Vector3.Distance(world.WheelSeat(state,rider,6),expected),Is.LessThan(.001f),"game holds seat");
+            state.Phase="Playing";rider.VisualWheelSince+=35;
+            Assert.That(Vector3.Distance(world.WheelSeat(state,rider,6),expected),Is.LessThan(.001f),"shifted boarding deadline does not jump fallback seat");
+        }
 
         // The booth is a festivalgoer rig under a MINIGAME sign, in a glowing ring the size of the rules' that nothing in it collides
         // with. It stands where the view's level has its booth, facing the festival's middle, while the festival shows, its game under

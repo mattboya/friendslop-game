@@ -147,7 +147,7 @@ namespace Festival.Presentation
             Vector3 place;float alpha,amount=0;
             if(landmark>=0)
             {
-                double since=System.Math.Max(0,state.SimulationSeconds-state.CloudClueReadAt);
+                double since=System.Math.Max(0,FestivalSimulation.WorldSeconds(state)-FestivalSimulation.WorldSeconds(state,state.CloudClueReadAt));
                 var from=sky.ClueAt(state.CloudClueStart,now-since);amount=Mathf.SmoothStep(0,1,(float)(since/CloudShapes.MorphSeconds));
                 place=Vector3.Lerp(new Vector3(from.X,from.Y,from.Z),Overhead(Yaw(state,viewer),from.Y),amount);
                 alpha=Mathf.Lerp(from.Alpha,1,amount)*Mathf.Clamp01((float)((CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds+CloudShapes.ClueFadeSeconds-since)/CloudShapes.ClueFadeSeconds));

@@ -1,4 +1,5 @@
 using Festival.Core;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,15 +17,26 @@ namespace Festival.Presentation
     public sealed class FestivalTalkLine
     {
         public const float HoldSeconds=1.5f,ShortestRead=3,LongestRead=7;
-        FestivalSpeechDeliveryTracker.Delivery selected,challengeLine;
+        FestivalSpeechDeliveryTracker.Delivery selected,challengeLine,latestLegacy;
         string challengeId="";
         public FestivalSpeechDeliveryTracker.Delivery Delivery=>selected;
         public bool IsChallenge=>ReferenceEquals(selected,challengeLine);
-        public void Reset(){selected=challengeLine=null;challengeId="";}
+        public void Reset(){selected=challengeLine=latestLegacy=null;challengeId="";}
         /// <summary>The challenge reads accepted IDs in order. Covering it consumes unseen deliveries silently.</summary>
-        public FestivalSpeechDeliveryTracker.Delivery Follow(FestivalSpeechDeliveryTracker tracker,PlayerState player,InteractionState challenge,bool hidden,float dt)
+        public FestivalSpeechDeliveryTracker.Delivery Follow(FestivalSpeechDeliveryTracker tracker,PlayerState player,InteractionState challenge,bool hidden,float dt,RoundState state=null)
         {
             if(selected!=null&&!ReferenceEquals(tracker.Find(selected.Id),selected)||challengeLine!=null&&!ReferenceEquals(tracker.Find(challengeLine.Id),challengeLine))Reset();
+            // Older/latest-only views join the same bounded tracker; shifted simulation deadlines never identify public speech.
+            if(string.IsNullOrEmpty(player.SpeechDeliveryId)&&!string.IsNullOrEmpty(player.NpcSpeech))
+            {
+                double expires=player.SpeechUntilWorldSeconds>=0?player.SpeechUntilWorldSeconds:state!=null?FestivalSimulation.WorldSeconds(state,player.NpcSpeechUntil):player.NpcSpeechUntil;
+                string id=tracker.RoundId+":legacy:"+player.Id+":"+player.NpcSpeaker+":"+player.NpcSpeech+":"+expires.ToString("F6",CultureInfo.InvariantCulture);
+                var latest=tracker.Find(id);
+                if(latest==null&&expires>tracker.WorldSeconds)latest=tracker.RegisterLocal(id,challenge?.TargetId??player.Id,player.NpcSpeaker,player.NpcSpeech,tracker.WorldSeconds,expires);
+                if(latestLegacy!=null&&latestLegacy!=latest)tracker.RetractLocal(latestLegacy.Id);
+                latestLegacy=latest;
+            }
+            else if(latestLegacy!=null){tracker.RetractLocal(latestLegacy.Id);latestLegacy=null;}
             if(challenge==null)
             {
                 if(challengeLine!=null&&!challengeLine.IsPublic)tracker.RetractLocal(challengeLine.Id);
@@ -33,6 +45,8 @@ namespace Festival.Presentation
                 if(selected!=null&&(selected.Retracted||!selected.WorldActive||hidden)){selected.HudConsumed=true;selected=null;}
                 Observe(tracker,hidden);return null;
             }
+            if(latestLegacy!=null&&!latestLegacy.HudObserved&&!latestLegacy.HudConsumed&&latestLegacy.WorldActive)
+            {latestLegacy.HudPending=true;if(selected==null)selected=latestLegacy;}
             foreach(var delivery in tracker.Deliveries)
                 if(delivery.IsPublic&&!delivery.HudObserved&&!delivery.HudConsumed&&delivery.WorldActive
                     &&(delivery.SpeakerId==challenge.TargetId||delivery.SpeakerId==player.Id||delivery.Id==player.SpeechDeliveryId))delivery.HudPending=true;

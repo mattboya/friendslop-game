@@ -1,6 +1,9 @@
 using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
+using System.Reflection;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace Festival.Tests
 {
@@ -18,6 +21,87 @@ namespace Festival.Tests
             you=new PlayerState{Id="you",Name="You",X=at.X+1,Z=at.Z};sam=new PlayerState{Id="sam",Name="Sam",X=at.X+20,Z=at.Z};s.Players.Add(you);s.Players.Add(sam);
             return s;
         }
+        [Test]public void Mini5HomeAndSundownCardsHoldThroughGameAndBanner()
+        {
+            var s=Level(out var you,out var sam);s.ElapsedSeconds=s.DurationSeconds-50;
+            Assert.That(FestivalHudText.SundownStage(s),Is.EqualTo(1));
+            s.Phase=FestivalSimulation.MinigamePhase;
+            Assert.That(FestivalHudText.SundownStage(s),Is.EqualTo(1),"paused day keeps its sundown stage");
+            s.LevelIndex=3;string before;
+            s.Phase="Playing";before=FestivalHudText.HomeChecklist(s,you.Id);
+            Assert.That(before,Is.Not.Empty);s.Phase=FestivalSimulation.MinigamePhase;
+            Assert.That(FestivalHudText.HomeChecklist(s,you.Id),Is.EqualTo(before),"paused Night 2 keeps its home checklist");
+            s.Booth.ScoredAt=4;
+            Assert.That(FestivalHudText.HomeChecklist(s,you.Id),Is.EqualTo(before),"banner also keeps home checklist");
+        }
+
+        [Test]public void NightTwoHomeChecklistHoldsDuringGameAndBanner()
+        {
+            var state=Level(out var player,out _);state.LevelIndex=3;string before=FestivalHudText.HomeChecklist(state,player.Id);Assert.That(before,Is.Not.Empty);
+            state.Phase=FestivalSimulation.MinigamePhase;
+            Assert.That(FestivalHudText.HomeChecklist(state,player.Id),Is.EqualTo(before),"home status remains during game");
+            state.Booth.ScoredAt=5;Assert.That(FestivalHudText.HomeChecklist(state,player.Id),Is.EqualTo(before),"and banner");
+        }
+        [Test]public void TimePayoutDoesNotReplayAnAlreadyReadSundownThreshold()
+        {
+            var root=new GameObject("impl-U58 payout HUD");
+            try
+            {
+                var hud=root.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(hud,null);
+                var state=Level(out var player,out _);state.RoundId="impl-U58-payout";state.ElapsedSeconds=state.DurationSeconds-50;
+                var update=typeof(FestivalHud).GetMethod("UpdateSundownAndResults",BindingFlags.Instance|BindingFlags.NonPublic);
+                var shown=typeof(FestivalHud).GetField("sundownShown",BindingFlags.Instance|BindingFlags.NonPublic);
+                update.Invoke(hud,new object[]{state,player,true});shown.SetValue(hud,FestivalHud.SundownNoticeSeconds);
+                state.DurationSeconds+=60;update.Invoke(hud,new object[]{state,player,true});
+                state.ElapsedSeconds+=60;update.Invoke(hud,new object[]{state,player,false});
+                Assert.That((float)shown.GetValue(hud),Is.GreaterThanOrEqualTo(FestivalHud.SundownNoticeSeconds),"crossing one-minute threshold again cannot replay the warning");
+            }
+            finally{Object.DestroyImmediate(root);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+
+        [Test]public void EachSundownStageKeepsItsReadProgressAcrossPayoutAndPause()
+        {
+            var root=new GameObject("impl-U58 sundown HUD");
+            try
+            {
+                var hud=root.AddComponent<FestivalHud>();
+                typeof(FestivalHud).GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(hud,null);
+                var state=Level(out var player,out _);state.RoundId="impl-U58-sundown";state.ElapsedSeconds=state.DurationSeconds-50;
+                var update=typeof(FestivalHud).GetMethod("UpdateSundownAndResults",BindingFlags.Instance|BindingFlags.NonPublic);
+                var shown=typeof(FestivalHud).GetField("sundownShown",BindingFlags.Instance|BindingFlags.NonPublic);
+                update.Invoke(hud,new object[]{state,player,true});shown.SetValue(hud,2f);
+                state.Phase=FestivalSimulation.MinigamePhase;state.Booth.Seconds=20;
+                update.Invoke(hud,new object[]{state,player,true});
+                Assert.That((float)shown.GetValue(hud),Is.EqualTo(2),"game keeps the partly read warning");
+                state.Booth.ScoredAt=20;state.DurationSeconds+=60;
+                update.Invoke(hud,new object[]{state,player,true});
+                state.Phase="Playing";state.ElapsedSeconds+=60;
+                update.Invoke(hud,new object[]{state,player,true});
+                Assert.That((float)shown.GetValue(hud),Is.EqualTo(2),"return across one-minute threshold after time payout keeps progress");
+                shown.SetValue(hud,FestivalHud.SundownNoticeSeconds);state.ElapsedSeconds=state.DurationSeconds-10;
+                update.Invoke(hud,new object[]{state,player,true});shown.SetValue(hud,FestivalHud.SundownNoticeSeconds);
+                state.DurationSeconds+=60;update.Invoke(hud,new object[]{state,player,true});
+                state.ElapsedSeconds+=60;update.Invoke(hud,new object[]{state,player,false});
+                Assert.That((float)shown.GetValue(hud),Is.GreaterThanOrEqualTo(FestivalHud.SundownNoticeSeconds),"an already read fifteen-second warning never replays");
+                state.LevelIndex=2;state.ElapsedSeconds=state.DurationSeconds-50;update.Invoke(hud,new object[]{state,player,true});
+                Assert.That((float)shown.GetValue(hud),Is.Zero,"a new level has its own progress");
+            }
+            finally{Object.DestroyImmediate(root);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+        [Test]public void EscapePhaseCardNamesTheMinigameDuringGameAndBanner()
+        {
+            var root=new GameObject("impl-U58 menu HUD");
+            try
+            {
+                var hud=root.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(hud,null);
+                var state=Level(out var player,out _);state.Phase=FestivalSimulation.MinigamePhase;
+                var update=typeof(FestivalHud).GetMethod("UpdateText",BindingFlags.Instance|BindingFlags.NonPublic);
+                foreach(double scored in new[]{-1d,4d})
+                {state.Booth.ScoredAt=scored;update.Invoke(hud,new object[]{state,player});Assert.That(((Text)typeof(FestivalHud).GetField("menuPhase",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(hud)).text,Is.EqualTo("MINIGAME"));}
+            }
+            finally{Object.DestroyImmediate(root);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+
         static (string,string) Card(RoundState s,PlayerState p)=>FestivalHudText.MinigameCard(s,p);
 
         // In the ring the card counts who of the connected living crew is in; says who keeps it from starting, down or busy; then

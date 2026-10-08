@@ -176,8 +176,8 @@ namespace Festival.Presentation
         }
         void Update()
         {
-            float now=Time.time;
-            UpdateWalkers(now);
+            UpdateWalkers(Time.time);
+            float now=Time.unscaledTime;
             if(now<nextVisibilityCheck)return;
             nextVisibilityCheck=now+.25f;
             var view=FestivalCharacter.ViewTransform;

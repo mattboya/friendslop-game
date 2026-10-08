@@ -22,6 +22,50 @@ namespace Festival.Tests
             return shown;
         }
 
+        [Test]public void ASequencedBarkKeepsOneIdentityAcrossPauseAndShiftedLegacyExpiry()
+        {
+            var state=new RoundState{RoundId="impl-U58-public",Phase="Playing",SimulationSeconds=10};
+            var speech=new PublicSpeechState{DeliveryId=state.RoundId+":speech:1",Sequence=1,SpeakerId="cop",Speaker="SECURITY",Text="Hey!",StartedAtWorldSeconds=9,ExpiresAtWorldSeconds=15};state.PublicSpeech.Add(speech);
+            var player=new PlayerState{Id="you",SpeechDeliveryId=speech.DeliveryId,NpcSpeech="Hey!",NpcSpeaker="SECURITY",NpcSpeechUntil=15};
+            var challenge=new InteractionState{Id="challenge",PlayerId="you",TargetId="cop",Kind="Dance",DialogueText="Dance"};
+            var tracker=new FestivalSpeechDeliveryTracker();var card=new FestivalTalkLine();tracker.Follow(state,0,10);
+            var first=card.Follow(tracker,player,challenge,false,3.1f);Assert.That(first.Id,Is.EqualTo(speech.DeliveryId));
+            state.Phase=FestivalSimulation.MinigamePhase;state.Booth.Seconds=35;state.SimulationSeconds=45;tracker.Follow(state,0,10);
+            card.Follow(tracker,player,challenge,false,0);state.Phase="Playing";player.NpcSpeechUntil+=35;tracker.Follow(state,0,10);
+            Assert.That(card.Follow(tracker,player,challenge,false,0),Is.Not.SameAs(first),"already-read delivery never queues again when legacy expiry shifts");
+            Assert.That(tracker.Find(speech.DeliveryId),Is.SameAs(first),"same stable shared delivery remains retained");
+            speech.Retracted=true;tracker.Follow(state,0,10);Assert.That(first.Retracted,Is.True,"Hush is the same-ID cancellation");
+        }
+        [Test]public void LegacyLatestBarkUsesTheSharedTrackerAndWorldExpiryWithoutReplay()
+        {
+            var state=new RoundState{RoundId="impl-U58-legacy",Phase="Playing",SimulationSeconds=10};
+            var tracker=new FestivalSpeechDeliveryTracker();tracker.Follow(state,0,10);
+            var player=new PlayerState{Id="you",NpcSpeech="Hey!",NpcSpeaker="SECURITY",NpcSpeechUntil=15,SpeechUntilWorldSeconds=15};
+            var challenge=new InteractionState{Id="legacy-challenge",PlayerId="you",TargetId="cop",Kind="Dance",DialogueText="Dance"};var card=new FestivalTalkLine();
+            var first=card.Follow(tracker,player,challenge,false,3.1f);
+            Assert.That(first.Text,Is.EqualTo("Hey!"),"legacy latest bark keeps priority ahead of the challenge and lives in the shared tracker");
+            Assert.That(tracker.Find(first.Id),Is.SameAs(first));
+            state.Phase=FestivalSimulation.MinigamePhase;state.Booth.Seconds=35;state.SimulationSeconds=45;tracker.Follow(state,0,10);card.Follow(tracker,player,challenge,false,0);
+            state.Phase="Playing";player.NpcSpeechUntil+=35;tracker.Follow(state,0,10);
+            Assert.That(card.Follow(tracker,player,challenge,false,0),Is.Not.SameAs(first),"shifted raw expiry cannot replay already read compatibility bark");
+            player.NpcSpeech="";card.Follow(tracker,player,challenge,false,0);Assert.That(first.Retracted,Is.True,"clearing latest legacy line immediately retracts its local delivery");
+        }
+
+        [Test]public void LegacyRawDeadlineNormalizesBeforeAndAfterShiftClock()
+        {
+            var state=new RoundState{RoundId="impl-U58-raw",Phase="Playing",SimulationSeconds=10};var tracker=new FestivalSpeechDeliveryTracker();tracker.Follow(state,0,10);
+            var player=new PlayerState{Id="you",NpcSpeech="Hey!",NpcSpeaker="SECURITY",NpcSpeechUntil=15};
+            var challenge=new InteractionState{Id="raw-challenge",PlayerId="you",TargetId="cop",Kind="Dance",DialogueText="Dance"};var card=new FestivalTalkLine();
+            var first=card.Follow(tracker,player,challenge,false,3.1f,state);Assert.That(first.Text,Is.EqualTo("Hey!"));
+            state.Phase=FestivalSimulation.MinigamePhase;state.Booth.Seconds=35;state.SimulationSeconds=45;tracker.Follow(state,0,10);
+            card.Follow(tracker,player,challenge,false,0,state);state.Phase="Playing";player.NpcSpeechUntil+=35;tracker.Follow(state,0,10);
+            card.Follow(tracker,player,challenge,false,0,state);
+            int barks=0;foreach(var delivery in tracker.Deliveries)if(delivery.Text=="Hey!")barks++;
+            Assert.That(barks,Is.EqualTo(1),"shifting raw expiry keeps one normalized legacy delivery");
+            Assert.That(first.Retracted,Is.False,"shifting raw expiry never replaces or retracts its original shared identity");
+            tracker.Follow(state,0,16);Assert.That(first.WorldActive,Is.False,"legacy world expiry continues after resume");
+        }
+
         [Test]public void ANewRoundRetiresCoveredChallengeReadStateEvenWhenIdsRepeat()
         {
             var state=new RoundState{RoundId="old-card-round",Phase="Playing"};

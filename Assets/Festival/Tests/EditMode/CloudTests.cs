@@ -357,6 +357,26 @@ namespace Festival.Tests
             Assert.That(Match(CluePuffs(ClueCloud(root),0,CloudShapes.MaxPuffs),sky.Clue.Puffs),Is.True,"as an ordinary cloud");
         }
 
+        [Test]public void ReadCloudGeometryAndOpacityHoldThroughGameBannerAndResume()
+        {
+            var clouds=Sky(out var root);var state=Clue(Festivals.PoloFestival,150,193,2,190);
+            clouds.Apply(state,Vector3.zero,Tripper);var clue=ClueCloud(root);var vertices=clue.GetComponent<MeshFilter>().sharedMesh.vertices;
+            var position=clue.localPosition;var block=new MaterialPropertyBlock();clue.GetComponent<Renderer>().GetPropertyBlock(block);float alpha=block.GetColor("_Color").a;
+            state.Phase=FestivalSimulation.MinigamePhase;
+            foreach(double pause in new[]{10d,35d,75d})
+            {
+                state.Booth.Seconds=pause;state.SimulationSeconds=193+pause;state.Booth.ScoredAt=pause==75?72:-1;
+                clouds.Apply(state,Vector3.zero,Tripper);
+                Assert.That(Shows(clue),Is.True,"read picture stays visible during game and banner");
+                Assert.That(clue.GetComponent<MeshFilter>().sharedMesh.vertices,Is.EqualTo(vertices),"morph freezes");
+                Assert.That(clue.localPosition,Is.EqualTo(position),"glide freezes");
+                clue.GetComponent<Renderer>().GetPropertyBlock(block);Assert.That(block.GetColor("_Color").a,Is.EqualTo(alpha),"opacity freezes");
+            }
+            state.Phase="Playing";state.CloudClueReadAt+=75;clouds.Apply(state,Vector3.zero,Tripper);
+            Assert.That(clue.GetComponent<MeshFilter>().sharedMesh.vertices,Is.EqualTo(vertices),"resume never rewinds");
+            state.SimulationSeconds+=40;state.ElapsedSeconds+=40;clouds.Apply(state,Vector3.zero,Tripper);Assert.That(Shows(clue),Is.False,"world time still completes fade after resume");
+        }
+
         private const string Tripper="trip";
         // A day level whose clue cloud comes up at `start`, `seconds` in, with the tripper's view holding landmark `landmark` read at
         // `readAt` (-1 for neither, as in everyone else's view).

@@ -24,6 +24,37 @@ namespace Festival.Tests
         private readonly List<GameObject> made=new List<GameObject>();
         [TearDown]public void Cleanup(){foreach(var go in made)if(go!=null)Object.DestroyImmediate(go);made.Clear();}
 
+        [Test]public void MinigameFreezesCreatureAgeFadeAndPointerScurryButResultsFinishFading()
+        {
+            var state=Hinted(FirstArrival(false),"Clue",new Vector2(0,40));var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}));
+            for(int i=0;i<15;i++,t+=Step)Frame(creatures,state,eye,t);
+            StandBehind(eye,body,new Vector2(0,40),2);Frame(creatures,state,eye,t);
+            var position=body.position;var rotation=body.rotation;var scale=body.localScale;int live=creatures.Live;
+            state.Phase=FestivalSimulation.MinigamePhase;
+            for(int i=0;i<120;i++)creatures.Apply(state,"me",eye,t,1/60f);
+            Assert.That(body.position,Is.EqualTo(position),"paused pointer neither hops nor scurries");
+            Assert.That(Quaternion.Angle(body.rotation,rotation),Is.LessThan(.001f),"paused pointer never nods");
+            Assert.That(body.localScale,Is.EqualTo(scale),"age and fade freeze");Assert.That(creatures.Live,Is.EqualTo(live));
+            eye.transform.Rotate(0,180,0);creatures.Apply(state,"me",eye,t,1/60f);Assert.That(creatures.OnScreen,Is.Zero,"culling still follows camera during pause");
+            eye.transform.Rotate(0,180,0);creatures.Apply(state,"me",eye,t,1/60f);Assert.That(creatures.OnScreen,Is.GreaterThan(0));
+            state.Players[0].Effects.Clear();state.Phase="Results";
+            for(int i=0;i<90;i++)creatures.Apply(state,"me",eye,t+i/60f,1/60f);
+            Assert.That(creatures.Live,Is.Zero,"results finish the life on frame time");
+        }
+
+        [Test]public void AnAlreadyFadingCreatureKeepsItsSizeDuringGameAndBanner()
+        {
+            var state=FirstArrival(true);var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);for(int i=0;i<15;i++,t+=Step)Frame(creatures,state,eye,t);
+            state.Players[0].Effects.Clear();for(int i=0;i<4;i++,t+=Step)Frame(creatures,state,eye,t);
+            float size=body.localScale.x;Assert.That(size,Is.InRange(.1f,.95f),"setup: fading creature");
+            state.Phase=FestivalSimulation.MinigamePhase;
+            for(int i=0;i<120;i++){state.Booth.ScoredAt=i>60?1:-1;creatures.Apply(state,"me",eye,t,1/60f);}
+            Assert.That(creatures.Live,Is.EqualTo(1),"paused fade never retires the creature");Assert.That(body.localScale.x,Is.EqualTo(size));
+            state.Phase="Results";for(int i=0;i<60;i++)creatures.Apply(state,"me",eye,t+i/60f,1/60f);Assert.That(creatures.Live,Is.Zero);
+        }
+
         [Test]public void OnlyTheLocalPlayersOwnLivingDoseBringsThem()
         {
             Assert.That(MostAlive(Round(2),30*60),Is.GreaterThan(0),"setup: a dosed player sees creatures");

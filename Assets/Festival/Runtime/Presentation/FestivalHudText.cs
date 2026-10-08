@@ -52,7 +52,7 @@ namespace Festival.Presentation
         /// festival). The HUD pops each stage's warning once.</summary>
         public static int SundownStage(RoundState s)
         {
-            if(s.Phase!="Playing"||Festivals.For(s).Night||FestivalSimulation.DayQuotaMet(s))return 0;
+            if((s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)||Festivals.For(s).Night||FestivalSimulation.DayQuotaMet(s))return 0;
             double left=s.DurationSeconds-s.ElapsedSeconds;
             return left<=15?2:left<=60?1:0;
         }
@@ -146,7 +146,7 @@ namespace Festival.Presentation
         /// </summary>
         public static string HomeChecklist(RoundState s,string localId)
         {
-            if(s.Phase!="Playing"||s.LevelIndex!=Festivals.LevelCount-1)return "";
+            if((s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)||s.LevelIndex!=Festivals.LevelCount-1)return "";
             int home=0,crew=0;string lines="";
             foreach(var p in s.Players)
             {
