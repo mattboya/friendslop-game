@@ -1050,7 +1050,7 @@ namespace Festival.Network
                 :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;
-            if(!Profile.Data.ReducedMotion)
+            if(!Profile.Data.ReducedMotion&&Profile.Data.CameraShake)
             {
                 foreach(var effect in player.Effects)
                 {

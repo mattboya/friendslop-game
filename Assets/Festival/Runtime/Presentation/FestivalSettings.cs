@@ -178,6 +178,16 @@ namespace Festival.Presentation
 #endif
             return LastError;
         }
+        public string CompleteComfortChoice(bool reduceMotion)
+        {
+            if(Data.ComfortPromptComplete)return "";
+            if(profile.ReadOnly)return Save();
+            bool previousMotion=Data.ReducedMotion;
+            Data.ReducedMotion=reduceMotion;Data.ComfortPromptComplete=true;
+            string error=Save();
+            if(error!=""){Data.ReducedMotion=previousMotion;Data.ComfortPromptComplete=false;}
+            return error;
+        }
         public string ResetTab(string tab)
         {
             if(profile.ReadOnly)return Save();

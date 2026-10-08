@@ -33,6 +33,10 @@ namespace Festival.Presentation
         private Canvas canvas;
         private Font font;
         private Font displayFont;
+        private readonly List<Text> authoredLabels=new List<Text>();
+        private readonly Dictionary<Text,(int Size,int Minimum,int Maximum)> authoredTextSizes=new Dictionary<Text,(int,int,int)>();
+        private float appliedTextScale=1;
+        private float textScale=>session?.Profile?.Data.TextScale??1;
         private GameObject titlePanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
@@ -173,6 +177,9 @@ namespace Festival.Presentation
         private GameObject howToPlayPanel;
         private readonly Text[] howToPlayTitles=new Text[6],howToPlayTexts=new Text[6];
         private bool howToPlayOpen;
+        private GameObject comfortPanel;
+        private Text comfortError;
+        private Action pendingComfortStart;
         // HUD-7: the level briefing (FestivalHudText.Briefing), its fade, its three lines, the briefing they were laid out from, and the
         // round a key put it away for.
         private GameObject briefingPanel;
@@ -287,7 +294,7 @@ namespace Festival.Presentation
             // Who trips this level and on how many doses, under the clock for the whole crew (UpdateTrippingLayout sizes it).
             trippingPanel=Card(root.transform,"Tripper card",new Vector2(.36f,.864f),new Vector2(.64f,.906f),true);
             Accent(trippingPanel.transform,Orange);
-            tripping=Label(trippingPanel.transform,"Tripping",16,TextAnchor.MiddleCenter);tripping.fontStyle=FontStyle.Normal;Fill(tripping.rectTransform,4);trippingPanel.SetActive(false);
+            tripping=Label(trippingPanel.transform,"Tripping",16,TextAnchor.MiddleCenter);tripping.fontStyle=FontStyle.Normal;Fill(tripping.rectTransform,4);ShrinkToFit(tripping,16);trippingPanel.SetActive(false);
             vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
             Accent(vitalPanel.transform,Mint);
             // Three lines (85 px at 1080p) of health, money, life and the crowd or security warning, then any effects. Ember Playa's
@@ -484,6 +491,7 @@ namespace Festival.Presentation
             chatWindow.Send=c=>session.Command(c.Kind,c.TargetId,c.ItemId,c.Amount,c.Direction,c.TimeSeconds);
             chatWindow.CheckReply=(check,choice)=>session.SpeechBubbles?.SelectCheckReply(session.State,session.LocalPlayer,check,choice,session.ConnectionGeneration,session.EstimatedWorldSeconds);
             BuildHowToPlay(root.transform);
+            BuildComfortChoice(root.transform);
         }
 
         // MENU-1: the title screen (FestivalTitleScreen) over the campsite, where the connection card was: the name and the tagline
@@ -601,6 +609,32 @@ namespace Festival.Presentation
             howToPlayOpen=true;
         }
 
+        private void BuildComfortChoice(Transform root)
+        {
+            comfortPanel=Panel(root,"First-launch comfort choice",new Color(.01f,.025f,.03f,.94f),Vector2.zero,Vector2.one);
+            var card=Card(comfortPanel.transform,"Comfort choice card",new Vector2(.2f,.18f),new Vector2(.8f,.82f),false);Accent(card.transform,Orange);
+            var heading=Label(card.transform,"Comfort heading",38,TextAnchor.MiddleCenter);heading.font=displayFont;heading.color=Ink;heading.text="BEFORE YOU PLAY";Place(heading.rectTransform,.06f,.79f,.94f,.94f);ShrinkToFit(heading,24);
+            var detail=Label(card.transform,"Comfort explanation",27,TextAnchor.MiddleCenter);detail.color=Ink;
+            detail.text="This game has strong visual trip effects. Reduce motion?\n\nKeep the colours and clues with calmer effects. You can change this in Settings → Accessibility.";
+            Place(detail.rectTransform,.07f,.43f,.93f,.79f);ShrinkToFit(detail,18);
+            var yes=Button(card.transform,"YES, REDUCE MOTION",new Vector2(.07f,.29f),new Vector2(.93f,.41f),()=>ChooseComfort(true));
+            var no=Button(card.transform,"NO, KEEP FULL EFFECTS",new Vector2(.07f,.14f),new Vector2(.93f,.26f),()=>ChooseComfort(false));
+            ShrinkToFit(yes.GetComponentInChildren<Text>(),18);ShrinkToFit(no.GetComponentInChildren<Text>(),18);
+            comfortError=Label(card.transform,"Comfort save error",20,TextAnchor.MiddleCenter);comfortError.color=new Color(.58f,.16f,.12f);Place(comfortError.rectTransform,.06f,.015f,.94f,.13f);ShrinkToFit(comfortError,14);
+            comfortPanel.SetActive(false);
+        }
+        private void WaitForComfort(Action start)
+        {
+            if(session.Profile.Data.ComfortPromptComplete){start();return;}
+            pendingComfortStart=start;comfortError.text="";comfortPanel.SetActive(true);
+        }
+        private void ChooseComfort(bool reduceMotion)
+        {
+            string error=session.Settings.CompleteComfortChoice(reduceMotion);
+            comfortError.text=error;if(error!="")return;
+            comfortPanel.SetActive(false);var start=pendingComfortStart;pendingComfortStart=null;start?.Invoke();
+        }
+
         private void BuildMap(Transform root)
         {
             mapShade=Panel(root,"Map dimmer",new Color(.01f,.025f,.03f,.65f),Vector2.zero,Vector2.one);mapShade.GetComponent<Image>().raycastTarget=false;
@@ -688,6 +722,7 @@ namespace Festival.Presentation
             notice.text=message;
             noticePanel.SetActive(session.Connected&&!session.MenuOpen&&!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<noticeUntil&&session.Message!="Accepted");
             titlePanel.SetActive(!session.Connected&&!settingsOpen);
+            if(session.Connected){pendingComfortStart=null;comfortPanel.SetActive(false);}
             bool showMenu=session.Connected&&session.MenuOpen;
             // MENU-1: SETTINGS on the title opens the pass's own settings, on the pass's card.
             bool passUp=showMenu||!session.Connected&&settingsOpen;
@@ -789,7 +824,9 @@ namespace Festival.Presentation
 
         private void LateUpdate()
         {
-            if(session==null||!session.Connected)return;
+            if(session==null)return;
+            ApplyTextReflow();
+            if(!session.Connected)return;
             bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
             foreach(var delivery in session.SpeechDeliveries.Deliveries)
             {
@@ -799,6 +836,35 @@ namespace Festival.Presentation
                     session.SpeechBubbles?.Babble.PlayRevealed(delivery,delivery.OwnAudioCharacters,delivery.VisibleCharacters);
                 delivery.OwnAudioVisible=shows;delivery.OwnAudioCharacters=delivery.VisibleCharacters;
             }
+        }
+
+        // Scale authored text and its local cards; the canvas and rhythm geometry keep their gameplay coordinates.
+        private void ApplyTextReflow()
+        {
+            float scale=textScale;bool changed=!Mathf.Approximately(appliedTextScale,scale);
+            foreach(var label in authoredLabels)
+            {
+                if(label==null)continue;
+                bool added=!authoredTextSizes.TryGetValue(label,out var size);
+                if(added){size=(label.fontSize,label.resizeTextMinSize,label.resizeTextMaxSize);authoredTextSizes.Add(label,size);}
+                if(!changed&&!added)continue;
+                label.fontSize=Mathf.RoundToInt(size.Size*scale);
+                label.resizeTextMinSize=Mathf.RoundToInt(size.Minimum*scale);
+                label.resizeTextMaxSize=Mathf.Max(label.resizeTextMinSize,Mathf.RoundToInt(size.Maximum*scale));
+            }
+            if(changed)
+            {
+                appliedTextScale=scale;rosterLines=-1;trippingLines=-1;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("[Settings] HUD text scale="+scale.ToString("F2")+"; rhythm geometry unchanged.");
+#endif
+            }
+            // The pass grows about its centre, so all of its authored click areas grow with its text.
+            float passHeight=Mathf.Min(.95f,.81f*scale),passWidth=.45f*scale;
+            Place(Rect(menuPanel),.5f-passWidth/2,.5f-passHeight/2,.5f+passWidth/2,.5f+passHeight/2);
+            Place(Rect(briefingPanel),.25f,.455f-.17f*scale,.75f,.455f);
+            Place(Rect(inventoryPanel),.978f-.264f*scale,.024f,.978f,.024f+.124f*scale);
+            foreach(var action in dynamicActions)if(action!=null)action.GetComponent<LayoutElement>().preferredHeight=64*scale;
         }
 
         private void UpdateGearLayout(bool hasGear)
@@ -852,9 +918,9 @@ namespace Festival.Presentation
             if(trippingLines==lines)return;
             trippingLines=lines;
             // Night 2's dose list grows the tripper card down from under the clock; the session notice moves down with it.
-            float bottom=.906f-.026f*Mathf.Max(1,lines)-.016f,noticeTop=Mathf.Min(.849f,bottom-.008f);
-            Place(Rect(trippingPanel),.36f,bottom,.64f,.906f);
-            Place(Rect(noticePanel),.368f,noticeTop-.064f,.695f,noticeTop);
+            float scale=textScale,bottom=.906f-(.026f*Mathf.Max(1,lines)+.016f)*scale,noticeTop=Mathf.Min(.849f,bottom-.008f);
+            Place(Rect(trippingPanel),.36f,bottom,.64f+.07f*(scale-1)/.3f,.906f);
+            Place(Rect(noticePanel),.368f,noticeTop-.064f*scale,.695f,noticeTop);
         }
 
         private void UpdateText(RoundState state,PlayerState player)
@@ -1239,6 +1305,7 @@ namespace Festival.Presentation
             if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}
             CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;
             ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
+            pendingComfortStart=null;if(comfortPanel!=null)comfortPanel.SetActive(false);
         }
         private void ResetChatForSession()
         {
@@ -1557,13 +1624,13 @@ namespace Festival.Presentation
         private void ApplyEffects(PlayerState player)
         {
             if(player==null||player.Effects.Count==0){effectWash.color=Color.clear;if(session?.ViewCamera!=null)session.ViewCamera.fieldOfView=baseFov;return;}
-            bool mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms"),reduced=session.Profile.Data.ReducedMotion;
+            bool mushrooms=player.Effects.Exists(e=>e.Id=="mushrooms"),reduced=session.Profile.Data.ReducedMotion,shake=session.Profile.Data.CameraShake;
             effectWash.color=EffectWash(player.Effects,reduced,Time.unscaledTime);
             // TRIP-5: the dose's substance adds its own swell (Fun Guys) on top of a shop-bought one; this stays the one writer.
             // GAS-5: the gas kicks the view on the camp music's beat, this frame's, as FestivalTrip's overlay and sound do.
             var campAudio=session.GetComponent<FestivalCampAudio>();
-            float trip=FestivalTrip.For(session.State,player.Id,reduced,Time.unscaledTime,campAudio!=null?campAudio.Beat:null).Fov;
-            if(session.ViewCamera!=null)session.ViewCamera.fieldOfView=(mushrooms&&!reduced?baseFov+Mathf.Sin(Time.unscaledTime*.8f)*1.2f:baseFov)+trip;
+            float trip=shake?FestivalTrip.For(session.State,player.Id,reduced,Time.unscaledTime,campAudio!=null?campAudio.Beat:null).Fov:0;
+            if(session.ViewCamera!=null)session.ViewCamera.fieldOfView=(mushrooms&&!reduced&&shake?baseFov+Mathf.Sin(Time.unscaledTime*.8f)*1.2f:baseFov)+trip;
         }
 
         /// <summary>
@@ -1953,8 +2020,8 @@ namespace Festival.Presentation
         }
         private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
-        private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(null);session.Host(nameField.text,port);}
-        private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";Remember(addressField.text);session.Join(nameField.text,addressField.text,port);}
+        private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text;WaitForComfort(()=>{Remember(null);session.Host(name,port);});}
+        private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text,address=addressField.text;WaitForComfort(()=>{Remember(address);session.Join(name,address,port);});}
         // MENU-1: until a game connects the session moves no camera, so the title drifts it over the campsite (FestivalTitleScreen.Shot).
         private void FrameTitle()
         {
@@ -2018,7 +2085,7 @@ namespace Festival.Presentation
         }
         private Text Label(Transform parent,string name,int size,TextAnchor anchor)
         {
-            var go=new GameObject(name,typeof(RectTransform),typeof(CanvasRenderer),typeof(Text));go.transform.SetParent(parent,false);var text=go.GetComponent<Text>();text.font=font;text.fontSize=size<=25?Mathf.RoundToInt(size*1.18f):size;text.alignment=anchor;text.color=Paper;text.horizontalOverflow=HorizontalWrapMode.Wrap;text.verticalOverflow=VerticalWrapMode.Truncate;text.raycastTarget=false;return text;
+            var go=new GameObject(name,typeof(RectTransform),typeof(CanvasRenderer),typeof(Text));go.transform.SetParent(parent,false);var text=go.GetComponent<Text>();text.font=font;text.fontSize=size<=25?Mathf.RoundToInt(size*1.18f):size;text.alignment=anchor;text.color=Paper;text.horizontalOverflow=HorizontalWrapMode.Wrap;text.verticalOverflow=VerticalWrapMode.Truncate;text.raycastTarget=false;authoredLabels.Add(text);return text;
         }
         // Text that would run past its box shrinks, down to min px, instead of being cut.
         private static void ShrinkToFit(Text text,int min){text.resizeTextForBestFit=true;text.resizeTextMinSize=min;text.resizeTextMaxSize=text.fontSize;}

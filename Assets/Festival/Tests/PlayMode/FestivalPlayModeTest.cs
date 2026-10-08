@@ -166,7 +166,7 @@ namespace Festival.Tests
     {
         private string savedFolder;
         private FestivalInput leftControls;
-        private string leftBindingKey;
+        private string leftProfileId,leftProfileFolder;
         private InputSettings.BackgroundBehavior leftBackground;
         private InputSettings.EditorInputBehaviorInPlayMode leftEditor;
 
@@ -176,15 +176,18 @@ namespace Festival.Tests
             UseAVirtualKeyboard("impl-U01 cleanup keyboard");UseAVirtualMouse("impl-U01 cleanup mouse");
             UseAVirtualKeyboard("impl-U01 cleanup keyboard"); // Repeated setup must retain the original settings and device.
             string id="impl-U01-cleanup-"+System.Guid.NewGuid().ToString("N");
-            leftControls=NewTestControls(id);leftBindingKey="festival-bindings-"+LocalProfile.Folder+"-"+id;
+            leftControls=NewTestControls(id);leftProfileId=id;leftProfileFolder=LocalProfile.Folder;
             leftControls.Rebind(leftControls.Interact,0,null);yield return null;yield return Tap(Key.K,.3f);
-            Assert.That(PlayerPrefs.HasKey(leftBindingKey),Is.True,"the real rebind saved this test's controls");
+            Assert.That(leftControls.Rebinding,Is.False,"the real key completes the rebind");
+            Assert.That(leftControls.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/k"));
+            Assert.That(new LocalProfile(leftProfileId).Data.BindingOverridesJson,Is.Not.Empty,"the real rebind saves the authoritative profile");
+            Assert.That(NewTestControls(leftProfileId).Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/k"),"production controls reload the persisted binding");
         }
 
         [UnityTest,Order(8)]public IEnumerator TheNextTestHasNoVirtualInputOrSavedControlsLeft()
         {
             Assert.That(leftControls.Map.enabled,Is.False,"teardown disposes controls even when the test never reaches its own cleanup");
-            Assert.That(PlayerPrefs.HasKey(leftBindingKey),Is.False,"only the preceding test's saved identity is removed");
+            Assert.That(Directory.Exists(leftProfileFolder),Is.False,"teardown retires the preceding test's owned profile folder");
             foreach(var device in InputSystem.devices)Assert.That(device.name.StartsWith("impl-U01 cleanup"),Is.False,"a keyboard or mouse leaked");
             Assert.That((InputSystem.settings.backgroundBehavior,InputSystem.settings.editorInputBehaviorInPlayMode),Is.EqualTo((leftBackground,leftEditor)),"repeated setup still restores the original input settings");
             yield break;
@@ -195,7 +198,7 @@ namespace Festival.Tests
             string id="impl-U01-bindings-"+System.Guid.NewGuid().ToString("N");
             string previousScope=FestivalInput.PreferencesScope;
             UseAVirtualKeyboard("impl-U01 binding keyboard");
-            string scopedKey="festival-bindings-"+LocalProfile.Folder+"-"+id;
+            string profileFolder=LocalProfile.Folder;
             try
             {
                 FestivalInput.PreferencesScope=LocalProfile.Folder;
@@ -203,20 +206,24 @@ namespace Festival.Tests
                 controls.Rebind(controls.Interact,0,null);yield return null;yield return Tap(Key.K,.3f);
                 Assert.That(controls.Rebinding,Is.False,"the real keyboard completes the rebind");
                 Assert.That(controls.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/k"),"the real key changes the action");
-                Assert.That(PlayerPrefs.HasKey(scopedKey),Is.True,"the rebind saves only to the disposable scope's identity");
-                string saved=PlayerPrefs.GetString(scopedKey);
-                NewTestControls(id);
-                Assert.That(PlayerPrefs.GetString(scopedKey),Is.EqualTo(saved),"recreating controls preserves the same test's saved data");
+                Assert.That(new LocalProfile(id).Data.BindingOverridesJson,Is.Not.Empty,"the rebind saves inside the disposable authoritative profile store");
+                string[] files=Directory.GetFiles(profileFolder,"*.json");Assert.That(files.Length,Is.EqualTo(1));
+                string saved=File.ReadAllText(files[0]);
+                Assert.That(NewTestControls(id).Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/k"),"recreated production controls reload the same identity");
+                Assert.That(File.ReadAllText(files[0]),Is.EqualTo(saved),"recreating controls preserves the same identity's saved bytes");
                 Assert.That(PlayerPrefs.HasKey("festival-bindings-"+id),Is.False,"the unscoped identity is untouched");
-                FestivalInput.PreferencesScope=LocalProfile.Folder+"-next";
+                string nextFolder=Path.Combine(profileFolder,"impl-U36-next-profile");Directory.CreateDirectory(nextFolder);
+                LocalProfile.Folder=nextFolder;FestivalInput.PreferencesScope=nextFolder;
                 var fresh=NewTestControls(id);
-                Assert.That(fresh.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/e"),"another test scope starts from the default binding");
+                Assert.That(fresh.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/e"),"another owned profile folder starts from the default binding");
+                Assert.That(new LocalProfile(id).Data.BindingOverridesJson,Is.Empty);
+                Assert.That(File.ReadAllText(files[0]),Is.EqualTo(saved),"the nested scope never changes its parent's saved identity");
             }
             finally
             {
                 // The unscoped probe identity also belongs to this GUID; the fixture retires the scoped identities.
                 PlayerPrefs.DeleteKey("festival-bindings-"+id);
-                FestivalInput.PreferencesScope=previousScope;
+                LocalProfile.Folder=profileFolder;FestivalInput.PreferencesScope=previousScope;
             }
         }
 

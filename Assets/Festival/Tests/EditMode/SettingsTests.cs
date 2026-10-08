@@ -270,6 +270,207 @@ namespace Festival.Tests
             yield return new ExitPlayMode();
         }
 
+        [UnityTest]public IEnumerator TextScaleReflowsHostedBriefingAndActionHitAreasWithoutMovingRhythm()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U36-text-live-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;
+            var host=new GameObject("impl-U36 text reflow HUD");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();
+            UnityEngine.UI.Text Label(string name)=>host.GetComponentsInChildren<UnityEngine.UI.Text>(true).First(t=>t.name==name);
+            RectTransform Card(string name)=>host.GetComponentsInChildren<RectTransform>(true).First(t=>t.name==name);
+            void Fits(UnityEngine.UI.Text label)
+            {
+                Canvas.ForceUpdateCanvases();int visible=label.cachedTextGenerator.characterCountVisible;
+                Assert.That(visible>=label.text.Length||label.text.Substring(visible).Trim().Length==0,Is.True,label.name+" clips at "+visible+"/"+label.text.Length+" in "+label.rectTransform.rect.size);
+            }
+            try
+            {
+                yield return null;session.Host("Text reader",0);yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var game=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var player=game.Player(session.LocalPlayerId);game.State.Phase="Playing";game.State.LevelIndex=3;game.State.ElapsedSeconds=1;game.State.DurationSeconds=600;game.State.TripperId=player.Id;
+                player.X=0;player.Z=0;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                game.State.Npcs.Clear();
+                var canvas=host.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);canvas.transform.localScale=Vector3.one;
+                session.MenuOpen=false;yield return new WaitForSeconds(.3f);
+                Assert.That(Card("Level briefing").gameObject.activeInHierarchy,Is.True,"actual hosted HUD shows its level briefing");
+                int font=Label("Briefing job").fontSize;float height=Card("Level briefing").rect.height;
+                var well=Card("Receptor well 0");var originalWell=(well.anchorMin,well.anchorMax,well.sizeDelta);
+                var note=Card("Notes");var originalNotes=(note.anchorMin,note.anchorMax,note.sizeDelta);
+                session.MenuOpen=true;yield return new WaitForSeconds(.3f);
+                var button=host.GetComponentsInChildren<UnityEngine.UI.Button>(true).First(b=>b.name=="RESUME FESTIVAL");
+                Assert.That(button.gameObject.activeInHierarchy,Is.True,"the actual hosted pass exposes its resume action");
+                float hitHeight=((RectTransform)button.transform).rect.height;
+                session.Profile.Data.TextScale=1.3f;Assert.That(session.Settings.Save(),Is.Empty);yield return null;yield return null;
+                Assert.That(((RectTransform)button.transform).rect.height,Is.GreaterThan(hitHeight),"real menu action hit areas grow with the saved text size");
+                session.MenuOpen=false;yield return null;yield return null;
+                Assert.That(Label("Briefing job").fontSize,Is.GreaterThan(font),"the actual authored briefing consumes text scale");
+                Assert.That(Card("Level briefing").rect.height,Is.GreaterThan(height),"the card reflows for larger text");
+                Fits(Label("Briefing goal"));Fits(Label("Briefing job"));Fits(Label("Briefing stakes"));
+                Assert.That((well.anchorMin,well.anchorMax,well.sizeDelta),Is.EqualTo(originalWell),"receptor geometry is unchanged");
+                Assert.That((note.anchorMin,note.anchorMax,note.sizeDelta),Is.EqualTo(originalNotes),"note geometry is unchanged");
+                session.Profile.Data.TextScale=1;Assert.That(session.Settings.Save(),Is.Empty);yield return null;yield return null;
+                Assert.That(Label("Briefing job").fontSize,Is.EqualTo(font),"returning to 100 percent is idempotent");
+                Assert.That(Card("Level briefing").rect.height,Is.EqualTo(height).Within(.1f));
+            }
+            finally
+            {
+                host.SetActive(false);session.Leave();UnityEngine.Object.DestroyImmediate(host);LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;Directory.Delete(playFolder,true);
+            }
+            yield return new ExitPlayMode();
+        }
+
+        [UnityTest]public IEnumerator LargerTextKeepsTheBusyHostedCardsAndEveryHelpBlockReadable()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U36-cards-live-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;
+            var host=new GameObject("impl-U36 busy card HUD");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();
+            var failures=new List<string>();
+            void Fits(UnityEngine.UI.Text text)
+            {
+                Canvas.ForceUpdateCanvases();int visible=Mathf.Max(0,text.cachedTextGenerator.characterCountVisible);
+                if(visible<text.text.Length&&text.text.Substring(visible).Trim().Length>0)failures.Add(text.name+" clips at "+visible+"/"+text.text.Length+" in "+text.rectTransform.rect.size+" at font "+text.cachedTextGenerator.fontSizeUsedForBestFit);
+            }
+            try
+            {
+                yield return null;session.Host("A Long Reader Name",0);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var game=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var player=game.Player(session.LocalPlayerId);
+                for(int i=1;i<8;i++)game.AddPlayer("impl_U36_busy_"+i,"Long Festival Friend "+i);
+                game.State.Phase="Playing";game.State.FestivalIndex=1;game.State.LevelIndex=3;game.State.DurationSeconds=600;game.State.ElapsedSeconds=30;game.State.TripperId=player.Id;
+                game.State.Doses.Clear();foreach(var p in game.State.Players){p.X=20;p.Z=20;game.State.Doses.Add(new PlayerDose{PlayerId=p.Id,Dose=4,Substance="mushrooms"});}
+                player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=3});player.EquippedItemId="stock_lsd";
+                game.State.Npcs.Clear();
+                var canvas=host.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);canvas.transform.localScale=Vector3.one;
+                session.Profile.Data.TextScale=1.3f;Assert.That(session.Settings.Save(),Is.Empty);session.MenuOpen=false;
+                session.SetMessage("Your friend found the missing festivalgoer. Get everyone home together.");yield return new WaitForSeconds(.3f);
+                var names=new[]{"Objective title","Objective detail","Vitals","Tripping","Roster","Equipment heading","Slot label","Notice"};
+                foreach(var text in host.GetComponentsInChildren<UnityEngine.UI.Text>(false))if(names.Contains(text.name))Fits(text);
+                session.MenuOpen=true;yield return null;
+                host.GetComponentsInChildren<UnityEngine.UI.Button>(false).First(b=>b.name=="HOW TO PLAY").onClick.Invoke();yield return null;yield return null;
+                foreach(var text in host.GetComponentsInChildren<UnityEngine.UI.Text>(false))if(text.name.StartsWith("How to play text"))Fits(text);
+                Assert.That(failures,Is.Empty,"actual rendered 130 percent text:\n"+string.Join("\n",failures));
+            }
+            finally{if(host!=null){host.SetActive(false);session?.Leave();UnityEngine.Object.DestroyImmediate(host);}LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;if(Directory.Exists(playFolder))Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
+        private static ushort ComfortPort()
+        {
+            using(var probe=new System.Net.Sockets.UdpClient(new System.Net.IPEndPoint(System.Net.IPAddress.Any,0)))
+                return (ushort)((System.Net.IPEndPoint)probe.Client.LocalEndPoint).Port;
+        }
+        private static UnityEngine.UI.Button ComfortButton(GameObject root,string name)
+        {
+            var button=root.GetComponentsInChildren<UnityEngine.UI.Button>(true).FirstOrDefault(b=>b.name==name);
+            Assert.That(button,Is.Not.Null,"actual title widget "+name+" exists before invoking its callback");return button;
+        }
+        private static void SetComfortPort(GameObject root,ushort port)
+        {
+            foreach(var field in root.GetComponentsInChildren<UnityEngine.UI.InputField>(true))if(field.name=="PORT")field.text=port.ToString();
+        }
+
+        [UnityTest]public IEnumerator TheTitleSavesEitherFirstLaunchChoiceBeforeHostingAndKeepsItOnReload()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U36-choice-live-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            GameObject host=null;
+            try
+            {
+                foreach(bool reduce in new[]{false,true})
+                {
+                    string folder=Path.Combine(playFolder,reduce?"reduced":"full");Directory.CreateDirectory(folder);LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;
+                    host=new GameObject("impl-U36 first-launch title");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();yield return null;
+                    Assert.That(session.Profile.Data.ReducedMotion||session.Profile.Data.HighContrast||session.Profile.Data.ComfortPromptComplete,Is.False,"new-profile defaults remain the shipped full-effects choice until informed consent");
+                    SetComfortPort(host,ComfortPort());ComfortButton(host,"PLAY").onClick.Invoke();yield return null;
+                    ComfortButton(host,"HOST A GAME").onClick.Invoke();yield return null;
+                    Assert.That(session.Connected||session.Connecting,Is.False,"the actual title callback cannot start gameplay before the comfort choice is saved");
+                    var choice=ComfortButton(host,reduce?"YES, REDUCE MOTION":"NO, KEEP FULL EFFECTS");Assert.That(choice,Is.Not.Null,"the title presents both explicit first-launch choices");
+                    Assert.That(choice.gameObject.activeInHierarchy,Is.True);choice.onClick.Invoke();yield return null;
+                    Assert.That(session.Connected,Is.True,session.Message);
+                    var saved=new LocalProfile("default");Assert.That(saved.Data.ComfortPromptComplete,Is.True);Assert.That(saved.Data.ReducedMotion,Is.EqualTo(reduce));Assert.That(saved.Data.HighContrast,Is.False);
+                    host.SetActive(false);session.Leave();UnityEngine.Object.DestroyImmediate(host);host=null;yield return null;
+                    host=new GameObject("impl-U36 saved-choice title");session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();yield return null;
+                    Assert.That(session.Profile.Data.ReducedMotion,Is.EqualTo(reduce));
+                    Assert.That(ComfortButton(host,"YES, REDUCE MOTION").gameObject.activeInHierarchy,Is.False,"saved choices are never asked again");
+                    UnityEngine.Object.DestroyImmediate(host);host=null;yield return null;
+                }
+            }
+            finally{if(host!=null){host.SetActive(false);UnityEngine.Object.DestroyImmediate(host);}LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
+        [UnityTest]public IEnumerator AFirstLaunchSaveErrorStaysVisibleAndBlocksThePendingTitleHost()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U36-choice-error-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;
+            GameObject host=null;FestivalSession session=null;
+            try
+            {
+                host=new GameObject("impl-U36 comfort save error");
+                session=host.AddComponent<FestivalSession>();
+                Assert.That(session,Is.Not.Null,"fixture session component was created");
+                Assert.That(session.Profile,Is.Not.Null,"fixture session Awake initialized its owned profile");
+                var hud=host.AddComponent<FestivalHud>();
+                Assert.That(hud,Is.Not.Null,"fixture HUD component was created");
+                Assert.That(host.GetComponentInChildren<Canvas>(true),Is.Not.Null,"fixture HUD Awake built real widgets");
+                yield return null;Assert.That(session.Profile,Is.Not.Null);Assert.That(host.GetComponentInChildren<Canvas>(true),Is.Not.Null);SetComfortPort(host,ComfortPort());ComfortButton(host,"PLAY").onClick.Invoke();yield return null;ComfortButton(host,"HOST A GAME").onClick.Invoke();yield return null;
+                Assert.That(session.Connected||session.Connecting,Is.False,"title connection waits for a saved choice");
+                string blocked=Path.Combine(playFolder,"default.json");Directory.CreateDirectory(blocked);
+                var choice=ComfortButton(host,"YES, REDUCE MOTION");Assert.That(choice,Is.Not.Null);choice.onClick.Invoke();yield return null;
+                Assert.That(session.Settings.LastError,Is.Not.Empty);Assert.That(session.Connected||session.Connecting,Is.False);
+                Assert.That(session.Profile.Data.ComfortPromptComplete,Is.False,"failed persistence cannot mark the prompt complete");
+                Assert.That(session.Profile.Data.ReducedMotion,Is.False,"failed choices restore the previous in-memory preference");
+                bool errorVisible=false;
+                foreach(var text in host.GetComponentsInChildren<UnityEngine.UI.Text>(false))if(text.text.Contains(session.Settings.LastError))errorVisible=true;
+                Assert.That(errorVisible,Is.True,"the actual visible prompt explains why play is waiting");
+                Directory.Delete(blocked);choice.onClick.Invoke();yield return null;
+                Assert.That(session.Connected,Is.True,session.Message);Assert.That(new LocalProfile("default").Data.ReducedMotion,Is.True);
+            }
+            finally{if(host!=null){host.SetActive(false);session?.Leave();UnityEngine.Object.DestroyImmediate(host);}LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;if(Directory.Exists(playFolder))Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
+        [UnityTest]public IEnumerator TheTitleJoinWaitsForItsOwnSavedChoiceWithoutGatingTheHostTransport()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U36-join-choice-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            string serverFolder=Path.Combine(playFolder,"server"),clientFolder=Path.Combine(playFolder,"client");Directory.CreateDirectory(serverFolder);Directory.CreateDirectory(clientFolder);
+            LocalProfile.Folder=serverFolder;FestivalInput.PreferencesScope=serverFolder;var server=new GameObject("impl-U36 choice server");var owner=server.AddComponent<FestivalSession>();
+            LocalProfile.Folder=clientFolder;FestivalInput.PreferencesScope=clientFolder;var client=new GameObject("impl-U36 first-launch join title");var session=client.AddComponent<FestivalSession>();client.AddComponent<FestivalHud>();
+            try
+            {
+                ushort port=ComfortPort();owner.Host("Transport owner",port);yield return null;Assert.That(owner.Connected,Is.True,"headless transport retains its existing compatible seam");
+                SetComfortPort(client,port);ComfortButton(client,"PLAY").onClick.Invoke();ComfortButton(client,"JOIN A FRIEND").onClick.Invoke();ComfortButton(client,"JOIN").onClick.Invoke();yield return null;
+                Assert.That(session.Connected||session.Connecting,Is.False,"the actual join callback waits for this player's informed choice");
+                ComfortButton(client,"NO, KEEP FULL EFFECTS").onClick.Invoke();
+                for(float deadline=Time.realtimeSinceStartup+15;!session.Connected&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.Connected,Is.True,session.Message);Assert.That(new LocalProfile("default").Data.ComfortPromptComplete,Is.True);Assert.That(new LocalProfile("default").Data.ReducedMotion,Is.False);
+                Assert.That(owner.Profile.Data.ComfortPromptComplete,Is.False,"local consent never becomes a network-wide preference gate");
+            }
+            finally{client.SetActive(false);server.SetActive(false);session.Leave();owner.Leave();UnityEngine.Object.DestroyImmediate(client);UnityEngine.Object.DestroyImmediate(server);LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
+        [UnityTest]public IEnumerator MigratedComfortChoicesReachTheTitleUnchangedWithoutAnotherPrompt()
+        {
+            yield return new EnterPlayMode();
+            string playFolder=Path.Combine(Path.GetTempPath(),"impl-U36-migrated-choice-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(playFolder);
+            LocalProfile.Folder=playFolder;FestivalInput.PreferencesScope=playFolder;File.WriteAllText(Path.Combine(playFolder,"default.json"),"{\"SchemaVersion\":1,\"ReducedMotion\":true,\"HighContrast\":false}");
+            var host=new GameObject("impl-U36 migrated title");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();
+            try
+            {
+                yield return null;var choice=ComfortButton(host,"YES, REDUCE MOTION");Assert.That(choice,Is.Not.Null);
+                Assert.That(choice.gameObject.activeInHierarchy,Is.False);Assert.That(session.Profile.Data.ReducedMotion,Is.True);Assert.That(session.Profile.Data.HighContrast,Is.False);
+                SetComfortPort(host,ComfortPort());ComfortButton(host,"PLAY").onClick.Invoke();ComfortButton(host,"HOST A GAME").onClick.Invoke();yield return null;
+                Assert.That(session.Connected,Is.True,session.Message);Assert.That(new LocalProfile("default").Data.ReducedMotion,Is.True);Assert.That(new LocalProfile("default").Data.HighContrast,Is.False);
+            }
+            finally{if(host!=null){host.SetActive(false);session?.Leave();UnityEngine.Object.DestroyImmediate(host);}LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;if(Directory.Exists(playFolder))Directory.Delete(playFolder,true);}
+            yield return new ExitPlayMode();
+        }
+
         [Test]public void HowToPlayNamesTheEffectiveReboundPointerAction()
         {
             using(var input=new FestivalInput("settings"))
@@ -869,6 +1070,54 @@ namespace Festival.Tests
                 apply.Invoke(hud,new object[]{me});Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(fov+offset).Within(.001f),"dose and gas compose over the chosen base");
                 typeof(FestivalHud).GetMethod("FrameTitle",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
                 Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(FestivalTitleScreen.Fov),"the title keeps its authored shot");
+            }
+            finally{Close(host,session);}
+        }
+
+        [Test]public void CameraShakeOffKeepsTheProfileFovAndColour()
+        {
+            var host=new GameObject("impl-U36 camera comfort");var session=Session(host);var hud=host.AddComponent<FestivalHud>();
+            if(typeof(FestivalHud).GetField("effectWash",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud)==null)
+                typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+            try
+            {
+                session.Profile.Data.FieldOfView=90;session.Profile.Data.ReducedMotion=false;session.Profile.Data.CameraShake=false;
+                var state=new RoundState{Phase="Playing",SimulationSeconds=110};var me=new PlayerState{Id="me"};state.Players.Add(me);
+                me.Effects.Add(new ActiveEffect{Id="mushrooms",RemainingSeconds=10});
+                me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Substance="mushrooms",Intensity=4});
+                typeof(FestivalSession).GetProperty("State").SetValue(session,state);
+                typeof(FestivalHud).GetMethod("ApplyEffects",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{me});
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(90).Within(.0001f),"camera shake off removes shop/dose swell while preserving the chosen base FOV");
+                var wash=(UnityEngine.UI.Image)typeof(FestivalHud).GetField("effectWash",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
+                Assert.That(wash.color.a,Is.GreaterThan(0),"comfort removes camera motion while keeping the trip colour");
+            }
+            finally{Close(host,session);}
+        }
+
+        [Test]public void CameraShakeOffRemovesShopRollAndGasKickWithoutRemovingTheGasLook()
+        {
+            var host=new GameObject("impl-U36 roll and gas comfort");var session=Session(host);var hud=host.AddComponent<FestivalHud>();
+            if(typeof(FestivalHud).GetField("effectWash",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud)==null)
+                typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+            try
+            {
+                session.Profile.Data.FieldOfView=86;session.Profile.Data.ReducedMotion=false;session.Profile.Data.CameraShake=false;
+                var state=new RoundState{Phase="Shopping",SimulationSeconds=1};var me=new PlayerState{Id="me"};state.Players.Add(me);
+                me.Effects.Add(new ActiveEffect{Id="lsd",RemainingSeconds=10});
+                me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=0,RemainingSeconds=FestivalSimulation.GiggleGasSeconds});
+                typeof(FestivalSession).GetProperty("State").SetValue(session,state);
+                typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,me.Id);
+                var camera=typeof(FestivalSession).GetMethod("UpdateCamera",BindingFlags.NonPublic|BindingFlags.Instance);
+                camera.Invoke(session,new object[]{me});
+                Assert.That(Mathf.DeltaAngle(0,session.ViewCamera.transform.eulerAngles.z),Is.EqualTo(0).Within(.0001f),"disabled camera shake removes the actual shop roll");
+                typeof(FestivalHud).GetMethod("ApplyEffects",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,new object[]{me});
+                Assert.That(session.ViewCamera.fieldOfView,Is.EqualTo(86).Within(.0001f),"the gas cannot add a camera kick");
+                var trip=session.GetComponent<FestivalTrip>();
+                trip.Apply(state,me.Id,session.ViewCamera.transform,null,false,1,0,0);
+                var vignette=(UnityEngine.UI.RawImage)typeof(FestivalTrip).GetField("vignette",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(trip);
+                Assert.That(vignette.color.a,Is.GreaterThan(0),"the actual gas overlay stays visible");
+                session.Profile.Data.CameraShake=true;camera.Invoke(session,new object[]{me});
+                Assert.That(Mathf.Abs(Mathf.DeltaAngle(0,session.ViewCamera.transform.eulerAngles.z)),Is.GreaterThan(.1f),"reenabling the setting restores the shipped roll");
             }
             finally{Close(host,session);}
         }
