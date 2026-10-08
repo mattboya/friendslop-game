@@ -25,8 +25,8 @@ namespace Festival.Core
             if(cop==null||dist>(n.Mode==Scattering?ScatterHoldRadius:ScatterRadius)||HoldsGround(n)||State.Interactions.Exists(i=>i.Status=="Active"&&i.TargetId==n.Id))return false;
             // Straight away from the cop; one standing right on it runs the way it faces.
             double yaw=dist>.01?Math.Atan2(n.X-cop.X,n.Z-cop.Z):n.Yaw*Math.PI/180;
-            if(dist<ScatterRadius){var to=Move(n.X,n.Z,cop.X+(float)(ScatterRadius*Math.Sin(yaw)),cop.Z+(float)(ScatterRadius*Math.Cos(yaw)),ScatterSpeed*dt);n.X=to.X;n.Z=to.Z;}
-            n.Mode=Scattering;n.Yaw=(float)(yaw*180/Math.PI);n.AttackAt=0;return true;
+            if(dist<ScatterRadius){var to=MovePursuer(n,cop.X+(float)(ScatterRadius*Math.Sin(yaw)),cop.Z+(float)(ScatterRadius*Math.Cos(yaw)),ScatterSpeed*dt);n.X=to.X;n.Z=to.Z;}
+            ReleaseApproach(n);n.Mode=Scattering;n.Yaw=(float)(yaw*180/Math.PI);n.AttackAt=0;return true;
         }
         // The quarter of the crowd that holds its ground, by place in the crowd and the level's seed, as CreateRound picks talkers.
         internal bool HoldsGround(NpcState n)=>unchecked((uint)(State.Npcs.IndexOf(n)+State.Seed))%4==0;

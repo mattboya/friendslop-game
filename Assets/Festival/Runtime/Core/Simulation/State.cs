@@ -77,6 +77,8 @@ namespace Festival.Core
         // TRIP-2: Buyer, Narc, Regular or (at night) ClueHolder, dealt as the crew leaves camp; never sent to clients. "" is not
         // dealt yet (a snapshot from before roles), and buys like every festivalgoer did then.
         public string Role="";
+        // Host-only stable approach reservations; old snapshots have no reservation and acquire one on their next step.
+        public string ApproachTargetId=""; public long ApproachEpoch; public int ApproachSlot=-1,CrowdDetourSide;
         // POLO-1: a festival twist this festivalgoer plays (FestivalTwists.cs), public so every client can show it: Influencer, VipGuard or "".
         public string Twist="";
         // VISION-3: view-only, never set on the host: FestivalSession.ViewFor sets it when FestivalSimulation.Engaged says the host
@@ -173,6 +175,7 @@ namespace Festival.Core
         // VISION-6: when a creature next hints at a true vision (HintVisions), on the level clock; 0, not armed (older snapshots arm
         // on their first step). Host-only: ViewFor builds the view field by field and leaves it out.
         public double NextVisionHintAt;
+        public long CrowdArrivalEpoch;
         public long SpeechSequence; public List<PublicSpeechState> PublicSpeech=new List<PublicSpeechState>();
         public List<PlayerState> Players=new List<PlayerState>(); public List<NpcState> Npcs=new List<NpcState>();
         public List<string> VendorOffers=new List<string>(); public List<ShopStockState> ShopStock=new List<ShopStockState>(); public List<InteractionState> Interactions=new List<InteractionState>();

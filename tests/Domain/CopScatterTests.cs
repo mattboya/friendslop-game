@@ -10,7 +10,7 @@ public static class CopScatterTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{ThreeInFourRunFromTheArrest,OnlyAnArrestScattersThem,TwelveAndAHalfMetresOffIsUntouched,ScatteringTheyNeitherWatchNorStrike,
+        foreach(var scenario in new Action[]{ScatterKeepsGapBesideSomeoneHoldingGround,ThreeInFourRunFromTheArrest,OnlyAnArrestScattersThem,TwelveAndAHalfMetresOffIsUntouched,ScatteringTheyNeitherWatchNorStrike,
             ASalePartnerStaysAndTheSaleGoesOn,AfterTheBustTheyCarryOnWhereTheyStopped,AQuarterOfEveryLevelsCrowdHoldsItsGround})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
@@ -161,4 +161,15 @@ public static class CopScatterTests
         Check(Math.Abs(share-.75)<=.03,"75% +/-3% of the crowd scatters over 200 levels ("+(share*100).ToString("0.0")+"%)");
         Check(ran.Count==FestivalCrowdLayout.Count&&held.Count==FestivalCrowdLayout.Count,"each festivalgoer scatters in some levels and holds its ground in others ("+ran.Count+" ran, "+held.Count+" held)");
     }
+    static void ScatterKeepsGapBesideSomeoneHoldingGround()
+    {
+        var s=new FestivalSimulation(3);var p=s.AddPlayer("a","A");p.Z=-1;s.State.Phase="Playing";s.State.SimulationSeconds=10;s.State.Npcs.Clear();
+        var runner=new NpcState{Id="runner",Z=2};var held=new NpcState{Id="held",Z=2.8f};
+        var cop=new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",Yaw=180};cop.Evidence.Add(new EvidenceState{PlayerId=p.Id,Kind="WitnessedDeal",DetainAt=1000});
+        s.State.Npcs.Add(runner);s.State.Npcs.Add(held);s.State.Npcs.Add(cop);Check(!s.HoldsGround(runner)&&s.HoldsGround(held),"fixture has a runner and a held neighbour");
+        int navigation=0;s.Navigate=(x,z,tx,tz,step)=>{navigation++;double d=Dist(x,z,tx,tz),travel=Math.Min(step,d);return d<=1e-6?new WorldPoint(x,z):new WorldPoint(x+(float)((tx-x)*travel/d),z+(float)((tz-z)*travel/d));};
+        for(int k=0;k<30;k++){float x=runner.X,z=runner.Z;s.Tick(.1);Check(Dist(runner.X,runner.Z,held.X,held.Z)>=.7-1e-5,"scatter cannot enter a held neighbour at step "+k);Check(Dist(x,z,runner.X,runner.Z)<=.3601,"scatter stays speed bounded");}
+        Check(navigation>0&&runner.Mode==FestivalSimulation.Scattering&&Dist(0,0,runner.X,runner.Z)>3,"scatter can navigate around the held neighbour");
+    }
+
 }

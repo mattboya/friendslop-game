@@ -12,7 +12,7 @@ public static class CrowdTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var scenario in new Action[]{()=>PursuersDoNotStepInsideEachOther(false,false),()=>PursuersDoNotStepInsideEachOther(false,true),()=>PursuersDoNotStepInsideEachOther(true,false),()=>PursuersDoNotStepInsideEachOther(true,true),PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,AwkwardChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
+        foreach(var scenario in new Action[]{EightSameSidePursuersReachSeparateRings,SettledInnerSwarmStrikesWhileOuterPairWaits,()=>EightPursuersFollow(true,false),()=>EightPursuersFollow(false,true),StableReservationsSurviveListAndMembershipChanges,OldestSwarmWaiterOwnsVacatedInnerPlace,ReturningSwarmWaiterKeepsArrivalPriority,SwarmsTakeInnerPlacesBeforeQuestioners,EightyPursuersHaveDistinctOverflowPlaces,DenseSeparatedCrowdsRemainSafeWithBlockedGeometry,ExistingOverlapRecoversThroughNavigation,RecoveryCannotCutThroughAnOverlappedNeighbour,RejectedNavigationStandsStill,AttackCapWindupCooldownAndPreMoveDistanceArePreserved,ApproachesReleaseOnDistractionSpiritAndDisconnect,PhysicalBoothPauseFreezesAndResumesReservations,()=>PursuersDoNotStepInsideEachOther(false,false),()=>PursuersDoNotStepInsideEachOther(false,true),()=>PursuersDoNotStepInsideEachOther(true,false),()=>PursuersDoNotStepInsideEachOther(true,true),PairsDoNotDrawAttention,FourBunchedDrawMore,SpreadingOutRemovesIt,BiggerPacksUpToTheCap,FiveMetresAndNoFurther,OnlyStandingCrewCount,BackstageScalesToo,StacksWithTheLevelUpToThree,CoolingOffIsNotScaled,AwkwardChatScales,GoodChatIsNotScaled,QuitScales,GroupDanceFailureScales,AnIdleFriendIsJudgedOnceForOverlappingDances,ARefusedSaleIsNotScaled})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -192,6 +192,197 @@ public static class CrowdTests
             }
             Check(!navigation||navigated>0,"pursuit calls the installed navigation delegate");
         }
+    }
+
+    static void EightSameSidePursuersReachSeparateRings()
+    {
+        var s=new FestivalSimulation(3);var p=s.AddPlayer("target","Target");p.X=0;p.Z=0;p.RecoveryUntil=100;
+        s.State.Phase="Playing";s.State.SimulationSeconds=10;s.State.Npcs.Clear();
+        for(int k=0;k<8;k++)
+        {
+            var n=new NpcState{Id="ring"+k,Z=3+k*.85f,Yaw=180,Mode="Swarming",TargetId=p.Id};
+            n.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=95,AccusationSeconds=0,LastSeenSeconds=10});s.State.Npcs.Add(n);
+        }
+        for(int step=0;step<200;step++)
+        {
+            s.Tick(.1);
+            for(int a=0;a<8;a++)for(int b=a+1;b<8;b++)Check(Gap(s.State.Npcs[a],s.State.Npcs[b])>=.7-1e-5,"eight same-side pursuers keep the gap at step "+step);
+        }
+        int inner=0,outer=0;foreach(var n in s.State.Npcs){double d=Math.Sqrt(n.X*n.X+n.Z*n.Z);if(d<=1.5)inner++;if(Math.Abs(d-2.2)<.15)outer++;}
+        Check(inner==6&&outer==2,"eight same-side pursuers fill six inner and two outer slots: inner="+inner+", outer="+outer+" places "+string.Join(";",s.State.Npcs.ConvertAll(n=>n.Id+"="+n.X+","+n.Z)));
+    }
+    static double Gap(NpcState a,NpcState b)=>Math.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Z-b.Z)*(a.Z-b.Z));
+
+    static FestivalSimulation Pursuit(int count=8,bool downed=false)
+    {
+        var s=new FestivalSimulation(3);var p=s.AddPlayer("target","Target");s.AddPlayer("other","Other");
+        p.X=0;p.Z=0;p.RecoveryUntil=1000;s.Player("other").X=60;s.Player("other").Z=60;
+        if(downed){p.Life="Downed";p.DownedRemaining=35;}
+        s.State.Phase="Playing";s.State.SimulationSeconds=10;s.State.Npcs.Clear();
+        for(int k=0;k<count;k++)
+        {
+            var n=new NpcState{Id="arrival"+k,Z=3+k*.85f,Yaw=180};
+            n.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=95,AccusationSeconds=0,LastSeenSeconds=10});s.State.Npcs.Add(n);
+        }
+        return s;
+    }
+    static void Separate(FestivalSimulation s,string at)
+    {
+        for(int a=0;a<s.State.Npcs.Count;a++)for(int b=a+1;b<s.State.Npcs.Count;b++)
+            if(s.State.Npcs[a].Kind=="Wook"&&s.State.Npcs[b].Kind=="Wook")Check(Gap(s.State.Npcs[a],s.State.Npcs[b])>=.7-1e-5,at+": "+s.State.Npcs[a].Id+" / "+s.State.Npcs[b].Id+" gap="+Gap(s.State.Npcs[a],s.State.Npcs[b]));
+    }
+    static double From(NpcState n,PlayerState p)=>Math.Sqrt((n.X-p.X)*(n.X-p.X)+(n.Z-p.Z)*(n.Z-p.Z));
+    static void Rings(FestivalSimulation s)
+    {
+        var p=s.Player("target");int inner=0,outer=0;
+        foreach(var n in s.State.Npcs){double d=From(n,p);if(d<=1.5)inner++;if(Math.Abs(d-2.2)<.15)outer++;}
+        Check(inner==6&&outer==2,"six inner and two outer arrivals: "+inner+" / "+outer+" places "+string.Join(";",s.State.Npcs.ConvertAll(n=>n.Id+"="+n.X+","+n.Z)));
+    }
+    static void EightPursuersFollow(bool downed,bool moving)
+    {
+        var s=Pursuit(downed:downed);var p=s.Player("target");
+        for(int step=0;step<220;step++){if(moving){p.X+=.025f;p.Z-=.015f;}s.Tick(.1);Separate(s,"eight target downed="+downed+", moving="+moving+", step="+step);}
+        Rings(s);Check(p.Health==100&&(!downed||p.Life=="Downed"),"downed/recovering target remains unharmed before death");
+    }
+    static void StableReservationsSurviveListAndMembershipChanges()
+    {
+        var s=Pursuit();for(int k=0;k<200;k++)s.Tick(.1);
+        var before=s.State.Npcs.ConvertAll(n=>(n.Id,n.X,n.Z));s.State.Npcs.Reverse();s.Tick(.1);
+        foreach(var at in before){var n=s.State.Npcs.Find(x=>x.Id==at.Id);Check(Math.Abs(n.X-at.X)<.01&&Math.Abs(n.Z-at.Z)<.01,"list reversal cannot reshuffle "+n.Id+"'s reserved place");}
+        var departed=s.State.Npcs.Find(n=>n.Id=="arrival7");s.State.Npcs.Remove(departed);s.Tick(.1);
+        foreach(var at in before){var n=s.State.Npcs.Find(x=>x.Id==at.Id);if(n!=null)Check(Math.Abs(n.X-at.X)<.01&&Math.Abs(n.Z-at.Z)<.01,"outer departure does not reshuffle "+n.Id);}
+        var first=s.State.Npcs.Find(n=>n.Id=="arrival0");first.Observers[0].Suspicion=0;
+        var other=first.Observers.Find(o=>o.PlayerId=="other");other.Suspicion=95;other.AccusationSeconds=0;other.LastSeenSeconds=s.State.SimulationSeconds;
+        s.Player("other").X=5;s.Player("other").Z=0;s.Tick(.1);Check(first.TargetId=="other","changed suspicion switches actual target");
+        for(int k=0;k<120;k++){s.Tick(.1);Separate(s,"target switch "+k);}Check(From(first,s.Player("other"))<1.5,"new target gets a new pursuit place");
+    }
+    static void SwarmsTakeInnerPlacesBeforeQuestioners()
+    {
+        var s=Pursuit(7);var q=s.State.Npcs[0];q.Observers[0].Suspicion=50;q.Observers[0].AccusationSeconds=-1;
+        for(int k=0;k<220;k++){s.Tick(.1);Separate(s,"swarm priority "+k);}
+        Check(q.Mode=="Questioning"&&Math.Abs(From(q,s.Player("target"))-2.2)<.15,"a questioner waits outside the six eligible swarmers");
+        foreach(var n in s.State.Npcs)if(n!=q)Check(n.Mode=="Swarming"&&From(n,s.Player("target"))<1.5,"all six swarmers have an inner place: "+n.Id+" "+n.Mode+" d="+From(n,s.Player("target"))+" at="+n.X+","+n.Z);
+    }
+    static void EightyPursuersHaveDistinctOverflowPlaces()
+    {
+        var s=Pursuit(80);
+        // Feasible separated geometry near each expected ring, including the thirteenth outer ring.
+        for(int k=0;k<80;k++){double radius=(k<6?1.3:2.2+.9*(k/6-1))+.3,angle=k%6*Math.PI/3;s.State.Npcs[k].X=(float)(radius*Math.Sin(angle));s.State.Npcs[k].Z=(float)(radius*Math.Cos(angle));}
+        for(int k=0;k<120;k++){s.Tick(.1);Separate(s,"80 overflow step "+k);}
+        for(int k=0;k<80;k++){double radius=k<6?1.3:2.2+.9*(k/6-1);Check(Math.Abs(From(s.State.Npcs[k],s.Player("target"))-radius)<.1,"overflow arrival "+k+" reaches its distinct ring radius "+radius+", got "+From(s.State.Npcs[k],s.Player("target")));}
+    }
+    static void ExistingOverlapRecoversThroughNavigation()
+    {
+        var s=Pursuit(3);s.State.Npcs[0].Z=3;s.State.Npcs[1].Z=3.2f;s.State.Npcs[2].Z=4;s.State.Npcs[2].DistractedUntil=1000;
+        int approved=0;s.Navigate=(x,z,tx,tz,step)=>{approved++;double d=Math.Sqrt((tx-x)*(tx-x)+(tz-z)*(tz-z)),travel=Math.Min(step,d);return d<=1e-6?new WorldPoint(x,z):new WorldPoint(x+(float)((tx-x)*travel/d),z+(float)((tz-z)*travel/d));};
+        double previous=Gap(s.State.Npcs[0],s.State.Npcs[1]);
+        for(int k=0;k<20;k++){var before=s.State.Npcs.ConvertAll(n=>(n.X,n.Z));s.Tick(.1);double gap=Gap(s.State.Npcs[0],s.State.Npcs[1]);Check(gap+1e-5>=Math.Min(.7,previous),"recovery never worsens an existing overlap");previous=gap;for(int j=0;j<3;j++){var n=s.State.Npcs[j];Check(Math.Sqrt((n.X-before[j].X)*(n.X-before[j].X)+(n.Z-before[j].Z)*(n.Z-before[j].Z))<=.3601,"recovery remains speed bounded");}Check(Gap(s.State.Npcs[0],s.State.Npcs[2])>=.7-1e-5&&Gap(s.State.Npcs[1],s.State.Npcs[2])>=.7-1e-5,"recovery cannot create another overlap");}
+        Check(previous>=.7-1e-5&&approved>0,"navigation-approved bounded recovery separates existing overlap, gap="+previous);
+    }
+    static void RejectedNavigationStandsStill()
+    {
+        foreach(int bad in new[]{0,1,2})
+        {
+            var s=Pursuit(2);s.Navigate=(x,z,tx,tz,step)=>bad==0?null:bad==1?new WorldPoint(float.NaN,z):new WorldPoint(x+10,z);
+            var before=s.State.Npcs.ConvertAll(n=>(n.X,n.Z));s.Tick(1);
+            for(int k=0;k<2;k++)Check((s.State.Npcs[k].X,s.State.Npcs[k].Z)==before[k],"null, nonfinite or overbudget navigation stands still");
+        }
+    }
+
+    static void AttackCapWindupCooldownAndPreMoveDistanceArePreserved()
+    {
+        var s=Pursuit();var p=s.Player("target");p.Health=1000;p.RecoveryUntil=0;
+        for(int k=0;k<8;k++){double angle=k*Math.PI/4;s.State.Npcs[k].X=(float)(1.3*Math.Sin(angle));s.State.Npcs[k].Z=(float)(1.3*Math.Cos(angle));}
+        s.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);s.Tick(.1);
+        Check(s.State.Npcs.FindAll(n=>n.AttackAt>0).Count==6&&p.Health==1000,"six windups begin, and a blocked outer pursuit cannot bypass the six-attacker cap");
+        double attack=s.State.Npcs[0].AttackAt;Check(Math.Abs(attack-s.State.SimulationSeconds-.75)<1e-8,"windup is still .75 world seconds");
+        s.Tick(.7);Check(p.Health==1000,"no damage before the original windup deadline");s.Tick(.1);Check(p.Health==880,"six original twenty-point strikes land");
+        double cooldown=s.State.Npcs[0].AttackCooldownUntil;Check(Math.Abs(cooldown-s.State.SimulationSeconds-2)<1e-8,"each strike still has a two-second cooldown");
+        s.Tick(1.9);Check(p.Health==880&&s.State.Npcs.TrueForAll(n=>n.AttackAt==0),"cooldown cannot start another windup early");
+        var pre=Pursuit(1);pre.Player("target").RecoveryUntil=0;pre.State.Npcs[0].Z=1.6f;pre.Tick(.1);
+        Check(From(pre.State.Npcs[0],pre.Player("target"))<=1.5&&pre.State.Npcs[0].AttackAt==0,"arrival cannot retroactively attack using post-move distance");pre.Tick(.1);Check(pre.State.Npcs[0].AttackAt>0,"the following pre-move in-range step starts the windup");
+        pre.HasLineOfSight=(x,z,tx,tz)=>false;pre.Tick(.8);Check(pre.Player("target").Health==100,"the existing strike line-of-sight check remains authoritative");
+    }
+    static void ApproachesReleaseOnDistractionSpiritAndDisconnect()
+    {
+        foreach(int lifecycle in new[]{0,1,2})
+        {
+            var s=Pursuit(2);s.Tick(.1);long epoch=s.State.Npcs[0].ApproachEpoch;Check(epoch>0&&s.State.Npcs[1].ApproachEpoch>epoch,"each arrival has a unique host epoch");
+            if(lifecycle==0)foreach(var n in s.State.Npcs)n.DistractedUntil=100;
+            else if(lifecycle==1)s.Player("target").Life="Spirit";
+            else s.Disconnect("target");
+            s.Tick(.1);foreach(var n in s.State.Npcs)Check(n.ApproachEpoch==0&&n.ApproachSlot==-1&&n.ApproachTargetId=="","lifecycle releases the host reservation: "+lifecycle);
+            if(lifecycle==0)foreach(var n in s.State.Npcs)n.DistractedUntil=0;
+            else{s.Player("target").Life="Alive";s.Player("target").Connected=true;}
+            s.Tick(.1);Check(s.State.Npcs[0].ApproachEpoch>epoch,"resumed pursuit receives a fresh arrival epoch");
+        }
+    }
+    static void PhysicalBoothPauseFreezesAndResumesReservations()
+    {
+        var s=Pursuit(2);var booth=Festivals.BoothSpots[0];
+        foreach(var p in s.State.Players){p.X=booth.X;p.Z=booth.Z;}
+        foreach(var n in s.State.Npcs){n.X=booth.X;n.Z+=booth.Z+12;}
+        s.State.Booth=new MinigameState{Spot=0,Kind=FestivalSimulation.MysteryCupsGame};
+        for(int k=0;k<40&&s.State.Phase=="Playing";k++)s.Tick(.1);
+        Check(s.State.Phase==FestivalSimulation.MinigamePhase,"actual physical booth ring starts a pause");var before=s.State.Npcs.ConvertAll(n=>(n.X,n.Z,n.ApproachEpoch,n.ApproachSlot));s.Tick(6);
+        for(int k=0;k<2;k++){var n=s.State.Npcs[k];Check((n.X,n.Z,n.ApproachEpoch,n.ApproachSlot)==before[k],"positions and reservations freeze during a booth pause");}
+        s.ScoreMinigame(0);s.Tick(FestivalSimulation.MinigameBannerSeconds+.1);Check(s.State.Phase=="Playing","actual banner resume restores Playing");
+        foreach(var n in s.State.Npcs)Check(n.ApproachEpoch==before[s.State.Npcs.IndexOf(n)].ApproachEpoch,"a pause does not reassign pursuit membership");Separate(s,"booth resume");
+    }
+
+    static void OldestSwarmWaiterOwnsVacatedInnerPlace()
+    {
+        var s=Pursuit();for(int k=0;k<200;k++)s.Tick(.1);
+        var oldest=s.State.Npcs.Find(n=>n.Id=="arrival6");var later=s.State.Npcs.Find(n=>n.Id=="arrival7");long epoch=oldest.ApproachEpoch;
+        s.State.Npcs.Find(n=>n.Id=="arrival0").DistractedUntil=1000;s.State.Npcs.Reverse();s.Tick(.1);
+        Check(oldest.ApproachSlot<6&&later.ApproachSlot>=6&&oldest.ApproachEpoch==epoch,"oldest reserved swarm arrival, rather than list order, inherits a vacated inner place");
+    }
+
+    static void DenseSeparatedCrowdsRemainSafeWithBlockedGeometry()
+    {
+        for(int variant=0;variant<3;variant++)
+        {
+            var s=Pursuit(80);
+            for(int k=0;k<80;k++){s.State.Npcs[k].X=(k%10-4.5f)*.9f;s.State.Npcs[k].Z=(k/10-3.5f)*.9f+variant*.1f;}
+            if(variant==1)s.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
+            else if(variant==2)s.Navigate=(x,z,tx,tz,step)=>{double d=Math.Sqrt((tx-x)*(tx-x)+(tz-z)*(tz-z)),travel=Math.Min(step,d);float xx=x+(float)((tx-x)*travel/d),zz=z+(float)((tz-z)*travel/d);return xx>4?new WorldPoint(x,z):new WorldPoint(xx,zz);};
+            Separate(s,"feasible dense start "+variant);
+            for(int step=0;step<80;step++)
+            {
+                var before=s.State.Npcs.ConvertAll(n=>(n.X,n.Z));s.Tick(.1);Separate(s,"dense separated property "+variant+" step "+step);
+                for(int k=0;k<80;k++){var n=s.State.Npcs[k];Check(!float.IsNaN(n.X)&&!float.IsInfinity(n.X)&&!float.IsNaN(n.Z)&&!float.IsInfinity(n.Z),"dense geometry always stays finite");Check(Math.Sqrt((n.X-before[k].X)*(n.X-before[k].X)+(n.Z-before[k].Z)*(n.Z-before[k].Z))<=.3601,"dense geometry remains bounded and may legitimately stand still");}
+            }
+        }
+    }
+
+    static void RecoveryCannotCutThroughAnOverlappedNeighbour()
+    {
+        var s=Pursuit(3);var moving=s.State.Npcs[0];moving.Z=3;
+        var held=s.State.Npcs[1];held.Z=2.9f;held.DistractedUntil=1000;s.State.Npcs[2].Z=4;s.State.Npcs[2].DistractedUntil=1000;
+        float x=moving.X,z=moving.Z;double old=Gap(moving,held);s.Tick(.1);
+        double dx=moving.X-x,dz=moving.Z-z,length=dx*dx+dz*dz,fraction=length<1e-12?0:Math.Max(0,Math.Min(1,((held.X-x)*dx+(held.Z-z)*dz)/length));
+        double closest=Math.Sqrt((x+fraction*dx-held.X)*(x+fraction*dx-held.X)+(z+fraction*dz-held.Z)*(z+fraction*dz-held.Z));
+        Check(closest+1e-6>=old,"approved recovery cannot cut through an already overlapping neighbour, closest="+closest+", original="+old);
+    }
+
+    static void ReturningSwarmWaiterKeepsArrivalPriority()
+    {
+        var s=Pursuit();for(int k=0;k<200;k++)s.Tick(.1);
+        var oldest=s.State.Npcs.Find(n=>n.Id=="arrival6");var later=s.State.Npcs.Find(n=>n.Id=="arrival7");
+        foreach(var n in new[]{oldest,later}){n.Observers[0].Suspicion=75;n.Observers[0].AccusationSeconds=s.State.SimulationSeconds-4;}s.Tick(.1);
+        Check(oldest.Mode=="Accusing"&&later.Mode=="Accusing","actual rules briefly return the waiting pair to accusations");
+        foreach(var n in new[]{oldest,later})n.Observers[0].Suspicion=95;
+        s.State.Npcs.Find(n=>n.Id=="arrival0").DistractedUntil=1000;s.State.Npcs.Reverse();s.Tick(.1);
+        Check(oldest.ApproachSlot<6&&later.ApproachSlot>=6,"the older eligible returning swarmer keeps priority before its mode is refreshed this step");
+    }
+
+    static void SettledInnerSwarmStrikesWhileOuterPairWaits()
+    {
+        var s=Pursuit();for(int k=0;k<200;k++)s.Tick(.1);var p=s.Player("target");p.Health=1000;p.RecoveryUntil=0;
+        s.Tick(.1);int inner=0,outer=0;
+        foreach(var n in s.State.Npcs)if(From(n,p)<=1.5){inner++;Check(n.AttackAt>0,"each settled inner swarmer starts the original windup");}else{outer++;Check(n.AttackAt==0,"the two waiting outer swarmers cannot attack");}
+        Check(inner==6&&outer==2,"six actual inner windups leave the outer pair waiting");s.Tick(.7);Check(p.Health==1000,"settled windups still cannot hit early");s.Tick(.1);Check(p.Health==880,"all six settled inner strikes retain twenty-point damage");
+        foreach(var n in s.State.Npcs)if(From(n,p)>1.5)Check(n.AttackAt==0&&n.AttackCooldownUntil==0,"outer waits neither strike nor consume attack cooldown");
     }
 
 }

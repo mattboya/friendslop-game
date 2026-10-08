@@ -205,7 +205,7 @@ namespace Festival.Core
             {
                 var n=crowd[k];if((n.Mode!="Blending"&&n.Mode!="Watching")||State.Interactions.Exists(i=>i.Status=="Active"&&i.TargetId==n.Id))continue;
                 double a=2*Math.PI*k/crowd.Count;
-                var at=Move(n.X,n.Z,Festivals.EffigyX+(float)(Festivals.BurnRingRadius*Math.Sin(a)),Festivals.EffigyZ+(float)(Festivals.BurnRingRadius*Math.Cos(a)),Festivals.BurnWalkSpeed*dt);
+                var at=MovePursuer(n,Festivals.EffigyX+(float)(Festivals.BurnRingRadius*Math.Sin(a)),Festivals.EffigyZ+(float)(Festivals.BurnRingRadius*Math.Cos(a)),Festivals.BurnWalkSpeed*dt,Festivals.EffigyX,Festivals.EffigyZ,true);
                 n.X=at.X;n.Z=at.Z;n.Yaw=Bearing(n.X,n.Z,Festivals.EffigyX,Festivals.EffigyZ);
             }
         }

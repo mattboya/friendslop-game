@@ -23,7 +23,7 @@ public static class PlayaTwistTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
             StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,APlainRiderStartsAnExclusiveDeckSet,DeckOwnershipIsRequired,DeckChartsUseTheSharedGridAndHolds,DeckWitnessesAccumulateByRangeAndLos,StormsLimitDeckWitnesses,DeckTipsSettleExactlyOnce,AnotherRiderCannotCollectOldTips,TheFullTipThresholdIsInclusive,TheMinimumTipThresholdIsInclusive,HalfAndFailedDecksKeepTheirRules,CancellingADeckNeverPays,PoliceAndLifecycleInterruptionsNeverPay,InvalidRestoredDecksAreRetired,OldAndTippedSnapshotsRestore,DecksStayOutsideGroupJudging,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
-            TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
+            TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,BurnWalkersKeepGapAcrossAnotherWalker,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" playa twist test(s) failed:\n"+string.Join("\n",failures));
@@ -476,9 +476,9 @@ public static class PlayaTwistTests
         foreach(var n in crowd)
         {
             if(n==busy)continue;
-            Check(Math.Abs(FromEffigy(n.X,n.Z)-Festivals.BurnRingRadius)<.05,n.Id+" has gathered in the ring "+Festivals.BurnRingRadius+" m round the effigy, got "+FromEffigy(n.X,n.Z)+" m");
+            Check(Math.Abs(FromEffigy(n.X,n.Z)-Festivals.BurnRingRadius)<.05,n.Id+" has gathered in the ring "+Festivals.BurnRingRadius+" m round the effigy, got "+FromEffigy(n.X,n.Z)+" m at "+n.X+","+n.Z);
             Check(OffEffigy(n)<1,n.Id+" watches the effigy burn, "+OffEffigy(n)+" degrees off");
-            foreach(var m in crowd)if(m!=n&&m!=busy)Check(Math.Sqrt((m.X-n.X)*(m.X-n.X)+(m.Z-n.Z)*(m.Z-n.Z))>1,n.Id+" and "+m.Id+" each have their own place in the ring");
+            foreach(var m in crowd)if(m!=n&&m!=busy)Check(Math.Sqrt((m.X-n.X)*(m.X-n.X)+(m.Z-n.Z)*(m.Z-n.Z))>1,n.Id+" and "+m.Id+" each have their own place in the ring: "+n.X+","+n.Z+" / "+m.X+","+m.Z);
         }
         Check(busy.Mode=="Questioning"&&Math.Sqrt((busy.X-p.X)*(busy.X-p.X)+(busy.Z-p.Z)*(busy.Z-p.Z))<2&&FromEffigy(busy.X,busy.Z)>10,"a festivalgoer questioning someone stays on them");
         Check(st.Npcs.FindAll(n=>n.Kind=="Cop").TrueForAll(n=>FromEffigy(n.X,n.Z)>15),"cops keep to their patrol");
@@ -589,4 +589,14 @@ public static class PlayaTwistTests
         Check(Near(Chased(8),2*chase),"it loses someone in the crush twice as fast, got "+Chased(8));
         Check(Near(Chased(8,0),chase),"but not at Palm Mirage, got "+Chased(8,0));
     }
+    static void BurnWalkersKeepGapAcrossAnotherWalker()
+    {
+        var s=Burn(120);s.Player("p0").X=-30;s.Player("p0").Z=-30;
+        var walking=new NpcState{Id="burn walker",X=Festivals.EffigyX,Z=Festivals.EffigyZ+1};
+        var held=new NpcState{Id="distracted neighbour",X=Festivals.EffigyX,Z=Festivals.EffigyZ+1.8f,DistractedUntil=1000};s.State.Npcs.Add(walking);s.State.Npcs.Add(held);
+        int navigation=0;s.Navigate=(x,z,tx,tz,step)=>{navigation++;double d=Math.Sqrt((tx-x)*(tx-x)+(tz-z)*(tz-z)),travel=Math.Min(step,d);return d<=1e-6?new WorldPoint(x,z):new WorldPoint(x+(float)((tx-x)*travel/d),z+(float)((tz-z)*travel/d));};
+        for(int k=0;k<80;k++){float x=walking.X,z=walking.Z;s.Tick(.1);Check(Dist(new WorldPoint(walking.X,walking.Z),new WorldPoint(held.X,held.Z))>=.7-1e-5,"burn gathering cannot enter another walker at step "+k);Check(Dist(new WorldPoint(x,z),new WorldPoint(walking.X,walking.Z))<=Festivals.BurnWalkSpeed*.1+1e-4,"burn step stays speed bounded");}
+        Check(navigation>0&&Math.Abs(FromEffigy(walking.X,walking.Z)-Festivals.BurnRingRadius)<.05,"burn gathering reaches the ring by approved separated steps");
+    }
+
 }
