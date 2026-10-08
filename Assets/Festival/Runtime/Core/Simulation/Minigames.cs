@@ -25,6 +25,8 @@ namespace Festival.Core
         public List<MinigameParticipant> Participants=new List<MinigameParticipant>();
         // Public scalar drum progress/result only; private charts and inputs remain on each owner's InteractionState.
         public List<DrumAccuracy> DrumAccuracies=new List<DrumAccuracy>(); public double DrumWorstScore=-1;
+        // Version 7: Light Show persists its public real script on the game clock; private dose/question/fake records stay on the host until recipient filtering is integrated.
+        public LightShowState LightShow=new LightShowState();
         // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
         // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
         // clock. Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
@@ -37,6 +39,7 @@ namespace Festival.Core
         {
             var b=(MinigameState)MemberwiseClone();b.PlayerIds=new List<string>(PlayerIds);b.Drunk=new List<int>(Drunk);b.Turns=new List<string>(Turns);
             b.DrumAccuracies=(DrumAccuracies??new List<DrumAccuracy>()).ConvertAll(p=>new DrumAccuracy{PlayerId=p.PlayerId,Accuracy=p.Accuracy});
+            b.LightShow=(LightShow??new LightShowState()).PublicCopy();
             b.Participants=(Participants??new List<MinigameParticipant>()).ConvertAll(p=>new MinigameParticipant{Id=p.Id,Name=p.Name});return b;
         }
     }
@@ -95,7 +98,7 @@ namespace Festival.Core
             State.Booth.RingSeconds=0;State.Booth.Seconds=0;State.Booth.ScoredAt=-1;State.Booth.ClockChange=0;State.Booth.PlayerIds=crew.ConvertAll(p=>p.Id);
             State.Booth.Participants=crew.ConvertAll(p=>new MinigameParticipant{Id=p.Id,Name=p.Name});
             State.Phase=MinigamePhase;
-            if(State.Booth.Kind==MysteryCupsGame)PourCups();else if(State.Booth.Kind==DrumCircleGame)StartDrumCircle();
+            if(State.Booth.Kind==MysteryCupsGame)PourCups();else if(State.Booth.Kind==DrumCircleGame)StartDrumCircle();else if(State.Booth.Kind==LightShowGame)StartLightShow();
         }
         // Each step of the game, in place of everything else Step does: the game's own clock, the cap, then the banner and the end.
         void MinigameTick(double dt)

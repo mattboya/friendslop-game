@@ -98,13 +98,13 @@ around it, and you don't know in advance what you'll be asked.
     - what one passer-by was carrying
   - The glover's own lights are fair game too ("what colour were my lights at the end?"), so ignoring the show
     doesn't work.
-- **The questions.** Afterwards, each player privately gets their own 3 questions, drawn from those categories.
+- **The questions.** Afterwards, each player privately gets their own 3 questions, drawn independently for each player from three different categories.
   - Each question has 4 answers plus "Not sure", with 8 seconds to answer.
   - Answers stay hidden until everyone has answered or time runs out. Then they're revealed all at once, the way
     the debrief reveals its votes.
 - **Intoxication: harder, but worth more.** A player's dose `d` is the intensity of their `dose` effect, or 0.
   - *Harder:* the show gets bigger and brighter. The player's own view also gets `d` hallucinated extras or lights
-    that nobody else sees. These carry the vision tells (no shadow, shimmer when the camera moves, slightly off
+    that nobody else sees. These carry the vision tells (a subtly wrong shadow, too small or a goblin's; shimmer when the camera moves; slightly off
     colour) and don't count toward any answer.
   - *Worth more:* a correct answer earns `1 + d` points, a wrong answer costs 1, and "Not sure" scores 0.
 - **Payout:** the crew's net points × 4 s, clamped to between −40 s and +60 s. For example, four sober players
