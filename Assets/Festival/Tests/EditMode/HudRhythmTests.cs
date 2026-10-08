@@ -66,27 +66,83 @@ namespace Festival.Tests
             var lane=Lane();var view=NoteView(lane);float tolerance=.02f*lane.rect.height;
             Assert.That(tolerance,Is.GreaterThan(0),"the lane has a measurable height");
             var looks=new List<EffectDefinition>{new EffectDefinition{Id="",LeadSeconds=2}};looks.AddRange(Catalog.Effects);
-            foreach(var look in looks)for(int direction=0;direction<4;direction++)
+            foreach(var look in looks)foreach(int dose in new[]{0,4})foreach(bool reducedMotion in new[]{false,true})for(int direction=0;direction<4;direction++)
             {
-                FestivalHud.PlaceNote(view,new RhythmNote{Id=5+direction,Direction=direction,TimeSeconds=4},0,look.LeadSeconds,look.Id,false);
+                FestivalHud.PlaceNote(view,new RhythmNote{Id=5+direction,Direction=direction,TimeSeconds=4},0,look.LeadSeconds,look.Id,reducedMotion,dose);
                 var outline=(RectTransform)lane.Find("Receptor well "+direction+"/Target arrow");
                 Assert.That(Vector2.Distance(Centre(lane,view.rectTransform),Centre(lane,outline)),Is.LessThanOrEqualTo(tolerance),
                     "lane "+direction+(look.Id==""?" sober":" on "+look.Id)+": a note at its exact time sits on its outline arrow");
             }
         }
 
-        [Test]public void AMissedNoteKeepsRisingPastTheOutlineAndFadesOut()
+        // Exercise real chart placement, beyond the already-shipped pure Path values.
+        [TestCase("lsd",0,false)]
+        [TestCase("lsd",0,true)]
+        [TestCase("lsd",3,false)]
+        [TestCase("lsd",3,true)]
+        [TestCase("ketamine",0,false)]
+        [TestCase("ketamine",0,true)]
+        public void ADosedArrowUsesTheFlightButStillLandsOnItsOutline(string effect,int direction,bool reducedMotion)
         {
-            var lane=Lane();var view=NoteView(lane);var note=new RhythmNote{Id=3,Direction=2,TimeSeconds=4};
-            FestivalHud.PlaceNote(view,note,.5,2,"",false);
+            var hud=Hud();var lane=LaneOf(hud);var note=new RhythmNote{Id=7,Direction=direction,TimeSeconds=4};
+            var chart=new RhythmChart{DurationSeconds=5,Notes=new List<RhythmNote>{note}};
+            hud.ShowChart(new InteractionState{Id="trip13-flight",Kind="Dance",NoteCount=1,BeatSeconds=.5},chart);
+            var view=NoteView(lane);double lead=Catalog.FindEffect(effect).LeadSeconds;
+            if(effect=="lsd")
+            {
+                hud.DrawChart(note.TimeSeconds-lead*.5,lead,effect,reducedMotion,4);
+                float centre=(view.rectTransform.anchorMin.x+view.rectTransform.anchorMax.x)*.5f;
+                Assert.That(direction==0?centre-.185f:.815f-centre,Is.GreaterThanOrEqualTo(.21f*.5f),"a dose-4 Tongue Stamps note travels at least half a lane inward at half its rise");
+                hud.DrawChart(note.TimeSeconds-lead,lead,effect,reducedMotion,4);
+                Assert.That(view.rectTransform.anchorMin.x,Is.InRange(.185f,.815f),"both outer lanes enter inside the panel using their actual Direction");
+            }
+            else
+            {
+                hud.DrawChart(note.TimeSeconds-lead*.6,lead,effect,reducedMotion,4);float first=view.rectTransform.anchorMin.y;
+                hud.DrawChart(note.TimeSeconds-lead*.4,lead,effect,reducedMotion,4);
+                Assert.That(view.rectTransform.anchorMin.y,Is.EqualTo(first).Within(1e-6f),"a dose-4 Pony Dust note stays still during its shipped stall");
+            }
+            hud.DrawChart(note.TimeSeconds,lead,effect,reducedMotion,4);
+            var outline=(RectTransform)lane.Find("Receptor well "+direction+"/Target arrow");
+            Assert.That(Vector2.Distance(Centre(lane,view.rectTransform),Centre(lane,outline)),Is.LessThanOrEqualTo(.02f*lane.rect.height),"the travel twist still lands on its original beat and receptor");
+        }
+
+        // Worked flight samples on the lane's .11 spawn / .8305 receptor anchors; these are independent literal expectations.
+        [TestCase("mushrooms",.125,.1599276f,false)]
+        [TestCase("mushrooms",.125,.1599276f,true)]
+        [TestCase("ecstasy",.5,.3476764f,false)]
+        [TestCase("ecstasy",.5,.3476764f,true)]
+        [TestCase("weed",.5,.5928236f,false)]
+        [TestCase("weed",.5,.5928236f,true)]
+        public void EveryDosedSubstanceReachesItsAuthoredFlight(string effect,double progress,float y,bool reducedMotion)
+        {
+            var hud=Hud();var lane=LaneOf(hud);var note=new RhythmNote{Id=7,Direction=2,TimeSeconds=4};
+            hud.ShowChart(new InteractionState{Id="dose-flight",Kind="Dance",NoteCount=1,BeatSeconds=.5},new RhythmChart{DurationSeconds=5,Notes=new List<RhythmNote>{note}});
+            double lead=Catalog.FindEffect(effect).LeadSeconds;
+            hud.DrawChart(note.TimeSeconds-lead*(1-progress),lead,effect,reducedMotion,4);
+            Assert.That(NoteView(lane).rectTransform.anchorMin.y,Is.EqualTo(y).Within(.000001f),"the actual chart uses this substance's dose-four travel, including under reduced motion");
+        }
+
+        [TestCase("",0,.8629225f,.895345f)]
+        [TestCase("lsd",4,.8629225f,.895345f)]
+        [TestCase("mushrooms",4,.8629225f,.895345f)]
+        [TestCase("ecstasy",4,.8710281f,.9115562f)]
+        [TestCase("ketamine",4,.8575187f,.8845375f)]
+        [TestCase("weed",4,.8629225f,.895345f)]
+        public void AMissedNoteKeepsRisingPastTheOutlineAndFadesOut(string effect,int dose,float halfwayY,float endY)
+        {
+            var lane=Lane();var view=NoteView(lane);var note=new RhythmNote{Id=3,Direction=2,TimeSeconds=4};double lead=Catalog.FindEffect(effect)?.LeadSeconds??2;
+            FestivalHud.PlaceNote(view,note,.5,lead,effect,false,dose);
             Assert.That(view.color.a,Is.EqualTo(1).Within(1e-4),"a note on its way up is solid");
-            FestivalHud.PlaceNote(view,note,0,2,"",false);float onTime=Centre(lane,view.rectTransform).y;
+            FestivalHud.PlaceNote(view,note,0,lead,effect,false,dose);float onTime=Centre(lane,view.rectTransform).y;
             Assert.That(view.color.a,Is.EqualTo(1).Within(1e-4),"a note on its time is solid");
-            FestivalHud.PlaceNote(view,note,-.09,2,"",false);float halfway=Centre(lane,view.rectTransform).y;
+            FestivalHud.PlaceNote(view,note,-.09,lead,effect,false,dose);float halfway=Centre(lane,view.rectTransform).y;
             Assert.That(halfway,Is.GreaterThan(onTime),"a missed note keeps rising past the outline");
+            Assert.That(view.rectTransform.anchorMin.y,Is.EqualTo(halfwayY).Within(.000001f),"doses keep the original linear overshoot");
             Assert.That(view.color.a,Is.EqualTo(.5f).Within(.01),"halfway through the 0.18 s overshoot it is half faded");
-            FestivalHud.PlaceNote(view,note,-.18,2,"",false);
+            FestivalHud.PlaceNote(view,note,-.18,lead,effect,false,dose);
             Assert.That(Centre(lane,view.rectTransform).y,Is.GreaterThan(halfway),"it rises for the whole overshoot");
+            Assert.That(view.rectTransform.anchorMin.y,Is.EqualTo(endY).Within(.000001f));
             Assert.That(view.color.a,Is.EqualTo(0).Within(1e-4),"it has faded out when the overshoot ends");
         }
 
@@ -188,12 +244,22 @@ namespace Festival.Tests
             Assert.That(Judgment(),Is.EqualTo("LET GO"));Assert.That(Combo(),Is.Zero);
         }
 
-        [Test]public void AHoldShowsATailThatShrinksOnceHit()
+        [TestCase("lsd",false)]
+        [TestCase("lsd",true)]
+        [TestCase("mushrooms",false)]
+        [TestCase("mushrooms",true)]
+        [TestCase("ecstasy",false)]
+        [TestCase("ecstasy",true)]
+        [TestCase("ketamine",false)]
+        [TestCase("ketamine",true)]
+        [TestCase("weed",false)]
+        [TestCase("weed",true)]
+        public void AHoldShowsATailThatShrinksOnceHit(string effect,bool reducedMotion)
         {
-            var hud=Hud();var lane=LaneOf(hud);var chart=new RhythmChart{DurationSeconds=4};
+            var hud=Hud();var lane=LaneOf(hud);var chart=new RhythmChart{DurationSeconds=4};double lead=Catalog.FindEffect(effect).LeadSeconds;
             chart.Notes.Add(new RhythmNote{Id=41,Direction=0,TimeSeconds=2,HoldSeconds=1});
             var interaction=new InteractionState{Id="hold-tail",Kind="Dance",NoteCount=1,BeatSeconds=.5};
-            hud.ShowChart(interaction,chart);hud.DrawChart(1,2,"lsd",false);
+            hud.ShowChart(interaction,chart);hud.DrawChart(1,lead,effect,reducedMotion,4);
             var tail=lane.Find("Hold tails/Tail 0")?.GetComponent<Image>();
             Assert.That(tail,Is.Not.Null,"a hold gets a plain pooled tail below its arrow");
             var head=(RectTransform)lane.Find("Notes/Note 0");var target=(RectTransform)lane.Find("Receptor well 0/Target arrow");
@@ -204,15 +270,15 @@ namespace Festival.Tests
             Assert.That(Quaternion.Angle(lane.rotation,tail.transform.rotation),Is.LessThan(.01f),"tails never inherit arrow wobble");
             float before=tail.rectTransform.rect.height;
             interaction.Inputs.Add(new RhythmInput{Direction=0,TimeSeconds=2});
-            Feedback(hud,interaction,2.5);hud.DrawChart(2.5,2,"lsd",false);
+            Feedback(hud,interaction,2.5);hud.DrawChart(2.5,lead,effect,reducedMotion,4);
             Assert.That(head.gameObject.activeSelf,Is.True,"the hit hold head stays visible");
             Assert.That(Vector2.Distance(Centre(lane,head),Centre(lane,target)),Is.LessThan(.01f),"a hit head pins to its receptor");
             Assert.That(tail.rectTransform.rect.height,Is.LessThan(before));Assert.That(tail.rectTransform.rect.height,Is.GreaterThan(0));
             interaction.Inputs.Add(new RhythmInput{Direction=0,TimeSeconds=2.5,Release=true});
-            Feedback(hud,interaction,2.5);hud.DrawChart(2.5,2,"lsd",false);
+            Feedback(hud,interaction,2.5);hud.DrawChart(2.5,lead,effect,reducedMotion,4);
             Assert.That(Judgment(hud),Is.EqualTo("LET GO"));Assert.That(tail.color.r,Is.EqualTo(tail.color.g));Assert.That(tail.color.g,Is.EqualTo(tail.color.b));
             Assert.That(tail.color.a,Is.EqualTo(.5f));
-            hud.DrawChart(3,2,"lsd",false);Assert.That(head.gameObject.activeSelf||tail.gameObject.activeSelf,Is.False,"both retire at the authored end");
+            hud.DrawChart(3,lead,effect,reducedMotion,4);Assert.That(head.gameObject.activeSelf||tail.gameObject.activeSelf,Is.False,"both retire at the authored end");
             var tap=new RhythmChart{DurationSeconds=4};tap.Notes.Add(new RhythmNote{Id=7,Direction=3,TimeSeconds=2});
             hud.ShowChart(new InteractionState{Id="tap",BeatSeconds=.5},tap);hud.DrawChart(1,2,"",false);
             Assert.That(lane.Find("Hold tails/Tail 0").GetComponent<Image>(),Is.SameAs(tail),"the next chart reuses the tail pool");

@@ -112,11 +112,41 @@ namespace Festival.Tests
         {
             var me=new PlayerState{Id="me"};
             Assert.That(FestivalTrip.LaneEffect(me),Is.Empty,"sober arrows are plain");
+            Assert.That(FestivalTrip.LaneDose(me),Is.Zero,"sober arrows have no dose twist");
             me.Effects.Add(new ActiveEffect{Id="shot",RemainingSeconds=60});me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,Substance="mushrooms"});
             Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("mushrooms"),"a dose's substance sets the arrows, ahead of anything else taken");
+            Assert.That(FestivalTrip.LaneDose(me),Is.EqualTo(2),"the selected substance carries its actual dose");
+            me.Effects.Add(new ActiveEffect{Id="lsd",Intensity=4,RemainingSeconds=60});
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("mushrooms"),"a newer shop effect cannot override the named dose");
+            Assert.That(FestivalTrip.LaneDose(me),Is.EqualTo(2),"shop intensity cannot replace the selected dose");
             Assert.That(Catalog.FindEffect("ecstasy").LeadSeconds,Is.EqualTo(1.6).Within(1e-9),"Rolly Pollies' arrows appear a little later");
             Assert.That(Catalog.FindEffect("ketamine").LeadSeconds,Is.EqualTo(2.4).Within(1e-9),"Pony Dust's a little earlier");
             foreach(var id in new[]{"lsd","mushrooms","weed"})Assert.That(Catalog.FindEffect(id).LeadSeconds,Is.EqualTo(2).Within(1e-9),Name(id)+" keeps the usual 2 s");
+        }
+
+        [Test]public void ShopAndLegacyDosesKeepTheExistingEffectSelection()
+        {
+            var me=new PlayerState{Id="me"};
+            me.Effects.Add(new ActiveEffect{Id="lsd",Intensity=4,RemainingSeconds=60});
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("lsd"));
+            Assert.That(FestivalTrip.LaneDose(me),Is.Zero,"a shop Tongue Stamp keeps its original flight, regardless of shop intensity");
+            var unnamed=new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance=""};me.Effects.Add(unnamed);
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("lsd"),"an old unnamed dose still falls back to the catalog effect");
+            Assert.That(FestivalTrip.LaneDose(me),Is.Zero,"the fallback shop look never borrows an unnamed dose's strength");
+            me.Effects.Add(new ActiveEffect{Id="mushrooms",Intensity=1});
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("mushrooms"),"legacy fallback still chooses the newest catalog effect");
+            Assert.That(FestivalTrip.LaneDose(me),Is.Zero);
+            unnamed.Substance="ketamine";
+            Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("ketamine"),"a named dose still precedes the newest shop effect");
+            Assert.That(FestivalTrip.LaneDose(me),Is.EqualTo(4));
+            foreach(int intensity in new[]{0,-1})
+            {
+                unnamed.Intensity=intensity;
+                Assert.That(FestivalTrip.LaneEffect(me),Is.EqualTo("ketamine"),"nonpositive legacy intensity does not change look-ahead selection");
+                Assert.That(FestivalTrip.LaneDose(me),Is.Zero,"a nonpositive dose introduces no travel twist");
+            }
+            unnamed.Substance="";me.Effects.Clear();me.Effects.Add(unnamed);
+            Assert.That(FestivalTrip.LaneEffect(me),Is.Empty);Assert.That(FestivalTrip.LaneDose(me),Is.Zero);
         }
 
         // Pony Dust's camera trails the mouse: no lag follows at once, a lag closes most of the gap within a few lags, never overshoots,

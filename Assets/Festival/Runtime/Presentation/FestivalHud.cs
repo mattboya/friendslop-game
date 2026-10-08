@@ -1330,8 +1330,8 @@ namespace Festival.Presentation
                 ShowRhythmKeys(session.Controls);
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
-            // TRIP-5: the dose's substance sets the arrows' path and look-ahead, the same for every lane.
-            string effect=FestivalTrip.LaneEffect(player);
+            // The selected substance supplies both the original look-ahead and its dose travel twist.
+            string effect=FestivalTrip.LaneEffect(player);int dose=FestivalTrip.LaneDose(player);
             double lead=Catalog.FindEffect(effect)?.LeadSeconds??2;
             ProcessRhythmFeedback(interaction,now);
             if(shownRhythmCombo!=rhythmComboCount){rhythmCombo.text=rhythmComboCount>=2?rhythmComboCount+" COMBO":"";shownRhythmCombo=rhythmComboCount;}
@@ -1342,7 +1342,10 @@ namespace Festival.Presentation
             float completed=Mathf.Clamp01((float)(now/displayedChart.DurationSeconds));
             var progressRect=rhythmProgressFill.rectTransform;progressRect.anchorMin=new Vector2(.08f,.055f);progressRect.anchorMax=new Vector2(.08f+.84f*completed,.071f);progressRect.offsetMin=progressRect.offsetMax=Vector2.zero;
             if(dialoguePanel.activeSelf&&!chatter&&speech.VisibleCharacters>=speech.CharacterCount)session.AcknowledgeDisplayedDialogue(interaction);
-            DrawChart(now,lead,effect,session.Profile.Data.ReducedMotion);
+            DrawChart(now,lead,effect,session.Profile.Data.ReducedMotion,dose);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            LogLaneFlight(effect,dose,lead);
+#endif
             for(int direction=0;direction<4;direction++)
             {
                 bool pressed=rhythmFocused&&!session.MenuOpen&&!session.Controls.Rebinding&&!session.Controls.Objectives.IsPressed()&&session.Controls.Notes[direction].WasPressedThisFrame();
@@ -1353,6 +1356,21 @@ namespace Festival.Presentation
                 rhythmReceptorWells[direction].color=flashing?new Color(.25f,.43f,.44f,1):new Color(.22f,.32f,.35f,1);
             }
         }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private float nextLaneFlightDiagnostic;
+        private void LogLaneFlight(string effect,int dose,double lead)
+        {
+            if(!DevelopmentDiagnostics.Visible||Time.unscaledTime<nextLaneFlightDiagnostic)return;
+            foreach(var view in noteViews)if(view.gameObject.activeSelf)
+            {
+                nextLaneFlightDiagnostic=Time.unscaledTime+10;
+                var anchor=view.rectTransform.anchorMin;
+                DevelopmentDiagnostics.GraphicsEvent("Rhythm","lane_flight","effect="+(effect==""?"plain":effect)+" dose="+dose+" lead="+lead.ToString("F3",System.Globalization.CultureInfo.InvariantCulture)
+                    +" anchor_x="+anchor.x.ToString("F3",System.Globalization.CultureInfo.InvariantCulture)+" anchor_y="+anchor.y.ToString("F3",System.Globalization.CultureInfo.InvariantCulture));return;
+            }
+        }
+#endif
 
         private void OnApplicationFocus(bool focused)
         {
@@ -1403,7 +1421,7 @@ namespace Festival.Presentation
 
         // Draws the displayed chart `now` seconds in: the step counter (hits out of the chart's notes, at its tempo) and each note
         // within `lead` seconds of its time, or just missed.
-        public void DrawChart(double now,double lead,string effect,bool reducedMotion)
+        public void DrawChart(double now,double lead,string effect,bool reducedMotion,int dose=0)
         {
             int bpm=Mathf.RoundToInt(60f/(float)displayedBeatSeconds),notes=displayedChart.Notes.Count;
             if(shownRhythmHits!=rhythmHitCount||shownRhythmCount!=notes||shownRhythmBpm!=bpm)
@@ -1419,7 +1437,7 @@ namespace Festival.Presentation
                 bool held=rhythmHeld[i]&&now<note.TimeSeconds+note.HoldSeconds;
                 bool visible=held||!rhythmConsumed[i]&&remaining<=lead&&remaining>=-MissOvershootSeconds;view.gameObject.SetActive(visible);
                 if(!visible)continue;
-                PlaceNote(view,note,held?0:remaining,lead,effect,reducedMotion);
+                PlaceNote(view,note,held?0:remaining,lead,effect,reducedMotion,dose);
                 if(rhythmDropped[i])view.color=new Color(.55f,.55f,.55f,1);
                 if(note.HoldSeconds<=0)continue;
                 float top=held?NoteHitY:NoteStartY+(NoteHitY-NoteStartY)*(float)(1-remaining/lead);
@@ -1454,12 +1472,14 @@ namespace Festival.Presentation
 
         // Places a note's view `remaining` seconds before its time, with `lead` seconds of look-ahead under the effect: it rises
         // from just above the step progress bar onto its lane's outline arrow, and a missed one fades out as it rises past it.
-        public static void PlaceNote(Image view,RhythmNote note,double remaining,double lead,string effect,bool reducedMotion)
+        public static void PlaceNote(Image view,RhythmNote note,double remaining,double lead,string effect,bool reducedMotion,int dose=0)
         {
             double progress=1-remaining/lead;
-            var visual=EffectPresentation.Path(effect,note.Id,progress,reducedMotion);
+            var visual=EffectPresentation.Path(effect,note.Id,progress,reducedMotion,dose,note.Direction);
             var color=RhythmColors[note.Direction];color.a=Mathf.Clamp01(1+(float)(remaining/MissOvershootSeconds));view.color=color;
-            var rect=view.rectTransform;float x=.185f+note.Direction*.21f,y=NoteStartY+(NoteHitY-NoteStartY)*(float)progress;
+            var rect=view.rectTransform;float x=.185f+(note.Direction+(float)visual.Lane)*.21f;
+            float rise=progress<=1?(float)(1-visual.Y):(float)progress;
+            float y=NoteStartY+(NoteHitY-NoteStartY)*rise;
             rect.anchorMin=rect.anchorMax=new Vector2(x,y);rect.pivot=new Vector2(.5f,.5f);rect.sizeDelta=new Vector2(96,96);
             rect.anchoredPosition=new Vector2((float)visual.X*32,0);rect.localRotation=Quaternion.Euler(0,0,RhythmAngles[note.Direction]+(float)visual.Rotation*.08f);
         }

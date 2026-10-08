@@ -16,7 +16,7 @@ namespace Festival.Tests
     // TRIP-5 in a running session: the local player's dose reaches their own screen through the single writers. FestivalHud adds
     // the swell to the field of view, FestivalSession trails the mouse, FestivalNightLighting lifts the colour grade, and
     // FestivalTrip draws its overlay and muffles the listener. A dose with nothing on the wheel puts every one of them back.
-    // In a live dance, the rhythm arrows take the substance's look-ahead.
+    // In a live dance, the rhythm arrows take the substance's look-ahead and the selected dose's travel twist.
     public sealed class TripPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator GraphicsChoicesReachTitleGameplayAndCampThroughTheExistingWriters()
@@ -109,13 +109,24 @@ namespace Festival.Tests
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float x=npc.X,z=npc.Z;player.X=x+.8f;player.Z=z;
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="audio-dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True);
                 yield return null;yield return null;
-                var pulse=host.GetComponents<AudioSource>().Single(s=>s.clip!=null&&s.clip.name=="Original festival pulse");
-                Assert.That(pulse.volume,Is.EqualTo(.35f).Within(1e-5f),"rhythm feedback keeps its old default loudness on the effects bus");
+                var dance=sim.Interaction(player.InteractionId);
+                Assert.That(dance.Kind,Is.EqualTo("Dance"));Assert.That(dance.StageTrack,Is.GreaterThan(0),"the real dance uses the authored stage grid");
+                Assert.That(RhythmChart.ValidStageAnchor(dance),Is.True,"the production command supplied a valid authored anchor");
+                var rhythm=host.GetComponent<FestivalRhythmAudio>();Assert.That(rhythm,Is.Not.Null);
+                var pulse=(AudioSource)typeof(FestivalRhythmAudio).GetField("beat",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(rhythm);
+                var other=(AudioSource)typeof(FestivalRhythmAudio).GetField("other",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(rhythm);
+                Assert.That(pulse.clip.name,Is.EqualTo("Authored festival tick"),"a measured-stage dance uses its light Effects tick");
+                Assert.That(other.clip,Is.SameAs(pulse.clip),"both scheduled tick sources share the authored clip");
+                Assert.That(pulse.volume,Is.EqualTo(.132f).Within(1e-5f),"the authored tick applies its .22 gain to the Effects bus");
+                Assert.That(other.volume,Is.EqualTo(.132f).Within(1e-5f));
+                Assert.That(pulse.volume*AudioListener.volume,Is.EqualTo(.0528f).Within(1e-5f),"master multiplies the tick once");
                 data.MusicVolume=0;data.EffectsVolume=.3f;npc.X=x;npc.Z=z;yield return null;yield return null;
-                Assert.That(pulse.volume,Is.EqualTo(.175f).Within(1e-5f),"music mute leaves feedback on the effects bus");
+                Assert.That(pulse.volume,Is.EqualTo(.066f).Within(1e-5f),"music mute leaves the authored tick on the Effects bus");
+                Assert.That(other.volume,Is.EqualTo(.066f).Within(1e-5f));
+                Assert.That(pulse.volume*AudioListener.volume,Is.EqualTo(.0264f).Within(1e-5f),"music mute still applies master once");
                 Assert.That(stage.Music.volume,Is.Zero,"music mute silences the stage");
                 data.EffectsVolume=0;npc.X=x;npc.Z=z;yield return null;yield return null;
-                Assert.That(pulse.volume,Is.Zero,"effects mute silences rhythm feedback");
+                Assert.That(pulse.volume,Is.Zero,"effects mute silences rhythm feedback");Assert.That(other.volume,Is.Zero);
                 Assert.That(chime.volume,Is.Zero);Assert.That(foley.volume,Is.Zero);
                 session.Leave();yield return null;yield return null;
                 Assert.That(AudioListener.volume,Is.EqualTo(.4f).Within(1e-5f),"leaving clears the trip while keeping master");
@@ -136,6 +147,11 @@ namespace Festival.Tests
             var host=new GameObject("Trip session");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();
             yield return null;
             bool reduced=session.Profile.Data.ReducedMotion;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            bool diagnostics=DevelopmentDiagnostics.Visible;DevelopmentDiagnostics.Visible=false;int laneDiagnosticCount=0;string laneDiagnostic="";
+            Application.LogCallback laneLog=(message,stack,type)=>{if(message.StartsWith("[Festival.Rhythm] action=lane_flight ")){laneDiagnosticCount++;laneDiagnostic=message;}};
+            Application.logMessageReceived+=laneLog;
+#endif
             try
             {
                 session.Host("Tester",HostPort);
@@ -195,23 +211,44 @@ namespace Festival.Tests
 
                 // Pony Dust in a live dance: the HUD's arrows rise into view 2.4 s ahead of their beat, not the plain 2 s. Each
                 // frame, how far ahead of its beat the farthest arrow on screen is; the partner is held in place so the dance runs on.
-                dose.Substance="ketamine";
+                dose.Substance="ketamine";dose.Intensity=4;session.Profile.Data.ReducedMotion=true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Assert.That(laneDiagnosticCount,Is.Zero,"lane diagnostics stay silent until opted in");DevelopmentDiagnostics.Visible=true;
+#endif
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float npcX=npc.X,npcZ=npc.Z;player.X=npcX+.8f;player.Z=npcZ;
                 Assert.That(sim.Execute(me,new GameCommand{Id="trip_dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True,"setup: a dance with a festivalgoer starts");
                 var notes=host.GetComponentsInChildren<Transform>(true).First(t=>t.name=="Notes");
-                double farthest=0,danced=0;
-                for(deadline=Time.realtimeSinceStartup+6;Time.realtimeSinceStartup<deadline&&danced<1;)
+                double farthest=0,danced=0;int stalledFrames=0;
+                for(deadline=Time.realtimeSinceStartup+6;Time.realtimeSinceStartup<deadline&&(danced<1||stalledFrames<2);)
                 {
                     npc.X=npcX;npc.Z=npcZ;yield return null;
                     var dance=session.State.Interactions.Find(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");if(dance==null)continue;
                     var chart=RhythmChart.For(dance);danced=session.EstimatedSimulationSeconds-dance.StartSeconds;
-                    foreach(Transform note in notes)if(note.gameObject.activeSelf)farthest=System.Math.Max(farthest,chart.Notes[int.Parse(note.name.Substring(5))].TimeSeconds-danced);
+                    foreach(Transform note in notes)if(note.gameObject.activeSelf)
+                    {
+                        double remaining=chart.Notes[int.Parse(note.name.Substring(5))].TimeSeconds-danced;
+                        farthest=System.Math.Max(farthest,remaining);
+                        double progress=1-remaining/2.4;
+                        if(progress>=.38&&progress<=.58)
+                        {
+                            Assert.That(((RectTransform)note).anchorMin.y,Is.EqualTo(.3501667f).Within(.0001f),"the live HUD supplies dose four: Pony Dust stalls a third of the way up even with reduced motion");
+                            stalledFrames++;
+                        }
+                    }
                 }
                 Assert.That(danced,Is.GreaterThanOrEqualTo(1),"setup: the dance runs a second past its countdown");
+                Assert.That(stalledFrames,Is.GreaterThanOrEqualTo(2),"the actual live arrows are observed inside the dose-four plateau on multiple frames");
                 Assert.That(farthest,Is.GreaterThan(2.1).And.LessThanOrEqualTo(Catalog.FindEffect("ketamine").LeadSeconds+.05),"Pony Dust's arrows show further ahead than the plain 2 s");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Assert.That(laneDiagnosticCount,Is.EqualTo(1),"the live lane diagnostic samples once, then stays throttled during this dance");
+                Assert.That(laneDiagnostic,Does.Contain("effect=ketamine dose=4 lead=2.400"),"the opt-in diagnostic reports the selection actually consumed by the live HUD");
+#endif
             }
             finally
             {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=laneLog;DevelopmentDiagnostics.Visible=diagnostics;
+#endif
                 session.Profile.Data.ReducedMotion=reduced;session.Leave();
                 foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
                 Object.Destroy(host);Object.Destroy(world);

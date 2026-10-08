@@ -10,7 +10,8 @@ using Object = UnityEngine.Object;
 namespace Festival.Presentation
 {
     /// <summary>TRIP-5: what the local player's dose looks and feels like, by the substance the third wheel picked, on their own screen
-    /// only and stronger with every dose. Substances change no rule; the dose alone does. Look and For are pure, and their values
+    /// only and stronger with every dose. Substances also twist rhythm travel and, for Tongue Stamps, Fun Guys and Couch Lock, the
+    /// host's walking; visions and other rules depend on the dose alone. Look and For are pure, and their values
     /// reach the screen through the single writers: FestivalHud.ApplyEffects adds Fov to the view's field of view,
     /// FestivalSession.UpdateCamera trails the mouse by Lag (Follow), and FestivalNightLighting adds Saturation and Brightness to the
     /// colour grade. This component draws the rest: its own overlay canvas under the HUD (tint, haze, vignette, letterbox), pooled
@@ -42,13 +43,11 @@ namespace Festival.Presentation
         /// <summary>LIGHT-1 took a level-long murk off the neon night, so at night a substance's tint and haze stay this faint.</summary>
         public const float NightTint=.03f;
         public const int MaxTrails=48,MaxGlows=12;
-        // Doses 1-4 at 40/60/80/100%.
-        private static float Strength(int dose)=>dose<1?0:.4f+.2f*(Mathf.Min(dose,4)-1);
 
         /// <summary>A dose of substance (a catalog effect id) at time t. An id off the wheel (or none) looks plain.</summary>
         public static Perception Look(string substance,int dose,bool reducedMotion,float time)
         {
-            var look=new Perception();float s=Strength(dose),motion=reducedMotion?ReducedMotionShare:1;
+            var look=new Perception();float s=(float)EffectPresentation.Strength(dose),motion=reducedMotion?ReducedMotionShare:1;
             if(s<=0)return look;
             switch(substance)
             {
@@ -126,12 +125,25 @@ namespace Festival.Presentation
         public static float Follow(float current,float target,float lag,float deltaTime)=>lag<=0?target:current+Mathf.DeltaAngle(current,target)*(1-Mathf.Exp(-deltaTime/lag));
 
         /// <summary>The effect whose look the rhythm arrows take (EffectPresentation.Path, Catalog's LeadSeconds): the dose's substance
-        /// first, else the newest catalog effect taken (HUD-4). The dose and the debrief's shot are not catalog effects: no look.</summary>
+        /// first, else the newest catalog effect taken (HUD-4). An unnamed legacy dose and the debrief's shot have no catalog look.</summary>
         public static string LaneEffect(PlayerState player)
         {
-            foreach(var e in player.Effects)if(e.Id==FestivalSimulation.DoseEffect&&!string.IsNullOrEmpty(e.Substance))return e.Substance;
-            for(int i=player.Effects.Count-1;i>=0;i--)if(Catalog.FindEffect(player.Effects[i].Id)!=null)return player.Effects[i].Id;
-            return "";
+            var effect=SelectedLaneEffect(player);
+            return effect==null?"":effect.Id==FestivalSimulation.DoseEffect?effect.Substance:effect.Id;
+        }
+
+        /// <summary>The selected dose's intensity, otherwise zero: shop and unnamed legacy effects keep their original flight.</summary>
+        public static int LaneDose(PlayerState player)
+        {
+            var effect=SelectedLaneEffect(player);
+            return effect!=null&&effect.Id==FestivalSimulation.DoseEffect?Math.Max(0,effect.Intensity):0;
+        }
+
+        private static ActiveEffect SelectedLaneEffect(PlayerState player)
+        {
+            foreach(var e in player.Effects)if(e.Id==FestivalSimulation.DoseEffect&&!string.IsNullOrEmpty(e.Substance))return e;
+            for(int i=player.Effects.Count-1;i>=0;i--)if(Catalog.FindEffect(player.Effects[i].Id)!=null)return player.Effects[i];
+            return null;
         }
 
         // Under the HUD (100) and the spinner (110), so the HUD stays readable over the bars and the spin covers it all.
