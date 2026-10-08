@@ -1,4 +1,5 @@
 using UnityEngine;
+using Festival.Network;
 using UnityEngine.Rendering;
 
 namespace Festival.Presentation
@@ -16,6 +17,7 @@ namespace Festival.Presentation
         bool firstPerson;
         int side;
         Transform performer,shoulderLeft,shoulderRight;
+        FestivalCharacter animationOwner;
         float weightedRadius;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         bool diagnosticCarrying;
@@ -32,7 +34,7 @@ namespace Festival.Presentation
         // lag behind that orbit, the hand leads the head by about 50 degrees, so it reads as pulling the head round, not chasing it.
         const float HandLead=.5f;
         /// <summary>POI-2: the angle this poi's head is swung round at in a butterfly, in radians. The hands follow it in both views.</summary>
-        public float OrbitAngle=>Time.time*SpinRate+motionPhase;
+        public float OrbitAngle=>(animationOwner!=null?animationOwner.AnimationSeconds:Time.time)*SpinRate+motionPhase;
         /// <summary>POI-2: where the hand holding this poi sits on its loop, as a unit circle across (the performer's right, mirrored
         /// for the left hand as its head is) and up, a step ahead of the head.</summary>
         public Vector2 HandLoop
@@ -61,7 +63,7 @@ namespace Festival.Presentation
             root.transform.localPosition=Vector3.Scale(grip,inverse);
             root.transform.localScale=inverse;
             var rig=root.AddComponent<FestivalPoiRig>();rig.side=side;rig.firstPerson=firstPerson;
-            var actor=parent.GetComponentInParent<FestivalCharacter>();
+            var actor=parent.GetComponentInParent<FestivalCharacter>();rig.animationOwner=actor;
             // Camera hands have no FestivalCharacter parent. Their own camera
             // attachment frame still drives the same opposed orbit in first person.
             rig.performer=actor!=null?actor.transform:firstPerson?parent:null;
@@ -103,7 +105,7 @@ namespace Festival.Presentation
             {
                 ball=grip+rest;velocity=Vector3.zero;initialized=true;spinUp=0;
             }
-            float dt=Mathf.Min(Time.deltaTime,.033f);
+            float dt=Mathf.Min(animationOwner!=null?animationOwner.AnimationFrameDelta:FestivalSession.WorldAnimationPaused||Time.timeScale==0?0:Time.deltaTime,.033f);
             if(dt>0)
             {
                 if(Spinning&&performer!=null)
@@ -219,7 +221,9 @@ namespace Festival.Presentation
             }
         }
 #endif
-        void OnDisable(){initialized=false;if(head!=null)head.gameObject.SetActive(false);if(rope!=null)rope.enabled=false;}
+        // Camera culling can hide and wake a rig while the world clock is stopped.
+        // Keep its pendulum state; actual teleports already reset against the grip.
+        void OnDisable(){if(head!=null)head.gameObject.SetActive(false);if(rope!=null)rope.enabled=false;}
         void OnEnable(){if(head!=null)head.gameObject.SetActive(true);if(rope!=null)rope.enabled=true;}
         void OnDestroy(){if(head!=null)Destroy(head.gameObject);}
     }

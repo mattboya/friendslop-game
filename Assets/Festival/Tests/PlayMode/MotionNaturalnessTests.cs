@@ -30,6 +30,103 @@ namespace Festival.Tests
             return actor;
         }
 
+        [UnityTest]public IEnumerator PausedWorldHoldsBonesIkAndPoiWithoutFrameCreep()
+        {
+            var root=new GameObject("impl-U59 frozen rig");var actor=Walker(root,"impl-U59 frozen performer");actor.SetEquippedItem("poi_led");
+            float scale=Time.timeScale;
+            try
+            {
+                actor.SpinningPoi=true;yield return new WaitForSeconds(.12f);
+                Time.timeScale=0;yield return null;yield return null;
+                var bones=FestivalMotionLibrary.Bones.Select(name=>Bone(actor,name)).ToArray();
+                var positions=bones.Select(b=>b.localPosition).ToArray();var rotations=bones.Select(b=>b.localRotation).ToArray();
+                var rigs=actor.GetComponentsInChildren<FestivalPoiRig>();Assert.That(rigs.Length,Is.EqualTo(2));
+                var ends=rigs.Select(r=>r.GetComponent<LineRenderer>().GetPosition(1)).ToArray();
+                for(int frame=0;frame<90;frame++)yield return null;
+                for(int i=0;i<bones.Length;i++)
+                {
+                    Assert.That(bones[i].localPosition,Is.EqualTo(positions[i]),"paused IK holds "+bones[i].name);
+                    Assert.That(bones[i].localRotation,Is.EqualTo(rotations[i]),"paused bones never ease by an invented delta: "+bones[i].name);
+                }
+                for(int i=0;i<rigs.Length;i++)Assert.That(rigs[i].GetComponent<LineRenderer>().GetPosition(1),Is.EqualTo(ends[i]),"paired head holds its world pose");
+                rigs[0].gameObject.SetActive(false);yield return null;rigs[0].gameObject.SetActive(true);yield return null;yield return null;
+                Assert.That(rigs[0].GetComponent<LineRenderer>().GetPosition(1),Is.EqualTo(ends[0]),"reactivation during pause preserves the tether pose");
+                Time.timeScale=1;yield return new WaitForSeconds(.2f);
+                Assert.That(bones.Select(b=>b.localRotation).SequenceEqual(rotations),Is.False,"real rig animation resumes");
+            }
+            finally{Time.timeScale=scale;Object.Destroy(root);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator GameLocalClockAnimatesOneRigWithoutUnfreezingWorld()
+        {
+            var root=new GameObject("impl-U59 local clock rigs");var world=Walker(root,"impl-U59 frozen world");world.SetEquippedItem("poi_practice");world.SpinningPoi=true;
+            var game=Walker(root,"impl-U59 game performer");game.transform.position=Vector3.right*3;game.Pose="Poi";game.SetEquippedItem("poi_led");
+            float scale=Time.timeScale;
+            // Invoke the optional public seam when available; the pre-feature source still compiles and fails on actual absent motion.
+            var setClock=typeof(FestivalCharacter).GetMethod("SetAnimationClock",BindingFlags.Public|BindingFlags.Instance);
+            var clearClock=typeof(FestivalCharacter).GetMethod("ClearAnimationClock",BindingFlags.Public|BindingFlags.Instance);
+            try
+            {
+                yield return new WaitForSeconds(.15f);Time.timeScale=0;yield return null;yield return null;
+                var worldBones=FestivalMotionLibrary.Bones.Select(name=>Bone(world,name)).ToArray();var frozen=worldBones.Select(b=>b.localRotation).ToArray();
+                var worldRigs=world.GetComponentsInChildren<FestivalPoiRig>();var worldEnds=worldRigs.Select(r=>r.GetComponent<LineRenderer>().GetPosition(1)).ToArray();
+                var gameRigs=game.GetComponentsInChildren<FestivalPoiRig>();Assert.That(gameRigs.Length,Is.EqualTo(2));
+                var wrist=new Bounds(Bone(game,"HandR").position,Vector3.zero);var head=new Bounds(gameRigs[0].GetComponent<LineRenderer>().GetPosition(1),Vector3.zero);
+                var leg=Bone(game,"LegR").localRotation;float legMotion=0;
+                for(int frame=0;frame<90;frame++)
+                {
+                    setClock?.Invoke(game,new object[]{100+frame/60f,1/60f});yield return null;
+                    wrist.Encapsulate(Bone(game,"HandR").position);head.Encapsulate(gameRigs[0].GetComponent<LineRenderer>().GetPosition(1));
+                    legMotion=Mathf.Max(legMotion,Quaternion.Angle(leg,Bone(game,"LegR").localRotation));
+                }
+                Assert.That(wrist.size.magnitude,Is.GreaterThan(.05f),"game-local wrists animate while the world clock is stopped");
+                Assert.That(head.size.y,Is.GreaterThan(.3f),"attached paired poi consume that same explicit clock");
+                Assert.That(legMotion,Is.GreaterThan(2),"game-local lower-body pose and foot planting advance too");
+                Assert.That(worldBones.Select(b=>b.localRotation),Is.EqualTo(frozen),"one game performer never unfreezes ordinary world bones");
+                for(int i=0;i<worldRigs.Length;i++)Assert.That(worldRigs[i].GetComponent<LineRenderer>().GetPosition(1),Is.EqualTo(worldEnds[i]));
+                setClock.Invoke(game,new object[]{101.5f,0f});yield return null;yield return null;
+                var gameBones=FestivalMotionLibrary.Bones.Select(name=>Bone(game,name)).ToArray();var stopped=gameBones.Select(b=>b.localRotation).ToArray();
+                for(int frame=0;frame<20;frame++)yield return null;
+                Assert.That(gameBones.Select(b=>b.localRotation),Is.EqualTo(stopped),"zero game-local delta holds its pose exactly");
+                clearClock.Invoke(game,null);yield return null;yield return null;
+                Assert.That(gameBones.Select(b=>b.localRotation),Is.EqualTo(stopped),"clearing the override returns to frozen world time");
+                setClock.Invoke(game,new object[]{102f,1/60f});yield return null;yield return null;
+                game.gameObject.SetActive(false);yield return null;game.gameObject.SetActive(true);yield return null;yield return null;
+                stopped=gameBones.Select(b=>b.localRotation).ToArray();for(int frame=0;frame<20;frame++)yield return null;
+                Assert.That(gameBones.Select(b=>b.localRotation),Is.EqualTo(stopped),"disable clears the game-local override before reactivation");
+                Time.timeScale=1;yield return new WaitForSeconds(.2f);Assert.That(worldBones.Select(b=>b.localRotation).SequenceEqual(frozen),Is.False,"world animation resumes normally");
+            }
+            finally{Time.timeScale=scale;Object.Destroy(root);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator PausedCameraHandsHoldTheirLocalPoseWhileTheViewTurns()
+        {
+            var cameraObject=new GameObject("impl-U59 paused hands camera");var camera=cameraObject.AddComponent<Camera>();
+            var hands=FestivalHands.Create(camera,"impl-U59 paused hands");Assert.That(hands,Is.Not.Null);
+            var player=new PlayerState{Id="impl-U59-hands",Life="Alive",EquippedItemId="poi_led"};
+            float scale=Time.timeScale,capture=Time.captureDeltaTime;Time.captureDeltaTime=1/60f;
+            try
+            {
+                hands.SetState(player,10,spinning:true);
+                for(int frame=0;frame<30;frame++){camera.transform.position+=Vector3.forward*.04f;yield return null;}
+                Time.timeScale=0;yield return null;yield return null;
+                var attachment=camera.transform.Find("First-person hand attachments");Assert.That(attachment,Is.Not.Null);
+                var position=hands.transform.localPosition;var grip=attachment.localPosition;
+                for(int frame=0;frame<60;frame++)
+                {
+                    camera.transform.position+=Vector3.forward*.01f;camera.transform.rotation=Quaternion.Euler(0,frame*3,0);yield return null;
+                    Assert.That(hands.transform.localPosition,Is.EqualTo(position),"camera-relative arms cannot creep during pause");
+                    Assert.That(attachment.localPosition,Is.EqualTo(grip),"camera-relative attachment pose holds through view movement");
+                }
+                Time.timeScale=1;yield return new WaitForSeconds(.2f);
+                Assert.That(hands.transform.localPosition,Is.Not.EqualTo(position),"normal hand breathing resumes");
+            }
+            finally{Time.timeScale=scale;Time.captureDeltaTime=capture;Object.Destroy(cameraObject);}
+            yield return null;
+        }
+
         // Sample after both the real character (order 0) and tether (order 100) finish LateUpdate.
         [UnityTest]public IEnumerator WalkingPracticePoiHeadsClearEveryGeneratedBodyThroughStartupAndTurns(){yield return CarryClearance("poi_practice");}
         [UnityTest]public IEnumerator WalkingLedPoiHeadsClearEveryGeneratedBodyThroughStartupAndTurns(){yield return CarryClearance("poi_led");}

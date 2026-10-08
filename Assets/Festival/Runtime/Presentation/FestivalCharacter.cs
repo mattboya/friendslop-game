@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Festival.Core;
+using Festival.Network;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -10,6 +11,8 @@ namespace Festival.Presentation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         internal static int DevelopmentAnimationUpdates;
         string loggedPerformancePose;
+        bool diagnosticPaused;
+        float nextPauseDiagnostic;
 #endif
         public static Transform ViewTransform;
         public bool AlwaysHighDetail;
@@ -80,6 +83,27 @@ namespace Festival.Presentation
         float lastAppliedThreat=-1;
         int skinStep;
         float lastAnimationTime;
+        bool hasAnimationClock;
+        float localAnimationSeconds,localAnimationDelta;
+        internal float AnimationSeconds=>hasAnimationClock?localAnimationSeconds:Time.time;
+        internal float AnimationFrameDelta=>hasAnimationClock?localAnimationDelta:FestivalSession.WorldAnimationPaused||Time.timeScale==0?0:Time.deltaTime;
+        /// <summary>Animate only this game or stage performer on an explicit local clock. Its attached poi share the same sample.</summary>
+        public void SetAnimationClock(float seconds,float deltaSeconds)
+        {
+            if(!hasAnimationClock)ShiftAnimationClock(seconds-Time.time);
+            hasAnimationClock=true;localAnimationSeconds=seconds;localAnimationDelta=Mathf.Max(0,deltaSeconds);
+        }
+        /// <summary>Return to the world's pause and clock. Disable clears this override too.</summary>
+        public void ClearAnimationClock()
+        {
+            if(!hasAnimationClock)return;
+            ShiftAnimationClock(Time.time-localAnimationSeconds);hasAnimationClock=false;
+        }
+        void ShiftAnimationClock(float shift)
+        {
+            poseStart+=shift;transitionEnd+=shift;receiptAt+=shift;latestDanceStepTime+=shift;lastAnimationTime=0;
+            previous=transform.position;hasPrevious=true;previousYaw=transform.eulerAngles.y;hasFacingSample=true;
+        }
         // Time this actor has stood in the world, so its idle sway starts from its own spawn rather than the shared clock.
         float idleClock;
         Material eyeMaterial;
@@ -127,7 +151,7 @@ namespace Festival.Presentation
             DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","world_receipt","sequence="+sequence+" age="+age+" suppressed="+(sequence==suppressedReceiptSequence));
 #endif
             if(sequence==suppressedReceiptSequence||age<0||age>1||string.IsNullOrEmpty(item))return;
-            receivedItem=item;receiptAt=Time.time-age;RefreshEquipment();
+            receivedItem=item;receiptAt=AnimationSeconds-age;RefreshEquipment();
         }
         public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
         {
@@ -272,7 +296,7 @@ namespace Festival.Presentation
         public void ClearManualEquipment(){manualEquipment=false;RefreshEquipment();}
         void RefreshEquipment()
         {
-            string itemId=exchanging?offeredItem:manualEquipment?manualItem:Time.time-receiptAt<.85f?receivedItem:requestedItem;
+            string itemId=exchanging?offeredItem:manualEquipment?manualItem:AnimationSeconds-receiptAt<.85f?receivedItem:requestedItem;
             if(equippedId==itemId)return;
             equippedId=itemId;
             if(equippedProp!=null){equippedProp.SetActive(false);Destroy(equippedProp);}
@@ -313,37 +337,14 @@ namespace Festival.Presentation
         {
             if(direction<0||direction>3)return;
             latestDanceDirection=direction;
-            latestDanceStepTime=Time.time;
+            latestDanceStepTime=AnimationSeconds;
         }
         void LateUpdate()
         {
             RefreshEquipment();
             float viewDistance=ViewTransform==null?0:Vector3.Distance(ViewTransform.position,transform.position);
             if(ViewTransform!=null)UpdateDetailForDistance(viewDistance);
-            if(AmbientCrowd&&viewDistance>18f&&((Time.frameCount+Mathf.FloorToInt(phase*10))&1)!=0)return;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            DevelopmentAnimationUpdates++;
-#endif
-            float animationDelta=lastAnimationTime<=0?Time.deltaTime:Mathf.Max(Time.time-lastAnimationTime,.001f);
-            lastAnimationTime=Time.time;
-            idleClock+=animationDelta;
-            float turned=Mathf.InverseLerp(TurnFrom,TurnFull,Threat);
-            if(faceRenderer!=null&&blinkIndex>=0&&!HighlyIntoxicated)
-            {
-                // CROWD-4: a suspicious face's lids hang part-closed (near mesh only), and it still blinks.
-                float cycle=(Time.time+phase)%(3.6f+phase*.11f);
-                faceRenderer.SetBlendShapeWeight(blinkIndex,Mathf.Max(UsesDistantMesh?0:turned*ScowlLid,cycle<.18f?Mathf.Sin(cycle/.18f*Mathf.PI)*100:0));
-            }
             bool performingPoi=Pose=="Poi";
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if(!AmbientCrowd&&loggedPerformancePose!=Pose)
-            {
-                loggedPerformancePose=Pose;
-                if(performingPoi)DevelopmentDiagnostics.GraphicsEvent("Motion","poi_butterfly_enter","actor="+name);
-                else if(Pose=="Dance")DevelopmentDiagnostics.GraphicsEvent("Motion","dance_enter",
-                    "actor="+name+" style="+danceStyle+" angular_speed="+DanceAngularSpeed(danceStyle));
-            }
-#endif
             // Equipped poi hang from both hands, wheel beside them while walking and join a
             // dance as butterflies on its beat. Rebuild only when the poi type changes. A dosed player stands in the Intoxicated pose
             // (the tripper all level), and still holds and spins their poi. A dose beat (the spinner's take and reaction) keeps the
@@ -365,6 +366,40 @@ namespace Festival.Presentation
             float spinRate=dancingPoi?DanceAngularSpeed(danceStyle):9f;
             if(poiLeft!=null){poiLeft.gameObject.SetActive(poiShown);poiLeft.Spinning=performingPoi||dancingPoi||spinningPoi;poiLeft.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiLeft.SpinRate=spinRate;}
             if(poiRight!=null){poiRight.gameObject.SetActive(poiShown);poiRight.Spinning=performingPoi||dancingPoi||spinningPoi;poiRight.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiRight.SpinRate=spinRate;}
+            // Visibility and held-prop creation still work for culled or newly joined actors.
+            // A stopped world never advances bones, IK or wrists by an invented interval.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            AnimationPauseDiagnostic(AnimationFrameDelta<=0);
+#endif
+            if(AnimationFrameDelta<=0)
+            {
+                lastAnimationTime=AnimationSeconds;previous=transform.position;hasPrevious=true;
+                previousYaw=transform.eulerAngles.y;hasFacingSample=true;return;
+            }
+            if(AmbientCrowd&&viewDistance>18f&&((Time.frameCount+Mathf.FloorToInt(phase*10))&1)!=0)return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentAnimationUpdates++;
+#endif
+            float animationDelta=hasAnimationClock||lastAnimationTime<=0?AnimationFrameDelta:AnimationSeconds-lastAnimationTime;
+            if(animationDelta<=0)return;
+            lastAnimationTime=AnimationSeconds;
+            idleClock+=animationDelta;
+            float turned=Mathf.InverseLerp(TurnFrom,TurnFull,Threat);
+            if(faceRenderer!=null&&blinkIndex>=0&&!HighlyIntoxicated)
+            {
+                // CROWD-4: a suspicious face's lids hang part-closed (near mesh only), and it still blinks.
+                float cycle=(AnimationSeconds+phase)%(3.6f+phase*.11f);
+                faceRenderer.SetBlendShapeWeight(blinkIndex,Mathf.Max(UsesDistantMesh?0:turned*ScowlLid,cycle<.18f?Mathf.Sin(cycle/.18f*Mathf.PI)*100:0));
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(!AmbientCrowd&&loggedPerformancePose!=Pose)
+            {
+                loggedPerformancePose=Pose;
+                if(performingPoi)DevelopmentDiagnostics.GraphicsEvent("Motion","poi_butterfly_enter","actor="+name);
+                else if(Pose=="Dance")DevelopmentDiagnostics.GraphicsEvent("Motion","dance_enter",
+                    "actor="+name+" style="+danceStyle+" angular_speed="+DanceAngularSpeed(danceStyle));
+            }
+#endif
             var delta=hasPrevious?transform.position-previous:Vector3.zero;previous=transform.position;hasPrevious=true;
             float yaw=transform.eulerAngles.y;
             float yawChange=hasFacingSample?Mathf.DeltaAngle(previousYaw,yaw):0;
@@ -387,7 +422,7 @@ namespace Festival.Presentation
             var gait=FestivalGait.For(speed,leg);
             if(measuredSpeed>.12f)walkCycle+=delta.magnitude*(Mathf.PI*2/gait.Stride);
             float idleShift=0,still=0,look=0,nod=0,shift=0;
-            float t=Time.time*4+phase,wave=Mathf.Sin(t),walk=Mathf.Sin(walkCycle);
+            float t=AnimationSeconds*4+phase,wave=Mathf.Sin(t),walk=Mathf.Sin(walkCycle);
             bool lying=Pose==FestivalSimulation.LieDownKind;
             if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit"&&!lying);
             foreach(var item in bones)targets[item.Key]=rest[item.Key];
@@ -402,7 +437,7 @@ namespace Festival.Presentation
             {
                 // TRIP-4: flat on their back, legs out ahead and hands behind the head, gazing up at the clouds. The hips sink to the
                 // grass below, once the foot plant has had its say.
-                Aim("Hips",new Vector3(-90,0,0));Aim("Spine",new Vector3(-3+Mathf.Sin(Time.time*1.1f+phase)*1.5f,0,0));Aim("Head",new Vector3(-10,0,0));
+                Aim("Hips",new Vector3(-90,0,0));Aim("Spine",new Vector3(-3+Mathf.Sin(AnimationSeconds*1.1f+phase)*1.5f,0,0));Aim("Head",new Vector3(-10,0,0));
                 Aim("ArmL",new Vector3(-155,0,-35));Aim("ArmR",new Vector3(-155,0,35));Aim("ForearmL",new Vector3(-115,0,0));Aim("ForearmR",new Vector3(-115,0,0));
                 Aim("LegL",new Vector3(0,0,7));Aim("LegR",new Vector3(0,0,-7));
             }
@@ -423,7 +458,7 @@ namespace Festival.Presentation
                 // phase and style keep a crowd from moving in lockstep. Hips roll
                 // over the supporting foot, and each style alternates two arm
                 // patterns across longer phrases so neighbours rarely match.
-                float beatTime=Time.time*DanceAngularSpeed(danceStyle)+phase;
+                float beatTime=AnimationSeconds*DanceAngularSpeed(danceStyle)+phase;
                 float feet=Mathf.Sin(beatTime),opposite=Mathf.Sin(beatTime+Mathf.PI);
                 float landing=Mathf.Pow(Mathf.Max(0,Mathf.Cos(beatTime*2)),2);
                 float sway=Mathf.Sin(beatTime*.5f);
@@ -436,7 +471,7 @@ namespace Festival.Presentation
                 {
                     // The performer concentrates on the paired butterfly flow:
                     // relaxed knees, quiet hips and alternating crossed wrists.
-                    float circle=Time.time*9f+phase;
+                    float circle=AnimationSeconds*9f+phase;
                     float exchange=Mathf.Sin(circle);
                     Aim("Hips",new Vector3(4+landing*2,sway*4-exchange*3,feet*6));
                     Aim("Spine",new Vector3(-5,phrase*5+exchange*6,-feet*5));
@@ -520,7 +555,7 @@ namespace Festival.Presentation
                 // Dancing with equipped poi keeps the style's footwork while the arms
                 // drive the butterfly on the dance beat, which the heads share.
                 if(dancingPoi)PoiArms(beatTime);
-                float step=Mathf.Clamp01(1-(Time.time-latestDanceStepTime)/.38f);
+                float step=Mathf.Clamp01(1-(AnimationSeconds-latestDanceStepTime)/.38f);
                 if(step>0)
                 {
                     float sideways=latestDanceDirection==0?-1:latestDanceDirection==3?1:0;
@@ -592,14 +627,14 @@ namespace Festival.Presentation
             {
                 foreach(var item in bones)transitionFrom[item.Key]=item.Value.localRotation;
                 transitionLength=key=="Downed"||motionKey=="Downed"||key==FestivalSimulation.LieDownKind||motionKey==FestivalSimulation.LieDownKind?.5f:key=="Dance"||key=="Poi"?.22f:.32f;
-                motionKey=key;poseStart=Time.time-.02f;transitionEnd=poseStart+transitionLength;
+                motionKey=key;poseStart=AnimationSeconds-.02f;transitionEnd=poseStart+transitionLength;
             }
             var acting=ActingClip(key,speed);
             bool fullBodyClip=false;Vector3 clipHips=Vector3.zero;
             var clip=acting.name==null?null:FestivalMotionLibrary.Get(acting.name);
             if(clip!=null)
             {
-                float clock=(Time.time-poseStart)*acting.rate+(acting.loop?phase*.53f:0);
+                float clock=(AnimationSeconds-poseStart)*acting.rate+(acting.loop?phase*.53f:0);
                 clip.Sample(clock,acting.loop,clipPose,out clipHips);
                 float weight=key=="Idle"||key==""||key=="Walk"?Mathf.Clamp01(1-speed/1.2f):key=="DoseReaction"?BeatStrength:1;
                 for(int i=0;i<clipPose.Length;i++)
@@ -611,13 +646,13 @@ namespace Festival.Presentation
                 fullBodyClip=acting.full;
             }
             // The dose hits as a head shake that grows with it.
-            if(key=="DoseReaction")Layer("Head",new Vector3(0,Mathf.Sin(Time.time*13f+phase)*16f,Mathf.Sin(Time.time*4.5f+phase)*9f)*BeatStrength);
+            if(key=="DoseReaction")Layer("Head",new Vector3(0,Mathf.Sin(AnimationSeconds*13f+phase)*16f,Mathf.Sin(AnimationSeconds*4.5f+phase)*9f)*BeatStrength);
             // Standing life layers on top of any clip: weight drifts between feet, the
             // chest breathes and the head wanders between glances, each on its own rhythm.
             if(still>.01f)
             {
                 Layer("Hips",new Vector3(0,0,3f*shift));
-                Layer("Spine",new Vector3(Mathf.Sin(Time.time*1.7f+phase)*1.2f*still,0,-2.2f*shift));
+                Layer("Spine",new Vector3(Mathf.Sin(AnimationSeconds*1.7f+phase)*1.2f*still,0,-2.2f*shift));
                 if(key=="Idle"||key=="")Layer("Head",new Vector3(nod*10f*still,look*28f*still,0));
                 if(idleStyle==1&&key=="Idle"&&equippedProp==null&&carriedPoi=="")
                 {
@@ -628,11 +663,11 @@ namespace Festival.Presentation
             }
             // Carry a prop with a bent elbow instead of swinging it through the
             // thigh. Keep dedicated interaction and performance poses in charge.
-            if(spinningPoi)PoiArms(Time.time*9f+phase);
+            if(spinningPoi)PoiArms(AnimationSeconds*9f+phase);
             else if(!dance&&poiCarryPose&&carriedPoi!="")
             {
                 // Both hands lead the wheeling heads at waist height, wrists rolling with each turn.
-                float roll=Mathf.Sin(Time.time*7.5f+phase)*Mathf.Clamp01(speed/1.2f);
+                float roll=Mathf.Sin(AnimationSeconds*7.5f+phase)*Mathf.Clamp01(speed/1.2f);
                 Aim("ArmL",new Vector3(-24,0,-4));Aim("ArmR",new Vector3(-24,0,4));
                 Aim("ForearmL",new Vector3(-58,0,0));Aim("ForearmR",new Vector3(-58,0,0));
                 Aim("HandL",new Vector3(roll*22,0,0));Aim("HandR",new Vector3(-roll*22,0,0));
@@ -644,14 +679,14 @@ namespace Festival.Presentation
                 Aim("ForearmR",new Vector3(bag?-18:-62,0,0));
                 Aim("HandR",new Vector3(0,0,-6));
             }
-            float presentation=Mathf.Sin(Mathf.Clamp01((Time.time-receiptAt)/.85f)*Mathf.PI);
+            float presentation=Mathf.Sin(Mathf.Clamp01((AnimationSeconds-receiptAt)/.85f)*Mathf.PI);
             if(presentation>.01f&&!dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying)
             {Aim("ArmR",new Vector3(-28-25*presentation,0,8));Aim("ForearmR",new Vector3(-62+15*presentation,0,0));Layer("Head",new Vector3(6*presentation,0,0));}
             // GAS-1: on Giggle Gas they giggle: quick little laughs tip the head back and shake the shoulders, under a big smile.
             if(Giggling&&Pose!="Downed"&&Pose!="Spirit"&&!dance&&!lying)
             {
-                float laugh=Mathf.Abs(Mathf.Sin(Time.time*11f+phase*3f));
-                Layer("Spine",new Vector3(-3-5*laugh,0,0));Layer("Head",new Vector3(-8-9*laugh,0,Mathf.Sin(Time.time*1.9f+phase)*6));
+                float laugh=Mathf.Abs(Mathf.Sin(AnimationSeconds*11f+phase*3f));
+                Layer("Spine",new Vector3(-3-5*laugh,0,0));Layer("Head",new Vector3(-8-9*laugh,0,Mathf.Sin(AnimationSeconds*1.9f+phase)*6));
                 Layer("ArmL",new Vector3(0,0,-6*laugh));Layer("ArmR",new Vector3(0,0,6*laugh));
             }
             bool canExchange=Pose!="Downed"&&Pose!="Spirit"&&!dance&&!lying;
@@ -671,7 +706,7 @@ namespace Festival.Presentation
             if(faceRenderer!=null&&!UsesDistantMesh)
             {
                 // CROWD-4: suspicion scowls rather than worries. Concern stays for Downed, Detained and the dose reaction.
-                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),Mathf.Lerp(dance?65:Time.time-receiptAt<1.4f||Giggling?80:0,ScowlMouth,turned),1-Mathf.Exp(-7*animationDelta)));
+                if(smileIndex>=0)faceRenderer.SetBlendShapeWeight(smileIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(smileIndex),Mathf.Lerp(dance?65:AnimationSeconds-receiptAt<1.4f||Giggling?80:0,ScowlMouth,turned),1-Mathf.Exp(-7*animationDelta)));
                 if(concernIndex>=0)faceRenderer.SetBlendShapeWeight(concernIndex,Mathf.Lerp(faceRenderer.GetBlendShapeWeight(concernIndex),Pose=="Downed"||Pose=="Detained"?85:key=="DoseReaction"?85*BeatStrength:turned*ScowlBrow,1-Mathf.Exp(-7*animationDelta)));
             }
             if(eyeRenderer!=null&&Mathf.Abs(Threat-lastAppliedThreat)>.001f)
@@ -686,7 +721,7 @@ namespace Festival.Presentation
             if(turnStep!=skinStep){skinStep=turnStep;Appearance.PaintSkin(skinPalette,(float)turnStep/SkinSteps);}
             // Pose changes ease out of the previous pose instead of snapping toward the new
             // one; the ease replaces per-frame smoothing so motion starts on the first frame.
-            float fade=Mathf.Clamp01(1-(transitionEnd-Time.time)/transitionLength);
+            float fade=Mathf.Clamp01(1-(transitionEnd-AnimationSeconds)/transitionLength);
             float blend=1-Mathf.Exp(-(Pose=="Downed"?9:16)*animationDelta);
             if(fade<1)
             {
@@ -697,7 +732,7 @@ namespace Festival.Presentation
             foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
             var hipsBefore=bones.TryGetValue("Hips",out var hipsBone)?hipsBone.localPosition:Vector3.zero;
             if(dance&&Pose!="Dj")
-                footPlant?.Dance(Time.time*DanceAngularSpeed(danceStyle)+phase,
+                footPlant?.Dance(AnimationSeconds*DanceAngularSpeed(danceStyle)+phase,
                     danceStyle,animationDelta);
             else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!lying&&!fullBodyClip&&!riding,
                 !dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying&&speed>.14f,
@@ -725,7 +760,7 @@ namespace Festival.Presentation
                 FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],bones["HandR"],Vector3.Lerp(bones["HandR"].position,poiRight.Wrist(),poiSwing),1);
             }
             // POLO-6: an influencer films all level, whatever else it does, so its phone stays up beside its face.
-            if(phone!=null&&phone.Shown)phone.Hold(Time.time,ViewTransform);
+            if(phone!=null&&phone.Shown)phone.Hold(AnimationSeconds,ViewTransform);
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
             {
                 if(djHandContact==null)
@@ -738,7 +773,7 @@ namespace Festival.Presentation
                         "actor="+name+" console="+DjConsole.name);
 #endif
                 }
-                djHandContact.Update(Time.time*6f+phase);
+                djHandContact.Update(AnimationSeconds*6f+phase);
             }
         }
         public void UpdateDetailForDistance(float metres)
@@ -802,6 +837,17 @@ namespace Festival.Presentation
             if(bones.TryGetValue("HandL",out var left))poiLeft=FestivalPoiRig.Create(left,new Vector3(0,-.05f,0),0,led);
             if(bones.TryGetValue("HandR",out var right))poiRight=FestivalPoiRig.Create(right,new Vector3(0,-.05f,0),1,led);
         }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        void AnimationPauseDiagnostic(bool paused)
+        {
+            if(diagnosticPaused==paused)return;
+            diagnosticPaused=paused;
+            if(!DevelopmentDiagnostics.Visible||Time.unscaledTime<nextPauseDiagnostic)return;
+            nextPauseDiagnostic=Time.unscaledTime+1;
+            DevelopmentDiagnostics.GraphicsEvent("Motion","rig_pause","paused="+paused+" clock="+(hasAnimationClock?"local":"world"));
+        }
+#endif
+        void OnDisable(){ClearAnimationClock();}
         void OnDestroy()
         {
             if(ownedMaterial!=null){if(Application.isPlaying)Destroy(ownedMaterial);else DestroyImmediate(ownedMaterial);}

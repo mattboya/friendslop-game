@@ -216,6 +216,12 @@ namespace Festival.Presentation
         }
         void LateUpdate()
         {
+            if(FestivalSession.WorldAnimationPaused||Time.timeScale==0||Time.deltaTime<=0)
+            {
+                // Looking round is still allowed. Keep camera baselines current without
+                // advancing walk phase, arm motion, grips or attachment offsets.
+                previousCameraPosition=transform.parent.position;previousCameraYaw=transform.parent.eulerAngles.y;return;
+            }
             if(gripSkin!=null)
             {
                 float blend=1-Mathf.Exp(-18*Time.deltaTime);

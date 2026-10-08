@@ -101,6 +101,17 @@ namespace Festival.Network
         // DrumPart chart/input log on the advancing game clock, sharing the held stage grid. Cancel withdraws without shrinking roster.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
+        static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
+        /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
+        public static bool WorldAnimationPaused
+        {
+            get
+            {
+                foreach(var session in activeSessions)
+                    if(session!=null&&session.State?.Phase==FestivalSimulation.MinigamePhase)return true;
+                return false;
+            }
+        }
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
         public FestivalCharacter LocalWorldCharacter => WorldCharacter(LocalPlayerId);
@@ -900,6 +911,8 @@ namespace Festival.Network
         }
         /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
+        // Local click prediction yields to the captured host state throughout the game and banner.
+        private bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
         private void UpdateActors()
         {
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();
@@ -930,7 +943,7 @@ namespace Festival.Network
                     exchangeCharacter.SetReceipt(p.VisualReceiptSequence,p.VisualReceivedItem,(float)(State.SimulationSeconds-p.VisualReceiptAt));
                     exchangeCharacter.Giggling=p.VisualGiggling;
                     // POI-1: your own body spins from your click at once; everyone else's from the host's view.
-                    exchangeCharacter.SpinningPoi=p.Id==LocalPlayerId?spinHeld&&FestivalSimulation.CanSpinPoi(p):p.VisualPoiSpin;
+                    exchangeCharacter.SpinningPoi=PresentedPoiSpin(p);
                 }
                 seen.Add(p.Id);
                 if(p.Id==LocalPlayerId)
@@ -1027,7 +1040,7 @@ namespace Festival.Network
                 wasLying=lying;
             }
             ThirdPersonView=FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
-            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),spinHeld&&FestivalSimulation.CanSpinPoi(player),FestivalSimulation.ArtCarOf(State,player.Id)>=0);}
+            if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),PresentedPoiSpin(player),FestivalSimulation.ArtCarOf(State,player.Id)>=0);}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
             // the eye's glide (rate 20) so it keeps it there as it turns, at any frame rate (POLO-7); the mouse still aims it, and the
@@ -1084,12 +1097,14 @@ namespace Festival.Network
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
         }
-        private void OnDisable(){SpeechBubbles?.Clear();SpeechDeliveries.Retire();}
+        private void OnEnable(){activeSessions.Add(this);}
+        private void OnDisable(){activeSessions.Remove(this);SpeechBubbles?.Clear();SpeechDeliveries.Retire();}
         private void OnDestroy()
         {
             try{Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
             finally
             {
+                activeSessions.Remove(this);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 smokeProfiles?.Dispose();smokeProfiles=null;
 #endif
