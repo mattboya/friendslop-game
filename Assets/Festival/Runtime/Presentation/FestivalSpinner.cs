@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Festival.Core;
 using Festival.Network;
@@ -169,9 +170,91 @@ namespace Festival.Presentation
         string spinRound="",whoLine="",doseLine="",tookLine="",takeLine="",reactLine="";
         int spinSeed;
 
+        AudioSource slotAudio;
+        AudioClip leverAudio,tickAudio,clunkAudio;
+        string audioRound="";
+        readonly HashSet<string> retiredAudioRounds=new HashSet<string>();
+        int audioSeed;
+        long audioTick;
+        double audioStart,audioElapsed;
+        bool audioObserved,audioHeld,audioFocused=true;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        double nextAudioDiagnostic;
+#endif
+
+        void CreateAudio()
+        {
+            slotAudio=gameObject.AddComponent<AudioSource>();slotAudio.playOnAwake=false;slotAudio.loop=false;slotAudio.spatialBlend=0;
+            leverAudio=MakeAudio("lever",.16,130,28);tickAudio=MakeAudio("tick",.025,1800,140);clunkAudio=MakeAudio("clunk",.12,90,40);
+        }
+        static AudioClip MakeAudio(string cue,double seconds,double tone,double decay)
+        {
+            const int rate=24000;var samples=new float[(int)(seconds*rate)];
+            for(int i=0;i<samples.Length;i++)
+            {
+                double t=i/(double)rate,edge=Math.Sin(Math.PI*i/(samples.Length-1));
+                samples[i]=(float)((Math.Sin(2*Math.PI*tone*t)+.3*Math.Sin(2*Math.PI*(tone*3.17)*t))*Math.Exp(-decay*t)*edge*.55);
+            }
+            var clip=AudioClip.Create("Original slot "+cue,samples.Length,1,rate,false);clip.SetData(samples,0);return clip;
+        }
+        /// <summary>Follows the public spin clock. Returns the number of one-shots actually emitted, at most one per view.
+        /// Late observations and lifecycle boundaries establish a cursor, never replay a backlog.</summary>
+        public int FollowAudio(RoundState state,double now,bool hidden,ProfileData profile,bool focused)
+        {
+            FestivalSettings.ApplyEffects(slotAudio,profile,.45f);
+            bool valid=state!=null&&state.Phase=="Spinning"&&state.Players.Exists(p=>p.Connected||p.Id==state.TripperId);
+            bool held=!valid||hidden||!isActiveAndEnabled||FestivalSettings.EffectsGain(profile)<=0||profile!=null&&profile.MasterVolume<=0
+                ||!focused&&(profile==null||profile.MuteWhenUnfocused);
+            if(!valid){StopAudio();audioHeld=true;return 0;}
+            double start=state.SpinEndsAt-FestivalSimulation.SpinSeconds,t=now-start;
+            if(double.IsNaN(t)||double.IsInfinity(t)){StopAudio();audioHeld=true;return 0;}
+            if(audioObserved&&(retiredAudioRounds.Contains(state.RoundId)&&state.RoundId!=audioRound||state.RoundId==audioRound&&state.Tick<audioTick))
+            {
+                if(held){StopAudio();audioHeld=true;}return 0;
+            }
+            bool changed=!audioObserved||audioRound!=state.RoundId||audioSeed!=state.SpinSeed||audioStart!=start;
+            if(!changed&&t<audioElapsed){if(held){StopAudio();audioHeld=true;}return 0;}
+            double before=audioElapsed;bool resumed=audioHeld;
+            if(changed)
+            {
+                StopAudio();if(audioObserved&&audioRound!=state.RoundId)retiredAudioRounds.Add(audioRound);
+                audioRound=state.RoundId;audioSeed=state.SpinSeed;audioStart=start;audioObserved=true;
+            }
+            audioTick=Math.Max(changed?state.Tick:audioTick,state.Tick);audioElapsed=t;audioHeld=held;
+            if(held){StopAudio();return 0;}
+            if(changed)return t>=0&&t<=.1?PlayAudio(leverAudio,-1):0;
+            if(resumed||t-before>.25||t==before)return 0;
+            if(before<0&&t>=0&&t<=.1)return PlayAudio(leverAudio,-1);
+            // Prioritize the current stop over a tick; a stalled view emits neither old stops nor a burst of tile crossings.
+            for(int reel=FestivalSimulation.ReelStopSeconds.Count-1;reel>=0;reel--)
+                if(before<ReelStops(reel)&&t>=ReelStops(reel))return PlayAudio(clunkAudio,reel);
+            for(int reel=0;reel<FestivalSimulation.ReelStopSeconds.Count;reel++)
+            {
+                float stop=ReelStops(reel);
+                if(t<stop&&Mathf.FloorToInt(Cruise*Run((float)t,stop))>Mathf.FloorToInt(Cruise*Run((float)before,stop)))return PlayAudio(tickAudio,reel);
+            }
+            return 0;
+        }
+        int PlayAudio(AudioClip clip,int reel)
+        {
+            slotAudio.Stop();slotAudio.clip=clip;slotAudio.Play();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible&&Time.unscaledTimeAsDouble>=nextAudioDiagnostic)
+            {
+                nextAudioDiagnostic=Time.unscaledTimeAsDouble+1;
+                DevelopmentDiagnostics.GraphicsEvent("Spinner","audio_cue","round="+audioRound+" seed="+audioSeed+" start="+audioStart.ToString("F3")+" reel="+reel+" cue="+clip.name);
+            }
+#endif
+            return 1;
+        }
+        void StopAudio(){if(slotAudio!=null)slotAudio.Stop();}
+        void OnApplicationFocus(bool focused){audioFocused=focused;if(!focused){StopAudio();audioHeld=true;}}
+        void OnDisable(){StopAudio();audioHeld=true;if(overlay!=null)overlay.SetActive(false);if(takeCamera!=null)takeCamera.enabled=false;}
+        static void DisposeAudio(UnityEngine.Object owned){if(owned==null)return;if(Application.isPlaying)Destroy(owned);else DestroyImmediate(owned);}
+
         void Awake()
         {
-            session=GetComponent<FestivalSession>();
+            session=GetComponent<FestivalSession>();CreateAudio();
             font=Resources.Load<Font>("FestivalDisplay");if(font==null)font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             overlay=new GameObject("Festival spinner");overlay.transform.SetParent(transform,false);
             var canvas=overlay.AddComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=110; // over the HUD (100)
@@ -221,7 +304,9 @@ namespace Festival.Presentation
             var state=session!=null?session.State:null;
             if(state!=null&&state.Phase=="Spinning"&&(spinRound!=state.RoundId||spinSeed!=state.SpinSeed))Prepare(state);
             var beat=At(state,crew,session!=null?session.EstimatedSimulationSeconds:0);
-            overlay.SetActive(beat.Stage!=Stage.Hidden&&!session.MenuOpen);
+            bool hidden=beat.Stage==Stage.Hidden||session==null||session.MenuOpen;
+            overlay.SetActive(!hidden);
+            FollowAudio(state,session!=null?session.EstimatedSimulationSeconds:0,hidden,session?.Profile?.Data,audioFocused);
             FestivalCharacter tripper=null;
             if(beat.Stage!=Stage.Hidden)
             {
@@ -359,6 +444,7 @@ namespace Festival.Presentation
         static void Stretch(RectTransform rect){rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;}
         void OnDestroy()
         {
+            StopAudio();DisposeAudio(slotAudio);DisposeAudio(leverAudio);DisposeAudio(tickAudio);DisposeAudio(clunkAudio);
             if(shotTexture!=null)Destroy(shotTexture);
         }
     }

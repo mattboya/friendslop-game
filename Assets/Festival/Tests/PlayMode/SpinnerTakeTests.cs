@@ -82,6 +82,9 @@ namespace Festival.Tests
                 string took=Catalog.FindEffect(spun.Substance).Name.ToUpperInvariant();
                 yield return new WaitForSeconds(.3f);
 
+                var slotSound=host.GetComponents<AudioSource>().FirstOrDefault(source=>source.clip!=null&&source.clip.name.StartsWith("Original slot "));
+                Assert.That(slotSound,Is.Not.Null,"the real session spinner follows its public clock into local audio");
+                Assert.That(slotSound.volume,Is.EqualTo(FestivalSettings.EffectsGain(session.Profile.Data,.45f)).Within(.001),"the live source follows the effects slider");
                 var overlay=host.transform.Find("Festival spinner");
                 Assert.That(overlay!=null&&overlay.gameObject.activeInHierarchy,"the slot machine covers the screen during the spin");
                 var shown=overlay.GetComponentsInChildren<Text>(false).Select(t=>t.text).ToList();

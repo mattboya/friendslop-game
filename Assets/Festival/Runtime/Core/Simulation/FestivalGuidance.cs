@@ -52,7 +52,7 @@ namespace Festival.Core
                     ?"Press E at the lit trailhead to ready up and dance."+starter
                     :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E."+starter+" Ready at lit trailhead "+Route(player,0,19)+".";
             }
-            if(state.Phase=="Spinning")return "The wheels pick who trips this level and how many doses they take.";
+            if(state.Phase=="Spinning")return "The slot machine picks who trips this level, how many doses they take and what they took.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
             // HUD-3: once every vote is in (or solo practice drew none) the ballot is gone and the verdict plays; only the host acts.
             if(state.Phase=="CampReview")return !FestivalSimulation.ReviewRevealed(state)?"Click a friend for each award, or press 1, 2 or 3. Then the host opens the camp shop."

@@ -347,7 +347,7 @@ public static class TripperTests
     {
         var s=Crew(91,2);s.State.LevelIndex=1;Spin(s);var tripper=Tripper(s);var friend=s.State.Players.Find(p=>p!=tripper);
         string headline=FestivalGuidance.Headline(s.State,friend),hint=FestivalGuidance.Hint(s.State,friend);
-        Check(headline.Contains("SPIN")&&!headline.Contains("TOTEM")&&hint.Contains("wheel"),"camp guidance follows the spin, not the festival: "+headline+" / "+hint);
+        Check(headline.Contains("SPIN")&&!headline.Contains("TOTEM")&&hint.Contains("slot machine")&&hint.Contains("doses")&&hint.Contains("what they took"),"camp guidance follows the spin, not the festival: "+headline+" / "+hint);
         Play(s);friend.X=-18;friend.Z=-22;hint=FestivalGuidance.Hint(s.State,friend);
         Check(!hint.ToLowerInvariant().Contains("tasting")&&hint.Contains(tripper.Name),"a sober friend is sent to the tripper, not to a clue tasting: "+hint);
     }
