@@ -32,6 +32,57 @@ namespace Festival.Tests
             player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId=item,Count=count});player.EquippedItemId=item;
         }
 
+        [UnityTest]public IEnumerator EightNearbyCrewKeepTheFiveRowStripAboveTheTipAndEveryMenuAction()
+        {
+            UseAVirtualKeyboard("impl-U54 nearby keyboard");
+            var world=new GameObject("impl-U54 nearby world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("impl-U54 nearby HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            var failures=new List<string>();
+            RectTransform Card(string name){foreach(var rect in root.GetComponentsInChildren<RectTransform>(true))if(rect.name==name)return rect;return null;}
+            void Fits(string name)
+            {
+                var text=DropText(root,name);Assert.That(text,Is.Not.Null,name);Canvas.ForceUpdateCanvases();
+                int visible=text.cachedTextGenerator.characterCountVisible;
+                if(visible<text.text.Length&&text.text.Substring(visible).Trim().Length>0)failures.Add(name+" clipped: box="+text.rectTransform.rect.size+", visible="+visible+"/"+text.text.Length+", font="+text.cachedTextGenerator.fontSizeUsedForBestFit+", lines="+text.cachedTextGenerator.lineCount+", literal="+text.text);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("impl:U54 measured "+name+": box="+text.rectTransform.rect.size+", visible="+visible+"/"+text.text.Length+", font="+text.cachedTextGenerator.fontSizeUsedForBestFit+", lines="+text.cachedTextGenerator.lineCount);
+#endif
+            }
+            try
+            {
+                session.Host(new string('W',24),HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var player=game.Player(session.LocalPlayerId);
+                var mates=new List<PlayerState>();for(int i=1;i<8;i++){var mate=game.AddPlayer("nearby_crew_"+i,i==1?new string('W',24):new string('W',23)+i);mate.Ready=true;mates.Add(mate);}
+                game.State.FestivalIndex=1;yield return StartLevel(session);QuietDropGround(game,player);GiveDropGear(player,"stock_lsd",1);player.Ordinal=3;
+                var canvas=root.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var buyer=new NpcState{Id="nearby_buyer_2",Kind="Wook",Role="Buyer",CanTalk=true,X=0,Z=1.5f,Yaw=180};game.State.Npcs.Add(buyer);
+                foreach(var mate in mates){mate.X=1;mate.Z=0;mate.Effects.Clear();}
+                game.State.TripperId=mates[0].Id;yield return new WaitForSeconds(.5f);session.Profile.ShowTipsAgain();yield return null;yield return null;
+                var strip=Card("Nearby actions");var tip=Card("First-time tip card");Assert.That(strip.gameObject.activeInHierarchy&&tip.gameObject.activeInHierarchy,Is.True,"real nearby actions and a first-time friend tip are visible together: strip="+strip.gameObject.activeInHierarchy+", tip="+tip.gameObject.activeInHierarchy+", phase="+session.State.Phase+", elapsed="+session.State.ElapsedSeconds+", life="+player.Life+", prompt="+DropText(root,"Prompt")?.text+", seen="+string.Join(",",session.Profile.Data.SeenTips));
+                var nearby=DropText(root,"Nearby");Assert.That(nearby.text.Split('\n').Length,Is.EqualTo(5));Assert.That(nearby.text,Does.EndWith("ESC  +7 more"));
+                Canvas.ForceUpdateCanvases();
+                if(strip.anchorMin.y<tip.anchorMax.y+.008f)failures.Add("nearby strip bottom="+strip.anchorMin.y+" overlaps first-time tip top="+tip.anchorMax.y);
+                Fits("Nearby");if(nearby.cachedTextGenerator.lineCount>5)failures.Add("five extras wrapped onto "+nearby.cachedTextGenerator.lineCount+" rendered rows");Fits("Objective title");Fits("Objective detail");Fits("Vitals");Fits("First-time tip");float crowdedHeight=strip.rect.height;
+                Assert.That(DropText(root,"Objective title").text,Does.Contain("FRIENDSHIP BRACELETS"),"the initial measurement uses the longest Ember currency");
+                for(int ordinal=0;ordinal<8;ordinal++){player.Ordinal=ordinal;yield return new WaitForSeconds(.25f);Fits("Objective title");Fits("Objective detail");Fits("Vitals");}player.Ordinal=3;
+                for(int i=4;i<7;i++){mates[i].X=10;mates[i].Z=10;}yield return new WaitForSeconds(.3f);Canvas.ForceUpdateCanvases();
+                Assert.That(DropText(root,"Nearby").text.Split('\n').Length,Is.EqualTo(5));
+                if(Mathf.Abs(strip.rect.height-crowdedHeight)>1)failures.Add("same five rendered rows changed strip height from "+crowdedHeight+" to "+strip.rect.height+" when hidden actions left reach");
+                foreach(var mate in mates){mate.X=1;mate.Z=0;}yield return new WaitForSeconds(.3f);
+                yield return Tap(Key.Escape,.3f);Assert.That(session.MenuOpen,Is.True);
+                var actions=new List<Button>();foreach(var button in root.GetComponentsInChildren<Button>(false))if(button.name.StartsWith("Action:"))actions.Add(button);
+                Assert.That(actions.Count,Is.EqualTo(12),"the full list retains the primary, all three other NPC actions, seven handoffs and lying down");
+                foreach(var mate in mates)Assert.That(actions.Exists(b=>b.name=="Action:Offer Tongue Stamps to "+mate.Name),Is.True,"every registered friend remains in the menu");
+                Fits("Crew status");foreach(var button in actions){var text=button.transform.Find("Text").GetComponent<Text>();var measured=new TextGenerator();measured.Populate(text.text,text.GetGenerationSettings(text.rectTransform.rect.size));int visible=Mathf.Max(0,measured.characterCountVisible);if(visible<text.text.Length&&text.text.Substring(visible).Trim().Length>0)failures.Add("menu action clipped: "+text.text);}
+                var scroll=actions[0].GetComponentInParent<ScrollRect>();Assert.That(scroll,Is.Not.Null);scroll.verticalNormalizedPosition=0;Canvas.ForceUpdateCanvases();
+                var last=actions.Find(b=>b.name=="Action:Offer Tongue Stamps to "+mates[6].Name);Assert.That(last,Is.Not.Null);last.onClick.Invoke();yield return null;yield return null;
+                Assert.That(session.MenuOpen,Is.False,"choosing an overflowed handoff closes the actual menu");Assert.That(game.State.Transfers.Exists(t=>t.FromId==player.Id&&t.ToId==mates[6].Id&&t.ItemId=="stock_lsd"),Is.True,"the hidden-strip action remains executable");session.Command("CancelTransfer",game.State.Transfers.Find(t=>t.FromId==player.Id).Id);
+                game.State.LevelIndex=3;game.State.FriendFound=true;foreach(var mate in mates){mate.X=0;mate.Z=19;}player.X=0;player.Z=19;yield return new WaitForSeconds(.3f);Fits("Roster");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;Assert.That(failures,Is.Empty,string.Join("\n",failures));
+        }
+
         [UnityTest]public IEnumerator StowingRetiresBothEquippedPropsBeforeTheFrameEnds()
         {
             UseAVirtualKeyboard("impl-U53 retiring props keyboard");

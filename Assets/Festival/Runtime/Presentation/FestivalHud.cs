@@ -293,7 +293,7 @@ namespace Festival.Presentation
             vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.03f,.94f,.97f);ShrinkToFit(vitals,14);
 
             rosterPanel=Card(root.transform,"Crew card",new Vector2(.835f,.846f),new Vector2(.978f,.882f),true);
-            roster=Label(rosterPanel.transform,"Roster",16,TextAnchor.MiddleRight);Fill(roster.rectTransform,3);
+            roster=Label(rosterPanel.transform,"Roster",16,TextAnchor.MiddleRight);Fill(roster.rectTransform,3);ShrinkToFit(roster,12);
             voice=Label(root.transform,"Voice",17,TextAnchor.LowerLeft);voice.color=MutedPaper;SetRect(voice.rectTransform,new Vector2(.023f,.012f),new Vector2(.23f,.052f),Vector2.zero,Vector2.zero);
             // The upper-left information rail keeps both palms, held props and
             // the ground immediately ahead visible during close interactions.
@@ -532,7 +532,7 @@ namespace Festival.Presentation
             Rule(menuPanel.transform,.782f);
             menuHome=Panel(menuPanel.transform,"Pass home",Color.clear,new Vector2(.055f,.025f),new Vector2(.945f,.76f));menuHome.GetComponent<Image>().raycastTarget=false;
             var crewHeading=Label(menuHome.transform,"Crew heading",17,TextAnchor.MiddleLeft);crewHeading.text="YOUR CREW";crewHeading.fontStyle=FontStyle.Normal;crewHeading.color=new Color(.31f,.42f,.38f);Place(crewHeading.rectTransform,.045f,.90f,.56f,.98f);
-            menuRoster=Label(menuHome.transform,"Crew status",23,TextAnchor.UpperLeft);menuRoster.fontStyle=FontStyle.Normal;menuRoster.color=Ink;Place(menuRoster.rectTransform,.045f,.72f,.55f,.89f);menuRoster.raycastTarget=false;
+            menuRoster=Label(menuHome.transform,"Crew status",23,TextAnchor.UpperLeft);menuRoster.fontStyle=FontStyle.Normal;menuRoster.color=Ink;Place(menuRoster.rectTransform,.045f,.72f,.55f,.89f);menuRoster.raycastTarget=false;ShrinkToFit(menuRoster,11);
             var phaseCard=Card(menuHome.transform,"Current stop",new Vector2(.59f,.735f),new Vector2(.955f,.98f),true);
             var phaseLabel=Label(phaseCard.transform,"Stop label",16,TextAnchor.MiddleLeft);phaseLabel.text="CURRENT STOP";phaseLabel.fontStyle=FontStyle.Normal;phaseLabel.color=Mint;Place(phaseLabel.rectTransform,.09f,.62f,.92f,.92f);
             menuPhase=Label(phaseCard.transform,"Stop value",24,TextAnchor.MiddleLeft);menuPhase.fontStyle=FontStyle.Normal;Place(menuPhase.rectTransform,.09f,.12f,.92f,.64f);
@@ -822,12 +822,27 @@ namespace Festival.Presentation
             Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.876f-.024f*checklistLines:.846f,.978f,.882f);
         }
 
-        // ECON-3: the strip hangs under the prompt, a line per action it lists.
-        private void UpdateNearbyLayout(int lines)
+        // Measure only the rendered extras. Long friend names share the existing bounded best-fit range,
+        // keeping each action on its own row and the complete list one menu press away.
+        private void UpdateNearbyLayout()
         {
-            if(nearbyLines==lines)return;
+            int lines=nearby.text==""?0:nearby.text.Split('\n').Length;
+            float width=nearby.rectTransform.rect.width;
+            var settings=nearby.GetGenerationSettings(new Vector2(width,0));
+            settings.resizeTextForBestFit=false;settings.horizontalOverflow=HorizontalWrapMode.Overflow;settings.verticalOverflow=VerticalWrapMode.Overflow;
+            settings.fontSize=nearby.fontSize;
+            var measured=nearby.cachedTextGeneratorForLayout;
+            while(settings.fontSize>nearby.resizeTextMinSize&&measured.GetPreferredWidth(nearby.text,settings)/nearby.pixelsPerUnit>width)settings.fontSize--;
+            nearby.resizeTextMaxSize=settings.fontSize;
+            float height=measured.GetPreferredHeight(nearby.text,settings)/nearby.pixelsPerUnit;
+            float parentHeight=((RectTransform)nearbyPanel.transform.parent).rect.height;
+            float bottom=Mathf.Max(.629f,.769f-.014f-height/Mathf.Max(1,parentHeight));
+            if(nearbyLines==lines&&Mathf.Approximately(Rect(nearbyPanel).anchorMin.y,bottom))return;
             nearbyLines=lines;
-            Place(Rect(nearbyPanel),.022f,.769f-.014f-.022f*lines,.295f,.769f);
+            Place(Rect(nearbyPanel),.022f,bottom,.295f,.769f);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","nearby_rows","shown="+lines);
+#endif
         }
 
         private void UpdateTrippingLayout(int lines)
@@ -1638,7 +1653,7 @@ namespace Festival.Presentation
                     else SetPromptAction("GEAR SHELVES BESIDE SELLER  •  READY AT LIT TRAILHEAD",null);
                 }
                 // CAMP-1: beside Marigold, the strip under the prompt says F talks to her.
-                if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open){nearby.text=CampSellerTalk.TalkPrompt;UpdateNearbyLayout(0);}
+                if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open){nearby.text=CampSellerTalk.TalkPrompt;UpdateNearbyLayout();}
                 FinishActions();return;
             }
             // TRIP-8: only a free player shops a shelf. Lying there, E gets you up; mid-dance it runs nothing (DANCE-12).
@@ -1778,7 +1793,7 @@ namespace Festival.Presentation
             // ECON-3: beside a festivalgoer or a cop, the strip lists what else there is, each a click away in the Esc menu's list.
             nearbyLabels.Clear();
             if(npc!=null&&primaryAction!=null)for(int i=0;i<activeActionCount;i++)nearbyLabels.Add(dynamicActions[i].name.Substring(7));
-            nearby.text=MoreActions(nearbyLabels);UpdateNearbyLayout(Mathf.Max(0,nearbyLabels.Count-1));
+            nearby.text=MoreActions(nearbyLabels);UpdateNearbyLayout();
             FinishActions();
         }
         private void AddTwistActions(RoundState state,PlayerState player,ref float y){foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);}
@@ -1836,7 +1851,13 @@ namespace Festival.Presentation
         /// <summary>ECON-3 (Matt: "there is no button to actually sell to people"): the strip under the prompt beside a festivalgoer or a
         /// cop. The prompt is the first action listed, on E; the strip lists the rest, each marked ESC, the key that opens the menu on
         /// that list to click one. "" with nothing else to do there.</summary>
-        public static string MoreActions(List<string> actions){string lines="";for(int i=1;i<actions.Count;i++)lines+=(i>1?"\n":"")+"ESC  "+actions[i];return lines;}
+        public static string MoreActions(List<string> actions)
+        {
+            int extras=actions.Count-1,shown=extras>5?4:extras;string lines="";
+            for(int i=1;i<=shown;i++)lines+=(i>1?"\n":"")+"ESC  "+actions[i];
+            if(extras>5)lines+="\nESC  +"+(extras-shown)+" more";
+            return lines;
+        }
         private void FinishActions(){for(int i=activeActionCount;i<dynamicActions.Count;i++)dynamicActions[i].SetActive(false);}
         private void SetPromptAction(string label,Action action){prompt.text=label.StartsWith("E  ")?label.Substring(3):label;primaryAction=action;}
         private string FocusedOffer(RoundState state,PlayerState player)

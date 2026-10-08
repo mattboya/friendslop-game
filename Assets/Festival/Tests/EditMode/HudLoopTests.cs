@@ -194,6 +194,17 @@ namespace Festival.Tests
             Assert.That(FestivalHud.MoreActions(new List<string>()),Is.Empty);
         }
 
+        [Test] public void NearbyOverflowKeepsFourExtrasAndCountsEverythingElse()
+        {
+            var actions=new List<string>{"Primary","First","Second","Third","Fourth","Fifth"};
+            Assert.That(FestivalHud.MoreActions(actions),Is.EqualTo("ESC  First\nESC  Second\nESC  Third\nESC  Fourth\nESC  Fifth"),"five extras fit without a summary");
+            actions.Add("Sixth");
+            Assert.That(FestivalHud.MoreActions(actions),Is.EqualTo("ESC  First\nESC  Second\nESC  Third\nESC  Fourth\nESC  +2 more"),"the summary is itself the fifth rendered row");
+            actions.Add("Seventh");actions.Add("Eighth");
+            Assert.That(FestivalHud.MoreActions(actions),Is.EqualTo("ESC  First\nESC  Second\nESC  Third\nESC  Fourth\nESC  +4 more"));
+            Assert.That(actions.Count,Is.EqualTo(9),"rendering the strip never removes menu actions");
+        }
+
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
         {
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.

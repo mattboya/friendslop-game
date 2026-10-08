@@ -17,6 +17,71 @@ namespace Festival.Tests
 {
     public sealed class HudTripperPlayTests:FestivalPlayModeTest
     {
+        [UnityTest]public IEnumerator HostInputExplicitlyCancelsAndFinishesUntimedTalks(){yield return UntimedTalkInput(false);}
+        [UnityTest]public IEnumerator JoinedInputExplicitlyCancelsAndFinishesUntimedTalks(){yield return UntimedTalkInput(true);}
+
+        IEnumerator UntimedTalkInput(bool joined)
+        {
+            UseAVirtualKeyboard("impl-U54 untimed keyboard");
+            var world=new GameObject("impl-U54 untimed world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("impl-U54 untimed host");var host=hostObject.AddComponent<FestivalSession>();
+            var ownerObject=joined?new GameObject("impl-U54 untimed joined"):hostObject;var owner=joined?ownerObject.AddComponent<FestivalSession>():host;ownerObject.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Talk host",port);yield return null;
+                if(joined){host.Controls.Map.Disable();owner.Join("Talk owner","127.0.0.1",port);}
+                for(float deadline=Time.realtimeSinceStartup+15;owner.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(owner.LocalPlayer,Is.Not.Null,owner.Message);owner.Profile.Data.ReducedMotion=true;
+                var game=Simulation(host);var player=game.Player(owner.LocalPlayerId);
+                if(joined){player.X=0;player.Z=19;owner.Command("Ready");yield return new WaitForSeconds(.3f);yield return StartLevel(host,owner.LocalPlayerId);}else yield return StartLevel(host);
+                game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);game.HasLineOfSight=(x,z,tx,tz)=>true;game.State.Npcs.Clear();game.State.Visions.Clear();game.State.Doses.Clear();
+                player.Effects.Clear();player.X=16.3f;player.Z=16;
+                const string id="escape_talker2";Assert.That(DialogueGrammar.PersonaFor(id,""),Is.EqualTo("Wook"),"legitimate safe persona retains normal talks rather than a trust dance");
+                var npc=new NpcState{Id=id,Kind="Wook",Role="Regular",CanTalk=true,X=16,Z=16};game.State.Npcs.Add(npc);
+                var window=ownerObject.GetComponentInChildren<FestivalChatWindow>(true);
+                foreach(string kind in new[]{"Conversation","Sale","Buy"})foreach(bool finish in new[]{false,true})
+                {
+                    npc.Role=kind=="Sale"?"Buyer":"Regular";npc.StockSold=0;npc.Observers.Clear();npc.Mode="Blending";npc.Suspicion=0;player.Cash=50;player.Inventory.Clear();player.EquippedItemId="";
+                    if(kind=="Sale"){player.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});player.EquippedItemId="stock_mushrooms";}
+                    yield return new WaitForSeconds(.4f);
+                    yield return Tap(kind=="Conversation"?Key.F:Key.E,.25f);
+                    for(float deadline=Time.realtimeSinceStartup+5;player.InteractionId==""&&Time.realtimeSinceStartup<deadline;)yield return null;
+                    var talk=game.Interaction(player.InteractionId);Assert.That(talk?.Kind,Is.EqualTo(kind),"actual bound input starts the intended talk: "+owner.Message);
+                    yield return new WaitForSeconds(.4f);Assert.That(window.Open,Is.True);Assert.That(window.transform.Find("Time left track").gameObject.activeSelf,Is.False,"ordinary talks show no answer deadline");
+                    Assert.That(talk.DurationSeconds,Is.Zero,"the authoritative talk is untimed");
+                    if(!finish)
+                    {
+                        if(kind=="Conversation")yield return new WaitForSeconds(13.2f);
+                        Assert.That(talk.Status,Is.EqualTo("Active"),"silence never settles the untimed talk");
+                        yield return Tap(Key.E,.15f);yield return Tap(Key.G,.15f);Assert.That(talk.Status,Is.EqualTo("Active"),"E and G leave the owned live talk open");
+                        owner.MenuOpen=true;yield return null;yield return null;
+                        if(!ownerObject.GetComponentsInChildren<Button>(false).Any(b=>b.name.StartsWith("Action:"))){var crew=ownerObject.GetComponentsInChildren<Button>(false).Single(b=>b.name=="CREW + NEARBY");crew.onClick.Invoke();yield return null;yield return null;}
+                        var listed=ownerObject.GetComponentsInChildren<Button>(false).Where(b=>b.name.StartsWith("Action:")).Select(b=>b.name).ToArray();
+                        Assert.That(listed,Is.EqualTo(new[]{"Action:Cancel current action"}),"active talks retain only their exit in the nearby list");owner.MenuOpen=false;yield return null;
+                        yield return Tap(Key.Escape,.25f);yield return new WaitForSeconds(.3f);
+                        Assert.That(talk.Status,Is.EqualTo("Cancelled"),"actual effective Menu explicitly cancels on authority");Assert.That(owner.MenuOpen||window.Open,Is.False,"the same press dismisses before opening the menu");
+                        if(kind=="Sale")Assert.That(player.Inventory.Find(i=>i.ItemId=="stock_mushrooms")?.Count,Is.EqualTo(1),"cancel returns the last reserved unit");
+                        if(kind=="Buy")Assert.That(player.Cash,Is.EqualTo(50),"cancel returns held payment");
+                    }
+                    else
+                    {
+                        for(int turn=0;turn<3;turn++)
+                        {
+                            Assert.That(talk.Turns.Count,Is.EqualTo(turn+1));int choice=System.Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth);Assert.That(choice,Is.InRange(0,2));
+                            Key[] replies={Key.Digit1,Key.Digit2,Key.Digit3};yield return Tap(replies[choice],.2f);yield return new WaitForSeconds(.3f);
+                            Assert.That(talk.Turns[turn].Pick,Is.EqualTo(choice),"the actual reply key reaches this exact owned turn");
+                        }
+                        Assert.That(talk.Status,Is.EqualTo("Complete"),"only the third explicit answer completes the talk");Assert.That(player.InteractionId,Is.Empty);
+                        if(kind=="Sale")Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_mushrooms"),Is.False,"finished sale consumes its reserved last unit");
+                        if(kind=="Buy")Assert.That(player.Cash,Is.EqualTo(45));
+                        yield return Tap(Key.Escape,.25f);yield return new WaitForSeconds(.3f);Assert.That(owner.MenuOpen||window.Open,Is.False,"the first effective Menu dismisses the completed outcome");
+                    }
+                }
+            }
+            finally{owner.Leave();if(joined){host.Leave();Object.Destroy(ownerObject);}Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator PrivateOwnVoiceConsumesHiddenGlyphsAndStopsForASpirit()
         {
             var world=new GameObject("Private voice world");world.AddComponent<FestivalWorld>();yield return null;
