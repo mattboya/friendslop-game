@@ -25,6 +25,14 @@ namespace Festival.Tests
         void Draw(string local="you",bool reduced=false)=>presenter.Apply(state,id=>id=="speaker"?body.transform:null,view.transform,Vector3.zero,local,reduced);
         TextMeshPro Text()=>root.GetComponentInChildren<TextMeshPro>(false);
 
+        [Test]public void TheNativeSmokeChecksTheActualSupportedBubbleTextMaterial()
+        {
+            Draw();var material=Text().fontSharedMaterial;
+            Assert.That(material.shader.isSupported,Is.True,"the actual world bubble material is supported by this runtime");
+            Assert.That(DevelopmentSmoke.BubbleTextShaderSupported(material),Is.True);
+            Assert.That(DevelopmentSmoke.BubbleTextShaderSupported(null),Is.False,"a missing consumer material must fail smoke acceptance");
+            Assert.That(DevelopmentSmoke.BubbleTextShaderSupported(Text().transform.parent.Find("Bubble backing").GetComponent<Renderer>().sharedMaterial),Is.False,"a supported non-text material cannot pass as the shipping TMP shader");
+        }
         [Test]public void TextTypesOutAtThirtyLettersASecond()
         {
             Draw();Assert.That(Text().maxVisibleCharacters,Is.Zero);

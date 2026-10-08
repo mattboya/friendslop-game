@@ -7,6 +7,7 @@ using Festival.Core;
 using Festival.Network;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Presentation
 {
@@ -80,6 +81,8 @@ namespace Festival.Presentation
             float deadline=Time.realtimeSinceStartup+200+2*(float)FestivalSimulation.SpinSeconds;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
             if(session.LocalPlayer==null){Debug.LogError("FESTIVAL SMOKE FAILED: no local identity");Application.Quit(2);yield break;}
+            if(!BubbleTextShaderSupported(TMP_Settings.defaultFontAsset?.material)){Fail("bubble text shader");yield break;}
+            Debug.Log("FESTIVAL SMOKE BUBBLE TEXT SHADER PASSED: TextMeshPro/Mobile/Distance Field supported");
             var festivalFont=Resources.Load<Font>("FestivalDisplay");
             if(festivalFont==null){Fail("festival display font");yield break;}
             foreach(var label in transform.Find("Festival HUD").GetComponentsInChildren<Text>(true))
@@ -1277,6 +1280,12 @@ namespace Festival.Presentation
             foreach(var button in hud.GetComponentsInChildren<Button>(true))
                 if(button.gameObject.activeSelf&&button.name.StartsWith(HandoffAction(isHost),StringComparison.Ordinal))return true;
             return false;
+        }
+        public static bool BubbleTextShaderSupported(Material material)
+        {
+            var shader=material!=null?material.shader:null;
+            return shader!=null&&shader.name=="TextMeshPro/Mobile/Distance Field"&&shader.isSupported
+                &&TMP_Settings.defaultFontAsset!=null&&shader==TMP_Settings.defaultFontAsset.material.shader;
         }
         static void Fail(string stage){Debug.LogError("FESTIVAL SMOKE FAILED: "+stage);Application.Quit(5);}
         static bool Near(PlayerState p,float x,float z)=>p!=null&&Mathf.Abs(p.X-x)<.1f&&Mathf.Abs(p.Z-z)<.1f;

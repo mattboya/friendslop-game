@@ -27,6 +27,10 @@ namespace Festival.Presentation
             public int VisibleCharacters {get;internal set;}
             public int CharacterCount {get;internal set;}
             public double AgeSeconds {get;internal set;}
+            // Card read state belongs to the same bounded delivery, never a timestamp/text identity cache.
+            internal float HudReadSeconds;
+            internal bool HudObserved,HudPending,HudConsumed,OwnAudioVisible;
+            internal int OwnAudioCharacters;
             internal double Started,Expires;
         }
         readonly List<Delivery> deliveries=new List<Delivery>();
@@ -37,6 +41,7 @@ namespace Festival.Presentation
         double worldClock;
         public IReadOnlyList<Delivery> Deliveries=>deliveries;
         public double WorldSeconds=>worldClock;
+        public string RoundId=>round;
         public Delivery Find(string id)=>deliveries.Find(d=>d.Id==id);
         /// <summary>Observe the filtered window, including expired literals and same-ID tombstones. Text/time never supplies identity.</summary>
         public void Follow(RoundState state,int connectionGeneration,double worldSeconds)
@@ -118,6 +123,7 @@ namespace Festival.Presentation
         readonly Dictionary<string,float> stack=new Dictionary<string,float>();
         FestivalSession session;
         FestivalSpeechDeliveryTracker tracker;
+        string privateCheck="";
         string cacheRound="";
         int cacheGeneration=-1;
         public FestivalSpeechDeliveryTracker Deliveries
@@ -195,6 +201,47 @@ namespace Festival.Presentation
                 stack[speech.SpeakerId]=offset+bubble.Height+.1f;
             }
         }
+        /// <summary>Only the local active check can supply private world speech. It never touches the public snapshot.</summary>
+        public void FollowCheck(RoundState state,PlayerState owner,InteractionState check,int generation,double worldSeconds)
+        {
+            Deliveries.Follow(state,generation,worldSeconds);
+            bool valid=(session==null||session.enabled&&session.Connected&&session.LocalPlayerId==owner?.Id)&&state!=null&&state.Phase=="Playing"&&owner!=null&&owner.Connected&&owner.Life!="Spirit"&&check!=null
+                &&check.PlayerId==owner.Id&&check.Id==owner.InteractionId&&check.Status=="Active"&&check.Kind=="ConfirmChat"
+                &&state.Interactions.Exists(i=>ReferenceEquals(i,check));
+            string current=valid?state.RoundId+":check:"+check.Id+":" :"";
+            if(privateCheck!=current)
+            {
+                RetireCheck();privateCheck=current;
+                if(current!="")
+                {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("Speech","check_open","owner_local=true public_publish=false");
+#endif
+                    RegisterCheckLine("opener",check.TargetId,state.Npcs.Exists(n=>n.Id==check.TargetId&&n.Twist==FestivalSimulation.VipGuard)?"VIP GUARD":"FESTIVALGOER",check.Chat.Opener,worldSeconds);
+                    if(check.Chat.Questions.Length==0)RegisterCheckLine("doorman",check.TargetId,"VIP GUARD",check.Chat.Doorman,worldSeconds);
+                }
+            }
+        }
+        public void SelectCheckReply(RoundState state,PlayerState owner,InteractionState check,int choice,int generation,double worldSeconds)
+        {
+            // Reply buttons can outlive the snapshot that built them. Resolve their stable owner/check identity in the current view.
+            check=state?.Interactions.Find(i=>i.Id==check?.Id&&i.PlayerId==owner?.Id&&i.Status=="Active"&&i.Kind=="ConfirmChat");
+            FollowCheck(state,owner,check,generation,worldSeconds);
+            if(privateCheck==""||choice<0||choice>=check.Chat.Questions.Length||choice>=check.Chat.Answers.Length)return;
+            RegisterCheckLine("question:"+choice,owner.Id,owner.Name,check.Chat.Questions[choice],worldSeconds);
+            RegisterCheckLine("answer:"+choice,check.TargetId,"FESTIVALGOER",check.Chat.Answers[choice],worldSeconds);
+        }
+        void RegisterCheckLine(string suffix,string speakerId,string speaker,string line,double now)
+        {
+            if(!string.IsNullOrEmpty(line))Deliveries.RegisterLocal(privateCheck+suffix,speakerId,speaker,line,now,now+FestivalTalkLine.ReadFor(line));
+        }
+        public void RetireCheck()
+        {
+            if(privateCheck!="")foreach(var delivery in Deliveries.Deliveries)
+                if(!delivery.IsPublic&&delivery.Id.StartsWith(privateCheck,StringComparison.Ordinal))Deliveries.RetractLocal(delivery.Id);
+            privateCheck="";
+        }
+
         Bubble Create()
         {
             if(font==null)
@@ -229,7 +276,7 @@ namespace Festival.Presentation
         }
         public void Clear()
         {
-            Deliveries.Retire();ClearAssets();
+            RetireCheck();Deliveries.Retire();ClearAssets();
         }
         void ClearAssets()
         {

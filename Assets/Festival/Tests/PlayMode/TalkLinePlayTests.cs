@@ -4,6 +4,8 @@ using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
+using TMPro;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
@@ -20,7 +22,7 @@ namespace Festival.Tests
             var world=new GameObject("Talk line world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("Talk line HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
             string Read(string name){foreach(var t in hud.GetComponentsInChildren<Text>(false))if(t.name==name)return t.text;return "(hidden)";}
-            string spoke="";var failures=new List<string>();
+            string spoke="",deliveryId="";var failures=new List<string>();
             try
             {
                 session.Host("Tester",HostPort);
@@ -33,14 +35,20 @@ namespace Festival.Tests
                 sim.State.SimulationSeconds+=600;
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");
                 npc.X=player.X+.6f;npc.Z=player.Z;npc.Mode="Blending";npc.Suspicion=0;npc.CanTalk=true;npc.LastTalkSeconds=-10;
-                session.Command("Talk",npc.Id);spoke=player.NpcSpeech;
+                session.Command("Talk",npc.Id);spoke=player.NpcSpeech;deliveryId=player.SpeechDeliveryId;
                 Assert.That(spoke,Is.Not.Empty,"setup: they talk: "+session.Message);
                 yield return new WaitForSeconds(.5f);
-                Assert.That(Read("Dialogue line"),Is.EqualTo(spoke),"setup: their line is up");
+                var bubble=hud.GetComponentsInChildren<TextMeshPro>(false).SingleOrDefault(t=>t.text==spoke);
+                Assert.That(bubble,Is.Not.Null,"setup: actual public TMP speech replaces the corner bark card");
+                Assert.That(session.SpeechDeliveries.Find(deliveryId).Text,Is.EqualTo(spoke));
+                Assert.That(session.SpeechDeliveries.Find(deliveryId).WorldActive,Is.True);
+                Assert.That(Read("Dialogue line"),Is.EqualTo("(hidden)"),"there is no challenge card outside a challenge");
                 float wait=Time.realtimeSinceStartup+15;
                 while(sim.State.SimulationSeconds<player.NpcSpeechUntil+.5&&Time.realtimeSinceStartup<wait)yield return null;
                 yield return new WaitForSeconds(.2f);
-                Assert.That(Read("Dialogue line"),Is.EqualTo("(hidden)"),"setup: their line is gone once the host drops it");
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==spoke),Is.False,"setup: the actual public bubble expires on its world clock");
+                Assert.That(session.SpeechDeliveries.Find(deliveryId).WorldActive,Is.False);
+                Assert.That(session.SpeechDeliveries.Find(deliveryId).Text,Is.EqualTo(spoke),"expiry retains the literal and accepted ID");
                 // Leave, and host a new game in the same app run.
                 session.Leave();yield return null;yield return null;yield return null;
                 session.Host("Tester",HostPort);
@@ -50,6 +58,7 @@ namespace Festival.Tests
                 for(int i=0;i<4;i++)
                 {
                     yield return new WaitForSeconds(.5f);
+                    if(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==spoke)||session.SpeechDeliveries.Find(deliveryId)!=null)failures.Add("old delivery or rendered TMP text survived Leave/rehost");
                     string shown=Read("Dialogue line");
                     if(shown!="(hidden)")failures.Add("the new game's "+session.State.Phase+" at "+session.EstimatedSimulationSeconds.ToString("0.0")+" s shows \""+shown+"\"");
                 }

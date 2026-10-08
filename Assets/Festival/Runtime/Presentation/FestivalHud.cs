@@ -11,6 +11,7 @@ using UnityEngine.UI;
 namespace Festival.Presentation
 {
     /// <summary>Native festival interface assembled from a small, consistent set of UI primitives.</summary>
+    [DefaultExecutionOrder(60)]
     public sealed class FestivalHud : MonoBehaviour
     {
         private static readonly Color Ink=new Color(.035f,.065f,.075f,1);
@@ -115,6 +116,7 @@ namespace Festival.Presentation
         private int chatReply=-1;
         // DIALOG-6: the one-line chat (Talk, a guard's bark) the dialogue card shows, kept up until read.
         private readonly FestivalTalkLine talkLine=new FestivalTalkLine();
+        private FestivalSpeechReveal dialogueReveal;
         private bool? chatBesidePass;
         // ECON-2: the buy from a festivalgoer under way, the kind it buys and how many of that kind were held as it began. K1: and
         // whom from, as "<round id>/<their id>", kept once they hand a unit over (soldToYou): a seller never buys, so beside them E
@@ -428,6 +430,7 @@ namespace Festival.Presentation
             Accent(dialoguePanel.transform,Orange);
             dialogueSpeaker=Label(dialoguePanel.transform,"Speaker",17,TextAnchor.MiddleLeft);dialogueSpeaker.fontStyle=FontStyle.Normal;dialogueSpeaker.color=new Color(.17f,.47f,.40f);Place(dialogueSpeaker.rectTransform,.045f,.56f,.95f,.90f);
             dialogueLine=Label(dialoguePanel.transform,"Dialogue line",24,TextAnchor.MiddleLeft);dialogueLine.color=Ink;Place(dialogueLine.rectTransform,.045f,.09f,.95f,.62f);
+            dialogueLine.supportRichText=false;dialogueReveal=dialogueLine.gameObject.AddComponent<FestivalSpeechReveal>();
             dialoguePanel.SetActive(false);
             BuildTitle(root.transform);
             BuildPass(root.transform);
@@ -460,6 +463,7 @@ namespace Festival.Presentation
             chatWindow=FestivalChatWindow.Build(root.transform,font,roundedSprite);
             // DIALOG-3: a reply picked in a talk is the host's Reply command.
             chatWindow.Send=c=>session.Command(c.Kind,c.TargetId,c.ItemId,c.Amount,c.Direction,c.TimeSeconds);
+            chatWindow.CheckReply=(check,choice)=>session.SpeechBubbles?.SelectCheckReply(session.State,session.LocalPlayer,check,choice,session.ConnectionGeneration,session.EstimatedWorldSeconds);
             BuildHowToPlay(root.transform);
         }
 
@@ -715,8 +719,8 @@ namespace Festival.Presentation
             promptKeycap.SetActive(primaryAction!=null);
             nearbyPanel.SetActive(promptPanel.activeSelf&&nearby.text!="");
             UpdateKeyboard(state,player);
-            UpdateRhythm(state,player);
             UpdateChat(state,player,showMenu);
+            UpdateRhythm(state,player);
             UpdateMap(state,player);
             if(mapPanel.activeSelf){rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();}
             if(rhythmPanel.activeSelf&&!showMenu&&!mapPanel.activeSelf)
@@ -757,6 +761,20 @@ namespace Festival.Presentation
                     +"  spoon trust "+(player.Inventory.Exists(i=>i.ItemId=="little_spoon")?"x0.90":"off");
             }
 #endif
+        }
+
+        private void LateUpdate()
+        {
+            if(session==null||!session.Connected)return;
+            bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
+            foreach(var delivery in session.SpeechDeliveries.Deliveries)
+            {
+                if(delivery.IsPublic||delivery.SpeakerId!=session.LocalPlayerId||!delivery.Id.Contains(":check:"))continue;
+                bool shows=visible&&delivery.WorldActive&&!delivery.Retracted;
+                if(shows&&delivery.OwnAudioVisible&&delivery.VisibleCharacters>delivery.OwnAudioCharacters)
+                    session.SpeechBubbles?.Babble.PlayRevealed(delivery,delivery.OwnAudioCharacters,delivery.VisibleCharacters);
+                delivery.OwnAudioVisible=shows;delivery.OwnAudioCharacters=delivery.VisibleCharacters;
+            }
         }
 
         private void UpdateGearLayout(bool hasGear)
@@ -1083,12 +1101,12 @@ namespace Festival.Presentation
         private void OnDisable()
         {
             if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}
-            ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();
+            ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
         }
         private void ResetChatForSession()
         {
             if(chatConnectionGeneration==session.ConnectionGeneration)return;
-            chatConnectionGeneration=session.ConnectionGeneration;sellerTalk.End();chatWindow?.ResetSession();
+            chatConnectionGeneration=session.ConnectionGeneration;sellerTalk.End();chatWindow?.ResetSession();talkLine.Reset();
         }
         private bool ConsumeChatMenu()
         {
@@ -1131,6 +1149,9 @@ namespace Festival.Presentation
             if(world!=null&&world.CampSeller!=null)sellerTalk.Face(world.CampSeller,player,Time.unscaledDeltaTime);
             if(covered)chatWindow.Close();
             if(chatReply>=0){if(live)chatWindow.Pick(chatReply);chatReply=-1;}
+            var check=FestivalChatWindow.LiveChat(state,player);
+            if(check?.Kind!="ConfirmChat"||chatWindow.IsDismissed(state,check))check=null;
+            session.SpeechBubbles?.FollowCheck(state,player,check,session.ConnectionGeneration,session.EstimatedWorldSeconds);
             if(chatWindow.Open)dialoguePanel.SetActive(false);
             // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
             // equip.
@@ -1157,12 +1178,13 @@ namespace Festival.Presentation
             else dancePreview.Hide();
             // DIALOG-6: a one-line chat stays until read, through a challenge starting (it takes the challenge's line until then) and
             // anything covering the card.
-            bool chatter=talkLine.Shows(state.RoundId,player,session.EstimatedSimulationSeconds,rhythm,session.MenuOpen||chatWindow.Open||mapPanel.activeSelf,Time.unscaledDeltaTime);
-            bool showDialogue=(rhythm&&!string.IsNullOrEmpty(interaction.DialogueText))||chatter;
+            var speech=talkLine.Follow(session.SpeechDeliveries,player,rhythm?interaction:null,session.MenuOpen||chatWindow.Open||mapPanel.activeSelf,Time.unscaledDeltaTime);
+            bool chatter=speech!=null&&!talkLine.IsChallenge;
+            bool showDialogue=rhythm&&speech!=null;
             dialoguePanel.SetActive(showDialogue);
             Place(dialoguePanel.GetComponent<RectTransform>(),showDancer ? .525f : .70f,showDancer ? .085f : .52f,showDancer ? .965f : .96f,showDancer ? .215f : .69f);
             dancerCaption.gameObject.SetActive(showDancer&&!showDialogue);
-            if(chatter){dialogueSpeaker.text=talkLine.Speaker;dialogueLine.text=talkLine.Line;}
+            if(speech!=null){dialogueSpeaker.text=speech.Speaker;dialogueLine.text=speech.Text;dialogueReveal.VisibleCharacters=speech.VisibleCharacters;}
             if(!rhythm)return;
             if(displayedChart==null||displayedInteractionId!=interaction.Id||displayedSeed!=interaction.ChartSeed||displayedNoteCount!=interaction.NoteCount||displayedPhrase!=interaction.Phrase||Math.Abs(displayedBeatSeconds-interaction.BeatSeconds)>.0001)
             {
@@ -1175,11 +1197,6 @@ namespace Festival.Presentation
             string effect=FestivalTrip.LaneEffect(player);
             double lead=Catalog.FindEffect(effect)?.LeadSeconds??2;
             ProcessRhythmFeedback(interaction,now);
-            if(dialoguePanel.activeSelf&&!chatter)
-            {
-                dialogueSpeaker.text=interaction.Kind=="Dj"?"STAGE CREW":"FESTIVALGOER";
-                dialogueLine.text=interaction.DialogueText;
-            }
             if(shownRhythmCombo!=rhythmComboCount){rhythmCombo.text=rhythmComboCount>=2?rhythmComboCount+" COMBO":"";shownRhythmCombo=rhythmComboCount;}
             bool feedbackVisible=Time.unscaledTime<rhythmJudgmentUntil;
             rhythmJudgment.text=now<0?(now<=-1?Math.Ceiling(-now).ToString("0"):"1"):feedbackVisible?lastRhythmJudgment:"";
@@ -1187,7 +1204,7 @@ namespace Festival.Presentation
             rhythmTiming.text=feedbackVisible&&(lastRhythmJudgment=="PERFECT"||lastRhythmJudgment=="GOOD")?(lastRhythmError<-.02?"EARLY":lastRhythmError>.02?"LATE":"ON BEAT"):"";
             float completed=Mathf.Clamp01((float)(now/displayedChart.DurationSeconds));
             var progressRect=rhythmProgressFill.rectTransform;progressRect.anchorMin=new Vector2(.08f,.055f);progressRect.anchorMax=new Vector2(.08f+.84f*completed,.071f);progressRect.offsetMin=progressRect.offsetMax=Vector2.zero;
-            if(!chatter&&!string.IsNullOrEmpty(interaction.DialogueText))session.AcknowledgeDisplayedDialogue(interaction);
+            if(dialoguePanel.activeSelf&&!chatter&&speech.VisibleCharacters>=speech.CharacterCount)session.AcknowledgeDisplayedDialogue(interaction);
             DrawChart(now,lead,effect,session.Profile.Data.ReducedMotion);
             for(int direction=0;direction<4;direction++)
             {

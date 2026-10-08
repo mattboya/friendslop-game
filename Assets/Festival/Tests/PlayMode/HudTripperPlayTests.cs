@@ -6,6 +6,7 @@ using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -16,6 +17,185 @@ namespace Festival.Tests
 {
     public sealed class HudTripperPlayTests:FestivalPlayModeTest
     {
+        [UnityTest]public IEnumerator PrivateOwnVoiceConsumesHiddenGlyphsAndStopsForASpirit()
+        {
+            var world=new GameObject("Private voice world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Private voice HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            IDictionary Cache()=>(IDictionary)typeof(FestivalBabble).GetField("speakers",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(session.SpeechBubbles.Babble);
+            try
+            {
+                session.Host("Owner",HostPort);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var npc=new NpcState{Id="private_voice_npc",Kind="Wook",Role="Buyer",CanTalk=true,X=18,Z=18};
+                sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();sim.State.Visions.Add(new VisionState{Id="private_voice_vision",Kind="Buyer",NpcId=npc.Id});
+                player.X=18.6f;player.Z=18;sim.State.TripperId=player.Id;player.Effects.Clear();player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                session.Command("ConfirmChat",npc.Id);var check=sim.Interaction(player.InteractionId);Assert.That(check,Is.Not.Null,session.Message);
+                yield return null;yield return null;
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);session.MenuOpen=true;yield return null;yield return null;
+                Assert.That(window.Pick(0),Is.True);yield return new WaitForSeconds(check.Chat.Questions[0].Length/30f+.3f);
+                Assert.That(Cache().Contains(player.Id),Is.False,"hidden own-head speech never creates a voice cache");
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false),Is.Empty,"menus suppress the local private NPC bubbles too");
+                session.MenuOpen=false;yield return null;yield return null;
+                Assert.That(Cache().Contains(player.Id),Is.False,"reopening after a fully revealed question never plays its backlog");
+                Assert.That(window.Pick(1),Is.True);yield return new WaitForSeconds(.25f);
+                Assert.That(Cache().Contains(player.Id),Is.True,"continuously visible newly revealed own-head question glyphs use the current Babble engine");
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==check.Chat.Questions[1]),Is.False,"own-head speech still has no world bubble");
+                player.Life="Spirit";yield return null;yield return null;
+                Assert.That(session.SpeechDeliveries.Deliveries.Where(d=>!d.IsPublic).All(d=>d.Retracted&&d.Text==""),Is.True,"a spirit retires all private check literals immediately");
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false),Is.Empty);
+                Assert.That(Cache().Contains(player.Id),Is.False,"private generated voice resources retire with the check owner");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator TheDoormanSpeaksOnlyThroughTheOwnedLocalCheckAdapter()
+        {
+            var world=new GameObject("Doorman speech world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Doorman speech HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Owner",HostPort);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var sim=Simulation(session);sim.AddPlayer("doorman_friend","Friend").Ready=true;yield return StartLevel(session);
+                var player=sim.Player(session.LocalPlayerId);var npc=new NpcState{Id="private_doorman",Kind="Wook",Twist=FestivalSimulation.VipGuard,Role="Regular",CanTalk=true,X=18,Z=18};
+                sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();player.X=18.6f;player.Z=18;player.Effects.Clear();
+                session.Command("ConfirmChat",npc.Id);var check=sim.Interaction(player.InteractionId);Assert.That(check,Is.Not.Null,session.Message);Assert.That(check.Chat.Questions,Is.Empty);Assert.That(check.Chat.Doorman,Is.Not.Empty);
+                yield return null;yield return null;
+                var shown=hud.GetComponentsInChildren<TextMeshPro>(false);Assert.That(shown.Select(t=>t.text),Is.EquivalentTo(new[]{check.Chat.Opener,check.Chat.Doorman}));
+                Assert.That(session.SpeechDeliveries.Deliveries.Where(d=>!d.IsPublic).Select(d=>d.Speaker),Is.All.EqualTo("VIP GUARD"));
+                string friendWire=JsonUtility.ToJson(FestivalSession.ViewFor(sim,"doorman_friend"));
+                Assert.That(friendWire,Does.Not.Contain(check.Chat.Opener).And.Not.Contain(check.Chat.Doorman));Assert.That(sim.State.PublicSpeech,Is.Empty);
+                session.Command("EndChat",check.Id);yield return null;yield return null;
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false),Is.Empty);Assert.That(hud.GetComponentInChildren<FestivalChatWindow>(true).Open,Is.True);
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator AJoinedOwnerCanSelectPrivateAnswersAfterFreshSnapshots()
+        {
+            var world=new GameObject("Joined private world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Private friend HUD");var host=hostObject.AddComponent<FestivalSession>();hostObject.AddComponent<FestivalHud>();
+            var ownerObject=new GameObject("Private owner HUD");var owner=ownerObject.AddComponent<FestivalSession>();ownerObject.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Friend",port);yield return null;owner.Join("Owner","127.0.0.1",port);
+                float deadline=Time.realtimeSinceStartup+15;while(owner.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(owner.LocalPlayer,Is.Not.Null,owner.Message);var joinedPlayer=Simulation(host).Player(owner.LocalPlayerId);joinedPlayer.X=0;joinedPlayer.Z=19;owner.Command("Ready");yield return new WaitForSeconds(.2f);yield return StartLevel(host,owner.LocalPlayerId);
+                var sim=Simulation(host);var player=sim.Player(owner.LocalPlayerId);var npc=new NpcState{Id="joined_private_npc",Kind="Wook",Role="Buyer",CanTalk=true,X=18,Z=18};
+                sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();sim.State.Visions.Add(new VisionState{Id="joined_private_vision",Kind="Buyer",NpcId=npc.Id});
+                sim.State.TripperId=player.Id;player.X=18.6f;player.Z=18;player.Effects.Clear();player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                yield return new WaitForSeconds(.3f);owner.Command("ConfirmChat",npc.Id);
+                deadline=Time.realtimeSinceStartup+5;while(owner.LocalPlayer.InteractionId==""&&Time.realtimeSinceStartup<deadline)yield return null;
+                var check=FestivalChatWindow.LiveChat(owner.State,owner.LocalPlayer);Assert.That(check,Is.Not.Null,owner.Message);
+                yield return new WaitForSeconds(.7f);
+                Assert.That(ownerObject.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==check.Chat.Opener),Is.True);
+                var window=ownerObject.GetComponentInChildren<FestivalChatWindow>(true);Assert.That(window.Pick(1),Is.True);
+                yield return null;yield return null;
+                Assert.That(ownerObject.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==check.Chat.Answers[1]),Is.True,"a UI closure from an earlier snapshot resolves the current owned check by stable identity");
+                Assert.That(hostObject.GetComponentsInChildren<TextMeshPro>(false),Is.Empty,"the real joined friend's presenter never receives private text");
+                Assert.That(host.SpeechDeliveries.Deliveries.Any(d=>!d.IsPublic),Is.False);
+                Assert.That(sim.State.PublicSpeech,Is.Empty);Assert.That(host.State.Interactions,Is.Empty);
+                var accepted=owner.SpeechDeliveries.Deliveries.Single(d=>d.Text==check.Chat.Answers[1]);
+                yield return new WaitForSeconds(.3f);
+                Assert.That(owner.SpeechDeliveries.Find(accepted.Id),Is.SameAs(accepted),"retransmitted owner snapshots never reset delivery identity or typing");
+                owner.Command("EndChat",owner.LocalPlayer.InteractionId);yield return new WaitForSeconds(.3f);
+                Assert.That(ownerObject.GetComponentsInChildren<TextMeshPro>(false),Is.Empty);
+                Assert.That(accepted.Retracted,Is.True);
+            }
+            finally{owner.Leave();host.Leave();Object.Destroy(ownerObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator PrivateCheckSpeechUsesTheOwnerTrackerAndRetiresAtCheckEnd()
+        {
+            var world=new GameObject("Private speech world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Private speech HUD");var session=hud.AddComponent<FestivalSession>();var screen=hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Owner",HostPort);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);sim.AddPlayer("private_speech_friend","Friend").Ready=true;
+                yield return StartLevel(session);
+                var npc=new NpcState{Id="private_speech_npc",Kind="Wook",Role="Buyer",CanTalk=true,X=18,Z=18};
+                sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();sim.State.Visions.Add(new VisionState{Id="private_speech_vision",Kind="Buyer",NpcId=npc.Id});
+                player.X=18.6f;player.Z=18;sim.State.TripperId=player.Id;player.Effects.Clear();player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                session.Command("ConfirmChat",npc.Id);var check=sim.Interaction(player.InteractionId);
+                Assert.That(check,Is.Not.Null,session.Message);Assert.That(check.Chat.Questions,Has.Length.EqualTo(3));
+                yield return null;yield return null;
+                var opener=hud.GetComponentsInChildren<TextMeshPro>(false).SingleOrDefault(t=>t.text==check.Chat.Opener);
+                Assert.That(opener,Is.Not.Null,"the actual owned check opener renders over its festivalgoer");
+                var delivery=session.SpeechDeliveries.Deliveries.Single(d=>!d.IsPublic&&d.Text==check.Chat.Opener);
+                Assert.That(delivery.SpeakerId,Is.EqualTo(npc.Id));
+                session.SpeechBubbles.Apply(session.State,id=>session.WorldCharacter(id)?.transform,session.ViewCamera.transform,session.EyePosition,session.LocalPlayerId,false,session.ConnectionGeneration,false,session.EstimatedWorldSeconds,session.Profile.Data);
+                Assert.That(opener.maxVisibleCharacters,Is.EqualTo(delivery.VisibleCharacters));
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);Assert.That(window.Pick(0),Is.True);
+                yield return null;yield return null;
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==check.Chat.Answers[0]),Is.True,"a selected answer is said by the checked NPC");
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==check.Chat.Questions[0]),Is.False,"your own head has no bubble");
+                Assert.That(session.SpeechDeliveries.Deliveries.Any(d=>!d.IsPublic&&d.SpeakerId==player.Id&&d.Text==check.Chat.Questions[0]),Is.True,"own question uses the same local tracker");
+                var friend=FestivalSession.ViewFor(sim,"private_speech_friend");string wire=JsonUtility.ToJson(friend);
+                Assert.That(friend.PublicSpeech,Is.Empty);Assert.That(friend.Interactions,Is.Empty);Assert.That(wire,Does.Not.Contain(check.Chat.Opener).And.Not.Contain(check.Chat.Answers[0]));
+                session.enabled=false;yield return null;yield return null;
+                Assert.That(window.Pick(2),Is.True,"the stale visible thread exercises its existing click route during a disabled session");
+                yield return null;yield return null;
+                Assert.That(session.SpeechDeliveries.Deliveries,Is.Empty,"a disabled real session cannot admit new private presentation deliveries from stale reply buttons");
+                session.enabled=true;yield return null;yield return null;
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false),Is.Empty,"reenabling the session cannot replay the disabled selection or earlier check literals");
+                session.Command("EndChat",check.Id);yield return null;yield return null;
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false),Is.Empty,"private world text retires while the terminal chat remains readable");
+                Assert.That(window.Open&&window.Lingering,Is.True);
+                Assert.That(delivery.Retracted,Is.True,"lifecycle erases the private literal rather than waiting for world expiry");
+                screen.enabled=false;yield return null;screen.enabled=true;yield return null;yield return null;
+                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false),Is.Empty,"reenabling HUD never replays the closed check");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator CoalescedTalkAndDanceKeepTheFirstNpcLiteralUntilRead()
+        {
+            var world=new GameObject("Ordered speech world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Ordered speech HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            Text Caption(string name)=>hud.GetComponentsInChildren<Text>(false).SingleOrDefault(t=>t.name==name);
+            try
+            {
+                session.Host("Owner",HostPort);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var npc=new NpcState{Id="ordered_speech_npc",Kind="Wook",Role="Regular",CanTalk=true,X=20,Z=20,LastTalkSeconds=-10};
+                sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();player.X=20.6f;player.Z=20;player.Effects.Clear();player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                session.Command("Talk",npc.Id);string first=player.NpcSpeech;string firstId=player.SpeechDeliveryId;
+                session.Command("Dance",npc.Id);var dance=sim.Interaction(player.InteractionId);Assert.That(dance,Is.Not.Null,session.Message);dance.DurationSeconds=60;
+                session.Profile.Data.SeenDialogue.RemoveAll(id=>id==dance.DialogueId);
+                yield return new WaitForSeconds(2);
+                Assert.That(Caption("Speaker").text,Is.EqualTo("FESTIVALGOER"));
+                Assert.That(Caption("Dialogue line").text,Is.EqualTo(first),"the first accepted NPC delivery survives a later player delivery in the same snapshot");
+                Assert.That(session.SpeechDeliveries.Find(firstId).Text,Is.EqualTo(first));
+                Assert.That(session.Profile.Data.SeenDialogue,Does.Not.Contain(dance.DialogueId),"a challenge behind unread speech has not been displayed");
+                yield return new WaitForSeconds(FestivalTalkLine.ReadFor(first)-2+.4f);
+                Assert.That(Caption("Dialogue line").text,Is.EqualTo(dance.DialogueText));
+                Assert.That(session.Profile.Data.SeenDialogue,Does.Contain(dance.DialogueId));
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator AChallengeRevealsItsFullLiteralOnTheSharedThirtyGlyphClock()
+        {
+            var world=new GameObject("Challenge reveal world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Challenge reveal HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Owner",HostPort);yield return null;Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var npc=new NpcState{Id="typed_speech_npc",Kind="Wook",Role="Regular",CanTalk=true,X=22,Z=22};
+                sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);sim.State.Visions.Clear();player.X=22.6f;player.Z=22;player.Effects.Clear();
+                session.Command("Dance",npc.Id);var dance=sim.Interaction(player.InteractionId);Assert.That(dance,Is.Not.Null,session.Message);dance.DurationSeconds=60;
+                yield return null;yield return null;
+                var line=hud.GetComponentsInChildren<Text>(false).Single(t=>t.name=="Dialogue line");Canvas.ForceUpdateCanvases();
+                var mesh=line.canvasRenderer.GetMesh();var colours=mesh.colors32;
+                Assert.That(line.text,Is.EqualTo(dance.DialogueText),"full literal remains laid out while unrevealed glyphs keep their place");
+                Assert.That(colours.Any(c=>c.a==0)&&colours.Any(c=>c.a>0),Is.True,"the challenge uses the shared partial reveal rather than showing every glyph immediately");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest] public IEnumerator EscapeConsumesLiveAndTerminalPrivateThreadsBeforeOpeningTheMenu()
         {
             UseAVirtualKeyboard();
@@ -503,14 +683,18 @@ namespace Festival.Tests
                     Expect("their line read, mid-dance","Dialogue line",talkDance.DialogueText);
                     if(!session.Profile.Data.SeenDialogue.Contains(talkDance.DialogueId))failures.Add("their line read, mid-dance: the dance's line on the card doesn't count as seen");
                 }
-                // Nor does the menu lose one: open as they speak and closed after the host has dropped the line, it is there to read.
+                // The retired corner bark card stays hidden. A menu consumes world speech silently, retaining the literal and ID without replay.
                 session.Command("Cancel");npc.Suspicion=0;npc.LastTalkSeconds=-10;
-                session.Command("Talk",npc.Id);spoke=player.NpcSpeech;session.MenuOpen=true;
+                session.Command("Talk",npc.Id);spoke=player.NpcSpeech;string hiddenId=player.SpeechDeliveryId;session.MenuOpen=true;
                 float hostDrops=Time.realtimeSinceStartup+10;
                 while(sim.State.SimulationSeconds<player.NpcSpeechUntil+.1&&Time.realtimeSinceStartup<hostDrops)yield return null;
                 Expect("the menu open as they spoke","Dialogue line","(hidden)");
                 session.MenuOpen=false;yield return new WaitForSeconds(.3f);
-                Expect("the menu closed after the host dropped their line","Dialogue line",spoke);
+                Expect("the menu closed after the host dropped their line","Dialogue line","(hidden)");
+                if(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==spoke))failures.Add("the menu closed after expiry: the world bubble replayed");
+                var hiddenDelivery=session.SpeechDeliveries.Find(hiddenId);
+                if(hiddenDelivery==null||hiddenDelivery.Text!=spoke||hiddenDelivery.WorldActive||hiddenDelivery.Retracted)failures.Add("expired menu speech lost its literal/identity or became a retraction");
+                if(hud.GetComponentsInChildren<AudioSource>(false).Any(a=>a.name=="Festival babble"&&a.isPlaying))failures.Add("the menu closed after expiry: babble backlog replayed");
 
                 // Night 2 doses everyone: the crew reads every dose, and what each friend took.
                 session.Command("Cancel");Trip(mate,3,"lsd");sim.State.LevelIndex=3;sim.State.DurationSeconds=600;

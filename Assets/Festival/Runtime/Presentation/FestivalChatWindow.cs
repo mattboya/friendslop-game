@@ -31,6 +31,8 @@ namespace Festival.Presentation
         /// <summary>DIALOG-3: where a reply picked in a talk goes, as the host's Reply command (Amount the reply, Direction the turn).
         /// FestivalHud sends it through the session.</summary>
         public Action<GameCommand> Send;
+        // Local-only presentation of an actually selected check question; ordinary host replies keep their existing route.
+        public Action<InteractionState,int> CheckReply;
         // The HUD's palette (FestivalHud): a paper card with an orange accent, ink text, their bubbles sage, yours orange.
         static readonly Color Paper=new Color(.948f,.928f,.852f,1),Ink=new Color(.035f,.065f,.075f,1),Orange=new Color(.99f,.465f,.255f,1),Hairline=new Color(.51f,.56f,.50f,.35f);
         static readonly Color TheirBubble=new Color(.83f,.87f,.80f,1),TheirMark=new Color(.12f,.45f,.39f,1),ReplyColor=new Color(.84f,.85f,.76f,1),Dimmed=new Color(.035f,.065f,.075f,.4f);
@@ -280,7 +282,7 @@ namespace Festival.Presentation
                 {
                     TheySay(chat.Opener,false);
                     if(chat.Questions.Length==0)TheySay(chat.Doorman,true);
-                    else Offer(chat.Questions,i=>{YouSay(chat.Questions[i]);TheySay(chat.Answers[i],true);});
+                    else Offer(chat.Questions,i=>{YouSay(chat.Questions[i]);TheySay(chat.Answers[i],true);CheckReply?.Invoke(live,i);});
                 }
             }
             else Begin(threadId,header.text,mark,now);

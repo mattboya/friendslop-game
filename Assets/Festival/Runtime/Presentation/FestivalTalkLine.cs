@@ -1,5 +1,6 @@
 using Festival.Core;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Festival.Presentation
 {
@@ -15,6 +16,64 @@ namespace Festival.Presentation
     public sealed class FestivalTalkLine
     {
         public const float HoldSeconds=1.5f,ShortestRead=3,LongestRead=7;
+        FestivalSpeechDeliveryTracker.Delivery selected,challengeLine;
+        string challengeId="";
+        public FestivalSpeechDeliveryTracker.Delivery Delivery=>selected;
+        public bool IsChallenge=>ReferenceEquals(selected,challengeLine);
+        public void Reset(){selected=challengeLine=null;challengeId="";}
+        /// <summary>The challenge reads accepted IDs in order. Covering it consumes unseen deliveries silently.</summary>
+        public FestivalSpeechDeliveryTracker.Delivery Follow(FestivalSpeechDeliveryTracker tracker,PlayerState player,InteractionState challenge,bool hidden,float dt)
+        {
+            if(selected!=null&&!ReferenceEquals(tracker.Find(selected.Id),selected)||challengeLine!=null&&!ReferenceEquals(tracker.Find(challengeLine.Id),challengeLine))Reset();
+            if(challenge==null)
+            {
+                if(challengeLine!=null&&!challengeLine.IsPublic)tracker.RetractLocal(challengeLine.Id);
+                challengeId="";challengeLine=null;
+                selected=tracker.Find(player.SpeechDeliveryId);
+                if(selected!=null&&(selected.Retracted||!selected.WorldActive||hidden)){selected.HudConsumed=true;selected=null;}
+                Observe(tracker,hidden);return null;
+            }
+            foreach(var delivery in tracker.Deliveries)
+                if(delivery.IsPublic&&!delivery.HudObserved&&!delivery.HudConsumed&&delivery.WorldActive
+                    &&(delivery.SpeakerId==challenge.TargetId||delivery.SpeakerId==player.Id||delivery.Id==player.SpeechDeliveryId))delivery.HudPending=true;
+            if(challengeId!=challenge.Id)
+            {
+                if(challengeLine!=null&&!challengeLine.IsPublic)tracker.RetractLocal(challengeLine.Id);
+                challengeId=challenge.Id;
+                challengeLine=tracker.Find(player.SpeechDeliveryId);
+                if(challengeLine==null||challengeLine.Text!=challenge.DialogueText)
+                    challengeLine=string.IsNullOrEmpty(challenge.DialogueText)?null:tracker.RegisterLocal(tracker.RoundId+":challenge:"+challenge.Id,challenge.TargetId,challenge.Kind=="Dj"?"STAGE CREW":"FESTIVALGOER",challenge.DialogueText,tracker.WorldSeconds,tracker.WorldSeconds+Mathf.Max(ReadFor(challenge.DialogueText),(float)challenge.DurationSeconds));
+                if(selected!=null&&(selected.Retracted||selected.HudConsumed||selected.SpeakerId!=challenge.TargetId&&selected.SpeakerId!=player.Id))selected=null;
+                if(selected==null)foreach(var delivery in tracker.Deliveries)
+                    if(delivery.IsPublic&&!delivery.HudObserved&&!delivery.HudConsumed&&delivery.WorldActive
+                        &&(delivery.SpeakerId==challenge.TargetId||delivery.SpeakerId==player.Id)){selected=delivery;break;}
+            }
+            if(selected==challengeLine&&selected!=null&&selected.HudReadSeconds>=HoldSeconds)
+                foreach(var delivery in tracker.Deliveries)
+                    if(delivery!=challengeLine&&delivery.HudPending&&!delivery.Retracted&&delivery.WorldActive){selected=null;break;}
+            if(selected!=null&&(selected.Retracted||selected.HudConsumed||selected!=challengeLine&&selected.HudReadSeconds>=ReadFor(selected.Text)))
+            {selected.HudConsumed=true;selected=null;}
+            if(hidden)
+            {
+                if(selected!=null&&!selected.WorldActive){selected.HudConsumed=true;selected=null;}
+                Observe(tracker,true);return null;
+            }
+            if(selected==null)foreach(var delivery in tracker.Deliveries)
+                if(delivery.HudPending&&!delivery.HudConsumed&&!delivery.Retracted&&delivery.WorldActive){selected=delivery;break;}
+            if(selected==null&&challengeLine!=null&&!challengeLine.Retracted&&!challengeLine.HudConsumed)selected=challengeLine;
+            if(selected!=null)selected.HudPending=false;
+            Observe(tracker,false);
+            if(selected!=null)selected.HudReadSeconds+=Mathf.Max(0,dt);
+            return selected;
+        }
+        void Observe(FestivalSpeechDeliveryTracker tracker,bool hidden)
+        {
+            foreach(var delivery in tracker.Deliveries)
+            {
+                if(hidden&&delivery!=selected){delivery.HudConsumed=true;delivery.HudPending=false;}
+                delivery.HudObserved=true;
+            }
+        }
         public string Speaker{get;private set;}="";
         public string Line{get;private set;}="";
         // The newest line heard, known by its NpcSpeechUntil (every Talk or bark sets a later one); the shown line's end on the host,
@@ -42,6 +101,24 @@ namespace Festival.Presentation
             bool shows=!hidden&&(unread||said&&!challenge);
             if(shows)seen+=dt;
             return shows;
+        }
+    }
+
+    /// <summary>Keep the complete legacy UI literal laid out while the shared delivery controls visible glyph quads.</summary>
+    public sealed class FestivalSpeechReveal : BaseMeshEffect
+    {
+        int visible=int.MaxValue;
+        public int VisibleCharacters
+        {
+            get=>visible;
+            set{if(visible==value)return;visible=value;graphic.SetVerticesDirty();}
+        }
+        public override void ModifyMesh(VertexHelper mesh)
+        {
+            if(!IsActive()||visible>=mesh.currentVertCount/4)return;
+            var vertex=new UIVertex();
+            for(int at=Mathf.Max(0,visible)*4;at<mesh.currentVertCount;at++)
+            {mesh.PopulateUIVertex(ref vertex,at);vertex.color.a=0;mesh.SetUIVertex(vertex,at);}
         }
     }
 }

@@ -22,6 +22,52 @@ namespace Festival.Tests
             return shown;
         }
 
+        [Test]public void ANewRoundRetiresCoveredChallengeReadStateEvenWhenIdsRepeat()
+        {
+            var state=new RoundState{RoundId="old-card-round",Phase="Playing"};
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="old-card-round:speech:1",Sequence=1,SpeakerId="you",Speaker="YOU",Text="Old challenge",ExpiresAtWorldSeconds=1});
+            var tracker=new FestivalSpeechDeliveryTracker();tracker.Follow(state,0,0);
+            var player=new PlayerState{Id="you",SpeechDeliveryId="old-card-round:speech:1"};
+            var challenge=new InteractionState{Id="reused-interaction",PlayerId="you",TargetId="npc",Kind="Dance",DialogueText="Old challenge"};
+            var card=new FestivalTalkLine();Assert.That(card.Follow(tracker,player,challenge,false,.2f),Is.SameAs(tracker.Find(player.SpeechDeliveryId)));
+            tracker.Follow(state,0,2);Assert.That(card.Follow(tracker,player,challenge,true,1),Is.Null);
+            state.RoundId="new-card-round";state.PublicSpeech.Clear();state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="new-card-round:speech:1",Sequence=1,SpeakerId="you",Speaker="YOU",Text="New challenge",ExpiresAtWorldSeconds=7});
+            player.SpeechDeliveryId="new-card-round:speech:1";challenge.DialogueText="New challenge";tracker.Follow(state,0,.1);
+            Assert.That(card.Follow(tracker,player,challenge,false,.1f),Is.SameAs(tracker.Find(player.SpeechDeliveryId)));
+            Assert.That(card.IsChallenge,Is.True,"the new round's literal is the current challenge, never a bark waiting behind a removed old reference");
+        }
+
+        [Test]public void SharedChallengeReadStateDistinguishesEqualLiteralDeliveries()
+        {
+            var state=new RoundState{RoundId="shared-card",Phase="Playing"};
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="shared-card:speech:1",Sequence=1,SpeakerId="npc",Speaker="FESTIVALGOER",Text="Same words",ExpiresAtWorldSeconds=7});
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="shared-card:speech:2",Sequence=2,SpeakerId="you",Speaker="YOU",Text="Same words",ExpiresAtWorldSeconds=60});
+            var tracker=new FestivalSpeechDeliveryTracker();tracker.Follow(state,0,.5);
+            var player=new PlayerState{Id="you",SpeechDeliveryId="shared-card:speech:2"};
+            var challenge=new InteractionState{Id="dance",PlayerId="you",TargetId="npc",Kind="Dance",DialogueText="Same words"};
+            var card=new FestivalTalkLine();
+            Assert.That(card.Follow(tracker,player,challenge,false,1),Is.SameAs(tracker.Find("shared-card:speech:1")));
+            Assert.That(card.IsChallenge,Is.False,"equal literals never acknowledge a different challenge delivery");
+            card.Follow(tracker,player,challenge,false,2.1f);
+            Assert.That(card.Follow(tracker,player,challenge,false,0),Is.SameAs(tracker.Find("shared-card:speech:2")));
+            Assert.That(card.IsChallenge,Is.True);
+        }
+        [Test]public void ANewAcceptedBarkCanBeReadDuringTheSameChallenge()
+        {
+            var state=new RoundState{RoundId="shared-bark",Phase="Playing"};
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="shared-bark:speech:1",Sequence=1,SpeakerId="you",Speaker="YOU",Text="Challenge",ExpiresAtWorldSeconds=60});
+            var tracker=new FestivalSpeechDeliveryTracker();tracker.Follow(state,0,1);
+            var player=new PlayerState{Id="you",SpeechDeliveryId="shared-bark:speech:1"};
+            var challenge=new InteractionState{Id="dance",PlayerId="you",TargetId="npc",Kind="Dance",DialogueText="Challenge"};
+            var card=new FestivalTalkLine();card.Follow(tracker,player,challenge,false,2);
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="shared-bark:speech:2",Sequence=2,SpeakerId="cop",Speaker="SECURITY",Text="Hey!",StartedAtWorldSeconds=1,ExpiresAtWorldSeconds=6});
+            player.SpeechDeliveryId="shared-bark:speech:2";tracker.Follow(state,0,1.5);
+            Assert.That(card.Follow(tracker,player,challenge,false,0),Is.SameAs(tracker.Find(player.SpeechDeliveryId)),"a new accepted stop bark can interrupt a read challenge without resetting either delivery");
+            Assert.That(card.IsChallenge,Is.False);
+            state.PublicSpeech[1].Retracted=true;tracker.Follow(state,0,1.5);
+            Assert.That(card.Follow(tracker,player,challenge,false,0),Is.SameAs(tracker.Find("shared-bark:speech:1")),"a retracted bark yields to the same original challenge identity");
+        }
+
         [Test] public void ALineReadsInASecondAndAHalfPlusAFewLettersASecond()
         {
             Assert.That(Hello.Length,Is.EqualTo(60),"setup: a 60-letter line");
