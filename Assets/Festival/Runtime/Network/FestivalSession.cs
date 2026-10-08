@@ -83,12 +83,20 @@ namespace Festival.Network
         // exact sample loop joins. Simulation countdown and the late-input verdict retain their separate clock semantics.
         // Public speech retains eight sequenced utterances with real speaker IDs, world-time expiry and same-ID retractions.
         // Public snapshots/projected latest lines contain only accepted spoken turns/replies/barks; checks and outcomes stay private.
+        // Early command rejections with no result identity echo only the bounded issued command ID in a detached reply;
+        // validation, admission, command limits and authoritative dedupe receipts keep their existing behavior.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         public string LocalPlayerId {get;private set;}="";
         public PlayerState LocalPlayer => State?.Players.Find(p=>p.Id==LocalPlayerId);
         public FestivalCharacter LocalWorldCharacter => WorldCharacter(LocalPlayerId);
         public FestivalCharacter WorldCharacter(string playerId) => actors.TryGetValue(playerId,out var actor)?actor.GetComponent<FestivalCharacter>():null;
+        public FestivalSpeechDeliveryTracker SpeechDeliveries {get;}=new FestivalSpeechDeliveryTracker();
+        public FestivalSpeechBubbles SpeechBubbles {get;private set;}
+        CommandResult lastLocalCommandResult;
+        string localCommandRound="";
+        public CommandResult LastLocalCommandResult=>CopyResult(lastLocalCommandResult);
+        public event Action<CommandResult> LocalCommandResultReceived;
         public bool IsHost => manager!=null && manager.IsHost;
         public bool Connected => manager!=null && manager.IsConnectedClient;
         public bool Connecting {get;private set;}
@@ -133,6 +141,8 @@ namespace Festival.Network
         public bool ThirdPersonView {get;private set;}
         public double EstimatedSimulationSeconds => State==null?0:State.SimulationSeconds
             +(State.Phase=="Results"||manager==null?0:Math.Max(0,Math.Min(.4,manager.ServerTime.Time-serverClockAtSnapshot)));
+        public double EstimatedWorldSeconds => State==null?0:FestivalSimulation.WorldSeconds(State)
+            +(State.Phase==FestivalSimulation.MinigamePhase?0:EstimatedSimulationSeconds-State.SimulationSeconds);
         public double LastSnapshotAge => Time.realtimeSinceStartupAsDouble-snapshotReceivedAt;
         public float RoundTripMs => manager!=null && Connected ? manager.GetComponent<UnityTransport>().GetCurrentRtt(NetworkManager.ServerClientId) : 0;
         private NetworkManager manager;
@@ -212,6 +222,7 @@ namespace Festival.Network
                 actorRoot=new GameObject("Authoritative actor presentation").transform;
                 world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
                 gameObject.AddComponent<FestivalVisionMarkers>();
+                SpeechBubbles=gameObject.AddComponent<FestivalSpeechBubbles>();
                 gameObject.AddComponent<FestivalCreatures>();
                 gameObject.AddComponent<FestivalTrip>();
                 gameObject.AddComponent<FestivalSpinner>();
@@ -242,6 +253,7 @@ namespace Festival.Network
         private void Configure(ushort port,string address,bool host)
         {
             if(manager!=null)throw new InvalidOperationException("Leave the existing session first.");
+            lastLocalCommandResult=null;localCommandRound="";
             if(host)historyEpoch=Guid.NewGuid().ToString("N");
             var go=new GameObject("Festival native session");
             var transport=go.AddComponent<UnityTransport>();
@@ -273,7 +285,7 @@ namespace Festival.Network
                 manager.NetworkConfig.ConnectionData=Encoding.UTF8.GetBytes(JsonUtility.ToJson(new Hello{Name=CleanName(name)}));
                 if(!manager.StartHost())throw new InvalidOperationException("Could not listen on that port.");
                 RegisterMessages();Message="Lobby open on port "+port+". Friends can join by LAN address.";
-                State=ViewFor(simulation,LocalPlayerId);MenuOpen=false;
+                State=ViewFor(simulation,LocalPlayerId);FollowLocalCommandRound(State.RoundId);MenuOpen=false;
             }
             catch(Exception e){Fail("Host failed: "+e.Message);}
         }
@@ -358,12 +370,12 @@ namespace Festival.Network
                 if(sender!=NetworkManager.ServerClientId||IsHost)return;
                 var packet=ReadJson<SnapshotPacket>(reader,512*1024);if(packet?.State==null)return;
                 if(State!=null && State.RoundId==packet.State.RoundId && packet.State.Tick<State.Tick)return;
-                State=packet.State;snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=packet.ServerSeconds;
+                State=packet.State;FollowLocalCommandRound(State.RoundId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=packet.ServerSeconds;
             });
             messages.RegisterNamedMessageHandler("festival.command",(sender,reader)=>{
                 if(!IsHost||!peers.TryGetValue(sender,out var id)||!Admit(id,60))return;
                 var command=ReadJson<GameCommand>(reader,2048);if(command==null)return;
-                var result=simulation.Execute(id,command);SendJson("festival.result",sender,result);
+                var result=simulation.Execute(id,command);SendJson("festival.result",sender,CorrelatedResult(result,command.Id));
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 if(command.Kind!="Rhythm")DevelopmentDiagnostics.Transition(command.Kind,result.Reason,simulation.State.RoundId,simulation.State.SimulationSeconds);
 #endif
@@ -374,7 +386,7 @@ namespace Festival.Network
             });
             messages.RegisterNamedMessageHandler("festival.result",(sender,reader)=>{
                 if(sender!=NetworkManager.ServerClientId||IsHost)return;
-                var result=ReadJson<CommandResult>(reader,2048);if(result!=null)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+                var result=ReadJson<CommandResult>(reader,2048);if(result!=null)ReceiveLocalCommandResult(result);
             });
             messages.RegisterNamedMessageHandler("festival.history",(sender,reader)=>{
                 if(!IsHost||!peers.TryGetValue(sender,out var id))return;
@@ -407,17 +419,39 @@ namespace Festival.Network
             }
         }
         public void Command(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)
+            =>SendCommand(kind,target,item,amount,direction,time);
+        /// <summary>The exact issued identity lets local callers match a rejection even when another reply arrives immediately afterward.</summary>
+        public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)
         {
-            if(!Connected||LocalPlayer==null)return;
+            if(!Connected||LocalPlayer==null)return "";
             var command=new GameCommand{Id=Guid.NewGuid().ToString("N"),Kind=kind,TargetId=target??"",ItemId=item??"",Amount=amount,Direction=direction,TimeSeconds=time};
             if(IsHost)
             {
-                var result=simulation.Execute(LocalPlayerId,command);Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+                var result=simulation.Execute(LocalPlayerId,command);FollowLocalCommandRound(simulation.State.RoundId);ReceiveLocalCommandResult(CorrelatedResult(result,command.Id));
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 if(kind!="Rhythm")DevelopmentDiagnostics.Transition(kind,result.Reason,simulation.State.RoundId,simulation.State.SimulationSeconds);
 #endif
             }
             else SendJson("festival.command",NetworkManager.ServerClientId,command);
+            return command.Id;
+        }
+        void FollowLocalCommandRound(string round)
+        {
+            if(localCommandRound==round)return;localCommandRound=round;lastLocalCommandResult=null;
+        }
+        static CommandResult CopyResult(CommandResult result)=>result==null?null:new CommandResult{Id=result.Id,Accepted=result.Accepted,Reason=result.Reason,Sequence=result.Sequence};
+        static CommandResult CorrelatedResult(CommandResult result,string issuedId)
+        {
+            var copy=CopyResult(result);
+            if(copy!=null&&string.IsNullOrEmpty(copy.Id)&&!string.IsNullOrEmpty(issuedId)&&issuedId.Length<=128)copy.Id=issuedId;
+            return copy;
+        }
+        void ReceiveLocalCommandResult(CommandResult result)
+        {
+            Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+            lastLocalCommandResult=CopyResult(result);
+            var listeners=LocalCommandResultReceived;
+            if(listeners!=null)foreach(Action<CommandResult> listener in listeners.GetInvocationList())listener(CopyResult(result));
         }
         // Raw chart-relative seconds in; calibrated judgment seconds alone go to the unchanged host command envelope.
         public void Rhythm(int direction,double chartSeconds,bool release=false)
@@ -494,7 +528,7 @@ namespace Festival.Network
             {
                 accumulator+=Math.Min(Time.unscaledDeltaTime,.2f);int steps=0;
                 while(accumulator>=1.0/30 && steps++<6){ApplyMovement(1.0/30);simulation.Tick(1.0/30);accumulator-=1.0/30;}
-                State=ViewFor(simulation,LocalPlayerId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=manager.ServerTime.Time;
+                State=ViewFor(simulation,LocalPlayerId);FollowLocalCommandRound(State.RoundId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=manager.ServerTime.Time;
                 Profile.RememberUnlocks(simulation.State);PublishAcknowledgedHistory();
                 if(Time.realtimeSinceStartupAsDouble>=nextSnapshot){Broadcast();nextSnapshot=Time.realtimeSinceStartupAsDouble+1.0/10;}
             }
@@ -545,6 +579,7 @@ namespace Festival.Network
                 nextInput=Time.realtimeSinceStartupAsDouble+.05;
             }
             if(player.HasCosmetic)Profile.AwardFirstRescue();
+            SpeechDeliveries.Follow(State,ConnectionGeneration,EstimatedWorldSeconds);
             UpdateActors();UpdateCamera(player);
         }
         public void ApplyLook(Vector2 delta)
@@ -1003,6 +1038,8 @@ namespace Festival.Network
         // straight away. ponytail: OnClientStopped alone, as a session is always a host or a client, never a dedicated server.
         public void Leave()
         {
+            SpeechBubbles?.Clear();SpeechDeliveries.Retire();
+            lastLocalCommandResult=null;localCommandRound="";
             closing=true;Connecting=false;Voice.Leave();ConnectionGeneration++;
             if(manager!=null)
             {
@@ -1020,6 +1057,7 @@ namespace Festival.Network
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
         }
+        private void OnDisable(){SpeechBubbles?.Clear();SpeechDeliveries.Retire();}
         private void OnDestroy()
         {
             try{Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
