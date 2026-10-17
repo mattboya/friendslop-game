@@ -11,8 +11,9 @@ using Festival.Core;
 // anyone is downed or busy. The round's phase is then "Minigame": the level clock and every danger timer stop, nobody moves,
 // and only the game's own commands go through. It runs at most 90 s, its result shows for 4 s, and then every deadline on the
 // simulation clock moves on by the pause, the result's time is paid (a loss never leaves under 15 s) and the booth is spent.
-// The bag deals MINI-4's Mystery Cups (MysteryCupsTests), the one game so far: the player up calls it at once for +0 s. The
-// pause's own tests that need a game nobody ends turn it into one this build doesn't know (Endless), which only the cap ends.
+// The bag deals MINI-4's Mystery Cups (MysteryCupsTests) and MINI-2's Drum Circle (DrumCircleTests). The pause's own tests play
+// Mystery Cups (Play deals it), whose player up calls it at once for +0 s; those that need a game nobody ends turn it into one this
+// build doesn't know (Endless), which only the cap ends.
 public static class MinigameTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -85,11 +86,13 @@ public static class MinigameTests
         Ready(s);return s;
     }
     static void Ready(FestivalSimulation s){foreach(var p in s.State.Players)if(p.Connected){p.X=0;p.Z=19;Check(Act(s,p.Id,"Ready").Accepted,"setup: "+p.Id+" readies");}s.Tick(5.2);Check(s.State.Phase=="Spinning","setup: the crew leaves camp");}
-    // The crew reaches the festival with the crowd cleared, so nobody but the test's own festivalgoers moves a thing.
+    // The crew reaches the festival with the crowd cleared, so nobody but the test's own festivalgoers moves a thing. Its booth
+    // deals Mystery Cups, whichever game the bag drew.
     static FestivalSimulation Play(int seed,int crew=2,bool spectators=false)
     {
         var s=Leave(seed,crew,spectators:spectators);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);foreach(var p in s.State.Players)Act(s,p.Id,"MapReady");
-        Check(s.State.Phase=="Playing","setup: the crew is at the festival");s.State.Npcs.Clear();Check(FestivalSimulation.BoothAt(s.State)!=null,"setup: the level has a booth");return s;
+        Check(s.State.Phase=="Playing","setup: the crew is at the festival");s.State.Npcs.Clear();Check(FestivalSimulation.BoothAt(s.State)!=null,"setup: the level has a booth");
+        s.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;return s;
     }
     // The level is won; the host brings everyone back and the next level's camp opens.
     static void Win(FestivalSimulation s){s.State.Phase="Results";s.State.Result="Success";Check(Act(s,s.State.HostPlayerId,"Reset").Accepted,"setup: the host brings the crew back");s.State.Phase="Shopping";}
@@ -106,23 +109,25 @@ public static class MinigameTests
     static bool ResumesWithin(FestivalSimulation s,double seconds){for(double t=0;t<seconds-1e-9;t+=.1){s.Tick(.1);if(s.State.Phase=="Playing")return true;}return false;}
     static double Left(FestivalSimulation s)=>s.State.DurationSeconds-s.State.ElapsedSeconds;
 
-    // 300 Day 1s of both festivals: each places one booth, on a listed spot, every spot turns up, and each plays a listed game.
-    // Camp has none, and every level of the weekend, Night 2 too, has its own.
+    // 300 Day 1s of both festivals: each places one booth, on a listed spot, every spot turns up, and each plays a listed game,
+    // every game the bag holds turning up, the Drum Circle among them. Camp has none, and every level of the weekend, Night 2 too,
+    // has its own.
     static void EveryLevelPlacesOneBoothOnASeededSpot()
     {
         Check(Festivals.BoothSpots.Length>=3,"at least three listed spots, got "+Festivals.BoothSpots.Length);
         var camp=new FestivalSimulation(1);camp.AddPlayer("p0","P0");
         Check(camp.State.Booth.Spot==-1&&FestivalSimulation.BoothAt(camp.State)==null,"camp has no booth");
-        var used=new int[Festivals.BoothSpots.Length];
+        var used=new int[Festivals.BoothSpots.Length];var dealt=new HashSet<string>();
         for(int seed=1;seed<=300;seed++)
         {
             var s=Leave(seed,1,seed%Festivals.Count);var b=s.State.Booth;var at=FestivalSimulation.BoothAt(s.State);
             Check(b.Spot>=0&&b.Spot<Festivals.BoothSpots.Length&&at!=null&&at.X==Festivals.BoothSpots[b.Spot].X&&at.Z==Festivals.BoothSpots[b.Spot].Z,"seed "+seed+"'s booth stands on a listed spot, got spot "+b.Spot);
             Check(FestivalSimulation.MinigameKinds.Contains(b.Kind)&&!b.Spent,"seed "+seed+"'s booth plays a listed game, unplayed, got '"+b.Kind+"'");
-            Check(b.Kind==FestivalSimulation.MysteryCupsGame,"for now that is Mystery Cups, no stub, got '"+b.Kind+"'");
-            used[b.Spot]++;
+            dealt.Add(b.Kind);used[b.Spot]++;
         }
         Check(Array.IndexOf(used,0)<0,"every spot turns up: "+string.Join(", ",used));
+        Check(FestivalSimulation.MinigameKinds.Contains(FestivalSimulation.DrumCircleGame),"the bag holds the Drum Circle");
+        Check(dealt.SetEquals(FestivalSimulation.MinigameKinds),"every game in the bag turns up: "+string.Join(", ",dealt));
         var weekend=Leave(7,2);
         for(int level=0;level<Festivals.LevelCount;level++)
         {

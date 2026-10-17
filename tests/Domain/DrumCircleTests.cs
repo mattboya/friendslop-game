@@ -85,7 +85,7 @@ public static class DrumCircleTests
             }
             if(count==2)Check(Part(s,"ghost")==null&&Part(s,"detained")==null&&Part(s,"gone")==null,"spirits, detained and disconnected players watch");
         }
-        Check(!FestivalSimulation.MinigameKinds.Contains("DrumCircle"),"bag stays disabled until real consumers land");
+        Check(FestivalSimulation.MinigameKinds.Contains("DrumCircle"),"the bag deals the drum circle now its real consumers have landed");
     }
     static void AllBandsUseTheWorstFinalScoreAndRawNearbySuspicion()
     {
