@@ -150,6 +150,9 @@ namespace Festival.Presentation
         // buys again rather than offering the unit back (FestivalHudText.FestivalgoerActions).
         // ponytail: a key per buy, never pruned (a weekend makes a few dozen); clear it on a new round if that ever matters.
         private string buyInteractionId="",buyItem="",buySeller="";
+        // ECON-8: the Pickup sent for a random find, and its amount, until the host answers it.
+        private string foundCommand="";
+        private int foundAmount;
         private int heldBeforeBuy;
         private readonly HashSet<string> soldToYou=new HashSet<string>();
         private Image effectWash;
@@ -1330,11 +1333,12 @@ namespace Festival.Presentation
         {
             if(session==null)return;
             session.ConsumeMenuPress=ConsumeChatMenu;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived+=EquipmentCommandResult;
+            session.LocalCommandResultReceived-=FoundCash;session.LocalCommandResultReceived+=FoundCash;
         }
         private void OnDisable()
         {
             if(session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}ResetRhythm();
-            if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}
+            if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;}
             CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;
             ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
             pendingComfortStart=null;if(comfortPanel!=null)comfortPanel.SetActive(false);
@@ -1834,7 +1838,7 @@ namespace Festival.Presentation
             NpcState npc=null;
             if(player.InteractionId=="")
             {
-                var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction(FestivalHudText.PickupAction(state,player,drop),()=>session.Command("Pickup",drop.Id),ref y);
+                var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction(FestivalHudText.PickupAction(state,player,drop),()=>PickUp(drop),ref y);
                 var stash=Nearest(state.Stashes,player.X,player.Z,2.7f);
                 if(stash!=null)
                 {
@@ -2052,6 +2056,20 @@ namespace Festival.Presentation
             string reply=FestivalHudText.BuyReply(buyItem,heldBeforeBuy,Held(player,buyItem));
             if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
         }
+        // ECON-8: a random find is announced only once the host gives it to you, so whoever lost the race to it hears nothing.
+        private void PickUp(DropState drop)
+        {
+            string issued=session.SendCommand("Pickup",drop.Id);
+            if(!drop.CashFind)return;
+            foundCommand=issued;foundAmount=drop.Count;
+            FoundCash(session.LastLocalCommandResult); // A host reply can arrive before SendCommand returns.
+        }
+        private void FoundCash(CommandResult result)
+        {
+            if(foundCommand==""||result==null||result.Id!=foundCommand)return;
+            foundCommand="";
+            if(result.Accepted){session.SetMessage(FestivalHudText.FoundCashNotice(foundAmount));lastNotice="";}
+        }
         private static int Held(PlayerState player,string item){foreach(var stack in player.Inventory)if(stack.ItemId==item)return stack.Count;return 0;}
         private void ApplyContrast(bool high)
         {
@@ -2060,7 +2078,7 @@ namespace Festival.Presentation
             rosterPanel.GetComponent<Image>().color=high?new Color(.01f,.025f,.03f,1):new Color(.025f,.064f,.071f,.95f);
             reticle.GetComponent<Image>().color=high?new Color(1,.95f,.71f,1):new Color(.88f,.90f,.74f,.65f);
         }
-        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
+        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
         private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text;WaitForComfort(()=>{Remember(null);session.Host(name,port);});}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text,address=addressField.text;WaitForComfort(()=>{Remember(address);session.Join(name,address,port);});}

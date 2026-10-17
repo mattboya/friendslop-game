@@ -278,6 +278,7 @@ namespace Festival.Network
                 gameObject.AddComponent<FestivalInhale>();
                 confetti=gameObject.AddComponent<FestivalConfettiBurst>();
                 gameObject.AddComponent<FestivalSpinner>();
+                gameObject.AddComponent<FestivalCashGlint>();
                 gameObject.AddComponent<FestivalMinigameView>();
             }
             catch

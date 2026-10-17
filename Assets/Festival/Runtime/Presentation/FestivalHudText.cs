@@ -394,6 +394,8 @@ namespace Festival.Presentation
         /// <summary>TRIP-8: the session notice for whoever finds the cloud's stash (RoundState.CloudStashFinderId), in dollars like the
         /// host's replies, for MoneyText.</summary>
         public static readonly string CloudStashNotice="Found the cloud's stash! +$"+FestivalSimulation.SecretStashCash+" for camp";
+        /// <summary>ECON-8: what whoever picks up a random find is told, in dollars like the host's replies, for MoneyText.</summary>
+        public static string FoundCashNotice(int amount)=>"Found $"+amount+" on the ground!";
         /// <summary>ESC-2: E during a stop while the guard is still walking over, out of talking reach (the host's 2.5 m): said, not
         /// offered, so until the talk is in reach E does nothing, never a sale or a buy in the guard's sight, which is an arrest.</summary>
         public const string StopApproachAction="Security is coming over";

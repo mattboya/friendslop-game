@@ -91,6 +91,14 @@ namespace Festival.Tests
             Assert.That(FestivalSession.DropModel("cash"),Is.EqualTo("FestivalVoucher"),"a cash pile reuses the voucher model");
         }
 
+        // ECON-8: a random find's notice, in your money.
+        [Test] public void AFindsNoticeReadsInYourMoney()
+        {
+            var palm=Day(0);var you=Crew(palm,"you",0);var playa=Day(1);var sam=Crew(playa,"sam",1);
+            Assert.That(FestivalHudText.MoneyText(palm,you,FestivalHudText.FoundCashNotice(4)),Is.EqualTo("Found $4 on the ground!"));
+            Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.FoundCashNotice(4)),Is.EqualTo("Found 4 ramen packets on the ground!"));
+        }
+
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()
         {
             // The HUD and the shelves' price tags never write a dollar sign themselves: every amount, down to the stash, release and
