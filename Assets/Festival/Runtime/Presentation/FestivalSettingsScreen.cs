@@ -241,7 +241,7 @@ namespace Festival.Presentation
             get
             {
                 var devices=monitor.Devices;
-                if(devices.Length==0)return "NO MICROPHONE FOUND";
+                if(devices.Length==0)return monitor.Blocked!=""?"NOT IN THIS BUILD YET":"NO MICROPHONE FOUND";
                 if(Data.MicrophoneDevice=="")return "SYSTEM DEFAULT";
                 return Array.IndexOf(devices,Data.MicrophoneDevice)>=0?Data.MicrophoneDevice:"SYSTEM DEFAULT (SAVED MIC MISSING)";
             }

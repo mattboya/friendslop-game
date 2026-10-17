@@ -208,6 +208,21 @@ namespace Festival.Tests
             Assert.That(new FestivalMicrophoneMonitor().Devices,Is.EqualTo(Microphone.devices),"the real adapter lists Unity's devices; listing records nothing");
         }
 
+        [Test]public void ABuildThatCannotUseTheMicrophoneSaysSoRatherThanNoMicrophoneFound()
+        {
+            var mic=new Fixture{Devices=new string[0],Blocked="This build cannot ask for the microphone yet, so nothing was recorded."};
+            var profile=new LocalProfile("final-gates-blocked-mic");
+            using(var settings=new FestivalSettings(profile))
+            {
+                var screen=new FestivalSettingsScreen(profile,settings,new UnavailableVoiceSession(),null,null,mic);
+                screen.Open(FestivalSettingsScreen.Tab.Voice);screen.Update();
+                var device=Row("MICROPHONE");
+                Assert.That(screen.Value(device),Is.EqualTo("NOT IN THIS BUILD YET"),"a Mac build without a usage description cannot list microphones");
+                Assert.That((screen.Usable(device),screen.Usable(Row("TEST MICROPHONE"))),Is.EqualTo((false,false)),"there is nothing to choose or test");
+                Assert.That((mic.Starts,mic.Requests),Is.EqualTo((0,0)));
+            }
+        }
+
         [Test]public void ATapTestWithTooFewTapsSaysWhyAndLeavesTheTimingAndAudioAlone()
         {
             var source=new GameObject("impl-U73 tap audio").AddComponent<AudioSource>();

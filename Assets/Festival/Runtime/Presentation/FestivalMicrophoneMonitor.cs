@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -29,6 +28,8 @@ namespace Festival.Presentation
         public Phase State {get;private set;}
         public float Level {get;private set;}
         public string[] Devices=>microphone.Devices??Array.Empty<string>();
+        /// <summary>Why this build cannot use the microphone at all, or "".</summary>
+        public string Blocked=>microphone.Blocked;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         // Automated runs put a device fixture here, so no test ever opens the room's microphone.
         public static IFestivalMicrophone Substitute {get;set;}
@@ -103,19 +104,22 @@ namespace Festival.Presentation
 
         private sealed class PlatformMicrophone:IFestivalMicrophone
         {
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+            // Unity refuses to build a Mac player that uses its Microphone class without a microphone usage description in
+            // Player Settings. This build has none, so a Mac neither lists nor opens a microphone.
+            public string[] Devices=>Array.Empty<string>();
+            public string Blocked=>"This build cannot ask for the microphone yet, so nothing was recorded.";
+            public bool Authorized=>false;
+            public bool AuthorizationPending=>false;
+            public void RequestAuthorization(){}
+            public AudioClip Start(string device)=>null;
+            public int GetPosition(string device)=>0;
+            public bool IsRecording(string device)=>false;
+            public void End(string device){}
+#else
             private AsyncOperation request;
             public string[] Devices=>Microphone.devices;
-            public string Blocked
-            {
-                get
-                {
-                    // macOS ends a process that opens the microphone when its Info.plist has no usage description.
-                    if(Application.platform!=RuntimePlatform.OSXPlayer)return "";
-                    try{if(File.ReadAllText(Path.Combine(Application.dataPath,"Info.plist")).Contains("NSMicrophoneUsageDescription"))return "";}
-                    catch(Exception e) when(e is IOException||e is UnauthorizedAccessException){}
-                    return "This build cannot ask for the microphone yet, so nothing was recorded.";
-                }
-            }
+            public string Blocked=>"";
             // Desktop systems ask on the first recording themselves; Unity's authorization calls cover phones and the web.
             public bool Authorized=>!(Application.isMobilePlatform||Application.platform==RuntimePlatform.WebGLPlayer)||Application.HasUserAuthorization(UserAuthorization.Microphone);
             public bool AuthorizationPending=>request!=null&&!request.isDone;
@@ -130,6 +134,7 @@ namespace Festival.Presentation
             public int GetPosition(string device)=>Microphone.GetPosition(device);
             public bool IsRecording(string device)=>Microphone.IsRecording(device);
             public void End(string device)=>Microphone.End(device);
+#endif
         }
     }
 }
