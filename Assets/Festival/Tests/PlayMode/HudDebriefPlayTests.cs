@@ -130,7 +130,8 @@ namespace Festival.Tests
                 session.Command("Reset");
                 yield return new WaitForSeconds(.6f);
                 if(Festivals.Name(sim.State.FestivalIndex)!="Ember Playa")failures.Add("weekend cleared: camp is at "+Festivals.Name(sim.State.FestivalIndex)+", not Ember Playa ("+session.Message+")");
-                Expect("weekend cleared","Review text","THE VERY OFFICIAL ROUND REVIEW\nWEEKEND CLEARED  •  SALES $45  •  SURVIVORS 0  •  CAMP ANTICS 0");
+                // LOOP-7: a new festival also says everyone starts over, in your own odd object at the next festival.
+                Expect("weekend cleared","Review text","THE VERY OFFICIAL ROUND REVIEW\nWEEKEND CLEARED  •  SALES $45  •  SURVIVORS 0  •  CAMP ANTICS 0\nNEW WEEKEND  •  EVERYONE STARTS OVER WITH "+FestivalHudText.Money(session.State,session.LocalPlayer,20).ToUpperInvariant()+" AND EMPTY POCKETS");
                 Fits("weekend cleared","Review text");
             }
             finally
