@@ -1024,8 +1024,8 @@ namespace Festival.Network
                 // The Ferris wheel draws nobody (POLO-3): its rider reads only a rough area on the objective card.
                 void LostFriend(string id,WorldPoint at,bool found){if(at!=null && (at.X!=0||at.Z!=0) && (found||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12)){Actor(id,"MISSING FRIEND",at.X,at.Z,0,Color.cyan,.9f,"Idle","Friend");seen.Add(id);}}
                 LostFriend("mission_friend",State.FriendPosition,State.FriendFound);LostFriend("mission_friend_2",State.SecondFriend.Position,State.SecondFriend.Found);
-                // A drop floats its display name ("Tongue Stamps", THEME-2); its id still picks the model.
-                foreach(var d in State.Drops){Actor(d.Id,Catalog.FindItem(d.ItemId)?.Name??d.ItemId,d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}
+                // A drop floats its display name ("Tongue Stamps", THEME-2), a cash pile its amount in the viewer's money; its id still picks the model.
+                foreach(var d in State.Drops){Actor(d.Id,FestivalHudText.DropLabel(State,local,d),d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}
                 // Night 2 bodies lie in the downed pose (and play the dragged motion while carried) until a revival lifts them.
                 foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed");seen.Add(id);}
             }
@@ -1074,7 +1074,8 @@ namespace Festival.Network
             if(item=="merch_bag")return "FestivalMerchBag";
             if(item=="map")return "FestivalMap";
             if(item=="stage_pass")return "FestivalStagePass";
-            if(item=="medical_voucher")return "FestivalVoucher";
+            // Cash lies in a voucher-sized pile while the art is frozen.
+            if(item=="medical_voucher"||item=="cash")return "FestivalVoucher";
             if(item=="stash_box")return "FestivalStash";
             if(item=="poi_led"||item=="poi_practice")return "FestivalPoi";
             if(item=="stock_lsd")return "FestivalStockPrism";

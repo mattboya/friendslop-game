@@ -327,6 +327,11 @@ namespace Festival.Presentation
         /// <summary>LOOP-4: where a corner reel lands: "KEPT $40", or "DROPPED $40" where they fell.</summary>
         public static string DeathSpinResult(RoundState s,PlayerState viewer,DeathSpinState spin)=>(spin.CashDropped>0?"DROPPED ":"KEPT ")+DeathSpinStake(s,viewer,spin);
 
+        /// <summary>LOOP-4: a drop's floating label: a cash pile reads its amount in the viewer's money ("$40"), anything else its name.</summary>
+        public static string DropLabel(RoundState s,PlayerState viewer,DropState drop)=>drop.ItemId=="cash"?Money(s,viewer,drop.Count):Catalog.FindItem(drop.ItemId)?.Name??drop.ItemId;
+        /// <summary>LOOP-4: the pickup line for a drop: "Pick up $40", "Pick up Tongue Stamps".</summary>
+        public static string PickupAction(RoundState s,PlayerState viewer,DropState drop)=>"Pick up "+DropLabel(s,viewer,drop);
+
         /// <summary>A crew member as the local player reads them in the debrief: "YOU", or their name.</summary>
         internal static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
 

@@ -1834,7 +1834,7 @@ namespace Festival.Presentation
             NpcState npc=null;
             if(player.InteractionId=="")
             {
-                var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction("Pick up "+ItemName(drop.ItemId),()=>session.Command("Pickup",drop.Id),ref y);
+                var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction(FestivalHudText.PickupAction(state,player,drop),()=>session.Command("Pickup",drop.Id),ref y);
                 var stash=Nearest(state.Stashes,player.X,player.Z,2.7f);
                 if(stash!=null)
                 {

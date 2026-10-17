@@ -1,11 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -154,6 +156,112 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"Ember Playa's money on screen:\n"+string.Join("\n",failures));
+        }
+
+        // LOOP-4: a real joined friend dies with $40 and the roll drops it. The host and the dead friend both see the corner reel name
+        // them. The host keeps walking and works the menu while it turns; the menu offers no pickup until the reel lands, then offers
+        // the pile, read in dollars over the voucher model, and taking it adds the $40 to the host's cash.
+        [UnityTest]public IEnumerator EveryoneSeesTheDeathReelAndTheLandedCashGoesToAFriend()
+        {
+            var world=new GameObject("Death cash world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Death cash host");var host=hostObject.AddComponent<FestivalSession>();var hud=hostObject.AddComponent<FestivalHud>();
+            var friendObject=new GameObject("Death cash friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            var failures=new List<string>();
+            Text Reel(GameObject owner,string part)=>owner.GetComponentsInChildren<Text>(false).FirstOrDefault(t=>t.name==part&&t.GetComponentInParent<Canvas>().name==FestivalSpinner.DeathCanvasName);
+            Button Action(string label)=>hud.GetComponentsInChildren<Button>(true).FirstOrDefault(b=>b.gameObject.activeSelf&&b.name=="Action:"+label);
+            string Listed()=>string.Join(" | ",hud.GetComponentsInChildren<Button>(true).Where(b=>b.gameObject.activeSelf&&b.name.StartsWith("Action:")).Select(b=>b.name.Substring(7)));
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Sam","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var sam=sim.Player(friend.LocalPlayerId);sam.X=0;sam.Z=19;friend.Command("Ready");
+                while(!sam.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(sam.Ready,Is.True,"setup: the friend's Ready reached the host");yield return StartLevel(host,friend.LocalPlayerId);
+                var me=sim.Player(host.LocalPlayerId);sim.State.Npcs.Clear();sim.State.Drops.Clear();
+                me.X=0;me.Z=2;me.Yaw=180;sam.X=0;sam.Z=0;sam.Inventory.Clear();sam.EquippedItemId="";sam.Cash=40;int cash=me.Cash;
+                yield return new WaitForSeconds(.4f);
+                // Sam dies on the host's own step, on a spin seed found by running that very step on a copy of the round.
+                sim.State.SpinSeed=DroppingSeed(sim,sam.Id);sam.Life="Downed";sam.DownedRemaining=.05;sim.Tick(.1);
+                var spin=sim.State.DeathSpins.Find(s=>s.PlayerId==sam.Id);
+                Assert.That(spin?.CashDropped,Is.EqualTo(40),"setup: Sam's $40 dropped where they fell");
+                double Age()=>FestivalSimulation.WorldSeconds(sim.State)-spin.AtWorldSeconds;
+                while((Reel(hostObject,"Title")==null||Reel(friendObject,"Title")==null)&&Age()<1)yield return null;
+                foreach(var (who,owner) in new[]{("the host",hostObject),("Sam, now a spirit",friendObject)})
+                {
+                    if(Reel(owner,"Title")?.text!="SAM DIED")failures.Add(who+": the corner reel reads \""+(Reel(owner,"Title")?.text??"(hidden)")+"\"");
+                    if(Reel(owner,"Result")?.text!="$40")failures.Add(who+": the reel turns for \""+(Reel(owner,"Result")?.text??"(hidden)")+"\"");
+                }
+                var reelCanvas=hostObject.GetComponentsInChildren<Canvas>(true).First(c=>c.name==FestivalSpinner.DeathCanvasName);
+                var hudCanvas=hostObject.GetComponentsInChildren<Canvas>(true).First(c=>c.name=="Festival HUD");
+                if(reelCanvas.sortingOrder>=hudCanvas.sortingOrder||reelCanvas.GetComponent<GraphicRaycaster>()!=null)failures.Add("the reel's canvas sorts at "+reelCanvas.sortingOrder+" against the HUD's "+hudCanvas.sortingOrder+" or takes clicks");
+                // The host keeps walking while it turns: the host's own movement input, as the host's keyboard gives it.
+                float from=me.X;
+                for(float until=Time.realtimeSinceStartup+.3f;Time.realtimeSinceStartup<until;){Walk(host,1,0);yield return null;}
+                if(me.X<from+.4f)failures.Add("the host walked "+(me.X-from).ToString("F2")+" m while the reel turned");
+                yield return new WaitForSeconds(.3f);me.X=0;me.Z=2;
+                // The menu opens, its RESUME takes the click, and it lists no pickup before the reel lands.
+                host.MenuOpen=true;yield return null;yield return null;
+                var resume=hud.GetComponentsInChildren<Button>(false).FirstOrDefault(b=>b.name=="RESUME FESTIVAL");
+                if(resume==null)failures.Add("the open menu has no RESUME FESTIVAL");
+                else
+                {
+                    var hits=new List<RaycastResult>();
+                    EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current){position=RectTransformUtility.WorldToScreenPoint(null,resume.transform.position)},hits);
+                    if(hits.Count==0||hits[0].gameObject.GetComponentInParent<Button>()!=resume)failures.Add("a click on RESUME lands on "+(hits.Count==0?"nothing":hits[0].gameObject.name));
+                }
+                if(Age()>=FestivalSimulation.DeathWheelSeconds)failures.Add("setup: the menu was checked "+Age().ToString("F2")+" s in, after the landing");
+                else if(Action("Pick up $40")!=null)failures.Add("the pile is offered "+Age().ToString("F2")+" s in, before the reel lands");
+                resume?.onClick.Invoke();yield return null;
+                if(host.MenuOpen)failures.Add("RESUME did not close the menu while the reel turned");
+                // Landed: the menu offers the pile, read in dollars over the voucher, and taking it pays the host.
+                while(Age()<FestivalSimulation.DeathWheelSeconds+.2)yield return null;
+                host.MenuOpen=true;yield return new WaitForSeconds(.2f);
+                if(Reel(hostObject,"Result")?.text!="DROPPED $40")failures.Add("landed: the host's reel reads \""+(Reel(hostObject,"Result")?.text??"(hidden)")+"\"");
+                var pile=sim.State.Drops.Find(d=>d.ItemId=="cash");
+                var actors=(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(host);
+                if(pile==null||!actors.TryGetValue(pile.Id,out var actor))failures.Add("landed: the host shows no pile");
+                else
+                {
+                    if(actor.name!="FestivalVoucher")failures.Add("landed: the pile is a "+actor.name+", not the voucher model");
+                    string label=actor.GetComponentInChildren<TextMesh>(true)?.text;
+                    if(label!="$40")failures.Add("landed: the pile's label reads \""+label+"\"");
+                }
+                var take=Action("Pick up $40");
+                if(take==null)failures.Add("landed: the menu offers \""+Listed()+"\", not \"Pick up $40\"");
+                else
+                {
+                    take.onClick.Invoke();yield return new WaitForSeconds(.4f);
+                    if(me.Cash!=cash+40)failures.Add("the host has "+me.Cash+" after taking it, not "+(cash+40));
+                    if(sim.State.Drops.Exists(d=>d.ItemId=="cash"))failures.Add("the pile is still there");
+                }
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+            Assert.That(failures,Is.Empty,"A friend's death cash:\n"+string.Join("\n",failures));
+        }
+
+        static int walkSequence=2000000;
+        // The host's real movement intent, as its keyboard sends it each frame; batchmode's unfocused keyboard sends none.
+        static void Walk(FestivalSession session,float x,float z)
+        {
+            var type=typeof(FestivalSession).Assembly.GetType("Festival.Network.MoveIntent");var intent=System.Activator.CreateInstance(type);
+            type.GetField("X").SetValue(intent,x);type.GetField("Z").SetValue(intent,z);type.GetField("Sequence").SetValue(intent,++walkSequence);
+            typeof(FestivalSession).GetMethod("AcceptInput",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new[]{(object)session.LocalPlayerId,intent});
+        }
+        // The first spin seed on which this player's death on the host's next step drops their cash, by taking that step on a copy.
+        static int DroppingSeed(FestivalSimulation sim,string id)
+        {
+            for(int seed=1;seed<200;seed++)
+            {
+                var copy=new FestivalSimulation();copy.Restore(JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(sim.State)));
+                copy.State.SpinSeed=seed;var dying=copy.Player(id);dying.Life="Downed";dying.DownedRemaining=.05;copy.Tick(.1);
+                if(copy.State.DeathSpins.Exists(s=>s.PlayerId==id&&s.CashDropped>0))return seed;
+            }
+            Assert.Fail("setup: no seed drops");return 0;
         }
     }
 }

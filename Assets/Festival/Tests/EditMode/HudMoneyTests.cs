@@ -1,6 +1,7 @@
 using System.IO;
 using NUnit.Framework;
 using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 
 namespace Festival.Tests
@@ -74,6 +75,20 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.DeathSpinResult(playa,sam,dropped),Is.EqualTo("DROPPED 40 RAMEN PACKETS"));
             Assert.That(FestivalHudText.DeathSpinResult(playa,sam,kept),Is.EqualTo("KEPT 40 RAMEN PACKETS"));
             Assert.That(FestivalHudText.DeathSpinTitle(new DeathSpinState{Name="Bartholomew the Great"}),Is.EqualTo("BARTHOLOME DIED"),"a long name keeps the spinner's ten letters");
+        }
+
+        // LOOP-4: a cash pile's floating label and its pickup line read its amount in your money; other drops keep their names.
+        [Test] public void ACashPileAndItsPickupReadInYourMoney()
+        {
+            var pile=new DropState{Id="cash_1",ItemId="cash",Count=40,X=1,Z=2};var stock=new DropState{Id="drop_2",ItemId="stock_lsd",Count=1};
+            var palm=Day(0);var you=Crew(palm,"you",0);
+            Assert.That(FestivalHudText.DropLabel(palm,you,pile),Is.EqualTo("$40"));
+            Assert.That(FestivalHudText.PickupAction(palm,you,pile),Is.EqualTo("Pick up $40"));
+            Assert.That(FestivalHudText.PickupAction(palm,you,stock),Is.EqualTo("Pick up Tongue Stamps"),"other drops keep their display names");
+            var playa=Day(1);var sam=Crew(playa,"sam",1);
+            Assert.That(FestivalHudText.DropLabel(playa,sam,pile),Is.EqualTo("40 ramen packets"));
+            Assert.That(FestivalHudText.PickupAction(playa,sam,pile),Is.EqualTo("Pick up 40 ramen packets"));
+            Assert.That(FestivalSession.DropModel("cash"),Is.EqualTo("FestivalVoucher"),"a cash pile reuses the voucher model");
         }
 
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()
