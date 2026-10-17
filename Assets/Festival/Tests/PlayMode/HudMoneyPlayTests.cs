@@ -65,7 +65,8 @@ namespace Festival.Tests
                 yield return new WaitForSeconds(.5f);
                 Expect("at the shelf","Prompt","PICK UP PRACTICE POI  •  5 FRIENDSHIP BRACELETS  •  Reusable dance tool: 15% wider good window, capped at 175 ms. Pair with a friend for rescue.");
                 // The host's camp card, which now also says where stock comes from beside the festival pick (ECON-2), still draws whole.
-                Expect("at the shelf","Objective detail","F  switch to Palm Mirage (1 of 2 unlocked) • stock comes from festivalgoers");
+                // ECON-6: the camp card names the starter allowance and festivalgoer prices, both in this festival's money.
+                Expect("at the shelf","Objective detail","F  switch to Palm Mirage (1 of 2 unlocked) • One starter each at camp: Tongue Stamps or Fun Guys for 5 friendship bracelets. Buy more from festivalgoers (5 friendship bracelets each; some are narcs). Keep some money for more stock.");
                 Fits("at the shelf","Prompt","Objective detail");NoDollars("at the shelf");
                 // The price tags on both shelves, each lettered within its painted card.
                 int tags=0;

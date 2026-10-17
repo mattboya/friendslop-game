@@ -350,7 +350,9 @@ namespace Festival.Presentation
                 while(!Near(session.LocalPlayer,market.X,market.Z)&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("night market placement");yield break;}
                 var marketGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.RootName+"/Night market goods");
-                if(marketGoods==null||marketGoods.childCount!=session.State.VendorOffers.Count){Fail("night market physical display");yield break;}
+                // ECON-6: starter stock is sold at camp, so the market shows a physical item for every other offer only.
+                int shownOffers=session.State.VendorOffers.FindAll(offer=>!Catalog.StarterStock(offer)).Count;
+                if(marketGoods==null||marketGoods.childCount!=shownOffers){Fail("night market physical display");yield break;}
                 session.Command("Buy",item:"medical_voucher");
                 while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")&&Time.realtimeSinceStartup<deadline)yield return null;
                 if(Time.realtimeSinceStartup>=deadline){Fail("night market direct purchase");yield break;}
