@@ -58,6 +58,27 @@ namespace Festival.Tests
             }
         }
 
+        // The sign names the game the booth deals, for every game a booth can deal and the two still to join the bag, and its board
+        // holds the longest name; a game this build cannot name keeps the plain sign.
+        [Test]public void TheBoothSignNamesItsSelectedGame()
+        {
+            root=new GameObject("Sign test");var booth=FestivalMinigameView.Build(root.transform);
+            var sign=booth.Find("Sign text").GetComponent<TextMesh>();var board=booth.Find("Sign board").GetComponent<Renderer>();
+            var state=new RoundState{Phase="Playing",Booth=new MinigameState{Spot=1}};
+            foreach(var kind in FestivalSimulation.MinigameKinds)
+            {
+                FestivalMinigameView.NameGame(booth,kind);
+                Assert.That(sign.text,Is.EqualTo(FestivalHudText.MinigameName(kind)+FestivalMinigameView.SignRule).And.Not.EqualTo(FestivalMinigameView.SignText),kind+" is dealt, so its sign names it");
+            }
+            foreach(var (kind,name) in new[]{(FestivalSimulation.MysteryCupsGame,"MYSTERY CUPS"),(FestivalSimulation.DrumCircleGame,"DRUM CIRCLE"),(FestivalSimulation.LightShowGame,"LIGHT SHOW"),("AnotherGame","MINIGAME")})
+            {
+                state.Booth.Kind=kind;FestivalMinigameView.Show(booth,state);FestivalMinigameView.NameGame(booth,kind);booth.rotation=Quaternion.identity;
+                Assert.That(sign.text,Is.EqualTo(name+"\nALL IN THE RING"),kind+"'s sign");
+                var text=sign.GetComponent<Renderer>().bounds.size.x;
+                Assert.That(text,Is.GreaterThan(0).And.LessThan(board.bounds.size.x),name+" fits its board");
+            }
+        }
+
         // MINI-4: Mystery Cups' cups stand in a numbered row on a table in front of the stranger, as many as the crew will play
         // before the game and as were poured once it runs, each drunk one gone. In the tripper's view (the only one carrying the
         // hint) the cup their hunch marks glows; in anyone else's none does. The cup the player up looks at lifts off the table.

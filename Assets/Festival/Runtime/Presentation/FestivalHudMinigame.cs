@@ -33,7 +33,8 @@ namespace Festival.Presentation
 
         /// <summary>MINI-4: Mystery Cups on the card. While it runs: the pot, who is up and their seconds, what the next safe cup adds,
         /// and the cup the tripper's hunch marks while it is on the table (only the tripper's view carries it). Then what became of the
-        /// pot: lost to the spiked cup, split across the crew by day, or banked by night; and when the festival starts again.</summary>
+        /// pot: lost to the spiked cup, split across the crew by day with the odd amount to the stash, or banked by night; and when
+        /// the festival starts again.</summary>
         static (string Title,string Detail) CupsCard(RoundState s,PlayerState p)
         {
             var b=s.Booth;
@@ -43,16 +44,25 @@ namespace Festival.Presentation
                 if(b.SpikedBy!="")return ("SPIKED!",(b.SpikedBy==p.Id?"You":NameOf(s,b.SpikedBy))+" drank the spiked cup"+(b.Pot>0?" and lost the "+Money(s,p,b.Pot)+" pot.":".")+again);
                 string paid=b.Pot==0?"Called it with nothing in the pot."
                     :Festivals.For(s).Night?"Called it: "+Money(s,p,b.Pot)+" to the stash."
-                    :"Called it: "+Money(s,p,b.Pot/Math.Max(1,b.PlayerIds.Count))+" each, counted as sales.";
+                    :DayPayout(s,p,b)+", counted as sales.";
                 return ("+"+Money(s,p,b.Pot),paid+again);
             }
             string up=FestivalSimulation.CupsTurn(s),seconds=WholeSeconds(b.TurnAt+FestivalSimulation.CupTurnSeconds-b.Seconds)+" s",next=Money(s,p,FestivalSimulation.NextCupPays(b));
             string hunch=b.Hint>=0&&!b.Drunk.Contains(b.Hint)?" Your hunch: cup "+(b.Hint+1)+" is spiked.":"";
-            return (("MYSTERY CUPS"+Dot+"POT "+Money(s,p,b.Pot)).ToUpperInvariant(),
+            return ((MinigameName(b.Kind)+Dot+"POT "+Money(s,p,b.Pot)).ToUpperInvariant(),
                 (up==p.Id?"Your turn: "+seconds+". Drink a cup for "+next+", or call it. One is spiked.":NameOf(s,up)+"'s turn: "+seconds+". A safe cup adds "+next+"; the spiked one loses the pot.")+hunch);
         }
-        // A player's name as the view has it; a spirit's view lists only spirits, so a living friend reads as "A friend".
-        static string NameOf(RoundState s,string id)=>s.Players.Find(x=>x.Id==id)?.Name??"A friend";
+        /// <summary>A game's name as its booth sign and card read it; "MINIGAME" for one this build cannot name.</summary>
+        public static string MinigameName(string kind)=>kind==FestivalSimulation.MysteryCupsGame?"MYSTERY CUPS":kind==FestivalSimulation.DrumCircleGame?"DRUM CIRCLE":kind==FestivalSimulation.LightShowGame?"LIGHT SHOW":"MINIGAME";
+        // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash.
+        static string DayPayout(RoundState s,PlayerState p,MinigameState b)
+        {
+            int crew=Math.Max(1,b.PlayerIds.Count),share=b.Pot/crew,stash=b.Pot-share*crew;
+            if(share==0)return "Called it: the whole "+Money(s,p,b.Pot)+" pot goes to the stash";
+            return "Called it: "+Money(s,p,share)+" each"+(stash>0?", "+Money(s,p,stash)+" to the stash":"");
+        }
+        // A player's name as the view has it, else as the game captured it at its start: a spirit's view lists only spirits.
+        static string NameOf(RoundState s,string id)=>s.Players.Find(x=>x.Id==id)?.Name??s.Booth.Participants?.Find(x=>x.Id==id)?.Name??"A friend";
         /// <summary>Whether the minigame card's result reads as a win (mint, not orange): scored, nothing taken off the clock, and in
         /// Mystery Cups no spiked cup drunk.</summary>
         public static bool MinigameWon(RoundState s)=>s.Phase==FestivalSimulation.MinigamePhase&&s.Booth.ScoredAt>=0&&s.Booth.ClockChange>=0&&s.Booth.SpikedBy=="";

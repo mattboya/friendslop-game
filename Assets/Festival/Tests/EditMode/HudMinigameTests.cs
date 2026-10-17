@@ -102,6 +102,58 @@ namespace Festival.Tests
             finally{Object.DestroyImmediate(root);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
         }
 
+        // The tripper's dose card and a living player's day quota stay up through every game and its banner, and a cups payout,
+        // counted as sales the moment it is called, shows on the quota at once.
+        [TestCase(FestivalSimulation.MysteryCupsGame)][TestCase(FestivalSimulation.DrumCircleGame)][TestCase(FestivalSimulation.LightShowGame)][TestCase(PlainGame)]
+        public void Mini6TripperAndQuotaRemainVisibleDuringEveryGameAndBanner(string game)
+        {
+            var s=Level(out var you,out var sam,game);s.TripperId=you.Id;
+            s.Doses.Add(new PlayerDose{PlayerId=you.Id,Dose=3,Substance="lsd"});s.LevelSales=12;
+            string tripping=FestivalHudText.Tripping(s,you.Id),quota=FestivalHudText.ObjectiveTitle(s,you),hint=FestivalHudText.QuotaHint(s,you);
+            Assert.That(tripping,Does.StartWith("YOU TRIP"));Assert.That(quota,Does.Contain("$12"));
+            s.Phase=FestivalSimulation.MinigamePhase;
+            Assert.That(FestivalHudText.Tripping(s,you.Id),Is.EqualTo(tripping),"dose card during the game");
+            Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo(quota),"quota during the game");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(hint),"the quota line, without a step the pause refuses");
+            s.Booth.ScoredAt=4;s.LevelSales=17;
+            Assert.That(FestivalHudText.Tripping(s,you.Id),Is.EqualTo(tripping),"dose card during the banner");
+            Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("DAY QUOTA  $17 / $30"),"payout is immediate during banner");
+            sam.Life="Spirit";
+            Assert.That(FestivalHudText.ObjectiveTitle(s,sam),Is.EqualTo(FestivalGuidance.Headline(s,sam)),"a spirit keeps its own guidance");
+        }
+
+        // By day the called pot is split as the host splits it: each share, then the odd amount to the stash, or the whole pot to the
+        // stash when the crew outnumbers it; always in the viewer's money.
+        [TestCase(Festivals.PoloFestival)][TestCase(Festivals.PlayaFestival)]
+        public void Mini6CalledPotSaysEveryShareAndTheStashRemainder(int festival)
+        {
+            var s=Level(out var you,out var sam);s.FestivalIndex=festival;you.Ordinal=2;s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;b.ScoredAt=12;b.Seconds=12.5;
+            string M(int amount)=>FestivalHudText.Money(s,you,amount);const string again=" The festival starts again in 4.";
+            foreach(var (crew,pot,line) in new[]{(1,5,"Called it: "+M(5)+" each, counted as sales."),(3,15,"Called it: "+M(5)+" each, counted as sales."),
+                (2,15,"Called it: "+M(7)+" each, "+M(1)+" to the stash, counted as sales."),(3,35,"Called it: "+M(11)+" each, "+M(2)+" to the stash, counted as sales."),
+                (8,5,"Called it: the whole "+M(5)+" pot goes to the stash, counted as sales."),(8,60,"Called it: "+M(7)+" each, "+M(4)+" to the stash, counted as sales.")})
+            {
+                b.PlayerIds.Clear();for(int i=0;i<crew;i++)b.PlayerIds.Add("p"+i);b.Pot=pot;
+                Assert.That(Card(s,you),Is.EqualTo(("+"+M(pot),line+again)),crew+" players calling a "+pot+" pot");
+            }
+            s.LevelIndex=1;Assert.That(Card(s,you).Item2,Is.EqualTo("Called it: "+M(60)+" to the stash."+again),"night banks it all");
+        }
+
+        // A spirit's view lists only spirits, so cups names who is up and who drank the spiked cup from the roster captured at the
+        // start; an older snapshot without one still reads "A friend".
+        [Test]public void Mini6SpiritWatchersReadCapturedNamesForTurnsAndTheSpikedCup()
+        {
+            var s=Level(out var you,out var sam);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;
+            b.PlayerIds.AddRange(new[]{"you","sam"});b.Cups=4;b.Turns.AddRange(new[]{"sam","you"});b.TurnAt=2;b.Seconds=4.6;
+            var ghost=new PlayerState{Id="ghost",Name="Ghost",Life="Spirit"};var spiritView=new RoundState{Phase=s.Phase,Booth=b,DurationSeconds=s.DurationSeconds};spiritView.Players.Add(ghost);
+            Assert.That(Card(spiritView,ghost).Item2,Does.StartWith("A friend's turn"),"an older snapshot has no roster");
+            b.Participants.Add(new MinigameParticipant{Id="you",Name="You"});b.Participants.Add(new MinigameParticipant{Id="sam",Name="Sam"});
+            Assert.That(Card(spiritView,ghost),Is.EqualTo(Card(s,you)),"the spirit reads Sam's turn as the living do");
+            b.ScoredAt=6;b.SpikedBy="sam";b.Pot=5;
+            Assert.That(Card(spiritView,ghost).Item2,Does.StartWith("Sam drank the spiked cup"),"and who drank the spiked cup");
+            sam.Connected=false;Assert.That(Card(s,you).Item2,Does.StartWith("Sam drank the spiked cup"),"a friend who left still has a name");
+        }
+
         static (string,string) Card(RoundState s,PlayerState p)=>FestivalHudText.MinigameCard(s,p);
 
         // In the ring the card counts who of the connected living crew is in; says who keeps it from starting, down or busy; then
@@ -180,7 +232,7 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.MinigameWon(s),Is.False,"which is no win");
             b.Pot=0;Assert.That(Card(s,you).Item2,Is.EqualTo("Sam drank the spiked cup."+again),"with nothing in the pot yet");
             b.SpikedBy="";b.Pot=15;
-            Assert.That(Card(s,you),Is.EqualTo(("+$15","Called it: $7 each, counted as sales."+again)),"called by day, split across the crew");
+            Assert.That(Card(s,you),Is.EqualTo(("+$15","Called it: $7 each, $1 to the stash, counted as sales."+again)),"called by day, split across the crew, the odd dollar banked");
             Assert.That(FestivalHudText.MinigameWon(s),Is.True,"a win");
             s.LevelIndex=1;Assert.That(Card(s,you),Is.EqualTo(("+$15","Called it: $15 to the stash."+again)),"called at night, banked");
             b.Pot=0;Assert.That(Card(s,you),Is.EqualTo(("+$0","Called it with nothing in the pot."+again)),"called before a cup was drunk");

@@ -75,7 +75,8 @@ namespace Festival.Presentation
             if(s.Phase=="Results")return OutcomeDetail(s,p);
             if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
             if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return FestivalGuidance.Hint(s,p);
-            return FestivalSimulation.DayQuotaMet(s)?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p);
+            // A paused game refuses every next step, and E is the game's own key then.
+            return FestivalSimulation.DayQuotaMet(s)||s.Phase==FestivalSimulation.MinigamePhase?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p);
         }
         /// <summary>Shared camp allowance/source teaching, always in the viewer's money, even before a rescue.</summary>
         public static string CampStockGuidance(RoundState s,PlayerState p)
@@ -100,8 +101,9 @@ namespace Festival.Presentation
             if(p.Id==s.TripperId)return "A green ball in a green ring is a real buyer: walk up and press E to offer.";
             return "Stick with "+(s.Players.Find(x=>x.Id==s.TripperId)?.Name??"the tripper")+": they see the buyers. Walk up to one and press E to offer.";
         }
-        // Downed, detained and spirit players keep the guidance about getting back on their feet.
-        static bool SellingToday(RoundState s,PlayerState p)=>s.Phase=="Playing"&&p.Life=="Alive"&&!Festivals.For(s).Night;
+        // Downed, detained and spirit players keep the guidance about getting back on their feet. A minigame's pot counts toward
+        // the quota, so the quota stays up while one runs.
+        static bool SellingToday(RoundState s,PlayerState p)=>(s.Phase=="Playing"||s.Phase==FestivalSimulation.MinigamePhase)&&p.Life=="Alive"&&!Festivals.For(s).Night;
 
         /// <summary>POLO-2: whether p's HUD offers Cancel for what they are doing. Nothing cancels a turn on the Ferris wheel (the
         /// host refuses it), so nothing offers to; an Ember Playa art car rider still hops off.</summary>
@@ -318,13 +320,13 @@ namespace Festival.Presentation
 
         /// <summary>
         /// Who trips this level, on how many doses and of what (TRIP-5's substance wheel), from the public spin result, while the crew
-        /// is out (the spinner names them before that, and camp still holds the last level's). Night 2 doses everyone, so the rest of
-        /// the crew's doses and substances follow, two to a line. A spirit's view lists only spirits: a living tripper is "A FRIEND"
+        /// is out, through a minigame and its banner too (the spinner names them before that, and camp still holds the last level's).
+        /// Night 2 doses everyone, so the rest of the crew's doses and substances follow, two to a line. A spirit's view lists only spirits: a living tripper is "A FRIEND"
         /// and the living's doses go unlisted. A dose spun before the substance wheel names no substance.
         /// </summary>
         public static string Tripping(RoundState s,string localId)
         {
-            if(s.TripperId==""||s.Phase!="Loading"&&s.Phase!="Playing")return "";
+            if(s.TripperId==""||s.Phase!="Loading"&&s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)return "";
             int dose=FestivalSimulation.TripperDose(s);string took=FestivalSpinner.SubstanceName(s.Doses.Find(d=>d.PlayerId==s.TripperId)?.Substance);
             string text=(s.TripperId==localId?"YOU TRIP":(s.Players.Find(p=>p.Id==s.TripperId)?.Name.ToUpperInvariant()??"A FRIEND")+" TRIPS")+Dot+dose+(dose==1?" DOSE":" DOSES")+(took==""?"":Dot+took);
             if(s.LevelIndex!=Festivals.LevelCount-1)return text;
