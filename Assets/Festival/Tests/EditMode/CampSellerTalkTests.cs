@@ -279,6 +279,20 @@ namespace Festival.Tests
             Assert.That(all,Does.Contain("nfluencer").And.Contain("dust storm"),"each festival's own tips");
         }
 
+        // A grabbed Giggle Tank pays nothing until someone carries it home, and her tip says so, in the viewer's money.
+        [Test] public void TheGiggleTankTipSaysToCarryItHomeToTheCampGate()
+        {
+            var s=Camp(Festivals.PlayaFestival,0,out var you,ordinal:1);var talk=new CampSellerTalk(5);var tank=new HashSet<string>();
+            for(int ask=0;ask<2000;ask++){string tip=talk.Tip(s,you);if(tip.Contains("Giggle Tank"))tank.Add(tip);}
+            Assert.That(tank.Count,Is.EqualTo(1),"one Giggle Tank tip: "+string.Join(" | ",tank));
+            foreach(var tip in tank)
+            {
+                Assert.That(tip,Does.Contain("carry it home to the camp gate").And.Contain("25 ramen packets").And.Not.Contain("$"),"the gate pays it, in your money: "+tip);
+                Assert.That(tip,Does.Contain("free hand").And.Contain("arrested or die"),"what it takes and what loses it: "+tip);
+                Assert.That(tip,Does.Not.Contain("Grab it and the crew stash gets"),"a grab alone no longer pays: "+tip);
+            }
+        }
+
         [Test] public void EverythingSheSaysIsFreeOfRealDrugAndRetiredWords()
         {
             var lines=new List<string>(CampSellerTalk.Questions){CampSellerTalk.Name};

@@ -10,6 +10,7 @@ namespace Festival.Tests
 {
     // GAS-2: a Giggle Tank stand-in, built from primitives, stands on the festival grounds wherever a living player's view has a
     // tank, with room all round it to grab it, and goes once someone has. It collides with nothing, and a spirit's view has none.
+    // Whoever grabs it, the whole crew hears a deep "oh yeah!", and whoever carries it home is told so.
     public sealed class GiggleTankWorldTests
     {
         private readonly List<GameObject> made=new List<GameObject>();
@@ -70,6 +71,124 @@ namespace Festival.Tests
             var after=Wire(game,"p0");
             Assert.That(after.GiggleTankFound&&FestivalSimulation.GiggleTankAt(after)==null,Is.True,"once grabbed it is gone from every view");
             Assert.That(JsonUtility.FromJson<RoundState>("{\"Phase\":\"Playing\",\"StashCash\":5}").GiggleTankSpot,Is.EqualTo(-1),"a snapshot from before tanks reads as none");
+        }
+
+        // What each client is told and plays as the level's tank is grabbed and carried home, from its view as the wire
+        // brings it. "sam" grabs; "host" is a friend and "ghost" a spirit, who sees no living player.
+        static FestivalSimulation Crew()
+        {
+            var game=new FestivalSimulation(5);game.AddPlayer("host","Host");game.AddPlayer("sam","Sam");game.AddPlayer("ghost","Ghost");
+            game.State.Phase="Playing";game.State.GiggleTankSpot=2;return game;
+        }
+        static void Grab(FestivalSimulation game,string id)
+        {
+            var p=game.Player(id);var at=FestivalSimulation.GiggleTankAt(game.State);p.X=at.X;p.Z=at.Z;
+            Assert.That(game.Execute(id,new GameCommand{Id="grab "+id,Kind=FestivalSimulation.GrabGiggleTankKind}).Accepted,Is.True,"setup: "+id+" grabs the tank");
+        }
+        // One frame of viewer's HUD: whether it plays the oh-yeah, and the notice it shows.
+        static (bool OhYeah,string Notice) Follow(FestivalHudText.GiggleTankNews news,FestivalSimulation game,string viewer,int connection=0)
+        {
+            var view=Wire(game,viewer);bool ohYeah=news.Follow(view,view.Players.Find(p=>p.Id==viewer),connection);return (ohYeah,news.Take());
+        }
+        const string SamGrabbed="Sam grabbed a Giggle Tank! Get it home: +$25 for camp",Home="Giggle Tank home! +$25 for camp";
+
+        [Test]public void TheWholeCrewHearsAGrabOnceAndFriendsAndSpiritsLearnWhoGrabbedIt()
+        {
+            var game=Crew();game.Player("ghost").Life="Spirit";
+            var host=new FestivalHudText.GiggleTankNews();var sam=new FestivalHudText.GiggleTankNews();var ghost=new FestivalHudText.GiggleTankNews();
+            Assert.That(Follow(host,game,"host"),Is.EqualTo((false,"")),"setup: the host's first view");
+            Assert.That(Follow(sam,game,"sam"),Is.EqualTo((false,"")),"setup: Sam's first view");
+            Assert.That(Follow(ghost,game,"ghost"),Is.EqualTo((false,"")),"setup: the spirit's first view");
+            Grab(game,"sam");
+            Assert.That(Follow(host,game,"host"),Is.EqualTo((true,SamGrabbed)),"a friend hears it and is told who grabbed it");
+            Assert.That(Follow(ghost,game,"ghost"),Is.EqualTo((true,SamGrabbed)),"so is a spirit, by the name the grab carries");
+            Assert.That(Follow(sam,game,"sam"),Is.EqualTo((true,"")),"the grabber hears it too; their own reply comes from the host");
+            foreach(var (news,viewer) in new[]{(host,"host"),(sam,"sam"),(ghost,"ghost")})
+                Assert.That(Follow(news,game,viewer),Is.EqualTo((false,"")),viewer+" hears and reads it once");
+        }
+
+        [Test]public void AGrabFromBeforeAViewConnectsOrItsRoundBeginsStaysSilent()
+        {
+            var game=Crew();Grab(game,"sam");var news=new FestivalHudText.GiggleTankNews();
+            Assert.That(Follow(news,game,"host"),Is.EqualTo((false,"")),"joining after the grab");
+            Assert.That(Follow(news,game,"host"),Is.EqualTo((false,"")),"and the frame after");
+            game=Crew();news=new FestivalHudText.GiggleTankNews();
+            Assert.That(Follow(news,game,"host"),Is.EqualTo((false,"")),"setup: before the grab");
+            Grab(game,"sam");
+            Assert.That(Follow(news,game,"host",connection:1),Is.EqualTo((false,"")),"reconnecting after the grab");
+            Assert.That(Follow(news,game,"host",connection:1),Is.EqualTo((false,"")),"and the frame after");
+            game=Crew();news=new FestivalHudText.GiggleTankNews();
+            Assert.That(Follow(news,game,"host"),Is.EqualTo((false,"")),"setup: a round without a grab");
+            Grab(game,"sam");game.State.RoundId="next round";
+            Assert.That(Follow(news,game,"host"),Is.EqualTo((false,"")),"a new round's first view, its tank already grabbed");
+            Assert.That(Follow(news,game,"host"),Is.EqualTo((false,"")),"and the frame after");
+        }
+
+        [Test]public void OnlyTheCarrierIsToldTheirTankGotHome()
+        {
+            var game=Crew();var host=new FestivalHudText.GiggleTankNews();var sam=new FestivalHudText.GiggleTankNews();
+            Grab(game,"sam");Follow(host,game,"host");Follow(sam,game,"sam");Follow(host,game,"host");Follow(sam,game,"sam");
+            int stash=game.State.StashCash;var carrier=game.Player("sam");carrier.X=Festivals.CampGateX;carrier.Z=Festivals.CampGateZ;game.Tick(.1);
+            Assert.That(game.State.StashCash,Is.EqualTo(stash+Festivals.GiggleTankCash),"setup: Sam banks the tank at the camp gate");
+            Assert.That(Follow(sam,game,"sam"),Is.EqualTo((false,Home)),"the carrier is told it got home, with no second oh-yeah");
+            Assert.That(Follow(host,game,"host"),Is.EqualTo((false,"")),"a friend sees the stash rise, never another's receipt");
+            Assert.That(Follow(sam,game,"sam"),Is.EqualTo((false,"")),"told once");
+        }
+
+        // The deep "oh yeah!" the crew hears as a tank is grabbed, made in code at 22050 Hz.
+        const int Rate=22050,Frame=Rate/50;
+        static float Rms(float[] samples,int from,int to){double sum=0;for(int i=from;i<to;i++)sum+=samples[i]*samples[i];return (float)System.Math.Sqrt(sum/System.Math.Max(1,to-from));}
+        // The quietest 20 ms frame with a loud stretch (at least 30% of the loudest frame) on each side, and its loudness against
+        // the quieter of those two: where one syllable ends and the next begins. -1 when there is no such frame.
+        static int Dip(float[] samples,out float depth)
+        {
+            var frames=new float[samples.Length/Frame];for(int i=0;i<frames.Length;i++)frames[i]=Rms(samples,i*Frame,(i+1)*Frame);
+            float loudest=0;foreach(var f in frames)loudest=Mathf.Max(loudest,f);
+            int dip=-1;depth=1;
+            for(int m=1;m<frames.Length-1;m++)
+            {
+                float before=0,after=0;for(int i=0;i<m;i++)before=Mathf.Max(before,frames[i]);for(int i=m+1;i<frames.Length;i++)after=Mathf.Max(after,frames[i]);
+                if(before<.3f*loudest||after<.3f*loudest)continue;
+                float ratio=frames[m]/Mathf.Min(before,after);if(ratio<depth){depth=ratio;dip=m;}
+            }
+            return dip;
+        }
+        // The loudest 2048 samples (about 93 ms) between from and to.
+        static float[] Loudest(float[] samples,int from,int to)
+        {
+            int best=from;float loudest=-1;
+            for(int i=from;i+2048<=to;i+=256){float rms=Rms(samples,i,i+2048);if(rms>loudest){loudest=rms;best=i;}}
+            var window=new float[2048];System.Array.Copy(samples,best,window,0,2048);return window;
+        }
+        // The pitch whose period best repeats the window (autocorrelation over 50-400 Hz).
+        static float Fundamental(float[] window)
+        {
+            int best=0;double strongest=double.MinValue;
+            for(int lag=Rate/400;lag<=Rate/50;lag++){double sum=0;for(int i=0;i+lag<window.Length;i++)sum+=window[i]*window[i+lag];if(sum>strongest){strongest=sum;best=lag;}}
+            return Rate/(float)best;
+        }
+        // How fast the wave moves for its loudness: a vowel with higher formants is brighter.
+        static float Brightness(float[] window){var change=new float[window.Length-1];for(int i=0;i<change.Length;i++)change[i]=window[i+1]-window[i];return Rms(change,0,change.Length)/Rms(window,0,window.Length);}
+
+        [Test]public void OhYeahIsOneToOneAndAHalfSecondsOfTwoSyllablesThatNeverClip()
+        {
+            var samples=FestivalHud.OhYeahSamples(Rate);
+            Assert.That(samples.Length/(float)Rate,Is.InRange(.8f,1.4f),"0.8-1.4 s long");
+            float peak=0;foreach(var sample in samples)peak=Mathf.Max(peak,Mathf.Abs(sample));
+            Assert.That(peak,Is.InRange(.3f,1f),"loud, and never past 1");
+            Assert.That(Dip(samples,out float depth),Is.GreaterThan(0),"two loud syllables");
+            Assert.That(depth,Is.LessThan(.3f),"its loudness dips between them");
+            Assert.That(FestivalHud.OhYeahSamples(Rate),Is.EqualTo(samples),"the same voice every time");
+        }
+
+        [Test]public void OhYeahIsDeepWithADarkOhThenABrighterYeah()
+        {
+            var samples=FestivalHud.OhYeahSamples(Rate);int dip=Dip(samples,out _);
+            Assert.That(dip,Is.GreaterThan(0),"setup: two syllables");
+            float[] oh=Loudest(samples,0,dip*Frame),yeah=Loudest(samples,(dip+1)*Frame,samples.Length);
+            Assert.That(Fundamental(oh),Is.LessThan(130),"a deep oh");
+            Assert.That(Fundamental(yeah),Is.LessThan(130),"a deep yeah");
+            Assert.That(Brightness(yeah),Is.GreaterThan(Brightness(oh)*1.3f),"two vowels: the yeah's formants sit higher than the oh's");
         }
 
         // What viewer's client receives, through the wire format.

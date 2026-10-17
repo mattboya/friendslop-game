@@ -184,7 +184,7 @@ namespace Festival.Presentation
                 "On Night 2 everybody goes home. One of you can drag the first body back alone, but every other one takes two carriers.",
                 "A downed friend can be rescued or dragged clear. A spirit has to walk to the medical tent.",
                 "The camp DJ takes requests: "+Tracks()+". Walk on up.",
-                "Sometimes there's a Giggle Tank hidden at the festival. Grab it and the crew stash gets $"+Festivals.GiggleTankCash+".",
+                "Sometimes there's a Giggle Tank hidden at the festival. It takes a free hand: carry it home to the camp gate and the crew stash gets $"+Festivals.GiggleTankCash+". Get arrested or die on the way and it's gone.",
                 "Lose a level and the whole festival starts over at Day 1. Win, and your cash and gear come with you.",
                 "At the campfire you vote on each other's silly awards, and the worst of you take a shot.",
                 "The little spoon's a necklace. Wear one and the crowd trusts you a touch more.",

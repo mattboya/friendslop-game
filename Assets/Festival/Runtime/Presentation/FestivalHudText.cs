@@ -396,6 +396,33 @@ namespace Festival.Presentation
         public static readonly string CloudStashNotice="Found the cloud's stash! +$"+FestivalSimulation.SecretStashCash+" for camp";
         /// <summary>ECON-8: what whoever picks up a random find is told, in dollars like the host's replies, for MoneyText.</summary>
         public static string FoundCashNotice(int amount)=>"Found $"+amount+" on the ground!";
+        /// <summary>What a friend or a spirit is told as someone grabs the level's Giggle Tank, by the name the grab carries
+        /// (RoundState.GiggleTankGrabberName), in dollars like the host's replies, for MoneyText.</summary>
+        public static string GiggleTankGrabbed(string grabber)=>grabber+" grabbed a Giggle Tank! Get it home: +$"+Festivals.GiggleTankCash+" for camp";
+        /// <summary>What the carrier is told once the camp gate banks their Giggle Tank.</summary>
+        public static readonly string GiggleTankHome="Giggle Tank home! +$"+Festivals.GiggleTankCash+" for camp";
+        /// <summary>Follows a client's view for the level's Giggle Tank. Follow is true the frame someone grabs it, when the whole
+        /// crew hears the oh-yeah. A friend's grab, or the viewer's own tank banked at the camp gate (their owner-only receipt), leaves
+        /// a notice for Take. The first view of a connection or a round only takes note, so a grab from before it stays silent.</summary>
+        public sealed class GiggleTankNews
+        {
+            string round,grabber="",notice="";
+            int connection=-1,banked;
+            public bool Follow(RoundState s,PlayerState viewer,int connectionGeneration)
+            {
+                if(round!=s.RoundId||connection!=connectionGeneration)
+                {
+                    round=s.RoundId;connection=connectionGeneration;grabber=s.GiggleTankGrabberId;banked=viewer.GiggleTankBankSequence;notice="";
+                    return false;
+                }
+                bool grabbed=s.GiggleTankGrabberId!=""&&s.GiggleTankGrabberId!=grabber;grabber=s.GiggleTankGrabberId;
+                if(grabbed&&grabber!=viewer.Id)notice=GiggleTankGrabbed(s.GiggleTankGrabberName);
+                if(viewer.GiggleTankBankSequence>banked){banked=viewer.GiggleTankBankSequence;notice=GiggleTankHome;}
+                return grabbed;
+            }
+            /// <summary>The notice still to show, once; "" for none.</summary>
+            public string Take(){string taken=notice;notice="";return taken;}
+        }
         /// <summary>ESC-2: E during a stop while the guard is still walking over, out of talking reach (the host's 2.5 m): said, not
         /// offered, so until the talk is in reach E does nothing, never a sale or a buy in the guard's sight, which is an arrest.</summary>
         public const string StopApproachAction="Security is coming over";

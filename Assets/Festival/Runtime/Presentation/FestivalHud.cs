@@ -107,6 +107,10 @@ namespace Festival.Presentation
         private bool crewOpen;
         private AudioSource shopAudio;
         private AudioClip shopChime;
+        // Played on shopAudio, so the effects volume applies to it as to the chime.
+        private AudioClip ohYeah;
+        private readonly FestivalHudText.GiggleTankNews giggleTankNews=new FestivalHudText.GiggleTankNews();
+        public int OhYeahPlays{get;private set;}
         private Texture2D discTexture;
         private Sprite discSprite;
         private Texture2D roundedTexture;
@@ -253,7 +257,44 @@ namespace Festival.Presentation
                 samples[n]=(Mathf.Sin(2*Mathf.PI*660*t)+.55f*Mathf.Sin(2*Mathf.PI*990*t))*envelope*.16f;
             }
             shopChime=AudioClip.Create("Camp seller cash chime",samples.Length,1,rate,false);shopChime.SetData(samples,0);
+            var spoken=OhYeahSamples(rate);ohYeah=AudioClip.Create("Giggle Tank oh yeah",spoken.Length,1,rate,false);ohYeah.SetData(spoken,0);
             Build();
+        }
+
+        // The oh-yeah's two syllables: when each sounds (s), its pitch glide (Hz), its first three formants from and to (Hz) and
+        // their loudness, and how long it fades out (s). A dark, rising "oh", then a brighter "yeah" that falls away.
+        private static readonly (float Start,float End,float PitchFrom,float PitchTo,Vector3 FormantsFrom,Vector3 FormantsTo,Vector3 Gains,float Fade)[] OhYeahSyllables=
+        {
+            (.03f,.46f,96,110,new Vector3(450,800,2600),new Vector3(430,760,2550),new Vector3(1,.45f,.08f),.1f),
+            (.53f,1.12f,120,80,new Vector3(300,2200,2950),new Vector3(620,1700,2500),new Vector3(1,.9f,.3f),.35f),
+        };
+        private static readonly Vector3 FormantWidths=new Vector3(90,110,160);
+        /// <summary>The crew's deep "oh yeah!" as a Giggle Tank is grabbed, made in code at `rate` Hz: a voice of 80-120 Hz whose
+        /// harmonics each syllable's vowel formants shape, the same every time.</summary>
+        public static float[] OhYeahSamples(int rate)
+        {
+            var samples=new float[(int)(rate*1.18f)];double phase=0;float peak=0;
+            for(int n=0;n<samples.Length;n++)
+            {
+                float t=n/(float)rate;
+                foreach(var s in OhYeahSyllables)
+                {
+                    if(t<s.Start-.04f||t>s.End)continue;
+                    float u=Mathf.SmoothStep(0,1,(t-s.Start)/(s.End-s.Start)),pitch=Mathf.Lerp(s.PitchFrom,s.PitchTo,u)*(1+.012f*Mathf.Sin(2*Mathf.PI*5.5f*t));
+                    var formants=Vector3.Lerp(s.FormantsFrom,s.FormantsTo,u);
+                    phase+=2*Math.PI*pitch/rate;double sound=0;
+                    for(int k=1;k*pitch<4000;k++)
+                    {
+                        float shape=.08f;
+                        for(int i=0;i<3;i++){float d=(k*pitch-formants[i])/FormantWidths[i];shape+=s.Gains[i]/(1+d*d);}
+                        sound+=shape/Math.Sqrt(k)*Math.Sin(k*phase);
+                    }
+                    samples[n]=(float)sound*Mathf.SmoothStep(0,1,(t-s.Start+.04f)/.08f)*Mathf.SmoothStep(0,1,(s.End-t)/s.Fade);
+                    peak=Mathf.Max(peak,Mathf.Abs(samples[n]));
+                }
+            }
+            for(int n=0;n<samples.Length;n++)samples[n]*=.8f/peak;
+            return samples;
         }
 
         private static bool ArrowInside(float x,float y)
@@ -822,6 +863,15 @@ namespace Festival.Presentation
             // PLAYA-5: what the crowd tipped for your deck set, once. Only your own view carries the receipt.
             string tips=FestivalSimulation.DeckTipSpeech(state,player);
             if(tips!=""&&uncovered&&deckTipNoticed!=state.RoundId+"/"+player.DeckTipDeliveryId){deckTipNoticed=state.RoundId+"/"+player.DeckTipDeliveryId;session.SetMessage(tips);lastNotice="";}
+            // A grab plays the oh-yeah at once; its notice waits, like the others, until nothing covers it.
+            if(giggleTankNews.Follow(state,player,session.ConnectionGeneration))
+            {
+                shopAudio.PlayOneShot(ohYeah);OhYeahPlays++;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("GiggleTank","oh_yeah","grabber="+(state.GiggleTankGrabberId==player.Id?"own":"crew")+" plays="+OhYeahPlays);
+#endif
+            }
+            if(uncovered){string tank=giggleTankNews.Take();if(tank!=""){session.SetMessage(tank);lastNotice="";}}
             UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
@@ -2100,7 +2150,7 @@ namespace Festival.Presentation
             rosterPanel.GetComponent<Image>().color=high?new Color(.01f,.025f,.03f,1):new Color(.025f,.064f,.071f,.95f);
             reticle.GetComponent<Image>().color=high?new Color(1,.95f,.71f,1):new Color(.88f,.90f,.74f,.65f);
         }
-        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
+        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(ohYeah!=null)Destroy(ohYeah);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
         private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text;WaitForComfort(()=>{Remember(null);session.Host(name,port);});}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text,address=addressField.text;WaitForComfort(()=>{Remember(address);session.Join(name,address,port);});}
