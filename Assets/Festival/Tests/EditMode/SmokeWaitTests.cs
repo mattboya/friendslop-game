@@ -94,7 +94,8 @@ namespace Festival.Tests
             var wait=new DevelopmentSmoke.GameplayWait("level",game.State,0,DevelopmentSmoke.LevelLeft(game.State));
             while(game.State.Phase=="Playing"){Assert.That(wait.CanContinue(game.State,0),Is.True,"the wait outlasts the level");game.Tick(1.0/30);}
             Assert.That(game.State.Phase,Is.EqualTo("Results"),"setup: the level ran out");
-            Assert.That(wait.CanContinue(game.State,0),Is.True,"the snapshot that shows the end still fits");
+            game.Tick(.5);
+            Assert.That(wait.CanContinue(game.State,0),Is.True,"a snapshot that shows the end half a second late still fits");
         }
         // A chat check and a festivalgoer talk wait for their owner: no host clock ends them, so the smoke still bounds them.
         [Test]public void AnUntimedChatStillGetsAFiniteWait()
