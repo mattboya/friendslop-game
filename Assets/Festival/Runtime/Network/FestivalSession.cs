@@ -271,6 +271,7 @@ namespace Festival.Network
                 SpeechBubbles=gameObject.AddComponent<FestivalSpeechBubbles>();
                 gameObject.AddComponent<FestivalCreatures>();
                 gameObject.AddComponent<FestivalTrip>();
+                gameObject.AddComponent<FestivalInhale>();
                 gameObject.AddComponent<FestivalSpinner>();
                 gameObject.AddComponent<FestivalMinigameView>();
             }

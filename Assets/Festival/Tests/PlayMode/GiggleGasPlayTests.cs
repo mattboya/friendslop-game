@@ -200,5 +200,167 @@ namespace Festival.Tests
             }
             yield return null;
         }
+
+        // GAS-6: every take a session reports plays the inhale once: in the hitter's own head (2-D), and for a friend in 3-D from the
+        // hitter's body, with no Doppler, fading to silence at 15 m. Two takes reported together play one inhale, not two at once.
+        [UnityTest]public IEnumerator EveryTakeInhalesOnceInTheHittersHeadAndFromTheirBodyForAFriend()
+        {
+            yield return HostAndFriend("Inhale");
+            try
+            {
+                var sim=Simulation(host);string me=host.LocalPlayerId,pal=friend.LocalPlayerId;
+                var mine=hostObject.GetComponent<FestivalInhale>();var theirs=friendObject.GetComponent<FestivalInhale>();
+                Assert.That(mine!=null&&theirs!=null,"every session plays the inhales");
+                Stand(sim,me,1.2f);Stand(sim,pal,-1.2f);
+                yield return Settle(.8f);
+                Assert.That((mine.Played,theirs.Played),Is.EqualTo((0,0)),"hosting and joining play nothing");
+
+                host.Command(FestivalSimulation.TakeGiggleBalloonKind);
+                Assert.That(sim.Player(me).VisualGiggleTakeSequence,Is.EqualTo(1),"setup: the host takes a balloon: "+host.Message);
+                yield return Until(()=>theirs.Played>0,3);
+                Assert.That(mine.Played,Is.EqualTo(1),"the host hears their own take once");
+                var own=Voice(mine,me);
+                Assert.That(own!=null&&own.isPlaying,"the host's own inhale plays");
+                Assert.That(own.spatialBlend,Is.Zero,"in their own head: 2-D");
+                Assert.That(own.clip.length,Is.InRange(.8f,1.4f),"the inhale");
+                Assert.That(theirs.Played,Is.EqualTo(1),"the friend hears it once");
+                var heard=Voice(theirs,me);
+                Assert.That(heard!=null&&heard.isPlaying,"the host's inhale plays for the friend");
+                Assert.That(heard.spatialBlend,Is.EqualTo(1),"in 3-D");
+                Assert.That(Vector3.Distance(heard.transform.position,friend.WorldCharacter(me).transform.position),Is.LessThan(2),"from the host's body, where the friend sees it");
+                Assert.That(heard.dopplerLevel,Is.Zero,"with no Doppler");
+                Assert.That((heard.rolloffMode,heard.maxDistance),Is.EqualTo((AudioRolloffMode.Linear,FestivalInhale.Range)),"fading to silence at 15 m");
+
+                friend.Command(FestivalSimulation.TakeGiggleBalloonKind);
+                yield return Until(()=>mine.Played>1&&theirs.Played>1,3);
+                Assert.That(theirs.Played,Is.EqualTo(2),"the friend hears their own take: "+friend.Message);
+                Assert.That(Voice(theirs,pal).spatialBlend,Is.Zero,"in their own head");
+                Assert.That(mine.Played,Is.EqualTo(2),"the host hears the friend's take");
+                Assert.That(Voice(mine,pal).spatialBlend,Is.EqualTo(1),"in 3-D");
+                Assert.That(Vector3.Distance(Voice(mine,pal).transform.position,host.WorldCharacter(pal).transform.position),Is.LessThan(2),"from the friend's body, where the host sees it");
+
+                yield return Settle(1.6f);
+                Assert.That((mine.Played,theirs.Played),Is.EqualTo((2,2)),"each take plays once, never again");
+                Assert.That(Voice(mine,me).isPlaying||Voice(theirs,me).isPlaying,Is.False,"and the inhales end");
+
+                // Two takes in one host step reach both sessions as one report.
+                yield return WearOff(sim,me);
+                Assert.That(Take(sim,me)&&Take(sim,me),"setup: two takes in one step");
+                yield return Until(()=>theirs.Played>2,3);yield return Settle(.3f);
+                Assert.That((mine.Played,theirs.Played),Is.EqualTo((3,3)),"two takes reported together play one inhale");
+            }
+            finally{LeaveCrew();}
+            yield return null;
+        }
+
+        // GAS-6: a friend beyond 15 m still learns of a take but hears nothing, and a friend who rejoins hears no take from before.
+        [UnityTest]public IEnumerator AFriendOutOfEarshotOrRejoiningHearsNoInhale()
+        {
+            yield return HostAndFriend("Far inhale");
+            try
+            {
+                var sim=Simulation(host);string me=host.LocalPlayerId,pal=friend.LocalPlayerId;
+                var theirs=friendObject.GetComponent<FestivalInhale>();int reports=0;friend.GiggleBalloonTaken+=(player,count)=>reports++;
+                Stand(sim,me,1.2f);Stand(sim,pal,-1.2f);yield return Settle(.8f);
+                Assert.That(Take(sim,me),"setup: a take beside the friend");
+                yield return Until(()=>reports>0,3);yield return null;
+                Assert.That(theirs.Played,Is.EqualTo(1),"a friend nearby hears it");
+
+                Stand(sim,pal,20);yield return Settle(1);
+                Assert.That(Vector3.Distance(friend.WorldCharacter(me).transform.position,friend.EyePosition),Is.GreaterThan(FestivalInhale.Range),"setup: the friend is out of earshot");
+                Assert.That(Take(sim,me),"setup: a second take");
+                yield return Until(()=>reports>1,3);yield return Settle(.3f);
+                Assert.That(reports,Is.EqualTo(2),"setup: the friend's session reports it");
+                Assert.That(theirs.Played,Is.EqualTo(1),"beyond 15 m the friend hears nothing");
+
+                friend.Leave();yield return null;yield return null;
+                Assert.That(Voices(theirs),Is.Empty,"leaving lets every inhale voice go");
+                yield return WearOff(sim,me);Assert.That(Take(sim,me),"setup: a take while the friend is away");
+                friend.Join("Friend","127.0.0.1",port);
+                for(float deadline=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,"setup: the friend joins again: "+friend.Message);
+                Stand(sim,friend.LocalPlayerId,-1.2f);yield return Settle(1);
+                Assert.That(theirs.Played,Is.EqualTo(1),"a friend who rejoins hears no take from before");
+            }
+            finally{LeaveCrew();}
+            yield return null;
+        }
+
+        // GAS-6: an inhale goes through the effects volume and follows its slider while it plays; the master volume stays with
+        // FestivalTrip's listener. Leaving stops it and lets its voices go, and a destroyed session lets its clip go.
+        [UnityTest]public IEnumerator TheInhaleFollowsTheEffectsVolumeAndLetsGo()
+        {
+            yield return HostAndFriend("Inhale volume");
+            try
+            {
+                var sim=Simulation(host);string me=host.LocalPlayerId,pal=friend.LocalPlayerId;
+                var mine=hostObject.GetComponent<FestivalInhale>();var theirs=friendObject.GetComponent<FestivalInhale>();
+                Stand(sim,me,1.2f);Stand(sim,pal,-1.2f);yield return Settle(.8f);
+                host.Profile.Data.EffectsVolume=.5f;friend.Profile.Data.EffectsVolume=.5f;
+                Assert.That(Take(sim,me),"setup: a take");
+                yield return Until(()=>theirs.Played>0,3);
+                var own=Voice(mine,me);var heard=Voice(theirs,me);
+                Assert.That(own!=null&&own.isPlaying&&heard!=null&&heard.isPlaying,"both inhales play");
+                Assert.That((own.volume,heard.volume),Is.EqualTo((.5f,.5f)),"at each player's effects volume");
+                host.Profile.Data.EffectsVolume=.2f;friend.Profile.Data.EffectsVolume=.9f;friend.Profile.Data.MasterVolume=.5f;
+                yield return null;
+                Assert.That(own.isPlaying&&heard.isPlaying,"setup: still playing");
+                Assert.That(own.volume,Is.EqualTo(.2f).Within(1e-5f),"the host's slider moves their inhale as it plays");
+                Assert.That(heard.volume,Is.EqualTo(.9f).Within(1e-5f),"the friend's moves theirs, with no second master volume");
+
+                Assert.That(Take(sim,me),"setup: a second take");
+                yield return Until(()=>theirs.Played>1,3);
+                Assert.That(heard.isPlaying,"setup: mid breath");
+                var clip=heard.clip;
+                friend.Leave();yield return null;yield return null;
+                Assert.That(Voices(theirs),Is.Empty,"leaving stops the inhale and lets its voices go");
+                Object.Destroy(friendObject);friendObject=null;yield return null;
+                Assert.That(clip==null,"a destroyed session lets the inhale's clip go");
+            }
+            finally{LeaveCrew();}
+            yield return null;
+        }
+
+        private GameObject crewWorld,hostObject,friendObject;
+        private FestivalSession host,friend;
+        private ushort port;
+        // A hosted session and a friend joined to it, both at camp.
+        private IEnumerator HostAndFriend(string name)
+        {
+            crewWorld=new GameObject(name+" world");crewWorld.AddComponent<FestivalWorld>();yield return null;
+            hostObject=new GameObject(name+" host");host=hostObject.AddComponent<FestivalSession>();
+            friendObject=new GameObject(name+" friend");friend=friendObject.AddComponent<FestivalSession>();
+            yield return null;
+            port=FreePort();host.Host("Tester",port);
+            float deadline=Time.realtimeSinceStartup+30;
+            while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            Assert.That(host.LocalPlayer,Is.Not.Null,"setup: host has a local player: "+host.Message);
+            friend.Join("Friend","127.0.0.1",port);
+            while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            Assert.That(friend.LocalPlayer,Is.Not.Null,"setup: the friend joins: "+friend.Message);
+        }
+        private void LeaveCrew()
+        {
+            if(friend!=null)friend.Leave();if(host!=null)host.Leave();
+            foreach(var go in new[]{friendObject,hostObject,crewWorld})if(go!=null)Object.Destroy(go);
+        }
+        // Puts a player x metres east of the Giggle Balloons.
+        private static void Stand(FestivalSimulation sim,string id,float x){var p=sim.Player(id);p.X=CampFeatures.GiggleBalloonX+x;p.Z=CampFeatures.GiggleBalloonZ;}
+        private static IEnumerator Settle(float seconds){for(float until=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<until;)yield return null;}
+        private static IEnumerator Until(System.Func<bool> done,float seconds){for(float until=Time.realtimeSinceStartup+seconds;!done()&&Time.realtimeSinceStartup<until;)yield return null;}
+        private static bool Take(FestivalSimulation sim,string id)=>sim.Execute(id,new GameCommand{Id=System.Guid.NewGuid().ToString("N"),Kind=FestivalSimulation.TakeGiggleBalloonKind}).Accepted;
+        private static IEnumerator WearOff(FestivalSimulation sim,string id)
+        {
+            foreach(var e in sim.Player(id).Effects)if(e.Id==FestivalSimulation.GiggleGasEffect)e.RemainingSeconds=.01;
+            yield return Until(()=>!sim.Player(id).Effects.Exists(e=>e.Id==FestivalSimulation.GiggleGasEffect),3);
+            Assert.That(sim.Player(id).Effects.Exists(e=>e.Id==FestivalSimulation.GiggleGasEffect),Is.False,"setup: the host's gas has worn off");
+        }
+        private static AudioSource Voice(FestivalInhale inhale,string playerId){var voice=inhale.transform.Find(FestivalInhale.VoiceName+" "+playerId);return voice!=null?voice.GetComponent<AudioSource>():null;}
+        private static List<AudioSource> Voices(FestivalInhale inhale)
+        {
+            var voices=new List<AudioSource>();
+            foreach(Transform child in inhale.transform)if(child.name.StartsWith(FestivalInhale.VoiceName,System.StringComparison.Ordinal))voices.Add(child.GetComponent<AudioSource>());
+            return voices;
+        }
     }
 }
