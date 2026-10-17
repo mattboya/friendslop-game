@@ -1,17 +1,29 @@
 using System.Collections.Generic;
+using System.Text;
 using Festival.Core;
+using Festival.Network;
 using UnityEngine;
 
 namespace Festival.Presentation
 {
     /// <summary>The eight camp secrets, made from the trip gnome, a sleeping camper and simple shapes, each standing at the host's
     /// point (Show moves them to the points a visit publishes). Nothing collides, so the camp navmesh and its routes stay as they were.
-    /// The aim dot picks a secret (Aimed) only where the host would accept a poke.</summary>
+    /// The aim dot picks a secret (Aimed) only where the host would accept a poke. The session it is attached to drives it: its state
+    /// each frame (a flat flamingo, a word in the dust) and each new poke it reports once (FestivalSession.CampEggActivated), which
+    /// blares, squeaks or pops confetti, and says a friend's line over the prop, for whoever is within Range.</summary>
     public sealed class FestivalCampEggView : MonoBehaviour
     {
         public const string Name="Camp secrets";
         // The host accepts a poke within 2.5 m of a secret's point (CampEggs.ActivateCampEgg).
         public const float Reach=2.5f;
+        /// <summary>How far a gag's line and sound carry, in metres, as far as speech, the inhale and the confetti pop.</summary>
+        public const float Range=15;
+        /// <summary>A prop shows its gag's line on a child of LineName and sounds from a child of VoiceName.</summary>
+        public const string LineName="Camp egg line",VoiceName="Camp egg voice";
+        // A line stays up long enough to read; the flamingo sags flat over DeflateSeconds, or at once with reduced motion.
+        const float LineSeconds=5,DeflateSeconds=1.6f;
+        const int LineWidth=26;
+        static readonly Vector3 Flat=new Vector3(1.3f,.12f,1.3f);
         public static string PropName(string id)=>"Camp egg "+id;
         // Where the aim dot finds each secret, from its point, and how near the aim line must pass. The button sits at the free end of
         // the DJ table and the dust on car_1's back window, so a look at the deck or the car door misses them.
@@ -26,6 +38,19 @@ namespace Festival.Presentation
             {"wash_me",(new Vector3(0,1.52f,-1.59f),.55f,"E  WRITE IN THE DUST")},
         };
         private readonly Dictionary<string,Transform> props=new Dictionary<string,Transform>();
+        // Each gag's line over its prop, until when it shows, and each sounding prop's voice.
+        private readonly Dictionary<string,(TextMesh Text,float Until)> lines=new Dictionary<string,(TextMesh,float)>();
+        private readonly Dictionary<string,AudioSource> voices=new Dictionary<string,AudioSource>();
+        private FestivalSession session;
+        private AudioClip horn,squeak;
+        private Transform air;
+        private TextMesh dust;
+        private string word="";
+        private bool deflated,sagging,live;
+        private float deflation;
+
+        /// <summary>How many gag sounds this view has played.</summary>
+        public int Played {get;private set;}
 
         /// <summary>The secrets under camp, each at its fixed point and the gnome at the first visit's spot until Show says otherwise.</summary>
         public static FestivalCampEggView Build(Transform camp)
@@ -38,6 +63,7 @@ namespace Festival.Presentation
                 var point=CampFeatures.EggPoint(egg,0);prop.localPosition=new Vector3(point.X,0,point.Z);
                 Dress(prop,egg.Id);view.props[egg.Id]=prop;
             }
+            view.air=view.props["flamingo"].Find("Flamingo air");view.dust=view.props["wash_me"].Find("Dust window/WASH ME label").GetComponent<TextMesh>();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DevelopmentDiagnostics.GraphicsEvent("CampEggs","props_built","count="+view.props.Count);
 #endif
@@ -45,13 +71,34 @@ namespace Festival.Presentation
         }
         public Transform Prop(string id)=>props.TryGetValue(id,out var prop)?prop:null;
 
-        /// <summary>Stand each prop at the point the view's round publishes for it.</summary>
+        /// <summary>Follow owner's camp state and its new pokes, letting go of any session followed before. FestivalSession attaches
+        /// itself as it wakes and detaches as it goes.</summary>
+        public void Attach(FestivalSession owner)
+        {
+            if(session==owner)return;
+            if(isActiveAndEnabled&&session!=null)session.CampEggActivated-=Activated;
+            session=owner;
+            if(isActiveAndEnabled&&session!=null)session.CampEggActivated+=Activated;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("CampEggs","attach","session="+(owner!=null?"on":"off"));
+#endif
+        }
+        public void Detach(FestivalSession owner){if(session==owner)Attach(null);}
+        // At the festival camp is hidden: no poke reaches it, and no gag is left playing.
+        void OnEnable(){if(session!=null)session.CampEggActivated+=Activated;}
+        void OnDisable(){if(session!=null)session.CampEggActivated-=Activated;Hush();}
+        void OnDestroy(){if(horn!=null)Dispose(horn);if(squeak!=null)Dispose(squeak);}
+
+        /// <summary>Stand each prop at the point the view's round publishes for it, the flamingo flat and the dust's word as the round
+        /// has them. Read alone, as on joining, they show at once and play nothing.</summary>
         public void Show(IReadOnlyList<CampEggState> eggs)
         {
             if(eggs==null)return;
             foreach(var egg in eggs)
             {
                 if(egg==null||!props.TryGetValue(egg.Id,out var prop))continue;
+                if(egg.Id=="flamingo")Deflate(egg.Deflated);
+                if(egg.Id=="wash_me")Write(egg.Word??"");
                 var at=new Vector3(egg.X,0,egg.Z);if(prop.localPosition==at)continue;
                 prop.localPosition=at;if(egg.Id=="gnome")FaceCamp(prop);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -59,6 +106,113 @@ namespace Festival.Presentation
 #endif
             }
         }
+        void Deflate(bool flat)
+        {
+            if(flat!=deflated)
+            {
+                deflated=flat;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DevelopmentDiagnostics.GraphicsEvent("CampEggs","persistent","egg=flamingo deflated="+flat);
+#endif
+            }
+            if(!flat)sagging=false;
+            if(!sagging&&deflation!=(flat?1:0))Sag(flat?1:0);
+        }
+        void Sag(float amount)
+        {
+            deflation=amount;if(amount>=1)sagging=false;
+            air.localScale=Vector3.Lerp(Vector3.one,Flat,amount*amount*(3-2*amount));
+        }
+        void Write(string written)
+        {
+            if(written==word)return;
+            word=written;dust.text=word==""?"WASH ME":"WASH ME\n"+word;dust.characterSize=word==""?.04f:.022f;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("CampEggs","persistent","egg=wash_me word="+(word==""?"none":word));
+#endif
+        }
+
+        // A poke the session reports once: its sound for whoever is within Range, and the button's confetti for anyone who can see it
+        // (its pop keeps its own 15 m). The line floats over the prop for friends; whoever poked reads it as their notice, and the
+        // headliner's chair seats them where the line would float.
+        void Activated(CampEggState egg)
+        {
+            if(egg==null||!props.TryGetValue(egg.Id,out var prop))return;
+            var at=AimPoint(egg);bool near=Vector3.Distance(at,session.EyePosition)<=Range,mine=egg.LastActorId==session.LocalPlayerId;
+            FestivalConfettiBurst burst=null;
+            bool confetti=egg.Id=="button"&&session.TryGetComponent(out burst);
+            if(confetti)burst.Burst(at+Vector3.up*.03f,Vector3.up);
+            if(egg.Id=="flamingo"&&session.Profile?.Data.ReducedMotion!=true&&deflation<1)sagging=true;
+            var sound=near?Sound(egg.Id):null;
+            if(near&&!mine)Say(egg.Id,prop,at,egg.LastLine);
+            if(sound!=null){var voice=Voice(egg.Id,prop);voice.transform.position=at;voice.clip=sound;FestivalSettings.ApplyEffects(voice,session.Profile?.Data);voice.Play();Played++;}
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("CampEggs","effect","egg="+egg.Id+" line="+(!near?"out_of_range":mine?"own":"shown")+" sound="+(sound==null?"none":sound==horn?"horn":"squeak")+" confetti="+(confetti?"yes":"no"));
+#endif
+        }
+        AudioClip Sound(string id)
+        {
+            if(id=="button"){if(horn==null)horn=FestivalCampAudio.CreateHorn();return horn;}
+            if(id=="flamingo"){if(squeak==null)squeak=FestivalCampAudio.CreateSqueak();return squeak;}
+            return null;
+        }
+        void Say(string id,Transform prop,Vector3 at,string said)
+        {
+            if(!lines.TryGetValue(id,out var line))
+            {
+                var made=new GameObject(LineName).AddComponent<TextMesh>();made.transform.SetParent(prop,false);
+                made.anchor=TextAnchor.MiddleCenter;made.alignment=TextAlignment.Center;made.characterSize=.025f;made.fontSize=48;made.color=new Color(.96f,.94f,.84f);
+                var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){made.font=font;made.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+                Part(made.transform,"Line bubble",PrimitiveType.Cube,new Vector3(0,0,.03f),Vector3.one,"Dark");
+                line.Text=made;
+            }
+            line.Text.text=Wrap(said,out int rows,out int widest);
+            line.Text.transform.Find("Line bubble").localScale=new Vector3(widest*.066f+.2f,rows*.125f+.08f,.02f);
+            line.Text.transform.position=at+Vector3.up*1.2f;line.Text.gameObject.SetActive(true);lines[id]=(line.Text,Time.unscaledTime+LineSeconds);
+        }
+        // TextMesh does not wrap, so a line breaks between words at about LineWidth letters.
+        static string Wrap(string said,out int rows,out int widest)
+        {
+            var wrapped=new StringBuilder();int column=0;rows=1;widest=0;
+            foreach(var part in (said??"").Split(' '))
+            {
+                if(column>0&&column+1+part.Length>LineWidth){wrapped.Append('\n');rows++;column=0;}
+                else if(column>0){wrapped.Append(' ');column++;}
+                wrapped.Append(part);column+=part.Length;widest=Mathf.Max(widest,column);
+            }
+            return wrapped.ToString();
+        }
+        AudioSource Voice(string id,Transform prop)
+        {
+            if(voices.TryGetValue(id,out var voice))return voice;
+            voice=new GameObject(VoiceName).AddComponent<AudioSource>();voice.transform.SetParent(prop,false);
+            voice.playOnAwake=false;voice.spatialBlend=1;voice.dopplerLevel=0;voice.rolloffMode=AudioRolloffMode.Linear;voice.minDistance=1;voice.maxDistance=Range;
+            return voices[id]=voice;
+        }
+
+        // After the session's Update has read this frame's state and reported its pokes.
+        void LateUpdate()
+        {
+            if(session==null||session.State==null){if(live)Renew();return;}
+            live=true;Show(session.CampEggStates);
+            if(sagging)Sag(Mathf.MoveTowards(deflation,1,Time.unscaledDeltaTime/DeflateSeconds));
+            var view=session.ViewCamera!=null?session.ViewCamera.transform:null;
+            foreach(var line in lines.Values)
+            {
+                if(!line.Text.gameObject.activeSelf)continue;
+                if(Time.unscaledTime>=line.Until)line.Text.gameObject.SetActive(false);
+                else if(view!=null)line.Text.transform.rotation=Quaternion.LookRotation(line.Text.transform.position-view.position);
+            }
+            foreach(var voice in voices.Values)FestivalSettings.ApplyEffects(voice,session.Profile?.Data);
+        }
+        // Out of a game the camp is new again: the flamingo full of air, the dust clean, and no gag left playing.
+        void Renew(){live=false;Hush();sagging=false;Deflate(false);Write("");}
+        void Hush()
+        {
+            foreach(var line in lines.Values)line.Text.gameObject.SetActive(false);
+            foreach(var voice in voices.Values)voice.Stop();
+        }
+        static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
 
         public static Vector3 AimPoint(CampEggState egg)=>new Vector3(egg.X,0,egg.Z)+(Targets.TryGetValue(egg.Id,out var target)?target.At:Vector3.zero);
         public static float AimRadius(string id)=>Targets.TryGetValue(id,out var target)?target.Radius:0;
@@ -102,17 +256,18 @@ namespace Festival.Presentation
                     Part(prop,"Big red button",PrimitiveType.Cylinder,new Vector3(.55f,.9f,-.02f),new Vector3(.13f,.025f,.13f),"StageGlowRed");
                     Label(prop,"DO NOT PRESS",new Vector3(.55f,.845f,.12f),new Vector3(90,180,0),.012f);break;
                 case "chair":
-                    // A camp chair facing south, the way the host turns its headliner.
-                    Part(prop,"Chair seat",PrimitiveType.Cube,new Vector3(0,.42f,0),new Vector3(.52f,.05f,.48f),"CanvasRose");
-                    Part(prop,"Chair back",PrimitiveType.Cube,new Vector3(0,.7f,.24f),new Vector3(.52f,.52f,.04f),"CanvasRose");
-                    foreach(float x in new[]{-.25f,.25f})
+                    // A low camp chair facing south, the way the host turns its headliner. Its canvas (top .23 m) meets the trousers of a
+                    // body in FestivalCharacter's CampChair pose.
+                    Part(prop,"Chair seat",PrimitiveType.Cube,new Vector3(0,.21f,.05f),new Vector3(.62f,.04f,.58f),"CanvasRose");
+                    Part(prop,"Chair back",PrimitiveType.Cube,new Vector3(0,.5f,.36f),new Vector3(.62f,.58f,.04f),"CanvasRose");
+                    foreach(float x in new[]{-.31f,.31f})
                     {
-                        Part(prop,"Chair arm",PrimitiveType.Cube,new Vector3(x,.6f,0),new Vector3(.05f,.04f,.48f),"Metal");
-                        foreach(float z in new[]{-.21f,.21f})Part(prop,"Chair leg",PrimitiveType.Cylinder,new Vector3(x,.3f,z),new Vector3(.03f,.3f,.03f),"Metal");
+                        Part(prop,"Chair arm",PrimitiveType.Cube,new Vector3(x,.5f,.05f),new Vector3(.05f,.04f,.58f),"Metal");
+                        foreach(float z in new[]{-.22f,.32f})Part(prop,"Chair leg",PrimitiveType.Cylinder,new Vector3(x,.25f,z),new Vector3(.03f,.25f,.03f),"Metal");
                     }
-                    Part(prop,"Reserved board",PrimitiveType.Cube,new Vector3(0,1.035f,.26f),new Vector3(.62f,.15f,.02f),"Cream");
-                    Label(prop,"RESERVED: HEADLINER",new Vector3(0,1.035f,.245f),Vector3.zero,.016f,dark:true);
-                    Label(prop,"RESERVED: HEADLINER",new Vector3(0,1.035f,.275f),new Vector3(0,180,0),.016f,dark:true);break;
+                    Part(prop,"Reserved board",PrimitiveType.Cube,new Vector3(0,.865f,.37f),new Vector3(.66f,.15f,.02f),"Cream");
+                    Label(prop,"RESERVED: HEADLINER",new Vector3(0,.865f,.355f),Vector3.zero,.016f,dark:true);
+                    Label(prop,"RESERVED: HEADLINER",new Vector3(0,.865f,.385f),new Vector3(0,180,0),.016f,dark:true);break;
                 case "lost_found":
                     Part(prop,"Lost and found box",PrimitiveType.Cube,new Vector3(0,.31f,0),new Vector3(.8f,.62f,.6f),"Wood");
                     Part(prop,"Box flap",PrimitiveType.Cube,new Vector3(0,.68f,-.36f),new Vector3(.78f,.02f,.3f),"Cream").localRotation=Quaternion.Euler(55,0,0);

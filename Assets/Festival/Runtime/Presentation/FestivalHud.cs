@@ -43,7 +43,7 @@ namespace Festival.Presentation
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
-        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping;
+        private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, campSecrets, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping;
         private Text musicValue,lookValue,motionValue,contrastValue,viewValue;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
@@ -627,7 +627,9 @@ namespace Festival.Presentation
             var phaseLabel=Label(phaseCard.transform,"Stop label",16,TextAnchor.MiddleLeft);phaseLabel.text="CURRENT STOP";phaseLabel.fontStyle=FontStyle.Normal;phaseLabel.color=Mint;Place(phaseLabel.rectTransform,.09f,.62f,.92f,.92f);
             menuPhase=Label(phaseCard.transform,"Stop value",24,TextAnchor.MiddleLeft);menuPhase.fontStyle=FontStyle.Normal;Place(menuPhase.rectTransform,.09f,.12f,.92f,.64f);
             Rule(menuHome.transform,.70f);
-            var pocketHeading=Label(menuHome.transform,"Pockets heading",17,TextAnchor.MiddleLeft);pocketHeading.text="CURRENT LOADOUT";pocketHeading.fontStyle=FontStyle.Normal;pocketHeading.color=new Color(.31f,.42f,.38f);Place(pocketHeading.rectTransform,.045f,.61f,.95f,.69f);
+            var pocketHeading=Label(menuHome.transform,"Pockets heading",17,TextAnchor.MiddleLeft);pocketHeading.text="CURRENT LOADOUT";pocketHeading.fontStyle=FontStyle.Normal;pocketHeading.color=new Color(.31f,.42f,.38f);Place(pocketHeading.rectTransform,.045f,.61f,.45f,.69f);
+            // CAMP-3: the camp secrets this machine has found (LocalProfile), and the line for finding all eight.
+            campSecrets=Label(menuHome.transform,"Easter eggs",17,TextAnchor.MiddleRight);campSecrets.fontStyle=FontStyle.Normal;campSecrets.color=new Color(.31f,.42f,.38f);Place(campSecrets.rectTransform,.45f,.61f,.955f,.69f);ShrinkToFit(campSecrets,10);
             preview=Label(menuHome.transform,"Preview",21,TextAnchor.MiddleLeft);Place(preview.rectTransform,.045f,.51f,.95f,.62f);preview.color=Ink;
             nextButton=Button(menuHome.transform,"NEXT CAMP",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>session.Command("Reset"));
             cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),FinishCurrentAction);
@@ -825,6 +827,7 @@ namespace Festival.Presentation
             motionValue.text=session.Profile.Data.ReducedMotion?"ON":"OFF";
             contrastValue.text=session.Profile.Data.HighContrast?"ON":"OFF";
             viewValue.text=session.Profile.Data.ThirdPerson?"THIRD PERSON":"FIRST PERSON";
+            string allFound=session.Profile.CampEggCompletionText;campSecrets.text=session.Profile.CampEggCountText+(allFound==""?"":"\n"+allFound);
             settingsBack.text=session.Connected?"BACK TO PASS":"BACK";
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");

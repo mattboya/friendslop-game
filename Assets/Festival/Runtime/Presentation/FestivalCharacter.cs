@@ -52,6 +52,9 @@ namespace Festival.Presentation
         // actor's own scale). Once the thighs come forward the trousers' seat hangs about .3 m below the hips, so any lower and it
         // shows under the floor, which is how friends on the ground see the gondola.
         const float SitHipHeight=.4f;
+        // CAMP-3: the headliner's low camp chair (FestivalCampEggView). Thighs level and shins straight down put the feet on the grass
+        // with the hips this high (metres at the actor's own scale); the trousers' seat then rests on the canvas at about .23 m.
+        const float ChairHipHeight=.49f;
         // CROWD-4: a festivalgoer turns zombie-like with its suspicion of you (Threat), from none at Watching (.25) to full at
         // Accusing (.70). Its skin redraws in SkinSteps steps along the way, never every frame. The full scowl's blend-shape
         // weights: negative Concern pulls the inner brows down, negative Smile drops the brows and the mouth corners, and part of
@@ -412,7 +415,7 @@ namespace Festival.Presentation
             // PLAYA-2: an art car carries its rider, so they stand on its deck: neither stepping with it nor planting their feet on
             // the ground it rolls over. PLAYA-5: a deck set dances up there the same way. POLO-5: a Ferris wheel rider sits in their
             // gondola as it carries them round.
-            bool seated=Pose==FestivalSimulation.RideWheelKind,decking=Pose==FestivalSimulation.DeckSetKind,riding=seated||decking||Pose==FestivalSimulation.RideCarKind;
+            bool seated=Pose==FestivalSimulation.RideWheelKind,chair=Pose==FestivalSimulation.CampChairPose,decking=Pose==FestivalSimulation.DeckSetKind,riding=seated||chair||decking||Pose==FestivalSimulation.RideCarKind;
             float measuredSpeed=hasPrevious&&delta.magnitude<2&&!riding?Mathf.Min(6,delta.magnitude/animationDelta):0;
             float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
@@ -443,6 +446,11 @@ namespace Festival.Presentation
                 Aim("Hips",new Vector3(-90,0,0));Aim("Spine",new Vector3(-3+Mathf.Sin(AnimationSeconds*1.1f+phase)*1.5f,0,0));Aim("Head",new Vector3(-10,0,0));
                 Aim("ArmL",new Vector3(-155,0,-35));Aim("ArmR",new Vector3(-155,0,35));Aim("ForearmL",new Vector3(-115,0,0));Aim("ForearmR",new Vector3(-115,0,0));
                 Aim("LegL",new Vector3(0,0,7));Aim("LegR",new Vector3(0,0,-7));
+            }
+            else if(chair)
+            {
+                Aim("LegL",new Vector3(-90,0,4));Aim("LegR",new Vector3(-90,0,-4));Aim("ShinL",new Vector3(90,0,0));Aim("ShinR",new Vector3(90,0,0));
+                Aim("Spine",new Vector3(-5,0,0));Aim("ArmL",new Vector3(-12,0,-35));Aim("ArmR",new Vector3(-12,0,35));Aim("ForearmL",new Vector3(-75,0,0));Aim("ForearmR",new Vector3(-75,0,0));
             }
             else if(seated)
             {
@@ -742,10 +750,10 @@ namespace Festival.Presentation
                 delta,speed,walkCycle,gait,animationDelta,idleShift);
             if(fullBodyClip&&hipsBone!=null)
                 hipsBone.localPosition=Vector3.Lerp(hipsBefore,restHips+clipHips,1-Mathf.Exp(-10f*animationDelta));
-            else if((lying||seated)&&hipsBone!=null)
+            else if((lying||seated||chair)&&hipsBone!=null)
             {
                 // Imported bone parents carry a rotated, scaled transform, so the drop is worked out in the world and taken back.
-                float above=hipsBone.parent.TransformPoint(restHips).y-transform.position.y-(lying?LieHipHeight:SitHipHeight)*transform.lossyScale.y;
+                float above=hipsBone.parent.TransformPoint(restHips).y-transform.position.y-(lying?LieHipHeight:chair?ChairHipHeight:SitHipHeight)*transform.lossyScale.y;
                 hipsBone.localPosition=Vector3.Lerp(hipsBefore,restHips+hipsBone.parent.InverseTransformVector(Vector3.down*above),1-Mathf.Exp(-10f*animationDelta));
             }
             if(exchangeWeight>.001f&&bones.Count==15)

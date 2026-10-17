@@ -35,12 +35,73 @@ namespace Festival.Tests
                 Assert.That(Poke(next,"host","flamingo","next_flame").Accepted,Is.True);session.FollowCampEggs(View(next,"friend"));
                 Assert.That(played.Count,Is.EqualTo(1),"new rounds baseline their own sequences instead of comparing with the prior visit");
                 Assert.That(session.CampEggStates[5].Deflated,Is.True);Assert.That(session.CampEggStates[7].Word,Is.Empty,"dust resets with the new round");
+                Assert.That(Poke(next,"host","button","next_button").Accepted,Is.True);session.FollowCampEggs(View(next,"friend"));
+                Assert.That(played,Is.EqualTo(new[]{"button","button"}),"the same secret's fresh poke in a new round plays, though the last round counted further");
                 session.FollowCampEggs(null);Assert.That(session.CampEggStates,Is.Empty);
-                session.FollowCampEggs(View(next,"friend"));Assert.That(played.Count,Is.EqualTo(1),"reconnect arms a fresh baseline");
+                session.FollowCampEggs(View(next,"friend"));Assert.That(played.Count,Is.EqualTo(2),"reconnect arms a fresh baseline");
                 Assert.That(Poke(next,"host","wash_me","next_dust").Accepted,Is.True);session.FollowCampEggs(View(next,"friend"));
-                Assert.That(played,Is.EqualTo(new[]{"button","wash_me"}));
+                Assert.That(played,Is.EqualTo(new[]{"button","button","wash_me"}));
             }
             finally{Object.DestroyImmediate(host);}
+        }
+
+        static float[] Samples(AudioClip clip){var samples=new float[clip.samples*clip.channels];Assert.That(clip.GetData(samples,0),Is.True,"setup: the clip's samples");return samples;}
+        static float Loudest(float[] samples,int from,int to){float peak=0;for(int i=from;i<to;i++)peak=Mathf.Max(peak,Mathf.Abs(samples[i]));return peak;}
+        static float Rms(float[] samples,int from,int to){double sum=0;for(int i=from;i<to;i++)sum+=samples[i]*samples[i];return (float)System.Math.Sqrt(sum/System.Math.Max(1,to-from));}
+        // Upward zero crossings a second: the pitch of a tone, near enough.
+        static float Pitch(float[] samples,int from,int to,int rate){int up=0;for(int i=from+1;i<to;i++)if(samples[i-1]<0&&samples[i]>=0)up++;return up*rate/(float)(to-from);}
+
+        // The button's air horn blares at once and holds; the flamingo's squeak is long and slides sadly down. Both are made in code,
+        // the same every time, and end without a click.
+        [Test] public void TheAirHornBlaresAndTheFlamingoSqueaksSadlyDown()
+        {
+            var horn=FestivalCampAudio.CreateHorn();var squeak=FestivalCampAudio.CreateSqueak();
+            var again=new[]{FestivalCampAudio.CreateHorn(),FestivalCampAudio.CreateSqueak()};
+            try
+            {
+                foreach(var clip in new[]{horn,squeak})
+                {
+                    Assert.That(clip.channels,Is.EqualTo(1),clip.name+" is mono");
+                    var samples=Samples(clip);int ms=clip.frequency/1000;float peak=Loudest(samples,0,samples.Length);
+                    Assert.That(peak,Is.InRange(.3f,1f),clip.name+" is loud, and never clipped");
+                    Assert.That(Loudest(samples,samples.Length-5*ms,samples.Length),Is.LessThan(.01f),clip.name+" ends without a click");
+                }
+                Assert.That(Samples(again[0]),Is.EqualTo(Samples(horn)),"every horn is the same");Assert.That(Samples(again[1]),Is.EqualTo(Samples(squeak)),"every squeak is the same");
+                var blare=Samples(horn);int hornMs=horn.frequency/1000;
+                Assert.That(horn.length,Is.InRange(.8f,1.6f),"one blare");
+                Assert.That(Rms(blare,0,40*hornMs),Is.GreaterThan(.15f),"it blares at once");
+                Assert.That(Rms(blare,blare.Length/2-50*hornMs,blare.Length/2+50*hornMs),Is.GreaterThan(.2f),"and holds");
+                var sad=Samples(squeak);int squeakMs=squeak.frequency/1000;
+                Assert.That(squeak.length,Is.InRange(1.5f,3f),"a long squeak");
+                float early=Pitch(sad,50*squeakMs,350*squeakMs,squeak.frequency),late=Pitch(sad,sad.Length-800*squeakMs,sad.Length-400*squeakMs,squeak.frequency);
+                Assert.That(early,Is.GreaterThan(late*1.8f),"that slides down: "+early+" Hz early, "+late+" Hz late");
+                Assert.That(Rms(sad,sad.Length-800*squeakMs,sad.Length-400*squeakMs),Is.GreaterThan(.02f),"and is still squeaking low near its end");
+            }
+            finally{Object.DestroyImmediate(horn);Object.DestroyImmediate(squeak);foreach(var clip in again)Object.DestroyImmediate(clip);}
+        }
+
+        // The flamingo lies flat and the dust carries its word from the first state a view reads, with no gag played, and both are back
+        // to new the next visit.
+        [Test] public void PersistentDeflationAndDustShowAtOnceAndResetTheNextVisit()
+        {
+            var root=new GameObject("impl:U66 persistent props");var world=root.AddComponent<FestivalWorld>();world.Build();
+            try
+            {
+                var game=new FestivalSimulation(0);game.AddPlayer("host","Host");
+                Assert.That(Poke(game,"host","flamingo","flat").Accepted,Is.True);Assert.That(Poke(game,"host","wash_me","word").Accepted,Is.True);
+                var air=world.CampEggs.Prop("flamingo").Find("Flamingo air");
+                TextMesh Dust()=>System.Array.Find(world.CampEggs.Prop("wash_me").GetComponentsInChildren<TextMesh>(true),t=>t.text.StartsWith("WASH ME",System.StringComparison.Ordinal));
+                Assert.That(air.localScale.y,Is.EqualTo(1),"setup: a new flamingo stands full of air");Assert.That(Dust().text,Is.EqualTo("WASH ME"),"setup: clean dust says WASH ME");
+                world.CampEggs.Show(View(game,"host").CampEggs);
+                Assert.That(air.localScale.y,Is.LessThan(.2f),"a deflated flamingo lies flat on the first state read");
+                string word=game.State.CampEggs.Find(e=>e.Id=="wash_me").Word;Assert.That(new[]{"BASS","HELP","NARC?","MOM SAYS HI"},Does.Contain(word),"setup: one of the four words");
+                Assert.That(Dust().text,Is.EqualTo("WASH ME\n"+word),"the dust carries the host's word under WASH ME");
+                foreach(var source in world.CampEggs.GetComponentsInChildren<AudioSource>(true))Assert.That(source.isPlaying,Is.False,"reading state plays no gag sound");
+                foreach(var shown in world.CampEggs.GetComponentsInChildren<Transform>(false))Assert.That(shown.name,Is.Not.EqualTo(FestivalCampEggView.LineName),"reading state shows no gag line");
+                var next=new FestivalSimulation(1);next.AddPlayer("host","Host");world.CampEggs.Show(View(next,"host").CampEggs);
+                Assert.That(air.localScale.y,Is.EqualTo(1),"the flamingo is back the next visit");Assert.That(Dust().text,Is.EqualTo("WASH ME"),"and the dust is clean");
+            }
+            finally{Object.DestroyImmediate(root);}
         }
 
         [Test] public void DelayedRepeatedAndRegressingSnapshotsDoNotReplayTransientGags()

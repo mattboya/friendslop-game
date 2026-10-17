@@ -274,6 +274,7 @@ namespace Festival.Network
 #endif
                 actorRoot=new GameObject("Authoritative actor presentation").transform;
                 world=FindFirstObjectByType<FestivalWorld>();if(world!=null)world.Build();
+                if(world!=null&&world.CampEggs!=null)world.CampEggs.Attach(this);
                 gameObject.AddComponent<FestivalVisionMarkers>();
                 SpeechBubbles=gameObject.AddComponent<FestivalSpeechBubbles>();
                 gameObject.AddComponent<FestivalCreatures>();
@@ -605,7 +606,7 @@ namespace Festival.Network
             }
             SaveAcknowledgedHistory();
             FollowCampEggs(State);
-            if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetTwists(State);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State,player);if(world.CampEggs!=null)world.CampEggs.Show(CampEggStates);}
+            if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetTwists(State);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State,player);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
             {
                 if(world!=null&&world.IsReady&&world.NavigationReady){loadedRound=State.RoundId;Command("MapReady");}
@@ -670,7 +671,13 @@ namespace Festival.Network
         {
             CampEggStates=state?.CampEggs??(IReadOnlyList<CampEggState>)Array.Empty<CampEggState>();
             if(state==null){campEggCursor.Clear();campEggRound="";return;}
-            if(campEggRound!=state.RoundId){campEggCursor.Clear();campEggRound=state.RoundId;}
+            if(campEggRound!=state.RoundId)
+            {
+                campEggCursor.Clear();campEggRound=state.RoundId;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                DevelopmentDiagnostics.GraphicsEvent("CampEggs","round","round="+state.RoundId+" baseline=silent");
+#endif
+            }
             foreach(var egg in CampEggStates)
             {
                 if(egg==null||CampFeatures.FindEgg(egg.Id)==null)continue;
@@ -1221,7 +1228,7 @@ namespace Festival.Network
         }
         private void OnDestroy()
         {
-            try{Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
+            try{Leave();if(world!=null&&world.CampEggs!=null)world.CampEggs.Detach(this);Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}
             finally
             {
                 activeSessions.Remove(this);

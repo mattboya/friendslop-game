@@ -5,7 +5,8 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>The camp's sound: the DJ's track, chosen in the host snapshot, and the original synthesized gag sounds. MUSIC-2: the
+    /// <summary>The camp's sound: the DJ's track, chosen in the host snapshot, and the original synthesized gag sounds (the camp
+    /// secrets' horn and squeak play from their props, FestivalCampEggView). MUSIC-2: the
     /// tracks are Matt's recordings (FestivalMusic). Each loops between beats measured from the recording, not over the file's silent
     /// start and faded end. Two decks take turns on the audio clock so the join lands to the sample: the first plays the track from
     /// its start to the loop's end, then the other plays the loop from its first beat, and so on.</summary>
@@ -54,6 +55,46 @@ namespace Festival.Presentation
             }
             var clip=AudioClip.Create("Original camp antic "+kind,samples.Length,1,Rate,false);
             clip.SetData(samples,0);return clip;
+        }
+        /// <summary>CAMP-3's DO NOT PRESS button: a 1.2 s air horn, two buzzy reeds a sour third apart, blaring at once and holding.</summary>
+        public static AudioClip CreateHorn()
+        {
+            const double Seconds=1.2;
+            var samples=new float[(int)(Rate*Seconds)];double low=0,high=0;
+            for(int n=0;n<samples.Length;n++)
+            {
+                double t=n/(double)Rate,wobble=1+.006*Math.Sin(2*Math.PI*5.5*t);
+                low+=415*wobble/Rate;high+=523*wobble/Rate;
+                double reeds=Saw(low)+.8*Saw(high);
+                samples[n]=(float)(Math.Tanh(1.6*reeds)*Math.Min(1,t/.012)*Fade(Seconds-t,.1));
+            }
+            return Clip("Camp air horn",samples,.85);
+        }
+        /// <summary>CAMP-3's flamingo: a long, sad, rubbery squeak sliding from about 700 Hz down to 180 Hz over escaping air.</summary>
+        public static AudioClip CreateSqueak()
+        {
+            const double Seconds=2.2;
+            var samples=new float[(int)(Rate*Seconds)];double phase=0,hiss=0;uint seed=0x3c6ef372;
+            for(int n=0;n<samples.Length;n++)
+            {
+                double t=n/(double)Rate,u=t/Seconds;
+                double hz=(180+520*Math.Exp(-u*3.2))*(1+(.02+.05*u)*Math.Sin(2*Math.PI*8*t));
+                phase+=2*Math.PI*hz/Rate;seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;
+                hiss+=(((seed&0xffff)/32767.5-1)-hiss)*.08;
+                double sound=(Math.Sin(phase)+.4*Math.Sin(2*phase)+.15*Math.Sin(3*phase))*(.9-.4*u)+hiss*.6;
+                samples[n]=(float)(sound*Math.Min(1,t/.03)*Fade(Seconds-t,.25));
+            }
+            return Clip("Camp flamingo squeak",samples,.7);
+        }
+        // A rising ramp from -1 to 1 once a cycle.
+        static double Saw(double cycles)=>2*(cycles-Math.Floor(cycles))-1;
+        // Squared, so the last few milliseconds are near silence and the clip ends without a click.
+        static double Fade(double left,double seconds)=>Math.Pow(Math.Min(1,left/seconds),2);
+        static AudioClip Clip(string name,float[] samples,double loudness)
+        {
+            float peak=0;foreach(float sample in samples)peak=Math.Max(peak,Math.Abs(sample));
+            for(int n=0;n<samples.Length;n++)samples[n]=(float)(samples[n]*loudness/peak);
+            var clip=AudioClip.Create(name,samples.Length,1,Rate,false);clip.SetData(samples,0);return clip;
         }
         // Plays the DJ's choice (CampFeatures.Tracks' index; SILENCE stops), its first pass starting at sample from.
         void Play(int selected,int from)
