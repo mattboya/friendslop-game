@@ -35,7 +35,7 @@ child.on('exit',code=>{
   const output=existsSync(log)?readFileSync(log,'utf8'):'';
   const run='in '+((Date.now()-started)/1000).toFixed(1)+' s real; '+describe(output);
   if(timedOut){console.error('Solo native smoke timed out after '+timeoutSeconds+' s '+run+'; inspect '+log);process.exitCode=1;return;}
-  if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(output)||!output.includes('FESTIVAL SOLO SMOKE PASSED')||!output.includes('FESTIVAL SMOKE CAMP MUSIC PASSED')){
+  if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(output)||!['FESTIVAL SOLO SMOKE PASSED','FESTIVAL SMOKE CAMP MUSIC PASSED','FESTIVAL SMOKE BUBBLE TEXT SHADER PASSED','FESTIVAL SMOKE STARTER SHELF PASSED','FESTIVAL SMOKE CHAT TYPING PASSED','FESTIVAL SMOKE STAGE MUSIC PASSED'].every(marker=>output.includes(marker))){
     console.error('Solo native smoke failed '+run+'; inspect '+log);
     process.exitCode=1;
     return;

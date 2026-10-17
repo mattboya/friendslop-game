@@ -172,6 +172,9 @@ namespace Festival.Presentation
             var campGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.CampRootName+"/Campsite shelf goods");
             if(campMenu==null||campMenu.Find("Pass home/RESUME FESTIVAL")==null||campMenu.Find("Pass home/SETTINGS")==null||campGoods==null||campGoods.childCount!=session.State.VendorOffers.Count)
             {Fail("physical camp shop and pass controls");yield break;}
+            string starterShelf=StarterShelfWrong(FindFirstObjectByType<FestivalWorld>()?.transform,session.State);
+            if(starterShelf!=null){Fail("starter shelf: "+starterShelf);yield break;}
+            Debug.Log("FESTIVAL SMOKE STARTER SHELF PASSED: both starters on the camp shelf, none on the night market; host="+session.IsHost);
             session.MenuOpen=false;
             captureCamera=session.ViewCamera;
             capturePosition=new Vector3(0,2.1f,-1);
@@ -200,6 +203,14 @@ namespace Festival.Presentation
             yield return new WaitForSeconds(.6f);
             if(!File.Exists(settingsPath)){Fail("settings render");yield break;}
             Debug.Log("FESTIVAL SMOKE SETTINGS RENDER PASSED: "+settingsPath);
+            var settingsPanel=campMenu.Find("Pass settings");
+            yield return CheckSettingsTabs(settingsPanel);
+            if(failed!=null){Fail(failed);yield break;}
+            settingsPanel.Find(FestivalSettingsScreen.TabName(FestivalSettingsScreen.Tab.Controls)).GetComponent<Button>().onClick.Invoke();
+            yield return new WaitForSeconds(.2f);
+            yield return Capture(session.IsHost?"host-settings-controls.png":"client-settings-controls.png","SETTINGS CONTROLS RENDER");
+            if(failed!=null){Fail(failed);yield break;}
+            settingsPanel.Find(FestivalSettingsScreen.TabName(FestivalSettingsScreen.Tabs[0])).GetComponent<Button>().onClick.Invoke();
             campMenu.Find("Pass settings/BACK TO PASS").GetComponent<Button>().onClick.Invoke();
             session.MenuOpen=false;
             var interfaceHud=GetComponent<FestivalHud>();
@@ -544,6 +555,9 @@ namespace Festival.Presentation
                     {
                         while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.72){if(!Holds(session,dance)){Fail(failed);yield break;}yield return null;}
                         ScreenCapture.CaptureScreenshot(rhythmPath);rhythmCaptured=true;
+                        string tails=HoldTailsWrong(lane,chart);
+                        if(tails!=null){Fail("hold tails: "+tails);yield break;}
+                        Debug.Log("FESTIVAL SMOKE HOLD TAILS PASSED: under the arrows, none on a chart without holds");
                     }
                     while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.02){if(!Holds(session,dance)){Fail(failed);yield break;}yield return null;}
                     session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
@@ -943,6 +957,8 @@ namespace Festival.Presentation
             float started=Time.realtimeSinceStartup+ConnectionSeconds;
             while(session.LocalPlayer==null&&Time.realtimeSinceStartup<started)yield return null;
             if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
+            if(!BubbleTextShaderSupported(TMP_Settings.defaultFontAsset?.material)){Fail("bubble text shader");yield break;}
+            Debug.Log("FESTIVAL SMOKE BUBBLE TEXT SHADER PASSED: TextMeshPro/Mobile/Distance Field supported");
             var sim=session.DevelopmentSimulation;
             var player=sim.Player(session.LocalPlayerId);
             string soloCaptureDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(soloCaptureDir);
@@ -1010,11 +1026,16 @@ namespace Festival.Presentation
             if(File.Exists(equippedCapture))File.Delete(equippedCapture);
             ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
             if(!File.Exists(equippedCapture)){Fail("solo equipped camp render");yield break;}
+            string starterShelf=StarterShelfWrong(FindFirstObjectByType<FestivalWorld>()?.transform,session.State)??BuyOneStarter(session);
+            if(starterShelf!=null){Fail("starter shelf: "+starterShelf);yield break;}
+            Debug.Log("FESTIVAL SMOKE STARTER SHELF PASSED: both starters on the camp shelf, one bought, a second turned down");
             player.Z=19;session.Command("Ready");
             yield return CaptureSpinner(session,"solo-spinner.png");
             if(failed!=null){Fail(failed);yield break;}
             yield return Until(session,"solo level start",()=>session.State.Phase=="Playing",FestivalSimulation.SpinSeconds+LoadingSeconds);
             if(failed!=null||session.State.Phase!="Playing"){Fail(failed??"solo campsite countdown");yield break;}
+            yield return StageMusicPlays(session);
+            if(failed!=null){Fail(failed);yield break;}
             session.Command("Equip",item:"poi_practice");
             yield return new WaitForSeconds(.2f);
             string poiCapture=Path.Combine(soloCaptureDir,"solo-poi-grip.png");
@@ -1221,7 +1242,8 @@ namespace Festival.Presentation
         }
         // DIALOG-3: talk `id` played as a player who reads people well plays it: the dance first, perfectly, if they ask for one,
         // then the smooth reply (SmoothReply) to each turn as it shows. With `capture`, the chat window must show the first turn (the
-        // talk's title, their line, three replies), and is screenshotted there before the reply. Sets failed when it doesn't.
+        // talk's title, their line, three replies) and their line must type out over them (SpeechTypedOut); the card is then
+        // screenshotted before the reply. Sets failed when it doesn't.
         IEnumerator Talk(FestivalSession session,string id,string capture=null,float realLimit=float.PositiveInfinity)
         {
             // A client's view is a new snapshot each time, so the talk is looked up afresh every frame. Even the host's view only
@@ -1253,6 +1275,8 @@ namespace Festival.Presentation
                         while((window==null||!window.Open||window.Replies<3)&&Time.realtimeSinceStartup<shown)yield return null;
                         if(window==null||!window.Open||window.Replies!=3||window.Header!=FestivalChatWindow.TalkHeader||window.ReplyLabel(0)!=talk.Turns[turn].Replies[0])
                         {failed="conversation card: "+(window==null?"missing":window.Header+", "+window.Replies+" replies");yield break;}
+                        yield return SpeechTypedOut(session,talk.TargetId,talk.Turns[turn].Line);
+                        if(failed!=null)yield break;
                         if(File.Exists(capture))File.Delete(capture);
                         ScreenCapture.CaptureScreenshot(capture);yield return new WaitForSeconds(.65f);
                         if(!File.Exists(capture)){failed="conversation card render";yield break;}
@@ -1448,6 +1472,122 @@ namespace Festival.Presentation
             var shader=material!=null?material.shader:null;
             return shader!=null&&shader.name=="TextMeshPro/Mobile/Distance Field"&&shader.isSupported
                 &&TMP_Settings.defaultFontAsset!=null&&shader==TMP_Settings.defaultFontAsset.material.shader;
+        }
+        // SET-1: opens every settings tab, and each CONTROLS section, and checks it shows its own rows and no others. VOICE must say
+        // voice is not in this build, and its microphone test stays off. Leaves the first tab open.
+        IEnumerator CheckSettingsTabs(Transform settings)
+        {
+            foreach(var tab in FestivalSettingsScreen.Tabs)
+            {
+                settings.Find(FestivalSettingsScreen.TabName(tab))?.GetComponent<Button>()?.onClick.Invoke();
+                foreach(string section in tab==FestivalSettingsScreen.Tab.Controls?FestivalSettingsScreen.Sections:new[]{""})
+                {
+                    if(section!="")settings.Find(section)?.GetComponent<Button>()?.onClick.Invoke();
+                    string wrong;float shown=Time.realtimeSinceStartup+RenderSeconds;
+                    do{yield return null;wrong=SettingsRowsWrong(settings,tab,section);}while(wrong!=null&&Time.realtimeSinceStartup<shown);
+                    if(wrong!=null){failed="settings "+FestivalSettingsScreen.TabName(tab)+(section==""?"":" "+section)+": "+wrong;yield break;}
+                }
+                if(tab==FestivalSettingsScreen.Tab.Voice&&(settings.Find("VOICE CHAT value")?.GetComponent<Text>()?.text!=FestivalSettingsScreen.VoiceExplanation||settings.Find("TEST")?.GetComponentInChildren<Text>()?.text!="TEST"))
+                {failed="settings VOICE: no voice explanation, or the microphone test is running";yield break;}
+            }
+            settings.Find(FestivalSettingsScreen.TabName(FestivalSettingsScreen.Tabs[0]))?.GetComponent<Button>()?.onClick.Invoke();
+            yield return null;
+        }
+        /// <summary>The first settings row shown or hidden wrongly for this tab and CONTROLS section, as "LABEL shown" or
+        /// "LABEL hidden"; null when every row is right. Two rows can share a label (PUSH TO TALK), so a label shows if either does.</summary>
+        public static string SettingsRowsWrong(Transform settings,FestivalSettingsScreen.Tab tab,string section)
+        {
+            foreach(var row in FestivalSettingsScreen.Rows)
+            {
+                bool expected=false,shown=false;
+                foreach(var other in FestivalSettingsScreen.Rows)expected|=other.Label==row.Label&&other.Tab==tab&&(other.Section==""||other.Section==section);
+                foreach(Transform child in settings)shown|=child.name==row.Label&&child.gameObject.activeSelf;
+                if(expected!=shown)return row.Label+(expected?" hidden":" shown");
+            }
+            return null;
+        }
+        /// <summary>ECON-6: what is wrong with the starter stock on the shelves, or null. Each starter offer stands on the camp shelf
+        /// with a copy showing and a price tag, and the night market holds none.</summary>
+        public static string StarterShelfWrong(Transform world,RoundState state)
+        {
+            var camp=world?.Find(FestivalWorld.CampRootName+"/Campsite shelf goods");var market=world?.Find(FestivalWorld.RootName+"/Night market goods");
+            if(camp==null||market==null)return "no shelves";
+            int starters=0;
+            foreach(var offer in state.VendorOffers)
+            {
+                if(!Catalog.StarterStock(offer))continue;
+                starters++;
+                var holder=camp.Find("Shop item "+offer);var tag=holder?.Find("Name and price")?.GetComponent<TextMesh>();
+                bool shown=false;var copies=holder?.Find("Individual shelf copies");
+                if(copies!=null)foreach(Transform copy in copies)shown|=copy.gameObject.activeSelf;
+                if(!shown||tag==null||tag.text=="")return offer+" missing from the camp shelf";
+                if(market.Find("Shop item "+offer)!=null)return offer+" on the night market";
+            }
+            return starters==0?"no starter offers":null;
+        }
+        // ECON-6: the solo player buys one starter Tongue Stamp at the camp shelf, and the shelf turns down a second starter. Null
+        // when both happen.
+        static string BuyOneStarter(FestivalSession session)
+        {
+            var sim=session.DevelopmentSimulation;var player=sim.Player(session.LocalPlayerId);
+            int held=player.Inventory.Find(item=>item.ItemId=="stock_lsd")?.Count??0;
+            var shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_lsd"));
+            player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"stock_lsd");
+            player.X=0;player.Z=7;session.Command("Buy",item:"stock_lsd");
+            if((player.Inventory.Find(item=>item.ItemId=="stock_lsd")?.Count??0)!=held+1)return "solo starter purchase: "+session.Message;
+            shelf=Catalog.ShopPoint(true,sim.State.VendorOffers.IndexOf("stock_mushrooms"));
+            player.X=shelf.X;player.Z=shelf.Z;session.Command("HoldOffer",item:"stock_mushrooms");
+            if(player.HeldOfferId!=""){session.Command("ReturnOffer");return "solo second starter was not turned down";}
+            player.X=0;player.Z=7;
+            return null;
+        }
+        // DIALOG-2: `line` from `speaker` types out on the game clock, and floats over them in a TextMeshPro bubble drawn with the
+        // bubble text shader. Sets failed when it does not.
+        IEnumerator SpeechTypedOut(FestivalSession session,string speaker,string line)
+        {
+            FestivalSpeechDeliveryTracker.Delivery said=null;
+            yield return Until(session,"speech types out",()=>(said=FindSpeech(session,speaker,line))!=null&&said.VisibleCharacters>=said.CharacterCount,CommandSeconds+line.Length/FestivalSpeechBubbles.LettersPerSecond);
+            if(failed!=null)yield break;
+            TextMeshPro bubble=null;float drawn=Time.realtimeSinceStartup+RenderSeconds;
+            while((bubble=SpeechBubble(line))==null||bubble.maxVisibleCharacters<said.CharacterCount)
+            {
+                if(Time.realtimeSinceStartup>=drawn){failed="speech bubble "+(bubble==null?"missing":"shows "+bubble.maxVisibleCharacters+" of "+said.CharacterCount+" letters");yield break;}
+                yield return null;
+            }
+            if(!BubbleTextShaderSupported(bubble.fontSharedMaterial)){failed="speech bubble shader "+bubble.fontSharedMaterial?.shader?.name;yield break;}
+            Debug.Log("FESTIVAL SMOKE CHAT TYPING PASSED: their line typed out in a TextMeshPro bubble, "+said.CharacterCount+" letters");
+        }
+        static FestivalSpeechDeliveryTracker.Delivery FindSpeech(FestivalSession session,string speaker,string line)
+        {
+            foreach(var delivery in session.SpeechDeliveries.Deliveries)if(delivery.SpeakerId==speaker&&delivery.Text==line)return delivery;
+            return null;
+        }
+        TextMeshPro SpeechBubble(string line)
+        {
+            foreach(var text in GetComponentsInChildren<TextMeshPro>())if(text.text==line)return text;
+            return null;
+        }
+        // MUSIC-4: a level plays its own stage recording on the shared clock. Sets failed when the stage stays silent.
+        IEnumerator StageMusicPlays(FestivalSession session)
+        {
+            var track=FestivalStageAudio.For(session.State);float heard=Time.realtimeSinceStartup+RenderSeconds;
+            FestivalStageAudio stage;
+            while((stage=GetComponent<FestivalStageAudio>())==null||track==null||stage.Track!=track||stage.Music==null||!stage.Music.isPlaying||stage.Music.clip!=track.Audio)
+            {
+                if(Time.realtimeSinceStartup>=heard){failed="stage music: "+(track==null?"no track for "+session.State.Phase:stage?.Music?.clip!=null?stage.Music.clip.name+" instead of "+track.Clip:"silent");yield break;}
+                yield return null;
+            }
+            Debug.Log("FESTIVAL SMOKE STAGE MUSIC PASSED: "+track.Clip+" plays on the shared clock");
+        }
+        /// <summary>DANCE-10: what is wrong with the rhythm lane's hold tails, or null. The tails draw under the arrows, and a chart
+        /// without holds (every Day 1 chart) draws none.</summary>
+        public static string HoldTailsWrong(Transform lane,RhythmChart chart)
+        {
+            var tails=lane?.Find("Hold tails");var notes=lane?.Find("Notes");
+            if(tails==null||notes==null)return "no tail pool";
+            if(tails.GetSiblingIndex()>notes.GetSiblingIndex())return "tails drawn over the arrows";
+            bool drawn=false;foreach(Transform tail in tails)drawn|=tail.gameObject.activeSelf;
+            return drawn&&!chart.Notes.Exists(note=>note.HoldSeconds>0)?"a tail drawn on a chart without holds":null;
         }
         static void Fail(string stage){Debug.LogError("FESTIVAL SMOKE FAILED: "+stage);Application.Quit(5);}
         static bool Near(PlayerState p,float x,float z)=>p!=null&&Mathf.Abs(p.X-x)<.1f&&Mathf.Abs(p.Z-z)<.1f;
