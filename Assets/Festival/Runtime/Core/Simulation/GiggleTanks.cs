@@ -1,12 +1,12 @@
 namespace Festival.Core
 {
-    /// <summary>GAS-2: now and then a Giggle Tank turns up at the festival, at one of Festivals.GiggleTankSpots. It is public, not a
-    /// vision: everyone sees it, and the first living, free player to reach it grabs it, which banks Festivals.GiggleTankCash in
-    /// the crew's shared stash at once. That is money to spend between rounds, withdrawn at the crew stash like the rest of the
-    /// stash; it is never sale cash, so it never counts toward a day's quota.</summary>
+    /// <summary>Now and then a Giggle Tank turns up at the festival, at one of Festivals.GiggleTankSpots. It is public, not a
+    /// vision: everyone sees it, and the first living, free player to reach it with a free hand slot grabs it. Carried home inside
+    /// the camp gate it banks Festivals.GiggleTankCash in the crew's shared stash: money to spend between rounds, withdrawn at the
+    /// crew stash like the rest of the stash, never sale cash, so it never counts toward a day's quota.</summary>
     public sealed partial class FestivalSimulation
     {
-        public const string GrabGiggleTankKind="GrabGiggleTank";
+        public const string GrabGiggleTankKind="GrabGiggleTank",GiggleTankItem="giggle_tank";
         /// <summary>Where this level's Giggle Tank stands, or null: none this level, someone grabbed it, or the view has none (a
         /// spirit's). It reads only public state, so the HUD and the world show it from any client's view.</summary>
         public static WorldPoint GiggleTankAt(RoundState s)=>!s.GiggleTankFound&&s.GiggleTankSpot>=0&&s.GiggleTankSpot<Festivals.GiggleTankSpots.Length?Festivals.GiggleTankSpots[s.GiggleTankSpot]:null;
@@ -21,13 +21,27 @@ namespace Festival.Core
         }
         /// <summary>Whether p stands within reach of the level's Giggle Tank, where GrabGiggleTank takes it (the HUD offers it there).</summary>
         public static bool AtGiggleTank(RoundState s,PlayerState p){var at=GiggleTankAt(s);return at!=null&&Near(p,at.X,at.Z,Festivals.GiggleTankReach);}
-        // Apply lets only a living, free player at the festival this far. The notice is the grabber's reply alone; everyone sees
-        // the stash rise and the tank go.
+        // Apply lets only a living, free player at the festival this far.
         CommandResult GrabGiggleTank(PlayerState p)
         {
             if(!AtGiggleTank(State,p))return Reject(State.GiggleTankFound?"Someone beat you to the Giggle Tank":"Get right up to the Giggle Tank to grab it");
-            State.GiggleTankFound=true;State.StashCash+=Festivals.GiggleTankCash;
-            return Ok("Giggle Tank! +$"+Festivals.GiggleTankCash+" for camp");
+            if(!CanAdd(p,GiggleTankItem,1))return Reject("Hands full: free a slot to carry the Giggle Tank");
+            Add(p,GiggleTankItem,1);State.GiggleTankFound=true;State.GiggleTankGrabberId=p.Id;State.GiggleTankGrabberName=p.Name;
+            return Ok("Giggle Tank! Carry it home to the camp gate: +$"+Festivals.GiggleTankCash+" for camp");
+        }
+        // Step runs this after the tick's arrests and deaths, and End before a level closes, so a carrier home on the last tick
+        // still pays. A spirit's carried body is home for Extract, never for a tank.
+        void BankGiggleTanks()
+        {
+            if(State.Phase!="Playing")return;
+            foreach(var p in State.Players)if(p.Connected&&(p.Life=="Alive"||p.Life=="Downed")&&Count(p,GiggleTankItem)>0&&AtCampGate(p.X,p.Z))
+            {Take(p,GiggleTankItem,1);State.StashCash+=Festivals.GiggleTankCash;p.GiggleTankBankSequence++;}
+        }
+        // Detention, death and the next level lose a tank, one still on offer included: returning it to full hands would drop it.
+        void LoseGiggleTank(PlayerState p)
+        {
+            State.Transfers.RemoveAll(t=>t.FromId==p.Id&&t.ItemId==GiggleTankItem);p.Inventory.RemoveAll(x=>x.ItemId==GiggleTankItem);
+            if(p.EquippedItemId==GiggleTankItem)p.EquippedItemId="";
         }
     }
 }

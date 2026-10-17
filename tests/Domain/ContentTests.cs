@@ -8,7 +8,9 @@ public static class ContentTests
     public static void Run()
     {
         DoseFlight();
-        Check(Catalog.Items.Length==13,"thirteen item definitions (POLO-1 added the VIP wristband)");
+        Check(Catalog.Items.Length==14,"fourteen item definitions (GAS-3 adds a carried Giggle Tank)");
+        var tank=Catalog.FindItem("giggle_tank");
+        Check(tank!=null&&!tank.Purchasable&&tank.StackLimit==1&&!Catalog.VendorOffers(42).Contains(tank.Id),"the tank is nonpurchasable, unstackable hand gear and never a shelf offer");
         Check(Catalog.Effects.Length==7,"seven effects (GAS-1 added camp's Giggle Gas)");
         var ids=new HashSet<string>();
         foreach(var item in Catalog.Items) { Check(ids.Add(item.Id),"unique item IDs"); Check(item.Price>=0&&item.StackLimit>0,"valid economics"); Check(!string.IsNullOrEmpty(item.CancellationRule),"use contract"); }

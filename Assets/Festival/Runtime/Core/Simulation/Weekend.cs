@@ -31,7 +31,7 @@ namespace Festival.Core
 
         // BeginCampReview has built the next, reseeded round (fresh $20, no gear, no effects, calm crowd).
         // A cleared level moves on and keeps cash, gear, stash cash and the stashes (the boxes placed and what is hidden in them,
-        // with the entity counter so later boxes get fresh ids); clearing Night 2 moves to the next
+        // with the entity counter so later boxes get fresh ids), but no Giggle Tank still out; clearing Night 2 moves to the next
         // festival (encore lap after the last) with a fresh start; any failure restarts this festival at Day 1.
         void AdvanceWeekend(RoundState old)
         {
@@ -46,7 +46,8 @@ namespace Festival.Core
             next.DurationSeconds=Festivals.For(next).DurationSeconds;
             if(!continuing)return;
             next.StashCash=old.StashCash;next.TripperBag=old.TripperBag;next.MinigameBag=old.MinigameBag;next.Stashes=old.Stashes;next.EntitySequence=Math.Max(next.EntitySequence,old.EntitySequence);
-            foreach(var before in old.Players){var after=Player(before.Id);after.Cash=before.Cash;after.Inventory=before.Inventory;after.EquippedItemId=before.EquippedItemId;}
+            foreach(var before in old.Players){var after=Player(before.Id);after.Cash=before.Cash;after.Inventory=before.Inventory;after.EquippedItemId=before.EquippedItemId;LoseGiggleTank(after);}
+            foreach(var stash in next.Stashes)stash.Items.RemoveAll(x=>x.ItemId==GiggleTankItem);
         }
         // Clearing Night 2 of festival k unlocks k+1. End runs this on the win itself, so the host's profile saves the unlock
         // even when they leave from the results screen instead of pressing NEXT CAMP.

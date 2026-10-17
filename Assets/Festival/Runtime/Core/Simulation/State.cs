@@ -39,6 +39,8 @@ namespace Festival.Core
         public string DeathSpinId="",DeathSpinRoundId="",DeathSpinName="";
         // Persistent owner-only semantic loss event; independent of cash and retained through covered screens.
         public long GearLossSequence; public string GearLossKind="",GearLossNotice="";
+        // Owner-only count of the Giggle Tanks this player carried home: a stash rise beside a lost tank can be someone else's payout.
+        public int GiggleTankBankSequence;
         public double DownedRemaining, RecoveryUntil, ChimeUntil, SprintUntil, HelpUntil;
         // Latest deck tip receipt is copied only to its owner; no public speech delivery or transcript. Legacy defaults are empty.
         public int DeckTipAmount; public string DeckTipDeliveryId=""; public double DeckTipAtWorldSeconds=-1,DeckTipUntilWorldSeconds=-1;
@@ -154,6 +156,9 @@ namespace Festival.Core
         // GAS-2: this level's Giggle Tank (GiggleTanks.cs), public like the spin: its place in Festivals.GiggleTankSpots, or -1 for
         // none (as in a snapshot from before tanks); found once someone has grabbed it.
         public int GiggleTankSpot=-1; public bool GiggleTankFound;
+        // Who grabbed it, for every view, spirits' included: the name travels with the id because spirits never see living players.
+        // "" until a grab, again each level, and in older snapshots.
+        public string GiggleTankGrabberId="",GiggleTankGrabberName="";
         // MINI-1: this level's minigame booth and its game (Minigames.cs), public like the tank; Spot -1, none (camp, and snapshots
         // from before booths). MinigameBag: the games this weekend still has to offer, carried like TripperBag; host-only.
         public MinigameState Booth=new MinigameState(); public List<string> MinigameBag=new List<string>();

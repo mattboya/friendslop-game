@@ -41,7 +41,9 @@ namespace Festival.Core
             Item("poi_practice", "Practice poi", "Reusable dance tool: 15% wider good window, capped at 175 ms. Pair with a friend for rescue.",5,1,"Performance","Dance","NearbyWooks",0,0,8,false),
             Item("poi_led", "LED poi", "Reusable dance tool: successful performances reduce suspicion 25% more.",10,1,"Performance","Dance","NearbyWooks",0,0,8,false),
             // POLO-1: sold only at Palm Mirage's night-market VIP stall, or given by the VIP guard; never on a shelf.
-            Item("vip_wristband", "VIP wristband", "Gets you past Palm Mirage's VIP ropes, where buyers pay double.",15,1,"Access","Passive","Self",0,0,0,false)
+            Item("vip_wristband", "VIP wristband", "Gets you past Palm Mirage's VIP ropes, where buyers pay double.",15,1,"Access","Passive","Self",0,0,0,false),
+            // Found at the festival, never on a shelf: it fills a hand slot until the camp gate banks it (GiggleTanks.cs).
+            Item("giggle_tank", "Giggle Tank", "Carry it home to the camp gate: +$25 for camp.",0,1,"Reward","Carry","Self",0,0,0,false,null,false)
         };
         public static readonly EffectDefinition[] Effects = {
             Effect("lsd","Tongue Stamps",2,true,"Deterministic irregular low-amplitude trails; fixed receptors."),
