@@ -64,6 +64,10 @@ namespace Festival.Presentation
                 title.Find("Play/Play choices/ADVANCED").GetComponent<Button>().onClick.Invoke();
                 title.Find("Play/Play choices/Advanced/PORT").GetComponent<InputField>().text="17781";
                 title.Find("Play/Play choices/HOST A GAME").GetComponent<Button>().onClick.Invoke();
+                // SET-1: a fresh profile answers the first-launch comfort question before the game starts.
+                var keepEffects=transform.Find("Festival HUD/First-launch comfort choice/Comfort choice card/NO, KEEP FULL EFFECTS");
+                if(keepEffects==null||!keepEffects.gameObject.activeInHierarchy){Fail("menu create asks the comfort question");yield break;}
+                keepEffects.GetComponent<Button>().onClick.Invoke();
                 float createDeadline=Time.realtimeSinceStartup+12;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<createDeadline)yield return null;
                 if(session.LocalPlayer==null||session.State.Phase!="Shopping"||session.MenuOpen){Fail("menu create enters campsite");yield break;}
