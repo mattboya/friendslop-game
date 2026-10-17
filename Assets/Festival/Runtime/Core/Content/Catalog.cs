@@ -32,7 +32,7 @@ namespace Festival.Core
             Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up, or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
             Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up, or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
             Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
-            Item("confetti", "Confetti cannon", "Redirect nearby idle or questioning wooks for 4 seconds; cannot stop a swarm.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
+            Item("confetti", "Confetti cannon", "Turns calm festivalgoers within 8 m to the burst for 4 s; accusers and swarms ignore it. Free party trick at camp.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
             Item("merch_bag", "Official merch bag", "Hide stock from casual inspection; witnessed sales and searches still count.",5,1,"Equipment","Passive","Self",0,0,0,false),
             Item("stash_box", "Lockable stash box", "Place shared storage; return within 2.5 metres to move cash or stock.",10,1,"Storage","Place","Ground",0,0,2.5,true),
             Item("medical_voucher", "Medical tent voucher", "At the tent, spend 3 seconds removing your newest impairment. Does not revive.",5,1,"Medical","Medical","Self",3,0,3,true),

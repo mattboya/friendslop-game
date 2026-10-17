@@ -349,6 +349,17 @@ namespace Festival.Tests
                 "GiggleBalloon|Refused: Two Giggle Balloons at a time: let one wear off"+round,"GiggleBalloon|Refused: Stand by the Giggle Balloons to take one"+round}));
         }
 
+        [Test] public void ConfettiDiagnosticsNameEachAcceptedBurst()
+        {
+            var game=new FestivalSimulation(3);var player=game.AddPlayer("host","Host");game.AddPlayer("friend","Friend");
+            player.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.ConfettiItem,Count=1});
+            var events=new System.Collections.Generic.List<string>();
+            game.ChatDiagnostic=(action,reason,round,time)=>events.Add(action+"|"+reason+"|"+round);
+            game.Execute(player.Id,new GameCommand{Id="burst",Kind="Use",ItemId=FestivalSimulation.ConfettiItem});
+            game.Execute("friend",new GameCommand{Id="unowned",Kind="Use",ItemId=FestivalSimulation.ConfettiItem});
+            Assert.That(events,Is.EqualTo(new[]{"Confetti|Confetti! A camp party trick: your cannon stays loaded|"+game.State.RoundId}));
+        }
+
         private static GameCommand Command(string id,string kind)=>new GameCommand{Id=id,Kind=kind};
     }
 }

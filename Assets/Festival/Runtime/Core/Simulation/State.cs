@@ -21,6 +21,9 @@ namespace Festival.Core
         // Accepted Giggle Balloon takes this round, public from the take on, so every client can play each inhale once;
         // zero in older snapshots.
         public int VisualGiggleTakeSequence;
+        // Accepted confetti cannon bursts this round, public in every view that carries the player so each client shows each burst
+        // once; zero in older snapshots.
+        public int VisualConfettiBurstSequence;
         // POI-1: the host sets it each tick while this player holds left click and may spin their poi (FestivalSimulation.CanSpinPoi);
         // every view carries it, so friends see the spin. Only for show; false in older snapshots.
         public bool VisualPoiSpin;

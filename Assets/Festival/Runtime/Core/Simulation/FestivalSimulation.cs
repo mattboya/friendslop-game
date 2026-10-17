@@ -106,6 +106,8 @@ namespace Festival.Core
             if(c.Kind=="Equip")return Equip(p,c);
             if(c.Kind=="Drop"&&State.Phase=="Shopping")return LeaveAtCamp(p,c);
             if(c.Kind==TakeGiggleBalloonKind)return TakeGiggleBalloon(p);
+            // Camp's only Use: the confetti cannon, a free party trick (Confetti.cs). Other gear waits for the festival.
+            if(c.Kind=="Use"&&c.ItemId==ConfettiItem&&State.Phase=="Shopping")return Use(p,c);
             if(State.Phase!="Playing")return Reject("Start the round first");
             if(c.Kind==DeckSetKind)return BeginDeckSet(p);
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");

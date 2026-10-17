@@ -8,7 +8,82 @@ public static class SimulationTests {
  static FestivalSimulation Game(){var s=new FestivalSimulation();var a=s.AddPlayer("a","A");var b=s.AddPlayer("b","B");a.X=b.X=0;a.Z=b.Z=19;s.Execute("a",C("Ready"));s.Execute("b",C("Ready"));Assert(s.Execute("a",C("Start")).Accepted,"start");s.Tick(FestivalSimulation.SpinSeconds+.1);s.Execute("a",C("MapReady"));s.Execute("b",C("MapReady"));Assert(s.State.Phase=="Playing","map ready");return s;}
  // The spinner doses one of the pair; tests about sober walking and consumables use the other.
  static PlayerState Sober(FestivalSimulation s){return s.State.Players.Find(x=>x.Id!=s.State.TripperId);}
+ static void ConfettiTellsThePlayerHowManyItDistracted(){
+  var s=Game();var p=s.Player("a");p.X=p.Z=0;s.State.Npcs.Clear();
+  var first=new NpcState{Id="calm-one",X=0,Z=2};var second=new NpcState{Id="calm-two",X=2,Z=0};
+  s.State.Npcs.Add(first);s.State.Npcs.Add(second);p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+  var command=C("Use","confetti");var fired=s.Execute(p.Id,command);
+  Assert(fired.Accepted,"setup: confetti use accepted");
+  Assert(fired.Reason=="Confetti! 2 festivalgoers look away for 4 s","confetti receipt must explain affected count; got "+fired.Reason);
+  Assert(first.DistractedUntil==s.State.SimulationSeconds+4&&second.DistractedUntil==s.State.SimulationSeconds+4,"both calm festivalgoers distracted for four seconds");
+  Assert(p.Inventory.Find(i=>i.ItemId=="confetti")==null,"festival use consumes one cannon");
+  Assert(s.Execute(p.Id,command).Reason==fired.Reason,"duplicate command returns same receipt");
+  Assert(p.VisualConfettiBurstSequence==1,"one accepted use is one public burst, never two for a replayed command; got "+p.VisualConfettiBurstSequence);
+ }
+ // Accusers and swarmers ignore the cannon, cops are no festivalgoers and 8 m is its reach; every festival use still spends one and bursts.
+ static void ConfettiSaysWhyItFooledNobody(){
+  var s=Game();var p=s.Player("a");p.X=p.Z=0;s.State.Npcs.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=3});
+  var swarming=new NpcState{Id="swarming",X=0,Z=1,Mode="Swarming",TargetId=p.Id};var accusing=new NpcState{Id="accusing",X=1,Z=0,Mode="Accusing",TargetId=p.Id};
+  var far=new NpcState{Id="far",X=0,Z=-8.5f};var cop=new NpcState{Id="cop",Kind="Cop",X=-1,Z=0};
+  s.State.Npcs.AddRange(new[]{swarming,accusing,far,cop});
+  var worked=s.Execute(p.Id,C("Use","confetti"));
+  Assert(worked.Accepted&&worked.Reason=="Confetti! They're too worked up to care","only accusers and swarmers in reach; got "+worked.Reason);
+  Assert(swarming.DistractedUntil==0&&accusing.DistractedUntil==0&&far.DistractedUntil==0&&cop.DistractedUntil==0,"nobody is distracted");
+  Assert(Count(p,"confetti")==2&&p.VisualConfettiBurstSequence==1,"the cannon is still spent and still bursts");
+  s.State.Npcs.Remove(swarming);s.State.Npcs.Remove(accusing);
+  var nobody=s.Execute(p.Id,C("Use","confetti"));
+  Assert(nobody.Reason=="Confetti! Nobody close enough to fool","no festivalgoer within 8 m, a cop beside you; got "+nobody.Reason);
+  var edge=new NpcState{Id="edge",X=8,Z=0};s.State.Npcs.Add(edge);s.State.Npcs.Add(swarming);
+  var one=s.Execute(p.Id,C("Use","confetti"));
+  Assert(one.Reason=="Confetti! 1 festivalgoer looks away for 4 s","a mixed crowd counts only the calm one; got "+one.Reason);
+  Assert(edge.DistractedUntil==s.State.SimulationSeconds+4&&swarming.DistractedUntil==0&&far.DistractedUntil==0,"exactly 8 m away is in reach, the swarmer stays immune");
+  Assert(Count(p,"confetti")==0&&p.VisualConfettiBurstSequence==3,"three uses, three cannons, three bursts");
+ }
+ // Fooled festivalgoers turn to the burst at once and keep facing where it went off while they dance; the immune keep their own facing.
+ static void FooledFestivalgoersFaceTheBurst(){
+  var s=Game();var p=s.Player("a");p.X=3;p.Z=-2;s.State.Npcs.Clear();p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+  var north=new NpcState{Id="north",X=3,Z=2,Yaw=0};var west=new NpcState{Id="west",X=-1,Z=-2,Yaw=0};var swarming=new NpcState{Id="swarming",X=3,Z=-3,Yaw=42,Mode="Swarming",TargetId=p.Id};
+  s.State.Npcs.AddRange(new[]{north,west,swarming});
+  Assert(s.Execute(p.Id,C("Use","confetti")).Accepted,"setup: fire");
+  Assert(Math.Abs(north.Yaw-180)<.01&&Math.Abs(west.Yaw-90)<.01,"each fooled festivalgoer faces the burst; got "+north.Yaw+", "+west.Yaw);
+  Assert(swarming.Yaw==42,"a swarmer is not turned by it");
+  p.X=10;p.Z=10;s.Tick(.5);
+  Assert(north.Mode=="Distracted"&&west.Mode=="Distracted","they dance distracted");
+  Assert(Math.Abs(north.Yaw-180)<.01&&Math.Abs(west.Yaw-90)<.01,"facing where it went off, not following the player; got "+north.Yaw+", "+west.Yaw);
+ }
+ // Camp's only Use: alive and outdoors the cannon fires free. It stays in hand and fools nobody, though camp has festivalgoers.
+ static void CampConfettiIsAFreePartyTrick(){
+  var s=new FestivalSimulation();var p=s.AddPlayer("a","A");var b=s.AddPlayer("b","B");p.X=0;p.Z=0;p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+  var near=s.State.Npcs.Find(n=>n.Kind=="Wook");near.X=0;near.Z=1;float yaw=near.Yaw;
+  Assert(s.State.Phase=="Shopping","setup: camp");
+  var command=C("Use","confetti");var fired=s.Execute(p.Id,command);
+  Assert(fired.Accepted&&fired.Reason=="Confetti! A camp party trick: your cannon stays loaded","camp fires free; got "+fired.Reason);
+  Assert(Count(p,"confetti")==1,"the cannon is not used up at camp");
+  Assert(near.DistractedUntil==0&&near.Yaw==yaw&&near.Mode=="Blending","nobody at camp is distracted or turned");
+  Assert(p.VisualConfettiBurstSequence==1&&s.Execute(p.Id,command).Reason==fired.Reason&&p.VisualConfettiBurstSequence==1,"it bursts once, never again for a replay");
+  Assert(s.Execute(p.Id,C("Use","confetti")).Accepted&&p.VisualConfettiBurstSequence==2,"and fires again");
+  p.Inventory.Add(new ItemStack{ItemId="stash_box",Count=1});
+  Assert(s.Execute(p.Id,C("Use","stash_box")).Reason=="Start the round first","other gear still waits for the festival");
+  Assert(s.Execute(b.Id,C("Use","confetti")).Reason=="Item not owned"&&b.VisualConfettiBurstSequence==0,"only an owned cannon fires");
+  p.X=-14;p.Z=-15;Assert(s.Execute(p.Id,C("EnterCamp",target:"car_1")).Accepted,"setup: inside the car");
+  Assert(s.Execute(p.Id,C("Use","confetti")).Reason=="Leave the camp interior first","never inside a tent, car or potty");
+  Assert(s.Execute(p.Id,C("ExitCamp")).Accepted,"setup: back outside");
+  p.Life="Downed";Assert(s.Execute(p.Id,C("Use","confetti")).Reason=="Requires a living, free player","only a living player");p.Life="Alive";
+  s.State.Phase="CampReview";Assert(s.Execute(p.Id,C("Use","confetti")).Reason=="Round is not interactive","not in the review");
+  Assert(p.VisualConfettiBurstSequence==2&&Count(p,"confetti")==1,"refusals neither burst nor spend");
+ }
+ // A snapshot from before the burst count restores at zero and counts on from there.
+ static void OlderSnapshotsCountBurstsFromZero(){
+  var s=new FestivalSimulation();var p=s.AddPlayer("a","A");p.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});Assert(s.Execute(p.Id,C("Use","confetti")).Accepted,"setup: a burst");
+  var options=new JsonSerializerOptions{IncludeFields=true};var json=System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(s.State,options));
+  foreach(var player in json["Players"].AsArray())player.AsObject().Remove("VisualConfettiBurstSequence");
+  var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),options));var q=old.Player(p.Id);
+  Assert(q.VisualConfettiBurstSequence==0,"an older snapshot counts no burst");
+  Assert(old.Execute(q.Id,C("Use","confetti")).Accepted&&q.VisualConfettiBurstSequence==1,"its next burst counts one, got "+q.VisualConfettiBurstSequence);
+ }
+ static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
  public static void Run(){
+  ConfettiTellsThePlayerHowManyItDistracted();ConfettiSaysWhyItFooledNobody();FooledFestivalgoersFaceTheBurst();CampConfettiIsAFreePartyTrick();OlderSnapshotsCountBurstsFromZero();
   var capacity=new FestivalSimulation();for(int i=0;i<8;i++)capacity.AddPlayer(i.ToString(),"P");bool denied=false;try{capacity.AddPlayer("9","P");}catch(InvalidOperationException){denied=true;}Assert(denied&&capacity.State.Players.Count==8,"capacity");
   var shop=new FestivalSimulation();var p=shop.AddPlayer("a","A");var shelf=Catalog.ShopPoint(true,shop.State.VendorOffers.IndexOf("medical_voucher"));p.X=shelf.X;p.Z=shelf.Z;Assert(shop.Execute("a",C("HoldOffer","medical_voucher")).Accepted,"hold shelf copy");Assert(!shop.Execute("a",C("HoldOffer","poi_practice")).Accepted,"one held item");p.X=0;p.Z=7;var buy=C("Buy","medical_voucher",amount:1);Assert(shop.Execute("a",buy).Accepted,"buy");shop.Execute("a",buy);Assert(p.Cash==15&&p.Inventory[0].Count==1,"buy exactly once");Assert(!shop.Execute("a",C("Buy","medical_voucher",amount:-1)).Accepted,"negative buy");
   var spoonShelf=Catalog.ShopPoint(true,shop.State.VendorOffers.IndexOf("little_spoon"));p.X=spoonShelf.X;p.Z=spoonShelf.Z;Assert(shop.Execute("a",C("HoldOffer","little_spoon")).Accepted,"spoon pickup");p.X=0;p.Z=7;Assert(shop.Execute("a",C("Buy","little_spoon",amount:1)).Accepted,"spoon purchase");Assert(p.EquippedItemId!="little_spoon"&&!shop.Execute("a",C("Equip","little_spoon")).Accepted,"spoon remains passive necklace");
