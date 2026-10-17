@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Festival.Core;
 
 // GAS-1: a Giggle Balloon station stands at camp, off the west edge of the gathering mat. Beside it, between levels, anyone takes a
 // free hit: nothing for 10 s, then 30 s of Giggle Gas (1 s in, full, 3 s out) that only the hitter feels, while friends see them
 // giggle. Two at a time: no third hit until one has worn off, which the host times at camp too. It never leaves camp.
+// GAS-6: each accepted take counts once on the player, in public, so every client can play its inhale once.
 public static class GiggleGasTests
 {
     const string Take=FestivalSimulation.TakeGiggleBalloonKind;
@@ -21,7 +23,8 @@ public static class GiggleGasTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{AHitBesideTheBalloonsKicksInTenSecondsLaterForThirty,TwoAtATimeUntilOneHasWornOff,OnlyBesideTheBalloonsAndOnlyAtCamp,
-            TheHostEndsItFortySecondsAfterTheHitEvenAtCamp,LeavingCampClearsIt,BackToBackHitsStackToTwoAndEaseBack,FriendsSeeAGiggleOnlyWhileTheGasIsOn,ASnapshotKeepsTheGasGoing})
+            TheHostEndsItFortySecondsAfterTheHitEvenAtCamp,LeavingCampClearsIt,BackToBackHitsStackToTwoAndEaseBack,FriendsSeeAGiggleOnlyWhileTheGasIsOn,ASnapshotKeepsTheGasGoing,
+            EachAcceptedTakeCountsOnceInPublic,OlderSnapshotsCountTakesFromZero})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" giggle gas test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -35,6 +38,7 @@ public static class GiggleGasTests
     static ActiveEffect Gas(PlayerState p)=>p.Effects.Find(e=>e.Id==FestivalSimulation.GiggleGasEffect);
     static int Hits(PlayerState p)=>p.Effects.FindAll(e=>e.Id==FestivalSimulation.GiggleGasEffect).Count;
     static double Strength(PlayerState p,double now)=>FestivalSimulation.GiggleGasStrength(p,now);
+    static int Takes(PlayerState p)=>p.VisualGiggleTakeSequence;
     // The crew readies up at the trailhead and leaves camp: the level starts.
     static void LeaveCamp(FestivalSimulation s)
     {
@@ -163,5 +167,36 @@ public static class GiggleGasTests
         Check(About(Strength(q,saved.State.SimulationSeconds),Strength(p,s.State.SimulationSeconds))&&About(Strength(q,saved.State.SimulationSeconds),1),"and their summed strength, got "+Strength(q,saved.State.SimulationSeconds));
         Check(!Act(saved,q.Id,Take).Accepted,"and refuses a third hit");
         Check(Hits(q)==2,"restored snapshot keeps both hits");saved.Tick(25.2);Check(Hits(q)==1,"the first ends on time");saved.Tick(5);Check(Gas(q)==null,"and so does the second");
+        Check(Takes(q)==2,"and it keeps the take count, got "+Takes(q));
+    }
+
+    // Both of the two allowed hits count, each once; a replayed command, a refusal or the gas wearing off never moves the count.
+    static void EachAcceptedTakeCountsOnceInPublic()
+    {
+        var s=Camp(out var p);var take=new GameCommand{Id="gas6-accepted",Kind=Take};
+        Check(s.Execute(p.Id,take).Accepted&&Takes(p)==1,"an accepted take counts one, got "+Takes(p));
+        Check(s.Execute(p.Id,take).Accepted&&Takes(p)==1&&Hits(p)==1,"a replayed command counts nothing more, got "+Takes(p));
+        s.Tick(5);Check(Act(s,p.Id,Take).Accepted&&Takes(p)==2,"the second hit counts too, got "+Takes(p));
+        Check(!Act(s,p.Id,Take).Accepted&&Takes(p)==2,"a refused third counts nothing");
+        s.Tick(40.2);Check(Hits(p)==0&&Takes(p)==2,"the gas wearing off keeps the count");
+        void Refused(string why){var result=Act(s,p.Id,Take);Check(!result.Accepted&&Takes(p)==2&&Hits(p)==0,why+" counts nothing, got "+result.Accepted+" \""+result.Reason+"\" and "+Takes(p));}
+        p.X=CampFeatures.GiggleBalloonX+3;Refused("too far");p.X=CampFeatures.GiggleBalloonX;
+        p.CampVisitId="tent_2";Refused("inside a tent");p.CampVisitId="";
+        p.Life="Downed";Refused("downed");p.Life="Alive";
+        s.State.Phase="Playing";Refused("at the festival");s.State.Phase="CampReview";Refused("in the review");s.State.Phase="Shopping";
+        s.Disconnect(p.Id);Refused("disconnected");s.AddPlayer(p.Id,p.Name);
+        Check(Act(s,p.Id,Take).Accepted&&Takes(p)==3,"back at the balloons a take counts again, got "+Takes(p));
+        Check(Takes(s.Player("p1"))==0,"a friend who took none counts none");
+    }
+
+    // A snapshot from before the count restores at zero and counts on from there.
+    static void OlderSnapshotsCountTakesFromZero()
+    {
+        var s=Camp(out var p);Check(Act(s,p.Id,Take).Accepted,"setup: a hit");
+        var json=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json));
+        foreach(var player in json["Players"].AsArray())player.AsObject().Remove("VisualGiggleTakeSequence");
+        var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),Json));
+        var q=old.Player(p.Id);Check(Takes(q)==0&&Hits(q)==1,"the older snapshot keeps its hit and counts no take");
+        Check(Act(old,q.Id,Take).Accepted&&Takes(q)==1,"its next take counts one, got "+Takes(q));
     }
 }

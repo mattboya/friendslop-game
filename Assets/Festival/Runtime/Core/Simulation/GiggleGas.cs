@@ -34,6 +34,7 @@ namespace Festival.Core
             if(!AtGiggleBalloons(p))return Reject("Stand by the Giggle Balloons to take one");
             if(TwoGiggleBalloonsOn(p))return Reject("Two Giggle Balloons at a time: let one wear off");
             p.Effects.Add(new ActiveEffect{Id=GiggleGasEffect,InstanceId=Id("effect"),StartSeconds=State.SimulationSeconds+GiggleGasOnsetSeconds,RemainingSeconds=GiggleGasOnsetSeconds+GiggleGasSeconds});
+            p.VisualGiggleTakeSequence++;
             return Ok("Giggle Balloon: give it a few seconds…");
         }
         // Each camp step (Step's shopping branch): level effects only tick while a level plays, so Giggle Gas counts down here.

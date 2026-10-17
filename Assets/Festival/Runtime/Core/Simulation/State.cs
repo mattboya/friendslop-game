@@ -18,6 +18,9 @@ namespace Festival.Core
         public bool Ready, Connected=true, MapReady, HasCosmetic, WearingLittleSpoon, VisualWideEyes, VisualRedEyes;
         // GAS-1: view-only, never set on the host: FestivalSession.ViewFor sets it while FestivalSimulation.Giggling, so friends see a giggle.
         public bool VisualGiggling;
+        // Accepted Giggle Balloon takes this round, public from the take on, so every client can play each inhale once;
+        // zero in older snapshots.
+        public int VisualGiggleTakeSequence;
         // POI-1: the host sets it each tick while this player holds left click and may spin their poi (FestivalSimulation.CanSpinPoi);
         // every view carries it, so friends see the spin. Only for show; false in older snapshots.
         public bool VisualPoiSpin;
