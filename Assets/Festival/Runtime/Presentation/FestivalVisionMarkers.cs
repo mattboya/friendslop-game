@@ -14,8 +14,7 @@ namespace Festival.Presentation
     /// off in colour and shimmers while the camera moves. A checked vision drops its tells and is ringed in green (a truth) or
     /// red (a fake). While the aim dot is on it, a checked vision says what it found (NOT A NARC, PAYS DOUBLE...) and an
     /// unchecked one asks what it claims (NARC?) (VISION-5). The shadow is a pool on the ground right under the marker, at the
-    /// festivalgoer's feet (the festival sun is only 14 degrees up, so a real one would land about 10 m away): dark by day, and
-    /// by night, when the ground is too dark for any shadow to show, a faint pale glow.</summary>
+    /// festivalgoer's feet (FestivalShadowTellView, which MINI-3's Light Show shares).</summary>
     public sealed class FestivalVisionMarkers : MonoBehaviour
     {
         // Over a festivalgoer's head (stacked when two visions share one), or over a spot on the grounds. A label sits LabelGap over
@@ -27,15 +26,6 @@ namespace Festival.Presentation
         // Fakes: hue a little off, and a scale shimmer that grows with how fast the camera turns or moves, eased over ShimmerEase
         // seconds so a mouse that reports slower than the screen refreshes cannot make it flicker.
         private const float FakeHueShift=.06f,ShimmerDepth=.18f,ShimmerHz=9,FullShimmerTurn=90,FullShimmerMove=4,ShimmerEase=.15f;
-        // Truths: a pool wider than the festivalgoer, so it shows around their feet; just clear of the footpaths (their tops sit
-        // under .03 m). Night ground is about 15 of 255 at one dose, so the night pool glows instead of darkening.
-        private const float ShadowWidth=1.4f,ShadowThickness=.01f,ShadowLift=.05f;
-        // VISION-4: a fake's shadow is wrong, never missing. Small: the pool at SmallShadow of a truth's width. Goblin: a squat pool
-        // GoblinWide by GoblinDeep with a pointed ear (a square EarSize on a side, turned 45 degrees) EarOut to either side and EarBack
-        // toward the far edge. Every shadow turns with the view, so the ears are always left and right.
-        private const float SmallShadow=.6f,GoblinWide=1.3f,GoblinDeep=.75f,EarSize=.3f,EarOut=.62f,EarBack=.2f;
-        private static readonly Vector3 TruthPool=new Vector3(ShadowWidth,ShadowThickness/2,ShadowWidth),SmallPool=new Vector3(ShadowWidth*SmallShadow,ShadowThickness/2,ShadowWidth*SmallShadow),GoblinPool=new Vector3(GoblinWide,ShadowThickness/2,GoblinDeep);
-        private static readonly Color NightGlow=new Color(.03f,.03f,.04f);
         private static readonly Color CheckedFalse=new Color(.52f,.52f,.55f);
         // A checked vision's ring: the glyph's own shape a little larger, its front faces culled so only a band around the glyph
         // shows. Bright neon, so it never reads as the dark, muted green of a suspicious wook's skin (CROWD-4).
@@ -45,7 +35,7 @@ namespace Festival.Presentation
         // the top of their whole stack of markers (or from its spot on the ground up to the top of its marker).
         private const float AimReach=.5f;
 
-        private sealed class Marker { public Transform Root,Label,Shadow,Pool; public MeshRenderer Glyph; public GameObject Ring,Ears; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask; public FakeShadow Wrong; }
+        private sealed class Marker { public Transform Root,Label; public FestivalShadowTellView Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask; public FakeShadow Wrong; }
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
@@ -93,11 +83,7 @@ namespace Festival.Presentation
                 marker.Material.color=vision.Confirmed&&!vision.IsTrue?CheckedFalse:tells?FakeTint(look):look;
                 if(marker.Material.HasProperty("_EmissionColor"))marker.Material.SetColor("_EmissionColor",marker.Material.color*Glow);
                 // VISION-4: a fake's shadow is wrong, never missing; checked, it is the normal pool again.
-                bool small=tells&&marker.Wrong==FakeShadow.Small,goblin=tells&&marker.Wrong==FakeShadow.Goblin;
-                marker.Pool.localScale=small?SmallPool:goblin?GoblinPool:TruthPool;
-                if(marker.Ears.activeSelf!=goblin)marker.Ears.SetActive(goblin);
-                marker.Shadow.position=ground+Vector3.up*ShadowLift;
-                if(view!=null)marker.Shadow.rotation=Quaternion.Euler(0,view.eulerAngles.y,0);
+                marker.Shadow.Show(tells,marker.Wrong);marker.Shadow.Place(ground,view);
                 marker.Glyph.transform.localScale=Vector3.one*Size*(tells?ShimmerScale(shimmer,time,i):1);
                 if(marker.Ring.activeSelf!=vision.Confirmed)marker.Ring.SetActive(vision.Confirmed);
                 if(vision.Confirmed)
@@ -208,9 +194,7 @@ namespace Festival.Presentation
         private Material Pool(bool night)
         {
             var pool=night?glow:shade;if(pool!=null)return pool;
-            pool=new Material(Resources.Load<Material>("FestivalLit")){color=Color.black};
-            if(pool.HasProperty("_Smoothness"))pool.SetFloat("_Smoothness",0);
-            if(night&&pool.HasProperty("_EmissionColor")){pool.EnableKeyword("_EMISSION");pool.SetColor("_EmissionColor",NightGlow);}
+            pool=FestivalShadowTellView.Material(night);
             return night?glow=pool:shade=pool;
         }
 
@@ -230,29 +214,14 @@ namespace Festival.Presentation
             var ring=new Material(Resources.Load<Material>("FestivalLit")){mainTexture=Texture2D.whiteTexture};ring.SetFloat("_Cull",(float)CullMode.Front);
             if(ring.HasProperty("_EmissionColor"))ring.EnableKeyword("_EMISSION");
             var ringRenderer=outline.GetComponent<MeshRenderer>();ringRenderer.sharedMaterial=ring;ringRenderer.shadowCastingMode=ShadowCastingMode.Off;outline.SetActive(false);
-            var shadow=new GameObject("Shadow").transform;shadow.SetParent(root,false);
-            var pool=Flat(PrimitiveType.Cylinder,"Pool",shadow,night);pool.localScale=TruthPool;
-            var ears=new GameObject("Ears");ears.transform.SetParent(shadow,false);ears.SetActive(false);
-            for(int side=-1;side<=1;side+=2)
-            {
-                var ear=Flat(PrimitiveType.Cube,"Ear",ears.transform,night);
-                ear.localPosition=new Vector3(side*EarOut,0,EarBack);ear.localRotation=Quaternion.Euler(0,45,0);ear.localScale=new Vector3(EarSize,ShadowThickness,EarSize);
-            }
+            var shadow=FestivalShadowTellView.Build(root,Pool(night));
             // VISION-5: the label grows up from just over its own glyph, so a second line never reaches down into it.
             var label=new GameObject("Label").transform;label.SetParent(root,false);label.localPosition=Vector3.up*(glyph.GetComponent<MeshFilter>().sharedMesh.bounds.extents.y*Size+LabelGap);
             var verdict=label.gameObject.AddComponent<TextMesh>();verdict.fontSize=64;verdict.characterSize=.03f;verdict.anchor=TextAnchor.LowerCenter;verdict.alignment=TextAlignment.Center;verdict.color=new Color(.96f,.94f,.84f);
             var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){verdict.font=font;label.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
             // A spot on the ground is checked by walking to it (FindStashes), so it says no more than its claim.
             var ask=vision.NpcId==""?ClaimText(vision.Kind):ClaimText(vision.Kind)+CheckLine;
-            return new Marker{Root=root,Label=label,Shadow=shadow,Pool=pool,Ears=ears,Wrong=ShadowTell(vision.Id),Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring,Ask=ask};
-        }
-        // A flat piece of a shadow: no collider, the pool's material, and no shadow of its own, cast or received.
-        private Transform Flat(PrimitiveType shape,string name,Transform parent,bool night)
-        {
-            var piece=GameObject.CreatePrimitive(shape);piece.name=name;piece.transform.SetParent(parent,false);
-            var collider=piece.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
-            var renderer=piece.GetComponent<MeshRenderer>();renderer.sharedMaterial=Pool(night);renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
-            return piece.transform;
+            return new Marker{Root=root,Label=label,Shadow=shadow,Wrong=ShadowTell(vision.Id),Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring,Ask=ask};
         }
 
         private void OnDestroy(){foreach(var marker in markers.Values){Dispose(marker.Material);Dispose(marker.RingMaterial);}markers.Clear();if(shade!=null)Dispose(shade);if(glow!=null)Dispose(glow);}

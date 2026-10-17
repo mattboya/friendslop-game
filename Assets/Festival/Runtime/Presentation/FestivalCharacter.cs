@@ -61,6 +61,8 @@ namespace Festival.Presentation
         int latestDanceDirection=-1;
         float latestDanceStepTime=-100;
         public string Pose="Idle";
+        /// <summary>MINI-3: the Light Show's glover, set only by FestivalLightShowView: the poi performer's wheeling hands, with no poi.</summary>
+        public const string GlovePose="Glove";
         public Transform DjConsole { get; set; }
         public bool Crowd;
         public bool AmbientCrowd;
@@ -427,7 +429,7 @@ namespace Festival.Presentation
             bool lying=Pose==FestivalSimulation.LieDownKind;
             if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit"&&!lying);
             foreach(var item in bones)targets[item.Key]=rest[item.Key];
-            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose=="Dj"||Pose=="Distracted"||decking;
+            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose==GlovePose||Pose=="Dj"||Pose=="Distracted"||decking;
             if(Pose=="Downed")
             {
                 Aim("Hips",new Vector3(75,0,walk*4));Aim("Head",new Vector3(-35,0,12));
@@ -468,7 +470,7 @@ namespace Festival.Presentation
                 Aim("Hips",new Vector3(7+landing*6,sway*9,feet*13));
                 Aim("Spine",new Vector3(-8-landing*4,-sway*5+phrase*6,-feet*15));
                 Aim("Head",new Vector3(2-landing*5,Mathf.Sin(beatTime*.5f+1)*9-phrase*5,-feet*4));
-                if(performingPoi)
+                if(performingPoi||Pose==GlovePose)
                 {
                     // The performer concentrates on the paired butterfly flow:
                     // relaxed knees, quiet hips and alternating crossed wrists.

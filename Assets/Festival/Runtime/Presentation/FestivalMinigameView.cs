@@ -12,8 +12,9 @@ namespace Festival.Presentation
     /// runs on unscaled time, as the HUD does. ponytail: a people rig and primitives, as no booth model exists and the art is frozen.
     /// MINI-4: a Mystery Cups booth sets its cups out in a numbered row on a table in front of the stranger (ShowCups); the cup under
     /// the aim dot is the one its player drinks (AimedCup), and in the tripper's view the cup their hunch marks glows. MINI-2: the
-    /// Drum Circle's song comes with the booth (FestivalDrumAudio).</summary>
-    [RequireComponent(typeof(FestivalDrumAudio))]
+    /// Drum Circle's song comes with the booth (FestivalDrumAudio). MINI-3: the Light Show comes with it too, its stranger the glover
+    /// (FestivalLightShowView).</summary>
+    [RequireComponent(typeof(FestivalDrumAudio),typeof(FestivalLightShowView))]
     public sealed class FestivalMinigameView : MonoBehaviour
     {
         public const string BoothName="Minigame booth",RingName="Minigame ring",SignRule="\nALL IN THE RING",SignText="MINIGAME"+SignRule;
@@ -33,6 +34,8 @@ namespace Festival.Presentation
         private Renderer lettering;
         private bool frozen;
         private string signKind;
+        /// <summary>The booth this view draws, built on its first frame; null before.</summary>
+        public Transform Booth=>booth;
 
         // After FestivalSession.Update has taken this frame's view of the round.
         private void LateUpdate()
