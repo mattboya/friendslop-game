@@ -175,6 +175,35 @@ namespace Festival.Tests
             }
         }
 
+        [Test]public void RebindingInteractToFOnTheControlsTabWarnsThatChatAlreadyUsesF()
+        {
+            var keyboard=InputSystem.AddDevice<Keyboard>();var profile=new LocalProfile("settings");
+            try
+            {
+                using(var input=new FestivalInput("settings",profile))
+                using(var settings=new FestivalSettings(profile))
+                {
+                    settings.AttachInput(input);
+                    var screen=new FestivalSettingsScreen(profile,settings,new Festival.Integrations.UnavailableVoiceSession(),input,null,new MicrophoneMonitorTests.Fixture());
+                    var interact=FestivalSettingsScreen.Rows.First(r=>r.Tab==FestivalSettingsScreen.Tab.Controls&&r.Label=="INTERACT");
+                    screen.Open(FestivalSettingsScreen.Tab.Controls);
+                    Assert.That(screen.Shows(interact),Is.False,"keys wait in their own section");
+                    screen.OpenSection("ACTIONS");
+                    Assert.That((screen.Shows(interact),screen.Value(interact),screen.ButtonLabel(interact,0)),Is.EqualTo((true,"E","REBIND")));
+                    Assert.That(screen.Change(interact,1),Is.Empty);
+                    Assert.That((input.Rebinding,screen.Value(interact)),Is.EqualTo((true,"PRESS A KEY")));
+                    InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.F));InputSystem.Update();
+                    System.Threading.Thread.Sleep(160);InputSystem.Update();
+                    Assert.That((input.Rebinding,screen.Value(interact)),Is.EqualTo((false,"F")),"the real key press completes the rebind");
+                    Assert.That(screen.Message,Is.EqualTo("CHAT already uses F. Rebind one of them."));Assert.That(screen.Failed,Is.False);
+                    using(var recreated=new FestivalInput("settings"))Assert.That(recreated.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/f"),"the rebind is saved");
+                    Assert.That(screen.ResetTab(),Is.Empty);
+                    Assert.That(screen.Value(interact),Is.EqualTo("E"),"RESET TAB restores the default key");
+                }
+            }
+            finally{InputSystem.RemoveDevice(keyboard);}
+        }
+
         [Test]public void ScheduledTapCalibrationMeasuresAudioAndRestoresItsSource()
         {
             var source=new GameObject("impl-U35 calibration audio").AddComponent<AudioSource>();

@@ -8,6 +8,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
@@ -18,16 +19,48 @@ namespace Festival.Tests
     // fails says so and keeps the saved value, and RESET TAB restores only the tab on show. Every test owns its profile folder.
     public sealed class SettingsPlayTests:FestivalPlayModeTest
     {
-        private static readonly Dictionary<string,string[]> TabRows=new Dictionary<string,string[]>
+        // Each tab, or CONTROLS section, and the rows it shows in order.
+        private static readonly (string Tab,string Section,string[] Rows)[] TabRows=
         {
-            {"AUDIO",new[]{"MASTER VOLUME","MUSIC VOLUME","EFFECTS VOLUME","VOICE VOLUME","MUTE WHEN UNFOCUSED"}},
-            {"GRAPHICS",new[]{"DISPLAY MODE","RESOLUTION","QUALITY","RENDER SCALE","VSYNC","FRAME CAP","FIELD OF VIEW","BRIGHTNESS"}},
-            {"CONTROLS",new[]{"LOOK SPEED","CAMERA VIEW"}},
-            {"ACCESSIBILITY",new[]{"REDUCED MOTION","HIGH CONTRAST"}},
-            {"VOICE",new string[0]},
+            ("AUDIO","",new[]{"MASTER VOLUME","MUSIC VOLUME","EFFECTS VOLUME","VOICE VOLUME","MUTE WHEN UNFOCUSED"}),
+            ("GRAPHICS","",new[]{"DISPLAY MODE","RESOLUTION","QUALITY","RENDER SCALE","VSYNC","FRAME CAP","FIELD OF VIEW","BRIGHTNESS"}),
+            ("CONTROLS","GENERAL",new[]{"LOOK SPEED","INVERT Y","CAMERA VIEW","RHYTHM TIMING"}),
+            ("CONTROLS","MOVE",new[]{"MOVE FORWARD","MOVE BACK","MOVE LEFT","MOVE RIGHT","SPRINT","LOOK","SWITCH VIEW"}),
+            ("CONTROLS","ACTIONS",new[]{"INTERACT","CHAT","USE","DROP","MAP","PUSH TO TALK"}),
+            ("CONTROLS","HANDS",new[]{"SLOT 1","SLOT 2","SLOT 3","NEXT SLOT","SPIN POI"}),
+            ("CONTROLS","DANCE",new[]{"DANCE LEFT","DANCE DOWN","DANCE UP","DANCE RIGHT","DANCE LEFT ALT","DANCE DOWN ALT","DANCE UP ALT","DANCE RIGHT ALT"}),
+            ("ACCESSIBILITY","",new[]{"REDUCED MOTION","HIGH CONTRAST","CAMERA SHAKE","TEXT SIZE"}),
+            ("VOICE","",new[]{"VOICE CHAT","MICROPHONE","MIC VOLUME","VOICE MODE","PUSH TO TALK","TEST MICROPHONE"}),
         };
         private GameObject host;
         private FestivalSession session;
+        // No automated run opens the room's microphone: every HUD these tests build tests this fixture instead.
+        private sealed class MicrophoneFixture:IFestivalMicrophone
+        {
+            public string[] Devices {get;}={"Desk Mic","Headset"};
+            public string Blocked=>"";
+            public bool Authorized=>true;
+            public bool AuthorizationPending=>false;
+            public int Requests,Starts,Ends;
+            // The device being recorded, or null.
+            public string Recording;
+            public AudioClip Clip;
+            public void RequestAuthorization()=>Requests++;
+            public AudioClip Start(string device)
+            {
+                Starts++;Recording=device;
+                var samples=new float[1600];for(int i=0;i<samples.Length;i++)samples[i]=i%2==0?.5f:-.5f;
+                Clip=AudioClip.Create("impl-U73 fixture microphone",samples.Length,1,16000,false);Clip.SetData(samples,0);
+                return Clip;
+            }
+            public int GetPosition(string device)=>800;
+            public bool IsRecording(string device)=>Recording!=null&&Recording==device;
+            public void End(string device){Ends++;if(Recording==device)Recording=null;}
+        }
+        private MicrophoneFixture microphone;
+        private IFestivalMicrophone previousMicrophone;
+        [SetUp]public void UseAMicrophoneFixture(){previousMicrophone=FestivalMicrophoneMonitor.Substitute;microphone=new MicrophoneFixture();FestivalMicrophoneMonitor.Substitute=microphone;}
+        [TearDown]public void RestoreTheMicrophone(){FestivalMicrophoneMonitor.Substitute=previousMicrophone;}
 
         private IEnumerator Title()
         {
@@ -56,7 +89,7 @@ namespace Festival.Tests
             Assert.That(button,Is.Not.Null,row+" has a "+label);return button;
         }
         private IEnumerator Press(Button button){button.onClick.Invoke();yield return null;yield return null;}
-        private IEnumerator OpenTab(string tab){yield return Press(Pressable(tab,"Pass settings"));}
+        private IEnumerator OpenTab(string tab,string section=""){yield return Press(Pressable(tab,"Pass settings"));if(section!="")yield return Press(Pressable(section,"Pass settings"));}
         private string Message()=>host.GetComponentsInChildren<Text>(false).First(t=>t.name=="Settings values").text;
 
         [UnityTest]public IEnumerator TheTitleAndThePassOpenTheSameScreenAndAChangeInOneShowsInTheOther()
@@ -109,11 +142,13 @@ namespace Festival.Tests
                     session.Profile.Data.TextScale=scale;Assert.That(session.Settings.Save(),Is.Empty);yield return null;
                     foreach(var tab in TabRows)
                     {
-                        yield return OpenTab(tab.Key);
+                        yield return OpenTab(tab.Tab,tab.Section);
                         var screen=Screen();Canvas.ForceUpdateCanvases();
-                        string where=tab.Key+" at "+Mathf.RoundToInt(scale*100)+"%";
+                        string where=(tab.Tab+" "+tab.Section).Trim()+" at "+Mathf.RoundToInt(scale*100)+"%";
                         var shown=screen.GetComponentsInChildren<Text>(false).Where(t=>t.name.EndsWith(" value")).Select(t=>t.name.Substring(0,t.name.Length-6)).ToArray();
-                        if(!shown.SequenceEqual(tab.Value))failures.Add(where+": shows rows "+string.Join(", ",shown)+", expected "+string.Join(", ",tab.Value));
+                        if(!shown.SequenceEqual(tab.Rows))failures.Add(where+": shows rows "+string.Join(", ",shown)+", expected "+string.Join(", ",tab.Rows));
+                        bool sections=screen.GetComponentsInChildren<Button>(false).Any(b=>b.name=="DANCE");
+                        if(sections!=(tab.Tab=="CONTROLS"))failures.Add(where+(sections?": shows":": hides")+" the CONTROLS sections");
                         foreach(var label in new[]{"RESET TAB","SHOW TIPS AGAIN","BACK TO PASS"})
                             if(!screen.GetComponentsInChildren<Button>(false).Any(b=>b.name==label))failures.Add(where+": no "+label);
                         foreach(var text in screen.GetComponentsInChildren<Text>(false))
@@ -136,8 +171,8 @@ namespace Festival.Tests
                                 if(other!=button&&button.parent==other.parent&&Overlap(button,other))failures.Add(where+": "+button.name+" overlaps "+other.name);
                         }
                         var status=screen.GetComponentsInChildren<Text>(false).FirstOrDefault(t=>t.name=="Settings status");
-                        if(tab.Key=="VOICE"&&status?.text!=session.Voice.Status)failures.Add(where+": the voice status reads \""+status?.text+"\"");
-                        if(tab.Key=="GRAPHICS"&&(status==null||!status.text.StartsWith("NOW ")))failures.Add(where+": no effective display status");
+                        if(tab.Tab=="VOICE"&&status?.text!=session.Voice.Status)failures.Add(where+": the voice status reads \""+status?.text+"\"");
+                        if(tab.Tab=="GRAPHICS"&&(status==null||!status.text.StartsWith("NOW ")))failures.Add(where+": no effective display status");
                     }
                 }
             }
@@ -227,6 +262,143 @@ namespace Festival.Tests
                 Assert.That(new LocalProfile(ProfileId()).Data.MusicVolume,Is.EqualTo(.4f).Within(1e-4f));
             }
             finally{if(Directory.Exists(blocked))Directory.Delete(blocked);session.Leave();UnityEngine.Object.Destroy(host);}
+        }
+
+        [UnityTest]public IEnumerator TheControlsTabShowsEveryEffectiveKeyRebindsARealOneAndResetRestoresIt()
+        {
+            UseAVirtualKeyboard("impl-U73 settings keyboard");
+            yield return Title();
+            try
+            {
+                yield return Press(Pressable("SETTINGS","Title menu"));
+                yield return OpenTab("CONTROLS","MOVE");
+                Assert.That(new[]{"MOVE FORWARD","MOVE BACK","MOVE LEFT","MOVE RIGHT","LOOK"}.Select(r=>Value(r).text),Is.EqualTo(new[]{"W","S","A","D","MOUSE"}),"each movement part and the pointer axis shows its binding");
+                yield return OpenTab("CONTROLS","DANCE");
+                // The keyboard layout names the arrow key ("LEFT" here, "LEFT ARROW" on others).
+                StringAssert.StartsWith("LEFT",Value("DANCE LEFT").text,"a lane shows its arrow");
+                Assert.That(Value("DANCE LEFT ALT").text,Is.EqualTo("A"),"and its second key");
+                yield return OpenTab("CONTROLS","ACTIONS");
+                Assert.That(Value("PUSH TO TALK").text,Is.EqualTo("T"));
+                yield return Press(RowButton("INTERACT","REBIND"));
+                Assert.That(Value("INTERACT").text,Is.EqualTo("PRESS A KEY"));
+                yield return Tap(Key.F,.3f);
+                Assert.That(session.Controls.Rebinding,Is.False,"the real key completes the rebind");
+                Assert.That((Value("INTERACT").text,Message()),Is.EqualTo(("F","CHAT already uses F. Rebind one of them.")));
+                Assert.That(session.Controls.Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/f"),"the new key works at once");
+                Assert.That(NewTestControls(ProfileId()).Interact.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/f"),"and is saved");
+                yield return Press(RowButton("INTERACT","REBIND"));yield return Tap(Key.Escape,.3f);
+                Assert.That((Value("INTERACT").text,session.Controls.Rebinding),Is.EqualTo(("F",false)),"Esc cancels a rebind");
+                Assert.That(Screen(),Is.Not.Null,"and leaves the settings open");
+                yield return OpenTab("CONTROLS","GENERAL");
+                yield return Press(RowButton("INVERT Y","TOGGLE"));
+                Assert.That((Value("INVERT Y").text,new LocalProfile(ProfileId()).Data.InvertY),Is.EqualTo(("ON",true)));
+                yield return Press(Pressable("RESET TAB","Pass settings"));
+                Assert.That((session.Controls.Interact.bindings[0].effectivePath,session.Profile.Data.InvertY),Is.EqualTo(("<Keyboard>/e",false)),"RESET TAB restores the keys and the look");
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(host);}
+        }
+
+        [UnityTest]public IEnumerator TheTapTestTimesRealDanceKeysAgainstItsScheduledBeatsAndSavesTheResult()
+        {
+            UseAVirtualKeyboard("impl-U73 tap keyboard");
+            yield return Title();
+            try
+            {
+                yield return Press(Pressable("SETTINGS","Title menu"));
+                yield return OpenTab("CONTROLS","GENERAL");
+                Assert.That(Value("RHYTHM TIMING").text,Is.EqualTo("0 MS"));
+                double start=AudioSettings.dspTime+.25;
+                yield return Press(RowButton("RHYTHM TIMING","TAP TEST"));
+                var pulses=host.GetComponents<AudioSource>().FirstOrDefault(a=>a.clip!=null&&a.clip.name=="Festival calibration pulses");
+                Assert.That(pulses,Is.Not.Null,"TAP TEST schedules the pulses on the HUD's own source");
+                Assert.That(RowButton("RHYTHM TIMING","TAP TEST").GetComponentInChildren<Text>().text,Is.EqualTo("STOP"));
+                for(int beat=0;beat<5;beat++)
+                {
+                    for(float deadline=Time.realtimeSinceStartup+3;AudioSettings.dspTime<start+beat*FestivalTapCalibration.BeatSeconds+.02&&Time.realtimeSinceStartup<deadline;)yield return null;
+                    yield return Tap(beat%2==0?Key.LeftArrow:Key.D);
+                }
+                Assert.That(Value("RHYTHM TIMING").text,Is.EqualTo("TAP 5 / 8"),"a dance key on each beat counts once");
+                for(float deadline=Time.realtimeSinceStartup+6;pulses.clip!=null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                StringAssert.StartsWith("Rhythm timing saved",Message());
+                float saved=new LocalProfile(ProfileId()).Data.TimingCalibrationMs;
+                Assert.That(saved,Is.InRange(-60f,160f),"the median of real presses against the scheduled beats");
+                StringAssert.EndsWith(Mathf.Abs(Mathf.RoundToInt(saved))+" MS",Value("RHYTHM TIMING").text);
+                yield return Press(RowButton("RHYTHM TIMING","TAP TEST"));
+                Assert.That(pulses.clip,Is.Not.Null);
+                yield return OpenTab("CONTROLS","MOVE");
+                Assert.That(pulses.clip,Is.Null,"another section ends the test");
+                Assert.That(new LocalProfile(ProfileId()).Data.TimingCalibrationMs,Is.EqualTo(saved),"an unfinished test changes nothing");
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(host);}
+        }
+
+        [UnityTest]public IEnumerator AccessibilityAddsShakeAndTextSizeAndKeepsTheFirstLaunchChoice()
+        {
+            yield return Title();
+            try
+            {
+                Assert.That(session.Settings.CompleteComfortChoice(true),Is.Empty,"the first-launch YES");
+                yield return Press(Pressable("SETTINGS","Title menu"));
+                yield return OpenTab("ACCESSIBILITY");
+                Assert.That(Value("REDUCED MOTION").text,Is.EqualTo("ON"),"the first-launch choice shows where its prompt says");
+                var heading=host.GetComponentsInChildren<Text>(false).First(t=>t.name=="Settings heading");int before=heading.fontSize;
+                yield return Press(RowButton("CAMERA SHAKE","TOGGLE"));
+                yield return Press(RowButton("TEXT SIZE","+"));yield return Press(RowButton("TEXT SIZE","+"));
+                Assert.That((Value("CAMERA SHAKE").text,Value("TEXT SIZE").text),Is.EqualTo(("OFF","120%")));
+                Assert.That(heading.fontSize,Is.GreaterThan(before),"larger text applies at once");
+                var saved=new LocalProfile(ProfileId()).Data;
+                Assert.That((saved.CameraShake,saved.TextScale,saved.ReducedMotion),Is.EqualTo((false,1.2f,true)));
+                yield return Press(Pressable("RESET TAB","Pass settings"));
+                saved=new LocalProfile(ProfileId()).Data;var defaults=new ProfileData();
+                Assert.That((saved.CameraShake,saved.TextScale,saved.ReducedMotion),Is.EqualTo((defaults.CameraShake,defaults.TextScale,defaults.ReducedMotion)));
+                Assert.That(saved.ComfortPromptComplete,Is.True,"a reset never asks the first-launch question again");
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(host);}
+        }
+
+        [UnityTest]public IEnumerator TheMicrophoneTestStartsOnlyFromTestAndStopsWhenItsTabScreenFocusOrHudGoes()
+        {
+            yield return Title();
+            try
+            {
+                yield return Press(Pressable("SETTINGS","Title menu"));
+                yield return OpenTab("VOICE");
+                Assert.That(Value("VOICE CHAT").text,Is.EqualTo(FestivalSettingsScreen.VoiceExplanation));
+                Assert.That((microphone.Starts,microphone.Requests,Value("TEST MICROPHONE").text),Is.EqualTo((0,0,"OFF")),"opening the tab opens nothing");
+                yield return Press(RowButton("TEST MICROPHONE","TEST"));
+                Assert.That((microphone.Starts,Value("TEST MICROPHONE").text),Is.EqualTo((1,"50%")));
+                Assert.That(RowButton("TEST MICROPHONE","TEST").GetComponentInChildren<Text>().text,Is.EqualTo("STOP"));
+                var meter=host.GetComponentsInChildren<Image>(false).FirstOrDefault(i=>i.name=="Microphone level");
+                Assert.That(meter,Is.Not.Null,"a level meter shows");Assert.That(meter.rectTransform.rect.width,Is.GreaterThan(1));
+                Assert.That(UnityEngine.Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None).Any(a=>a.clip==microphone.Clip),Is.False,"the meter never plays the microphone back");
+                yield return OpenTab("AUDIO");
+                Assert.That((microphone.Ends,microphone.Recording),Is.EqualTo((1,(string)null)),"another tab stops it");
+                yield return OpenTab("VOICE");yield return Press(RowButton("TEST MICROPHONE","TEST"));
+                yield return Press(Pressable("BACK TO PASS","Pass settings"));
+                Assert.That((microphone.Ends,microphone.Recording),Is.EqualTo((2,(string)null)),"closing the settings stops it");
+                yield return Press(Pressable("SETTINGS","Title menu"));yield return OpenTab("VOICE");
+                Assert.That(microphone.Starts,Is.EqualTo(2),"reopening does not restart it");
+                yield return Press(RowButton("TEST MICROPHONE","TEST"));
+                host.SendMessage("OnApplicationFocus",false);yield return null;
+                Assert.That((microphone.Ends,microphone.Recording),Is.EqualTo((3,(string)null)),"losing focus stops it");
+                host.SendMessage("OnApplicationFocus",true);
+                yield return Press(Pressable("BACK TO PASS","Pass settings"));
+
+                session.Host("Microphone tester",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                session.MenuOpen=true;yield return null;
+                yield return Press(Pressable("SETTINGS","Pass home"));yield return OpenTab("VOICE");
+                yield return Press(RowButton("TEST MICROPHONE","TEST"));Assert.That(microphone.Recording,Is.EqualTo(""));
+                session.MenuOpen=false;yield return null;yield return null;
+                Assert.That((microphone.Ends,microphone.Recording),Is.EqualTo((4,(string)null)),"putting the pass away stops it");
+                Assert.That(session.Voice.Available,Is.False,"the test never makes voice available");
+                session.MenuOpen=true;yield return null;yield return null;
+                yield return Press(RowButton("TEST MICROPHONE","TEST"));Assert.That(microphone.Recording,Is.EqualTo(""));
+                UnityEngine.Object.Destroy(host);yield return null;
+                Assert.That((microphone.Ends,microphone.Recording),Is.EqualTo((5,(string)null)),"tearing the HUD down stops it");
+            }
+            finally{if(host!=null){session.Leave();UnityEngine.Object.Destroy(host);}}
         }
 
         private sealed class Display:IFestivalDisplay

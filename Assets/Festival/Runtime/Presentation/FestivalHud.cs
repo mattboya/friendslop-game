@@ -49,7 +49,11 @@ namespace Festival.Presentation
         private FestivalSettingsScreen settingsScreen;
         private readonly List<(FestivalSettingsScreen.Tab Tab,Image Fill,Text Label)> settingsTabs=new List<(FestivalSettingsScreen.Tab,Image,Text)>();
         private readonly List<(FestivalSettingsScreen.Row Row,GameObject[] Parts,Text Value,Button[] Buttons)> settingsRows=new List<(FestivalSettingsScreen.Row,GameObject[],Text,Button[])>();
+        private readonly List<(string Section,Image Fill,Text Label,GameObject Button)> settingsSections=new List<(string,Image,Text,GameObject)>();
         private Text settingsStatus;
+        private RectTransform settingsMeter;
+        // The settings' tap test plays its pulses here, so the shop chime's source never has to be idle for it.
+        private AudioSource tapAudio;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
         private readonly Image[] slotFrames=new Image[3];
@@ -270,7 +274,8 @@ namespace Festival.Presentation
             }
             shopChime=AudioClip.Create("Camp seller cash chime",samples.Length,1,rate,false);shopChime.SetData(samples,0);
             var spoken=OhYeahSamples(rate);ohYeah=AudioClip.Create("Giggle Tank oh yeah",spoken.Length,1,rate,false);ohYeah.SetData(spoken,0);
-            if(session?.Profile!=null)settingsScreen=new FestivalSettingsScreen(session.Profile,session.Settings,session.Voice);
+            tapAudio=gameObject.AddComponent<AudioSource>();tapAudio.spatialBlend=0;tapAudio.playOnAwake=false;
+            if(session?.Profile!=null)settingsScreen=new FestivalSettingsScreen(session.Profile,session.Settings,session.Voice,session.Controls,tapAudio);
             Build();
         }
 
@@ -656,10 +661,19 @@ namespace Festival.Presentation
                 settingsTabs.Add((tab,button.GetComponent<Image>(),label));
             }
             settingsText=Label(settingsPanel.transform,"Settings values",18,TextAnchor.MiddleLeft);settingsText.text=FestivalSettingsScreen.SavedMessage;settingsText.color=new Color(.32f,.40f,.36f);Place(settingsText.rectTransform,.04f,.75f,.96f,.805f);ShrinkToFit(settingsText,12);
-            var slots=new Dictionary<FestivalSettingsScreen.Tab,int>();
+            // CONTROLS holds every key in sections; their buttons take its first row.
+            for(int i=0;i<FestivalSettingsScreen.Sections.Length;i++)
+            {
+                string section=FestivalSettingsScreen.Sections[i];float x=.04f+i*.186f;
+                var button=Button(settingsPanel.transform,section,new Vector2(x,.742f-SettingRowHeight),new Vector2(x+.176f,.738f),()=>settingsScreen.OpenSection(section));
+                var label=button.GetComponentInChildren<Text>();ShrinkToFit(label,12);
+                settingsSections.Add((section,button.GetComponent<Image>(),label,button));
+            }
+            var slots=new Dictionary<(FestivalSettingsScreen.Tab,string),int>();
             foreach(var row in FestivalSettingsScreen.Rows)
             {
-                slots.TryGetValue(row.Tab,out int slot);slots[row.Tab]=slot+1;
+                if(!slots.TryGetValue((row.Tab,row.Section),out int slot))slot=row.Section==""?0:1;
+                slots[(row.Tab,row.Section)]=slot+1;
                 settingsRows.Add(SettingRow(settingsPanel.transform,row,.74f-(slot+1)*SettingRowHeight));
             }
             settingsStatus=Label(settingsPanel.transform,"Settings status",16,TextAnchor.MiddleLeft);settingsStatus.color=new Color(.32f,.40f,.36f);Place(settingsStatus.rectTransform,.04f,.105f,.96f,.16f);ShrinkToFit(settingsStatus,11);
@@ -769,17 +783,28 @@ namespace Festival.Presentation
             mapText=Label(mapPanel.transform,"Map text",21,TextAnchor.UpperLeft);mapText.color=Ink;Place(mapText.rectTransform,.70f,.08f,.96f,.84f);
         }
 
-        private const float SettingRowHeight=.072f;
+        // Nine rows fit between the save message and the status line: CONTROLS' section buttons over its eight dance keys.
+        private const float SettingRowHeight=.58f/9;
         private (FestivalSettingsScreen.Row,GameObject[],Text,Button[]) SettingRow(Transform parent,FestivalSettingsScreen.Row row,float y)
         {
-            float top=y+SettingRowHeight,inset=.005f;
+            float top=y+SettingRowHeight,inset=.002f;
+            bool note=row.Buttons.Length==0;
             var rule=Rule(parent,y);
-            var label=Label(parent,row.Label,20,TextAnchor.MiddleLeft);label.text=row.Label;label.color=Ink;label.fontStyle=FontStyle.Normal;Place(label.rectTransform,.04f,y,.44f,top);ShrinkToFit(label,12);
-            var value=Label(parent,row.Label+" value",21,TextAnchor.MiddleRight);value.color=new Color(.16f,.44f,.38f);Place(value.rectTransform,.44f,y,.665f,top);ShrinkToFit(value,12);
-            var buttons=row.Toggle
-                ?new[]{Button(parent,"TOGGLE",new Vector2(.70f,y+inset),new Vector2(.94f,top-inset),()=>settingsScreen.Change(row,1))}
-                :new[]{Button(parent,"−",new Vector2(.69f,y+inset),new Vector2(.80f,top-inset),()=>settingsScreen.Change(row,-1)),Button(parent,"+",new Vector2(.83f,y+inset),new Vector2(.94f,top-inset),()=>settingsScreen.Change(row,1))};
+            var label=Label(parent,row.Label,20,TextAnchor.MiddleLeft);label.text=row.Label;label.color=Ink;label.fontStyle=FontStyle.Normal;Place(label.rectTransform,.04f,y,note?.28f:.44f,top);ShrinkToFit(label,12);
+            var value=Label(parent,row.Label+" value",note?17:21,note?TextAnchor.MiddleLeft:TextAnchor.MiddleRight);value.color=new Color(.16f,.44f,.38f);Place(value.rectTransform,note?.28f:.44f,y,note?.96f:.665f,top);ShrinkToFit(value,12);
             var parts=new List<GameObject>{rule,label.gameObject,value.gameObject};
+            if(row==FestivalSettingsScreen.MicrophoneTest)
+            {
+                // The level bar grows from the left of the value's box, under its text.
+                var meter=Panel(parent,"Microphone level",new Color(.35f,.80f,.69f,.55f),new Vector2(.44f,y+.012f),new Vector2(.44f,top-.012f));meter.GetComponent<Image>().raycastTarget=false;
+                meter.transform.SetSiblingIndex(value.transform.GetSiblingIndex());settingsMeter=Rect(meter);parts.Add(meter);
+            }
+            var buttons=new GameObject[row.Buttons.Length];
+            for(int i=0;i<buttons.Length;i++)
+            {
+                bool pair=buttons.Length==2;int direction=pair&&i==0?-1:1;
+                buttons[i]=Button(parent,row.Buttons[i],new Vector2(pair?(i==0?.69f:.83f):.70f,y+inset),new Vector2(pair?(i==0?.80f:.94f):.94f,top-inset),()=>settingsScreen.Change(row,direction));
+            }
             foreach(var button in buttons){ShrinkToFit(button.GetComponentInChildren<Text>(),14);parts.Add(button);}
             return (row,parts.ToArray(),value,Array.ConvertAll(buttons,b=>b.GetComponent<Button>()));
         }
@@ -1459,6 +1484,7 @@ namespace Festival.Presentation
             CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;
             ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
             pendingComfortStart=null;if(comfortPanel!=null)comfortPanel.SetActive(false);
+            settingsScreen?.Close();
         }
         private void ResetChatForSession()
         {
@@ -1596,7 +1622,7 @@ namespace Festival.Presentation
 
         private void OnApplicationFocus(bool focused)
         {
-            rhythmFocused=focused;
+            rhythmFocused=focused;settingsScreen?.FocusChanged(focused);
             if(!focused){CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;}
             if(!focused&&session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}
         }
@@ -2159,20 +2185,31 @@ namespace Festival.Presentation
         // SET-1: only the open tab's rows show, each reading the saved choice; a row another choice overrides cannot be pressed.
         private void UpdateSettingsScreen()
         {
-            if(!settingsOpen||settingsScreen==null)return;
+            if(settingsScreen==null)return;
+            // BACK, Esc, RESUME, a drop or the pass closing all hide the screen, and a rebind or test ends with it.
+            if(!settingsOpen||!menuPanel.activeSelf){settingsScreen.Close();return;}
+            settingsScreen.Update();
             foreach(var tab in settingsTabs)
             {
                 bool open=tab.Tab==settingsScreen.Shown;
                 tab.Fill.color=open?new Color(.065f,.37f,.32f,1):new Color(.84f,.85f,.76f,1);tab.Label.color=open?Paper:Ink;
             }
+            foreach(var section in settingsSections)
+            {
+                bool open=section.Section==settingsScreen.Section;
+                section.Button.SetActive(settingsScreen.Shown==FestivalSettingsScreen.Tab.Controls);
+                section.Fill.color=open?new Color(.065f,.37f,.32f,1):new Color(.84f,.85f,.76f,1);section.Label.color=open?Paper:Ink;
+            }
             foreach(var row in settingsRows)
             {
-                bool shown=row.Row.Tab==settingsScreen.Shown;
+                bool shown=settingsScreen.Shows(row.Row);
                 foreach(var part in row.Parts)part.SetActive(shown);
                 if(!shown)continue;
                 row.Value.text=settingsScreen.Value(row.Row);
-                bool usable=settingsScreen.Usable(row.Row);foreach(var button in row.Buttons)button.interactable=usable;
+                bool usable=settingsScreen.Usable(row.Row);
+                for(int i=0;i<row.Buttons.Length;i++){row.Buttons[i].interactable=usable;row.Buttons[i].GetComponentInChildren<Text>().text=settingsScreen.ButtonLabel(row.Row,i);}
             }
+            if(settingsMeter!=null)settingsMeter.anchorMax=new Vector2(Mathf.Lerp(.44f,.665f,settingsScreen.MicrophoneLevel),settingsMeter.anchorMax.y);
             settingsText.text=settingsScreen.Message;settingsText.color=settingsScreen.Failed?new Color(.58f,.16f,.12f):new Color(.32f,.40f,.36f);
             settingsStatus.text=settingsScreen.Status;
         }
