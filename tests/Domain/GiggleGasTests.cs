@@ -5,7 +5,7 @@ using Festival.Core;
 
 // GAS-1: a Giggle Balloon station stands at camp, off the west edge of the gathering mat. Beside it, between levels, anyone takes a
 // free hit: nothing for 10 s, then 30 s of Giggle Gas (1 s in, full, 3 s out) that only the hitter feels, while friends see them
-// giggle. One at a time: no new hit until the last one has worn off, which the host times at camp too. It never leaves camp.
+// giggle. Two at a time: no third hit until one has worn off, which the host times at camp too. It never leaves camp.
 public static class GiggleGasTests
 {
     const string Take=FestivalSimulation.TakeGiggleBalloonKind;
@@ -20,8 +20,8 @@ public static class GiggleGasTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{AHitBesideTheBalloonsKicksInTenSecondsLaterForThirty,OneAtATimeUntilTheLastHasWornOff,OnlyBesideTheBalloonsAndOnlyAtCamp,
-            TheHostEndsItFortySecondsAfterTheHitEvenAtCamp,LeavingCampClearsIt,FriendsSeeAGiggleOnlyWhileTheGasIsOn,ASnapshotKeepsTheGasGoing})
+        foreach(var test in new Action[]{AHitBesideTheBalloonsKicksInTenSecondsLaterForThirty,TwoAtATimeUntilOneHasWornOff,OnlyBesideTheBalloonsAndOnlyAtCamp,
+            TheHostEndsItFortySecondsAfterTheHitEvenAtCamp,LeavingCampClearsIt,BackToBackHitsStackToTwoAndEaseBack,FriendsSeeAGiggleOnlyWhileTheGasIsOn,ASnapshotKeepsTheGasGoing})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" giggle gas test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -34,6 +34,7 @@ public static class GiggleGasTests
     }
     static ActiveEffect Gas(PlayerState p)=>p.Effects.Find(e=>e.Id==FestivalSimulation.GiggleGasEffect);
     static int Hits(PlayerState p)=>p.Effects.FindAll(e=>e.Id==FestivalSimulation.GiggleGasEffect).Count;
+    static double Strength(PlayerState p,double now)=>FestivalSimulation.GiggleGasStrength(p,now);
     // The crew readies up at the trailhead and leaves camp: the level starts.
     static void LeaveCamp(FestivalSimulation s)
     {
@@ -57,22 +58,42 @@ public static class GiggleGasTests
         Check(About(At(20),1)&&About(At(37),1),"full strength: "+At(20)+" at 20 s, "+At(37)+" at 37 s");
         Check(About(At(38.5),.5)&&About(At(39.7),.1),"a 3 s fade out: "+At(38.5)+" at 38.5 s, "+At(39.7)+" at 39.7 s");
         foreach(double t in new[]{40,45})Check(At(t)==0,"over at 40 s: "+At(t)+" at "+t+" s");
-        Check(FestivalSimulation.GiggleGasStrength(null,hit+20)==0&&FestivalSimulation.GiggleGasStrength(new ActiveEffect{Id=FestivalSimulation.DoseEffect,StartSeconds=hit,RemainingSeconds=60},hit+20)==0,"only Giggle Gas has a gas strength");
+        Check(FestivalSimulation.GiggleGasStrength((ActiveEffect)null,hit+20)==0&&FestivalSimulation.GiggleGasStrength(new ActiveEffect{Id=FestivalSimulation.DoseEffect,StartSeconds=hit,RemainingSeconds=60},hit+20)==0,"only Giggle Gas has a gas strength");
     }
 
-    // Free and unlimited, one at a time: a second hit waits until the last one has worn off, then it's another free one.
-    static void OneAtATimeUntilTheLastHasWornOff()
+    // Free and unlimited, two at a time: a third hit waits until one has worn off, then it's another free one.
+    static void TwoAtATimeUntilOneHasWornOff()
     {
-        var s=Camp(out var p);int cash=p.Cash;
-        for(int round=1;round<=3;round++)
+        foreach(double gap in new[]{5.0,15.0})
         {
-            Check(Act(s,p.Id,Take).Accepted&&Hits(p)==1,"hit "+round+" is taken");
-            s.Tick(5);var early=Act(s,p.Id,Take);
-            Check(!early.Accepted&&Hits(p)==1,"no second hit before hit "+round+" kicks in, got "+early.Accepted+" \""+early.Reason+"\"");
-            s.Tick(30);Check(!Act(s,p.Id,Take).Accepted&&Hits(p)==1,"nor while hit "+round+" is on");
-            s.Tick(5.2);Check(Hits(p)==0,"setup: hit "+round+" has worn off");
+            var s=Camp(out var p);int cash=p.Cash;
+            Check(Act(s,p.Id,Take).Accepted,"first hit is accepted");s.Tick(gap);
+            var second=Act(s,p.Id,Take);
+            Check(second.Accepted&&second.Reason==Hit&&Hits(p)==2,"second hit is accepted during onset or strength; gap="+gap+", got "+second.Accepted+" \""+second.Reason+"\"");
+            Check(About(p.Effects[0].RemainingSeconds,40-gap)&&About(p.Effects[1].RemainingSeconds,40),"each hit counts down on its own: "+p.Effects[0].RemainingSeconds+" and "+p.Effects[1].RemainingSeconds+" s");
+            var third=Act(s,p.Id,Take);
+            Check(!third.Accepted&&third.Reason=="Two Giggle Balloons at a time: let one wear off"&&Hits(p)==2,"third is refused without adding an effect, got "+third.Accepted+" \""+third.Reason+"\"");
+            s.Tick(40-gap+.1);Check(Hits(p)==1,"only the first hit wears off");
+            Check(Act(s,p.Id,Take).Accepted&&Hits(p)==2,"another hit is accepted when one wears off");
+            Check(p.Cash==cash,"all accepted hits are free");
         }
-        Check(p.Cash==cash,"three hits, all free");
+    }
+
+    // Hit 1 at h and hit 2 at h+15: each keeps its own 1 s rise and 3 s fall, and the player feels their sum.
+    static void BackToBackHitsStackToTwoAndEaseBack()
+    {
+        var s=Camp(out var p);double hit=s.State.SimulationSeconds;
+        Check(Act(s,p.Id,Take).Accepted,"first hit");s.Tick(15);Check(Act(s,p.Id,Take).Accepted,"second hit");
+        foreach(var sample in new[]{(5.0,0.0),(20.0,1.0),(25.5,1.5),(30.0,2.0),(38.5,1.5),(45.0,1.0),(56.0,0.0)})
+        {
+            double now=hit+sample.Item1;double strength=Strength(p,now);
+            Check(About(strength,sample.Item2),"sum at "+sample.Item1+" is "+sample.Item2+", got "+strength);
+            foreach(var e in p.Effects)Check(FestivalSimulation.GiggleGasStrength(e,now)<=1,"individual hits remain at most one");
+        }
+        var mate=s.Player("p1");mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,StartSeconds=hit,RemainingSeconds=60});
+        Check(Strength(mate,hit+20)==0,"a dose is no gas");
+        for(int extra=0;extra<3;extra++)mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=hit,RemainingSeconds=40});
+        Check(About(Strength(mate,hit+20),2),"the sum is capped at two, got "+Strength(mate,hit+20));
     }
 
     // A hit away from the balloons, inside a tent, or out of the shopping phase is refused, and adds nothing.
@@ -114,7 +135,7 @@ public static class GiggleGasTests
 
     static void LeavingCampClearsIt()
     {
-        var s=Camp(out var p);var mate=s.Player("p1");Check(Act(s,p.Id,Take).Accepted,"setup: a hit");
+        var s=Camp(out var p);var mate=s.Player("p1");Check(Act(s,p.Id,Take).Accepted&&Act(s,p.Id,Take).Accepted&&Hits(p)==2,"setup: two hits");
         mate.X=CampFeatures.GiggleBalloonX;mate.Z=CampFeatures.GiggleBalloonZ;s.Tick(25);Check(Act(s,mate.Id,Take).Accepted,"setup: a friend's hit, still kicking in");
         Check(FestivalSimulation.Giggling(p,s.State.SimulationSeconds),"setup: p0 is giggling");
         LeaveCamp(s);
@@ -135,11 +156,12 @@ public static class GiggleGasTests
 
     static void ASnapshotKeepsTheGasGoing()
     {
-        var s=Camp(out var p);Check(Act(s,p.Id,Take).Accepted,"setup: a hit");s.Tick(15);
+        var s=Camp(out var p);Check(Act(s,p.Id,Take).Accepted,"setup: a hit");s.Tick(5);Check(Act(s,p.Id,Take).Accepted,"setup: second hit");s.Tick(10);
         var saved=new FestivalSimulation();saved.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
         var q=saved.Player("p0");
         Check(FestivalSimulation.Giggling(q,saved.State.SimulationSeconds),"a snapshot keeps the gas on");
-        Check(!Act(saved,q.Id,Take).Accepted,"and keeps it one at a time");
-        saved.Tick(25.2);Check(Gas(q)==null,"and it ends on time");
+        Check(About(Strength(q,saved.State.SimulationSeconds),Strength(p,s.State.SimulationSeconds))&&About(Strength(q,saved.State.SimulationSeconds),1),"and their summed strength, got "+Strength(q,saved.State.SimulationSeconds));
+        Check(!Act(saved,q.Id,Take).Accepted,"and refuses a third hit");
+        Check(Hits(q)==2,"restored snapshot keeps both hits");saved.Tick(25.2);Check(Hits(q)==1,"the first ends on time");saved.Tick(5);Check(Gas(q)==null,"and so does the second");
     }
 }

@@ -4,9 +4,9 @@ namespace Festival.Core
 {
     /// <summary>GAS-1: Giggle Balloons at camp, beside CampFeatures' station. Between levels, any living player there takes a free hit:
     /// nothing for GiggleGasOnsetSeconds, then GiggleGasSeconds of Giggle Gas that fades in over a second and out over the last
-    /// three. One at a time: no new hit until the last one is gone. It changes no rule; the hitter's own screen feels it
-    /// (FestivalTrip) and friends see them giggle (Giggling, which ViewFor sends). The host counts it down at camp (GiggleGasTick)
-    /// and clears it as the crew leaves for a level (ClearGiggleGas), so it never reaches the festival.</summary>
+    /// three. Two at a time, each timed on its own: no third hit until one is gone. It changes no rule; the hitter's own screen
+    /// feels it (FestivalTrip) and friends see them giggle (Giggling, which ViewFor sends). The host counts it down at camp
+    /// (GiggleGasTick) and clears it as the crew leaves for a level (ClearGiggleGas), so it never reaches the festival.</summary>
     public sealed partial class FestivalSimulation
     {
         public const string GiggleGasEffect="giggle_gas",TakeGiggleBalloonKind="TakeGiggleBalloon";
@@ -19,6 +19,10 @@ namespace Festival.Core
             double t=now-e.StartSeconds;if(t<=0||t>=GiggleGasSeconds)return 0;
             return Math.Min(1,Math.Min(t/GiggleGasFadeInSeconds,(GiggleGasSeconds-t)/GiggleGasFadeOutSeconds));
         }
+        /// <summary>What p feels at simulation time now: the sum of their gas hits' strengths, capped at two.</summary>
+        public static double GiggleGasStrength(PlayerState p,double now){double sum=0;foreach(var e in p.Effects)sum+=GiggleGasStrength(e,now);return Math.Min(2,sum);}
+        /// <summary>Whether p has two gas hits on, kicking in or felt, so a third waits until one is gone.</summary>
+        public static bool TwoGiggleBalloonsOn(PlayerState p)=>p.Effects.FindAll(e=>e.Id==GiggleGasEffect).Count>=2;
         /// <summary>Whether friends see p giggle at simulation time now: only while their Giggle Gas has strength, never while it kicks in.</summary>
         public static bool Giggling(PlayerState p,double now)=>p.Effects.Exists(e=>GiggleGasStrength(e,now)>0);
         /// <summary>Whether p stands within reach of the camp's Giggle Balloons, where TakeGiggleBalloon takes a hit (the HUD offers it there).</summary>
@@ -28,7 +32,7 @@ namespace Festival.Core
         {
             if(State.Phase!="Shopping")return Reject("Giggle Balloons stay at camp");
             if(!AtGiggleBalloons(p))return Reject("Stand by the Giggle Balloons to take one");
-            if(p.Effects.Exists(e=>e.Id==GiggleGasEffect))return Reject("One Giggle Balloon at a time: let this one wear off");
+            if(TwoGiggleBalloonsOn(p))return Reject("Two Giggle Balloons at a time: let one wear off");
             p.Effects.Add(new ActiveEffect{Id=GiggleGasEffect,InstanceId=Id("effect"),StartSeconds=State.SimulationSeconds+GiggleGasOnsetSeconds,RemainingSeconds=GiggleGasOnsetSeconds+GiggleGasSeconds});
             return Ok("Giggle Balloon: give it a few seconds…");
         }
