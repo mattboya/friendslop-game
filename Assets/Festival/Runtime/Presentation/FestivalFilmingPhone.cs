@@ -56,6 +56,8 @@ namespace Festival.Presentation
             this.recording=filming&&recording;
             if(phone.gameObject.activeSelf!=filming)phone.gameObject.SetActive(filming);
             if(label.gameObject.activeSelf!=this.recording)label.gameObject.SetActive(this.recording);
+            // MINI-5 freezes world rigs during a minigame, so Hold may not run: a recording light can't wait for it.
+            if(this.recording)light.enabled=true;
         }
 
         /// <summary>Each frame once the body is posed (FestivalCharacter.LateUpdate): the phone arm reaches up to hold it beside the
