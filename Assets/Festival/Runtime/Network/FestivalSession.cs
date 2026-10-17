@@ -1088,18 +1088,16 @@ namespace Festival.Network
                 :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,20)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
                 :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
-            float roll=0;
-            if(!Profile.Data.ReducedMotion&&Profile.Data.CameraShake)
-            {
-                foreach(var effect in player.Effects)
-                {
-                    if(effect.Id=="lsd")roll+=Mathf.Sin((float)State.SimulationSeconds*2.1f)*2.2f;
-                    else if(effect.Id=="mushrooms")roll+=Mathf.Sin((float)State.SimulationSeconds*1.3f+1.1f)*1.5f;
-                }
-            }
+            float roll=0;bool shake=Profile.Data.CameraShake;
+            if(!Profile.Data.ReducedMotion&&shake)foreach(var effect in player.Effects)roll+=FestivalTrip.Sway(effect.Id,(float)State.SimulationSeconds);
+            // The dose's own roll runs on the HUD and overlay's unscaled clock; a shop effect's stays on the simulation clock.
+            var trip=FestivalTrip.For(State,LocalPlayerId,Profile.Data.ReducedMotion,Time.unscaledTime);
+            if(shake)roll+=trip.Roll;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)TraceTripLook(player,trip);
+#endif
             // TRIP-5: Pony Dust's camera trails the mouse; movement still faces where the mouse points (yaw).
-            float lag=FestivalTrip.For(State,LocalPlayerId,Profile.Data.ReducedMotion,0).Lag;
-            viewYaw=FestivalTrip.Follow(viewYaw,yaw,lag,Time.unscaledDeltaTime);viewPitch=FestivalTrip.Follow(viewPitch,pitch,lag,Time.unscaledDeltaTime);
+            viewYaw=FestivalTrip.Follow(viewYaw,yaw,trip.Lag,Time.unscaledDeltaTime);viewPitch=FestivalTrip.Follow(viewPitch,pitch,trip.Lag,Time.unscaledDeltaTime);
             ViewCamera.transform.rotation=Quaternion.Euler(viewPitch,viewYaw,Mathf.Clamp(roll,-3.5f,3.5f));
             // CAM-1: over the shoulder the camera is set straight on its boom from the eye (no ease of its own, so a switch is a cut), and
             // shows your body unless a wall has pulled the boom into your head; in first person it is the eye, your body hidden.
@@ -1107,6 +1105,19 @@ namespace Festival.Network
             ViewCamera.transform.position=ThirdPersonView?FestivalThirdPerson.Place(EyePosition,viewYaw,viewPitch,out boom):EyePosition;
             ViewCamera.cullingMask=FestivalThirdPerson.Mask(ViewCamera.cullingMask,boom);
         }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private (string,int,bool,bool,bool) tracedLook=("",-1,false,false,false);
+        // Opt-in: the dose look the camera holds, each time its substance, dose, showing or a comfort setting changes.
+        private void TraceTripLook(PlayerState player,FestivalTrip.Perception trip)
+        {
+            ActiveEffect dose=null;foreach(var effect in player.Effects)if(effect.Id==FestivalSimulation.DoseEffect){dose=effect;break;}
+            var look=(dose?.Substance??"",dose?.Intensity??0,Profile.Data.ReducedMotion,FestivalWorld.ShowsFestival(State.Phase)&&player.Life!="Spirit",Profile.Data.CameraShake);
+            if(look==tracedLook)return;
+            tracedLook=look;
+            DevelopmentDiagnostics.GraphicsEvent("Trip","look","substance="+look.Item1+" dose="+look.Item2+" reduced="+look.Item3+" share="+(look.Item3?FestivalTrip.ReducedMotionShare:1).ToString("F2")
+                +" shown="+look.Item4+" camera_shake="+look.Item5+" roll="+trip.Roll.ToString("F2")+" saturation="+trip.Saturation.ToString("F1"));
+        }
+#endif
         private void TransportFailed(){if(!closing)Fail("Network transport failed. Leave and try another port or host address.");}
         private void Fail(string message){Leave();Message=message;}
         public void SetMessage(string message){Message=message;}

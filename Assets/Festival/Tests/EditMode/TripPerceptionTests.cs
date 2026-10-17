@@ -26,9 +26,9 @@ namespace Festival.Tests
         private static string Name(string id)=>Catalog.FindEffect(id).Name;
         // Every setting, so two looks can be told apart and a failure shows them.
         private static string Describe(FestivalTrip.Perception p)=>
-            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3}";
+            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3}";
         // How strongly each setting is felt.
-        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,Mathf.Abs(p.Fov),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle};
+        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle};
         // Everything but camera motion: colour, haze, vignette, letterbox, the grade, trails, glow and sound.
         private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle};
         private static readonly string Nothing=Describe(default);
@@ -42,25 +42,43 @@ namespace Festival.Tests
             Assert.That(Describe(FestivalTrip.Look("",4,false,Moment)),Is.EqualTo(Nothing),"a dose of nothing on the wheel (a host from before it) looks plain");
         }
 
-        // The queue's picture of each one, as the settings that carry it.
+        // The queue's picture of each one, as the settings that carry it, at every dose.
         [Test]public void EachSubstanceFeelsTheWayItsNameSays()
         {
-            FestivalTrip.Perception Of(string id,float time=Moment)=>FestivalTrip.Look(id,2,false,time);
-            var stamps=Of("lsd");
-            Assert.That(stamps.Trails,Is.GreaterThan(0),"Tongue Stamps leave colour trails behind moving people");
-            Assert.That(stamps.Tint.a,Is.GreaterThan(0),"under a rainbow tint");
-            Color.RGBToHSV(Of("lsd",0).Tint,out float before,out _,out _);Color.RGBToHSV(Of("lsd",5).Tint,out float after,out _,out _);
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(before*360,after*360)),Is.GreaterThan(30),"that slowly cycles");
-            Assert.That(Mathf.Abs(Of("mushrooms").Fov),Is.GreaterThan(1),"Fun Guys make the world breathe: the field of view swells");
-            Assert.That(Of("mushrooms",0).Fov,Is.Not.EqualTo(Of("mushrooms").Fov),"and settles, over and over");
-            var rolly=Of("ecstasy");
-            Assert.That(rolly.Saturation>0&&rolly.Brightness>0&&rolly.Tint.r>rolly.Tint.b,"Rolly Pollies are warm, bright and saturated: "+Describe(rolly));
-            Assert.That(rolly.Glow,Is.GreaterThan(0),"with a soft glow around other people");
-            var pony=Of("ketamine");
-            Assert.That(pony.Vignette>0&&pony.Lag>0&&pony.Muffle>0,"Pony Dust closes the view to a tunnel, drags the camera behind the mouse and muffles the sound: "+Describe(pony));
-            var couch=Of("weed");
-            Assert.That(couch.Haze>0&&couch.Letterbox>0,"Couch Lock is a soft haze between letterbox bars: "+Describe(couch));
-            Assert.That(couch.Tint.g>couch.Tint.r&&couch.Tint.g>couch.Tint.b,"with a green cast");
+            for(int dose=1;dose<=4;dose++)
+            {
+                FestivalTrip.Perception Of(string id,float time=Moment)=>FestivalTrip.Look(id,dose,false,time);
+                string at=" at dose "+dose;
+                var stamps=Of("lsd");
+                Assert.That(stamps.Trails,Is.GreaterThan(0),"Tongue Stamps leave colour trails behind moving people"+at);
+                Assert.That(stamps.Tint.a,Is.GreaterThan(0),"under a rainbow tint"+at);
+                Color.RGBToHSV(Of("lsd",0).Tint,out float before,out _,out _);Color.RGBToHSV(Of("lsd",5).Tint,out float after,out _,out _);
+                Assert.That(Mathf.Abs(Mathf.DeltaAngle(before*360,after*360)),Is.GreaterThan(30),"that slowly cycles"+at);
+                Assert.That(Mathf.Abs(Of("mushrooms").Fov),Is.GreaterThan(1),"Fun Guys make the world breathe: the field of view swells"+at);
+                Assert.That(Of("mushrooms",0).Fov,Is.Not.EqualTo(Of("mushrooms").Fov),"and settles, over and over"+at);
+                // Both tilt the view to and fro and turn the world more colourful, but no brighter.
+                foreach(var id in new[]{"lsd","mushrooms"})
+                {
+                    float least=float.MaxValue,most=float.MinValue;
+                    for(float t=0;t<6;t+=.05f){float roll=Of(id,t).Roll;least=Mathf.Min(least,roll);most=Mathf.Max(most,roll);}
+                    Assert.That(most,Is.GreaterThan(0),Name(id)+" tilts the view one way"+at);
+                    Assert.That(least,Is.LessThan(0),"and back the other"+at);
+                    Assert.That(Mathf.Max(most,-least),Is.LessThanOrEqualTo(3.5f),"a sway, never more than the camera's 3.5 degrees"+at);
+                    Assert.That(Of(id).Saturation,Is.GreaterThan(0),Name(id)+" turns the world more colourful"+at);
+                    Assert.That(Of(id).Brightness,Is.Zero,Name(id)+" adds no brightness"+at);
+                }
+                var rolly=Of("ecstasy");
+                Assert.That(rolly.Saturation>0&&rolly.Brightness>0&&rolly.Tint.r>rolly.Tint.b,"Rolly Pollies are warm, bright and saturated: "+Describe(rolly)+at);
+                Assert.That(rolly.Glow,Is.GreaterThan(0),"with a soft glow around other people"+at);
+                foreach(var id in Substances)if(id!="ecstasy")Assert.That(rolly.Brightness,Is.GreaterThan(Of(id).Brightness),"Rolly Pollies are brighter than "+Name(id)+at);
+                Assert.That(rolly.Saturation,Is.GreaterThan(Mathf.Max(Of("lsd").Saturation,Of("mushrooms").Saturation)),"and the most saturated"+at);
+                var pony=Of("ketamine");
+                Assert.That(pony.Vignette>0&&pony.Lag>0&&pony.Muffle>0,"Pony Dust closes the view to a tunnel, drags the camera behind the mouse and muffles the sound: "+Describe(pony)+at);
+                var couch=Of("weed");
+                Assert.That(couch.Haze>0&&couch.Letterbox>0,"Couch Lock is a soft haze between letterbox bars: "+Describe(couch)+at);
+                Assert.That(couch.Tint.g>couch.Tint.r&&couch.Tint.g>couch.Tint.b,"with a green cast"+at);
+                foreach(var id in new[]{"ecstasy","ketamine","weed"})Assert.That(Of(id).Roll,Is.Zero,Name(id)+" never tilts the view"+at);
+            }
         }
 
         [Test]public void StrengthGrowsWithTheDose()
@@ -72,6 +90,8 @@ namespace Festival.Tests
                     float[] a=Amounts(less),b=Amounts(more);
                     for(int i=0;i<a.Length;i++)Assert.That(b[i],Is.GreaterThanOrEqualTo(a[i]),Name(id)+": nothing fades from dose "+(dose-1)+" to "+dose+"\n"+Describe(less)+"\n"+Describe(more));
                     Assert.That(b.Sum(),Is.GreaterThan(a.Sum()),Name(id)+" is stronger at dose "+dose+" than at "+(dose-1));
+                    if(id=="lsd"||id=="mushrooms")for(float t=.25f;t<6;t+=.5f)
+                        Assert.That(Mathf.Abs(FestivalTrip.Look(id,dose,false,t).Roll),Is.GreaterThan(Mathf.Abs(FestivalTrip.Look(id,dose-1,false,t).Roll)),Name(id)+" tilts further at dose "+dose+" than at "+(dose-1)+", t="+t);
                 }
             // Muffled, not deaf: the rhythm's beat stays audible under the heaviest Pony Dust.
             Assert.That(FestivalTrip.LowPassHz(FestivalTrip.Look("ketamine",4,false,Moment).Muffle),Is.InRange(2000f,8000f),"Pony Dust's low-pass stays mild");
@@ -82,11 +102,17 @@ namespace Festival.Tests
         {
             Assert.That(Mathf.Abs(FestivalTrip.Look("mushrooms",4,false,Moment).Fov),Is.GreaterThan(0),"setup: Fun Guys swell the view");
             Assert.That(FestivalTrip.Look("ketamine",4,false,Moment).Lag,Is.GreaterThan(0),"setup: Pony Dust drags the camera");
+            foreach(var id in new[]{"lsd","mushrooms"})
+            {
+                Assert.That(Mathf.Abs(FestivalTrip.Look(id,4,false,Moment).Roll),Is.GreaterThan(0),"setup: "+Name(id)+" tilts the view");
+                Assert.That(FestivalTrip.Look(id,4,false,Moment).Saturation,Is.GreaterThan(0),"setup: "+Name(id)+" saturates the grade, which counts as colour");
+            }
             foreach(var id in Substances)
             {
                 var full=FestivalTrip.Look(id,4,false,Moment);var calm=FestivalTrip.Look(id,4,true,Moment);
-                Assert.That(Colour(calm),Is.EqualTo(Colour(full)),Name(id)+" keeps its colour, haze, vignette, letterbox, trails, glow and sound");
+                Assert.That(Colour(calm),Is.EqualTo(Colour(full)),Name(id)+" keeps its colour, haze, vignette, letterbox, grade, trails, glow and sound");
                 Assert.That(calm.Fov,Is.EqualTo(full.Fov*.25f).Within(1e-5f),Name(id)+": the swell is cut to a quarter");
+                Assert.That(calm.Roll,Is.EqualTo(full.Roll*.25f).Within(1e-5f),Name(id)+": the tilt is cut to a quarter");
                 Assert.That(calm.Lag,Is.EqualTo(full.Lag*.25f).Within(1e-5f),Name(id)+": the lag is cut to a quarter");
             }
         }
@@ -104,6 +130,36 @@ namespace Festival.Tests
             var shop=Round("Playing",0);shop.Players[0].Effects.Add(new ActiveEffect{Id="lsd",Intensity=1,RemainingSeconds=60});
             Assert.That(For(shop),Is.EqualTo(Nothing),"keyed on the dose alone, not on a Tongue Stamp bought at the shop");
             Assert.That(For(null),Is.EqualTo(Nothing),"a client that left sees none");
+        }
+
+        // The tilt and the extra colour are the local player's own dose, day and night alike, and nothing else's: a sober
+        // player, a spirit, camp, a friend's dose, a shop-bought Tongue Stamp or a client that left see none of them.
+        [Test]public void TheTiltAndColourComeFromYourOwnDoseDayAndNight()
+        {
+            foreach(var id in new[]{"lsd","mushrooms"})
+                for(int dose=1;dose<=4;dose++)
+                    foreach(int level in new[]{0,1,2,3})
+                    {
+                        var state=Round("Playing",dose,id);state.LevelIndex=level;
+                        var look=FestivalTrip.For(state,"me",false,Moment);var own=FestivalTrip.Look(id,dose,false,Moment);
+                        string where=Name(id)+" dose "+dose+" level "+level;
+                        Assert.That(look.Roll,Is.EqualTo(own.Roll).And.Not.EqualTo(0),where+": the dose's own tilt");
+                        Assert.That(look.Saturation,Is.EqualTo(own.Saturation).And.GreaterThan(0),where+": the dose's own colour, night included");
+                        Assert.That(look.Brightness,Is.Zero,where+": no brightness");
+                        if(FestivalNightLighting.IsNight(state))Assert.That(look.Tint.a,Is.LessThanOrEqualTo(FestivalTrip.NightTint),where+": the night's tint stays a whisper");
+                        Assert.That(FestivalTrip.For(state,"me",true,Moment).Roll,Is.EqualTo(own.Roll*FestivalTrip.ReducedMotionShare).Within(1e-5f),where+": a quarter with reduced motion");
+                    }
+            float Roll(RoundState state)=>FestivalTrip.For(state,"me",false,Moment).Roll;
+            Assert.That(Roll(Round("Playing",0,"lsd")),Is.Zero,"sober, though a friend is on four doses");
+            Assert.That(Roll(Round("Playing",4,"lsd",life:"Spirit")),Is.Zero,"a spirit");
+            foreach(var phase in new[]{"Shopping","Spinning","Loading","CampReview"})Assert.That(Roll(Round(phase,4,"lsd")),Is.Zero,"at camp ("+phase+")");
+            Assert.That(Roll(Round(FestivalSimulation.MinigamePhase,4,"lsd")),Is.EqualTo(FestivalTrip.Look("lsd",4,false,Moment).Roll),"through a minigame's freeze-frame");
+            Assert.That(Roll(Round("Results",4,"mushrooms")),Is.EqualTo(FestivalTrip.Look("mushrooms",4,false,Moment).Roll),"through the level's results");
+            var shop=Round("Playing",0);shop.Players[0].Effects.Add(new ActiveEffect{Id="lsd",Intensity=4,RemainingSeconds=60});shop.Players[0].Effects.Add(new ActiveEffect{Id="mushrooms",Intensity=4,RemainingSeconds=60});
+            Assert.That(Describe(FestivalTrip.For(shop,"me",false,Moment)),Is.EqualTo(Nothing),"shop-bought effects keep their own camera roll, outside the dose's look");
+            var stacked=Round("Playing",2,"mushrooms");stacked.Players[0].Effects.Add(new ActiveEffect{Id="lsd",Intensity=4,RemainingSeconds=60});
+            Assert.That(Describe(FestivalTrip.For(stacked,"me",false,Moment)),Is.EqualTo(Describe(FestivalTrip.Look("mushrooms",2,false,Moment))),"a shop Tongue Stamp on top of a dose of Fun Guys leaves the dose's look alone");
+            Assert.That(Roll(null),Is.Zero,"a client that left");
         }
 
         // The rhythm arrows follow the dose's substance: Tongue Stamps trail, Fun Guys curve, and the look-ahead is fixed and mild per

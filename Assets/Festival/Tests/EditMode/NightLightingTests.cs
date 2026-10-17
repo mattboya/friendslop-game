@@ -144,17 +144,27 @@ namespace Festival.Tests
         }
 
         // TRIP-5: Rolly Pollies' warm, bright, saturated colours go through the one colour grade, on top of the dose's own lift, and
-        // camp takes them off again.
+        // camp takes them off again. Tongue Stamps and Fun Guys add colour of their own, less than Rolly Pollies, and no light.
         [Test]public void RollyPolliesBrightenAndSaturateTheGradeOnTopOfTheDose()
         {
             root=new GameObject("Rolly world");var world=root.AddComponent<FestivalWorld>();world.Build();
             Assert.That(root.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True,"world colour grade");
             float exposure=grade.postExposure.value,saturation=grade.saturation.value;
+            world.SetLighting(Round(1,"Playing",2),"me");
+            float plainExposure=grade.postExposure.value,plainSaturation=grade.saturation.value;
+            foreach(var substance in new[]{"lsd","mushrooms"})
+            {
+                world.SetLighting(Took(Round(1,"Playing",2),substance),"me");
+                Assert.That(grade.saturation.value,Is.EqualTo(plainSaturation+FestivalTrip.Look(substance,2,false,0).Saturation).Within(1e-4f),Catalog.FindEffect(substance).Name+" adds its own colour to the night's grade");
+                Assert.That(grade.saturation.value,Is.GreaterThan(plainSaturation),"so the night looks more colourful");
+                Assert.That(grade.postExposure.value,Is.EqualTo(plainExposure).Within(1e-5f),"and no brighter than the dose itself makes it");
+            }
             world.SetLighting(Took(Round(1,"Playing",2),"lsd"),"me");
             float dosedExposure=grade.postExposure.value,dosedSaturation=grade.saturation.value;
             Assert.That(dosedExposure,Is.EqualTo(exposure+.3f).Within(1e-5f),"setup: two doses of Tongue Stamps lift the grade as any dose does");
             world.SetLighting(Took(Round(1,"Playing",2),"ecstasy"),"me");
-            Assert.That(grade.saturation.value,Is.GreaterThan(dosedSaturation+10),"Rolly Pollies are more saturated than the same dose of anything else");
+            Assert.That(grade.saturation.value,Is.GreaterThan(dosedSaturation),"Rolly Pollies are more saturated than the same dose of anything else");
+            Assert.That(grade.saturation.value-dosedSaturation,Is.EqualTo(FestivalTrip.Look("ecstasy",2,false,0).Saturation-FestivalTrip.Look("lsd",2,false,0).Saturation).Within(1e-4f),"by their own lift over Tongue Stamps'");
             Assert.That(grade.postExposure.value,Is.GreaterThan(dosedExposure+.05f),"and brighter");
             world.SetLighting(Took(Round(1,"CampReview",2),"ecstasy"),"me");
             Assert.That(grade.postExposure.value,Is.EqualTo(exposure).Within(1e-5f),"camp exposure");

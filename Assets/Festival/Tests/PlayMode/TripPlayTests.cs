@@ -148,8 +148,8 @@ namespace Festival.Tests
             yield return null;
             bool reduced=session.Profile.Data.ReducedMotion;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            bool diagnostics=DevelopmentDiagnostics.Visible;DevelopmentDiagnostics.Visible=false;int laneDiagnosticCount=0;string laneDiagnostic="";
-            Application.LogCallback laneLog=(message,stack,type)=>{if(message.StartsWith("[Festival.Rhythm] action=lane_flight ")){laneDiagnosticCount++;laneDiagnostic=message;}};
+            bool diagnostics=DevelopmentDiagnostics.Visible;DevelopmentDiagnostics.Visible=false;int laneDiagnosticCount=0,lookDiagnosticCount=0;string laneDiagnostic="",lookDiagnostic="";
+            Application.LogCallback laneLog=(message,stack,type)=>{if(message.StartsWith("[Festival.Rhythm] action=lane_flight ")){laneDiagnosticCount++;laneDiagnostic=message;}if(message.StartsWith("[Festival.Trip] action=look ")){lookDiagnosticCount++;lookDiagnostic=message;}};
             Application.logMessageReceived+=laneLog;
 #endif
             try
@@ -194,11 +194,29 @@ namespace Festival.Tests
                 Assert.That(muffle!=null&&muffle.enabled,"the first-person listener hears it muffled");
                 Assert.That(muffle.cutoffFrequency,Is.EqualTo(FestivalTrip.LowPassHz(Now().Muffle)).Within(1),"as muffled as four Pony Dust say");
 
-                // Two Rolly Pollies: the world's one colour grade is more saturated than the same dose of Tongue Stamps.
+                // Four Tongue Stamps at full motion: every frame the session's one camera writer tilts the view by the dose's own roll,
+                // inside its 3.5 degree clamp, so the world wobbles.
+                dose.Substance="lsd";yield return null;yield return null;
+                Assert.That(player.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms"),Is.False,"setup: no shop-bought effect rolls the view as well");
+                float tilted=0;
+                for(deadline=Time.realtimeSinceStartup+1.5f;Time.realtimeSinceStartup<deadline;)
+                {
+                    yield return null;
+                    float roll=Mathf.DeltaAngle(0,view.transform.eulerAngles.z);
+                    Assert.That(roll,Is.EqualTo(Now().Roll).Within(.01f),"the view tilts by this frame's dose roll");
+                    Assert.That(Mathf.Abs(roll),Is.LessThanOrEqualTo(3.5f),"inside the camera's clamp");
+                    tilted=Mathf.Max(tilted,Mathf.Abs(roll));
+                }
+                Assert.That(tilted,Is.GreaterThan(1),"four Tongue Stamps tilt the view by degrees");
+
+                // Two doses: Tongue Stamps lift the world's one colour grade above a dose with no substance, and Rolly Pollies more.
                 Assert.That(world.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True,"setup: the world's colour grade");
-                dose.Intensity=2;dose.Substance="lsd";yield return null;yield return null;float plain=grade.saturation.value;
+                dose.Intensity=2;dose.Substance="";yield return null;yield return null;float plain=grade.saturation.value;
+                dose.Substance="lsd";yield return null;yield return null;float stamps=grade.saturation.value;
+                Assert.That(stamps,Is.EqualTo(plain+FestivalTrip.Look("lsd",2,false,0).Saturation).Within(.01f),"Tongue Stamps add their own colour to the grade");
+                Assert.That(stamps,Is.GreaterThan(plain),"so the saturation rises");
                 dose.Substance="ecstasy";yield return null;yield return null;
-                Assert.That(grade.saturation.value,Is.GreaterThan(plain+10),"Rolly Pollies saturate the grade");
+                Assert.That(grade.saturation.value,Is.GreaterThan(stamps),"Rolly Pollies saturate the grade more");
 
                 // A dose spun before the substance wheel looks plain: every writer puts its property back.
                 dose.Substance="";yield return null;yield return null;
@@ -213,7 +231,8 @@ namespace Festival.Tests
                 // frame, how far ahead of its beat the farthest arrow on screen is; the partner is held in place so the dance runs on.
                 dose.Substance="ketamine";dose.Intensity=4;session.Profile.Data.ReducedMotion=true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                Assert.That(laneDiagnosticCount,Is.Zero,"lane diagnostics stay silent until opted in");DevelopmentDiagnostics.Visible=true;
+                Assert.That(laneDiagnosticCount,Is.Zero,"lane diagnostics stay silent until opted in");
+                Assert.That(lookDiagnosticCount,Is.Zero,"through every look so far the camera's trip trace stays silent until opted in");DevelopmentDiagnostics.Visible=true;
 #endif
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float npcX=npc.X,npcZ=npc.Z;player.X=npcX+.8f;player.Z=npcZ;
                 Assert.That(sim.Execute(me,new GameCommand{Id="trip_dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True,"setup: a dance with a festivalgoer starts");
@@ -242,6 +261,8 @@ namespace Festival.Tests
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Assert.That(laneDiagnosticCount,Is.EqualTo(1),"the live lane diagnostic samples once, then stays throttled during this dance");
                 Assert.That(laneDiagnostic,Does.Contain("effect=ketamine dose=4 lead=2.400"),"the opt-in diagnostic reports the selection actually consumed by the live HUD");
+                Assert.That(lookDiagnosticCount,Is.EqualTo(1),"opted in, the camera traces the look it holds once, not every frame: "+lookDiagnostic);
+                Assert.That(lookDiagnostic,Does.Contain("substance=ketamine dose=4 reduced=True share=0.25"),"with the substance, dose and reduced-motion share the camera writer used");
 #endif
             }
             finally
@@ -253,6 +274,59 @@ namespace Festival.Tests
                 foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
                 Object.Destroy(host);Object.Destroy(world);
             }
+            yield return null;
+        }
+
+        // The session's one camera writer adds the dose's roll, on the unscaled clock, to any shop-bought effect's roll, on the
+        // simulation clock, and clamps the sum to 3.5 degrees. Reduced motion keeps a quarter of the dose's roll and none of the shop's;
+        // camera shake off keeps neither; sober, a spirit or camp roll nothing. Each check runs inside one frame, so the dose's clock
+        // holds still across its calls.
+        [UnityTest]public IEnumerator TheDoseRollJoinsTheShopRollInsideTheCameraClamp()
+        {
+            var host=new GameObject("impl-U46 roll session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            try
+            {
+                var camera=typeof(FestivalSession).GetMethod("UpdateCamera",BindingFlags.NonPublic|BindingFlags.Instance);
+                var state=new RoundState{Phase="Playing",LevelIndex=1};var me=new PlayerState{Id="me"};state.Players.Add(me);
+                typeof(FestivalSession).GetProperty("State").SetValue(session,state);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,me.Id);
+                var dose=new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="lsd"};
+                var stamp=new ActiveEffect{Id="lsd",RemainingSeconds=60};var guys=new ActiveEffect{Id="mushrooms",RemainingSeconds=60};
+                var data=session.Profile.Data;data.ReducedMotion=false;data.CameraShake=true;
+                float Roll(params ActiveEffect[] effects){me.Effects.Clear();me.Effects.AddRange(effects);camera.Invoke(session,new object[]{me});return Mathf.DeltaAngle(0,session.ViewCamera.transform.eulerAngles.z);}
+
+                float doseRoll=0;
+                for(float deadline=Time.realtimeSinceStartup+5;Time.realtimeSinceStartup<deadline&&Mathf.Abs(doseRoll)<=1.5f;){yield return null;doseRoll=Roll(dose);}
+                Assert.That(Mathf.Abs(doseRoll),Is.GreaterThan(1.5f),"four Tongue Stamps on Night 1 tilt the camera by degrees");
+                Assert.That(doseRoll,Is.EqualTo(FestivalTrip.For(state,me.Id,false,Time.unscaledTime).Roll).Within(1e-3f),"by the dose's own roll on the unscaled clock");
+                int composed=0,clamped=0;
+                for(int step=0;step<1500;step++)
+                {
+                    state.SimulationSeconds=step*.01;
+                    float shop=Roll(stamp,guys),both=Roll(stamp,guys,dose);
+                    Assert.That(Mathf.Abs(both),Is.LessThanOrEqualTo(3.5f+1e-4f),"the clamp holds at "+state.SimulationSeconds+" s");
+                    if(Mathf.Abs(shop)>=3.5f-1e-3f)continue;
+                    composed++;if(Mathf.Abs(shop+doseRoll)>3.6f)clamped++;
+                    Assert.That(both,Is.EqualTo(Mathf.Clamp(shop+doseRoll,-3.5f,3.5f)).Within(1e-3f),"the shop's "+shop+" and the dose's "+doseRoll+" degrees add up at "+state.SimulationSeconds+" s");
+                }
+                Assert.That(composed,Is.GreaterThan(1000),"setup: the shop's own roll stays inside the clamp most of the time");
+                Assert.That(clamped,Is.GreaterThan(0),"stacked, they reach past 3.5 degrees and the clamp holds them there");
+
+                data.ReducedMotion=true;
+                foreach(double at in new[]{.3,1.7,4.1})
+                {
+                    state.SimulationSeconds=at;
+                    Assert.That(Roll(stamp,guys,dose),Is.EqualTo(FestivalTrip.For(state,me.Id,true,Time.unscaledTime).Roll).Within(1e-3f),"reduced motion: only the dose's quarter tilt, at "+at+" s");
+                    Assert.That(Roll(stamp,guys,dose),Is.EqualTo(doseRoll*FestivalTrip.ReducedMotionShare).Within(1e-3f),"a quarter of the full tilt");
+                }
+                data.ReducedMotion=false;data.CameraShake=false;
+                foreach(double at in new[]{.3,1.7,4.1}){state.SimulationSeconds=at;Assert.That(Roll(stamp,guys,dose),Is.EqualTo(0).Within(1e-4f),"camera shake off: no tilt at all, at "+at+" s");}
+                data.CameraShake=true;
+                Assert.That(Roll(),Is.EqualTo(0).Within(1e-4f),"sober: no tilt");
+                me.Life="Spirit";Assert.That(Roll(dose),Is.EqualTo(0).Within(1e-4f),"a spirit: no tilt");me.Life="Alive";
+                state.Phase="Shopping";Assert.That(Roll(dose),Is.EqualTo(0).Within(1e-4f),"at camp: no tilt");
+            }
+            finally{session.Leave();Object.Destroy(host);}
             yield return null;
         }
     }

@@ -13,11 +13,11 @@ namespace Festival.Presentation
     /// only and stronger with every dose. Substances also twist rhythm travel and, for Tongue Stamps, Fun Guys and Couch Lock, the
     /// host's walking; visions and other rules depend on the dose alone. Look and For are pure, and their values
     /// reach the screen through the single writers: FestivalHud.ApplyEffects adds Fov to the view's field of view,
-    /// FestivalSession.UpdateCamera trails the mouse by Lag (Follow), and FestivalNightLighting adds Saturation and Brightness to the
-    /// colour grade. This component draws the rest: its own overlay canvas under the HUD (tint, haze, vignette, letterbox), pooled
-    /// colour trails and glows around other people, and a low-pass on the view's listener. GAS-1: a Giggle Balloon's gas at camp (Gas)
-    /// goes the same way, and adds a tremolo and (GAS-5) a reverb: FestivalTrip is the one writer of AudioListener.volume and of the
-    /// listener's filters.</summary>
+    /// FestivalSession.UpdateCamera tilts the view by Roll and trails the mouse by Lag (Follow), and FestivalNightLighting adds
+    /// Saturation and Brightness to the colour grade. This component draws the rest: its own overlay canvas under the HUD (tint,
+    /// haze, vignette, letterbox), pooled colour trails and glows around other people, and a low-pass on the view's listener.
+    /// GAS-1: a Giggle Balloon's gas at camp (Gas) goes the same way, and adds a tremolo and (GAS-5) a reverb: FestivalTrip is the
+    /// one writer of AudioListener.volume and of the listener's filters.</summary>
     public sealed class FestivalTrip : MonoBehaviour
     {
         /// <summary>One moment of a trip. Zero everywhere is a sober view.</summary>
@@ -28,8 +28,8 @@ namespace Festival.Presentation
             public float Haze;
             // How dark the edges close in (0-1), and each letterbox bar's share of the screen's height.
             public float Vignette,Letterbox;
-            // Degrees added to the field of view right now, and the seconds the camera trails the mouse by.
-            public float Fov,Lag;
+            // Degrees added to the field of view and to the view's roll right now, and the seconds the camera trails the mouse by.
+            public float Fov,Roll,Lag;
             // Added to the colour grade's saturation and post exposure.
             public float Saturation,Brightness;
             // How strongly people leave colour trails and glow (0-1), and how muffled the sound is (0-1).
@@ -38,7 +38,7 @@ namespace Festival.Presentation
             public float Tremolo,Reverb;
         }
 
-        /// <summary>Reduced motion keeps every colour but cuts camera motion, the swell and the lag, to this share.</summary>
+        /// <summary>Reduced motion keeps every colour but cuts camera motion, the swell, the roll and the lag, to this share.</summary>
         public const float ReducedMotionShare=.25f;
         /// <summary>LIGHT-1 took a level-long murk off the neon night, so at night a substance's tint and haze stay this faint.</summary>
         public const float NightTint=.03f;
@@ -51,10 +51,12 @@ namespace Festival.Presentation
             if(s<=0)return look;
             switch(substance)
             {
-                case "lsd": // Tongue Stamps: a slowly cycling rainbow tint, and colour trails behind moving people.
-                    var hue=Color.HSVToRGB(Mathf.Repeat(time*.05f,1),.75f,1);look.Tint=new Color(hue.r,hue.g,hue.b,.07f*s);look.Trails=s;break;
-                case "mushrooms": // Fun Guys: the world breathes, a slow swell of the field of view under a faint violet.
-                    look.Fov=Mathf.Sin(time*.8f)*4*s*motion;look.Tint=new Color(.6f,.45f,1,.035f*s);break;
+                case "lsd": // Tongue Stamps: a slowly cycling rainbow tint, colour trails behind moving people, a wobble and richer colour.
+                    var hue=Color.HSVToRGB(Mathf.Repeat(time*.05f,1),.75f,1);look.Tint=new Color(hue.r,hue.g,hue.b,.07f*s);look.Trails=s;
+                    look.Roll=Sway(substance,time)*s*motion;look.Saturation=DoseSaturation*s;break;
+                case "mushrooms": // Fun Guys: the world breathes (the field of view swells) and sways under a faint violet, in richer colour.
+                    look.Fov=Mathf.Sin(time*.8f)*4*s*motion;look.Tint=new Color(.6f,.45f,1,.035f*s);
+                    look.Roll=Sway(substance,time)*s*motion;look.Saturation=DoseSaturation*s;break;
                 case "ecstasy": // Rolly Pollies: warm, bright, saturated colours, and a soft glow around other people.
                     look.Tint=new Color(1,.6f,.35f,.05f*s);look.Saturation=30*s;look.Brightness=.15f*s;look.Glow=s;break;
                 case "ketamine": // Pony Dust: tunnel vision, a camera that lags behind the mouse, and muffled sound.
@@ -64,6 +66,13 @@ namespace Festival.Presentation
             }
             return look;
         }
+
+        // Tongue Stamps' and Fun Guys' grade saturation at full strength: below Rolly Pollies' 30, with no brightness of their own.
+        private const float DoseSaturation=20;
+
+        /// <summary>The view's roll in degrees at time t that a shop-bought Tongue Stamp (a wobble) or Fun Guy (a sway) gives at full
+        /// strength; a dose of either rolls by this times its strength. Anything else rolls nothing.</summary>
+        public static float Sway(string id,float time)=>id=="lsd"?Mathf.Sin(time*2.1f)*2.2f:id=="mushrooms"?Mathf.Sin(time*1.3f+1.1f)*1.5f:0;
 
         // At full strength: the vignette's floor and its pulse on top, the field-of-view kick in degrees, the colour drained from the
         // grade, the haze, the low-pass's floor (it pulses up to 1) and how far the tremolo dips the volume. GAS-5 set the vignette,
