@@ -5,6 +5,9 @@ namespace Festival.Presentation
     /// <summary>Authored grip coordinates in the imported prop's metre space.</summary>
     public static class FestivalHeldItem
     {
+        const string GripName="Held grip ";
+        // The confetti barrel's open end: its axis is the model's +y.
+        static readonly Vector3 ConfettiMuzzle=new Vector3(0,.685f,0);
         public static GameObject Create(Transform parent,string item,Vector3 palm,bool firstPerson)
         {
             string resource=Festival.Network.FestivalSession.DropModel(item);
@@ -22,7 +25,7 @@ namespace Festival.Presentation
                 case "wristband":grip=new Vector3(.30f,.18f,0);size=.30f;break;
                 default:return null;
             }
-            var root=new GameObject("Held grip "+item);root.transform.SetParent(parent,false);
+            var root=new GameObject(GripName+item);root.transform.SetParent(parent,false);
             root.layer=parent.gameObject.layer;
             var inverse=Unscale(parent);
             root.transform.localScale=inverse;
@@ -38,6 +41,18 @@ namespace Festival.Presentation
                 "item="+item+" view="+(firstPerson?"first_person":"world")+" scale="+size+" model_grip="+grip);
 #endif
             return root;
+        }
+        /// <summary>Where a confetti cannon shown under holder fires from: the middle of its barrel's open end, aimed along the barrel
+        /// (Pose.up). False when none shows there.</summary>
+        public static bool Muzzle(Transform holder,out Pose muzzle)
+        {
+            if(holder!=null)
+                foreach(var grip in holder.GetComponentsInChildren<Transform>())
+                    if(grip.name==GripName+"confetti"&&grip.childCount>0)
+                    {
+                        var prop=grip.GetChild(0);muzzle=new Pose(prop.TransformPoint(ConfettiMuzzle),prop.rotation);return true;
+                    }
+            muzzle=default;return false;
         }
         /// <summary>The local scale that cancels what a hand passes on (the imported bones' scale and the body's size), so a prop
         /// under it keeps its authored metre size. POLO-5: all but a Ferris wheel rider's RideScale, so a prop made mid-ride goes

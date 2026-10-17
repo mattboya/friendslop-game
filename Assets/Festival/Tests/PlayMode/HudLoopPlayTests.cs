@@ -1991,5 +1991,171 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"What 1-3 and the wheel switch:\n"+string.Join("\n",failures));
         }
 
+        static ParticleSystem ConfettiPaper(FestivalConfettiBurst burst)=>burst.transform.Find(FestivalConfettiBurst.PaperName).GetComponent<ParticleSystem>();
+        static ParticleSystem.Particle[] PaperPieces(FestivalConfettiBurst burst){var paper=ConfettiPaper(burst);var pieces=new ParticleSystem.Particle[paper.particleCount];paper.GetParticles(pieces);return pieces;}
+        static List<AudioSource> ConfettiPops(FestivalConfettiBurst burst,bool playing)
+        {
+            var pops=new List<AudioSource>();
+            foreach(Transform child in burst.transform)if(child.name==FestivalConfettiBurst.PopName&&(!playing||child.GetComponent<AudioSource>().isPlaying))pops.Add(child.GetComponent<AudioSource>());
+            return pops;
+        }
+
+        // Q fires the confetti cannon in your hand. At camp it is a free party trick; at the festival your last cannon goes, but
+        // its burst still leaves from the muzzle you saw, in first person though your own body is hidden. A friend sees each burst
+        // once, from your cannon. The paper sprays up, drifts down and is gone in about 2 s; the pop follows the effects volume.
+        [UnityTest]public IEnumerator QFiresTheConfettiCannonOnceFromTheMuzzleYouAndAFriendSee()
+        {
+            UseAVirtualKeyboard("Confetti keyboard");
+            var world=new GameObject("Confetti world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Confetti HUD");var host=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();
+            var friendObject=new GameObject("Confetti friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var me=sim.Player(host.LocalPlayerId);var pal=sim.Player(friend.LocalPlayerId);
+                var mine=root.GetComponent<FestivalConfettiBurst>();var theirs=friendObject.GetComponent<FestivalConfettiBurst>();
+                Assert.That(mine!=null&&theirs!=null,Is.True,"every session shows confetti");
+                IEnumerator Shown(FestivalConfettiBurst burst,int bursts){for(float until=Time.realtimeSinceStartup+3;burst.Played<bursts&&Time.realtimeSinceStartup<until;)yield return null;}
+                float Farthest(Vector3 from){float far=0;foreach(var piece in PaperPieces(mine))far=Mathf.Max(far,Vector3.Distance(piece.position,from));return far;}
+                float MeanHeight(){float sum=0;var pieces=PaperPieces(mine);foreach(var piece in pieces)sum+=piece.position.y;return sum/Mathf.Max(1,pieces.Length);}
+                float MeanRise(){float sum=0;var pieces=PaperPieces(mine);foreach(var piece in pieces)sum+=piece.totalVelocity.y;return sum/Mathf.Max(1,pieces.Length);}
+
+                // Camp: Q fires free.
+                host.Profile.Data.ThirdPerson=false;host.MenuOpen=false;
+                me.X=0;me.Z=14;me.Yaw=0;pal.X=0;pal.Z=17;pal.Yaw=180;
+                me.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.ConfettiItem,Count=1});me.EquippedItemId=FestivalSimulation.ConfettiItem;
+                yield return new WaitForSeconds(.8f);
+                Assert.That(FestivalHeldItem.Muzzle(host.ViewCamera.transform,out var campMuzzle),Is.True,"setup: the cannon is in your first-person hand");
+                yield return Tap(Key.Q);yield return Shown(mine,1);
+                Assert.That(host.Message,Is.EqualTo("Confetti! A camp party trick: your cannon stays loaded"),"Q at camp fires the cannon");
+                Assert.That(mine.Played,Is.EqualTo(1),"you see the burst");
+                Assert.That(me.Inventory.Find(i=>i.ItemId==FestivalSimulation.ConfettiItem)?.Count,Is.EqualTo(1),"and it costs nothing");
+                var paper=ConfettiPaper(mine);
+                Assert.That(paper.particleCount,Is.EqualTo(FestivalConfettiBurst.Pieces),"a burst of paper");
+                Assert.That(paper.gameObject.layer!=31&&(host.ViewCamera.cullingMask&(1<<paper.gameObject.layer))!=0,Is.True,"on a layer your first-person camera draws, though it hides your body");
+                Assert.That(Farthest(campMuzzle.position),Is.LessThan(.6f),"leaving your cannon's muzzle");
+                yield return Shown(theirs,1);
+                Assert.That(theirs.Played,Is.EqualTo(1),"your friend sees it too");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(MeanHeight(),Is.GreaterThan(campMuzzle.position.y+.3f),"spraying up");
+                yield return new WaitForSeconds(1.1f);
+                Assert.That(paper.particleCount,Is.EqualTo(FestivalConfettiBurst.Pieces),"for about 2 s");
+                Assert.That(MeanRise(),Is.LessThan(0),"drifting down");
+                yield return new WaitForSeconds(1.1f);
+                Assert.That(paper.particleCount,Is.Zero,"then gone");
+                Assert.That((mine.Played,theirs.Played),Is.EqualTo((1,1)),"each sees the burst once");
+
+                // The festival: Q spends your last cannon, and its burst still leaves from it.
+                pal.X=0;pal.Z=19;friend.Command("Ready");
+                for(float until=Time.realtimeSinceStartup+5;!pal.Ready&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(pal.Ready,Is.True,"setup: the friend is ready");yield return StartLevel(host,friend.LocalPlayerId);
+                sim.State.Npcs.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;me.X=0;me.Z=0;me.Yaw=0;pal.X=0;pal.Z=3;pal.Yaw=180;host.MenuOpen=false;
+                me.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");me.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.ConfettiItem,Count=1});me.EquippedItemId=FestivalSimulation.ConfettiItem;
+                host.Profile.Data.EffectsVolume=.5f;
+                yield return new WaitForSeconds(.8f);
+                Assert.That(FestivalHeldItem.Muzzle(host.ViewCamera.transform,out var muzzle),Is.True,"setup: your last cannon is in your first-person hand");
+                Assert.That(FestivalHeldItem.Muzzle(friend.WorldCharacter(me.Id).transform,out var friendsMuzzle),Is.True,"setup: your friend sees it in your body's hand");
+                yield return Tap(Key.Q);yield return Shown(mine,2);
+                Assert.That(host.Message,Is.EqualTo("Confetti! Nobody close enough to fool"),"Q at the festival fires the cannon");
+                Assert.That(mine.Played,Is.EqualTo(2),"you see the burst");
+                Assert.That(me.Inventory.Exists(i=>i.ItemId==FestivalSimulation.ConfettiItem)||me.EquippedItemId==FestivalSimulation.ConfettiItem,Is.False,"setup: it spent your last cannon");
+                Assert.That(FestivalHeldItem.Muzzle(host.ViewCamera.transform,out _),Is.False,"which has left your hand");
+                var pops=ConfettiPops(mine,true);
+                Assert.That(pops.Count,Is.EqualTo(1),"one pop");
+                Assert.That(Vector3.Distance(pops[0].transform.position,muzzle.position),Is.LessThan(.03f),"from the muzzle you saw: "+pops[0].transform.position+" vs "+muzzle.position);
+                Assert.That(Farthest(muzzle.position),Is.LessThan(.6f),"with its paper");
+                Assert.That((pops[0].spatialBlend,pops[0].dopplerLevel,pops[0].rolloffMode,pops[0].maxDistance),Is.EqualTo((1f,0f,AudioRolloffMode.Linear,FestivalConfettiBurst.Range)),"in 3-D, with no Doppler, silent beyond 15 m");
+                Assert.That(pops[0].volume,Is.EqualTo(.5f).Within(1e-5f),"at your effects volume");
+                host.Profile.Data.EffectsVolume=.2f;yield return null;
+                Assert.That(pops[0].isPlaying,Is.True,"setup: still popping");
+                Assert.That(pops[0].volume,Is.EqualTo(.2f).Within(1e-5f),"following the slider as it plays");
+                yield return Shown(theirs,2);
+                Assert.That(theirs.Played,Is.EqualTo(2),"your friend sees it too");
+                var heard=ConfettiPops(theirs,true);
+                Assert.That(heard.Count,Is.EqualTo(1),"and hears one pop");
+                Assert.That(Vector3.Distance(heard[0].transform.position,friendsMuzzle.position),Is.LessThan(.15f),"from the cannon they saw in your hand: "+heard[0].transform.position+" vs "+friendsMuzzle.position);
+                yield return new WaitForSeconds(1);
+                Assert.That((mine.Played,theirs.Played),Is.EqualTo((2,2)),"each burst shows once, never again");
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        // A friend inside a tent sees no burst outside, and coming back out replays none. Leaving clears the paper in the air
+        // and lets every pop go, and a friend who joins again sees no burst from before. A burst can go off anywhere too (a camp gag's),
+        // spending nothing, its pop silent beyond 15 m. A destroyed session lets its pop, paper material and paper piece go.
+        [UnityTest]public IEnumerator HiddenOrReturningFriendsSeeNoOldBurstAndLeavingClearsIt()
+        {
+            var world=new GameObject("Confetti tent world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Confetti tent host");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("Confetti tent friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            bool visible=DevelopmentDiagnostics.Visible;var traced=new List<string>();
+            void Trace(string text,string stack,LogType type){if(text.StartsWith("[Festival.Confetti]"))traced.Add(text);}
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var me=sim.Player(host.LocalPlayerId);var pal=sim.Player(friend.LocalPlayerId);
+                var theirs=friendObject.GetComponent<FestivalConfettiBurst>();
+                bool Fire()=>sim.Execute(me.Id,new GameCommand{Id=System.Guid.NewGuid().ToString("N"),Kind="Use",ItemId=FestivalSimulation.ConfettiItem}).Accepted;
+                IEnumerator Shown(int bursts){for(float until=Time.realtimeSinceStartup+3;theirs.Played<bursts&&Time.realtimeSinceStartup<until;)yield return null;}
+                me.X=0;me.Z=14;pal.X=0;pal.Z=17;me.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.ConfettiItem,Count=1});
+                yield return new WaitForSeconds(.5f);
+                Assert.That(Fire(),Is.True,"setup: a burst at camp");yield return Shown(1);
+                Assert.That(theirs.Played,Is.EqualTo(1),"setup: your friend sees it");
+
+                var tent=CampFeatures.Find("tent_1");pal.X=tent.X;pal.Z=tent.Z;friend.Command("EnterCamp",tent.Id);
+                for(float until=Time.realtimeSinceStartup+3;pal.CampVisitId!=tent.Id&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(pal.CampVisitId,Is.EqualTo(tent.Id),"setup: your friend is in a tent: "+friend.Message);
+                Assert.That(Fire(),Is.True,"setup: a burst outside");yield return new WaitForSeconds(.6f);
+                Assert.That(theirs.Played,Is.EqualTo(1),"a friend in a tent sees no burst outside");
+                friend.Command("ExitCamp");
+                for(float until=Time.realtimeSinceStartup+3;pal.CampVisitId!=""&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(pal.CampVisitId,Is.Empty,"setup: your friend comes back out: "+friend.Message);yield return new WaitForSeconds(.6f);
+                Assert.That(theirs.Played,Is.EqualTo(1),"nor once they come back out");
+
+                pal.X=0;pal.Z=17;yield return new WaitForSeconds(.5f);
+                Assert.That(Fire(),Is.True,"setup: a burst beside your friend");yield return Shown(2);
+                Assert.That(theirs.Played,Is.EqualTo(2),"setup: your friend sees it");
+                Assert.That(ConfettiPaper(theirs).particleCount,Is.GreaterThan(0),"setup: paper in the air");
+                Assert.That(ConfettiPops(theirs,true).Count,Is.EqualTo(1),"setup: a pop playing");
+                friend.Leave();yield return null;yield return null;
+                Assert.That(ConfettiPaper(theirs).particleCount,Is.Zero,"leaving clears the paper in the air");
+                Assert.That(ConfettiPops(theirs,false),Is.Empty,"and lets every pop go");
+                Assert.That(Fire(),Is.True,"setup: a burst while your friend is away");
+                friend.Join("Friend","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;friend.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,"setup: your friend joins again: "+friend.Message);yield return new WaitForSeconds(1);
+                Assert.That(theirs.Played,Is.EqualTo(2),"a friend who joins again sees no burst from before");
+
+                // Opted in, each burst and the clean-up say what happened, with no player named.
+                DevelopmentDiagnostics.Visible=true;Application.logMessageReceived+=Trace;
+                int bursts=me.VisualConfettiBurstSequence;var spot=friend.EyePosition+new Vector3(2,0,2);
+                theirs.Burst(spot,Vector3.up);
+                Assert.That(theirs.Played,Is.EqualTo(3),"any spot can burst");
+                var gag=ConfettiPops(theirs,true);
+                Assert.That(gag.Count==1&&Vector3.Distance(gag[0].transform.position,spot)<.001f,Is.True,"with its pop right there");
+                Assert.That(ConfettiPaper(theirs).particleCount,Is.EqualTo(FestivalConfettiBurst.Pieces),"and its paper");
+                theirs.Burst(friend.EyePosition+Vector3.right*(FestivalConfettiBurst.Range+5),Vector3.up);
+                Assert.That((theirs.Played,ConfettiPops(theirs,true).Count),Is.EqualTo((4,1)),"a burst beyond 15 m shows, but its pop is silent");
+                Assert.That((me.VisualConfettiBurstSequence,me.Inventory.Find(i=>i.ItemId==FestivalSimulation.ConfettiItem)?.Count),Is.EqualTo((bursts,(int?)1)),"a gag's burst spends no cannon and counts none");
+
+                var clip=gag[0].clip;var look=ConfettiPaper(theirs).GetComponent<ParticleSystemRenderer>();var material=look.sharedMaterial;var piece=look.mesh;
+                Assert.That(clip!=null&&material!=null&&piece!=null,Is.True,"setup: the pop, paper material and paper piece");
+                Object.Destroy(friendObject);friendObject=null;yield return null;
+                Assert.That(clip==null&&material==null&&piece==null,Is.True,"a destroyed session lets its pop, paper material and paper piece go");
+                Assert.That(traced,Is.EqualTo(new[]{"[Festival.Confetti] action=burst from=spot pop=audible paper=48","[Festival.Confetti] action=burst from=spot pop=out_of_earshot paper=96",
+                    "[Festival.Confetti] action=cleanup paper=96 pops=1"}),"opted in, each burst and the clean-up are logged once");
+            }
+            finally{Application.logMessageReceived-=Trace;DevelopmentDiagnostics.Visible=visible;if(friend!=null)friend.Leave();host.Leave();if(friendObject!=null)Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+        }
     }
 }

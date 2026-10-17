@@ -150,6 +150,9 @@ namespace Festival.Network
         private string campEggRound="",campDiscoveryError="";
         /// <summary>A drawn player's new Giggle Balloon takes: their id, and how many came since the last report (FollowPlayerEvents).</summary>
         public event Action<string,int> GiggleBalloonTaken;
+        /// <summary>A drawn player's new confetti bursts: their id, and how many came since the last report (FollowPlayerEvents).</summary>
+        public event Action<string,int> ConfettiFired;
+        const string ConfettiBursts="ConfettiBurst";
         // Public per-player event counts seen this round, by kind and player id. Each follow fills the spare and swaps it in, so a
         // player missing from a view drops out and is baselined afresh when they come back.
         private Dictionary<(string,string),int> playerEvents=new Dictionary<(string,string),int>(),spentPlayerEvents=new Dictionary<(string,string),int>();
@@ -225,6 +228,7 @@ namespace Festival.Network
         private FestivalWorld world;
         public FestivalSettings Settings {get;private set;}
         private FestivalHands firstPersonHands;
+        private FestivalConfettiBurst confetti;
         private bool closing;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private DevelopmentSmokeProfileScope smokeProfiles;
@@ -272,6 +276,7 @@ namespace Festival.Network
                 gameObject.AddComponent<FestivalCreatures>();
                 gameObject.AddComponent<FestivalTrip>();
                 gameObject.AddComponent<FestivalInhale>();
+                confetti=gameObject.AddComponent<FestivalConfettiBurst>();
                 gameObject.AddComponent<FestivalSpinner>();
                 gameObject.AddComponent<FestivalMinigameView>();
             }
@@ -631,6 +636,9 @@ namespace Festival.Network
             }
             if(player.HasCosmetic)Profile.AwardFirstRescue();
             SpeechDeliveries.Follow(State,ConnectionGeneration,EstimatedWorldSeconds);
+            // Before UpdateActors refreshes gear: a burst that spends the last cannon still leaves from its muzzle.
+            foreach(var p in State.Players)
+                if(Shows(player,p)&&playerEvents.TryGetValue((ConfettiBursts,p.Id),out int shown)&&p.VisualConfettiBurstSequence>shown)confetti.Aim(p.Id);
             UpdateActors();UpdateCamera(player);FollowPlayerEvents(State,LocalPlayerId);
         }
         public void ApplyLook(Vector2 delta)
@@ -684,12 +692,19 @@ namespace Festival.Network
             {
                 int taken=NewPlayerEvents(seen,"GiggleTake",p,p.VisualGiggleTakeSequence,Shows(local,p));
                 if(taken>0)GiggleBalloonTaken?.Invoke(p.Id,taken);
+                int bursts=NewPlayerEvents(seen,ConfettiBursts,p,p.VisualConfettiBurstSequence,Shows(local,p));
+                if(bursts>0)ConfettiFired?.Invoke(p.Id,bursts);
             }
         }
         int NewPlayerEvents(Dictionary<(string,string),int> seen,string kind,PlayerState p,int count,bool shown)
         {
             bool known=seen.TryGetValue((kind,p.Id),out int last);playerEvents[(kind,p.Id)]=known?Math.Max(last,count):count;
-            return known&&shown&&count>last?count-last:0;
+            int fresh=known&&shown&&count>last?count-last:0;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Opt-in: counts passed over unreported, as a first sight's baseline or for a player this view does not draw.
+            if(DevelopmentDiagnostics.Visible&&fresh==0&&(known?count>last:count>0))DevelopmentDiagnostics.GraphicsEvent("PlayerEvents",known?"suppress":"baseline","kind="+kind+" count="+count);
+#endif
+            return fresh;
         }
         /// <summary>Whether local's screen draws p: connected, on local's side of death, and outdoors with local or in local's camp room.</summary>
         static bool Shows(PlayerState local,PlayerState p)=>p.Connected&&(local.Life=="Spirit")==(p.Life=="Spirit")&&p.CampVisitId==local.CampVisitId;
