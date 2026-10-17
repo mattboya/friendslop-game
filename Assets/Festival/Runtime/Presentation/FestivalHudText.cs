@@ -108,14 +108,17 @@ namespace Festival.Presentation
         /// <summary>POLO-2: whether p's HUD offers Cancel for what they are doing. Nothing cancels a turn on the Ferris wheel (the
         /// host refuses it), so nothing offers to; an Ember Playa art car rider still hops off.</summary>
         public static bool CanCancel(RoundState s,PlayerState p)=>p.InteractionId!=""&&!FestivalSimulation.OnWheel(s,p.Id);
+        /// <summary>The cancel E runs. PLAYA-5: on a plain art car ride it also says F plays a set on the car's deck while that is free.</summary>
+        public static string CancelAction(RoundState s,PlayerState p)=>"Cancel current action"+(FestivalSimulation.CanPlayDeckSet(s,p)?Dot+"F PLAY A DECK SET":"");
         /// <summary>DANCE-12: whether p is mid four-lane challenge (FestivalInput.IsRhythm: a dance, a check dance, the poi circle, the
         /// deck, a Drum Circle part, or a talk's trust dance). E sits between the W and D lanes, so then E runs nothing and a tap of G
         /// drops nothing: only holding G for HoldToStopSeconds stops it, as HoldToStopFor says. Anything else keeps its cancel on E, and
         /// lying down gets up first. DIALOG-3: a talk is replied to on 1-3, and the effective Menu binding walks out of it.</summary>
         public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythm(i);return false;}
         public const string HoldToStop="HOLD G TO STOP DANCING";
-        /// <summary>The line under the lanes: holding G withdraws a Drum Circle part, and stops every dance.</summary>
-        public static string HoldToStopFor(string kind)=>kind==FestivalSimulation.DrumPartKind?"HOLD G TO STOP DRUMMING":HoldToStop;
+        /// <summary>The line under the lanes: holding G withdraws a Drum Circle part, ends a deck set by hopping off the art car (PLAYA-5),
+        /// and stops every dance.</summary>
+        public static string HoldToStopFor(string kind)=>kind==FestivalSimulation.DrumPartKind?"HOLD G TO STOP DRUMMING":kind==FestivalSimulation.DeckSetKind?"HOLD G TO HOP OFF":HoldToStop;
         public const float HoldToStopSeconds=1;
         /// <summary>K2 (batch call 9: "you can walk away (E-hold, or moving off)"): whether p is mid talk, replying on 1-3 (its trust
         /// dance is on the lanes: StopsByHold). A talk holds you still and walking out of it (Cancel) puts every watcher on edge, so a
@@ -417,8 +420,9 @@ namespace Festival.Presentation
             +"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+Dot+Condition(s,p);
 
         /// <summary>The rhythm lane's title, naming a check dance as the check it is. DIALOG-3: a talk is on the lanes only for the dance
-        /// a wary festivalgoer asks for first, so it reads as that. MINI-2: a Drum Circle part is the player's own.</summary>
-        public static string RhythmTitle(string kind)=>kind==FestivalSimulation.DrumPartKind?"DRUM CIRCLE  /  YOUR PART"
+        /// a wary festivalgoer asks for first, so it reads as that. MINI-2: a Drum Circle part is the player's own. PLAYA-5: an art
+        /// car's deck set reads as a set.</summary>
+        public static string RhythmTitle(string kind)=>kind==FestivalSimulation.DrumPartKind?"DRUM CIRCLE  /  YOUR PART":kind==FestivalSimulation.DeckSetKind?"DECK SET  /  FOUR-LANE"
             :(kind=="ConfirmDance"?"CHECK DANCE":FestivalSimulation.Talks(kind)?"TRUST DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
 
         /// <summary>DANCE-2: every four-lane challenge (FestivalInput.IsRhythm, a talk's trust dance included) shows the live dancer
@@ -427,9 +431,9 @@ namespace Festival.Presentation
         public static bool ShowsDancer(InteractionState i,bool menuOpen)=>FestivalInput.IsRhythm(i)&&i.Kind!=FestivalSimulation.DrumPartKind&&!menuOpen;
         /// <summary>The live dancer's heading. A check dance reads as a dance. DIALOG-3: a talk shows the dancer only in its trust dance,
         /// whatever the talk, so it says what that dance is for.</summary>
-        public static string DancerHeading(string kind)=>FestivalSimulation.Talks(kind)?"YOU  /  DANCING FOR TRUST":kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK",_=>"YOU  /  ON THE FLOOR"};
+        public static string DancerHeading(string kind)=>FestivalSimulation.Talks(kind)?"YOU  /  DANCING FOR TRUST":kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK",FestivalSimulation.DeckSetKind=>"YOU  /  ON THE ART CAR",_=>"YOU  /  ON THE FLOOR"};
         /// <summary>The caption under the live dancer, shown while nobody is saying a line.</summary>
-        public static string DancerCaption(string kind)=>FestivalSimulation.Talks(kind)?"YOUR LOOK • THEIR TRUST":kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX",_=>"YOUR LOOK • YOUR MOVES"};
+        public static string DancerCaption(string kind)=>FestivalSimulation.Talks(kind)?"YOUR LOOK • THEIR TRUST":kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX",FestivalSimulation.DeckSetKind=>"YOUR LOOK • YOUR SET",_=>"YOUR LOOK • YOUR MOVES"};
 
         /// <summary>What p can do beside festivalgoer n, as the HUD lists them; E runs the first. ECON-3 (Matt: "there is no button to
         /// actually sell to people"): by day that is p's next step to a sale, the offer while holding stock and otherwise a buy from

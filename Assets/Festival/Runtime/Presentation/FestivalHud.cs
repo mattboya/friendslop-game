@@ -169,6 +169,8 @@ namespace Festival.Presentation
         // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice). TRIP-8: whether the
         // cloud's stash they found has had its own (FestivalHudText.CloudStashNotice).
         private bool stopNoticed,stashNoticed;
+        // PLAYA-5: the round and receipt of the last deck set tips shown in the session notice.
+        private string deckTipNoticed="";
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
         // it, and the results banner. Each warning, a round's SundownStage, stays SundownNoticeSeconds on screen; its seconds run only
         // while it shows, so a dance, the map or the menu hiding it never uses them up.
@@ -814,6 +816,9 @@ namespace Festival.Presentation
             // TRIP-8: whoever walks onto the cloud's stash is told so the same way, once.
             if(state.CloudStashFinderId!=player.Id)stashNoticed=false;
             else if(!stashNoticed&&uncovered){stashNoticed=true;session.SetMessage(FestivalHudText.CloudStashNotice);lastNotice="";}
+            // PLAYA-5: what the crowd tipped for your deck set, once. Only your own view carries the receipt.
+            string tips=FestivalSimulation.DeckTipSpeech(state,player);
+            if(tips!=""&&uncovered&&deckTipNoticed!=state.RoundId+"/"+player.DeckTipDeliveryId){deckTipNoticed=state.RoundId+"/"+player.DeckTipDeliveryId;session.SetMessage(tips);lastNotice="";}
             UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
             ApplyEffects(player);
@@ -1276,8 +1281,10 @@ namespace Festival.Presentation
         // F while playing: the tripper checks a vision by chatting when they have one to check within reach, and anyone beside the
         // VIP guard talks their way past the rope (FestivalHudText.CheckTarget); otherwise F talks with the festivalgoer beside you
         // (DIALOG-3: a talk on the chat window, the one way to chat). Beside someone busy it does nothing, as the HUD says (VISION-3).
+        // PLAYA-5: on a plain art car ride, F plays a set on the car's deck; otherwise F does nothing while you're busy.
         private void ChatKey(RoundState state,PlayerState player)
         {
+            if(FestivalSimulation.CanPlayDeckSet(state,player)){session.Command(FestivalSimulation.DeckSetKind);return;}
             if(state.Phase!="Playing"||player.Life!="Alive"||player.InteractionId!="")return;
             var check=FestivalHudText.CheckTarget(state,player);
             if(check!=null){if(!FestivalSimulation.Engaged(state,check))session.Command("ConfirmChat",check.Id);return;}
@@ -1806,7 +1813,15 @@ namespace Festival.Presentation
                 if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
-            if(!lying&&FestivalHudText.CanCancel(state,player))AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":"Cancel current action",FinishCurrentAction,ref y);
+            if(!lying&&FestivalHudText.CanCancel(state,player))
+            {
+                // PLAYA-5: a plain art car ride lists its deck set beside the way off. Both read the view again when chosen, so a list
+                // from just before a set began can neither stop it nor ask for another.
+                bool deck=FestivalSimulation.CanPlayDeckSet(state,player);string listed=player.InteractionId;
+                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player),deck?()=>{if(session.LocalPlayer?.InteractionId==listed)FinishCurrentAction();}:(Action)FinishCurrentAction,ref y);
+                if(deck)foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))
+                    AddAction(label,()=>{if(FestivalSimulation.CanPlayDeckSet(session.State,session.LocalPlayer))session.Command(command.Kind);},ref y);
+            }
             // ESC-2: security stopping you comes next, so E talks to them as the card says (TALK (E)), even with a festivalgoer nearer
             // or the stock you just ditched at your feet. Until the guard has walked into reach (the host's 2.5 m), E says so and does
             // nothing: what E would do instead, a sale or a buy beside a festivalgoer, is a deal in the guard's sight, an arrest.

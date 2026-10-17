@@ -408,8 +408,9 @@ namespace Festival.Presentation
                 ?Mathf.Clamp(yawChange/animationDelta,-240f,240f):0;
             turnRate=Mathf.Lerp(turnRate,measuredTurn,1-Mathf.Exp(-9f*animationDelta));
             // PLAYA-2: an art car carries its rider, so they stand on its deck: neither stepping with it nor planting their feet on
-            // the ground it rolls over. POLO-5: a Ferris wheel rider sits in their gondola as it carries them round.
-            bool seated=Pose==FestivalSimulation.RideWheelKind,riding=seated||Pose==FestivalSimulation.RideCarKind;
+            // the ground it rolls over. PLAYA-5: a deck set dances up there the same way. POLO-5: a Ferris wheel rider sits in their
+            // gondola as it carries them round.
+            bool seated=Pose==FestivalSimulation.RideWheelKind,decking=Pose==FestivalSimulation.DeckSetKind,riding=seated||decking||Pose==FestivalSimulation.RideCarKind;
             float measuredSpeed=hasPrevious&&delta.magnitude<2&&!riding?Mathf.Min(6,delta.magnitude/animationDelta):0;
             float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
@@ -426,7 +427,7 @@ namespace Festival.Presentation
             bool lying=Pose==FestivalSimulation.LieDownKind;
             if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit"&&!lying);
             foreach(var item in bones)targets[item.Key]=rest[item.Key];
-            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose=="Dj"||Pose=="Distracted";
+            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose=="Dj"||Pose=="Distracted"||decking;
             if(Pose=="Downed")
             {
                 Aim("Hips",new Vector3(75,0,walk*4));Aim("Head",new Vector3(-35,0,12));
@@ -731,7 +732,7 @@ namespace Festival.Presentation
             }
             foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
             var hipsBefore=bones.TryGetValue("Hips",out var hipsBone)?hipsBone.localPosition:Vector3.zero;
-            if(dance&&Pose!="Dj")
+            if(dance&&Pose!="Dj"&&!riding)
                 footPlant?.Dance(AnimationSeconds*DanceAngularSpeed(danceStyle)+phase,
                     danceStyle,animationDelta);
             else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!lying&&!fullBodyClip&&!riding,

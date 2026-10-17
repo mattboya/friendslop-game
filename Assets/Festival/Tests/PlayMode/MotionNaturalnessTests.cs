@@ -386,6 +386,34 @@ namespace Festival.Tests
             finally{Object.Destroy(root);Application.targetFrameRate=rate;}
         }
 
+        // PLAYA-5: everyone sees a deck set's rider in the literal "DeckSet" pose. They dance on the car's deck, but the car carries
+        // them, so their legs neither walk with it nor plant on the ground it rolls over: the rolling set's feet move exactly as the same
+        // set's standing still. Actors of one name share their style and phase; a plain rider beside them shows the dance is on.
+        [UnityTest]public IEnumerator ADeckSetDancesOnTheCarWithoutWalkingOrPlantingItsFeet()
+        {
+            var root=new GameObject("Deck set test");int rate=Application.targetFrameRate;Application.targetFrameRate=60;
+            try
+            {
+                var rolling=Walker(root,"Deck set rider");var still=Walker(root,"Deck set rider");var plain=Walker(root,"Deck set rider");
+                still.transform.position=Vector3.right*4;plain.transform.position=Vector3.right*8;
+                rolling.Pose=FestivalSimulation.DeckSetKind;still.Pose=FestivalSimulation.DeckSetKind;plain.Pose=FestivalSimulation.RideCarKind;
+                float feet=0,arms=0,start=Time.time;
+                while(Time.time-start<2.2f)
+                {
+                    var roll=Vector3.forward*(Festivals.ArtCarSpeed*Time.deltaTime);rolling.transform.position+=roll;plain.transform.position+=roll;
+                    yield return null;
+                    if(Time.time-start<.6f)continue;
+                    foreach(var foot in new[]{"FootL","FootR"})
+                        feet=Mathf.Max(feet,Vector3.Distance(rolling.transform.InverseTransformPoint(Bone(rolling,foot).position),still.transform.InverseTransformPoint(Bone(still,foot).position)));
+                    arms=Mathf.Max(arms,Quaternion.Angle(Bone(rolling,"ArmR").localRotation,Bone(plain,"ArmR").localRotation));
+                }
+                Debug.Log($"[Festival.Test] deck set rolling-vs-still feet={feet:F4} arms vs plain rider={arms:F1}deg");
+                Assert.That(feet,Is.LessThan(.01f),"the car carries the set: its feet neither step nor stay planted behind on the ground");
+                Assert.That(arms,Is.GreaterThan(25f),"the rider dances the set rather than standing as a plain rider");
+            }
+            finally{Object.Destroy(root);Application.targetFrameRate=rate;}
+        }
+
         [UnityTest]public IEnumerator DanceStylesHaveDistinctUpperBodies()
         {
             var root=new GameObject("Dance style test");

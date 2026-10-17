@@ -11,9 +11,9 @@ namespace Festival.Presentation
     {
         // DIALOG-3: the kinds always played on the four lanes. A sale, a buy, a chat and a talk with security are talks
         // (FestivalSimulation.Talks), on the chat card; they reach the lanes only for a trust dance (IsRhythm).
-        public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Poi"||kind=="Dj"||kind=="ConfirmDance"||kind==FestivalSimulation.DrumPartKind;
+        public static bool IsRhythmKind(string kind) => kind=="Dance"||kind=="Poi"||kind=="Dj"||kind=="ConfirmDance"||kind==FestivalSimulation.DrumPartKind||kind==FestivalSimulation.DeckSetKind;
         /// <summary>DIALOG-3: whether i plays on the four lanes now: a dance, the poi circle, the deck, a check dance, a Drum Circle
-        /// part, or the dance a wary festivalgoer asks for before a talk (FestivalSimulation.TrustDancing).</summary>
+        /// part, an art car's deck set, or the dance a wary festivalgoer asks for before a talk (FestivalSimulation.TrustDancing).</summary>
         public static bool IsRhythm(InteractionState i) => i!=null&&(IsRhythmKind(i.Kind)||FestivalSimulation.TrustDancing(i));
         /// <summary>DIALOG-3: whether doing this kind holds you still (FestivalSession freezes your move): anything on the lanes, and a
         /// talk, face to face until it ends or you walk out of it with Cancel.</summary>

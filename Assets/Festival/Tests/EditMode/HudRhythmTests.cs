@@ -389,6 +389,7 @@ namespace Festival.Tests
                 {"ConfirmDance",("YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES")},
                 {"Poi",("YOU  /  POI CIRCLE","YOUR POI • YOUR FLOW")},
                 {"Dj",("YOU  /  AT THE DECK","YOUR LOOK • YOUR MIX")},
+                {FestivalSimulation.DeckSetKind,("YOU  /  ON THE ART CAR","YOUR LOOK • YOUR SET")},
                 {"Sale",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
                 {"Buy",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
                 {"Conversation",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
@@ -401,6 +402,9 @@ namespace Festival.Tests
                 Assert.That(FestivalHudText.DancerCaption(pair.Key),Is.EqualTo(pair.Value.caption),pair.Key+"'s caption");
             }
             foreach(var kind in TalkKinds)Assert.That(FestivalHudText.RhythmTitle(kind),Is.EqualTo("TRUST DANCE  /  FOUR-LANE"),"a "+kind+"'s lane title");
+            // PLAYA-5: holding G ends a deck set by hopping off the car.
+            Assert.That(FestivalHudText.RhythmTitle(FestivalSimulation.DeckSetKind),Is.EqualTo("DECK SET  /  FOUR-LANE"),"the deck set's lane title");
+            Assert.That(FestivalHudText.HoldToStopFor(FestivalSimulation.DeckSetKind),Is.EqualTo("HOLD G TO HOP OFF"),"the deck set's stop line");
         }
 
         // DANCE-12: E sits between the W and D lanes, so a stray E must never end a dance. Every four-lane challenge, and only those,
@@ -439,7 +443,7 @@ namespace Festival.Tests
             return doing;
         }
 
-        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj"},TalkKinds={"Sale","Buy","Conversation","Police"};
+        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj",FestivalSimulation.DeckSetKind},TalkKinds={"Sale","Buy","Conversation","Police"};
 
         // DIALOG-3: a sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are talks again, not dances, so every
         // client, the talker's own view included, sees the player in that talk's pose, never dancing. Only the dance a wary
