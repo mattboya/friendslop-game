@@ -7,6 +7,7 @@ namespace Festival.Core
     [Serializable] public sealed class LightShowEvent
     {
         public LightShowEventKind Kind; public float StartsAt,EndsAt; public string Colour="",Shape="",Prop=""; public int Side,Look;
+        internal LightShowEvent Copy()=>(LightShowEvent)MemberwiseClone();
     }
     public enum LightShowShadowTell { Small, Goblin }
     [Serializable] public sealed class LightShowFake
@@ -21,17 +22,21 @@ namespace Festival.Core
     {
         public string PlayerId=""; public int Dose; public List<LightShowFake> Fakes=new List<LightShowFake>();
         public List<LightShowQuestion> Questions=new List<LightShowQuestion>();
+        // One per closed or answered question: a choice 0-3, or -1 for Not sure, which a timeout or a disconnect also gives.
+        public List<int> Answers=new List<int>();
     }
     /// <summary>Persisted records on the advancing game clock, never world entities or simulation deadlines.</summary>
     [Serializable] public sealed class LightShowState
     {
         public List<LightShowEvent> Events=new List<LightShowEvent>();
         public List<LightShowPlayer> Players=new List<LightShowPlayer>();
-        internal LightShowState PublicCopy()=>new LightShowState{Events=Events.ConvertAll(e=>new LightShowEvent{Kind=e.Kind,StartsAt=e.StartsAt,EndsAt=e.EndsAt,Colour=e.Colour,Shape=e.Shape,Prop=e.Prop,Side=e.Side,Look=e.Look})};
+        // The open question, the same for everyone, and when it opened; Slot reaches QuestionSlots once every question has closed.
+        public int Slot; public float SlotAt=LightShow.ShowSeconds;
+        internal LightShowState PublicCopy()=>new LightShowState{Events=Events.ConvertAll(e=>e.Copy()),Slot=Slot,SlotAt=SlotAt};
     }
     public static class LightShow
     {
-        public const float ShowSeconds=20;
+        public const float ShowSeconds=20,QuestionSeconds=8; public const int QuestionSlots=3;
         public static LightShowState Create(int seed)
         {
             var show=new LightShowState();var random=new ContentRandom(seed);random.Next(100);
@@ -58,7 +63,67 @@ namespace Festival.Core
     }
     public sealed partial class FestivalSimulation
     {
-        public const string LightShowGame="LightShow";
+        public const string LightShowGame="LightShow",LightShowAnswer="Answer";
+        /// <summary>One answer's points: a correct one earns 1 + the captured dose, a wrong one costs 1 and Not sure (-1) none.</summary>
+        public static int LightShowPoints(int dose,int answer,int correct)
+        {
+            if(dose<0||dose>4||correct<0||correct>3||answer< -1||answer>3)throw new ArgumentOutOfRangeException(nameof(answer));
+            return answer<0?0:answer==correct?1+dose:-1;
+        }
+        /// <summary>The crew's net points as seconds on the level clock: four each, between -40 and +60.</summary>
+        public static int LightShowClockChange(int netPoints)=>(int)Math.Max(-40L,Math.Min(60L,(long)netPoints*4));
+        // An answer to the open question by a captured player: Amount is the choice (-1 Not sure), Direction the question's slot.
+        CommandResult PlayLightShow(PlayerState p,GameCommand c)
+        {
+            var b=State.Booth;var show=b.LightShow;var mine=show.Players.Find(x=>x.PlayerId==p.Id);
+            if(c.ItemId!=LightShowAnswer||mine==null)return Reject("Answer the light show's question");
+            if(show.Slot>=LightShow.QuestionSlots||b.Seconds<LightShow.ShowSeconds)return Reject("Watch the show: the questions come after it");
+            if(c.Direction!=show.Slot)return Reject("That question isn't open");
+            if(mine.Answers.Count!=show.Slot)return Reject("You already answered this one");
+            if(show.Slot>=mine.Questions.Count||c.Amount<-1||c.Amount>=mine.Questions[show.Slot].Choices.Count)return Reject("Pick one of the four answers, or Not sure");
+            mine.Answers.Add(c.Amount);LightShowTick();return Ok("Answer locked in");
+        }
+        // Questions close in turn, each once every connected captured player has answered or its eight seconds are up; the
+        // missing answers are Not sure. After the third, the crew's net points score the game.
+        void LightShowTick()
+        {
+            var b=State.Booth;var show=b.LightShow;
+            // A question after the first opens as the last one closes, so only the show holds the questions back.
+            while(show.Slot<LightShow.QuestionSlots&&b.Seconds>=LightShow.ShowSeconds)
+            {
+                float closes=show.SlotAt+LightShow.QuestionSeconds;bool timedOut=b.Seconds>=closes||b.Seconds>=MinigameMaxSeconds;
+                if(!timedOut&&show.Players.Exists(x=>x.Answers.Count<=show.Slot&&Player(x.PlayerId)?.Connected==true))return;
+                foreach(var x in show.Players)while(x.Answers.Count<=show.Slot)x.Answers.Add(-1);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                RhythmDiagnostic?.Invoke("[Festival.LightShow] question="+show.Slot+" closed="+(timedOut?"timeout":"answered"));
+#endif
+                show.Slot++;show.SlotAt=timedOut?closes:(float)b.Seconds;
+            }
+            if(show.Slot<LightShow.QuestionSlots)return;
+            int net=0;foreach(var x in show.Players)for(int k=0;k<x.Answers.Count&&k<x.Questions.Count;k++)net+=LightShowPoints(x.Dose,x.Answers[k],x.Questions[k].CorrectIndex);
+            ScoreMinigame(LightShowClockChange(net));
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            RhythmDiagnostic?.Invoke("[Festival.LightShow] reveal participants="+show.Players.Count+" clock_change="+b.ClockChange.ToString(System.Globalization.CultureInfo.InvariantCulture));
+#endif
+        }
+        /// <summary>The Light Show as viewer's snapshot carries it (FestivalSession.ViewFor): the real script and question timing for
+        /// everyone; until the game is scored, the viewer's own record alone, with the questions opened so far and no answer keys; then
+        /// every captured player's questions, keys and answers at once. Fakes only ever reach their own viewer.</summary>
+        public static LightShowState VisibleLightShow(RoundState s,string viewer)
+        {
+            var b=s.Booth;var show=b.LightShow??new LightShowState();var view=show.PublicCopy();bool revealed=b.ScoredAt>=0;
+            int open=show.Slot+(show.Slot<LightShow.QuestionSlots&&b.Seconds>=LightShow.ShowSeconds?1:0);
+            foreach(var x in show.Players)
+            {
+                bool own=x.PlayerId==viewer;if(!own&&!revealed)continue;
+                var copy=new LightShowPlayer{PlayerId=x.PlayerId,Dose=x.Dose,Answers=new List<int>(x.Answers)};
+                if(own)copy.Fakes=x.Fakes.ConvertAll(f=>new LightShowFake{Event=f.Event.Copy(),Shadow=f.Shadow,TintTell=f.TintTell,MovementShimmer=f.MovementShimmer});
+                for(int k=0;k<x.Questions.Count&&(revealed||k<open);k++)
+                {var q=x.Questions[k];copy.Questions.Add(new LightShowQuestion{Category=q.Category,Prompt=q.Prompt,Unsure=q.Unsure,Choices=new List<string>(q.Choices),CorrectIndex=revealed?q.CorrectIndex:-1});}
+                view.Players.Add(copy);
+            }
+            return view;
+        }
         void StartLightShow()
         {
             int seed=unchecked(State.SpinSeed*73+43)^State.DealSeed;var show=LightShow.Create(seed);

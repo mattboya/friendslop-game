@@ -99,6 +99,9 @@ namespace Festival.Network
         // default to an empty roster. Every recipient receives detached booth lists without broadening spirit Players.
         // Drum Circle carries public scalar per-participant accuracies/result; each owner alone receives a detached 24-tap
         // DrumPart chart/input log on the advancing game clock, sharing the held stage grid. Cancel withdraws without shrinking roster.
+        // Light Show: Minigame ItemId Answer sends choice Amount 0-3 or -1 Not sure for slot Direction 0-2; three shared 8 s questions
+        // follow the 20 s show. Booth.LightShow carries the script and Slot/SlotAt to all; each viewer alone gets their dose, fakes,
+        // opened questions without CorrectIndex and own Answers until scoring reveals every participant's. Fakes never leave their owner.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -847,6 +850,7 @@ namespace Festival.Network
                 // which Mystery Cup is spiked, which stays here too, and the cup the tripper is shown as spiked, sent to them alone.
                 // Captured participant names reach spectators through this detached booth, never through extra PlayerState.
                 Booth=FestivalSimulation.VisibleBooth(source,viewer)};
+            view.Booth.LightShow=FestivalSimulation.VisibleLightShow(source,viewer);
             foreach(var spin in source.DeathSpins)
                 view.DeathSpins.Add(new DeathSpinState{Id=spin.Id,RoundId=spin.RoundId,PlayerId=spin.PlayerId,Name=spin.Name,Sequence=spin.Sequence,Amount=spin.Amount,Seed=spin.Seed,CashDropped=spin.CashDropped,AtWorldSeconds=spin.AtWorldSeconds});
             foreach(var p in source.Players)

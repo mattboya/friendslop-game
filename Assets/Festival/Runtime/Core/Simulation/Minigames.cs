@@ -25,7 +25,8 @@ namespace Festival.Core
         public List<MinigameParticipant> Participants=new List<MinigameParticipant>();
         // Public scalar drum progress/result only; private charts and inputs remain on each owner's InteractionState.
         public List<DrumAccuracy> DrumAccuracies=new List<DrumAccuracy>(); public double DrumWorstScore=-1;
-        // Version 7: Light Show persists its public real script on the game clock; private dose/question/fake records stay on the host until recipient filtering is integrated.
+        // Version 7: Light Show records on the game clock. Copy keeps only its public script and question timing; ViewFor adds each
+        // viewer's own records (FestivalSimulation.VisibleLightShow).
         public LightShowState LightShow=new LightShowState();
         // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
         // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
@@ -106,7 +107,7 @@ namespace Festival.Core
             var b=State.Booth;b.Seconds+=dt;
             // A game's own tick scores it when it ends, at the cap too (Mystery Cups calls it). One this build doesn't know (a snapshot
             // from a build with other games) has no moves here, so the cap scores it +0 s.
-            if(b.ScoredAt<0){if(b.Kind==MysteryCupsGame)CupsTick();else if(b.Kind==DrumCircleGame)DrumCircleTick();if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
+            if(b.ScoredAt<0){if(b.Kind==MysteryCupsGame)CupsTick();else if(b.Kind==DrumCircleGame)DrumCircleTick();else if(b.Kind==LightShowGame)LightShowTick();if(b.Seconds>=MinigameMaxSeconds)ScoreMinigame(0);return;}
             if(b.Seconds<b.ScoredAt+MinigameBannerSeconds)return;
             CloseDrumParts();ShiftClock(b.Seconds);b.Spent=true;State.Phase="Playing";
         }
@@ -125,6 +126,7 @@ namespace Festival.Core
             switch(b.Kind)
             {
                 case MysteryCupsGame:return PlayCups(p,c);
+                case LightShowGame:return PlayLightShow(p,c);
                 default:return Reject("Unknown minigame");
             }
         }
