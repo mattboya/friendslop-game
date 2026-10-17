@@ -1,5 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -763,5 +766,130 @@ namespace Festival.Tests
             finally{Object.Destroy(root);}
             yield return null;
         }
+        // CROWD-7: the stage crew stand with the festival only. There they dance, no two alike at any one moment, the photographer
+        // turns between the crowd and the DJ, and they are culled like the ambient crowd. The resident DJ keeps both hands on the mixer.
+        [UnityTest]public IEnumerator StageCrewShowOnlyAtTheFestivalWhereNoTwoMoveAlike()
+        {
+            var root=new GameObject("impl-U68 stage crew world");var actualView=FestivalCharacter.ViewTransform;
+            var eye=new GameObject("impl-U68 stage crew eye").transform;eye.position=new Vector3(0,1.6f,18);
+            try
+            {
+                var world=root.AddComponent<FestivalWorld>();FestivalCharacter.ViewTransform=eye;yield return null;
+                var crew=root.GetComponentInChildren<FestivalStageCrew>(true);Assert.That(crew,Is.Not.Null,"the festival has its stage crew");
+                Assert.That(crew.Count,Is.EqualTo(6));var members=new List<FestivalCharacter>();for(int i=0;i<crew.Count;i++)members.Add(crew.Member(i));
+                Assert.That(world.IsCampVisible,Is.True,"setup: camp");
+                foreach(var member in members)Assert.That(member.gameObject.activeInHierarchy,Is.False,member.name+" is hidden at camp");
+                world.SetPhase("Playing");yield return new WaitForSeconds(.6f);
+                foreach(var member in members)Assert.That(member.gameObject.activeInHierarchy,Is.True,member.name+" is shown at the festival");
+                var poses=members.Select(Pose).ToList();
+                for(int i=0;i<poses.Count;i++)for(int j=i+1;j<poses.Count;j++)
+                    Assert.That(Difference(poses[i],poses[j]),Is.GreaterThan(5),members[i].name+" and "+members[j].name+" strike different poses at the same moment");
+                var photographer=Photographer(members);Assert.That(photographer,Is.Not.Null,"a photographer holds a phone up");
+                var dj=root.transform.Find(FestivalWorld.RootName+"/resident_stage_dj").GetComponent<FestivalCharacter>();
+                var toDj=dj.transform.position-photographer.transform.position;toDj.y=0;float crowd=180,stage=180;
+                for(float end=Time.time+4.2f;Time.time<end;)
+                {
+                    yield return null;var facing=photographer.transform.forward;
+                    crowd=Mathf.Min(crowd,Vector3.Angle(facing,Vector3.back));stage=Mathf.Min(stage,Vector3.Angle(facing,toDj));
+                }
+                Assert.That(crowd,Is.LessThan(25),"the photographer shoots out over the crowd");Assert.That(stage,Is.LessThan(3),"and turns to shoot the DJ");
+                for(int i=0;i<members.Count;i++)if(members[i]!=photographer)Assert.That(Difference(poses[i],Pose(members[i])),Is.GreaterThan(1),members[i].name+" keeps moving");
+                Assert.That(float.IsNaN(dj.DanceBeat),Is.True,"the resident DJ keeps its own clock");
+                var console=dj.DjConsole;var left=Bone(dj,"HandL");var right=Bone(dj,"HandR");
+                Assert.That(Vector3.Distance(left.position,console.TransformPoint(new Vector3(-.46f,.81f,.36f))),Is.LessThan(.13f),"the DJ's left hand stays on the mixer");
+                Assert.That(Vector3.Distance(right.position,console.TransformPoint(new Vector3(.38f,.81f,.33f))),Is.LessThan(.13f),"the DJ's right hand stays on the mixer");
+                eye.rotation=Quaternion.Euler(0,180,0);yield return new WaitForSecondsRealtime(.35f);
+                foreach(var member in members)Assert.That(member.gameObject.activeSelf,Is.False,member.name+" behind the view is culled");
+                eye.rotation=Quaternion.identity;yield return new WaitForSecondsRealtime(.35f);
+                foreach(var member in members)Assert.That(member.gameObject.activeSelf,Is.True,member.name+" wakes in view");
+                eye.position=new Vector3(0,1.6f,-30);yield return new WaitForSecondsRealtime(.35f);
+                foreach(var member in members)Assert.That(member.gameObject.activeSelf,Is.False,member.name+" far away is culled");
+                world.SetPhase("Shopping");
+                foreach(var member in members)Assert.That(member.gameObject.activeInHierarchy,Is.False,member.name+" is hidden back at camp");
+            }
+            finally{FestivalCharacter.ViewTransform=actualView;Object.Destroy(eye.gameObject);Object.Destroy(root);}
+            yield return null;
+            Assert.That(Object.FindObjectsByType<FestivalStageCrew>(FindObjectsInactive.Include,FindObjectsSortMode.None),Is.Empty,"the crew go with the world");
+            Assert.That(System.Array.Exists(Object.FindObjectsByType<FestivalCharacter>(FindObjectsInactive.Include,FindObjectsSortMode.None),
+                c=>c.name.StartsWith(FestivalStageCrew.Prefix,System.StringComparison.Ordinal)),Is.False,"and no performer is left behind");
+        }
+        // CROWD-7: in a hosted level the crew dance on the stage song's beat. Through a booth game they hold still with the rest of
+        // the world, a friend leaving and rejoining included, and turning still culls them; after it they dance on.
+        [UnityTest]public IEnumerator StageCrewDanceOnTheStageSongAndHoldThroughAGameAndARejoin()
+        {
+            var world=new GameObject("impl-U68 crew stage world").AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl-U68 crew host").AddComponent<FestivalSession>();
+            var peer=new GameObject("impl-U68 crew peer").AddComponent<FestivalSession>();yield return null;
+            var actualView=FestivalCharacter.ViewTransform;var eye=new GameObject("impl-U68 crew eye").transform;eye.position=new Vector3(0,1.6f,18);
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);yield return null;peer.Join("Peer","127.0.0.1",port);
+                for(float end=Time.realtimeSinceStartup+30;peer.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(peer.LocalPlayer,Is.Not.Null,peer.Message);var sim=Simulation(host);var joined=sim.Player(peer.LocalPlayerId);joined.X=0;joined.Z=19;peer.Command("Ready");
+                for(float end=Time.realtimeSinceStartup+10;!joined.Ready&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(joined.Ready,Is.True);yield return StartLevel(host,peer.LocalPlayerId);sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
+                for(float end=Time.realtimeSinceStartup+5;peer.State.Phase!="Playing"&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(peer.State.Phase,Is.EqualTo("Playing"));FestivalCharacter.ViewTransform=eye;
+                var crew=world.GetComponentInChildren<FestivalStageCrew>(true);Assert.That(crew,Is.Not.Null,"the festival has its stage crew");
+                var members=new List<FestivalCharacter>();for(int i=0;i<crew.Count;i++)members.Add(crew.Member(i));
+                yield return new WaitForSecondsRealtime(1.2f);var stage=crew.Song;
+                Assert.That(stage==host.GetComponent<FestivalStageAudio>()||stage==peer.GetComponent<FestivalStageAudio>(),Is.True,"the crew follow a session's stage song");
+                OnTheSong(stage,members,"the crew dance on the stage song");
+                sim.State.SimulationSeconds+=30/stage.Track.Beats.Bpm;yield return new WaitForSecondsRealtime(1.5f);
+                OnTheSong(crew.Song,members,"the song jumped half a beat and the crew caught it");
+                var at=FestivalSimulation.BoothAt(sim.State);foreach(var p in sim.State.Players){p.X=at.X+1;p.Z=at.Z;}
+                for(float end=Time.realtimeSinceStartup+6;peer.State.Phase!=FestivalSimulation.MinigamePhase&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(peer.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase));yield return null;yield return null;
+                Assert.That(FestivalSession.WorldAnimationPaused,Is.True,"setup: the game holds the world");
+                var held=members.Select(Frozen).ToList();double beats=crew.Beats;yield return new WaitForSecondsRealtime(.4f);
+                AssertHeld(members,held,"through the game");Assert.That(crew.Beats,Is.EqualTo(beats),"the crew's beat holds with the song");
+                eye.rotation=Quaternion.Euler(0,180,0);yield return new WaitForSecondsRealtime(.35f);
+                foreach(var member in members)Assert.That(member.gameObject.activeSelf,Is.False,member.name+" behind the view is culled during the game");
+                eye.rotation=Quaternion.identity;yield return new WaitForSecondsRealtime(.35f);
+                foreach(var member in members)Assert.That(member.gameObject.activeSelf,Is.True,member.name+" wakes during the game");
+                AssertHeld(members,held,"after waking in the game");
+                string rejoinId=joined.Id;peer.Leave();
+                for(float end=Time.realtimeSinceStartup+5;joined.Connected&&Time.realtimeSinceStartup<end;)yield return null;
+                peer.Join("Peer","127.0.0.1",port);for(float end=Time.realtimeSinceStartup+30;peer.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(peer.LocalPlayerId,Is.EqualTo(rejoinId));yield return new WaitForSecondsRealtime(.3f);
+                Assert.That(FestivalSession.WorldAnimationPaused,Is.True,"setup: still in the game");AssertHeld(members,held,"through a friend's rejoin");
+                var turn=FestivalSimulation.CupsTurn(sim.State)==host.LocalPlayerId?host:peer;turn.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);
+                for(float end=Time.realtimeSinceStartup+6;peer.State.Phase==FestivalSimulation.MinigamePhase&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(peer.State.Phase,Is.EqualTo("Playing"));yield return new WaitForSecondsRealtime(1.2f);
+                var photographer=Photographer(members);
+                for(int i=0;i<members.Count;i++)if(members[i]!=photographer)Assert.That(Difference(held[i].Rotations,Pose(members[i])),Is.GreaterThan(1),members[i].name+" dances on after the game");
+                Assert.That(crew.Beats,Is.GreaterThan(beats+1),"the crew's beat, and the photographer's turn with it, moves on");
+                OnTheSong(crew.Song,members,"back on the song after the game");
+            }
+            finally{FestivalCharacter.ViewTransform=actualView;Object.Destroy(eye.gameObject);peer.Leave();host.Leave();Object.Destroy(peer.gameObject);Object.Destroy(host.gameObject);Object.Destroy(world.gameObject);}
+            yield return null;Assert.That(Time.timeScale,Is.EqualTo(1));
+        }
+        // Each dancer lands a step on the song's beat: its step count's phase is the song's beat phase times its steps a beat.
+        static void OnTheSong(FestivalStageAudio stage,List<FestivalCharacter> members,string reason)
+        {
+            Assert.That(stage.Track,Is.Not.Null,"setup: the stage song plays");Assert.That(stage.Beat,Is.Not.Null);
+            int steps=FestivalStageCrew.StepsPerBeat(stage.Track.Beats.Bpm);int dancers=0;
+            foreach(var member in members)
+            {
+                if(member.Pose!="Dance")continue;dancers++;
+                float off=Mathf.Repeat(member.DanceBeat-steps*stage.Beat.Value+.5f,1)-.5f;
+                Assert.That(Mathf.Abs(off),Is.LessThan(.1f),reason+": "+member.name+" is "+off+" of a step off the beat");
+            }
+            Assert.That(dancers,Is.EqualTo(4),"setup: four dancers");
+        }
+        static FestivalCharacter Photographer(List<FestivalCharacter> members)=>members.Find(m=>System.Array.Exists(m.GetComponentsInChildren<Transform>(),t=>t.name==FestivalFilmingPhone.PhoneName));
+        sealed class FrozenPose{public Quaternion[] Rotations;public Vector3[] Positions;}
+        static FrozenPose Frozen(FestivalCharacter actor)=>new FrozenPose{Rotations=Pose(actor),Positions=FestivalMotionLibrary.Bones.Select(b=>Bone(actor,b).localPosition).ToArray()};
+        static void AssertHeld(List<FestivalCharacter> members,List<FrozenPose> held,string when)
+        {
+            for(int i=0;i<members.Count;i++)for(int b=0;b<FestivalMotionLibrary.Bones.Length;b++)
+            {
+                var bone=Bone(members[i],FestivalMotionLibrary.Bones[b]);string who=members[i].name+" "+bone.name+" "+when;
+                Assert.That(bone.localRotation,Is.EqualTo(held[i].Rotations[b]),who);Assert.That(bone.localPosition,Is.EqualTo(held[i].Positions[b]),who);
+            }
+        }
+        static Quaternion[] Pose(FestivalCharacter actor)=>FestivalMotionLibrary.Bones.Select(b=>Bone(actor,b).localRotation).ToArray();
+        static float Difference(Quaternion[] a,Quaternion[] b){float most=0;for(int i=0;i<a.Length;i++)most=Mathf.Max(most,Quaternion.Angle(a[i],b[i]));return most;}
+        static Transform Bone(FestivalCharacter actor,string name)=>System.Array.Find(actor.GetComponentsInChildren<Transform>(true),t=>t.name==name);
     }
 }

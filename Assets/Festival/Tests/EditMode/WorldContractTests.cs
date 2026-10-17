@@ -103,6 +103,52 @@ namespace Festival.Tests
             var again=FestivalArtView.MaterialFor("Rose");
             Assert.That(again!=null,Is.True,"a destroyed shared material is not handed out");Assert.That(again.name,Is.EqualTo("Festival art Rose"));
         }
+        // Six stage crew join the resident DJ on the deck of both festivals: on its top, clear of the mixer, its riser, cables and
+        // ramp, of Palm Mirage's stage dressing, of anything solid, of each other and of the aisle from the stage front to the DJ.
+        [Test]public void SixStageCrewStandOnTheDeckClearOfTheMixerEachOtherAndTheDjAisleOnBothFestivals()
+        {
+            root=new GameObject("impl:U68 stage crew placement");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");
+            var festival=root.transform.Find(FestivalWorld.RootName);
+            var crew=new List<Transform>();
+            foreach(Transform child in festival)
+            {
+                if(child.name.StartsWith(FestivalStageCrew.Prefix,System.StringComparison.Ordinal))crew.Add(child);
+                Assert.That(child.name.StartsWith("stage_hype_",System.StringComparison.Ordinal),Is.False,"the two hype dancers are two of the six, not extras");
+            }
+            Assert.That(crew.Count,Is.EqualTo(6),"six stage crew");
+            var dj=festival.Find("resident_stage_dj");Assert.That(dj,Is.Not.Null,"the resident DJ stays");
+            var resident=dj.GetComponent<FestivalCharacter>();Assert.That(resident.Pose,Is.EqualTo("Dj"));Assert.That(resident.DjConsole,Is.SameAs(festival.Find("FestivalDJDeck")),"at the mixer");
+            var poses=new List<string>();foreach(var actor in crew)poses.Add(actor.GetComponent<FestivalCharacter>().Pose);
+            Assert.That(poses.FindAll(p=>p=="Dance").Count,Is.EqualTo(4),"two hype and two go-go dancers");Assert.That(poses,Does.Contain(FestivalCharacter.McPose),"an MC");
+            Assert.That(crew.FindAll(c=>System.Array.Exists(c.GetComponentsInChildren<Transform>(true),t=>t.name==FestivalFilmingPhone.PhoneName&&t.gameObject.activeSelf)).Count,Is.EqualTo(1),"a photographer, phone up");
+            var deck=festival.Find("Stage").GetComponent<Collider>().bounds;
+            var aisleFrom=new Vector2(0,deck.min.z);var aisleTo=new Vector2(dj.position.x,dj.position.z);
+            // The mixer, its riser, cables and ramp, and Palm Mirage's stage dressing are measured by their meshes, not their boxes.
+            var gear=new List<Collider>();
+            foreach(var name in new[]{"FestivalDJDeck","FestivalDJRiser",FestivalPoloDressing.RootName+"/FestivalStageMirage",FestivalPoloDressing.RootName+"/FestivalPetalCanopy"})
+                foreach(var mesh in festival.Find(name).GetComponentsInChildren<MeshFilter>(true))gear.Add(mesh.gameObject.AddComponent<MeshCollider>());
+            Assert.That(gear.Count,Is.GreaterThan(10),"setup: the stage gear has meshes to measure");
+            foreach(int index in new[]{Festivals.PoloFestival,Festivals.PlayaFestival})
+            {
+                world.SetTwists(new RoundState{Phase="Playing",FestivalIndex=index});Physics.SyncTransforms();
+                Assert.That(festival.Find(FestivalPoloDressing.RootName).gameObject.activeSelf,Is.EqualTo(index==Festivals.PoloFestival),"setup: "+Festivals.Name(index)+"'s stage");
+                foreach(var actor in crew)
+                {
+                    string who=actor.name+" at "+actor.position+" on "+Festivals.Name(index);var at=new Vector2(actor.position.x,actor.position.z);
+                    Assert.That(actor.position.y,Is.EqualTo(deck.max.y).Within(.001f),who+" stands on the deck top");
+                    Assert.That(actor.position.x,Is.InRange(deck.min.x+.5f,deck.max.x-.5f),who+" is inside the deck's width");
+                    Assert.That(actor.position.z,Is.InRange(deck.min.z+.5f,deck.max.z-.5f),who+" is inside the deck's depth");
+                    Assert.That(actor.GetComponentsInChildren<Collider>(true),Is.Empty,who+" is presentation only");
+                    foreach(var c in Physics.OverlapCapsule(actor.position+Vector3.up*.1f,actor.position+Vector3.up*2,.7f,~0,QueryTriggerInteraction.Collide))
+                        Assert.That(c.name,Is.EqualTo("Stage"),who+" stands within .7 m of "+c.name+(gear.Contains(c)?" ("+c.transform.parent.name+")":""));
+                    foreach(var other in crew)if(other!=actor)Assert.That(Vector2.Distance(at,new Vector2(other.position.x,other.position.z)),Is.GreaterThanOrEqualTo(.7f),who+" crowds "+other.name);
+                    Assert.That(Vector2.Distance(at,aisleTo),Is.GreaterThanOrEqualTo(.7f),who+" crowds the DJ");
+                    var along=aisleTo-aisleFrom;float t=Mathf.Clamp01(Vector2.Dot(at-aisleFrom,along)/along.sqrMagnitude);
+                    Assert.That(Vector2.Distance(at,aisleFrom+along*t),Is.GreaterThanOrEqualTo(.7f),who+" stands in the aisle from the stage front to the DJ");
+                }
+            }
+            world.SetPhase("Shopping");foreach(var actor in crew)Assert.That(actor.gameObject.activeInHierarchy,Is.False,actor.name+" is hidden at camp");
+        }
         private static Renderer[] Drawn(Transform prop)=>System.Array.FindAll(prop.GetComponentsInChildren<Renderer>(),r=>r.enabled);
         private static Bounds Bounds(Renderer[] renderers){var b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);return b;}
         [TearDown]public void Cleanup(){if(root!=null)Object.DestroyImmediate(root);}

@@ -153,14 +153,7 @@ namespace Festival.Presentation
                 playerDeck.transform.localScale=Vector3.one*.68f;
                 PlayerDjConsole=playerDeck.transform;
             }
-            foreach(float x in new[]{-3.65f,3.65f})
-            {
-                var performer=FestivalCharacter.Create(owned,x<0?"stage_hype_west":"stage_hype_east",Color.white);
-                performer.Pose="Dance";
-                performer.transform.localPosition=new Vector3(x,1.4f,29.55f);
-                performer.transform.localRotation=Quaternion.Euler(0,x<0?165:195,0);
-                performer.transform.localScale=Vector3.Scale(Vector3.one*.88f,performer.ShapeScale);
-            }
+            owned.gameObject.AddComponent<FestivalStageCrew>().Build(stageDj.transform);
             Box("Stage lip glow",new Vector3(0,1.46f,27.55f),new Vector3(18,.08f,.13f),lampRose,false);
             Box("Stage frame left",new Vector3(-8.8f,4.4f,35.65f),new Vector3(.15f,5.6f,.12f),lampMint,false);
             Box("Stage frame right",new Vector3(8.8f,4.4f,35.65f),new Vector3(.15f,5.6f,.12f),lampMint,false);

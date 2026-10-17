@@ -37,7 +37,8 @@ namespace Festival.Presentation
         internal float MotionPhase => phase;
         bool hasPrevious;
         int danceStyle;
-        public int DanceStyle=>danceStyle;
+        /// <summary>Hakken, shuffle or jumpstyle (0-2), picked from the name; the stage crew set theirs so no two dance alike.</summary>
+        public int DanceStyle{get=>danceStyle;set=>danceStyle=Mathf.Clamp(value,0,2);}
         int idleStyle;
         string motionKey="";
         float poseStart,transitionEnd,transitionLength=.3f;
@@ -66,6 +67,12 @@ namespace Festival.Presentation
         public string Pose="Idle";
         /// <summary>MINI-3: the Light Show's glover, set only by FestivalLightShowView: the poi performer's wheeling hands, with no poi.</summary>
         public const string GlovePose="Glove";
+        /// <summary>CROWD-7: the stage MC, set only by FestivalStageCrew: a bounce on the beat, a fist pumped overhead on each one
+        /// and, every other phrase, the other arm pointed out over the crowd ahead.</summary>
+        public const string McPose="MC";
+        /// <summary>CROWD-7: a stage performer's step count on the stage song (FestivalStageCrew): a foot lands on each whole count.
+        /// NaN, the default, dances on the actor's own clock and tempo.</summary>
+        public float DanceBeat=float.NaN;
         public Transform DjConsole { get; set; }
         public bool Crowd;
         public bool AmbientCrowd;
@@ -91,7 +98,10 @@ namespace Festival.Presentation
         bool hasAnimationClock;
         float localAnimationSeconds,localAnimationDelta;
         internal float AnimationSeconds=>hasAnimationClock?localAnimationSeconds:Time.time;
-        internal float AnimationFrameDelta=>hasAnimationClock?localAnimationDelta:FestivalSession.WorldAnimationPaused||Time.timeScale==0?0:Time.deltaTime;
+        internal float AnimationFrameDelta=>hasAnimationClock?localAnimationDelta:WorldFrameDelta;
+        /// <summary>This frame's time for world rigs: none while the world holds (a minigame) or time stands still.</summary>
+        internal static float WorldFrameDelta=>FestivalSession.WorldAnimationPaused||Time.timeScale==0?0:Time.deltaTime;
+        float DanceTime=>float.IsNaN(DanceBeat)?AnimationSeconds*DanceAngularSpeed(danceStyle)+phase:DanceBeat*Mathf.PI;
         /// <summary>Animate only this game or stage performer on an explicit local clock. Its attached poi share the same sample.</summary>
         public void SetAnimationClock(float seconds,float deltaSeconds)
         {
@@ -432,7 +442,8 @@ namespace Festival.Presentation
             bool lying=Pose==FestivalSimulation.LieDownKind;
             if(equippedProp!=null)equippedProp.SetActive(Pose!="Poi"&&Pose!="Downed"&&Pose!="Spirit"&&!lying);
             foreach(var item in bones)targets[item.Key]=rest[item.Key];
-            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose==GlovePose||Pose=="Dj"||Pose=="Distracted"||decking;
+            bool dance=Crowd||Pose=="Dance"||Pose=="Poi"||Pose==GlovePose||Pose=="Dj"||Pose==McPose||Pose=="Distracted"||decking;
+            float danceTime=DanceTime;
             if(Pose=="Downed")
             {
                 Aim("Hips",new Vector3(75,0,walk*4));Aim("Head",new Vector3(-35,0,12));
@@ -469,7 +480,7 @@ namespace Festival.Presentation
                 // phase and style keep a crowd from moving in lockstep. Hips roll
                 // over the supporting foot, and each style alternates two arm
                 // patterns across longer phrases so neighbours rarely match.
-                float beatTime=AnimationSeconds*DanceAngularSpeed(danceStyle)+phase;
+                float beatTime=danceTime;
                 float feet=Mathf.Sin(beatTime),opposite=Mathf.Sin(beatTime+Mathf.PI);
                 float landing=Mathf.Pow(Mathf.Max(0,Mathf.Cos(beatTime*2)),2);
                 float sway=Mathf.Sin(beatTime*.5f);
@@ -512,6 +523,16 @@ namespace Festival.Presentation
                     Aim("HandR",new Vector3(10+opposite*16,0,0));
                     Aim("LegL",new Vector3(2+feet*3,0,0));
                     Aim("LegR",new Vector3(2-feet*3,0,0));
+                }
+                else if(Pose==McPose)
+                {
+                    // Chest up to the crowd, bouncing on each beat. The arms only start near where McArms puts them.
+                    Aim("Hips",new Vector3(4+landing*5,sway*6,feet*5));
+                    Aim("Spine",new Vector3(-7-landing*4,-sway*5+phrase*4,-feet*5));
+                    Aim("Head",new Vector3(-6-landing*7,phrase*8,-feet*3));
+                    Aim("LegL",new Vector3(Mathf.Max(0,feet)*14-4,0,0));Aim("LegR",new Vector3(Mathf.Max(0,opposite)*14-4,0,0));
+                    Aim("ShinL",new Vector3(Mathf.Max(0,feet)*16,0,0));Aim("ShinR",new Vector3(Mathf.Max(0,opposite)*16,0,0));
+                    Aim("ArmL",new Vector3(-120,0,-15));Aim("ArmR",new Vector3(-120,0,15));
                 }
                 else if(danceStyle==0)
                 {
@@ -743,8 +764,7 @@ namespace Festival.Presentation
             foreach(var item in bones)item.Value.localRotation=Quaternion.Slerp(item.Value.localRotation,targets[item.Key],blend);
             var hipsBefore=bones.TryGetValue("Hips",out var hipsBone)?hipsBone.localPosition:Vector3.zero;
             if(dance&&Pose!="Dj"&&!riding)
-                footPlant?.Dance(AnimationSeconds*DanceAngularSpeed(danceStyle)+phase,
-                    danceStyle,animationDelta);
+                footPlant?.Dance(danceTime,danceStyle,animationDelta);
             else footPlant?.Update(Pose!="Downed"&&Pose!="Spirit"&&!lying&&!fullBodyClip&&!riding,
                 !dance&&Pose!="Downed"&&Pose!="Spirit"&&!lying&&speed>.14f,
                 delta,speed,walkCycle,gait,animationDelta,idleShift);
@@ -770,6 +790,7 @@ namespace Festival.Presentation
                 FestivalDjHandContact.Reach(transform,bones["ArmL"],bones["ForearmL"],bones["HandL"],Vector3.Lerp(bones["HandL"].position,poiLeft.Wrist(),poiSwing),-1);
                 FestivalDjHandContact.Reach(transform,bones["ArmR"],bones["ForearmR"],bones["HandR"],Vector3.Lerp(bones["HandR"].position,poiRight.Wrist(),poiSwing),1);
             }
+            if(Pose==McPose&&bones.Count==15)McArms(danceTime);
             // POLO-6: an influencer films all level, whatever else it does, so its phone stays up beside its face.
             if(phone!=null&&phone.Shown)phone.Hold(AnimationSeconds,ViewTransform);
             if(Pose=="Dj"&&DjConsole!=null&&bones.Count==15)
@@ -842,6 +863,23 @@ namespace Festival.Presentation
             Aim("ForearmR",new Vector3(-50-exchange*8,0,-27-exchange*10));
             Aim("HandL",new Vector3(wristPulse*20,0,exchange*18));
             Aim("HandR",new Vector3(wristPulse*20,0,-exchange*18));
+        }
+        // One fist reaches straight up on each beat and bends back between; every other phrase the other arm points out over the
+        // crowd ahead, sweeping across it, and pumps with the first the rest of the time.
+        void McArms(float beatTime)
+        {
+            float landing=Mathf.Pow(Mathf.Max(0,Mathf.Cos(beatTime*2)),2);
+            float point=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.3f,.3f,Mathf.Sin(beatTime*.125f+phase)));
+            McArm(bones["ArmL"],bones["ForearmL"],bones["HandL"],landing,point,beatTime);
+            McArm(bones["ArmR"],bones["ForearmR"],bones["HandR"],landing,point,beatTime);
+        }
+        void McArm(Transform arm,Transform forearm,Transform hand,float landing,float point,float beatTime)
+        {
+            int outward=Vector3.Dot(arm.position-transform.position,transform.right)<0?-1:1;
+            float reach=Vector3.Distance(arm.position,forearm.position)+Vector3.Distance(forearm.position,hand.position);
+            var pump=arm.position+(transform.up+transform.forward*.15f+transform.right*(outward*.2f)).normalized*reach*(.62f+.36f*landing);
+            var aim=arm.position+Quaternion.AngleAxis(Mathf.Sin(beatTime*.25f)*20,transform.up)*(transform.forward+transform.up*.12f+transform.right*(outward*.25f)).normalized*reach;
+            FestivalDjHandContact.Reach(transform,arm,forearm,hand,outward<0?Vector3.Lerp(pump,aim,point):pump,outward);
         }
         void PreparePoi(bool led)
         {
