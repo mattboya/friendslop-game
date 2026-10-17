@@ -13,7 +13,8 @@ using UnityEngine.UI;
 
 namespace Festival.Tests
 {
-    // GAS-1 in a running session: at camp, beside the Giggle Balloons, the prompt offers one and E takes it. Once it kicks in, the
+    // GAS-1 in a running session: at camp, beside the Giggle Balloons, the prompt offers one and E takes it (GAS-4: two at a time,
+    // and two drain the grade further). Once it kicks in, the
     // gas reaches the hitter's screen through the single writers: FestivalHud adds the kick to the field of view, FestivalNightLighting
     // drains the colour grade, and FestivalTrip pulses its overlay, closes a low-pass, adds a big reverb (GAS-5) and dips the volume.
     // All of it lets go when the gas ends, when the player leaves the session, and when FestivalTrip is turned off or destroyed.
@@ -58,8 +59,14 @@ namespace Festival.Tests
                 var gas=player.Effects.Find(e=>e.Id==FestivalSimulation.GiggleGasEffect);
                 Assert.That(gas,Is.Not.Null,"E takes a hit: "+session.Message);
                 Assert.That(session.Message,Is.EqualTo("Giggle Balloon: give it a few seconds…"),"and the host says so");
+                // GAS-4: two at a time. While the first kicks in, the prompt offers another and E takes it; then E does nothing.
                 yield return new WaitForSeconds(.5f);
-                Assert.That(Find("Prompt")?.text,Is.EqualTo("ONE GIGGLE BALLOON AT A TIME"),"one at a time");
+                Assert.That(Find("Prompt")?.text,Is.EqualTo("TAKE A GIGGLE BALLOON"),"with one on, the prompt offers another");
+                ((System.Action)primary.GetValue(hud))();
+                var hits=player.Effects.FindAll(e=>e.Id==FestivalSimulation.GiggleGasEffect);
+                Assert.That(hits.Count,Is.EqualTo(2),"E takes a second hit: "+session.Message);
+                yield return new WaitForSeconds(.5f);
+                Assert.That(Find("Prompt")?.text,Is.EqualTo("TWO GIGGLE BALLOONS AT A TIME"),"two at a time");
                 Assert.That(primary.GetValue(hud),Is.Null,"so E does nothing");
                 overlay=host.transform.Find("Festival trip");
                 Sober("while it kicks in");
@@ -70,7 +77,7 @@ namespace Festival.Tests
                 // Kicked in (the wait skipped), at full motion: each writer moves its own property with the pulse, every frame. A test
                 // resumes after the frame's Updates (the HUD's kick, the session's grade) and before its LateUpdates, so the overlay and
                 // the sound FestivalTrip drew are last frame's moment, on last frame's beat.
-                gas.StartSeconds=sim.State.SimulationSeconds-5;session.Profile.Data.ReducedMotion=false;
+                foreach(var hit in hits)hit.StartSeconds=sim.State.SimulationSeconds-5;session.Profile.Data.ReducedMotion=false;
                 yield return null;yield return null;
                 float widest=0,quietest=1,drawnAt=Time.unscaledTime;float? drawnBeat=campAudio.Beat;
                 for(deadline=Time.realtimeSinceStartup+1.5f;Time.realtimeSinceStartup<deadline;)
@@ -90,7 +97,8 @@ namespace Festival.Tests
                     Assert.That(reverb.room,Is.EqualTo(FestivalTrip.ReverbRoom(drawn.Reverb)).Within(1),"as wet as the gas is strong");
                     widest=Mathf.Max(widest,Mathf.Abs(view.fieldOfView-75));quietest=Mathf.Min(quietest,AudioListener.volume);
                 }
-                Assert.That(grade.saturation.value,Is.LessThan(camp-30),"the colours drain");
+                Assert.That(grade.saturation.value,Is.LessThan(camp+FestivalTrip.Gas(1,false,0).Saturation-30),"both kicked in, the colours drain past a single hit's drain");
+                Assert.That(grade.saturation.value,Is.EqualTo(camp-95).Within(1e-3f),"by two hits' 95, through the one grade");
                 Assert.That(session.WorldCharacter(me).Giggling,Is.True,"the hitter's body giggles, as friends see it");
                 Assert.That(widest,Is.GreaterThan(2),"the view kicks wide on the beat");
                 Assert.That(quietest,Is.LessThan(.8f),"the sound goes wah-wah");
@@ -145,8 +153,8 @@ namespace Festival.Tests
                 }
                 Assert.That(quietest,Is.LessThan(.8f),"reduced motion: the wah-wah stays");
 
-                // The host ends it: every writer lets go, and the balloons offer another.
-                gas.RemainingSeconds=.01;
+                // The host ends both: every writer lets go, and the balloons offer another.
+                foreach(var hit in hits)hit.RemainingSeconds=.01;
                 yield return new WaitForSeconds(.5f);
                 Assert.That(player.Effects.Exists(e=>e.Id==FestivalSimulation.GiggleGasEffect),Is.False,"setup: the host removed it");
                 Sober("once it has worn off");

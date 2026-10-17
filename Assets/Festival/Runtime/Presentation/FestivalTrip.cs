@@ -78,31 +78,36 @@ namespace Festival.Presentation
         // grade, the haze, the low-pass's floor (it pulses up to 1) and how far the tremolo dips the volume. GAS-5 set the vignette,
         // its pulse and the kick (from .3, .3 and a 1.2 degree throb): starting points for PLAYTEST-1.
         private const float GasVignette=.45f,GasVignettePulse=.4f,GasThrob=4,GasDrain=55,GasHaze=.1f,GasMuffle=.4f,GasTremolo=.4f;
+        // GAS-4: two hits on at once (strength 2) kick, drain and dip this far; 95 takes camp's -5 grade to URP's full grey.
+        private const float GasStrongThrob=8,GasStrongDrain=95,GasStrongTremolo=.7f;
         // GAS-5's reverb at full strength: its wet level in millibels (6 dB under the dry sound, so the beat stays clear) and a big
         // hall's decay in seconds.
         private const float GasReverbRoom=-600,GasReverbDecay=2.5f;
 
-        /// <summary>GAS-1: Giggle Gas at strength 0-1 (FestivalSimulation.GiggleGasStrength, on the simulation clock). GAS-5: a wah-wah
-        /// pulse on every beat (beat: the phase, 0 on the kick, rising to 1 at the next), sharp on the kick and easing off to nothing
-        /// by the next, runs through the sound (a low-pass closing in, and a tremolo) and the view (a deep vignette closing in, and a
-        /// strong field-of-view kick); colours drain, a big reverb and a pale haze put the world at a distance. Reduced motion drops
-        /// the kick and halves the vignette's pulse; the sound stays.</summary>
+        /// <summary>GAS-1: Giggle Gas at strength 0-2 (FestivalSimulation.GiggleGasStrength of the player, on the simulation clock).
+        /// GAS-5: a wah-wah pulse on every beat (beat: the phase, 0 on the kick, rising to 1 at the next), sharp on the kick and
+        /// easing off to nothing by the next, runs through the sound (a low-pass closing in, and a tremolo) and the view (a deep
+        /// vignette closing in, and a strong field-of-view kick); colours drain, a big reverb and a pale haze put the world at a
+        /// distance. Reduced motion drops the kick and halves the vignette's pulse; the sound stays. GAS-4: a second hit (strength
+        /// 1-2) ramps the kick, the drain and the tremolo on to their strong values; the rest stays a hit's.</summary>
         public static Perception Gas(float strength,bool reducedMotion,float beat)
         {
             var look=new Perception();if(strength<=0)return look;
-            float pulse=Mathf.Exp(-4*beat)*(1-beat);
-            look.Vignette=strength*(GasVignette+GasVignettePulse*(reducedMotion?.5f:1)*pulse);
-            look.Fov=reducedMotion?0:strength*GasThrob*pulse;
-            look.Saturation=-GasDrain*strength;look.Haze=GasHaze*strength;
-            look.Muffle=strength*(GasMuffle+(1-GasMuffle)*pulse);look.Tremolo=strength*GasTremolo*pulse;look.Reverb=strength;
+            float pulse=Mathf.Exp(-4*beat)*(1-beat),hit=Mathf.Min(strength,1);
+            look.Vignette=hit*(GasVignette+GasVignettePulse*(reducedMotion?.5f:1)*pulse);
+            look.Fov=reducedMotion?0:Stacked(strength,GasThrob,GasStrongThrob)*pulse;
+            look.Saturation=-Stacked(strength,GasDrain,GasStrongDrain);look.Haze=GasHaze*hit;
+            look.Muffle=hit*(GasMuffle+(1-GasMuffle)*pulse);look.Tremolo=Stacked(strength,GasTremolo,GasStrongTremolo)*pulse;look.Reverb=hit;
             return look;
         }
+        // A hit's value times strength up to 1, then on to strong at 2.
+        private static float Stacked(float strength,float hit,float strong)=>strength<=1?hit*strength:Mathf.Lerp(hit,strong,strength-1);
 
         /// <summary>The local player's trip in state, never for a spirit. A dose shows only while the festival is shown (Playing or
         /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
-        /// Giggle Gas shows by its own strength; it lives only at camp (the host clears it as the crew leaves), so never with a dose. It
-        /// pulses on beat, the camp music's phase (FestivalCampAudio.Beat); with no music (null) it keeps a 120 BPM clock, so it never
-        /// stops.</summary>
+        /// Giggle Gas shows by the summed strength of the player's hits (GAS-4: up to two); it lives only at camp (the host clears it
+        /// as the crew leaves), so never with a dose. It pulses on beat, the camp music's phase (FestivalCampAudio.Beat); with no music
+        /// (null) it keeps a 120 BPM clock, so it never stops.</summary>
         public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time,float? beat=null)
         {
             if(state==null)return default;
@@ -112,7 +117,7 @@ namespace Festival.Presentation
                 if(p.Life=="Spirit")return default;
                 foreach(var e in p.Effects)
                 {
-                    if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(e,state.SimulationSeconds),reducedMotion,beat??Mathf.Repeat(time*2,1));
+                    if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(p,state.SimulationSeconds),reducedMotion,beat??Mathf.Repeat(time*2,1));
                     if(e.Id!=FestivalSimulation.DoseEffect||e.Intensity<1||!FestivalWorld.ShowsFestival(state.Phase))continue;
                     var look=Look(e.Substance,e.Intensity,reducedMotion,time);
                     if(FestivalNightLighting.IsNight(state)){look.Tint.a=Mathf.Min(look.Tint.a,NightTint);look.Haze=Mathf.Min(look.Haze,NightTint);}

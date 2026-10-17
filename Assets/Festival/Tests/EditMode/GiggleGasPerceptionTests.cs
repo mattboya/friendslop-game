@@ -129,7 +129,45 @@ namespace Festival.Tests
             Assert.That(FestivalHud.EffectWash(new List<ActiveEffect>{Gas()},false,0).a,Is.Zero,"the HUD's wash stays clear: the gas has its own look");
         }
 
+        // GAS-4: two hits on at once add up, capped at two. Strength 1 is GAS-5's profile; from 1 to 2 the kick ramps 4 to 8 degrees,
+        // the drain 55 to 95 and the tremolo .4 to .7, while the vignette, haze, low-pass, reverb and the pulse's shape stay a hit's.
+        [Test]public void BackToBackHitsBuildToTheStrongerProfile()
+        {
+            float Peak(System.Func<FestivalTrip.Perception,float> value,RoundState state,bool reduced=false)=>Range(t=>value(FestivalTrip.For(state,"me",reduced,t))).High;
+            var one=Camp(Full);var two=Camp(Full);two.Players[0].Effects.Add(Gas());
+            Assert.That(Peak(p=>p.Fov,one),Is.InRange(3.5f,4.5f),"setup: one hit kicks about 4 degrees");
+            Assert.That(Peak(p=>p.Tremolo,one),Is.EqualTo(.4f).Within(.02f),"setup: one hit's tremolo dips .4");
+            Assert.That(FestivalTrip.For(one,"me",false,.1f).Saturation,Is.EqualTo(-55).Within(1e-3f),"setup: one hit drains 55");
+
+            Assert.That(FestivalTrip.For(two,"me",false,.1f).Saturation,Is.EqualTo(-95).Within(1e-3f),"two hits at full drain 95: "+Describe(FestivalTrip.For(two,"me",false,.1f)));
+            Assert.That(Peak(p=>p.Fov,two),Is.InRange(7.5f,8.5f),"the kick doubles, about 8 degrees");
+            float tremolo=Peak(p=>p.Tremolo,two);
+            Assert.That(tremolo,Is.AtLeast(.6f),"the tremolo dips deeper");
+            Assert.That(tremolo,Is.LessThan(1),"never to silence");
+            for(int i=0;i<20;i++)
+            {
+                float t=i/20f;var a=FestivalTrip.For(one,"me",false,t);var b=FestivalTrip.For(two,"me",false,t);
+                Assert.That(b.Vignette,Is.EqualTo(a.Vignette).Within(1e-5f),"the vignette stays a hit's at "+t+" s");
+                Assert.That(b.Haze,Is.EqualTo(a.Haze).Within(1e-5f),"the haze stays a hit's");
+                Assert.That(b.Muffle,Is.EqualTo(a.Muffle).Within(1e-5f),"the low-pass stays a hit's");
+                Assert.That(b.Reverb,Is.EqualTo(a.Reverb).Within(1e-5f),"the reverb stays a hit's");
+                Assert.That(b.Fov,Is.EqualTo(a.Fov*2).Within(1e-4f),"the kick is a hit's pulse, twice as deep, at "+t+" s");
+                Assert.That(b.Tremolo,Is.EqualTo(a.Tremolo*.7f/.4f).Within(1e-4f),"the tremolo is a hit's pulse, .7 deep, at "+t+" s");
+            }
+
+            // The second hit half way through its fade in: 1.5 in all, half way from the gentle profile to the stronger one.
+            var half=Camp(Full);half.Players[0].Effects.Add(new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=Full-.5,RemainingSeconds=FestivalSimulation.GiggleGasSeconds});
+            Assert.That(FestivalTrip.For(half,"me",false,.1f).Saturation,Is.EqualTo(-75).Within(1e-3f),"at 1.5 the drain is half way, 75");
+            Assert.That(Peak(p=>p.Fov,half),Is.EqualTo(Peak(p=>p.Fov,one)*1.5f).Within(.02f),"the kick half way, about 6 degrees");
+            Assert.That(Peak(p=>p.Tremolo,half),Is.EqualTo(.55f).Within(.02f),"the tremolo half way, .55");
+
+            Assert.That(Peak(p=>Mathf.Abs(p.Fov),two,true),Is.Zero,"reduced motion still has no throb");
+            var calm=Range(t=>FestivalTrip.For(two,"me",true,t).Vignette);var single=Range(t=>FestivalTrip.For(one,"me",true,t).Vignette);
+            Assert.That(calm.High-calm.Low,Is.EqualTo(single.High-single.Low).Within(1e-3f),"and halves the vignette's pulse as for one hit");
+        }
+
         // The single writers: the grade's saturation goes through FestivalNightLighting, and camp gets it back when the gas ends.
+        // GAS-4: two hits drain camp's -5 grade to -100, full grey, and it comes back as each wears off.
         [Test]public void TheColourGradeDrainsThroughTheOneGradeWriter()
         {
             var root=new GameObject("Gas world");made.Add(root);var world=root.AddComponent<FestivalWorld>();world.Build();
@@ -140,6 +178,15 @@ namespace Festival.Tests
             Assert.That(grade.saturation.value,Is.EqualTo(saturation+At(Full).Saturation).Within(1e-3f),"by the gas's own drain, through the one grade");
             world.SetLighting(Camp(Kick+31),"me");
             Assert.That(grade.saturation.value,Is.EqualTo(saturation).Within(1e-5f),"and they come back when it ends");
+
+            // A second hit 5 s after the first: both on, then the first wears off, then the second.
+            RoundState Two(double now){var state=Camp(now);state.Players[0].Effects.Add(new ActiveEffect{Id=FestivalSimulation.GiggleGasEffect,StartSeconds=Kick+5,RemainingSeconds=FestivalSimulation.GiggleGasSeconds});return state;}
+            world.SetLighting(Two(Full),"me");
+            Assert.That(grade.saturation.value,Is.EqualTo(-100).Within(1e-3f),"two hits drain camp's grade to full grey");
+            world.SetLighting(Two(Kick+31),"me");
+            Assert.That(grade.saturation.value,Is.EqualTo(saturation+At(Full).Saturation).Within(1e-3f),"one hit's drain once the first wears off");
+            world.SetLighting(Two(Kick+36),"me");
+            Assert.That(grade.saturation.value,Is.EqualTo(saturation).Within(1e-5f),"camp's colours once both have");
         }
 
         // The overlay, the low-pass, the reverb and the tremolo follow the gas, and let go when it ends and when the client leaves (no state).
@@ -206,13 +253,18 @@ namespace Festival.Tests
             Assert.That(station.gameObject.activeInHierarchy,Is.False,"the festival hides them with the rest of camp");
         }
 
-        [Test]public void BesideTheBalloonsEOffersAHitOneAtATime()
+        // GAS-4: E takes a hit with none or one on, kicking in or felt; with two on there is nothing to press.
+        [Test]public void BesideTheBalloonsEOffersUpToTwoHits()
         {
             var me=new PlayerState{Id="me",X=CampFeatures.GiggleBalloonX,Z=CampFeatures.GiggleBalloonZ+2.4f};
             Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.EqualTo("E  TAKE A GIGGLE BALLOON"),"within reach, E takes one");
             me.Effects.Add(Gas());
-            Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.EqualTo("ONE GIGGLE BALLOON AT A TIME"),"while one is on, E does nothing: one at a time");
-            me.Effects.Clear();me.Z=CampFeatures.GiggleBalloonZ+2.6f;
+            Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.EqualTo("E  TAKE A GIGGLE BALLOON"),"with one on, E takes another");
+            me.Effects.Add(Gas());
+            Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.EqualTo("TWO GIGGLE BALLOONS AT A TIME"),"with two on, E does nothing: two at a time");
+            me.Z=CampFeatures.GiggleBalloonZ+2.6f;
+            Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.Empty,"out of reach with two on, no prompt");
+            me.Effects.Clear();
             Assert.That(FestivalHudText.GiggleBalloonPrompt(me),Is.Empty,"out of reach, no prompt");
         }
 
