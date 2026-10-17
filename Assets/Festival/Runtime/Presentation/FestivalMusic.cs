@@ -85,7 +85,8 @@ namespace Festival.Presentation
             static int Sample(Track track,double world)=>(int)System.Math.Min(track.LoopEnd-1,System.Math.Floor(RhythmChart.StageSampleAtWorld(track.Beats,world)));
             public void Stop()
             {
-                foreach(var deck in decks){deck.Stop();deck.clip=null;}
+                // At quit the decks' object can be destroyed before the owner's OnDisable stops them.
+                foreach(var deck in decks)if(deck!=null){deck.Stop();deck.clip=null;}
                 track=null;epoch="";handoff=false;
             }
             /// <summary>Call once per frame. Epoch/hold changes cue immediately; steady playback checks material drift twice

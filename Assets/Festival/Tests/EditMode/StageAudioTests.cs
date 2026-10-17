@@ -13,6 +13,15 @@ namespace Festival.Tests
     {
         private static string Clip(FestivalMusic.Track track)=>track==null?"nothing":track.Clip;
 
+        // At quit Unity can destroy the speakers before the stage audio's OnDisable stops them (native smoke, 2026-10-16).
+        [Test]public void StoppingAfterTheSpeakersAreGoneThrowsNothing()
+        {
+            var speakers=new GameObject("stage speakers under test");
+            var transport=new FestivalMusic.Transport(new[]{speakers.AddComponent<AudioSource>(),speakers.AddComponent<AudioSource>()});
+            UnityEngine.Object.DestroyImmediate(speakers);
+            Assert.DoesNotThrow(transport.Stop);
+        }
+
         [Test]public void EachFestivalsStagePlaysItsOwnDayAndNightTrack()
         {
             string[] palmMirage={"disco-house-loop","tech-house-loop","disco-house-loop","tech-house-loop"};
