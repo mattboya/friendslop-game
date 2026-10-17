@@ -213,7 +213,7 @@ namespace Festival.Tests
                     Assert.That(FestivalSession.ViewFor(sim,friend.Id).Players.Find(p=>p.Id==me.Id).VisualPoiSpin,Is.EqualTo(before),stage+": the friend's snapshot preserves the frozen spin");
                 }
                 Intent(before);Assert.That(me.VisualPoiSpin,Is.EqualTo(before),"setup: the actual host applied the pre-game intent");
-                var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null);
+                sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null);
                 foreach(var p in sim.State.Players){p.X=at.X;p.Z=at.Z;}
                 sim.Tick(3.1);Assert.That(sim.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"the actual ring countdown starts the game");
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

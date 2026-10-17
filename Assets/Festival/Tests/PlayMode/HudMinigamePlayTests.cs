@@ -28,7 +28,7 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=Simulation(session);
-                yield return StartLevel(session);
+                yield return StartLevel(session);sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
                 Text Find(string name){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
                 var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
                 for(float until=Time.realtimeSinceStartup+.3f;Time.realtimeSinceStartup<until;)yield return null;

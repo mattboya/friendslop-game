@@ -103,7 +103,7 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);
                 var sim=Simulation(session);var me=sim.Player(session.LocalPlayerId);var cam=sim.State.Npcs.Find(n=>n.Twist==FestivalSimulation.Influencer);
                 Assert.That(cam,Is.Not.Null);sim.State.Npcs.RemoveAll(n=>n!=cam);me.Effects.Clear();
-                var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null);
+                sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null);
                 me.X=at.X+2;me.Z=at.Z;cam.X=me.X;cam.Z=me.Z-1.5f;cam.Yaw=0;
                 Assert.That(sim.Films(cam,me),Is.True,"setup: the production frame and line of sight put you on camera");
                 sim.State.Booth.RingSeconds=FestivalSimulation.MinigameRingSeconds-.01;sim.Tick(.02);cam.Yaw=0;

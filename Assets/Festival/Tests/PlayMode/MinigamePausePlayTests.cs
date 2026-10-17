@@ -25,7 +25,7 @@ namespace Festival.Tests
             for(float end=Time.realtimeSinceStartup+30;peer.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
             Assert.That(peer.LocalPlayer,Is.Not.Null,peer.Message);var sim=Simulation(host);var joined=sim.Player(peer.LocalPlayerId);joined.X=0;joined.Z=19;peer.Command("Ready");
             for(float end=Time.realtimeSinceStartup+10;!joined.Ready&&Time.realtimeSinceStartup<end;)yield return null;
-            Assert.That(joined.Ready,Is.True);yield return StartLevel(host,peer.LocalPlayerId);yield return null;
+            Assert.That(joined.Ready,Is.True);yield return StartLevel(host,peer.LocalPlayerId);Simulation(host).State.Booth.Kind=FestivalSimulation.MysteryCupsGame;yield return null;
             for(float end=Time.realtimeSinceStartup+5;peer.State.Phase!="Playing"&&Time.realtimeSinceStartup<end;)yield return null;
             Assert.That(peer.State.Phase,Is.EqualTo("Playing"));yield return null;yield return null;
             var owner=sim.Player(host.LocalPlayerId);sim.State.Npcs.Clear();owner.Effects.Clear();joined.Effects.Clear();
@@ -114,7 +114,7 @@ namespace Festival.Tests
         {
             var world=new GameObject("impl-U59 registration world").AddComponent<FestivalWorld>();yield return null;
             var session=new GameObject("impl-U59 registration host").AddComponent<FestivalSession>();session.gameObject.AddComponent<FestivalHud>();yield return null;
-            session.Host("Tester",HostPort);yield return null;yield return StartLevel(session);yield return null;
+            session.Host("Tester",HostPort);yield return null;yield return StartLevel(session);Simulation(session).State.Booth.Kind=FestivalSimulation.MysteryCupsGame;yield return null;
             var actor=FestivalCharacter.Create(world.transform,"impl-U59 surviving world rig",Color.white);actor.Pose="Poi";actor.SetEquippedItem("poi_led");
             var sim=Simulation(session);var at=FestivalSimulation.BoothAt(sim.State);var owner=sim.Player(session.LocalPlayerId);
             try
@@ -140,7 +140,7 @@ namespace Festival.Tests
         {
             var world=new GameObject("impl-U58 pause world").AddComponent<FestivalWorld>();yield return null;
             var session=new GameObject("impl-U58 pause session").AddComponent<FestivalSession>();session.gameObject.AddComponent<FestivalHud>();yield return null;
-            session.Host("Tester",HostPort);yield return null;yield return StartLevel(session);yield return null;
+            session.Host("Tester",HostPort);yield return null;yield return StartLevel(session);Simulation(session).State.Booth.Kind=FestivalSimulation.MysteryCupsGame;yield return null;
             // This regression owns visibility. The separate rig-pause slice covers bone/IK evolution on newly woken actors.
             foreach(var actor in world.GetComponentsInChildren<FestivalCharacter>(true))actor.enabled=false;
             var sim=Simulation(session);var crowd=world.GetComponentInChildren<FestivalAmbientCrowd>();Assert.That(crowd,Is.Not.Null);
@@ -176,7 +176,7 @@ namespace Festival.Tests
             for(float end=Time.realtimeSinceStartup+30;peer.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
             Assert.That(peer.LocalPlayer,Is.Not.Null,peer.Message);var sim=Simulation(host);var owner=sim.Player(peer.LocalPlayerId);owner.X=0;owner.Z=19;peer.Command("Ready");
             for(float end=Time.realtimeSinceStartup+10;!owner.Ready&&Time.realtimeSinceStartup<end;)yield return null;
-            Assert.That(owner.Ready,Is.True);yield return StartLevel(host,peer.LocalPlayerId);yield return null;
+            Assert.That(owner.Ready,Is.True);yield return StartLevel(host,peer.LocalPlayerId);Simulation(host).State.Booth.Kind=FestivalSimulation.MysteryCupsGame;yield return null;
             foreach(var actor in world.GetComponentsInChildren<FestivalCharacter>(true))actor.enabled=false;
             sim.State.ElapsedSeconds=193;sim.State.SimulationSeconds=193;sim.State.TripperId=owner.Id;sim.State.CloudClueStart=150;sim.State.CloudClueReadAt=190;sim.State.CloudClueLandmark=2;
             var at=FestivalSimulation.BoothAt(sim.State);foreach(var player in sim.State.Players){player.X=at.X+1;player.Z=at.Z;}

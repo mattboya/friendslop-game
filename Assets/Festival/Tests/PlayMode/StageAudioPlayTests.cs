@@ -89,7 +89,7 @@ namespace Festival.Tests
             try
             {
                 yield return Open(session);var sim=Simulation(session);var stage=host.GetComponent<FestivalStageAudio>();var player=sim.Player(session.LocalPlayerId);
-                var at=FestivalSimulation.BoothAt(sim.State);player.X=at.X+1;player.Z=at.Z;
+                sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;var at=FestivalSimulation.BoothAt(sim.State);player.X=at.X+1;player.Z=at.Z;
                 double deadline=Time.realtimeSinceStartupAsDouble+6;
                 while(session.State.Phase=="Playing"&&Time.realtimeSinceStartupAsDouble<deadline)yield return null;
                 Assert.That(session.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase));yield return Wait(.2);

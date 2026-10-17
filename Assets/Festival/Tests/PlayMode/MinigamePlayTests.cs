@@ -30,7 +30,7 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=Simulation(session);
                 Assert.That(sim.State.FestivalIndex,Is.EqualTo(Festivals.PoloFestival),"setup: a new game starts at Palm Mirage, with its Ferris wheel");
-                yield return StartLevel(session);
+                yield return StartLevel(session);sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
                 yield return null;yield return null;
 
                 var at=FestivalSimulation.BoothAt(session.State);

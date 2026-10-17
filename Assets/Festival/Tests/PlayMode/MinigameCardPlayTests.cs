@@ -29,7 +29,7 @@ namespace Festival.Tests
                 var sam=sim.AddPlayer("impl-U60-sam","Sam");sam.Ready=true;var ash=sim.AddPlayer("impl-U60-ash","Ash");ash.Ready=true;
                 var ghost=sim.AddPlayer("impl-U60-ghost","Ghost");ghost.Ready=true;
                 sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;
-                yield return StartLevel(session);
+                yield return StartLevel(session);sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
                 Text Find(string name){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
                 IEnumerator Wait(float seconds){for(float until=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<until;)yield return null;}
                 int sequence=0;

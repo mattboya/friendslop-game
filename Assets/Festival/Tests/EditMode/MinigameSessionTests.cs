@@ -78,7 +78,7 @@ namespace Festival.Tests
             foreach(var p in game.State.Players.Where(p=>p.Connected)){p.X=0;p.Z=19;Assert.That(game.Execute(p.Id,new GameCommand{Id="ready"+p.Id,Kind="Ready"}).Accepted,Is.True);}
             game.Tick(5.2);game.Tick(game.State.SpinEndsAt-game.State.SimulationSeconds+.1);
             foreach(var p in game.State.Players.Where(p=>p.Connected))Assert.That(game.Execute(p.Id,new GameCommand{Id="map"+p.Id,Kind="MapReady"}).Accepted,Is.True);
-            game.State.Npcs.Clear();ghost.Connected=true;ghost.Life="Spirit";
+            game.State.Npcs.Clear();ghost.Connected=true;ghost.Life="Spirit";game.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
             var at=FestivalSimulation.BoothAt(game.State);foreach(var p in game.State.Players){p.X=at.X;p.Z=at.Z;}
             for(int k=0;k<35&&game.State.Phase!=FestivalSimulation.MinigamePhase;k++)game.Tick(.1);
             Assert.That(game.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase));return game;
