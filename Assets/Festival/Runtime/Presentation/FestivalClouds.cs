@@ -10,8 +10,8 @@ namespace Festival.Presentation
     /// shader (unlit, fog-free, always in player builds) with a puff texture made here, as the art is frozen. Driven by
     /// FestivalWorld.SetLighting with no network calls; nothing collides or casts a shadow.
     /// TRIP-4: a day's clue cloud drifts through too, like any other cloud to everyone but the tripper, whose sky gives it a faint
-    /// rainbow rim. Once they have read it, their view alone holds its landmark, and their sky glides it overhead into the
-    /// landmark's picture with a gold "$" beside it.</summary>
+    /// rainbow rim. Once they have read it, their view alone holds its landmark, and their sky glides it overhead into a loose,
+    /// patchy picture of the landmark, different each level, with a gold "$" beside it.</summary>
     public sealed class FestivalClouds
     {
         public const string RootName="Festival clouds",ClueName="Clue cloud",RimName="Rainbow rim";
@@ -174,11 +174,11 @@ namespace Festival.Presentation
             float off=altitude*Mathf.Tan(OverheadTilt*Mathf.Deg2Rad);
             return new Vector3(Mathf.Sin(yaw*Mathf.Deg2Rad)*off,altitude,Mathf.Cos(yaw*Mathf.Deg2Rad)*off);
         }
-        // Lays the clue cloud's puffs out `amount` of the way into landmark's picture (-1 none), its "$" growing in beside it, and
-        // its rim round the lot.
+        // Lays the clue cloud's puffs out `amount` of the way into the level's loose picture of landmark (-1 none), its crisp "$"
+        // growing in beside it, and its rim round the lot.
         private void DrawClue(int landmark,float amount)
         {
-            var own=sky.Clue.Puffs;var into=landmark<0?own:CloudShapes.Landmarks[landmark].Picture.Puffs;
+            var own=sky.Clue.Puffs;var into=landmark<0?own:sky.CluePictures[landmark];
             for(int i=0;i<ClueQuads;i++)
             {
                 bool dollar=i>=CloudShapes.MaxPuffs;var sign=dollar?CloudShapes.Dollar[i-CloudShapes.MaxPuffs]:default;

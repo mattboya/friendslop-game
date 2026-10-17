@@ -14,10 +14,12 @@ public static class CloudShapesTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{EachLevelHas8To14CloudsOnTheBand,OneWindCarriesEveryCloud,CloudsFadeOutAndBackInWhereTheyWrap,
+        // The tables check goes first, before any other test has worked out a sky.
+        foreach(var test in new Action[]{LoosePicturesLeaveTheTablesAndTheRestOfTheSkyAsTheyWere,EachLevelHas8To14CloudsOnTheBand,OneWindCarriesEveryCloud,CloudsFadeOutAndBackInWhereTheyWrap,
             TheSameSpinGivesTheSameSky,AShapeShowsEvery60To120SAndHolds15To20S,TheCloudNearestTheZenithTakesTheShape,
             EveryShapeFitsOneCloud,EveryShapeIsOneBoldCloud,ACloudMorphsIntoItsShapeAndBack,ACheekyShapeShowsAboutOneShowInThree,
-            TheRocketStandsUprightOnTwoPods,EveryLandmarkIsPicturedAsOneBoldCloudWithADollarSignBesideIt,TheClueCloudDriftsWithTheWindOnTheBandWhileItIsUp})
+            TheRocketStandsUprightOnTwoPods,EachLevelsLoosePictureStillReadsAsItsOwnLandmark,EveryLandmarkIsPicturedAsOneBoldCloudWithADollarSignBesideIt,
+            TheClueCloudDriftsWithTheWindOnTheBandWhileItIsUp})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" cloud test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -266,6 +268,62 @@ public static class CloudShapesTests
         }
         float high=dollar.Max(p=>p.Y+p.Radius),low=dollar.Min(p=>p.Y-p.Radius);
         Check(high-low>=1.5f*CloudShapes.HalfHeight,"the $ stands as tall as the picture beside it, got "+(high-low)+" m");
+    }
+
+    // Each level's sky pictures every landmark loose and patchy: a third of its puffs gone, never the four reaching furthest out,
+    // the rest swollen and nudged up to LooseJitter m inside the footprint. It must still read as that landmark and no other.
+    static void EachLevelsLoosePictureStillReadsAsItsOwnLandmark()
+    {
+        var forms=CloudShapes.Landmarks.Select(_=>new HashSet<string>()).ToArray();
+        foreach(int spin in Spins())
+        {
+            var pictures=CloudShapes.For(spin).CluePictures;var repeat=CloudShapes.For(spin).CluePictures;
+            Check(pictures.Length==CloudShapes.Landmarks.Length,"one loose picture per landmark");
+            for(int k=0;k<pictures.Length;k++)
+            {
+                var clean=CloudShapes.Landmarks[k].Picture.Puffs;var loose=pictures[k];
+                string context="spin "+spin+" "+CloudShapes.Landmarks[k].Name+": ";
+                Fits(loose,context);Check(loose.All(p=>p.Radius>=MinPuff),context+"no puff below "+MinPuff+" m");
+                Check(loose.Length==clean.Length-clean.Length/3,context+"exactly a third (rounded down) of "+clean.Length+" puffs dropped, got "+loose.Length+" left");
+                float cleanWidth=clean.Max(p=>p.X+p.Radius)-clean.Min(p=>p.X-p.Radius),cleanHeight=clean.Max(p=>p.Y+p.Radius)-clean.Min(p=>p.Y-p.Radius);
+                float looseWidth=loose.Max(p=>p.X+p.Radius)-loose.Min(p=>p.X-p.Radius),looseHeight=loose.Max(p=>p.Y+p.Radius)-loose.Min(p=>p.Y-p.Radius);
+                Check(looseWidth>=.8f*cleanWidth&&looseHeight>=.8f*cleanHeight,context+"keeps 80 percent of both spans, got "+looseWidth+" x "+looseHeight+" of "+cleanWidth+" x "+cleanHeight);
+                foreach(var reach in new Func<CloudShapes.Puff,float>[]{p=>p.Radius-p.X,p=>p.X+p.Radius,p=>p.Radius-p.Y,p=>p.Y+p.Radius})
+                {
+                    // On a tie the first such puff stays, so tables with a straight edge keep one corner.
+                    var edge=clean.OrderByDescending(reach).First();float radius=edge.Radius*CloudShapes.LooseSwell;
+                    float x=Math.Max(radius-CloudShapes.HalfWidth,Math.Min(CloudShapes.HalfWidth-radius,edge.X)),y=Math.Max(radius-CloudShapes.HalfHeight,Math.Min(CloudShapes.HalfHeight-radius,edge.Y));
+                    Check(loose.Any(p=>Math.Abs(p.Radius-radius)<1e-4&&Math.Abs(p.X-x)<=CloudShapes.LooseJitter+1e-4&&Math.Abs(p.Y-y)<=CloudShapes.LooseJitter+1e-4),context+"keeps its outermost puff at ("+edge.X+", "+edge.Y+")");
+                }
+                string signature=Signature(loose);
+                Check(!ReferenceEquals(loose,clean)&&signature!=Signature(clean),context+"is not the crisp picture");
+                Check(signature==Signature(repeat[k]),context+"the same spin worked out twice gives the same loose picture");
+                double own=MeanNearest(loose,clean);
+                for(int other=0;other<pictures.Length;other++)if(other!=k)Check(own<MeanNearest(loose,CloudShapes.Landmarks[other].Picture.Puffs),context+"reads as its own landmark before "+CloudShapes.Landmarks[other].Name);
+                forms[k].Add(signature);
+            }
+        }
+        for(int k=0;k<forms.Length;k++)Check(forms[k].Count>=100,CloudShapes.Landmarks[k].Name+" has at least 100 distinct forms, got "+forms[k].Count);
+    }
+    static double MeanNearest(CloudShapes.Puff[] loose,CloudShapes.Puff[] clean)=>loose.Average(p=>clean.Min(c=>Math.Sqrt(Sq(p.X-c.X)+Sq(p.Y-c.Y))));
+    static string Signature(CloudShapes.Puff[] puffs)=>string.Join(";",puffs.Select(p=>p.X+","+p.Y+","+p.Radius));
+
+    // The loose pictures never touch the authored tables, nor draw from the streams the rest of the sky comes from.
+    static void LoosePicturesLeaveTheTablesAndTheRestOfTheSkyAsTheyWere()
+    {
+        Func<string> tables=()=>string.Join("|",CloudShapes.Landmarks.Select(l=>Signature(l.Picture.Puffs)).Concat(CloudShapes.Shapes.Select(s=>Signature(s.Puffs))))+"|"+Signature(CloudShapes.Dollar);
+        string before=tables();foreach(int spin in Spins())CloudShapes.For(spin);
+        Check(tables()==before,"working out skies leaves every landmark, shape and $ table as authored");
+        // Taken from the sky before it had loose pictures: each cloud's puff count, the clue cloud's, its height and side, and every show.
+        var golden=new Dictionary<int,string>{
+            {829348964,"10,8,7,8,10,6,10,9,9,7,10,6,6,9|10@48-|13/0@88+20,6/10@206+19,6/0@326+15,13/11@423+17"},
+            {1658697915,"9,7,7,8,9,10,7,9,7,6,10,7|9@46+|0/8@120+20,4/4@180+18,0/10@297+19,0/2@394+15"}};
+        foreach(var pair in golden)
+        {
+            var sky=CloudShapes.For(pair.Key);
+            string got=string.Join(",",sky.Clouds.Select(c=>c.Puffs.Length))+"|"+sky.Clue.Puffs.Length+"@"+sky.Clue.Altitude+(sky.Clue.Offset>0?"+":"-")+"|"+string.Join(",",sky.Shows.Select(s=>s.Cloud+"/"+s.Shape+"@"+s.Start+"+"+s.Hold));
+            Check(got==pair.Value,"spin "+pair.Key+"'s clouds, clue cloud and shows stay as they were, got "+got);
+        }
     }
 
     // TRIP-4: the day's clue cloud comes up and goes with the window (CloudClueUp), fading in and out over ClueFadeSeconds, and in

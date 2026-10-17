@@ -202,13 +202,26 @@ namespace Festival.Tests
             foreach(double t in new[]{show.Start+CloudShapes.MorphSeconds/2,show.Start+CloudShapes.MorphSeconds+show.Hold/2,show.End+3})
             {
                 state.ElapsedSeconds=t;clouds.Apply(state,new Vector3(31,1.65f,-24));
-                for(int c=0;c<sky.Clouds.Length;c++)
+                for(int c=0;c<sky.Clouds.Length;c++)Held(Cloud(root,c),"cloud "+c+" at "+t+" s");
+            }
+            // The read clue cloud and its rim too: its loose picture, swollen puffs and "$" included, as it forms, holds and fades.
+            for(int k=0;k<CloudShapes.Landmarks.Length;k++)
+            {
+                double readAt=190;var clue=Clue(Festivals.PoloFestival,150,readAt,k,readAt);clue.Players.Find(p=>p.Id==Tripper).Yaw=50*k;
+                foreach(double into in new[]{CloudShapes.MorphSeconds/2,CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds/2,CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds+CloudShapes.ClueFadeSeconds/2})
                 {
-                    var cloud=Cloud(root,c);var bounds=cloud.GetComponent<MeshRenderer>().bounds;bounds.Expand(1e-3f);
-                    foreach(var vertex in cloud.GetComponent<MeshFilter>().sharedMesh.vertices)
-                        Assert.That(bounds.Contains(cloud.TransformPoint(vertex)),Is.True,"cloud "+c+" at "+t+" s: its bounds "+bounds+" hold its corner "+cloud.TransformPoint(vertex));
+                    clue.SimulationSeconds=clue.ElapsedSeconds=readAt+into;clouds.Apply(clue,new Vector3(31,1.65f,-24),Tripper);
+                    string when=CloudShapes.Landmarks[k].Name+" "+into+" s after the read";
+                    Assert.That(Shows(ClueCloud(root))&&Shows(Rim(root)),Is.True,"setup: "+when+", the clue cloud and its rim show");
+                    Held(ClueCloud(root),"the clue cloud, "+when);Held(Rim(root),"its rim, "+when);
                 }
             }
+        }
+        private static void Held(Transform part,string what)
+        {
+            var bounds=part.GetComponent<MeshRenderer>().bounds;bounds.Expand(1e-3f);
+            foreach(var vertex in part.GetComponent<MeshFilter>().sharedMesh.vertices)
+                Assert.That(bounds.Contains(part.TransformPoint(vertex)),Is.True,what+": its bounds "+bounds+" hold its corner "+part.TransformPoint(vertex));
         }
 
         // Per-frame code makes no garbage. Which sky shows (night, storm, camp) is rechecked once a second of clock, as storms
@@ -320,7 +333,8 @@ namespace Festival.Tests
 
         // TRIP-4: once the tripper has read it, their sky (and theirs alone: no other view holds the landmark) draws the clue cloud
         // gliding overhead over a morph's 4 s, toward where their body faces as they lie there, turning into the landmark with a gold
-        // "$" beside it. The picture holds 20 s, then fades away, even past the end of the cloud's window.
+        // "$" beside it. The picture holds 20 s, then fades away, even past the end of the cloud's window. It is the level's loose,
+        // patchy picture of the landmark, never the crisp one, from the morph to the fade, and the rim follows it; the "$" stays crisp.
         [Test]public void TheTrippersReadCloudDriftsOverheadAndBecomesTheLandmarkWithADollarSign()
         {
             var clouds=Sky(out var root);var sky=CloudShapes.For(Spin);var viewer=new Vector3(6,.3f,-12);
@@ -331,7 +345,12 @@ namespace Festival.Tests
                 clouds.Apply(state,viewer,Tripper);var clue=ClueCloud(root);var path=sky.ClueAt(150,readAt);
                 Assert.That(Vector3.Distance(clue.localPosition,new Vector3(path.X,path.Y,path.Z)),Is.LessThan(1e-3f),landmark.Name+": as it is read the cloud is still on its path");
                 Assert.That(Match(CluePuffs(clue,0,CloudShapes.MaxPuffs),sky.Clue.Puffs),Is.True,landmark.Name+": and still itself");
-                foreach(double into in new[]{CloudShapes.MorphSeconds,CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds-.5})
+                var loose=sky.CluePictures[k];
+                state.SimulationSeconds=state.ElapsedSeconds=readAt+CloudShapes.MorphSeconds/2;clouds.Apply(state,viewer,Tripper);
+                var half=new List<CloudShapes.Puff>();
+                for(int i=0;i<CloudShapes.MaxPuffs;i++){var p=CloudShapes.Morph(sky.Clue.Puffs,loose,i,.5f);if(p.Radius>0)half.Add(p);}
+                Assert.That(Match(CluePuffs(clue,0,CloudShapes.MaxPuffs),half.ToArray()),Is.True,landmark.Name+": half way through the morph, half way to the loose picture");
+                foreach(double into in new[]{CloudShapes.MorphSeconds,CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds-.5,CloudShapes.MorphSeconds+CloudShapes.CluePictureSeconds+CloudShapes.ClueFadeSeconds/2})
                 {
                     string when=landmark.Name+" "+into+" s after the read: ";
                     state.SimulationSeconds=readAt+into;state.ElapsedSeconds=readAt+into;clouds.Apply(state,viewer,Tripper);
@@ -341,8 +360,13 @@ namespace Festival.Tests
                     Assert.That(Vector2.Angle(ground,new Vector2(Mathf.Sin(yaw*Mathf.Deg2Rad),Mathf.Cos(yaw*Mathf.Deg2Rad))),Is.LessThan(1f),when+"toward where the tripper's body faces");
                     Assert.That(Vector3.Angle(clue.forward,away),Is.LessThan(.1f),when+"facing them");
                     Assert.That(Vector3.Dot(clue.up,new Vector3(-Mathf.Sin(yaw*Mathf.Deg2Rad),0,-Mathf.Cos(yaw*Mathf.Deg2Rad))),Is.GreaterThan(.9f),when+"its top toward their head, so it reads upright as they look up");
-                    Assert.That(Match(CluePuffs(clue,0,CloudShapes.MaxPuffs),landmark.Picture.Puffs),Is.True,when+"it pictures the "+landmark.Name);
-                    Assert.That(Match(CluePuffs(clue,CloudShapes.MaxPuffs,CloudShapes.Dollar.Length),CloudShapes.Dollar),Is.True,when+"with the $ beside it");
+                    var puffs=CluePuffs(clue,0,CloudShapes.MaxPuffs);
+                    Assert.That(Match(puffs,loose),Is.True,when+"it pictures the "+landmark.Name+" as this level's loose picture");
+                    Assert.That(Match(puffs,landmark.Picture.Puffs),Is.False,when+"not the crisp one");
+                    var rim=CluePuffs(Rim(root),0,CloudShapes.MaxPuffs);float grow=rim.Count>0?rim[0].Radius/loose[0].Radius:0;
+                    Assert.That(Match(rim,System.Array.ConvertAll(loose,p=>new CloudShapes.Puff(p.X,p.Y,p.Radius*grow))),Is.True,when+"the rim runs round the loose picture");
+                    Assert.That(grow,Is.GreaterThan(1f),when+"a little wider than the cloud");
+                    Assert.That(Match(CluePuffs(clue,CloudShapes.MaxPuffs,CloudShapes.Dollar.Length),CloudShapes.Dollar),Is.True,when+"with the crisp $ beside it");
                     var colors=clue.GetComponent<MeshFilter>().sharedMesh.colors;var gold=colors[4*CloudShapes.MaxPuffs];
                     Assert.That(gold.r>.9f&&gold.g>.6f&&gold.b<.5f,Is.True,when+"a gold $, got "+gold);
                 }

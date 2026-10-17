@@ -26,6 +26,9 @@ namespace Festival.Core
         // morphs in over MorphSeconds, holds MinHold-MaxHoldSeconds and melts back over MorphSeconds.
         public const int MinGapSeconds=60,MaxGapSeconds=120,MinHoldSeconds=15,MaxHoldSeconds=20;
         public const double MorphSeconds=4;
+        // A read clue cloud's picture is loose: each kept puff LooseSwell times as big and nudged up to LooseJitter m. Much more
+        // nudge lets some levels' security star or Ferris wheel read closer to another landmark.
+        public const float LooseJitter=1f,LooseSwell=1.3f;
 
         /// <summary>One soft puff, in metres in its cloud's own plane: X across, Y up, Radius how far it reaches.</summary>
         public readonly struct Puff { public readonly float X,Y,Radius; public Puff(float x,float y,float radius){X=x;Y=y;Radius=radius;} }
@@ -56,11 +59,18 @@ namespace Festival.Core
             /// <summary>TRIP-4: the day's clue cloud (FestivalSimulation.CloudClueUp): an ordinary cloud with a lane of its own, Offset
             /// to the side of the middle at Altitude. Its Lane and Phase go unused, as it crosses the sky only once (ClueAt).</summary>
             public readonly Cloud Clue;
+            /// <summary>Each of Landmarks as this level's read clue cloud pictures it, loose and patchy (Loosen). Worked out once with
+            /// the sky, so drawing it makes no garbage.</summary>
+            public readonly Puff[][] CluePictures;
             readonly double alongX,alongZ,speed;
             public Sky(int spinSeed,double heading,double speed,Cloud[] clouds,Cloud clue)
             {
                 alongX=Math.Cos(heading);alongZ=Math.Sin(heading);this.speed=speed;WindX=(float)(alongX*speed);WindZ=(float)(alongZ*speed);Clouds=clouds;Clue=clue;
                 Shows=Schedule(spinSeed);
+                // A stream of its own, so the clouds and shows come out as they did before.
+                var loose=new ContentRandom(unchecked(spinSeed*61+23));loose.Next(100);
+                CluePictures=new Puff[Landmarks.Length][];
+                for(int k=0;k<Landmarks.Length;k++)CluePictures[k]=Loosen(Landmarks[k].Picture.Puffs,loose);
             }
             /// <summary>Where the clue cloud is `seconds` into a level whose clue comes up at `start`: down its lane with the wind,
             /// nearest the middle of the sky half way through its ClueSeconds, fading in and out over ClueFadeSeconds. Alpha is 0
@@ -124,6 +134,31 @@ namespace Festival.Core
             // stays on the band from one end of its window to the other, at 2 m/s too.
             var clue=new Cloud((random.Next(2)==0?1:-1)*LaneInner,0,0,MinAltitude+random.Next(11),Ordinary(random));
             return new Sky(spinSeed,heading,speed,clouds,clue);
+        }
+        // A third of a landmark's puffs gone, in a new copy, the rest kept in order. The first puff reaching furthest out each way
+        // always stays, so the picture keeps its full span.
+        static Puff[] Loosen(Puff[] clean,ContentRandom random)
+        {
+            int left=0,right=0,low=0,high=0;
+            for(int i=1;i<clean.Length;i++)
+            {
+                if(clean[i].X-clean[i].Radius<clean[left].X-clean[left].Radius)left=i;
+                if(clean[i].X+clean[i].Radius>clean[right].X+clean[right].Radius)right=i;
+                if(clean[i].Y-clean[i].Radius<clean[low].Y-clean[low].Radius)low=i;
+                if(clean[i].Y+clean[i].Radius>clean[high].Y+clean[high].Radius)high=i;
+            }
+            var candidates=new List<int>();
+            for(int i=0;i<clean.Length;i++)if(i!=left&&i!=right&&i!=low&&i!=high)candidates.Add(i);
+            var dropped=new bool[clean.Length];int remove=clean.Length/3;
+            for(int n=0;n<remove;n++){int at=random.Next(candidates.Count),last=candidates.Count-1;dropped[candidates[at]]=true;candidates[at]=candidates[last];candidates.RemoveAt(last);}
+            var result=new Puff[clean.Length-remove];int kept=0,jitter=(int)(LooseJitter*100);
+            for(int i=0;i<clean.Length;i++)if(!dropped[i])
+            {
+                var p=clean[i];float radius=p.Radius*LooseSwell,x=p.X+(random.Next(2*jitter+1)-jitter)/100f,y=p.Y+(random.Next(2*jitter+1)-jitter)/100f;
+                x=Math.Max(-HalfWidth+radius,Math.Min(HalfWidth-radius,x));y=Math.Max(-HalfHeight+radius,Math.Min(HalfHeight-radius,y));
+                result[kept++]=new Puff(x,y,radius);
+            }
+            return result;
         }
         // An ordinary cloud: 6-10 overlapping puffs in a row, bigger and higher in the middle, on a flat base.
         static Puff[] Ordinary(ContentRandom random)
