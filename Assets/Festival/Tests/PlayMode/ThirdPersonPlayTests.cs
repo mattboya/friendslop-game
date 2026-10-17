@@ -190,9 +190,11 @@ namespace Festival.Tests
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
 
-                // The pass's settings: CAMERA VIEW says which view you have, and its TOGGLE flips it.
+                // The pass's settings: on CONTROLS, CAMERA VIEW says which view you have, and its TOGGLE flips it.
                 session.MenuOpen=true;yield return null;
                 Assert.That(Click("SETTINGS"),Is.Not.Null,"setup: the pass has a SETTINGS button");
+                yield return null;yield return null;
+                Assert.That(Click("CONTROLS"),Is.Not.Null,"setup: the settings have a CONTROLS tab");
                 yield return null;yield return null;
                 var value=Find("CAMERA VIEW value");
                 Assert.That(value,Is.Not.Null,"the settings have a CAMERA VIEW row");

@@ -1479,8 +1479,14 @@ namespace Festival.Tests
                     else
                     {
                         if(Value("MUSIC VOLUME")!="35%")failures.Add("settings: MUSIC VOLUME reads \""+Value("MUSIC VOLUME")+"\", expected this machine's 35%");
-                        // The first + is the music's.
-                        Named<Button>("+","Pass settings").onClick.Invoke();yield return null;
+                        // The + on the MUSIC VOLUME row.
+                        var music=Named<Text>("MUSIC VOLUME value","Pass settings").rectTransform;
+                        foreach(var plus in hud.GetComponentsInChildren<Button>(false))
+                        {
+                            var at=(RectTransform)plus.transform;
+                            if(plus.name=="+"&&at.parent==music.parent&&at.anchorMin.y<music.anchorMax.y&&music.anchorMin.y<at.anchorMax.y){plus.onClick.Invoke();break;}
+                        }
+                        yield return null;
                         if(Value("MUSIC VOLUME")!="40%"||Mathf.Abs(session.Profile.Data.MusicVolume-.4f)>1e-4f)failures.Add("settings: after + MUSIC VOLUME reads \""+Value("MUSIC VOLUME")+"\" at a volume of "+session.Profile.Data.MusicVolume+", expected 40%");
                         var back=Named<Button>("BACK TO PASS","Pass settings");
                         string backLabel=back==null?"(none)":back.GetComponentInChildren<Text>().text;

@@ -44,7 +44,12 @@ namespace Festival.Presentation
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
         private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, campSecrets, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping;
-        private Text musicValue,lookValue,motionValue,contrastValue,viewValue;
+        // SET-1: the one settings screen the title and the pass open (FestivalSettingsScreen): its tab buttons, a widget row for each
+        // of its Rows, and the line saying what the platform is actually doing.
+        private FestivalSettingsScreen settingsScreen;
+        private readonly List<(FestivalSettingsScreen.Tab Tab,Image Fill,Text Label)> settingsTabs=new List<(FestivalSettingsScreen.Tab,Image,Text)>();
+        private readonly List<(FestivalSettingsScreen.Row Row,GameObject[] Parts,Text Value,Button[] Buttons)> settingsRows=new List<(FestivalSettingsScreen.Row,GameObject[],Text,Button[])>();
+        private Text settingsStatus;
         private RectTransform mapPlayerMarker;
         private GameObject campMap,festivalMap;
         private readonly Image[] slotFrames=new Image[3];
@@ -265,6 +270,7 @@ namespace Festival.Presentation
             }
             shopChime=AudioClip.Create("Camp seller cash chime",samples.Length,1,rate,false);shopChime.SetData(samples,0);
             var spoken=OhYeahSamples(rate);ohYeah=AudioClip.Create("Giggle Tank oh yeah",spoken.Length,1,rate,false);ohYeah.SetData(spoken,0);
+            if(session?.Profile!=null)settingsScreen=new FestivalSettingsScreen(session.Profile,session.Settings,session.Voice);
             Build();
         }
 
@@ -639,24 +645,27 @@ namespace Festival.Presentation
             Button(menuHome.transform,"HOW TO PLAY",new Vector2(.505f,.135f),new Vector2(.955f,.25f),OpenHowToPlay);
             Button(menuHome.transform,"LEAVE SESSION",new Vector2(.045f,.01f),new Vector2(.955f,.125f),()=>{session.Leave();titleScreen.Open(FestivalTitleScreen.Page.Home);});
             settingsPanel=Panel(menuPanel.transform,"Pass settings",Color.clear,new Vector2(.055f,.025f),new Vector2(.945f,.76f));settingsPanel.GetComponent<Image>().raycastTarget=false;
-            var settingsHeading=Label(settingsPanel.transform,"Settings heading",32,TextAnchor.MiddleLeft);settingsHeading.text="LOCAL SETTINGS";settingsHeading.fontStyle=FontStyle.Normal;settingsHeading.color=Ink;Place(settingsHeading.rectTransform,.04f,.88f,.96f,.98f);
-            settingsText=Label(settingsPanel.transform,"Settings values",18,TextAnchor.MiddleLeft);settingsText.text="Saved on this machine. Changes apply immediately.";settingsText.color=new Color(.32f,.40f,.36f);Place(settingsText.rectTransform,.04f,.78f,.96f,.88f);
-            SettingRow(settingsPanel.transform,"MUSIC VOLUME",.64f,out musicValue);
-            SettingRow(settingsPanel.transform,"LOOK SPEED",.51f,out lookValue);
-            SettingRow(settingsPanel.transform,"REDUCED MOTION",.38f,out motionValue);
-            SettingRow(settingsPanel.transform,"HIGH CONTRAST",.25f,out contrastValue);
-            // CAM-1: FIRST PERSON or THIRD PERSON, read further left than the short values so the words fit before the TOGGLE.
-            SettingRow(settingsPanel.transform,"CAMERA VIEW",.12f,out viewValue);Place(viewValue.rectTransform,.30f,.13f,.68f,.23f);
-            Button(settingsPanel.transform,"−",new Vector2(.66f,.67f),new Vector2(.76f,.75f),()=>ChangeSetting("music",-1));
-            Button(settingsPanel.transform,"+",new Vector2(.84f,.67f),new Vector2(.94f,.75f),()=>ChangeSetting("music",1));
-            Button(settingsPanel.transform,"−",new Vector2(.66f,.54f),new Vector2(.76f,.62f),()=>ChangeSetting("look",-1));
-            Button(settingsPanel.transform,"+",new Vector2(.84f,.54f),new Vector2(.94f,.62f),()=>ChangeSetting("look",1));
-            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.41f),new Vector2(.94f,.49f),()=>ChangeSetting("motion",1));
-            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.28f),new Vector2(.94f,.36f),()=>ChangeSetting("contrast",1));
-            Button(settingsPanel.transform,"TOGGLE",new Vector2(.70f,.15f),new Vector2(.94f,.23f),()=>ChangeSetting("view",1));
-            // HUD-7: every first-time tip this machine has shown comes back.
-            Button(settingsPanel.transform,"SHOW TIPS AGAIN",new Vector2(.04f,.015f),new Vector2(.49f,.105f),()=>{string error=session.Profile.ShowTipsAgain();settingsText.text=error!=""?error:"First-time tips will show again.";});
-            settingsBack=Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.51f,.015f),new Vector2(.96f,.105f),()=>settingsOpen=false).GetComponentInChildren<Text>();
+            var settingsHeading=Label(settingsPanel.transform,"Settings heading",32,TextAnchor.MiddleLeft);settingsHeading.text="LOCAL SETTINGS";settingsHeading.fontStyle=FontStyle.Normal;settingsHeading.color=Ink;Place(settingsHeading.rectTransform,.04f,.89f,.96f,.98f);
+            // SET-1: five tabs, the save message (or why a change could not be saved), the open tab's rows, what the platform is
+            // actually doing, then RESET TAB for the open tab, SHOW TIPS AGAIN and the way out.
+            for(int i=0;i<FestivalSettingsScreen.Tabs.Length;i++)
+            {
+                var tab=FestivalSettingsScreen.Tabs[i];
+                var button=Button(settingsPanel.transform,FestivalSettingsScreen.TabName(tab),new Vector2(.04f+i*.186f,.815f),new Vector2(.216f+i*.186f,.885f),()=>settingsScreen.Open(tab));
+                var label=button.GetComponentInChildren<Text>();ShrinkToFit(label,12);
+                settingsTabs.Add((tab,button.GetComponent<Image>(),label));
+            }
+            settingsText=Label(settingsPanel.transform,"Settings values",18,TextAnchor.MiddleLeft);settingsText.text=FestivalSettingsScreen.SavedMessage;settingsText.color=new Color(.32f,.40f,.36f);Place(settingsText.rectTransform,.04f,.75f,.96f,.805f);ShrinkToFit(settingsText,12);
+            var slots=new Dictionary<FestivalSettingsScreen.Tab,int>();
+            foreach(var row in FestivalSettingsScreen.Rows)
+            {
+                slots.TryGetValue(row.Tab,out int slot);slots[row.Tab]=slot+1;
+                settingsRows.Add(SettingRow(settingsPanel.transform,row,.74f-(slot+1)*SettingRowHeight));
+            }
+            settingsStatus=Label(settingsPanel.transform,"Settings status",16,TextAnchor.MiddleLeft);settingsStatus.color=new Color(.32f,.40f,.36f);Place(settingsStatus.rectTransform,.04f,.105f,.96f,.16f);ShrinkToFit(settingsStatus,11);
+            Button(settingsPanel.transform,"RESET TAB",new Vector2(.04f,.015f),new Vector2(.32f,.095f),()=>settingsScreen.ResetTab());
+            ShrinkToFit(Button(settingsPanel.transform,"SHOW TIPS AGAIN",new Vector2(.34f,.015f),new Vector2(.64f,.095f),()=>settingsScreen.ShowTipsAgain()).GetComponentInChildren<Text>(),14);
+            settingsBack=Button(settingsPanel.transform,"BACK TO PASS",new Vector2(.66f,.015f),new Vector2(.96f,.095f),()=>settingsOpen=false).GetComponentInChildren<Text>();
         }
 
         // HUD-7: How to Play, built last so it covers the main menu, the pass and whatever is open beside them; its dimmer takes the
@@ -760,11 +769,19 @@ namespace Festival.Presentation
             mapText=Label(mapPanel.transform,"Map text",21,TextAnchor.UpperLeft);mapText.color=Ink;Place(mapText.rectTransform,.70f,.08f,.96f,.84f);
         }
 
-        private void SettingRow(Transform parent,string title,float y,out Text value)
+        private const float SettingRowHeight=.072f;
+        private (FestivalSettingsScreen.Row,GameObject[],Text,Button[]) SettingRow(Transform parent,FestivalSettingsScreen.Row row,float y)
         {
-            Rule(parent,y-.01f);
-            var label=Label(parent,title,20,TextAnchor.MiddleLeft);label.text=title;label.color=Ink;label.fontStyle=FontStyle.Normal;Place(label.rectTransform,.04f,y+.01f,.53f,y+.11f);
-            value=Label(parent,title+" value",21,TextAnchor.MiddleRight);value.color=new Color(.16f,.44f,.38f);Place(value.rectTransform,.52f,y+.01f,.65f,y+.11f);
+            float top=y+SettingRowHeight,inset=.005f;
+            var rule=Rule(parent,y);
+            var label=Label(parent,row.Label,20,TextAnchor.MiddleLeft);label.text=row.Label;label.color=Ink;label.fontStyle=FontStyle.Normal;Place(label.rectTransform,.04f,y,.44f,top);ShrinkToFit(label,12);
+            var value=Label(parent,row.Label+" value",21,TextAnchor.MiddleRight);value.color=new Color(.16f,.44f,.38f);Place(value.rectTransform,.44f,y,.665f,top);ShrinkToFit(value,12);
+            var buttons=row.Toggle
+                ?new[]{Button(parent,"TOGGLE",new Vector2(.70f,y+inset),new Vector2(.94f,top-inset),()=>settingsScreen.Change(row,1))}
+                :new[]{Button(parent,"−",new Vector2(.69f,y+inset),new Vector2(.80f,top-inset),()=>settingsScreen.Change(row,-1)),Button(parent,"+",new Vector2(.83f,y+inset),new Vector2(.94f,top-inset),()=>settingsScreen.Change(row,1))};
+            var parts=new List<GameObject>{rule,label.gameObject,value.gameObject};
+            foreach(var button in buttons){ShrinkToFit(button.GetComponentInChildren<Text>(),14);parts.Add(button);}
+            return (row,parts.ToArray(),value,Array.ConvertAll(buttons,b=>b.GetComponent<Button>()));
         }
 
         private void MapPin(Transform parent,string name,float x,float y,Color color)
@@ -822,11 +839,7 @@ namespace Festival.Presentation
             // MENU-1: the session reads no keys until it connects, so on the title Esc is the HUD's: it puts the settings away, or
             // steps back a page.
             if(!session.Connected&&session.Controls.Menu.WasPressedThisFrame()&&!session.Controls.Rebinding){if(settingsOpen)settingsOpen=false;else titleScreen.Back();}
-            musicValue.text=Mathf.RoundToInt(session.Profile.Data.MusicVolume*100)+"%";
-            lookValue.text=session.Profile.Data.MouseSensitivity.ToString("0.00");
-            motionValue.text=session.Profile.Data.ReducedMotion?"ON":"OFF";
-            contrastValue.text=session.Profile.Data.HighContrast?"ON":"OFF";
-            viewValue.text=session.Profile.Data.ThirdPerson?"THIRD PERSON":"FIRST PERSON";
+            UpdateSettingsScreen();
             string allFound=session.Profile.CampEggCompletionText;campSecrets.text=session.Profile.CampEggCountText+(allFound==""?"":"\n"+allFound);
             settingsBack.text=session.Connected?"BACK TO PASS":"BACK";
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
@@ -2143,15 +2156,25 @@ namespace Festival.Presentation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private string tracedCampEgg="";
 #endif
-        private void ChangeSetting(string key,int direction)
+        // SET-1: only the open tab's rows show, each reading the saved choice; a row another choice overrides cannot be pressed.
+        private void UpdateSettingsScreen()
         {
-            var data=session.Profile.Data;
-            if(key=="music")data.MusicVolume=Mathf.Clamp(data.MusicVolume+direction*.05f,0,.7f);
-            if(key=="look")data.MouseSensitivity=Mathf.Clamp(data.MouseSensitivity+direction*.02f,.02f,.5f);
-            if(key=="motion")data.ReducedMotion=!data.ReducedMotion;
-            if(key=="contrast")data.HighContrast=!data.HighContrast;
-            if(key=="view")data.ThirdPerson=!data.ThirdPerson;
-            string error=session.Profile.Save();if(error!="")session.SetMessage(error);
+            if(!settingsOpen||settingsScreen==null)return;
+            foreach(var tab in settingsTabs)
+            {
+                bool open=tab.Tab==settingsScreen.Shown;
+                tab.Fill.color=open?new Color(.065f,.37f,.32f,1):new Color(.84f,.85f,.76f,1);tab.Label.color=open?Paper:Ink;
+            }
+            foreach(var row in settingsRows)
+            {
+                bool shown=row.Row.Tab==settingsScreen.Shown;
+                foreach(var part in row.Parts)part.SetActive(shown);
+                if(!shown)continue;
+                row.Value.text=settingsScreen.Value(row.Row);
+                bool usable=settingsScreen.Usable(row.Row);foreach(var button in row.Buttons)button.interactable=usable;
+            }
+            settingsText.text=settingsScreen.Message;settingsText.color=settingsScreen.Failed?new Color(.58f,.16f,.12f):new Color(.32f,.40f,.36f);
+            settingsStatus.text=settingsScreen.Status;
         }
         private void UpdatePurchaseFeedback(RoundState state,PlayerState player)
         {
@@ -2249,10 +2272,11 @@ namespace Festival.Presentation
             var bar=Panel(parent,"Accent rule",color,new Vector2(.025f,.974f),new Vector2(.975f,.982f));
             bar.GetComponent<Image>().raycastTarget=false;
         }
-        private void Rule(Transform parent,float y)
+        private GameObject Rule(Transform parent,float y)
         {
             var go=Panel(parent,"Divider",Hairline,new Vector2(.04f,y),new Vector2(.96f,y+.003f));
             go.GetComponent<Image>().raycastTarget=false;
+            return go;
         }
         private GameObject Keycap(Transform parent,string character,Vector2 min,Vector2 max)
         {
