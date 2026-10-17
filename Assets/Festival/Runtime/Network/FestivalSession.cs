@@ -136,6 +136,8 @@ namespace Festival.Network
         public CommandResult LastLocalCommandResult=>CopyResult(lastLocalCommandResult);
         public event Action<CommandResult> LocalCommandResultReceived;
         public bool IsHost => manager!=null && manager.IsHost;
+        /// <summary>Whether this machine hosts with the test-build festival pick (FestivalHostBootstrap). Never sent to clients.</summary>
+        public bool DevelopmentFestivalSelection => simulation!=null && simulation.DevelopmentFestivalSelection;
         public bool Connected => manager!=null && manager.IsConnectedClient;
         public bool Connecting {get;private set;}
         /// <summary>The title's line before any game, and again after leaving one (MENU-2).</summary>
@@ -329,6 +331,7 @@ namespace Festival.Network
             {
                 token="";endpoint="127.0.0.1:"+port;peers.Clear();tokens.Clear();inputs.Clear();pending.Clear();
                 simulation=new FestivalSimulation(Environment.TickCount & int.MaxValue);Profile.ApplyUnlocks(simulation.State);
+                FestivalHostBootstrap.Configure(simulation);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 simulation.ChatDiagnostic=DevelopmentDiagnostics.Transition;
                 simulation.CampEggDiagnostic=DevelopmentDiagnostics.Transition;

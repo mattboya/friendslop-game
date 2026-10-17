@@ -78,7 +78,7 @@ public static class WeekendTests
         s.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
         Check(s.DevelopmentFestivalSelection&&Act(s,"a","ChooseFestival",1).Accepted,"restoration preserves the receiving host's enabled session capability");
         Finish(s,"Time expired");s.State.Phase="Shopping";
-        Check(s.State.UnlockedFestivalCount==1&&Act(s,"a","ChooseFestival",0).Accepted,"a failed weekend preserves the capability without granting unlocks");
+        Check(s.DevelopmentFestivalSelection&&s.State.UnlockedFestivalCount==1&&Act(s,"a","ChooseFestival",0).Accepted&&Act(s,"a","ChooseFestival",1).Accepted&&s.State.FestivalIndex==1,"a failed weekend preserves the capability without granting unlocks");
     }
 
     static void DevelopmentSessionNeverAdvancesEarnedUnlocksOnRealWins()

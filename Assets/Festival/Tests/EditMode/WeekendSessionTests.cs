@@ -220,6 +220,35 @@ namespace Festival.Tests
             Assert.That(FestivalSimulation.VisibleDrops(game.State).Contains(drop),Is.True,"legacy gear still lands immediately");
         }
 
+        // The host bootstrap the Editor runs offers locked Ember Playa on a fresh profile; a level cleared there saves nothing.
+        [Test] public void TestBuildHostPicksEmberPlayaAndTheSavedProfileKeepsOneUnlock()
+        {
+            string id="dev_selection_"+Guid.NewGuid().ToString("N").Substring(0,12);
+            string file=Path.Combine(LocalProfile.Folder,id+".json");
+            try
+            {
+                var profile=new LocalProfile(id);
+                var game=new FestivalSimulation(7);profile.ApplyUnlocks(game.State);FestivalHostBootstrap.Configure(game);
+                var host=game.AddPlayer("host","Host");game.AddPlayer("friend","Friend");
+                var view=FestivalSession.ViewFor(game,host.Id);
+                Assert.That(FestivalHudText.FestivalChoice(view,host.Id,game.DevelopmentFestivalSelection),Is.EqualTo("F  switch to Ember Playa (test build: all festivals)"),"a fresh profile is offered the next festival");
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-pick",Kind="ChooseFestival",Amount=FestivalHudText.NextFestival(view,game.DevelopmentFestivalSelection)}).Accepted,Is.True);
+                Assert.That(game.State.FestivalIndex,Is.EqualTo(1));
+                foreach(var p in game.State.Players){p.X=0;p.Z=19;Assert.That(game.Execute(p.Id,new GameCommand{Id="dev-ready-"+p.Id,Kind="Ready"}).Accepted,Is.True);}
+                game.Tick(5.2+FestivalSimulation.SpinSeconds+.1);
+                foreach(var p in game.State.Players)Assert.That(game.Execute(p.Id,new GameCommand{Id="dev-loaded-"+p.Id,Kind="MapReady"}).Accepted,Is.True);
+                Assert.That(game.State.Phase,Is.EqualTo("Playing"),"setup: Ember Playa's Day 1 is on");
+                game.State.LevelSales=FestivalSimulation.DayQuota(game.State);host.X=Festivals.CampGateX;host.Z=Festivals.CampGateZ;
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-extract",Kind="Extract"}).Accepted,Is.True);game.Tick(3.1);
+                Assert.That(game.State.Phase=="Results"&&game.State.Result=="Success",Is.True,"setup: the day is cleared");
+                profile.RememberUnlocks(game.State);
+                Assert.That(new LocalProfile(id).Data.UnlockedFestivalCount,Is.EqualTo(1),"the saved profile still says 1 unlocked");
+                var rehosted=new FestivalSimulation(8);new LocalProfile(id).ApplyUnlocks(rehosted.State);FestivalHostBootstrap.Configure(rehosted);
+                Assert.That(rehosted.DevelopmentFestivalSelection&&rehosted.State.UnlockedFestivalCount==1,Is.True,"the next host starts from the same earned count with the pick");
+            }
+            finally{if(File.Exists(file))File.Delete(file);}
+        }
+
         [Test] public void HostProfileRemembersUnlockedFestivals()
         {
             string id="weekend_test_"+Guid.NewGuid().ToString("N").Substring(0,12);

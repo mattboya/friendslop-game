@@ -70,10 +70,10 @@ namespace Festival.Presentation
         /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line;
         /// either way the card says the viewer's paid starter allowance and the crowd stock source. This card, not FestivalGuidance.Hint, is what camp reads. By day the quota's line is followed
         /// by p's next step to a sale (NextStep). A Ferris wheel rider reads what they spot from up there instead (FestivalGuidance.Hint, POLO-1).</summary>
-        public static string ObjectiveDetail(RoundState s,PlayerState p)
+        public static string ObjectiveDetail(RoundState s,PlayerState p,bool developmentSelection=false)
         {
             if(s.Phase=="Results")return OutcomeDetail(s,p);
-            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
+            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id,developmentSelection),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
             if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return FestivalGuidance.Hint(s,p);
             // A paused game refuses every next step, and E is the game's own key then.
             return FestivalSimulation.DayQuotaMet(s)||s.Phase==FestivalSimulation.MinigamePhase?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p);
@@ -181,15 +181,17 @@ namespace Festival.Presentation
             return carriers>=2?"":carriers==1?"Take the other end of "+body:"Carry "+body;
         }
 
-        /// <summary>The host's festival pick at camp before Day 1, once a second festival is unlocked. F moves to the next unlocked one.</summary>
-        public static string FestivalChoice(RoundState s,string localId)
+        /// <summary>The host's festival pick at camp before Day 1, once a second festival is unlocked. F moves to the next unlocked one.
+        /// A test-build host (developmentSelection: FestivalSession.DevelopmentFestivalSelection) picks from every festival, earned or not.</summary>
+        public static string FestivalChoice(RoundState s,string localId,bool developmentSelection=false)
         {
-            if(s.Phase!="Shopping"||s.LevelIndex!=0||s.HostPlayerId!=localId||s.UnlockedFestivalCount<2)return "";
-            int next=NextFestival(s);
-            return "F  switch to "+Festivals.Name(next)+" ("+(next+1)+" of "+s.UnlockedFestivalCount+" unlocked)";
+            if(s.Phase!="Shopping"||s.LevelIndex!=0||s.HostPlayerId!=localId||Pickable(s,developmentSelection)<2)return "";
+            int next=NextFestival(s,developmentSelection);
+            return "F  switch to "+Festivals.Name(next)+" ("+(developmentSelection?"test build: all festivals":(next+1)+" of "+s.UnlockedFestivalCount+" unlocked")+")";
         }
-        /// <summary>The festival F picks: the next unlocked one, wrapping round to the first.</summary>
-        public static int NextFestival(RoundState s)=>(s.FestivalIndex+1)%s.UnlockedFestivalCount;
+        /// <summary>The festival F picks: the next pickable one, wrapping round to the first.</summary>
+        public static int NextFestival(RoundState s,bool developmentSelection=false)=>(s.FestivalIndex+1)%Pickable(s,developmentSelection);
+        static int Pickable(RoundState s,bool developmentSelection)=>developmentSelection?Festivals.Count:s.UnlockedFestivalCount;
 
         /// <summary>The existing twenty-unit restart rule, read in the viewer's money.</summary>
         public static string FreshPocketsDisclosure(RoundState s,PlayerState viewer=null)=>"EVERYONE STARTS OVER WITH "+(s!=null&&viewer!=null?Money(s,viewer,20):"$20").ToUpperInvariant()+" AND EMPTY POCKETS";

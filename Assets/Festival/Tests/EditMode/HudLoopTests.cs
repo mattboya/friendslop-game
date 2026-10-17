@@ -339,6 +339,23 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.FestivalChoice(s,"you"),Is.Empty,"nothing to pick until a second festival is unlocked");
         }
 
+        [Test] public void ATestBuildHostIsOfferedEveryFestivalWithoutAnUnlock()
+        {
+            var s=Level(0,0,"Shopping");var you=Crew(s,"you","You");var sam=Crew(s,"sam","Sam");
+            Assert.That(FestivalHudText.FestivalChoice(s,"you",true),Is.EqualTo("F  switch to Ember Playa (test build: all festivals)"),"a fresh profile is offered locked Ember Playa");
+            Assert.That(FestivalHudText.NextFestival(s,true),Is.EqualTo(1),"F sends the locked festival it names");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you,true),Does.StartWith("F  switch to Ember Playa (test build: all festivals) • One starter each at camp"));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam,true),Is.EqualTo(CampLine),"only the host picks, even in a test build");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(CampLine),"a release host with one festival is offered no pick");
+            s.FestivalIndex=1;
+            Assert.That(FestivalHudText.FestivalChoice(s,"you",true),Is.EqualTo("F  switch to Palm Mirage (test build: all festivals)"),"F wraps round to the first festival");
+            Assert.That(FestivalHudText.NextFestival(s,true),Is.EqualTo(0));
+            s.UnlockedFestivalCount=2;s.FestivalIndex=0;
+            Assert.That(FestivalHudText.FestivalChoice(s,"you",true),Is.EqualTo("F  switch to Ember Playa (test build: all festivals)"),"an earned festival reads the same in a test build");
+            s.LevelIndex=1;
+            Assert.That(FestivalHudText.FestivalChoice(s,"you",true),Is.Empty,"mid-weekend the festival is set, even in a test build");
+        }
+
         [Test] public void ResultsSayHowTheLevelEndedAndWhatComesNext()
         {
             var day=Level(0,0,"Results");day.Result="Success";

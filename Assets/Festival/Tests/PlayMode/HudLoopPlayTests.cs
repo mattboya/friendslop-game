@@ -785,10 +785,14 @@ namespace Festival.Tests
                 var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("hud_mate","Sam");mate.Ready=true;
-                // At camp, with no festival to pick, the card teaches the paid starter and crowd stock source, drawn whole.
+                // At camp the card teaches the paid starter and crowd stock source, drawn whole: beside the test-build pick on this
+                // Editor host, and, as a release host with one festival sees it, with no pick at all.
                 sim.State.UnlockedFestivalCount=1;yield return new WaitForSeconds(.4f);
-                Expect("camp","Objective detail","Browse shelves • pay the seller • One starter each at camp: Tongue Stamps or Fun Guys for $5. Buy more from festivalgoers ($5 each; some are narcs). Keep some money for more stock. • meet at the trailhead");
+                Expect("camp","Objective detail","F  switch to Ember Playa (test build: all festivals) • One starter each at camp: Tongue Stamps or Fun Guys for $5. Buy more from festivalgoers ($5 each; some are narcs). Keep some money for more stock.");
                 Fits("camp","Objective detail");
+                sim.DevelopmentFestivalSelection=false;yield return new WaitForSeconds(.4f);
+                Expect("camp, release host","Objective detail","Browse shelves • pay the seller • One starter each at camp: Tongue Stamps or Fun Guys for $5. Buy more from festivalgoers ($5 each; some are narcs). Keep some money for more stock. • meet at the trailhead");
+                Fits("camp, release host","Objective detail");
                 yield return StartLevel(session);
 
                 // Day 1 of Palm Mirage asks $15 from each of the two.

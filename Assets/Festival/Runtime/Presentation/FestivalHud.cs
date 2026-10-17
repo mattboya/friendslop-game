@@ -1047,7 +1047,7 @@ namespace Festival.Presentation
         {
             levelBanner.text=FestivalHudText.LevelBanner(state);
             objectiveTitle.text=FestivalHudText.ObjectiveTitle(state,player);
-            objective.text=FestivalHudText.ObjectiveDetail(state,player);
+            objective.text=FestivalHudText.ObjectiveDetail(state,player,session!=null&&session.DevelopmentFestivalSelection);
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             vitals.text=FestivalHudText.Vitals(state,player);
@@ -1180,9 +1180,9 @@ namespace Festival.Presentation
                 if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open)sellerTalk.Begin(chatWindow,state,player,Time.unscaledTime);
                 return;
             }
-            if(!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame()&&FestivalHudText.FestivalChoice(state,player.Id)!="")
+            if(!session.MenuOpen&&session.Controls.Chat.WasPressedThisFrame()&&FestivalHudText.FestivalChoice(state,player.Id,session.DevelopmentFestivalSelection)!="")
             {
-                session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state));return;
+                session.Command("ChooseFestival",amount:FestivalHudText.NextFestival(state,session.DevelopmentFestivalSelection));return;
             }
             int equipSlot=session.Controls.Slot1.WasPressedThisFrame()?0:session.Controls.Slot2.WasPressedThisFrame()?1:session.Controls.Slot3.WasPressedThisFrame()?2:-1;
             // DIALOG-5: while the chat window has questions to ask this frame, or a talk's replies (DIALOG-3), 1-3 pick them instead of
