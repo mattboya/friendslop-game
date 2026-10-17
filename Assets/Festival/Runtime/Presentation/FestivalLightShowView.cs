@@ -14,11 +14,24 @@ namespace Festival.Presentation
     /// the ground and shapes flashed on a sign. A dosed viewer's own record adds exactly their dose's fakes, which no other view
     /// carries, each with the vision tells: a wrong shadow (FestivalShadowTellView), a colour slightly off and a shimmer while the view
     /// moves. Nothing here collides or touches the rules. Comfort settings keep every answer: reduced motion only shortens the trails
-    /// and drops the shapes' pop, and the lights' glow makes up for the brightness setting. ponytail: rigs and primitives, as the art is
-    /// frozen.</summary>
+    /// and drops the shapes' pop, and the lights' glow makes up for the brightness setting. Each player watches facing the glover, their
+    /// look held within LookDegrees (FacesGlover; FestivalSession holds the view). ponytail: rigs and primitives, as the art is frozen.</summary>
     public sealed class FestivalLightShowView : MonoBehaviour
     {
         public const string RootName="Light show";
+        /// <summary>How far a player's held view may turn either way from the glover (FestivalSession holds it).</summary>
+        public const float LookDegrees=40;
+        /// <summary>Whether viewer watches the Light Show under way as one of its players, its questions and banner included, and then
+        /// heading, the yaw in degrees that faces its glover from where they stand. A spirit or a latecomer watches with a free view.</summary>
+        public static bool FacesGlover(RoundState state,PlayerState viewer,out float heading)
+        {
+            heading=0;var at=state==null||viewer==null?null:FestivalSimulation.BoothAt(state);
+            if(at==null||state.Phase!=FestivalSimulation.MinigamePhase||state.Booth.Kind!=FestivalSimulation.LightShowGame||!state.Booth.PlayerIds.Contains(viewer.Id))return false;
+            float x=at.X-viewer.X,z=at.Z-viewer.Z;
+            // On the spot itself, the booth is faced from the festival's middle, as its sign is.
+            if(x*x+z*z<.01f){x=at.X;z=at.Z;}
+            heading=Mathf.Atan2(x,z)*Mathf.Rad2Deg;return true;
+        }
         // The show's frame stands on the booth facing the audience. Passers cross PasserSpan m either side of the glover, in Lanes
         // lanes from PasserBehind m behind them, LaneGap apart.
         private const float PasserSpan=4,PasserBehind=3,LaneGap=1.2f;

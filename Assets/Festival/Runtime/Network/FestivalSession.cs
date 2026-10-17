@@ -176,8 +176,9 @@ namespace Festival.Network
             simulation?.ChatDiagnostic?.Invoke(consumed?"MenuConsumed":"MenuToggled","Chat",State?.RoundId??"",State?.SimulationSeconds??0);
 #endif
         }
-        /// <summary>The pointer is free, and the view holds still, for the menu and for clicking a friend at the debrief (HUD-3).</summary>
-        public bool PointerFree=>MenuOpen||State!=null&&FestivalHudText.VoteOpen(State);
+        /// <summary>The pointer is free, and the view holds still, for the menu, for clicking a friend at the debrief (HUD-3) and for
+        /// clicking an answer to a Light Show question open to you (MINI-3).</summary>
+        public bool PointerFree=>MenuOpen||State!=null&&(FestivalHudText.VoteOpen(State)||FestivalHudText.LightShowOpen(State,LocalPlayerId).Question!=null);
         public Camera ViewCamera {get;private set;}
         /// <summary>CAM-1: where your eyes are, eased after your body as the first-person view always was. Over the shoulder the
         /// camera hangs from it; whatever aims with the view (shelves, visions) aims from here along the camera's forward, so both
@@ -217,6 +218,8 @@ namespace Festival.Network
         // TRIP-4: lying on the grass the view drops to LyingEyeHeight and looks up at the sky; getting up looks where it did before.
         private const float LyingEyeHeight=.3f,LyingPitch=-80;
         private bool wasLying;private float preLiePitch;
+        // MINI-3: a Light Show holds its players' view on the glover (FestivalLightShowView.FacesGlover), kept here and given back after.
+        private bool showViewHeld;private float showHeldYaw,showHeldPitch;
         private double accumulator,nextSnapshot,nextInput,snapshotReceivedAt,serverClockAtSnapshot,connectAt;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private double nextMovementDiagnostic;
@@ -617,7 +620,8 @@ namespace Festival.Network
             lastPhase=State.Phase;
             if(Controls.Menu.WasPressedThisFrame()&&!Controls.Rebinding)HandleMenuPress();
             // CAM-1: V flips your view between first person and over the shoulder, and remembers it; never in the menu or mid-rebind.
-            if(Controls.View.WasPressedThisFrame()&&!MenuOpen&&!Controls.Rebinding){Profile.Data.ThirdPerson=!Profile.Data.ThirdPerson;string error=Profile.Save();if(error!="")Message=error;}
+            // MINI-3: the Light Show holds a first-person view, so V would only change the saved one unseen.
+            if(Controls.View.WasPressedThisFrame()&&!MenuOpen&&!Controls.Rebinding&&!FestivalLightShowView.FacesGlover(State,player,out _)){Profile.Data.ThirdPerson=!Profile.Data.ThirdPerson;string error=Profile.Save();if(error!="")Message=error;}
             Cursor.lockState=PointerFree?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=PointerFree;
             // POI-1: left click held, with the pointer locked (never a click on the menu or the vote). No focus check: the Input
             // System lets go of the mouse when the window loses focus, and batchmode tests run unfocused. One reading per frame feeds
@@ -1100,7 +1104,18 @@ namespace Festival.Network
                 else pitch=preLiePitch;
                 wasLying=lying;
             }
-            ThirdPersonView=FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
+            // MINI-3: a Light Show's players face its glover in first person, level, the look free only LookDegrees either way.
+            bool watching=FestivalLightShowView.FacesGlover(State,player,out float glover);
+            if(watching&&!showViewHeld)
+            {
+                showViewHeld=true;showHeldYaw=yaw;showHeldPitch=pitch;yaw=viewYaw=glover;pitch=viewPitch=0;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("LightShow","view_hold","look_degrees="+FestivalLightShowView.LookDegrees);
+#endif
+            }
+            else if(!watching)ReleaseShowView();
+            if(watching){yaw=glover+Mathf.Clamp(Mathf.DeltaAngle(glover,yaw),-FestivalLightShowView.LookDegrees,FestivalLightShowView.LookDegrees);pitch=0;}
+            ThirdPersonView=!watching&&FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
             if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),PresentedPoiSpin(player),FestivalSimulation.ArtCarOf(State,player.Id)>=0);}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
@@ -1120,12 +1135,26 @@ namespace Festival.Network
 #endif
             // TRIP-5: Pony Dust's camera trails the mouse; movement still faces where the mouse points (yaw).
             viewYaw=FestivalTrip.Follow(viewYaw,yaw,trip.Lag,Time.unscaledDeltaTime);viewPitch=FestivalTrip.Follow(viewPitch,pitch,trip.Lag,Time.unscaledDeltaTime);
+            PlaceView(roll);
+        }
+        // CAM-1: over the shoulder the camera is set straight on its boom from the eye (no ease of its own, so a switch is a cut), and
+        // shows your body unless a wall has pulled the boom into your head; in first person it is the eye, your body hidden.
+        private void PlaceView(float roll)
+        {
             ViewCamera.transform.rotation=Quaternion.Euler(viewPitch,viewYaw,Mathf.Clamp(roll,-3.5f,3.5f));
-            // CAM-1: over the shoulder the camera is set straight on its boom from the eye (no ease of its own, so a switch is a cut), and
-            // shows your body unless a wall has pulled the boom into your head; in first person it is the eye, your body hidden.
             float boom=0;
             ViewCamera.transform.position=ThirdPersonView?FestivalThirdPerson.Place(EyePosition,viewYaw,viewPitch,out boom):EyePosition;
             ViewCamera.cullingMask=FestivalThirdPerson.Mask(ViewCamera.cullingMask,boom);
+        }
+        // The yaw and pitch from before the Light Show come back, the eased view with them; whether a held view was given back.
+        private bool ReleaseShowView()
+        {
+            if(!showViewHeld)return false;
+            showViewHeld=false;yaw=viewYaw=showHeldYaw;pitch=viewPitch=showHeldPitch;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("LightShow","view_restore","connected="+Connected+" enabled="+isActiveAndEnabled);
+#endif
+            return true;
         }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private (string,int,bool,bool,bool) tracedLook=("",-1,false,false,false);
@@ -1169,7 +1198,7 @@ namespace Festival.Network
             nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
-            Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;
+            ReleaseShowView();Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;
             // Before returning, not on the HUD's next frame: whatever runs next sees the camp's light, grade and fog.
             if(showedGame&&world!=null)
             {
@@ -1183,7 +1212,13 @@ namespace Festival.Network
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
         }
         private void OnEnable(){activeSessions.Add(this);}
-        private void OnDisable(){activeSessions.Remove(this);SpeechBubbles?.Clear();SpeechDeliveries.Retire();}
+        private void OnDisable()
+        {
+            activeSessions.Remove(this);SpeechBubbles?.Clear();SpeechDeliveries.Retire();
+            // MINI-3: switched off mid-show, the camera shows the view from before it, as the saved setting has it; nothing can have
+            // laid you down or seated you since the game began.
+            if(ReleaseShowView()&&ViewCamera!=null){ThirdPersonView=Profile.Data.ThirdPerson;PlaceView(0);}
+        }
         private void OnDestroy()
         {
             try{Leave();Settings?.Dispose();Controls?.Dispose();if(actorRoot!=null)Destroy(actorRoot.gameObject);if(ViewCamera!=null)Destroy(ViewCamera.gameObject);}

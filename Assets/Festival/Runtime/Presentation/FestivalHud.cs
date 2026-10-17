@@ -214,6 +214,13 @@ namespace Festival.Presentation
         // MINI-2: the minigame card beside a drummer's lanes, over the dimmer that covers the card itself.
         private GameObject drumPanel;
         private Text drumTitle,drumStrip,stopHoldLabel;
+        // MINI-3: the Light Show's question card over the minigame card: the open question and its five answers, then the reveal.
+        // lightShowSent: the question slot a click has answered this frame or since, before the host's view says so; -1 none.
+        private GameObject lightShowPanel;
+        private Text lightShowPrompt,lightShowReveal;
+        private readonly Button[] lightShowAnswers=new Button[5];
+        private readonly Text[] lightShowLabels=new Text[5];
+        private int lightShowSent=-1,lightShowChoice;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -435,6 +442,18 @@ namespace Festival.Presentation
             minigameTitle=Label(minigamePanel.transform,"Minigame title",34,TextAnchor.MiddleCenter);minigameTitle.fontStyle=FontStyle.Normal;Place(minigameTitle.rectTransform,.05f,.47f,.95f,.93f);ShrinkToFit(minigameTitle,18);
             minigameDetail=Label(minigamePanel.transform,"Minigame detail",19,TextAnchor.MiddleCenter);Place(minigameDetail.rectTransform,.05f,.07f,.95f,.47f);ShrinkToFit(minigameDetail,13);
             minigamePanel.SetActive(false);
+            // MINI-3: over the minigame card, the Light Show's questions take clicks, the pointer free (FestivalSession.PointerFree).
+            lightShowPanel=Card(root.transform,"Light Show questions",new Vector2(.3f,.44f),new Vector2(.7f,.9f),true);
+            Accent(lightShowPanel.transform,Mint);
+            lightShowPrompt=Label(lightShowPanel.transform,"Light Show prompt",26,TextAnchor.MiddleCenter);lightShowPrompt.fontStyle=FontStyle.Normal;Place(lightShowPrompt.rectTransform,.05f,.81f,.95f,.96f);ShrinkToFit(lightShowPrompt,16);
+            for(int k=0;k<lightShowAnswers.Length;k++)
+            {
+                int choice=k<4?k:-1;float top=.79f-k*.15f;
+                var answer=Button(lightShowPanel.transform,"",new Vector2(.08f,top-.13f),new Vector2(.92f,top),()=>AnswerLightShow(choice));answer.name="Light Show answer "+(k+1);
+                lightShowAnswers[k]=answer.GetComponent<Button>();lightShowLabels[k]=answer.transform.Find("Text").GetComponent<Text>();ShrinkToFit(lightShowLabels[k],14);
+            }
+            lightShowReveal=Label(lightShowPanel.transform,"Light Show reveal",19,TextAnchor.MiddleCenter);Place(lightShowReveal.rectTransform,.05f,.04f,.95f,.79f);ShrinkToFit(lightShowReveal,12);
+            lightShowPanel.SetActive(false);
             // HUD-7: a first-time tip down the left rail, under the prompt and the nearby strip and clear of the price confirmation.
             tipPanel=Card(root.transform,"First-time tip card",new Vector2(.022f,.535f),new Vector2(.42f,.615f),true);
             Accent(tipPanel.transform,Mint);
@@ -810,7 +829,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -851,6 +870,7 @@ namespace Festival.Presentation
             UpdateSundownAndResults(state,player,showMenu);
             bool uncovered=!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf;
             UpdateMinigame(state,player,uncovered);
+            UpdateLightShow(state,player,uncovered);
             UpdateBriefing(state,player,uncovered&&!minigamePanel.activeSelf);
             UpdateTip(state,player,uncovered);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
@@ -873,7 +893,7 @@ namespace Festival.Presentation
             }
             if(uncovered){string tank=giggleTankNews.Take();if(tank!=""){session.SetMessage(tank);lastNotice="";}}
             UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
-            reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf);
+            reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf&&!lightShowPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
             foreach(var item in handGear)gear.Add(ItemName(item.ItemId));
@@ -1055,6 +1075,37 @@ namespace Festival.Presentation
             minigamePanel.SetActive(clear&&title!="");if(!minigamePanel.activeSelf)return;
             minigameTitle.text=title;minigameDetail.text=detail;
             minigameTitle.color=FestivalHudText.MinigameWon(state)?Mint:Orange;
+        }
+
+        // MINI-3: the Light Show question open to you, its five answers to click until one is sent, the sent one marked; once scored,
+        // your answers beside the right ones. Only while nothing covers it (clear: no menu, map or dance).
+        private void UpdateLightShow(RoundState state,PlayerState player,bool clear)
+        {
+            var (slot,question,answer)=FestivalHudText.LightShowOpen(state,player.Id);
+            if(slot!=lightShowSent)lightShowSent=-1;
+            string reveal=question==null?FestivalHudText.LightShowReveal(state,player.Id):"";
+            lightShowPanel.SetActive(clear&&(question!=null||reveal!=""));if(!lightShowPanel.activeSelf)return;
+            lightShowPrompt.text=question!=null?question.Prompt:"YOUR ANSWERS";
+            lightShowReveal.gameObject.SetActive(question==null);lightShowReveal.text=reveal;
+            int sent=answer!=FestivalHudText.NoAnswer?answer:lightShowSent>=0?lightShowChoice:FestivalHudText.NoAnswer;
+            for(int k=0;k<lightShowAnswers.Length;k++)
+            {
+                bool shown=question!=null&&(k==4||k<question.Choices.Count);
+                if(lightShowAnswers[k].gameObject.activeSelf!=shown)lightShowAnswers[k].gameObject.SetActive(shown);
+                if(!shown)continue;
+                lightShowLabels[k].text=k<4?question.Choices[k]:question.Unsure;
+                lightShowAnswers[k].interactable=sent==FestivalHudText.NoAnswer;
+                lightShowAnswers[k].image.color=sent==(k<4?k:-1)?Mint:new Color(.84f,.85f,.76f,1);
+            }
+        }
+        // A click answers the question still open to you, once: a second click, or one on a question since closed, sends nothing.
+        private void AnswerLightShow(int choice)
+        {
+            var state=session.State;var player=session.LocalPlayer;if(state==null||player==null)return;
+            var (slot,question,answer)=FestivalHudText.LightShowOpen(state,player.Id);
+            if(question==null||answer!=FestivalHudText.NoAnswer||lightShowSent==slot)return;
+            lightShowSent=slot;lightShowChoice=choice;
+            session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.LightShowAnswer,amount:choice,direction:slot);
         }
 
         // HUD-7: the level briefing for its window, unless a key put it away this level; only while nothing covers it (clear: no

@@ -274,6 +274,91 @@ namespace Festival.Tests
             yield return new ExitPlayMode();
         }
 
+        // The card and the question card walk each player through the show, their own three questions and the reveal; a spirit
+        // watching sees the crew's progress and, once scored, every player's points, never anyone's questions before then.
+        [Test]public void TheCardsWalkEachPlayerThroughTheShowTheirQuestionsAndTheReveal()
+        {
+            var game=Started();game.Tick(5);
+            (string,string) Card(string id){var view=Wire(game,id);return FestivalHudText.MinigameCard(view,view.Players.Find(p=>p.Id==id));}
+            (int Slot,LightShowQuestion Question,int Answer) Open(string id)=>FestivalHudText.LightShowOpen(Wire(game,id),id);
+            foreach(var id in new[]{"p0","p1"})
+            {
+                Assert.That(Card(id),Is.EqualTo(("LIGHT SHOW","Watch the glover and everything around them. Questions in 15 s.")),id+" watches the show");
+                Assert.That(Open(id).Question,Is.Null,id+" has no question during the show");Assert.That(Open(id).Slot,Is.EqualTo(-1));
+            }
+            Assert.That(Card("ghost"),Is.EqualTo(("LIGHT SHOW","The crew watches a light show. The festival is paused.")),"a spirit watches");
+
+            game.Tick(15.5);
+            for(int slot=0;slot<LightShow.QuestionSlots;slot++)
+            {
+                string title="QUESTION "+(slot+1)+" / 3";
+                foreach(var id in new[]{"p0","p1"})
+                {
+                    var open=Open(id);var host=Host(game,id).Questions[slot];
+                    Assert.That(open.Slot,Is.EqualTo(slot),id+"'s question "+(slot+1)+" is open");Assert.That(open.Answer,Is.EqualTo(FestivalHudText.NoAnswer));
+                    Assert.That(open.Question.Prompt,Is.EqualTo(host.Prompt),id+" reads their own question");Assert.That(open.Question.Choices,Is.EqualTo(host.Choices));Assert.That(open.Question.Unsure,Is.EqualTo(LightShowQuestions.Unsure));
+                    Assert.That(Card(id),Is.EqualTo((title,"8 s to answer. Nobody sees an answer until everyone has.")));
+                }
+                Assert.That(Open("ghost").Question,Is.Null,"a spirit has no question");
+                Assert.That(Card("ghost"),Is.EqualTo(("LIGHT SHOW  •  "+title,"The crew answers in private: 8 s.")));
+                int correct=Host(game,"p0").Questions[slot].CorrectIndex,mine=slot==0?correct:slot==1?-1:(correct+1)%4;
+                Assert.That(Answer(game,"p0",slot,mine).Accepted,Is.True,"setup: p0 answers");
+                Assert.That(Open("p0").Answer,Is.EqualTo(mine),"p0 sees the answer they sent");Assert.That(Card("p0"),Is.EqualTo((title,"Locked in. Waiting for the crew: 8 s.")));
+                Assert.That(Open("p1").Answer,Is.EqualTo(FestivalHudText.NoAnswer),"and p1 does not");
+                Assert.That(FestivalHudText.LightShowReveal(Wire(game,"p0"),"p0"),Is.Empty,"nothing is revealed while the questions run");
+                Assert.That(Answer(game,"p1",slot,(Host(game,"p1").Questions[slot].CorrectIndex+slot)%4).Accepted,Is.True,"setup: p1 answers");
+            }
+            Assert.That(game.State.Booth.ScoredAt,Is.GreaterThanOrEqualTo(0),"setup: the third answer scores the show");
+            Assert.That(Open("p0").Question,Is.Null,"no question is open once it is scored");
+
+            var questions=Host(game,"p0").Questions;var reveal=FestivalHudText.LightShowReveal(Wire(game,"p0"),"p0").Split('\n');
+            Assert.That(reveal,Is.EqualTo(new[]
+            {
+                questions[0].Prompt,"You said "+questions[0].Choices[questions[0].CorrectIndex]+". Right: +3.",
+                questions[1].Prompt,"Not sure. It was "+questions[1].Choices[questions[1].CorrectIndex]+".",
+                questions[2].Prompt,"You said "+questions[2].Choices[(questions[2].CorrectIndex+1)%4]+". It was "+questions[2].Choices[questions[2].CorrectIndex]+": −1.",
+            }),"p0's own answers beside the right ones, a right one worth 1 + their dose of 2");
+            Assert.That(FestivalHudText.LightShowReveal(Wire(game,"ghost"),"ghost"),Is.Empty,"a spirit has no answers to reveal");
+
+            int Points(string id){var x=Host(game,id);int points=0;for(int k=0;k<3;k++)points+=FestivalSimulation.LightShowPoints(x.Dose,x.Answers[k],x.Questions[k].CorrectIndex);return points;}
+            string Signed(int n)=>n>0?"+"+n:n<0?"−"+(-n):"0";
+            int first=Points("p0"),second=Points("p1");double change=game.State.Booth.ClockChange;
+            string clock=(change<0?"−":"+")+Math.Abs(change)+" s",effect=change>0?" Added to the clock.":change<0?" Taken off the clock.":" The clock is unchanged.";
+            Assert.That(Card("p0"),Is.EqualTo((clock,"Crew score "+Signed(first+second)+": You "+Signed(first)+", Second "+Signed(second)+"."+effect+" The festival starts again in 4.")),"the banner reveals every player's points at once");
+            Assert.That(Card("ghost"),Is.EqualTo((clock,"Crew score "+Signed(first+second)+": First "+Signed(first)+", Second "+Signed(second)+"."+effect+" The festival starts again in 4.")),"a spirit reads every name from the roster");
+
+            // The fifteen-second floor can keep a losing crew's clock at +0 s; the banner still reads as a loss.
+            var floored=Wire(game,"p0");floored.Booth.ClockChange=0;
+            foreach(var x in floored.Booth.LightShow.Players)for(int k=0;k<3;k++)x.Answers[k]=(x.Questions[k].CorrectIndex+1)%4;
+            Assert.That(FestivalHudText.MinigameWon(floored),Is.False,"a crew that lost points lost the show");
+            foreach(var x in floored.Booth.LightShow.Players)for(int k=0;k<3;k++)x.Answers[k]=-1;
+            Assert.That(FestivalHudText.MinigameWon(floored),Is.True,"a crew that broke even did not");
+            game.Tick(FestivalSimulation.MinigameBannerSeconds+.1);Assert.That(game.State.Phase,Is.EqualTo("Playing"),"setup: play resumes");
+            Assert.That(FestivalHudText.LightShowReveal(Wire(game,"p0"),"p0"),Is.Empty,"the reveal goes with the banner");
+        }
+
+        // Each player's view turns to the glover from where they stand, through the show, the questions and the banner; a spirit, a
+        // finished show and another game leave the view free.
+        [Test]public void APlayersViewFacesTheGloverFromWhereTheyStand()
+        {
+            var game=Started();var view=Wire(game,"p0");var me=view.Players.Find(p=>p.Id=="p0");var spot=Spot(view);
+            Assert.That(FestivalLightShowView.LookDegrees,Is.EqualTo(40),"the look is free 40 degrees either way");
+            foreach(var (x,z) in new[]{(0f,2f),(3f,-1f),(-2.5f,.5f)})
+            {
+                me.X=spot.x+x;me.Z=spot.z+z;
+                Assert.That(FestivalLightShowView.FacesGlover(view,me,out float heading),Is.True,"a player at ("+x+", "+z+") watches the glover");
+                Assert.That(Vector3.Angle(Quaternion.Euler(0,heading,0)*Vector3.forward,spot-new Vector3(me.X,0,me.Z)),Is.LessThan(.5f),"and faces it from ("+x+", "+z+")");
+            }
+            me.X=spot.x;me.Z=spot.z;
+            Assert.That(FestivalLightShowView.FacesGlover(view,me,out float onSpot),Is.True);
+            Assert.That(Vector3.Angle(Quaternion.Euler(0,onSpot,0)*Vector3.forward,spot),Is.LessThan(.5f),"on the spot itself, the view faces it from the festival's middle");
+            game.Tick(21);Assert.That(FestivalLightShowView.FacesGlover(Wire(game,"p0"),me,out _),Is.True,"the questions keep the view");
+            var ghost=Wire(game,"ghost");Assert.That(FestivalLightShowView.FacesGlover(ghost,ghost.Players.Find(p=>p.Id=="ghost"),out _),Is.False,"a spirit watches freely");
+            var cups=Wire(game,"p0");cups.Booth.Kind=FestivalSimulation.MysteryCupsGame;Assert.That(FestivalLightShowView.FacesGlover(cups,me,out _),Is.False,"another game leaves the view free");
+            var after=Wire(game,"p0");after.Phase="Playing";Assert.That(FestivalLightShowView.FacesGlover(after,me,out _),Is.False,"and so does play");
+            Assert.That(FestivalLightShowView.FacesGlover(null,me,out _),Is.False);
+        }
+
         // A Light Show under way: p0 at dose 2, p1 sober and a spirit watching, all standing 2 m in front of the booth.
         private static FestivalSimulation Started()
         {
@@ -283,6 +368,9 @@ namespace Festival.Tests
             Assert.That(game.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"setup: the Light Show starts");return game;
         }
         private static RoundState Wire(FestivalSimulation game,string id)=>JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,id)));
+        private static int sequence;
+        private static CommandResult Answer(FestivalSimulation game,string id,int slot,int choice)=>game.Execute(id,new GameCommand{Id="impl-U64 answer "+(sequence++),Kind=FestivalSimulation.MinigameKind,ItemId=FestivalSimulation.LightShowAnswer,Amount=choice,Direction=slot});
+        private static LightShowPlayer Host(FestivalSimulation game,string id)=>game.State.Booth.LightShow.Players.Find(p=>p.PlayerId==id);
         private static List<LightShowEvent> Of(LightShowState show,LightShowEventKind kind)=>show.Events.Where(e=>e.Kind==kind).ToList();
         private static Vector3 Spot(RoundState state){var at=FestivalSimulation.BoothAt(state);return new Vector3(at.X,0,at.Z);}
         private static Vector3 Audience(RoundState state)=>Spot(state)+Vector3.forward*2;
