@@ -102,6 +102,9 @@ namespace Festival.Network
         // Light Show: Minigame ItemId Answer sends choice Amount 0-3 or -1 Not sure for slot Direction 0-2; three shared 8 s questions
         // follow the 20 s show. Booth.LightShow carries the script and Slot/SlotAt to all; each viewer alone gets their dose, fakes,
         // opened questions without CorrectIndex and own Answers until scoring reveals every participant's. Fakes never leave their owner.
+        // Giggle Balloons: TakeGiggleBalloon accepts a second unexpired hit, kicking in or felt, and refuses a third. An owner's
+        // Effects can carry two independently timed hits. PlayerState.VisualGiggleTakeSequence counts accepted takes in every view
+        // that carries the player, zero in older rounds; peers' Effects stay masked.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -138,6 +141,12 @@ namespace Festival.Network
         public event Action<CampEggState> CampEggActivated;
         private readonly Dictionary<string,(long Sequence,double At)> campEggCursor=new Dictionary<string,(long,double)>();
         private string campEggRound="",campDiscoveryError="";
+        /// <summary>A drawn player's new Giggle Balloon takes: their id, and how many came since the last report (FollowPlayerEvents).</summary>
+        public event Action<string,int> GiggleBalloonTaken;
+        // Public per-player event counts seen this round, by kind and player id. Each follow fills the spare and swaps it in, so a
+        // player missing from a view drops out and is baselined afresh when they come back.
+        private Dictionary<(string,string),int> playerEvents=new Dictionary<(string,string),int>(),spentPlayerEvents=new Dictionary<(string,string),int>();
+        private string playerEventRound="";
         private double nextCampDiscoverySave;
         private string historyEpoch="",historyError="",outcomeRound="",acknowledgedOutcome="";
         private long historyRevision=-1,dismissedOutcomeSequence;
@@ -614,7 +623,7 @@ namespace Festival.Network
             }
             if(player.HasCosmetic)Profile.AwardFirstRescue();
             SpeechDeliveries.Follow(State,ConnectionGeneration,EstimatedWorldSeconds);
-            UpdateActors();UpdateCamera(player);
+            UpdateActors();UpdateCamera(player);FollowPlayerEvents(State,LocalPlayerId);
         }
         public void ApplyLook(Vector2 delta)
         {
@@ -655,6 +664,27 @@ namespace Festival.Network
 #endif
             }
         }
+        /// <summary>Report each player's new public events once. A first sight of a player (a first snapshot, a rejoin, a new round,
+        /// a player back in the view) only baselines them; one the view does not draw advances silently, and a lower count reports
+        /// nothing and keeps the higher one, so no event is ever replayed.</summary>
+        public void FollowPlayerEvents(RoundState state,string viewer)
+        {
+            var seen=playerEvents;playerEvents=spentPlayerEvents;spentPlayerEvents=seen;playerEvents.Clear();
+            if(state?.RoundId!=playerEventRound){seen.Clear();playerEventRound=state?.RoundId??"";}
+            var local=state?.Players.Find(p=>p.Id==viewer);if(local==null)return;
+            foreach(var p in state.Players)
+            {
+                int taken=NewPlayerEvents(seen,"GiggleTake",p,p.VisualGiggleTakeSequence,Shows(local,p));
+                if(taken>0)GiggleBalloonTaken?.Invoke(p.Id,taken);
+            }
+        }
+        int NewPlayerEvents(Dictionary<(string,string),int> seen,string kind,PlayerState p,int count,bool shown)
+        {
+            bool known=seen.TryGetValue((kind,p.Id),out int last);playerEvents[(kind,p.Id)]=known?Math.Max(last,count):count;
+            return known&&shown&&count>last?count-last:0;
+        }
+        /// <summary>Whether local's screen draws p: connected, on local's side of death, and outdoors with local or in local's camp room.</summary>
+        static bool Shows(PlayerState local,PlayerState p)=>p.Connected&&(local.Life=="Spirit")==(p.Life=="Spirit")&&p.CampVisitId==local.CampVisitId;
         public void AcknowledgeDisplayedDialogue(InteractionState interaction)
         {
             if(interaction==null||interaction.PlayerId!=LocalPlayerId)return;
@@ -922,9 +952,8 @@ namespace Festival.Network
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();
             foreach(var p in State.Players)
             {
-                if(!p.Connected||(spirit!=(p.Life=="Spirit")))continue;
-                bool togetherInside=p.CampVisitId!=""&&p.CampVisitId==local.CampVisitId;
-                if(!togetherInside&&(p.CampVisitId!=""||local.CampVisitId!=""))continue;
+                if(!Shows(local,p))continue;
+                bool togetherInside=p.CampVisitId!="";
                 // POLO-5: a Ferris wheel rider is drawn seated in their gondola, facing away from its bench (-z), and at
                 // FestivalTwistVisuals.RiderScale so they fit under its roof, while the rules keep them at its base. They are aimed
                 // ahead of the seat for Actor's glide (rate 15) so it keeps them there at any frame rate (POLO-7).
@@ -1092,7 +1121,7 @@ namespace Festival.Network
                 if(stopping.IsListening)stopping.OnClientStopped+=_=>Destroy(stopping.gameObject);else Destroy(stopping.gameObject);
             }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
-            FollowCampEggs(null);
+            FollowCampEggs(null);FollowPlayerEvents(null,"");
             nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
