@@ -320,6 +320,13 @@ namespace Festival.Presentation
         // At most nine digits, so an amount always fits an int.
         static readonly Regex Dollars=new Regex(@"\$(\d{1,9})");
 
+        /// <summary>LOOP-4: who a corner death reel is for, from its frozen summary, cut to the spinner's ten letters: "SAM DIED".</summary>
+        public static string DeathSpinTitle(DeathSpinState spin){string name=spin.Name.ToUpperInvariant();return (name.Length>10?name.Substring(0,10):name)+" DIED";}
+        /// <summary>LOOP-4: the frozen cash a corner reel turns for, in the viewer's money: "$40".</summary>
+        public static string DeathSpinStake(RoundState s,PlayerState viewer,DeathSpinState spin)=>Money(s,viewer,spin.Amount).ToUpperInvariant();
+        /// <summary>LOOP-4: where a corner reel lands: "KEPT $40", or "DROPPED $40" where they fell.</summary>
+        public static string DeathSpinResult(RoundState s,PlayerState viewer,DeathSpinState spin)=>(spin.CashDropped>0?"DROPPED ":"KEPT ")+DeathSpinStake(s,viewer,spin);
+
         /// <summary>A crew member as the local player reads them in the debrief: "YOU", or their name.</summary>
         internal static string CrewName(RoundState s,string localId,string id)=>id==localId?"YOU":s.Players.Find(p=>p.Id==id)?.Name.ToUpperInvariant()??"A FRIEND";
 

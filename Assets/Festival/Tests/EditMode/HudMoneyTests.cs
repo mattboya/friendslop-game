@@ -59,6 +59,23 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.BuyReply("stock_lsd",1,1),Is.EqualTo(""),"a missed or cancelled buy gave the price back and no unit");
         }
 
+        // LOOP-4: the corner reel's frozen amount and result, in the viewer's money.
+        [Test] public void ADeathsCornerReelReadsInYourMoney()
+        {
+            var dropped=new DeathSpinState{Id="r:death:sam:1",RoundId="r",PlayerId="sam",Name="Sam",Sequence=1,Amount=40,CashDropped=40,AtWorldSeconds=3};
+            var kept=new DeathSpinState{Id="r:death:sam:2",RoundId="r",PlayerId="sam",Name="Sam",Sequence=2,Amount=40,AtWorldSeconds=9};
+            var palm=Day(0);var you=Crew(palm,"you",0);
+            Assert.That(FestivalHudText.DeathSpinTitle(dropped),Is.EqualTo("SAM DIED"));
+            Assert.That(FestivalHudText.DeathSpinStake(palm,you,dropped),Is.EqualTo("$40"));
+            Assert.That(FestivalHudText.DeathSpinResult(palm,you,dropped),Is.EqualTo("DROPPED $40"));
+            Assert.That(FestivalHudText.DeathSpinResult(palm,you,kept),Is.EqualTo("KEPT $40"));
+            var playa=Day(1);var sam=Crew(playa,"sam",1);
+            Assert.That(FestivalHudText.DeathSpinStake(playa,sam,dropped),Is.EqualTo("40 RAMEN PACKETS"),"Sam reads the stake in ramen");
+            Assert.That(FestivalHudText.DeathSpinResult(playa,sam,dropped),Is.EqualTo("DROPPED 40 RAMEN PACKETS"));
+            Assert.That(FestivalHudText.DeathSpinResult(playa,sam,kept),Is.EqualTo("KEPT 40 RAMEN PACKETS"));
+            Assert.That(FestivalHudText.DeathSpinTitle(new DeathSpinState{Name="Bartholomew the Great"}),Is.EqualTo("BARTHOLOME DIED"),"a long name keeps the spinner's ten letters");
+        }
+
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()
         {
             // The HUD and the shelves' price tags never write a dollar sign themselves: every amount, down to the stash, release and

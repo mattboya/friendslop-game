@@ -134,6 +134,37 @@ namespace Festival.Presentation
             return beat;
         }
 
+        // LOOP-4: every positive-cash death spins its own small one-reel slot in the corner, three KEEP tiles to one DROP, read off the
+        // death's frozen public summary on the world clock, so every viewer (the dead player and spirits too) sees the same spin land
+        // just as the pile does. It sits on its own canvas under the HUD and takes no clicks, so it never stops anyone doing anything.
+        public const string DeathCanvasName="Festival death spinner";
+        // The result rests DeathResultSeconds, fading out over its last DeathFadeSeconds; presentation only, no protocol meaning.
+        public const float DeathResultSeconds=2.5f,DeathPopSeconds=.3f,DeathFadeSeconds=.3f;
+        public const int DeathKeep=0,DeathDrop=1;
+        public static readonly IReadOnlyList<int> DeathStrip=new[]{DeathKeep,DeathKeep,DeathKeep,DeathDrop};
+        /// <summary>A corner reel at one moment: Neutral is reduced motion's still, blank reel while the result is pending; Pop is the
+        /// card's scale and Alpha its opacity, both 0-1.</summary>
+        public struct DeathFrame{public bool Shown,Landed,Neutral;public float Elapsed,Scroll,Pop,Alpha;}
+        public static DeathFrame DeathBeat(RoundState state,DeathSpinState spin,double worldNow,bool reducedMotion)
+        {
+            var frame=new DeathFrame();
+            if(state==null||spin==null||state.Phase!="Playing"||spin.RoundId!=state.RoundId||spin.AtWorldSeconds<0)return frame;
+            float wheel=(float)FestivalSimulation.DeathWheelSeconds,t=frame.Elapsed=(float)(worldNow-spin.AtWorldSeconds);
+            if(!(t>=0&&t<wheel+DeathResultSeconds))return frame;
+            frame.Shown=true;frame.Landed=t>=wheel;frame.Neutral=reducedMotion&&!frame.Landed;
+            frame.Scroll=Scroll(DeathStrip.Count,TileOf(DeathStrip,spin.CashDropped>0?DeathDrop:DeathKeep,spin.Seed),spin.Seed,wheel,frame.Neutral?0:t);
+            float u=Mathf.Clamp01(t/DeathPopSeconds)-1;
+            frame.Pop=reducedMotion?1:1+(Back+1)*u*u*u+Back*u*u;
+            frame.Alpha=Mathf.Clamp01((wheel+DeathResultSeconds-t)/DeathFadeSeconds);
+            return frame;
+        }
+        /// <summary>The deaths whose corner reels show at worldNow, in the order they happened (the host's list order).</summary>
+        public static void ShownDeaths(RoundState state,double worldNow,List<DeathSpinState> shown)
+        {
+            shown.Clear();if(state==null)return;
+            foreach(var spin in state.DeathSpins)if(DeathBeat(state,spin,worldNow,false).Shown)shown.Add(spin);
+        }
+
         // FestivalHud's palette, so the spinner reads as part of the same interface.
         static readonly Color Ink=new Color(.035f,.065f,.075f,1),Paper=new Color(.948f,.928f,.852f,1),Orange=new Color(.99f,.465f,.255f,1);
         static readonly Color Gold=new Color(1,.76f,.29f),Unlit=new Color(.3f,.23f,.09f),Pink=new Color(1,.25f,.55f);
@@ -152,8 +183,8 @@ namespace Festival.Presentation
         // camp; past 90 it would see the back of the head.
         const float TakeFar=2.5f,TakeNear=1.8f,TakeClearance=.45f,SceneryClearance=.3f;
         static readonly float[] TakeAngles={0,30,-30,60,-60,90,-90};
-        // One reel: a masked window over a strip of tiles that wraps round forever. LOOP-4's one-reel corner spinner can reuse it.
-        sealed class Reel{public RectTransform Strip;public Text Result;public readonly List<RectTransform> Tiles=new List<RectTransform>();public readonly List<Image> Faces=new List<Image>();public readonly List<Color> Colors=new List<Color>();}
+        // One reel: a masked window over a strip of tiles that wraps round forever. LOOP-4's corner spinner reuses it.
+        sealed class Reel{public RectTransform Strip;public Text Title,Result;public readonly List<RectTransform> Tiles=new List<RectTransform>();public readonly List<Image> Faces=new List<Image>();public readonly List<Color> Colors=new List<Color>();}
         FestivalSession session;
         Font font;
         GameObject overlay,backdrop,letterbox;
@@ -169,6 +200,15 @@ namespace Festival.Presentation
         List<string> crew=new List<string>();
         string spinRound="",whoLine="",doseLine="",tookLine="",takeLine="",reactLine="";
         int spinSeed;
+        // A pool of corner cards, filled left to right along the bottom, DeathColumns to a row, then up a row.
+        sealed class DeathCard{public RectTransform Root;public CanvasGroup Fade;public Reel Reel;public GameObject Pending;public string SpinId="",Stake="",Result="";}
+        const int DeathColumns=4,DeathCardLimit=8; // ponytail: room for a full crew of eight at once; a reel past that is not drawn.
+        const float DeathScale=.45f;
+        static readonly Vector2 DeathFirstCard=new Vector2(185,215),DeathCardPitch=new Vector2(290,260);
+        static readonly Color Mint=new Color(.385f,.86f,.725f);
+        GameObject deathOverlay;
+        readonly List<DeathCard> deathCards=new List<DeathCard>();
+        readonly List<DeathSpinState> shownDeaths=new List<DeathSpinState>();
 
         AudioSource slotAudio;
         AudioClip leverAudio,tickAudio,clunkAudio;
@@ -249,17 +289,16 @@ namespace Festival.Presentation
         }
         void StopAudio(){if(slotAudio!=null)slotAudio.Stop();}
         void OnApplicationFocus(bool focused){audioFocused=focused;if(!focused){StopAudio();audioHeld=true;}}
-        void OnDisable(){StopAudio();audioHeld=true;if(overlay!=null)overlay.SetActive(false);if(takeCamera!=null)takeCamera.enabled=false;}
+        void OnDisable(){StopAudio();audioHeld=true;if(overlay!=null)overlay.SetActive(false);if(deathOverlay!=null)deathOverlay.SetActive(false);if(takeCamera!=null)takeCamera.enabled=false;}
         static void DisposeAudio(UnityEngine.Object owned){if(owned==null)return;if(Application.isPlaying)Destroy(owned);else DestroyImmediate(owned);}
 
         void Awake()
         {
             session=GetComponent<FestivalSession>();CreateAudio();
             font=Resources.Load<Font>("FestivalDisplay");if(font==null)font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            overlay=new GameObject("Festival spinner");overlay.transform.SetParent(transform,false);
-            var canvas=overlay.AddComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=110; // over the HUD (100)
-            var scaler=overlay.AddComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution=new Vector2(1920,1080);scaler.matchWidthOrHeight=.5f;
+            overlay=Overlay("Festival spinner",110); // over the HUD (100)
+            // No GraphicRaycaster on either canvas: neither takes a click.
+            deathOverlay=Overlay(DeathCanvasName,90);deathOverlay.SetActive(false);
             backdrop=Panel(overlay.transform,"Spinner backdrop",new Color(Ink.r,Ink.g,Ink.b,.92f),Vector2.zero,Vector2.one);
             var cabinet=Block(backdrop.transform,"Cabinet",Orange,new Vector2(-40,0),CabinetSize);
             var face=(RectTransform)Panel(cabinet,"Face",Ink,Vector2.zero,Vector2.one).transform;face.offsetMin=new Vector2(16,16);face.offsetMax=new Vector2(-16,-16);
@@ -299,9 +338,18 @@ namespace Festival.Presentation
             takeCamera.cullingMask=~(1<<30); // everyone, the local body included, but no floating name tags
             takeCamera.GetUniversalAdditionalCameraData().renderPostProcessing=true;
         }
+        GameObject Overlay(string name,int order)
+        {
+            var go=new GameObject(name);go.transform.SetParent(transform,false);
+            var canvas=go.AddComponent<Canvas>();canvas.renderMode=RenderMode.ScreenSpaceOverlay;canvas.sortingOrder=order;
+            var scaler=go.AddComponent<CanvasScaler>();scaler.uiScaleMode=CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution=new Vector2(1920,1080);scaler.matchWidthOrHeight=.5f;
+            return go;
+        }
         void LateUpdate()
         {
             var state=session!=null?session.State:null;
+            FollowDeaths(state,session!=null?session.LocalPlayer:null,session!=null?session.EstimatedWorldSeconds:0,session!=null&&session.Profile.Data.ReducedMotion);
             if(state!=null&&state.Phase=="Spinning"&&(spinRound!=state.RoundId||spinSeed!=state.SpinSeed))Prepare(state);
             var beat=At(state,crew,session!=null?session.EstimatedSimulationSeconds:0);
             bool hidden=beat.Stage==Stage.Hidden||session==null||session.MenuOpen;
@@ -336,6 +384,47 @@ namespace Festival.Presentation
         {
             string name=(state.Players.Find(p=>p.Id==id)?.Name??"Friend").ToUpperInvariant();
             return name.Length>10?name.Substring(0,10):name;
+        }
+        /// <summary>LOOP-4: a corner card for each death whose reel shows at worldNow, oldest first, its amounts in viewer's money.
+        /// Returns how many show.</summary>
+        public int FollowDeaths(RoundState state,PlayerState viewer,double worldNow,bool reducedMotion)
+        {
+            ShownDeaths(viewer!=null?state:null,worldNow,shownDeaths);
+            int shown=Mathf.Min(shownDeaths.Count,DeathCardLimit);
+            deathOverlay.SetActive(shown>0);
+            for(int i=0;i<Mathf.Max(shown,deathCards.Count);i++)
+            {
+                if(i>=deathCards.Count)deathCards.Add(MakeDeathCard(i));
+                var card=deathCards[i];
+                if(i>=shown){card.Root.gameObject.SetActive(false);card.SpinId="";continue;}
+                var spin=shownDeaths[i];var frame=DeathBeat(state,spin,worldNow,reducedMotion);
+                if(card.SpinId!=spin.Id)
+                {
+                    card.SpinId=spin.Id;card.Reel.Title.text=FestivalHudText.DeathSpinTitle(spin);
+                    card.Stake=FestivalHudText.DeathSpinStake(state,viewer,spin);card.Result=FestivalHudText.DeathSpinResult(state,viewer,spin);
+                }
+                card.Root.gameObject.SetActive(true);
+                card.Root.anchoredPosition=DeathFirstCard+new Vector2(i%DeathColumns*DeathCardPitch.x,i/DeathColumns*DeathCardPitch.y);
+                card.Root.localScale=Vector3.one*DeathScale*frame.Pop;card.Fade.alpha=frame.Alpha;
+                card.Reel.Strip.gameObject.SetActive(!frame.Neutral);card.Pending.SetActive(frame.Neutral);
+                Show(card.Reel,frame.Scroll);
+                card.Reel.Result.text=frame.Landed?card.Result:card.Stake;
+            }
+            return shown;
+        }
+        DeathCard MakeDeathCard(int index)
+        {
+            var root=new GameObject("Death card "+index,typeof(RectTransform),typeof(CanvasGroup)).GetComponent<RectTransform>();root.SetParent(deathOverlay.transform,false);
+            root.anchorMin=root.anchorMax=Vector2.zero;root.sizeDelta=Vector2.zero;
+            var fade=root.GetComponent<CanvasGroup>();fade.blocksRaycasts=false;fade.interactable=false;
+            Block(root,"Card",new Color(Ink.r,Ink.g,Ink.b,.85f),new Vector2(0,-65),new Vector2(640,560));
+            var reel=MakeReel(root,"Death reel",0,"");reel.Title.fontSize=56;
+            // Odd-object money can run the result to two lines.
+            reel.Result.fontSize=56;reel.Result.horizontalOverflow=HorizontalWrapMode.Wrap;reel.Result.rectTransform.sizeDelta=new Vector2(600,140);
+            reel.Result.rectTransform.anchoredPosition-=new Vector2(0,30);
+            Fill(reel,new List<string>{"KEEP","KEEP","KEEP","DROP"},new List<Color>{Mint,Mint,Mint,Pink},56);
+            var pending=Label(reel.Strip.parent,"Pending",96);pending.text="?";Stretch(pending.rectTransform);
+            return new DeathCard{Root=root,Fade=fade,Reel=reel,Pending=pending.gameObject};
         }
         // The camera cuts to the tripper at camp: a slow push-in while they take the dose (the existing Consume clip)
         // and react (the Panic clip, sized by the dose). A tripper out of view (inside a tent) keeps just the caption.
@@ -401,7 +490,7 @@ namespace Festival.Presentation
             var strip=new GameObject("Strip",typeof(RectTransform));strip.transform.SetParent(window,false);Stretch((RectTransform)strip.transform);
             var heading=Label(holder,"Title",36);heading.text=title;heading.rectTransform.anchoredPosition=new Vector2(0,holder.sizeDelta.y*.5f+40);
             var result=Label(holder,"Result",48);result.color=Orange;result.rectTransform.anchoredPosition=new Vector2(0,-holder.sizeDelta.y*.5f-44);
-            return new Reel{Strip=(RectTransform)strip.transform,Result=result};
+            return new Reel{Strip=(RectTransform)strip.transform,Title=heading,Result=result};
         }
         // Lays a strip's tiles out, each label on its colour; Show moves them.
         void Fill(Reel reel,List<string> labels,List<Color> colors,int size)

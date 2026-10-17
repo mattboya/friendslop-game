@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -206,6 +207,163 @@ namespace Festival.Tests
         {
             var state=Spin(7,4,3,1);state.Players[1].Connected=false;state.Players[3].Connected=false;
             Assert.That(FestivalSpinner.Crew(state),Is.EqualTo(new[]{"p0","p2","p3"}),"a friend who left has no tile, but a tripper who just dropped keeps one so the reel can land");
+        }
+
+        // LOOP-4: each positive-cash death spins a one-reel corner slot (three KEEP tiles, one DROP) from its frozen public summary,
+        // on the world clock, so every viewer sees the same spin land as the pile does.
+        static FestivalSimulation Death(int spinSeed,int cash=40,int festival=0)
+        {
+            var game=new FestivalSimulation(9);var owner=game.AddPlayer("owner","Owner");game.AddPlayer("friend","Friend");var spirit=game.AddPlayer("spirit","Spirit");game.AddPlayer("third","Third");
+            game.State.Phase="Playing";game.State.FestivalIndex=festival;game.State.Npcs.Clear();game.State.SpinSeed=spinSeed;owner.Cash=cash;spirit.Life="Spirit";
+            owner.Life="Downed";owner.DownedRemaining=.05;game.Tick(.1);
+            Assert.That(game.State.DeathSpins,Has.Count.EqualTo(1),"setup: the death is summarised for everyone");
+            return game;
+        }
+        static RoundState Wire(FestivalSimulation game,string viewer)=>JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,viewer)));
+        static bool OnDrop(float scroll)=>FestivalSpinner.DeathStrip[FestivalSpinner.TileAt(FestivalSpinner.DeathStrip.Count,scroll)]==FestivalSpinner.DeathDrop;
+        static double Wheel=>FestivalSimulation.DeathWheelSeconds;
+
+        [Test] public void TheDeathReelLandsOnDropExactlyWhenTheCashDropped()
+        {
+            Assert.That(FestivalSpinner.DeathStrip.Count(t=>t==FestivalSpinner.DeathKeep),Is.EqualTo(3),"three KEEP tiles");
+            Assert.That(FestivalSpinner.DeathStrip.Count(t=>t==FestivalSpinner.DeathDrop),Is.EqualTo(1),"to one DROP: the 1 in 4");
+            int drops=0,keeps=0;
+            for(int seed=1;seed<=80;seed++)
+            {
+                var view=Wire(Death(seed),"friend");var spin=view.DeathSpins[0];
+                var start=FestivalSpinner.DeathBeat(view,spin,spin.AtWorldSeconds,false);var landed=FestivalSpinner.DeathBeat(view,spin,spin.AtWorldSeconds+Wheel,false);
+                Assert.That(landed.Landed,Is.True,"seed "+seed+": the reel has landed as the pile does");
+                Assert.That(OnDrop(landed.Scroll),Is.EqualTo(spin.CashDropped>0),"seed "+seed+": the reel lands on DROP exactly when the cash dropped");
+                Assert.That(landed.Scroll,Is.EqualTo(Mathf.Round(landed.Scroll)),"seed "+seed+": its result rests centred on the payline");
+                Assert.That(landed.Scroll-start.Scroll,Is.GreaterThan(20),"seed "+seed+": after a fast scroll through dozens of tiles");
+                if(spin.CashDropped>0)drops++;else keeps++;
+            }
+            Assert.That(drops,Is.GreaterThan(5),"setup: real deaths dropped");Assert.That(keeps,Is.GreaterThan(drops),"and kept more often");
+        }
+
+        [Test] public void TheDeathReelPopsUpSpinsUntilThePileLandsThenReadsAndHides()
+        {
+            var view=Wire(Death(4),"friend");var spin=view.DeathSpins[0];
+            FestivalSpinner.DeathFrame At(double t)=>FestivalSpinner.DeathBeat(view,spin,spin.AtWorldSeconds+t,false);
+            double end=Wheel+FestivalSpinner.DeathResultSeconds;
+            Assert.That(At(-.01).Shown,Is.False,"hidden before the death");
+            Assert.That(At(0).Shown,Is.True,"it pops up as they die");
+            Assert.That(At(0).Pop,Is.LessThan(.2f),"from small");
+            float peak=0;for(double t=0;t<FestivalSpinner.DeathPopSeconds;t+=.01)peak=Mathf.Max(peak,At(t).Pop);
+            Assert.That(peak,Is.GreaterThan(1),"overshooting a little");
+            Assert.That(At(FestivalSpinner.DeathPopSeconds).Pop,Is.EqualTo(1),"then settling at full size");
+            double landing=First(t=>At(t).Landed);
+            Assert.That(landing,Is.EqualTo(Wheel).Within(.002),"it lands as the pile does, 2.5 s after the death");
+            Assert.That(At(landing-.05).Scroll,Is.Not.EqualTo(At(landing).Scroll),"still turning just before");
+            Assert.That(At(landing+1).Scroll,Is.EqualTo(At(landing).Scroll),"and resting after");
+            Assert.That(FestivalSpinner.DeathResultSeconds,Is.EqualTo(2.5f),"the result reads for 2.5 s");
+            Assert.That(At(end-FestivalSpinner.DeathFadeSeconds-.01).Alpha,Is.EqualTo(1),"fully readable");
+            Assert.That(At(end-.05).Alpha,Is.GreaterThan(0).And.LessThan(1),"fading out at the end");
+            Assert.That(At(end-.01).Shown,Is.True);
+            Assert.That(At(end).Shown,Is.False,"hidden from death + wheel + result on");Assert.That(At(60).Shown,Is.False);
+            foreach(var phase in new[]{FestivalSimulation.MinigamePhase,"Results","Shopping"})
+            {view.Phase=phase;Assert.That(At(1).Shown,Is.False,"hidden outside Playing: "+phase);}
+            view.Phase="Playing";view.RoundId="next round";
+            Assert.That(At(1).Shown,Is.False,"an event of another round never shows");
+        }
+
+        [Test] public void EveryViewerOfARealDeathSeesTheSameCornerReel()
+        {
+            for(int seed=1;seed<=12;seed++)
+            {
+                var game=Death(seed);
+                Assert.That(game.Player("owner").Life,Is.EqualTo("Spirit"),"setup: the dead player watches as a spirit");
+                string first=null;
+                foreach(var viewer in new[]{"owner","friend","spirit"})
+                {
+                    var view=Wire(game,viewer);var spin=view.DeathSpins.Single();var frames="";
+                    foreach(double t in new[]{0,.3,1.7,2.49,2.5,4})
+                    {var f=FestivalSpinner.DeathBeat(view,spin,spin.AtWorldSeconds+t,false);frames+=f.Shown+","+f.Landed+","+f.Scroll+","+f.Pop+","+f.Alpha+";";}
+                    if(first==null)first=frames;
+                    else Assert.That(frames,Is.EqualTo(first),"seed "+seed+": "+viewer+" sees exactly the reel every other viewer does");
+                }
+            }
+        }
+
+        // A neutral reel waits for the same authoritative landing, then shows the same result for the same time: no spin, no pop.
+        [Test] public void ReducedMotionWaitsOnANeutralReelForTheSameLanding()
+        {
+            var view=Wire(Death(4),"spirit");var spin=view.DeathSpins[0];
+            FestivalSpinner.DeathFrame At(double t,bool reduced)=>FestivalSpinner.DeathBeat(view,spin,spin.AtWorldSeconds+t,reduced);
+            float still=At(0,true).Scroll;
+            for(int step=0;step*.05<Wheel-.01;step++)
+            {
+                double t=step*.05;var f=At(t,true);
+                Assert.That(f.Shown&&f.Neutral&&!f.Landed,Is.True,t.ToString("F2")+" s: shown, neutral, pending");
+                Assert.That(f.Pop,Is.EqualTo(1),"no pop");Assert.That(f.Scroll,Is.EqualTo(still),"no spin");
+            }
+            foreach(double t in new[]{Wheel,Wheel+1,Wheel+FestivalSpinner.DeathResultSeconds-.05,Wheel+FestivalSpinner.DeathResultSeconds})
+            {
+                FestivalSpinner.DeathFrame reduced=At(t,true),full=At(t,false);
+                Assert.That((reduced.Shown,reduced.Landed,reduced.Scroll,reduced.Alpha),Is.EqualTo((full.Shown,full.Landed,full.Scroll,full.Alpha)),t+" s: the same result for the same time");
+                Assert.That(reduced.Neutral,Is.False);
+            }
+            Assert.That(At(-.01,true).Shown,Is.False);
+        }
+
+        [Test] public void ReelsForDeathsAtTheSameTimeStackInDeathOrder()
+        {
+            var game=Death(4);var friend=game.Player("friend");friend.Cash=30;
+            game.Tick(1);friend.Life="Downed";friend.DownedRemaining=.05;game.Tick(.1);
+            var view=Wire(game,"spirit");var shown=new List<DeathSpinState>();double first=view.DeathSpins[0].AtWorldSeconds;
+            Assert.That(view.DeathSpins.Select(s=>s.PlayerId),Is.EqualTo(new[]{"owner","friend"}),"setup: two real deaths a second apart");
+            FestivalSpinner.ShownDeaths(view,first-.1,shown);Assert.That(shown,Is.Empty,"none before the first death");
+            FestivalSpinner.ShownDeaths(view,first+1.5,shown);Assert.That(shown.Select(s=>s.PlayerId),Is.EqualTo(new[]{"owner","friend"}),"the earlier death's reel comes first");
+            FestivalSpinner.ShownDeaths(view,first+Wheel+FestivalSpinner.DeathResultSeconds+.05,shown);Assert.That(shown.Select(s=>s.PlayerId),Is.EqualTo(new[]{"friend"}),"then the later one alone");
+        }
+
+        // The corner reel never takes a click from the HUD or the menu over it, nor moves the camera or opens anything.
+        [Test] public void TheDeathReelDrawsUnderTheHudAndTakesNoClicks()
+        {
+            var root=new GameObject("Death reel canvas");
+            try
+            {
+                var spinner=root.AddComponent<FestivalSpinner>();typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
+                var hud=root.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
+                var view=Wire(Death(4),"friend");var spin=view.DeathSpins[0];
+                Assert.That(spinner.FollowDeaths(view,view.Players.Find(p=>p.Id=="friend"),spin.AtWorldSeconds+1,false),Is.EqualTo(1),"one reel shows");
+                var canvas=root.GetComponentsInChildren<Canvas>(true).SingleOrDefault(c=>c.name==FestivalSpinner.DeathCanvasName);
+                Assert.That(canvas,Is.Not.Null,"the corner reel has its own canvas");
+                Assert.That(canvas.gameObject.activeInHierarchy,Is.True);
+                var hudCanvas=root.GetComponentsInChildren<Canvas>(true).Single(c=>c.name=="Festival HUD");
+                Assert.That(canvas.sortingOrder,Is.LessThan(hudCanvas.sortingOrder),"under the HUD");
+                Assert.That(canvas.GetComponentsInChildren<UnityEngine.UI.GraphicRaycaster>(true),Is.Empty,"no raycaster: clicks pass through to the HUD");
+                foreach(var graphic in canvas.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))Assert.That(graphic.raycastTarget,Is.False,graphic.name+" takes no clicks");
+                Assert.That(canvas.renderMode,Is.EqualTo(RenderMode.ScreenSpaceOverlay));
+            }
+            finally{UnityEngine.Object.DestroyImmediate(root);}
+        }
+
+        // What the corner reel shows: who died, the frozen amount in the viewer's money as it turns, then KEPT or DROPPED, then nothing.
+        [Test] public void TheCornerReelNamesWhoDiedAndReadsTheirCashInYourMoney()
+        {
+            var root=new GameObject("Death reel text");
+            try
+            {
+                var spinner=root.AddComponent<FestivalSpinner>();typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
+                int seed=1;while(Death(seed).State.DeathSpins[0].CashDropped==0)seed++;
+                string Read(string name)=>root.GetComponentsInChildren<UnityEngine.UI.Text>(false).FirstOrDefault(t=>t.name==name&&t.GetComponentInParent<Canvas>().name==FestivalSpinner.DeathCanvasName)?.text??"(hidden)";
+                var view=Wire(Death(seed),"friend");var spin=view.DeathSpins[0];var friend=view.Players.Find(p=>p.Id=="friend");
+                spinner.FollowDeaths(view,friend,spin.AtWorldSeconds+1,false);
+                Assert.That(Read("Title"),Is.EqualTo("OWNER DIED"),"it names who died");
+                Assert.That(Read("Result"),Is.EqualTo("$40"),"and the cash at stake as it turns");
+                int parts=root.GetComponentsInChildren<RectTransform>(true).Length;
+                spinner.FollowDeaths(view,friend,spin.AtWorldSeconds+Wheel+.1,false);
+                Assert.That(Read("Result"),Is.EqualTo("DROPPED $40"),"then the result");
+                Assert.That(root.GetComponentsInChildren<RectTransform>(true).Length,Is.EqualTo(parts),"on the same card, not a new one");
+                spinner.FollowDeaths(view,friend,spin.AtWorldSeconds+Wheel+FestivalSpinner.DeathResultSeconds,false);
+                Assert.That(Read("Title"),Is.EqualTo("(hidden)"),"and gone once read");
+                var playa=Wire(Death(seed,40,Festivals.PlayaFestival),"friend");spin=playa.DeathSpins[0];friend=playa.Players.Find(p=>p.Id=="friend");
+                Assert.That(friend.Ordinal,Is.EqualTo(1),"setup: the friend counts in ramen packets");
+                spinner.FollowDeaths(playa,friend,spin.AtWorldSeconds+Wheel+.1,false);
+                Assert.That(Read("Result"),Is.EqualTo("DROPPED 40 RAMEN PACKETS"),"on Ember Playa, in the viewer's odd objects");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(root);}
         }
     }
 }
