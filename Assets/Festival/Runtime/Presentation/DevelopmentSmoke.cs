@@ -14,6 +14,62 @@ namespace Festival.Presentation
     /// <summary>Explicit opt-in native transport/render smoke test. Absent from release builds.</summary>
     public sealed class DevelopmentSmoke : MonoBehaviour
     {
+        /// <summary>One named gameplay wait: a budget of simulation seconds in the round it began in, and a watchdog that ends it
+        /// after NoProgressSeconds of real time with no simulation progress.</summary>
+        public sealed class GameplayWait
+        {
+            public const double NoProgressSeconds=60;
+            public readonly string Name;
+            readonly string round;
+            readonly double simulationStart,realStart,budget,realLimit;
+            double simulation,progressAt;
+            public string Failure {get;private set;}="";
+            public GameplayWait(string name,RoundState state,double real,double budget,double realLimit=double.PositiveInfinity)
+            {
+                Name=name;round=state?.RoundId;simulationStart=simulation=state?.SimulationSeconds??0;realStart=progressAt=real;this.budget=budget;this.realLimit=realLimit;
+            }
+            public bool CanContinue(RoundState state,double real)
+            {
+                if(Failure!="")return false;
+                if(state==null)Failure="session closed";
+                else if(state.RoundId!=round)Failure="round changed";
+                else if(state.SimulationSeconds<simulation)Failure="simulation clock regressed";
+                else
+                {
+                    if(state.SimulationSeconds>simulation){simulation=state.SimulationSeconds;progressAt=real;}
+                    if(real-progressAt>=NoProgressSeconds)Failure="no simulation progress";
+                    else if(real>=realLimit)Failure="real-time limit";
+                    else if(simulation-simulationStart>=budget)Failure="simulation budget spent";
+                }
+                return Failure=="";
+            }
+            /// <summary>The log line for a stage of the wait: simulation and real seconds since it began. No player data.</summary>
+            public string Report(string stage,RoundState state,double real)
+            {
+                double now=state!=null&&state.RoundId==round&&state.SimulationSeconds>simulation?state.SimulationSeconds:simulation;
+                return "[Festival.SmokeWait] "+Name+" "+stage+" sim="+Seconds(now-simulationStart)+"/"+Seconds(budget)+" real="+Seconds(real-realStart)+(Failure==""?"":" failure="+Failure);
+            }
+            static string Seconds(double seconds)=>seconds.ToString("F2",System.Globalization.CultureInfo.InvariantCulture);
+        }
+        // Simulation seconds a wait allows past an authoritative end: the host's next steps and the snapshot that shows them.
+        public const double EndGraceSeconds=2;
+        // A command's own result: the host's reply and the snapshot that shows it.
+        public const double CommandSeconds=5;
+        // An untimed chat or talk: the smoke's own replies, each a round trip to the host.
+        public const double ChatSeconds=30;
+        // Camp has no level clock: a peer's placements and captures there.
+        public const double CampSeconds=120;
+        // After the spin: the festival builds and every player reports MapReady.
+        public const double LoadingSeconds=120;
+        // Real seconds for the player to start and the two peers to connect, and for the HUD to draw what a snapshot already holds.
+        const float ConnectionSeconds=120,RenderSeconds=10;
+        /// <summary>Simulation seconds from now until the host ends interaction i (a rhythm chart keeps .75 s of grace), plus
+        /// EndGraceSeconds. Nothing on the host ends an untimed chat, so it gets ChatSeconds.</summary>
+        public static double UntilEnd(RoundState s,InteractionState i)=>FestivalSimulation.UntimedChat(i)?ChatSeconds
+            :Math.Max(0,i.StartSeconds+i.DurationSeconds+(FestivalInput.IsRhythm(i)?.75:0)-s.SimulationSeconds)+EndGraceSeconds;
+        /// <summary>Simulation seconds the level has left, plus EndGraceSeconds: anything a player does in it ends by then.</summary>
+        public static double LevelLeft(RoundState s)=>Math.Max(0,s.DurationSeconds-s.ElapsedSeconds)+EndGraceSeconds;
+
         Camera captureCamera;
         Vector3 capturePosition=new Vector3(0,2.3f,-10);
         Quaternion captureRotation=Quaternion.Euler(8,0,0);
@@ -81,9 +137,10 @@ namespace Festival.Presentation
                 Application.Quit(0);
                 yield break;
             }
-            // Camp, Day 1, the debrief and Night 1, with a spin before each level.
-            float deadline=Time.realtimeSinceStartup+200+2*(float)FestivalSimulation.SpinSeconds;
-            while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            // Camp, Day 1, the debrief and Night 1, with a spin before each level. Startup and the connection have a real-time limit;
+            // every gameplay step after them waits on simulation time (Until).
+            float connected=Time.realtimeSinceStartup+ConnectionSeconds;
+            while(session.LocalPlayer==null&&Time.realtimeSinceStartup<connected)yield return null;
             if(session.LocalPlayer==null){Debug.LogError("FESTIVAL SMOKE FAILED: no local identity");Application.Quit(2);yield break;}
             if(!BubbleTextShaderSupported(TMP_Settings.defaultFontAsset?.material)){Fail("bubble text shader");yield break;}
             Debug.Log("FESTIVAL SMOKE BUBBLE TEXT SHADER PASSED: TextMeshPro/Mobile/Distance Field supported");
@@ -103,14 +160,14 @@ namespace Festival.Presentation
             var sim=session.DevelopmentSimulation;
             if(session.IsHost)
             {
-                while(sim.State.Players.Count<2&&Time.realtimeSinceStartup<deadline)yield return null;
+                while(sim.State.Players.Count<2&&Time.realtimeSinceStartup<connected)yield return null;
                 if(sim.State.Players.Count<2){Fail("camp peers");yield break;}
                 sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;
                 sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
             }
             float campX=session.IsHost?-1:1;
-            while(!Near(session.LocalPlayer,campX,6)&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("camp placement");yield break;}
+            yield return Until(session,"camp placement",()=>Near(session.LocalPlayer,campX,6),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             var campMenu=transform.Find("Festival HUD/Festival pass");
             var campGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.CampRootName+"/Campsite shelf goods");
             if(campMenu==null||campMenu.Find("Pass home/RESUME FESTIVAL")==null||campMenu.Find("Pass home/SETTINGS")==null||campGoods==null||campGoods.childCount!=session.State.VendorOffers.Count)
@@ -163,10 +220,11 @@ namespace Festival.Presentation
                 sim.State.Players[1].X=spoon.X+.4f;sim.State.Players[1].Z=spoon.Z-1;
             }
             var shelfPoint=Catalog.ShopPoint(true,session.State.VendorOffers.IndexOf("little_spoon"));
-            while(!Within(session.LocalPlayer,shelfPoint.X,shelfPoint.Z,2.8f)&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"shelf placement",()=>Within(session.LocalPlayer,shelfPoint.X,shelfPoint.Z,2.8f),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             session.Command("HoldOffer",item:"little_spoon");
-            while(session.LocalPlayer.HeldOfferId!="little_spoon"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("shared shelf pickup");yield break;}
+            yield return Until(session,"shared shelf pickup",()=>session.LocalPlayer.HeldOfferId=="little_spoon",CommandSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             yield return new WaitForSeconds(.15f);
             string heldPath=Path.Combine(shopDir,session.IsHost?"host-held.png":"client-held.png");
             if(File.Exists(heldPath))File.Delete(heldPath);
@@ -176,20 +234,21 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE HELD RENDER PASSED: "+heldPath);
             if(session.IsHost)
             {
-                while(!sim.State.Players.TrueForAll(p=>p.HeldOfferId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("two peers reserved separate shelf copies");yield break;}
+                yield return Until(session,"two peers reserved separate shelf copies",()=>sim.State.Players.TrueForAll(p=>p.HeldOfferId=="little_spoon"),CampSeconds);
+                if(failed!=null){Fail(failed);yield break;}
                 sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
             }
-            while(!Near(session.LocalPlayer,campX,6)&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"checkout placement",()=>Near(session.LocalPlayer,campX,6),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             session.Command("Buy",item:"little_spoon");
-            while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="little_spoon")&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("camp spoon purchase");yield break;}
+            yield return Until(session,"camp spoon purchase",()=>session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="little_spoon"),CommandSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             if(session.LocalPlayer.HeldOfferId!=""){Fail("purchase still held");yield break;}
             // Days are sold (LOOP-2), but no shelf sells stock (ECON-2): each friend buys a Tongue Stamp from a festivalgoer on Day 1.
             if(session.IsHost)
             {
-                while(!sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="little_spoon"))&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("two camp purchases");yield break;}
+                yield return Until(session,"two camp purchases",()=>sim.State.Players.TrueForAll(p=>p.Inventory.Exists(item=>item.ItemId=="little_spoon")),CampSeconds);
+                if(failed!=null){Fail(failed);yield break;}
                 var site=CampFeatures.Find("tent_1");
                 foreach(var peer in sim.State.Players)
                 {
@@ -199,11 +258,8 @@ namespace Festival.Presentation
                 sim.State.Players[0].Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});
                 session.Command("Transfer",sim.State.Players[1].Id,"merch_bag",1);
             }
-            while(session.LocalPlayer.CampVisitId!="tent_1"||session.State.Transfers.Count==0)
-            {
-                if(Time.realtimeSinceStartup>=deadline){Fail("interior handoff offer");yield break;}
-                yield return null;
-            }
+            yield return Until(session,"interior handoff offer",()=>session.LocalPlayer.CampVisitId=="tent_1"&&session.State.Transfers.Count>0,CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             yield return new WaitForSeconds(.3f);
             if(!ShowsHandoffAction(transform.Find("Festival HUD"),session.IsHost)){Fail("interior handoff action "+HandoffAction(session.IsHost));yield break;}
             var transferPath=Path.Combine(shopDir,session.IsHost?"host-interior-handoff.png":"client-interior-handoff.png");
@@ -211,11 +267,8 @@ namespace Festival.Presentation
             ScreenCapture.CaptureScreenshot(transferPath);yield return new WaitForSeconds(.55f);
             if(!File.Exists(transferPath)){Fail("interior handoff render");yield break;}
             if(!session.IsHost)session.Command("AcceptTransfer",session.State.Transfers[0].Id);
-            while(session.State.Transfers.Count>0||!(session.IsHost?sim.State.Players[1].Inventory:session.LocalPlayer.Inventory).Exists(item=>item.ItemId=="merch_bag"))
-            {
-                if(Time.realtimeSinceStartup>=deadline){Fail("interior handoff acceptance");yield break;}
-                yield return null;
-            }
+            yield return Until(session,"interior handoff acceptance",()=>session.State.Transfers.Count==0&&(session.IsHost?sim.State.Players[1].Inventory:session.LocalPlayer.Inventory).Exists(item=>item.ItemId=="merch_bag"),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             Debug.Log("FESTIVAL SMOKE INTERIOR HANDOFF PASSED: "+transferPath);
             if(session.IsHost)
             {
@@ -225,11 +278,11 @@ namespace Festival.Presentation
                 sim.State.Players[0].X=-2;sim.State.Players[0].Z=-13;
                 sim.State.Players[1].X=2;sim.State.Players[1].Z=-13;
             }
-            while(session.LocalPlayer.CampVisitId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(session.LocalPlayer.CampVisitId!=""){Fail("interior handoff exit replication");yield break;}
+            yield return Until(session,"interior handoff exit replication",()=>session.LocalPlayer.CampVisitId=="",CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             float overviewX=session.IsHost?-2:2;
-            while(!Near(session.LocalPlayer,overviewX,-13)&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("camp overview placement");yield break;}
+            yield return Until(session,"camp overview placement",()=>Near(session.LocalPlayer,overviewX,-13),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             yield return new WaitForSeconds(.4f);
             string campDir=Path.Combine(Application.persistentDataPath,"smoke");Directory.CreateDirectory(campDir);
             string campPath=Path.Combine(campDir,session.IsHost?"host-camp.png":"client-camp.png");
@@ -281,15 +334,13 @@ namespace Festival.Presentation
                 Debug.Log("FESTIVAL SMOKE CAMP DOME TENT PASSED: "+domePath);
             }
             if(session.IsHost){sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;}
-            while(!Within(session.LocalPlayer,0,19,3.2f)&&Time.realtimeSinceStartup<deadline)yield return null;
-            session.Command("Ready");
-            yield return CaptureSpinner(session,session.IsHost?"host-spinner.png":"client-spinner.png",deadline);
+            yield return Until(session,"trailhead placement",()=>Within(session.LocalPlayer,0,19,3.2f),CampSeconds);
             if(failed!=null){Fail(failed);yield break;}
-            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)
-            {
-                yield return new WaitForSeconds(.2f);
-            }
-            if(session.State.Phase!="Playing"||session.State.Players.Count!=2){Debug.LogError("FESTIVAL SMOKE FAILED: two-player loading barrier");Application.Quit(3);yield break;}
+            session.Command("Ready");
+            yield return CaptureSpinner(session,session.IsHost?"host-spinner.png":"client-spinner.png");
+            if(failed!=null){Fail(failed);yield break;}
+            yield return Until(session,"two-player loading barrier",()=>session.State.Phase=="Playing",FestivalSimulation.SpinSeconds+LoadingSeconds);
+            if(failed!=null||session.State.Phase!="Playing"||session.State.Players.Count!=2){Debug.LogError("FESTIVAL SMOKE FAILED: "+(failed??"two-player loading barrier"));Application.Quit(3);yield break;}
             Debug.Log("FESTIVAL SMOKE TRANSPORT PASSED: two peers ready and playing; host="+session.IsHost);
             var crowd=FindFirstObjectByType<FestivalAmbientCrowd>();
             if(crowd==null||crowd.MemberCount!=62||crowd.WalkerCount!=12){Fail("festival crowd population");yield break;}
@@ -309,9 +360,9 @@ namespace Festival.Presentation
             if(!File.Exists(liveCrowdPath)){Fail("live crowd render");yield break;}
             Debug.Log("FESTIVAL SMOKE CROWD LIVE PASSED: "+liveCrowdPath);
             capturePosition=previousPosition;captureRotation=previousRotation;
-            session.Command("Buy",item:"medical_voucher");
-            yield return new WaitForSeconds(.2f);
-            if(session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")){Fail("remote night market purchase");yield break;}
+            yield return Send(session,"Buy","","medical_voucher");
+            if(failed!=null){Fail(failed);yield break;}
+            if(reply.Accepted||session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")){Fail("remote night market purchase");yield break;}
             Debug.Log("FESTIVAL SMOKE MARKET RANGE PASSED: remote purchase blocked; host="+session.IsHost);
             // Only test actor placement is privileged. The client uses the
             // ordinary command channel for every mission action and note.
@@ -335,11 +386,11 @@ namespace Festival.Presentation
                 sim.Player(sim.State.HostPlayerId).X=-2.5f;
                 Stand(clientSeller,0,-1.5f);Stand(hostSeller,-2.5f,-1.5f);
                 MakeClientTheTripper(sim);
-                yield return BuyStock(session,"stock_lsd",-2.5f,-1.5f,deadline);
+                yield return BuyStock(session,"stock_lsd",-2.5f,-1.5f);
                 if(failed!=null){Fail(failed);yield break;}
                 var client=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
-                while(!client.Inventory.Exists(item=>item.ItemId=="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("client's stock buy");yield break;}
+                yield return Until(session,"client's stock buy",()=>client.Inventory.Exists(item=>item.ItemId=="stock_lsd"),LevelLeft(sim.State));
+                if(failed!=null){Fail(failed);yield break;}
                 // The sellers step away, out of the market views.
                 KeepOnly(sim,buyers);
                 PlaceBoth(sim,market.X,market.Z);
@@ -347,19 +398,19 @@ namespace Festival.Presentation
             }
             else
             {
-                while(!Near(session.LocalPlayer,0,0)&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("stock buy placement");yield break;}
-                yield return BuyStock(session,"stock_lsd",0,-1.5f,deadline);
+                yield return Until(session,"stock buy placement",()=>Near(session.LocalPlayer,0,0),LevelLeft(session.State));
                 if(failed!=null){Fail(failed);yield break;}
-                while(!Near(session.LocalPlayer,market.X,market.Z)&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("night market placement");yield break;}
+                yield return BuyStock(session,"stock_lsd",0,-1.5f);
+                if(failed!=null){Fail(failed);yield break;}
+                yield return Until(session,"night market placement",()=>Near(session.LocalPlayer,market.X,market.Z),LevelLeft(session.State));
+                if(failed!=null){Fail(failed);yield break;}
                 var marketGoods=FindFirstObjectByType<FestivalWorld>()?.transform.Find(FestivalWorld.RootName+"/Night market goods");
                 // ECON-6: starter stock is sold at camp, so the market shows a physical item for every other offer only.
                 int shownOffers=session.State.VendorOffers.FindAll(offer=>!Catalog.StarterStock(offer)).Count;
                 if(marketGoods==null||marketGoods.childCount!=shownOffers){Fail("night market physical display");yield break;}
                 session.Command("Buy",item:"medical_voucher");
-                while(!session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher")&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("night market direct purchase");yield break;}
+                yield return Until(session,"night market direct purchase",()=>session.LocalPlayer.Inventory.Exists(item=>item.ItemId=="medical_voucher"),CommandSeconds);
+                if(failed!=null){Fail(failed);yield break;}
                 captureCamera=session.ViewCamera;
                 foreach(var location in new[]{
                     new {Name="medical",Camera=new Vector3(18,2.2f,-23),Target=new Vector3(24,1.7f,-17)},
@@ -395,15 +446,15 @@ namespace Festival.Presentation
                 if(!File.Exists(marketApproachPath)){Fail("night market approach render");yield break;}
                 Debug.Log("FESTIVAL SMOKE MARKET APPROACH PASSED: "+marketApproachPath);
             }
-            while((session.IsHost?sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Effects.Count:session.LocalPlayer.Effects.Count)==0&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(Time.realtimeSinceStartup>=deadline){Fail("client tripper dose");yield break;}
+            yield return Until(session,"client tripper dose",()=>(session.IsHost?sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Effects.Count:session.LocalPlayer.Effects.Count)>0,LevelLeft(session.State));
+            if(failed!=null){Fail(failed);yield break;}
             // The host's view is built before this frame's tripper handoff, so it catches up a frame later.
-            while(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(session.IsHost&&!session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes){Fail("teammate intoxication face state");yield break;}
+            if(session.IsHost)yield return Until(session,"teammate intoxication face state",()=>session.State.Players.Find(p=>p.Id!=session.LocalPlayerId).VisualWideEyes,CommandSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             // Only the tripper's client (here the client) gets visions; VISION-1 draws them, and the tripper checks them below.
             bool shouldSeeVisions=!session.IsHost;
-            while(session.State.Visions.Count>0!=shouldSeeVisions&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(session.State.Visions.Count>0!=shouldSeeVisions){Fail("private vision visibility");yield break;}
+            yield return Until(session,"private vision visibility",()=>session.State.Visions.Count>0==shouldSeeVisions,LevelLeft(session.State));
+            if(failed!=null){Fail(failed);yield break;}
             Debug.Log("FESTIVAL SMOKE CLUE VISIBILITY PASSED: visible="+(session.State.Visions.Count>0)+" host="+session.IsHost);
             // Tabs out to sell. The host waits for this before moving everyone on from the market views.
             if(!session.IsHost)session.Command("Equip",item:"stock_lsd");
@@ -411,7 +462,8 @@ namespace Festival.Presentation
             {
                 // The client's market voucher is equipped on purchase, so its tabs come out only after its market views.
                 var seller=sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId);
-                while((!seller.Inventory.Exists(item=>item.ItemId=="medical_voucher")||seller.EquippedItemId!="stock_lsd")&&Time.realtimeSinceStartup<deadline)yield return null;
+                yield return Until(session,"client's market voucher and tabs out",()=>seller.Inventory.Exists(item=>item.ItemId=="medical_voucher")&&seller.EquippedItemId=="stock_lsd",LevelLeft(sim.State));
+                if(failed!=null){Fail(failed);yield break;}
                 PlaceBoth(sim,0,0);
                 sim.Player(sim.State.HostPlayerId).X=-2.5f;
                 // The tripper dances with the buyer in their visions, checks them by chatting, then sells to both buyers until
@@ -420,14 +472,15 @@ namespace Festival.Presentation
                 var tabStack=seller.Inventory.Find(item=>item.ItemId=="stock_lsd");
                 if(tabStack==null){Fail("tripper's Day 1 stock");yield break;}
                 tabStack.Count=2*FestivalSimulation.SalesPerBuyer(sim.State);
-                while(!FestivalSimulation.DayQuotaMet(sim.State)&&Time.realtimeSinceStartup<deadline)yield return null;
+                yield return Until(session,"client's day quota",()=>FestivalSimulation.DayQuotaMet(sim.State),LevelLeft(sim.State));
+                if(failed!=null){Fail(failed);yield break;}
                 PlaceBoth(sim,Festivals.CampGateX,Festivals.CampGateZ);
             }
             else
             {
                 NpcState dayBuyer=null;
-                while((!Near(session.LocalPlayer,0,0)||(dayBuyer=session.State.Npcs.Find(n=>Near(n,0,1)))==null)&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("performance placement");yield break;}
+                yield return Until(session,"performance placement",()=>Near(session.LocalPlayer,0,0)&&(dayBuyer=session.State.Npcs.Find(n=>Near(n,0,1)))!=null,LevelLeft(session.State));
+                if(failed!=null){Fail(failed);yield break;}
                 // TEST-1: the tripper's view of the buyer in their visions (the host stood DayBuyers()[0] here) shows the vision's marker
                 // over their head: drawn, and in frame.
                 var clue=session.State.Visions.Find(v=>v.NpcId==dayBuyer.Id);var clueMarker=clue!=null?transform.Find("Vision "+clue.Id):null;
@@ -457,16 +510,15 @@ namespace Festival.Presentation
                 if(!File.Exists(actionPath)){Fail("nearby actions render");yield break;}
                 Debug.Log("FESTIVAL SMOKE ACTIONS RENDER PASSED: "+actionPath);
                 session.MenuOpen=false;
-                session.Command("Dance",dayBuyer.Id);
+                yield return Send(session,"Dance",dayBuyer.Id);
+                if(failed!=null){Fail(failed);yield break;}
+                if(!reply.Accepted){Fail("dance challenge refused: "+reply.Reason);yield break;}
                 InteractionState performance=null;
-                while(performance==null&&Time.realtimeSinceStartup<deadline)
-                {
-                    performance=session.State.Interactions.Find(i=>i.PlayerId==session.LocalPlayerId&&i.Kind=="Dance"&&i.Status=="Active");
-                    yield return null;
-                }
-                if(performance==null){Fail("dance challenge");yield break;}
+                yield return Until(session,"dance challenge start",()=>(performance=session.State.Interactions.Find(i=>i.PlayerId==session.LocalPlayerId&&i.Kind=="Dance"&&i.Status=="Active"))!=null,CommandSeconds);
+                if(failed!=null){Fail(failed);yield break;}
                 var dancePreview=GetComponent<FestivalDancePreview>();
-                while((dancePreview==null||!dancePreview.IsVisible||dancePreview.Dancer==null)&&Time.realtimeSinceStartup<deadline)yield return null;
+                float drawn=Time.realtimeSinceStartup+RenderSeconds;
+                while((dancePreview==null||!dancePreview.IsVisible||dancePreview.Dancer==null)&&Time.realtimeSinceStartup<drawn)yield return null;
                 var liveDancer=transform.Find("Festival HUD/Live dancer/Dancer window/Live character view")?.GetComponent<RawImage>();
                 if(dancePreview==null||!dancePreview.IsVisible||dancePreview.Dancer==null||dancePreview.Dancer!=session.LocalWorldCharacter||dancePreview.Dancer.Pose!="Dance"||liveDancer==null||liveDancer.texture==null)
                 {Fail("live dance avatar");yield break;}
@@ -484,30 +536,30 @@ namespace Festival.Presentation
                 string judgmentPath=Path.Combine(Application.persistentDataPath,"smoke","client-rhythm-judgment.png");
                 if(File.Exists(judgmentPath))File.Delete(judgmentPath);
                 var chart=RhythmChart.For(performance);
+                var dance=Begin(session,"dance challenge",UntilEnd(Clock(session),performance));
                 bool rhythmCaptured=false,judgmentCaptured=false;
                 foreach(var note in chart.Notes)
                 {
                     if(!rhythmCaptured)
                     {
-                        while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.72&&Time.realtimeSinceStartup<deadline)yield return null;
+                        while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.72){if(!Holds(session,dance)){Fail(failed);yield break;}yield return null;}
                         ScreenCapture.CaptureScreenshot(rhythmPath);rhythmCaptured=true;
                     }
-                    while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
-                    if(Time.realtimeSinceStartup>=deadline){Fail("rhythm clock");yield break;}
+                    while(session.EstimatedSimulationSeconds-performance.StartSeconds<note.TimeSeconds-.02){if(!Holds(session,dance)){Fail(failed);yield break;}yield return null;}
                     session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
                     if(!judgmentCaptured)
                     {
-                        while((session.State.Interactions.Find(i=>i.Id==performance.Id)?.Inputs.Count??0)<1&&Time.realtimeSinceStartup<deadline)yield return null;
-                        float stepDeadline=Time.realtimeSinceStartup+.25f;
-                        while(session.LocalPlayer.VisualDanceStepSequence<1&&Time.realtimeSinceStartup<stepDeadline)yield return null;
-                        if(session.LocalPlayer.VisualDanceStepSequence<1||session.LocalPlayer.VisualDanceStepDirection!=note.Direction)
-                        {Fail("replicated dance step: seq="+session.LocalPlayer.VisualDanceStepSequence+" direction="+session.LocalPlayer.VisualDanceStepDirection+" expected="+note.Direction);yield break;}
+                        yield return Until(session,"replicated dance step",()=>(session.State.Interactions.Find(i=>i.Id==performance.Id)?.Inputs.Count??0)>=1&&session.LocalPlayer.VisualDanceStepSequence>=1,CommandSeconds);
+                        if(failed!=null||session.LocalPlayer.VisualDanceStepDirection!=note.Direction)
+                        {Fail((failed??"replicated dance step")+": seq="+session.LocalPlayer.VisualDanceStepSequence+" direction="+session.LocalPlayer.VisualDanceStepDirection+" expected="+note.Direction);yield break;}
                         var judgment=transform.Find("Festival HUD/Rhythm lane/Judgment")?.GetComponent<Text>();
-                        while(judgment!=null&&judgment.text!="PERFECT"&&Time.realtimeSinceStartup<stepDeadline)yield return null;
+                        float judged=Time.realtimeSinceStartup+RenderSeconds;
+                        while(judgment!=null&&judgment.text!="PERFECT"&&Time.realtimeSinceStartup<judged)yield return null;
                         if(judgment==null||judgment.text!="PERFECT"){Fail("rhythm judgment UI");yield break;}
                         ScreenCapture.CaptureScreenshot(judgmentPath);judgmentCaptured=true;
                     }
                 }
+                End(session,dance);
                 yield return null;
                 recordRhythmFrames=false;
                 if(!File.Exists(rhythmPath)||!File.Exists(judgmentPath)){Fail("rhythm render");yield break;}
@@ -518,13 +570,16 @@ namespace Festival.Presentation
                     var measured=new float[rhythmFrameCount];Array.Copy(rhythmFrameMs,measured,rhythmFrameCount);Array.Sort(measured);
                     Debug.Log("FESTIVAL SMOKE RHYTHM FRAME P95 "+measured[Mathf.Clamp(Mathf.CeilToInt(rhythmFrameCount*.95f)-1,0,rhythmFrameCount-1)].ToString("0.0")+" MS; MAX "+measured[rhythmFrameCount-1].ToString("0.0")+" MS; SAMPLES "+rhythmFrameCount);
                 }
-                yield return WorkTheDay(session,dayBuyer.Id,session.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Id!=dayBuyer.Id)?.Id,deadline);
+                yield return WorkTheDay(session,dayBuyer.Id,session.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Id!=dayBuyer.Id)?.Id);
                 if(failed!=null){Fail(failed);yield break;}
                 // Quota met: the tripper heads back to camp early and ends the day.
-                while(!Near(session.LocalPlayer,Festivals.CampGateX,Festivals.CampGateZ)&&Time.realtimeSinceStartup<deadline)yield return null;
-                yield return Interact(session,"Extract","","",deadline);
+                yield return Until(session,"camp gate placement",()=>Near(session.LocalPlayer,Festivals.CampGateX,Festivals.CampGateZ),LevelLeft(session.State));
+                if(failed!=null){Fail(failed);yield break;}
+                yield return Interact(session,"Extract","","");
+                if(failed!=null){Fail(failed);yield break;}
             }
-            while(session.State!=null&&session.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"day settlement",()=>session.State==null||session.State.Phase=="Results",LevelLeft(session.State));
+            if(failed!=null){Fail(failed);yield break;}
             if(session.State==null){Fail("day settlement: session closed, "+session.Message);yield break;}
             if(session.State.Result!="Success"||session.State.LevelIndex!=0||!FestivalSimulation.DayQuotaMet(session.State)||session.State.Survivors!=2)
             {Fail("day settlement: result="+session.State.Result+" level="+session.State.LevelIndex+" sales="+session.State.LevelSales+"/"+FestivalSimulation.DayQuota(session.State)+" survivors="+session.State.Survivors+" message="+session.Message);yield break;}
@@ -537,9 +592,12 @@ namespace Festival.Presentation
                 yield return new WaitForSeconds(2);
                 session.Command("Reset");
             }
-            while(session.State.Phase!="CampReview"&&Time.realtimeSinceStartup<deadline)yield return null;
+            // Reset makes a new round: the day's waits are over, and each wait from here starts on its clock.
+            yield return Until(session,"camp review",()=>session.State.Phase=="CampReview",CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             for(int award=0;award<session.State.ReviewAwards.Count;award++)session.Command("ReviewVote",session.State.HostPlayerId,amount:award);
-            while(!FestivalSimulation.ReviewRevealed(session.State)&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"debrief reveal",()=>FestivalSimulation.ReviewRevealed(session.State),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             if(session.State.ReviewAwards.Count!=3||!FestivalSimulation.ReviewRevealed(session.State)||session.State.ReviewWinners.Exists(id=>id!=session.State.HostPlayerId))
             {Fail("debrief vote: awards="+session.State.ReviewAwards.Count+" winners="+session.State.ReviewWinners.Count);yield break;}
             if(session.IsHost)
@@ -548,9 +606,11 @@ namespace Festival.Presentation
                 if(sim.State.Phase!="Shopping"){Fail("debrief close: "+session.Message);yield break;}
                 sim.State.Players[0].X=-1;sim.State.Players[0].Z=19;sim.State.Players[1].X=1;sim.State.Players[1].Z=19;
             }
-            while((session.State.Phase!="Shopping"||!Within(session.LocalPlayer,0,19,3.2f))&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"night trailhead placement",()=>session.State.Phase=="Shopping"&&Within(session.LocalPlayer,0,19,3.2f),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             session.Command("Ready");
-            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"night 1 start",()=>session.State.Phase=="Playing",CampSeconds+FestivalSimulation.SpinSeconds+LoadingSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             if(session.State.Phase!="Playing"||session.State.LevelIndex!=1){Fail("night 1 start: phase="+session.State.Phase+" level="+session.State.LevelIndex);yield break;}
             if(session.IsHost&&!session.LocalPlayer.Effects.Exists(e=>e.Id=="shot")){Fail("debrief shot");yield break;}
             if(session.IsHost)MakeClientTheTripper(sim);
@@ -561,33 +621,38 @@ namespace Festival.Presentation
             {
                 PlaceBoth(sim,0,0);
                 sim.Player(sim.State.HostPlayerId).X=-2.5f;
-                yield return LeadTrail(sim,deadline);
+                yield return LeadTrail(session);
+                if(failed!=null){Fail(failed);yield break;}
                 if(!sim.State.GateOpened){Fail("clue trail");yield break;}
                 PlaceBoth(sim,sim.State.FriendPosition.X,sim.State.FriendPosition.Z);
             }
             else
             {
-                while(!Near(session.LocalPlayer,0,0)&&Time.realtimeSinceStartup<deadline)yield return null;
-                yield return FollowTrail(session,deadline);
+                yield return Until(session,"trail placement",()=>Near(session.LocalPlayer,0,0),LevelLeft(session.State));
+                if(failed!=null){Fail(failed);yield break;}
+                yield return FollowTrail(session);
                 if(failed!=null){Fail(failed);yield break;}
                 // The trail's last link shows the tripper where the friend is.
-                while((session.State.FriendPosition.X==0&&session.State.FriendPosition.Z==0||!Near(session.LocalPlayer,session.State.FriendPosition.X,session.State.FriendPosition.Z))&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("friend reveal");yield break;}
-                yield return Interact(session,"FindFriend","","",deadline);
+                yield return Until(session,"friend reveal",()=>!(session.State.FriendPosition.X==0&&session.State.FriendPosition.Z==0)&&Near(session.LocalPlayer,session.State.FriendPosition.X,session.State.FriendPosition.Z),LevelLeft(session.State));
+                if(failed!=null){Fail(failed);yield break;}
+                yield return Interact(session,"FindFriend","","");
+                if(failed!=null){Fail(failed);yield break;}
             }
-            while(!session.State.FriendFound&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(!session.State.FriendFound){Fail("friend recruitment");yield break;}
+            yield return Until(session,"friend recruitment",()=>session.State.FriendFound,LevelLeft(session.State));
+            if(failed!=null){Fail(failed);yield break;}
             if(session.IsHost)
             {
                 sim.State.FriendPosition=new WorldPoint(0,-32);PlaceBoth(sim,0,-32);
             }
             else
             {
-                while((!Near(session.LocalPlayer,0,-32)||!Near(session.State.FriendPosition,0,-32))&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(Time.realtimeSinceStartup>=deadline){Fail("shuttle placement");yield break;}
-                session.Command("Extract");
+                yield return Until(session,"shuttle placement",()=>Near(session.LocalPlayer,0,-32)&&Near(session.State.FriendPosition,0,-32),LevelLeft(session.State));
+                if(failed!=null){Fail(failed);yield break;}
+                yield return Interact(session,"Extract","","");
+                if(failed!=null){Fail(failed);yield break;}
             }
-            while(session.State!=null&&session.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"networked mission settlement",()=>session.State==null||session.State.Phase=="Results",LevelLeft(session.State));
+            if(failed!=null){Fail(failed);yield break;}
             if(session.State==null){Fail("networked mission settlement: session closed, "+session.Message);yield break;}
             if(session.State.Result!="Success"||!session.State.GateOpened||session.State.Survivors!=2||session.State.SurvivorBonus!=10)
             {
@@ -599,7 +664,8 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SMOKE MISSION PASSED: Day 1 quota, debrief, Night 1 clue trail, friend, extraction, two survivors; host="+session.IsHost);
             // The galleries below are art-review captures, so they are lit as by day again; the night look has its own capture.
             if(session.IsHost)sim.State.LevelIndex=0;
-            while(FestivalNightLighting.IsNight(session.State)&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"gallery daylight",()=>!FestivalNightLighting.IsNight(session.State),CampSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             session.MenuOpen=true;
             // Move the view only, leaving the authority/player positions untouched.
             captureCamera=session.ViewCamera;
@@ -872,9 +938,10 @@ namespace Festival.Presentation
         }
         IEnumerator SoloSmoke(FestivalSession session)
         {
-            // Camp, Day 1 and Night 1 with a camp review after each, and a spin before each level.
-            float deadline=Time.realtimeSinceStartup+220+2*(float)FestivalSimulation.SpinSeconds;
-            while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+            // Camp, Day 1 and Night 1 with a camp review after each, and a spin before each level. Startup has a real-time limit;
+            // every gameplay step after it waits on simulation time (Until).
+            float started=Time.realtimeSinceStartup+ConnectionSeconds;
+            while(session.LocalPlayer==null&&Time.realtimeSinceStartup<started)yield return null;
             if(session.LocalPlayer==null||!session.IsHost||session.MenuOpen||session.State.Phase!="Shopping"){Fail("solo starts in campsite");yield break;}
             var sim=session.DevelopmentSimulation;
             var player=sim.Player(session.LocalPlayerId);
@@ -944,10 +1011,10 @@ namespace Festival.Presentation
             ScreenCapture.CaptureScreenshot(equippedCapture);yield return new WaitForSeconds(.65f);
             if(!File.Exists(equippedCapture)){Fail("solo equipped camp render");yield break;}
             player.Z=19;session.Command("Ready");
-            yield return CaptureSpinner(session,"solo-spinner.png",deadline);
+            yield return CaptureSpinner(session,"solo-spinner.png");
             if(failed!=null){Fail(failed);yield break;}
-            while(session.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(session.State.Phase!="Playing"){Fail("solo campsite countdown");yield break;}
+            yield return Until(session,"solo level start",()=>session.State.Phase=="Playing",FestivalSimulation.SpinSeconds+LoadingSeconds);
+            if(failed!=null||session.State.Phase!="Playing"){Fail(failed??"solo campsite countdown");yield break;}
             session.Command("Equip",item:"poi_practice");
             yield return new WaitForSeconds(.2f);
             string poiCapture=Path.Combine(soloCaptureDir,"solo-poi-grip.png");
@@ -963,8 +1030,8 @@ namespace Festival.Presentation
             if(funGuys==null||tabs==null){Fail("solo day sellers");yield break;}
             KeepOnly(sim,new[]{buyers[0],buyers[1],funGuys,tabs});
             player.X=0;player.Z=0;Stand(funGuys,-1.6f,.6f);Stand(tabs,1.6f,.6f);
-            yield return BuyStock(session,"stock_mushrooms",-1.6f,.6f,deadline);
-            if(failed==null)yield return BuyStock(session,"stock_lsd",1.6f,.6f,deadline);
+            yield return BuyStock(session,"stock_mushrooms",-1.6f,.6f);
+            if(failed==null)yield return BuyStock(session,"stock_lsd",1.6f,.6f);
             if(failed!=null){Fail("solo "+failed);yield break;}
             KeepOnly(sim,buyers);
             player.X=-18;player.Z=-22;session.Command("Use",item:"stock_mushrooms");
@@ -979,36 +1046,37 @@ namespace Festival.Presentation
             session.Command("Conversation",npc.Id);
             var talk=sim.Interaction(player.InteractionId);
             if(talk==null||talk.Kind!="Conversation"){Fail("solo NPC conversation: "+session.Message);yield break;}
-            yield return Talk(session,talk.Id,deadline,Path.Combine(soloCaptureDir,"solo-npc-chat.png"));
+            yield return Talk(session,talk.Id,Path.Combine(soloCaptureDir,"solo-npc-chat.png"));
             if(failed!=null){Fail("solo "+failed);yield break;}
-            while(player.InteractionId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"solo NPC conversation end",()=>player.InteractionId=="",CommandSeconds);
+            if(failed!=null){Fail(failed);yield break;}
             if(player.LastRhythmScore<.6){Fail("solo NPC conversation result: "+player.LastRhythmScore.ToString("F2"));yield break;}
             player.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});session.Command("Use",item:"confetti");
             if(npc.DistractedUntil<=sim.State.SimulationSeconds){Fail("solo wook distraction");yield break;}
             session.Command("Dance",npc.Id);
             var dance=sim.Interaction(player.InteractionId);
-            if(dance==null||dance.Kind!="Dance"){Fail("solo dance start");yield break;}
+            if(dance==null||dance.Kind!="Dance"){Fail("solo dance start: "+session.Message);yield break;}
+            var danced=Begin(session,"solo dance",UntilEnd(sim.State,dance));
             foreach(var note in RhythmChart.For(dance).Notes)
             {
-                while(sim.State.SimulationSeconds-dance.StartSeconds<note.TimeSeconds&&Time.realtimeSinceStartup<deadline)yield return null;
+                while(sim.State.SimulationSeconds-dance.StartSeconds<note.TimeSeconds){if(!Holds(session,danced)){Fail(failed);yield break;}yield return null;}
                 session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
             }
-            while(dance.Status=="Active"&&Time.realtimeSinceStartup<deadline)yield return null;
+            while(dance.Status=="Active"){if(!Holds(session,danced)){Fail(failed);yield break;}yield return null;}
+            End(session,danced);
             if(dance.Status!="Complete"){Fail("solo dance");yield break;}
             Stand(buyers[0],-1.6f,.6f);Stand(buyers[1],1.6f,.6f);
             player.Inventory.Find(item=>item.ItemId=="stock_lsd").Count=2*FestivalSimulation.SalesPerBuyer(sim.State);
-            yield return WorkTheDay(session,buyers[0].Id,buyers[1].Id,deadline);
+            yield return WorkTheDay(session,buyers[0].Id,buyers[1].Id);
             if(failed!=null){Fail(failed);yield break;}
-            player.Life="Downed";player.DownedRemaining=.1;
-            while(player.Life!="Spirit"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(sim.State.Phase!="Playing"){Fail("solo death recovery window");yield break;}
-            player.X=24;player.Z=-20;session.Command("BeginRevival",player.Id);
-            while(player.Life!="Alive"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(player.Life!="Alive"||player.RevivalCount!=1){Fail("solo medical revival");yield break;}
+            yield return SoloRevival(session);
+            if(failed!=null){Fail(failed);yield break;}
             // Quota met: back to camp early to end the day.
             player.X=Festivals.CampGateX;player.Z=Festivals.CampGateZ;
-            yield return Interact(session,"Extract","","",deadline);
-            while(sim.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Interact(session,"Extract","","");
+            if(failed!=null){Fail(failed);yield break;}
+            yield return Until(session,"solo day settlement",()=>sim.State.Phase=="Results",LevelLeft(sim.State));
+            if(failed!=null){Fail(failed);yield break;}
             if(sim.State.Result!="Success"||sim.State.LevelIndex!=0||!FestivalSimulation.DayQuotaMet(sim.State)||sim.State.Survivors!=1){Fail("solo day result: "+sim.State.Result+", $"+sim.State.LevelSales+" of $"+FestivalSimulation.DayQuota(sim.State));yield break;}
             session.Command("Reset");
             if(sim.State.Phase!="CampReview"||sim.State.ReviewResult!="Success"){Fail("solo camp review transition");yield break;}
@@ -1022,20 +1090,23 @@ namespace Festival.Presentation
             if(sim.State.Phase!="Shopping"){Fail("solo review before shopping");yield break;}
             // Night 1: follow the clue trail link by link, find the lost friend and bring them home. A new level is a new round.
             player=sim.Player(session.LocalPlayerId);player.X=0;player.Z=19;session.Command("Ready");
-            while(sim.State.Phase!="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(sim.State.Phase!="Playing"||sim.State.LevelIndex!=1){Fail("solo night 1 start");yield break;}
+            yield return Until(session,"solo night 1 start",()=>sim.State.Phase=="Playing",CampSeconds+FestivalSimulation.SpinSeconds+LoadingSeconds);
+            if(failed!=null||sim.State.Phase!="Playing"||sim.State.LevelIndex!=1){Fail(failed??"solo night 1 start");yield break;}
             yield return CaptureNight(session,"solo-night.png");
             if(failed!=null){Fail(failed);yield break;}
             player.X=0;player.Z=0;
-            StartCoroutine(LeadTrail(sim,deadline));
-            yield return FollowTrail(session,deadline);
+            StartCoroutine(LeadTrail(session));
+            yield return FollowTrail(session);
             if(failed!=null){Fail(failed);yield break;}
             player.X=sim.State.FriendPosition.X;player.Z=sim.State.FriendPosition.Z;
-            yield return Interact(session,"FindFriend","","",deadline);
+            yield return Interact(session,"FindFriend","","");
+            if(failed!=null){Fail(failed);yield break;}
             if(!sim.State.FriendFound){Fail("solo friend recruitment: "+session.Message);yield break;}
             player.X=Festivals.CampGateX;player.Z=Festivals.CampGateZ;sim.State.FriendPosition=new WorldPoint(Festivals.CampGateX,Festivals.CampGateZ);
-            yield return Interact(session,"Extract","","",deadline);
-            while(sim.State.Phase!="Results"&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Interact(session,"Extract","","");
+            if(failed!=null){Fail(failed);yield break;}
+            yield return Until(session,"solo night settlement",()=>sim.State.Phase=="Results",LevelLeft(sim.State));
+            if(failed!=null){Fail(failed);yield break;}
             if(sim.State.Result!="Success"||sim.State.LevelIndex!=1||sim.State.Survivors!=1){Fail("solo night result: "+sim.State.Result);yield break;}
             session.Command("Reset");
             if(sim.State.Phase!="CampReview"||sim.State.LevelIndex!=2){Fail("solo weekend moves on to Day 2");yield break;}
@@ -1044,53 +1115,132 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, Day 1 quota, Night 1 clue trail and rescue, camp reviews, Day 2 shopping");
             Application.Quit(0);
         }
-        // Starts an interaction with a command, plays its rhythm chart perfectly when it has one, talks a talk through smoothly
-        // (DIALOG-3: a sale or a buy), and waits for it to end. Sets finished to it, or leaves it null when the command was refused.
-        IEnumerator Interact(FestivalSession session,string command,string target,string item,float deadline)
+        // The solo player dies and revives themselves at medical: a 15 s task, timed from the host's acceptance.
+        IEnumerator SoloRevival(FestivalSession session)
+        {
+            var sim=session.DevelopmentSimulation;var player=sim.Player(session.LocalPlayerId);
+            player.Life="Downed";player.DownedRemaining=.1;
+            yield return Until(session,"solo death",()=>player.Life=="Spirit",player.DownedRemaining+EndGraceSeconds);
+            if(failed!=null)yield break;
+            if(sim.State.Phase!="Playing"){failed="solo death recovery window";yield break;}
+            player.X=24;player.Z=-20;session.Command("BeginRevival",player.Id);
+            var revival=sim.Interaction(player.InteractionId);
+            if(revival==null||revival.Kind!="Revival"){failed="solo medical revival refused: "+session.Message;yield break;}
+            yield return Until(session,"solo medical revival",()=>player.Life=="Alive",UntilEnd(sim.State,revival));
+            if(failed==null&&player.RevivalCount!=1)failed="solo medical revival";
+        }
+        // A gameplay wait reads the host's own simulation, or a client's latest snapshot. Never the client's estimate, which runs
+        // on between snapshots and would hide a host that has stopped.
+        static RoundState Clock(FestivalSession session)=>session.IsHost?session.DevelopmentSimulation?.State:session.State;
+        static GameplayWait Begin(FestivalSession session,string name,double budget,float realLimit=float.PositiveInfinity)
+        {
+            var wait=new GameplayWait(name,Clock(session),Time.realtimeSinceStartupAsDouble,budget,realLimit);
+            Debug.Log(wait.Report("start",Clock(session),Time.realtimeSinceStartupAsDouble));
+            return wait;
+        }
+        // False once the wait has run out: failed then names it and why, and the failure is logged.
+        bool Holds(FestivalSession session,GameplayWait wait)
+        {
+            double now=Time.realtimeSinceStartupAsDouble;var clock=Clock(session);
+            if(wait.CanContinue(clock,now))return true;
+            failed??=wait.Name+" ("+wait.Failure+")";
+            Debug.Log(wait.Report("fail",clock,now));
+            return false;
+        }
+        static void End(FestivalSession session,GameplayWait wait)=>Debug.Log(wait.Report("end",Clock(session),Time.realtimeSinceStartupAsDouble));
+        // Waits until done, within `budget` simulation seconds (GameplayWait). Sets failed when it runs out.
+        IEnumerator Until(FestivalSession session,string name,Func<bool> done,double budget,float realLimit=float.PositiveInfinity)
+        {
+            var wait=Begin(session,name,budget,realLimit);
+            while(!done())
+            {
+                if(!Holds(session,wait))yield break;
+                yield return null;
+            }
+            End(session,wait);
+        }
+        // The host's reply to the command Send issued last.
+        CommandResult reply;
+        // Issues a command and waits for the host's reply to it, matched by id: the host replies before SendCommand returns, a client
+        // hears back later, and the session's own acknowledgements can arrive in between. Sets failed when no reply comes.
+        IEnumerator Send(FestivalSession session,string kind,string target="",string item="",float realLimit=float.PositiveInfinity)
+        {
+            reply=null;var heard=new List<CommandResult>();Action<CommandResult> listen=heard.Add;
+            session.LocalCommandResultReceived+=listen;
+            try
+            {
+                string id=session.SendCommand(kind,target,item);
+                if(id==""){failed=kind+" (not connected)";yield break;}
+                yield return Until(session,kind+" reply",()=>(reply=heard.Find(result=>result.Id==id))!=null,CommandSeconds,realLimit);
+            }
+            finally{session.LocalCommandResultReceived-=listen;}
+        }
+        // Starts an interaction with a command and plays it through: its rhythm chart perfectly, a talk smoothly (DIALOG-3: a sale or a
+        // buy), a chat check ended with EndChat, which confirms what it showed. Then waits for it to end. Sets finished to it, or failed
+        // when the host refuses the command, it never shows or it outlasts its end. realLimit is a caller's own real-time stop
+        // (Time.realtimeSinceStartup); the native smokes leave real time to their outer script.
+        IEnumerator Interact(FestivalSession session,string command,string target,string item,float realLimit=float.PositiveInfinity)
         {
             finished=null;string kind=command=="StartSale"?"Sale":command=="StartBuy"?"Buy":command;
-            while(session.LocalPlayer.InteractionId!=""&&Time.realtimeSinceStartup<deadline)yield return null;
-            session.Command(command,target,item);
-            InteractionState running=null;float refusedAfter=Time.realtimeSinceStartup+3;
-            while(running==null&&Time.realtimeSinceStartup<refusedAfter)
+            if(session.LocalPlayer.InteractionId!="")
             {
-                running=session.State.Interactions.Find(i=>i.PlayerId==session.LocalPlayerId&&i.Kind==kind&&i.Status=="Active");
-                if(running==null)yield return null;
+                var busy=session.State.Interactions.Find(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");
+                yield return Until(session,"action before "+command,()=>session.LocalPlayer?.InteractionId=="",busy!=null?UntilEnd(Clock(session),busy):CommandSeconds,realLimit);
+                if(failed!=null)yield break;
             }
-            if(running==null)yield break;
-            if(kind=="ConfirmChat")session.Command("EndChat",running.Id);
-            else if(FestivalSimulation.Talks(kind))yield return Talk(session,running.Id,deadline);
-            else if(FestivalInput.IsRhythmKind(kind))
+            yield return Send(session,command,target,item,realLimit);
+            if(failed!=null)yield break;
+            if(!reply.Accepted){failed=command+" refused: "+reply.Reason;yield break;}
+            InteractionState running=null;
+            yield return Until(session,command+" shows",()=>(running=session.State.Interactions.Find(i=>i.PlayerId==session.LocalPlayerId&&i.Kind==kind&&i.Status=="Active"))!=null,CommandSeconds,realLimit);
+            if(failed!=null)yield break;
+            double budget=UntilEnd(Clock(session),running);
+            if(kind=="ConfirmChat")
+            {
+                yield return Send(session,"EndChat",running.Id,"",realLimit);
+                if(failed!=null)yield break;
+                if(!reply.Accepted){failed="EndChat on "+command+" refused: "+reply.Reason;yield break;}
+                budget=CommandSeconds;
+            }
+            else if(FestivalSimulation.Talks(kind))
+            {
+                yield return Talk(session,running.Id,null,realLimit);
+                if(failed!=null)yield break;
+                budget=CommandSeconds;
+            }
+            var wait=Begin(session,command,budget,realLimit);
+            if(FestivalInput.IsRhythmKind(kind))
                 foreach(var note in RhythmChart.For(running).Notes)
                 {
-                    while(session.EstimatedSimulationSeconds-running.StartSeconds<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
+                    while(session.EstimatedSimulationSeconds-running.StartSeconds<note.TimeSeconds-.02){if(!Holds(session,wait))yield break;yield return null;}
                     session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
                 }
-            while(session.LocalPlayer.InteractionId==running.Id&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(session.LocalPlayer.InteractionId!=running.Id)finished=running;
+            while(session.LocalPlayer?.InteractionId==running.Id){if(!Holds(session,wait))yield break;yield return null;}
+            End(session,wait);
+            finished=running;
         }
         // DIALOG-3: talk `id` played as a player who reads people well plays it: the dance first, perfectly, if they ask for one,
         // then the smooth reply (SmoothReply) to each turn as it shows. With `capture`, the chat window must show the first turn (the
         // talk's title, their line, three replies), and is screenshotted there before the reply. Sets failed when it doesn't.
-        IEnumerator Talk(FestivalSession session,string id,float deadline,string capture=null)
+        IEnumerator Talk(FestivalSession session,string id,string capture=null,float realLimit=float.PositiveInfinity)
         {
-            int replied=-1;bool seen=false;float showsBy=Time.realtimeSinceStartup+3;
-            while(Time.realtimeSinceStartup<deadline)
+            // A client's view is a new snapshot each time, so the talk is looked up afresh every frame. Even the host's view only
+            // takes in a talk started this frame on its next Update, so the talk is over once seen and gone, not before.
+            InteractionState talk=null;
+            yield return Until(session,"talk shows",()=>(talk=session.State.Interactions.Find(i=>i.Id==id&&i.Status=="Active"))!=null,CommandSeconds,realLimit);
+            if(failed!=null)yield break;
+            var wait=Begin(session,"talk",(FestivalSimulation.TrustDancing(talk)?UntilEnd(Clock(session),talk):0)+ChatSeconds,realLimit);
+            for(int replied=-1;(talk=session.State.Interactions.Find(i=>i.Id==id&&i.Status=="Active"))!=null;)
             {
-                // A client's view is a new snapshot each time, so the talk is looked up afresh every frame. Even the host's view only
-                // takes in a talk started this frame on its next Update, so the talk is over once seen and gone, not before.
-                var talk=session.State.Interactions.Find(i=>i.Id==id&&i.Status=="Active");
-                if(talk==null){if(seen||Time.realtimeSinceStartup>showsBy)yield break;yield return null;continue;}
-                seen=true;
                 if(FestivalSimulation.TrustDancing(talk))
                 {
                     double start=talk.StartSeconds;
                     foreach(var note in RhythmChart.For(talk).Notes)
                     {
-                        while(session.EstimatedSimulationSeconds-start<note.TimeSeconds-.02&&Time.realtimeSinceStartup<deadline)yield return null;
+                        while(session.EstimatedSimulationSeconds-start<note.TimeSeconds-.02){if(!Holds(session,wait))yield break;yield return null;}
                         session.Command("Rhythm",direction:note.Direction,time:note.TimeSeconds);
                     }
-                    while(session.State.Interactions.Exists(i=>i.Id==id&&i.Status=="Active"&&i.Turns.Count==0)&&Time.realtimeSinceStartup<deadline)yield return null;
+                    while(session.State.Interactions.Exists(i=>i.Id==id&&i.Status=="Active"&&i.Turns.Count==0)){if(!Holds(session,wait))yield break;yield return null;}
                     continue;
                 }
                 int turn=talk.Turns.Count-1;
@@ -1099,7 +1249,7 @@ namespace Festival.Presentation
                     if(capture!=null)
                     {
                         var window=transform.Find("Festival HUD/Chat window")?.GetComponent<FestivalChatWindow>();
-                        float shown=Time.realtimeSinceStartup+1;
+                        float shown=Time.realtimeSinceStartup+RenderSeconds;
                         while((window==null||!window.Open||window.Replies<3)&&Time.realtimeSinceStartup<shown)yield return null;
                         if(window==null||!window.Open||window.Replies!=3||window.Header!=FestivalChatWindow.TalkHeader||window.ReplyLabel(0)!=talk.Turns[turn].Replies[0])
                         {failed="conversation card: "+(window==null?"missing":window.Header+", "+window.Replies+" replies");yield break;}
@@ -1110,79 +1260,85 @@ namespace Festival.Presentation
                     }
                     replied=turn;session.Command("Reply",amount:SmoothReply(talk.Turns[turn]),direction:turn);
                 }
+                if(!Holds(session,wait))yield break;
                 yield return null;
             }
+            End(session,wait);
         }
         /// <summary>DIALOG-3: the reply the smokes pick on a talk's turn: the smooth one, as a player who reads the person well would.</summary>
         public static int SmoothReply(ConversationTurn turn)=>Array.IndexOf(turn.Grades,ConversationLines.Smooth);
         // ECON-2: buys a unit of this kind from the festivalgoer the host stood at (x, z), dancing it perfectly, as a sale is.
-        IEnumerator BuyStock(FestivalSession session,string kind,float x,float z,float deadline)
+        IEnumerator BuyStock(FestivalSession session,string kind,float x,float z)
         {
             NpcState seller=null;
-            while((seller=session.State.Npcs.Find(n=>Near(n,x,z)))==null&&Time.realtimeSinceStartup<deadline)yield return null;
-            if(seller==null){failed="seller placement";yield break;}
+            yield return Until(session,"seller placement",()=>(seller=session.State.Npcs.Find(n=>Near(n,x,z)))!=null,LevelLeft(Clock(session)));
+            if(failed!=null)yield break;
             int held=session.LocalPlayer.Inventory.Find(item=>item.ItemId==kind)?.Count??0;
-            yield return Interact(session,"StartBuy",seller.Id,kind,deadline);
-            if(finished==null||(session.LocalPlayer.Inventory.Find(item=>item.ItemId==kind)?.Count??0)<=held){failed="stock bought from "+seller.Id+": life="+session.LocalPlayer.Life+" "+session.Message;yield break;}
+            yield return Interact(session,"StartBuy",seller.Id,kind);
+            if(failed!=null)yield break;
+            if((session.LocalPlayer.Inventory.Find(item=>item.ItemId==kind)?.Count??0)<=held){failed="stock bought from "+seller.Id+": life="+session.LocalPlayer.Life+" "+session.Message;yield break;}
             Debug.Log("FESTIVAL SMOKE STOCK BUY PASSED: "+kind+" from "+seller.Id+" at score "+session.LocalPlayer.LastRhythmScore.ToString("F2")+"; host="+session.IsHost);
         }
         // Day 1 for the tripper (TRIP-3, LOOP-2): check the buyer in their visions by chatting, then sell to that buyer and then
         // the other until the crew's quota is met.
-        IEnumerator WorkTheDay(FestivalSession session,string checkedBuyer,string otherBuyer,float deadline)
+        IEnumerator WorkTheDay(FestivalSession session,string checkedBuyer,string otherBuyer,float realLimit=float.PositiveInfinity)
         {
-            yield return Interact(session,"ConfirmChat",checkedBuyer,"",deadline);
+            yield return Interact(session,"ConfirmChat",checkedBuyer,"",realLimit);
+            if(failed!=null)yield break;
             var vision=session.State.Visions.Find(v=>v.NpcId==checkedBuyer);
-            if(finished==null||vision==null||!vision.Confirmed){failed="buyer check: "+session.Message;yield break;}
+            if(vision==null||!vision.Confirmed){failed="buyer check: "+session.Message;yield break;}
             Debug.Log("FESTIVAL SMOKE BUYER CHECK PASSED: the "+vision.Kind+" vision was "+(vision.IsTrue?"true":"false")+"; host="+session.IsHost);
             foreach(var buyer in new[]{checkedBuyer,otherBuyer})
                 for(int sale=0;buyer!=null&&sale<FestivalSimulation.SalesPerBuyer(session.State)&&!FestivalSimulation.DayQuotaMet(session.State);sale++)
                 {
                     int before=session.State.LevelSales;
-                    yield return Interact(session,"StartSale",buyer,"stock_lsd",deadline);
-                    if(finished==null||session.State.LevelSales<=before){failed="sale to "+buyer+" paid nothing: life="+session.LocalPlayer.Life+" "+session.Message;yield break;}
+                    yield return Interact(session,"StartSale",buyer,"stock_lsd",realLimit);
+                    if(failed!=null)yield break;
+                    if(session.State.LevelSales<=before){failed="sale to "+buyer+" paid nothing: life="+session.LocalPlayer.Life+" "+session.Message;yield break;}
                     Debug.Log("FESTIVAL SMOKE SALE: $"+(session.State.LevelSales-before)+" from "+buyer+" at score "+session.LocalPlayer.LastRhythmScore.ToString("F2")+"; host="+session.IsHost);
                 }
             if(!FestivalSimulation.DayQuotaMet(session.State))failed="day quota: $"+session.State.LevelSales+" of $"+FestivalSimulation.DayQuota(session.State);
         }
         // Night (host): the crowd and security step away but the trail's clue holders; each next holder in turn stands at (0, 1)
         // in front of the tripper, and steps aside once read.
-        static IEnumerator LeadTrail(FestivalSimulation sim,float deadline)
+        IEnumerator LeadTrail(FestivalSession session)
         {
-            var chain=new List<string>(sim.State.ClueChain);
+            var sim=session.DevelopmentSimulation;var chain=new List<string>(sim.State.ClueChain);
             KeepOnly(sim,sim.State.Npcs.FindAll(n=>chain.Contains(n.Id)).ToArray());
-            while(!sim.State.GateOpened&&Time.realtimeSinceStartup<deadline)
+            while(!sim.State.GateOpened)
             {
                 int link=sim.State.CluesRead;var holder=sim.State.Npcs.Find(n=>n.Id==chain[link]);Stand(holder,0,1);
-                while(sim.State.CluesRead==link&&Time.realtimeSinceStartup<deadline)yield return null;
+                yield return Until(session,"clue link "+link+" read",()=>sim.State.CluesRead!=link,LevelLeft(sim.State));
+                if(failed!=null)yield break;
                 Stand(holder,-4,4);
             }
         }
         // Night (tripper, TRIP-3): check each clue holder brought over, chatting and dancing in turn, until the last link shows the
         // way to the lost friend. A holder already checked can wear a fake of the next link while it steps aside, so it is skipped.
-        IEnumerator FollowTrail(FestivalSession session,float deadline)
+        IEnumerator FollowTrail(FestivalSession session,float realLimit=float.PositiveInfinity)
         {
             string lastChecked="";
             for(int link=0;!session.State.GateOpened;link++)
             {
                 NpcState holder=null;
-                while(holder==null&&Time.realtimeSinceStartup<deadline)
-                {
-                    holder=session.State.Npcs.Find(n=>n.Id!=lastChecked&&Near(n,0,1)&&session.State.Visions.Exists(v=>v.NpcId==n.Id&&v.Kind=="Clue"&&!v.Confirmed));
-                    if(holder==null)yield return null;
-                }
-                if(holder==null){failed="clue holder "+link+" never stood in front of the tripper";yield break;}
+                yield return Until(session,"clue holder "+link+" in front",()=>(holder=session.State.Npcs.Find(n=>n.Id!=lastChecked&&Near(n,0,1)&&session.State.Visions.Exists(v=>v.NpcId==n.Id&&v.Kind=="Clue"&&!v.Confirmed)))!=null,LevelLeft(Clock(session)),realLimit);
+                if(failed!=null)yield break;
                 int read=session.State.CluesRead;lastChecked=holder.Id;
-                yield return Interact(session,link%2==0?"ConfirmChat":"ConfirmDance",holder.Id,"",deadline);
-                while(session.State.CluesRead==read&&Time.realtimeSinceStartup<deadline)yield return null;
-                if(finished==null||session.State.CluesRead==read){failed="clue link "+link+": "+session.Message;yield break;}
+                yield return Interact(session,link%2==0?"ConfirmChat":"ConfirmDance",holder.Id,"",realLimit);
+                if(failed!=null)yield break;
+                yield return Until(session,"clue link "+link+" counted",()=>session.State.CluesRead!=read,CommandSeconds,realLimit);
+                if(failed!=null)yield break;
             }
             Debug.Log("FESTIVAL SMOKE CLUE TRAIL PASSED: "+session.State.CluesRead+" links checked; host="+session.IsHost);
         }
         // SPIN-1: once the last reel has stopped (SPIN-3), just before the take, the spinner's own slot machine is what the screen shows.
-        IEnumerator CaptureSpinner(FestivalSession session,string file,float deadline)
+        IEnumerator CaptureSpinner(FestivalSession session,string file)
         {
-            while(session.State.Phase!="Spinning"&&Time.realtimeSinceStartup<deadline)yield return null;
-            while(session.State.Phase=="Spinning"&&session.EstimatedSimulationSeconds<session.State.SpinEndsAt-FestivalSimulation.SpinSeconds+FestivalSpinner.LastReelStops+.2f&&Time.realtimeSinceStartup<deadline)yield return null;
+            yield return Until(session,"spin start",()=>session.State.Phase=="Spinning",CampSeconds);
+            if(failed!=null)yield break;
+            var spin=Clock(session);
+            yield return Until(session,"spin reels",()=>session.State.Phase!="Spinning"||session.EstimatedSimulationSeconds>=session.State.SpinEndsAt-FestivalSimulation.SpinSeconds+FestivalSpinner.LastReelStops+.2f,Math.Max(0,spin.SpinEndsAt-spin.SimulationSeconds)+EndGraceSeconds);
+            if(failed!=null)yield break;
             var overlay=transform.Find("Festival spinner");
             if(session.State.Phase!="Spinning"||overlay==null||!overlay.gameObject.activeSelf){failed="spinner overlay at "+session.State.Phase;yield break;}
             yield return Capture(file,"SPINNER RENDER");

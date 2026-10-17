@@ -5,7 +5,21 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const binary=process.env.FESTIVAL_NATIVE_BINARY||path.join(root,'Builds/macOS/Development/FestivalCoop.app/Contents/MacOS/Festival Co-op Prototype');
 const dir=path.join(root,'artifacts/native-smoke');mkdirSync(dir,{recursive:true});
+// Each player times its gameplay steps on the simulation clock, with a 60 s no-progress watchdog. This outer limit only stops
+// players that hang; FESTIVAL_SMOKE_TIMEOUT_SECONDS raises it for a heavily loaded machine.
+const timeoutSeconds=Number(process.env.FESTIVAL_SMOKE_TIMEOUT_SECONDS||900);
+if(!(timeoutSeconds>0))throw new Error('FESTIVAL_SMOKE_TIMEOUT_SECONDS must be a positive number of seconds.');
 if(!existsSync(binary))throw new Error('Build the macOS development player first.');
+// Each gameplay wait a player logged: its name, stage and simulation/real seconds.
+const waits=text=>[...text.matchAll(/^\[Festival\.SmokeWait\] ([^\n]+) (start|end|fail) sim=([\d.]+)\/([\d.]+) real=([\d.]+)(?: failure=([^\n]+))?$/gm)]
+  .map(([,name,stage,sim,budget,real,failure])=>({name,stage,sim:Number(sim),budget:Number(budget),real:Number(real),failure}));
+const describe=text=>{
+  const logged=waits(text),ended=logged.filter(w=>w.stage==='end'),failedWaits=logged.filter(w=>w.stage==='fail');
+  const slowest=ended.reduce((worst,w)=>!worst||w.real>worst.real?w:worst,null);
+  return ended.length+' gameplay waits ended, '+failedWaits.length+' failed'
+    +(slowest?'; slowest '+slowest.name+' sim '+slowest.sim.toFixed(2)+'/'+slowest.budget.toFixed(2)+' s real '+slowest.real.toFixed(2)+' s':'')
+    +failedWaits.map(w=>'; FAILED '+w.name+' ('+w.failure+') sim '+w.sim.toFixed(2)+' s real '+w.real.toFixed(2)+' s').join('');
+};
 const processes=[];
 const run=(role,args)=>new Promise((resolve,reject)=>{
   const log=path.join(dir,role+'.log');if(existsSync(log))unlinkSync(log);
@@ -15,12 +29,14 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
   child.on('error',reject);
   child.on('exit',code=>{
     const text=existsSync(log)?readFileSync(log,'utf8'):'';
-    if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(text)||!text.includes('FESTIVAL SMOKE EYE STATES PASSED')||!text.includes('FESTIVAL SMOKE CAMP PASSED')||!text.includes('FESTIVAL SMOKE CAMP SHOP PASSED')||!text.includes('FESTIVAL SMOKE PASS RENDER PASSED')||!text.includes('FESTIVAL SMOKE SETTINGS RENDER PASSED')||!text.includes('FESTIVAL SMOKE MAP RENDER PASSED')||!text.includes('FESTIVAL SMOKE HELD RENDER PASSED')||!text.includes('FESTIVAL SMOKE INTERIOR HANDOFF PASSED')||!text.includes('FESTIVAL SMOKE CAMP OVERVIEW PASSED')||!text.includes('FESTIVAL SMOKE TRANSPORT PASSED')||!text.includes('FESTIVAL SMOKE CROWD PASSED')||!text.includes('FESTIVAL SMOKE CLUE VISIBILITY PASSED')||!text.includes('FESTIVAL SMOKE MISSION PASSED')||!text.includes('FESTIVAL SMOKE RENDER PASSED')||!text.includes('FESTIVAL SMOKE FIT ROLES PASSED')||!text.includes('FESTIVAL SMOKE FIT OUTFITS PASSED')||!text.includes('FESTIVAL SMOKE LOCOMOTION MOTION PASSED'))return reject(new Error(role+' smoke failed; inspect '+log));
+    if(code!==0||/Exception:|FESTIVAL SMOKE FAILED:/.test(text)||!text.includes('FESTIVAL SMOKE EYE STATES PASSED')||!text.includes('FESTIVAL SMOKE CAMP PASSED')||!text.includes('FESTIVAL SMOKE CAMP SHOP PASSED')||!text.includes('FESTIVAL SMOKE PASS RENDER PASSED')||!text.includes('FESTIVAL SMOKE SETTINGS RENDER PASSED')||!text.includes('FESTIVAL SMOKE MAP RENDER PASSED')||!text.includes('FESTIVAL SMOKE HELD RENDER PASSED')||!text.includes('FESTIVAL SMOKE INTERIOR HANDOFF PASSED')||!text.includes('FESTIVAL SMOKE CAMP OVERVIEW PASSED')||!text.includes('FESTIVAL SMOKE TRANSPORT PASSED')||!text.includes('FESTIVAL SMOKE CROWD PASSED')||!text.includes('FESTIVAL SMOKE CLUE VISIBILITY PASSED')||!text.includes('FESTIVAL SMOKE MISSION PASSED')||!text.includes('FESTIVAL SMOKE RENDER PASSED')||!text.includes('FESTIVAL SMOKE FIT ROLES PASSED')||!text.includes('FESTIVAL SMOKE FIT OUTFITS PASSED')||!text.includes('FESTIVAL SMOKE LOCOMOTION MOTION PASSED'))return reject(new Error(role+' smoke failed: '+describe(text)+'; inspect '+log));
     const screenshot=text.match(/FESTIVAL SMOKE RENDER PASSED: (.+)/)?.[1]?.trim();
     if(!screenshot||!existsSync(screenshot))return reject(new Error(role+' screenshot missing'));
     if(role==='client'){
       // TEST-1: the tripper's clue render frames the marker over the buyer in their visions, drawn.
       if(!text.includes('FESTIVAL SMOKE CLUE MARKERS PASSED'))return reject(new Error('Client clue render frames no vision marker; inspect '+log));
+      // The tripper ends the day's buyer check and each night chat check with EndChat; the host confirms both.
+      if(!text.includes('FESTIVAL SMOKE BUYER CHECK PASSED')||!text.includes('FESTIVAL SMOKE CLUE TRAIL PASSED'))return reject(new Error('Client chat checks did not finish; inspect '+log));
       const clue=text.match(/FESTIVAL SMOKE CLUE RENDER PASSED: (.+)/)?.[1]?.trim();
       if(!clue||!existsSync(clue))return reject(new Error('Client clue screenshot missing'));
       copyFileSync(clue,path.join(dir,'client-clue.png'));
@@ -56,7 +72,7 @@ const run=(role,args)=>new Promise((resolve,reject)=>{
       if(!existsSync(source))return reject(new Error(role+' '+kind+' capture '+frame+' missing'));
       copyFileSync(source,path.join(dir,role+'-'+kind+'-'+frame+'.png'));
     }
-    copyFileSync(screenshot,path.join(dir,role+'.png'));console.log(role.toUpperCase()+' NATIVE SMOKE PASSED');resolve();
+    copyFileSync(screenshot,path.join(dir,role+'.png'));console.log(role.toUpperCase()+' NATIVE SMOKE PASSED: '+describe(text));resolve();
   });
 });
 const captureConnection=()=>new Promise((resolve,reject)=>{
@@ -76,11 +92,12 @@ const captureConnection=()=>new Promise((resolve,reject)=>{
   });
 });
 // A full Day 1 and Night 1, with two spins and a debrief between them, before the galleries.
-const timeout=setTimeout(()=>{for(const child of processes)child.kill();},300000);
+const started=Date.now();
+const timeout=setTimeout(()=>{console.error('Native smoke timed out after '+timeoutSeconds+' s');for(const child of processes)child.kill();},timeoutSeconds*1000);
 try{
   const host=run('host',['--host']);
   const client=run('client',['--join','127.0.0.1']);
   await Promise.all([host,client]);console.log('TWO-CLIENT NATIVE SMOKE PASSED');
-  await captureConnection();console.log('CONNECTION UI CAPTURE PASSED');
+  await captureConnection();console.log('CONNECTION UI CAPTURE PASSED in '+((Date.now()-started)/1000).toFixed(1)+' s real');
 }catch(error){for(const child of processes)child.kill();console.error(error.message);process.exitCode=1;}
 finally{clearTimeout(timeout);}
