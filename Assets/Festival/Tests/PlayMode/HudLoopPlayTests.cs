@@ -1520,7 +1520,11 @@ namespace Festival.Tests
                 Named<InputField>("YOUR NAME","Play").text="Title Tester";
                 Named<Button>("ADVANCED","Play choices").onClick.Invoke();yield return null;
                 Named<InputField>("PORT","Advanced").text=FreePort().ToString();
-                Named<Button>("HOST A GAME","Play choices").onClick.Invoke();
+                Named<Button>("HOST A GAME","Play choices").onClick.Invoke();yield return null;
+                // SET-1: a fresh profile answers the first-launch comfort question before the game starts.
+                var keepEffects=Named<Button>("NO, KEEP FULL EFFECTS","Comfort choice card");
+                if(keepEffects==null)failures.Add("HOST A GAME: a fresh profile isn't asked the first-launch comfort question");
+                else keepEffects.onClick.Invoke();
                 float deadline=Time.realtimeSinceStartup+30;
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"HOST A GAME hosts: "+session.Message+" "+failures.Count+" failures:\n"+string.Join("\n",failures));
@@ -1583,13 +1587,15 @@ namespace Festival.Tests
             var failures=new List<string>();
             T At<T>(GameObject hud,string path) where T:Component{var found=hud.transform.Find("Festival HUD/Title screen/"+path);return found==null?null:found.GetComponent<T>();}
             void Press(GameObject hud,string path){var button=At<Button>(hud,path);Assert.That(button,Is.Not.Null,path+" is a button");button.onClick.Invoke();}
+            // SET-1: a fresh profile answers the first-launch comfort question before hosting or joining.
+            void KeepFullEffects(GameObject hud){var found=hud.transform.Find("Festival HUD/First-launch comfort choice/Comfort choice card/NO, KEEP FULL EFFECTS");Assert.That(found!=null&&found.gameObject.activeInHierarchy,Is.True,"a fresh profile is asked the comfort question");found.GetComponent<Button>().onClick.Invoke();}
             try
             {
                 ushort port=FreePort();
                 Press(hostObject,"Title menu/PLAY");
                 Press(hostObject,"Play/Play choices/ADVANCED");
                 At<InputField>(hostObject,"Play/Play choices/Advanced/PORT").text=port.ToString();
-                Press(hostObject,"Play/Play choices/HOST A GAME");
+                Press(hostObject,"Play/Play choices/HOST A GAME");yield return null;KeepFullEffects(hostObject);
                 float deadline=Time.realtimeSinceStartup+30;
                 while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(host.LocalPlayer,Is.Not.Null,"HOST A GAME hosts on port "+port+": "+host.Message);
@@ -1603,7 +1609,7 @@ namespace Festival.Tests
                 string status=At<Text>(friendObject,"Play/Status")?.text;
                 if(status!="Port must be 1–65535."||friend.Connecting)failures.Add("JOIN on port 0: "+(friend.Connecting?"connects":"the status reads \""+status+"\""));
                 At<InputField>(friendObject,"Play/Join a friend/PORT").text=port.ToString();
-                Press(friendObject,"Play/Join a friend/JOIN");
+                Press(friendObject,"Play/Join a friend/JOIN");yield return null;KeepFullEffects(friendObject);
                 while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(friend.LocalPlayer,Is.Not.Null,"JOIN A FRIEND joins the host on port "+port+": "+friend.Message);
                 if(friend.LocalPlayer.Name!="Sam")failures.Add("the friend plays as \""+friend.LocalPlayer.Name+"\", not the name typed");
