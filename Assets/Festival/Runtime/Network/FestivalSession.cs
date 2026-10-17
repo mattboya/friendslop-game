@@ -105,6 +105,10 @@ namespace Festival.Network
         // Giggle Balloons: TakeGiggleBalloon accepts a second unexpired hit, kicking in or felt, and refuses a third. An owner's
         // Effects can carry two independently timed hits. PlayerState.VisualGiggleTakeSequence counts accepted takes in every view
         // that carries the player, zero in older rounds; peers' Effects stay masked.
+        // Giggle Tanks: GrabGiggleTank puts one unsold giggle_tank item in a free hand slot and pays nothing, so GiggleTankFound
+        // means grabbed, not banked. A connected Alive or Downed carrier inside the camp gate banks it once into StashCash.
+        // Detention, death and the next level destroy carried, stashed and offered tanks. RoundState.GiggleTankGrabberId/Name
+        // reach every view, spirits' included; PlayerState.GiggleTankBankSequence reaches only its owner. Older rounds default empty.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -876,6 +880,8 @@ namespace Festival.Network
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
                 // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
                 CloudStashFinderId=source.CloudStashFinderId,
+                // Who grabbed the Giggle Tank, named for spirits too, who see no living player; where it stood stays living-only.
+                GiggleTankGrabberId=source.GiggleTankGrabberId,GiggleTankGrabberName=source.GiggleTankGrabberName,
                 // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here. MINI-4: all but
                 // which Mystery Cup is spiked, which stays here too, and the cup the tripper is shown as spiked, sent to them alone.
                 // Captured participant names reach spectators through this detached booth, never through extra PlayerState.
@@ -899,7 +905,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
+                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
             }
             if(!spirit)
             {
