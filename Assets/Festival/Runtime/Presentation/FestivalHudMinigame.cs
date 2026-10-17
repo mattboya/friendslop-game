@@ -4,7 +4,8 @@ using Festival.Core;
 namespace Festival.Presentation
 {
     /// <summary>MINI-1 (docs/MINIGAMES_2026-09-30.md): the minigame booth's lines on the HUD, from the viewer's round state: the card
-    /// under the aim dot (FestivalHud's minigame card) and what E does while a game runs. MINI-4: Mystery Cups' own lines.</summary>
+    /// under the aim dot (FestivalHud's minigame card) and what E does while a game runs. MINI-4: Mystery Cups' own lines. MINI-2: the
+    /// Drum Circle's, which a drummer reads beside their lanes too.</summary>
     public static partial class FestivalHudText
     {
         /// <summary>MINI-1: the minigame card's title and line, or ("","") for none. Standing alive in the booth's ring: how many of
@@ -18,6 +19,7 @@ namespace Festival.Presentation
             if(s.Phase==FestivalSimulation.MinigamePhase)
             {
                 if(b.Kind==FestivalSimulation.MysteryCupsGame)return CupsCard(s,p);
+                if(b.Kind==FestivalSimulation.DrumCircleGame)return DrumCard(s,p);
                 if(b.ScoredAt>=0)return (ClockChange(b.ClockChange),(b.ClockChange>0?"Added to the clock.":b.ClockChange<0?"Taken off the clock.":"The clock is unchanged.")
                     +" The festival starts again in "+WholeSeconds(b.ScoredAt+FestivalSimulation.MinigameBannerSeconds-b.Seconds)+".");
                 return ("MINIGAME",b.PlayerIds.Contains(p.Id)?"The festival is paused while you play: "+WholeSeconds(FestivalSimulation.MinigameMaxSeconds-b.Seconds)+" s left.":"The festival is paused while the crew plays.");
@@ -52,6 +54,31 @@ namespace Festival.Presentation
             return ((MinigameName(b.Kind)+Dot+"POT "+Money(s,p,b.Pot)).ToUpperInvariant(),
                 (up==p.Id?"Your turn: "+seconds+". Drink a cup for "+next+", or call it. One is spiked.":NameOf(s,up)+"'s turn: "+seconds+". A safe cup adds "+next+"; the spiked one loses the pot.")+hunch);
         }
+        /// <summary>MINI-2: the Drum Circle on the card. While it runs, every part's live accuracy in roster order, the viewer's own as
+        /// "You". Once scored: the worst part's verdict, whose part it was, what the result did to the clock and the crowd, and when the
+        /// festival starts again. The verdict follows the worst part's band (DrumCircle.ClockChange), which the fifteen-second floor
+        /// can shrink on the clock but never on the crowd.</summary>
+        static (string Title,string Detail) DrumCard(RoundState s,PlayerState p)
+        {
+            var b=s.Booth;
+            if(b.ScoredAt<0)
+            {
+                var parts=new System.Collections.Generic.List<string>();
+                foreach(string id in b.PlayerIds)parts.Add((id==p.Id?"You":NameOf(s,id))+" "+Percent(DrumAccuracy(b,id)));
+                return (MinigameName(b.Kind),string.Join(Dot,parts)+"\nThe worst drummer sets the clock.");
+            }
+            int band=DrumBand(b);
+            string worst="";double low=2;
+            foreach(string id in b.PlayerIds){double accuracy=DrumAccuracy(b,id);if(accuracy<low){low=accuracy;worst=id;}}
+            return (ClockChange(b.ClockChange),(band>0?"In the pocket.":band<0?"Off the beat.":"Decent.")
+                +(worst==""?"":" Worst part: "+(worst==p.Id?"you":NameOf(s,worst))+", "+Percent(low)+".")
+                +(b.ClockChange>0?" Added to the clock.":b.ClockChange<0?" Taken off the clock.":" The clock is unchanged.")
+                +(band>0?" Nearby wooks ease off.":band<0?" Nearby wooks grow suspicious.":"")
+                +" The festival starts again in "+WholeSeconds(b.ScoredAt+FestivalSimulation.MinigameBannerSeconds-b.Seconds)+".");
+        }
+        static int DrumBand(MinigameState b)=>b.Kind!=FestivalSimulation.DrumCircleGame||b.DrumWorstScore<0?0:DrumCircle.ClockChange(new[]{b.DrumWorstScore});
+        static double DrumAccuracy(MinigameState b,string id)=>b.DrumAccuracies?.Find(x=>x.PlayerId==id)?.Accuracy??0;
+        static string Percent(double accuracy)=>(int)Math.Round(accuracy*100)+"%";
         /// <summary>A game's name as its booth sign and card read it; "MINIGAME" for one this build cannot name.</summary>
         public static string MinigameName(string kind)=>kind==FestivalSimulation.MysteryCupsGame?"MYSTERY CUPS":kind==FestivalSimulation.DrumCircleGame?"DRUM CIRCLE":kind==FestivalSimulation.LightShowGame?"LIGHT SHOW":"MINIGAME";
         // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash.
@@ -63,9 +90,9 @@ namespace Festival.Presentation
         }
         // A player's name as the view has it, else as the game captured it at its start: a spirit's view lists only spirits.
         static string NameOf(RoundState s,string id)=>s.Players.Find(x=>x.Id==id)?.Name??s.Booth.Participants?.Find(x=>x.Id==id)?.Name??"A friend";
-        /// <summary>Whether the minigame card's result reads as a win (mint, not orange): scored, nothing taken off the clock, and in
-        /// Mystery Cups no spiked cup drunk.</summary>
-        public static bool MinigameWon(RoundState s)=>s.Phase==FestivalSimulation.MinigamePhase&&s.Booth.ScoredAt>=0&&s.Booth.ClockChange>=0&&s.Booth.SpikedBy=="";
+        /// <summary>Whether the minigame card's result reads as a win (mint, not orange): scored, nothing taken off the clock, in
+        /// Mystery Cups no spiked cup drunk, and in the Drum Circle no losing worst part, even where the floor kept the clock.</summary>
+        public static bool MinigameWon(RoundState s)=>s.Phase==FestivalSimulation.MinigamePhase&&s.Booth.ScoredAt>=0&&s.Booth.ClockChange>=0&&s.Booth.SpikedBy==""&&DrumBand(s.Booth)>=0;
 
         /// <summary>MINI-1: a game's result on the clock, as its banner reads it: "+45 s", "−30 s", "+0 s".</summary>
         static string ClockChange(double seconds){int whole=(int)Math.Round(Math.Abs(seconds));return (seconds<0&&whole>0?"−":"+")+whole+" s";}

@@ -50,8 +50,11 @@ namespace Festival.Presentation
         {
             var player=session.LocalPlayer;var state=session.State;
             var interaction=player==null?null:state.Interactions.Find(x=>x.Id==player.InteractionId&&x.Status=="Active");
-            Follow(interaction,interaction==null?0:session.EstimatedSimulationSeconds-interaction.StartSeconds,state?.Phase!="Playing",session.Profile?.Data,AudioSettings.dspTime);
+            Follow(interaction,interaction==null?0:session.EstimatedSimulationSeconds-interaction.StartSeconds,Held(state,interaction),session.Profile?.Data,AudioSettings.dspTime);
         }
+        /// <summary>Whether the tick holds with the world: outside play, except for a Drum Circle part, whose chart runs on the booth
+        /// game's own clock while the world stands still.</summary>
+        public static bool Held(RoundState state,InteractionState interaction)=>state?.Phase!="Playing"&&!(state?.Phase==FestivalSimulation.MinigamePhase&&interaction?.Kind==FestivalSimulation.DrumPartKind);
         /// <summary>Also accepts a booth-owned advancing raw chart clock while the stage is held.</summary>
         public void Follow(InteractionState interaction,double chartSeconds,bool held,ProfileData profile,double dspSeconds)
         {

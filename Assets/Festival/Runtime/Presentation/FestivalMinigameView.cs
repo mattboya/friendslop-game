@@ -11,7 +11,9 @@ namespace Festival.Presentation
     /// (FestivalTwistVisuals) and FestivalNightLighting drains a little colour. So whatever a game draws while it runs (MINI-2..4)
     /// runs on unscaled time, as the HUD does. ponytail: a people rig and primitives, as no booth model exists and the art is frozen.
     /// MINI-4: a Mystery Cups booth sets its cups out in a numbered row on a table in front of the stranger (ShowCups); the cup under
-    /// the aim dot is the one its player drinks (AimedCup), and in the tripper's view the cup their hunch marks glows.</summary>
+    /// the aim dot is the one its player drinks (AimedCup), and in the tripper's view the cup their hunch marks glows. MINI-2: the
+    /// Drum Circle's song comes with the booth (FestivalDrumAudio).</summary>
+    [RequireComponent(typeof(FestivalDrumAudio))]
     public sealed class FestivalMinigameView : MonoBehaviour
     {
         public const string BoothName="Minigame booth",RingName="Minigame ring",SignRule="\nALL IN THE RING",SignText="MINIGAME"+SignRule;

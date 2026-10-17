@@ -202,6 +202,9 @@ namespace Festival.Presentation
         // MINI-1: the minigame card (FestivalHudText.MinigameCard): the booth's ring and countdown, the game under way, its result.
         private GameObject minigamePanel;
         private Text minigameTitle,minigameDetail;
+        // MINI-2: the minigame card beside a drummer's lanes, over the dimmer that covers the card itself.
+        private GameObject drumPanel;
+        private Text drumTitle,drumStrip,stopHoldLabel;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -417,6 +420,11 @@ namespace Festival.Presentation
             dancerCaption=Label(dancePanel.transform,"Dancer caption",17,TextAnchor.MiddleCenter);dancerCaption.text="YOUR LOOK • YOUR MOVES";dancerCaption.color=MutedPaper;Place(dancerCaption.rectTransform,.055f,.025f,.945f,.11f);
             dancePreview=gameObject.AddComponent<FestivalDancePreview>();dancePreview.Initialize(dancerImage);
             dancePanel.SetActive(false);
+            drumPanel=Card(root.transform,"Drum crew",new Vector2(.525f,.40f),new Vector2(.965f,.64f),true);drumPanel.GetComponent<Image>().raycastTarget=false;
+            Accent(drumPanel.transform,Mint);
+            drumTitle=Label(drumPanel.transform,"Drum crew title",30,TextAnchor.MiddleCenter);drumTitle.fontStyle=FontStyle.Normal;drumTitle.color=Orange;Place(drumTitle.rectTransform,.05f,.62f,.95f,.93f);ShrinkToFit(drumTitle,18);
+            drumStrip=Label(drumPanel.transform,"Drum crew strip",20,TextAnchor.MiddleCenter);Place(drumStrip.rectTransform,.05f,.07f,.95f,.62f);ShrinkToFit(drumStrip,13);
+            drumPanel.SetActive(false);
 
             rhythmPanel=Card(root.transform,"Rhythm lane",new Vector2(.015f,.05f),new Vector2(.495f,.95f),true);
             Accent(rhythmPanel.transform,Orange);
@@ -457,7 +465,7 @@ namespace Festival.Presentation
             var controls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);controls.text="ARROWS OR WASD";controls.color=MutedPaper;Place(controls.rectTransform,.06f,.005f,StopHoldLeft-.02f,.049f);
             // DANCE-12: only a held G stops a challenge; the fill under the words grows while it's held (ShowStopHold).
             stopHoldFill=Panel(rhythmPanel.transform,"Stop hold fill",new Color(Orange.r,Orange.g,Orange.b,.5f),new Vector2(StopHoldLeft,.008f),new Vector2(StopHoldLeft,.046f)).GetComponent<Image>();stopHoldFill.raycastTarget=false;stopHoldFill.gameObject.SetActive(false);
-            var stopHold=Label(rhythmPanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);stopHold.text=FestivalHudText.HoldToStop;Place(stopHold.rectTransform,StopHoldLeft,.005f,StopHoldRight,.049f);
+            stopHoldLabel=Label(rhythmPanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);stopHoldLabel.text=FestivalHudText.HoldToStop;Place(stopHoldLabel.rectTransform,StopHoldLeft,.005f,StopHoldRight,.049f);
             rhythmPanel.SetActive(false);
             dialoguePanel=Card(root.transform,"Interaction dialogue",new Vector2(.70f,.52f),new Vector2(.96f,.69f),false);
             Accent(dialoguePanel.transform,Orange);
@@ -756,9 +764,9 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
-            var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();return;}
+            var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
             FollowPendingEquipment(state,player);
             reviewPanel.SetActive(state.Phase=="CampReview"&&!showMenu);
@@ -787,7 +795,7 @@ namespace Festival.Presentation
             UpdateChat(state,player,showMenu);
             UpdateRhythm(state,player);
             UpdateMap(state,player);
-            if(mapPanel.activeSelf){rhythmShade.SetActive(false);dancePanel.SetActive(false);dancePreview.Hide();}
+            if(mapPanel.activeSelf){rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();}
             if(rhythmPanel.activeSelf&&!showMenu&&!mapPanel.activeSelf)
             {
                 objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);
@@ -1386,11 +1394,13 @@ namespace Festival.Presentation
             // DIALOG-3: a talk is on the chat window (UpdateChat), and on the lanes only for its trust dance.
             bool rhythm=FestivalInput.IsRhythm(interaction);
             rhythmPanel.SetActive(rhythm);
-            // DANCE-2: every four-lane challenge shows the live dancer beside its lanes.
-            bool showDancer=FestivalHudText.ShowsDancer(interaction,session.MenuOpen);
+            // DANCE-2: every four-lane challenge shows the live dancer beside its lanes. MINI-2: a drummer sees the crew's accuracy there.
+            bool showDancer=FestivalHudText.ShowsDancer(interaction,session.MenuOpen),drumming=rhythm&&interaction.Kind==FestivalSimulation.DrumPartKind&&!session.MenuOpen,beside=showDancer||drumming;
             rhythmShade.SetActive(rhythm&&!session.MenuOpen);
-            Place(rhythmPanel.GetComponent<RectTransform>(),showDancer ? .015f : .32f,showDancer ? .05f : .06f,showDancer ? .495f : .68f,showDancer ? .95f : .87f);
+            Place(rhythmPanel.GetComponent<RectTransform>(),beside ? .015f : .32f,beside ? .05f : .06f,beside ? .495f : .68f,beside ? .95f : .87f);
             dancePanel.SetActive(showDancer);
+            drumPanel.SetActive(drumming);
+            if(drumming){var (title,strip)=FestivalHudText.MinigameCard(state,player);drumTitle.text=title;drumStrip.text=strip;}
             if(showDancer)
             {
                 dancerHeading.text=FestivalHudText.DancerHeading(interaction.Kind);dancerCaption.text=FestivalHudText.DancerCaption(interaction.Kind);
@@ -1403,14 +1413,14 @@ namespace Festival.Presentation
             bool chatter=speech!=null&&!talkLine.IsChallenge;
             bool showDialogue=rhythm&&speech!=null;
             dialoguePanel.SetActive(showDialogue);
-            Place(dialoguePanel.GetComponent<RectTransform>(),showDancer ? .525f : .70f,showDancer ? .085f : .52f,showDancer ? .965f : .96f,showDancer ? .215f : .69f);
+            Place(dialoguePanel.GetComponent<RectTransform>(),beside ? .525f : .70f,beside ? .085f : .52f,beside ? .965f : .96f,beside ? .215f : .69f);
             dancerCaption.gameObject.SetActive(showDancer&&!showDialogue);
             if(speech!=null){dialogueSpeaker.text=speech.Speaker;dialogueLine.text=speech.Text;dialogueReveal.VisibleCharacters=speech.VisibleCharacters;}
             if(!rhythm||!session.enabled){ResetRhythm();return;}
             if(displayedChart==null||displayedInteractionId!=interaction.Id||displayedSeed!=interaction.ChartSeed||displayedNoteCount!=interaction.NoteCount||displayedPhrase!=interaction.Phrase||Math.Abs(displayedBeatSeconds-interaction.BeatSeconds)>.0001)
             {
                 ShowChart(interaction,RhythmChart.For(interaction));
-                rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);
+                rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);stopHoldLabel.text=FestivalHudText.HoldToStopFor(interaction.Kind);
                 ShowRhythmKeys(session.Controls);
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;

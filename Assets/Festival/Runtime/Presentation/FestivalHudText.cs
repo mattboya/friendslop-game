@@ -109,11 +109,13 @@ namespace Festival.Presentation
         /// host refuses it), so nothing offers to; an Ember Playa art car rider still hops off.</summary>
         public static bool CanCancel(RoundState s,PlayerState p)=>p.InteractionId!=""&&!FestivalSimulation.OnWheel(s,p.Id);
         /// <summary>DANCE-12: whether p is mid four-lane challenge (FestivalInput.IsRhythm: a dance, a check dance, the poi circle, the
-        /// deck, or a talk's trust dance). E sits between the W and D lanes, so then E runs nothing and a tap of G drops nothing: only
-        /// holding G for HoldToStopSeconds stops it, as HoldToStop says. Anything else keeps its cancel on E, and lying down gets up
-        /// first. DIALOG-3: a talk is replied to on 1-3, and the effective Menu binding walks out of it.</summary>
+        /// deck, a Drum Circle part, or a talk's trust dance). E sits between the W and D lanes, so then E runs nothing and a tap of G
+        /// drops nothing: only holding G for HoldToStopSeconds stops it, as HoldToStopFor says. Anything else keeps its cancel on E, and
+        /// lying down gets up first. DIALOG-3: a talk is replied to on 1-3, and the effective Menu binding walks out of it.</summary>
         public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythm(i);return false;}
         public const string HoldToStop="HOLD G TO STOP DANCING";
+        /// <summary>The line under the lanes: holding G withdraws a Drum Circle part, and stops every dance.</summary>
+        public static string HoldToStopFor(string kind)=>kind==FestivalSimulation.DrumPartKind?"HOLD G TO STOP DRUMMING":HoldToStop;
         public const float HoldToStopSeconds=1;
         /// <summary>K2 (batch call 9: "you can walk away (E-hold, or moving off)"): whether p is mid talk, replying on 1-3 (its trust
         /// dance is on the lanes: StopsByHold). A talk holds you still and walking out of it (Cancel) puts every watcher on edge, so a
@@ -415,12 +417,14 @@ namespace Festival.Presentation
             +"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+Dot+Condition(s,p);
 
         /// <summary>The rhythm lane's title, naming a check dance as the check it is. DIALOG-3: a talk is on the lanes only for the dance
-        /// a wary festivalgoer asks for first, so it reads as that.</summary>
-        public static string RhythmTitle(string kind)=>(kind=="ConfirmDance"?"CHECK DANCE":FestivalSimulation.Talks(kind)?"TRUST DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
+        /// a wary festivalgoer asks for first, so it reads as that. MINI-2: a Drum Circle part is the player's own.</summary>
+        public static string RhythmTitle(string kind)=>kind==FestivalSimulation.DrumPartKind?"DRUM CIRCLE  /  YOUR PART"
+            :(kind=="ConfirmDance"?"CHECK DANCE":FestivalSimulation.Talks(kind)?"TRUST DANCE":kind.ToUpperInvariant())+"  /  FOUR-LANE";
 
         /// <summary>DANCE-2: every four-lane challenge (FestivalInput.IsRhythm, a talk's trust dance included) shows the live dancer
-        /// beside its lanes, unless the menu covers it.</summary>
-        public static bool ShowsDancer(InteractionState i,bool menuOpen)=>FestivalInput.IsRhythm(i)&&!menuOpen;
+        /// beside its lanes, unless the menu covers it. MINI-2: nobody dances in the Drum Circle, so its parts show the crew's
+        /// accuracy there instead (FestivalHud).</summary>
+        public static bool ShowsDancer(InteractionState i,bool menuOpen)=>FestivalInput.IsRhythm(i)&&i.Kind!=FestivalSimulation.DrumPartKind&&!menuOpen;
         /// <summary>The live dancer's heading. A check dance reads as a dance. DIALOG-3: a talk shows the dancer only in its trust dance,
         /// whatever the talk, so it says what that dance is for.</summary>
         public static string DancerHeading(string kind)=>FestivalSimulation.Talks(kind)?"YOU  /  DANCING FOR TRUST":kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK",_=>"YOU  /  ON THE FLOOR"};
