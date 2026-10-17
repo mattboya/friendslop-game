@@ -109,6 +109,9 @@ namespace Festival.Network
         // means grabbed, not banked. A connected Alive or Downed carrier inside the camp gate banks it once into StashCash.
         // Detention, death and the next level destroy carried, stashed and offered tanks. RoundState.GiggleTankGrabberId/Name
         // reach every view, spirits' included; PlayerState.GiggleTankBankSequence reaches only its owner. Older rounds default empty.
+        // Confetti: Use confetti is also accepted at camp (Shopping), alive and outdoors, where it is free and distracts nobody.
+        // PlayerState.VisualConfettiBurstSequence counts accepted uses in every view that carries the player, zero in older rounds.
+        // A Distracted festivalgoer's Mode reaches every living view, with its Yaw facing the burst; TargetId stays the target's alone.
         public const int ProtocolVersion=7;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -912,8 +915,9 @@ namespace Festival.Network
                 foreach(var npc in source.Npcs)
                 {
                     // CROWD-3: a festivalgoer scattering from an arrest does so in every client's view; whom it suspects stays masked.
-                    bool scattering=npc.Mode==FestivalSimulation.Scattering,targetsViewer=!scattering&&npc.TargetId==viewer;
-                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer||scattering?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
+                    // A distracted one dances in every view too; only its target still learns whom it suspects.
+                    bool scattering=npc.Mode==FestivalSimulation.Scattering,targetsViewer=!scattering&&npc.TargetId==viewer,shown=scattering||npc.Mode=="Distracted";
+                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer||shown?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);

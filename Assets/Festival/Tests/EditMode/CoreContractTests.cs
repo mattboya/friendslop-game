@@ -360,6 +360,54 @@ namespace Festival.Tests
             Assert.That(events,Is.EqualTo(new[]{"Confetti|Confetti! A camp party trick: your cannon stays loaded|"+game.State.RoundId}));
         }
 
+        // What viewer's client receives, through the wire format.
+        private static RoundState Wire(FestivalSimulation game,string viewer)=>UnityEngine.JsonUtility.FromJson<RoundState>(UnityEngine.JsonUtility.ToJson(Festival.Network.FestivalSession.ViewFor(game,viewer)));
+
+        // Every living view carries the burst count and the dance it set off, facing the burst; the gear and whom it suspected stay private.
+        [Test] public void FriendsSeeTheBurstAndTheDanceButNeverTheGearOrTheSuspect()
+        {
+            var game=new FestivalSimulation(5);var host=game.AddPlayer("host","Host");var friend=game.AddPlayer("friend","Friend");
+            game.State.Phase="Playing";game.State.SimulationSeconds=100;game.State.Npcs.Clear();
+            host.X=0;host.Z=0;friend.X=-30;friend.Z=-30;host.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.ConfettiItem,Count=2});
+            var fooled=new NpcState{Id="fooled",X=0,Z=3,Yaw=0,Mode="Questioning",TargetId="host"};
+            fooled.Observers.Add(new ObserverState{PlayerId="host",Suspicion=50,LastSeenSeconds=100});fooled.Observers.Add(new ObserverState{PlayerId="friend",Suspicion=10,LastSeenSeconds=100});
+            game.State.Npcs.Add(fooled);
+            Assert.That(game.Execute("host",new GameCommand{Id="burst",Kind="Use",ItemId=FestivalSimulation.ConfettiItem}).Accepted,Is.True,"setup: the host fires");
+            game.Tick(.1);
+            Assert.That(fooled.Mode=="Distracted"&&fooled.TargetId=="host",Is.True,"setup: on the host it dances, still suspecting the host");
+
+            var seen=Wire(game,"friend");var shooter=seen.Players.Find(p=>p.Id=="host");var dancer=seen.Npcs.Find(n=>n.Id=="fooled");
+            Assert.That(shooter.VisualConfettiBurstSequence,Is.EqualTo(1),"a friend's view counts the burst");
+            Assert.That(shooter.Inventory,Is.Empty,"but carries none of the shooter's gear");
+            Assert.That(dancer.Mode,Is.EqualTo("Distracted"),"a friend sees the fooled festivalgoer dance");
+            Assert.That(Festival.Network.FestivalSession.NpcPose(dancer),Is.EqualTo("Distracted"),"and poses it dancing");
+            Assert.That(dancer.Yaw,Is.EqualTo(180).Within(.01),"facing the burst");
+            Assert.That(dancer.TargetId,Is.Empty,"never whom it suspected");
+            Assert.That(dancer.Suspicion,Is.EqualTo(10),"and only the friend's own suspicion");
+
+            var own=Wire(game,"host");
+            Assert.That(own.Players.Find(p=>p.Id=="host").VisualConfettiBurstSequence,Is.EqualTo(1));
+            Assert.That(own.Players.Find(p=>p.Id=="host").Inventory.Find(i=>i.ItemId==FestivalSimulation.ConfettiItem).Count,Is.EqualTo(1),"the shooter sees their last cannon");
+            var suspect=own.Npcs.Find(n=>n.Id=="fooled");
+            Assert.That(suspect.Mode=="Distracted"&&suspect.TargetId=="host"&&suspect.Suspicion==50,Is.True,"the suspect's own view is as before");
+
+            friend.Life="Spirit";var spirit=Wire(game,"friend");
+            Assert.That(spirit.Players.Exists(p=>p.Id=="host"),Is.False,"a spirit receives no living shooter");
+            Assert.That(spirit.Npcs,Is.Empty,"nor the festivalgoers");
+        }
+
+        [Test] public void OlderJsonWithoutTheBurstCountRestoresAtZero()
+        {
+            var game=new FestivalSimulation(5);var host=game.AddPlayer("host","Host");host.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.ConfettiItem,Count=1});
+            Assert.That(game.Execute("host",new GameCommand{Id="burst",Kind="Use",ItemId=FestivalSimulation.ConfettiItem}).Accepted,Is.True,"setup: a camp burst");
+            string json=System.Text.RegularExpressions.Regex.Replace(UnityEngine.JsonUtility.ToJson(game.State),"\"VisualConfettiBurstSequence\":-?[0-9]+,","");
+            Assert.That(json,Does.Not.Contain("VisualConfettiBurstSequence"),"the fixture represents a snapshot from before the count");
+            var restored=new FestivalSimulation();restored.Restore(UnityEngine.JsonUtility.FromJson<RoundState>(json));
+            Assert.That(restored.Player("host").VisualConfettiBurstSequence,Is.Zero);
+            Assert.That(restored.Execute("host",new GameCommand{Id="again",Kind="Use",ItemId=FestivalSimulation.ConfettiItem}).Accepted,Is.True);
+            Assert.That(restored.Player("host").VisualConfettiBurstSequence,Is.EqualTo(1),"and the count goes on from zero");
+        }
+
         private static GameCommand Command(string id,string kind)=>new GameCommand{Id=id,Kind=kind};
     }
 }
