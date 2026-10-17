@@ -2,6 +2,7 @@ using NUnit.Framework;
 using Festival.Core;
 using Festival.Network;
 using System.Collections.Generic;
+using Festival.Presentation;
 using UnityEngine;
 
 namespace Festival.Tests
@@ -125,6 +126,80 @@ namespace Festival.Tests
             Assert.That(View(game,"friend").Players.Find(p=>p.Id=="host").VisualPose,Is.EqualTo("Idle"));
             Assert.That(Poke(game,"host","chair","sit_again").Accepted,Is.True);game.Tick(4.1);
             Assert.That(View(game,"friend").Players.Find(p=>p.Id=="host").VisualPose,Is.EqualTo("Idle"));
+        }
+
+        // The aim dot picks a secret only within the host's reach, for a player the host lets poke one, and only on its prop.
+        static string AimFrom(RoundState state,PlayerState p,Vector3 at)
+        {
+            var eye=new Vector3(p.X,1.65f,p.Z);return FestivalCampEggView.Aimed(state,p,eye,(at-eye).normalized);
+        }
+        static PlayerState Stand(FestivalSimulation game,string id,CampEggState egg,float distance)
+        {
+            var p=game.Player(id);var away=new Vector2(-egg.X,-egg.Z).normalized*distance;p.X=egg.X+away.x;p.Z=egg.Z+away.y;return p;
+        }
+
+        [Test] public void TheAimDotPicksEachSecretWithinTheHostsReachAndTheHostAcceptsIt()
+        {
+            var game=new FestivalSimulation(0);game.AddPlayer("host","Host");var prompts=new HashSet<string>();
+            foreach(var egg in game.State.CampEggs)
+            {
+                var aim=FestivalCampEggView.AimPoint(egg);
+                Assert.That(FestivalCampEggView.Prompt(egg.Id),Does.StartWith("E  "),egg.Id+" has an E prompt");Assert.That(prompts.Add(FestivalCampEggView.Prompt(egg.Id)),Is.True,egg.Id+" has its own prompt");
+                var far=Stand(game,"host",egg,2.6f);
+                Assert.That(AimFrom(game.State,far,aim),Is.Empty,egg.Id+" is out of reach at 2.6 m");
+                Assert.That(game.Execute("host",new GameCommand{Id="far_"+egg.Id,Kind="CampEgg",TargetId=egg.Id}).Accepted,Is.False,"setup: the host refuses "+egg.Id+" at 2.6 m");
+                var near=Stand(game,"host",egg,2.4f);
+                var eye=new Vector3(near.X,1.65f,near.Z);
+                Assert.That(FestivalCampEggView.Aimed(game.State,near,eye,-(aim-eye).normalized),Is.Empty,egg.Id+" is not picked when the aim dot looks away");
+                Assert.That(AimFrom(game.State,near,aim+Vector3.up*1.2f),Is.Empty,egg.Id+" is not picked by aim more than 1 m off its prop");
+                Assert.That(AimFrom(game.State,near,aim),Is.EqualTo(egg.Id),egg.Id+" is picked by the aim dot at 2.4 m");
+                var result=game.Execute("host",new GameCommand{Id="near_"+egg.Id,Kind="CampEgg",TargetId=egg.Id});
+                Assert.That(result.Accepted,Is.True,"the host accepts what the aim dot offers: "+result.Reason);
+                // Free the headliner's chair, so the next secret's poke is not refused for sitting.
+                game.State.CampEggs.Find(e=>e.Id=="chair").SeatedPlayerId="";
+            }
+        }
+
+        [Test] public void TheButtonAndTheDustNeedTheirOwnAimSoTheDjAndCarDoorKeepTheirs()
+        {
+            var game=new FestivalSimulation(0);var p=game.AddPlayer("host","Host");
+            var button=game.State.CampEggs.Find(e=>e.Id=="button");p.X=CampFeatures.DjX+1;p.Z=CampFeatures.DjZ+1.4f;
+            Assert.That(AimFrom(game.State,p,new Vector3(CampFeatures.DjX,.9f,CampFeatures.DjZ)),Is.Empty,"aimed at the DJ deck, E stays the DJ's");
+            Assert.That(AimFrom(game.State,p,FestivalCampEggView.AimPoint(button)),Is.EqualTo("button"));
+            var dust=game.State.CampEggs.Find(e=>e.Id=="wash_me");var car=CampFeatures.Find("car_1");p.X=car.X+1.4f;p.Z=car.Z+2.8f;
+            Assert.That(Vector2.Distance(new Vector2(p.X,p.Z),new Vector2(car.X,car.Z)),Is.LessThan(3.5f),"setup: inside the car's door zone");
+            Assert.That(Vector2.Distance(new Vector2(p.X,p.Z),new Vector2(dust.X,dust.Z)),Is.LessThan(2.5f),"setup: and within reach of the dust");
+            Assert.That(AimFrom(game.State,p,new Vector3(car.X+1.7f,1,car.Z)),Is.Empty,"aimed at the car's door, E stays the door's");
+            Assert.That(AimFrom(game.State,p,new Vector3(p.X,1.65f,p.Z+3)),Is.Empty,"aimed away, E stays the door's");
+            Assert.That(AimFrom(game.State,p,FestivalCampEggView.AimPoint(dust)),Is.EqualTo("wash_me"));
+        }
+
+        [Test] public void OnlyAPlayerTheHostLetsPokeASecretGetsTheAim()
+        {
+            var game=new FestivalSimulation(0);var p=game.AddPlayer("host","Host");game.AddPlayer("friend","Friend");
+            var cone=game.State.CampEggs.Find(e=>e.Id=="cone");var aim=FestivalCampEggView.AimPoint(cone);
+            void Refused(string why,System.Action set,System.Action reset)
+            {
+                set();var near=Stand(game,"host",cone,1.5f);
+                Assert.That(AimFrom(game.State,near,aim),Is.Empty,why+": no aimed secret");
+                Assert.That(game.Execute("host",new GameCommand{Id="refused_"+why,Kind="CampEgg",TargetId="cone"}).Accepted,Is.False,"setup: the host refuses "+why);
+                reset();
+            }
+            Refused("ready",()=>p.Ready=true,()=>p.Ready=false);
+            Refused("holding an unpaid item",()=>p.HeldOfferId="water",()=>p.HeldOfferId="");
+            Refused("inside a tent",()=>p.CampVisitId="tent_1",()=>p.CampVisitId="");
+            Refused("downed",()=>p.Life="Downed",()=>p.Life="Alive");
+            Refused("busy",()=>p.InteractionId="busy",()=>p.InteractionId="");
+            Refused("in the festival",()=>game.State.Phase="Playing",()=>game.State.Phase="Shopping");
+            Assert.That(AimFrom(game.State,Stand(game,"host",cone,1.5f),aim),Is.EqualTo("cone"),"setup: a free player gets the aim");
+            var chair=game.State.CampEggs.Find(e=>e.Id=="chair");
+            Assert.That(Poke(game,"friend","chair","friend_sits").Accepted,Is.True);
+            Assert.That(AimFrom(game.State,Stand(game,"host",chair,1.5f),FestivalCampEggView.AimPoint(chair)),Is.Empty,"a friend already has the headliner's chair");
+            Assert.That(game.Execute("host",new GameCommand{Id="second_sitter",Kind="CampEgg",TargetId="chair"}).Accepted,Is.False,"setup: the host refuses a second sitter");
+            game.Tick(4.1);
+            Assert.That(AimFrom(game.State,Stand(game,"host",chair,1.5f),FestivalCampEggView.AimPoint(chair)),Is.EqualTo("chair"),"the chair is free again after four seconds");
+            Assert.That(Poke(game,"host","chair","host_sits").Accepted,Is.True);
+            Assert.That(AimFrom(game.State,Stand(game,"host",cone,1.5f),aim),Is.Empty,"a seated headliner stands up before another secret");
         }
 
         [Test] public void OlderJsonWithoutEggFieldsRestoresWithNoDiscoveries()

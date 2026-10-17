@@ -1,15 +1,111 @@
+using System;
 using System.Collections;
+using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
+using Object=UnityEngine.Object;
 
 namespace Festival.Tests
 {
     public sealed class CampEggPlayTests:FestivalPlayModeTest
     {
+        // In a hosted camp with the real world and HUD, the aim dot on each secret's prop offers its own E, and E sends the host
+        // command that pokes it. Aimed elsewhere, the DJ table and car_1's door keep E, and an E offered a moment ago checks the aim again.
+        [UnityTest] public IEnumerator EAimedAtEachSecretsPropPokesItWithoutStealingTheDjOrTheCarDoor()
+        {
+            var world=new GameObject("impl:U65 aimed eggs world").AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl:U65 aimed eggs");var session=host.AddComponent<FestivalSession>();var hud=host.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);
+                var flags=BindingFlags.NonPublic|BindingFlags.Instance;
+                var primary=typeof(FestivalHud).GetField("primaryAction",flags);var yaw=typeof(FestivalSession).GetField("yaw",flags);var pitch=typeof(FestivalSession).GetField("pitch",flags);
+                string Prompt(){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name=="Prompt")return text.text;return null;}
+                IEnumerator StandAndLook(Vector3 stand,Vector3 at)
+                {
+                    player.X=stand.x;player.Z=stand.z;var look=at-new Vector3(stand.x,1.65f,stand.z);
+                    yaw.SetValue(session,Mathf.Atan2(look.x,look.z)*Mathf.Rad2Deg);pitch.SetValue(session,-Mathf.Asin(look.normalized.y)*Mathf.Rad2Deg);
+                    yield return new WaitForSeconds(.5f);
+                }
+                CampEggState Egg(string id)=>game.State.CampEggs.Find(e=>e.Id==id);
+                // Each standing point is 1.6 m from the secret, toward the middle of camp; the chair comes last, as sitting holds the player.
+                foreach(var id in new[]{"gnome","lost_found","hammock","flamingo","cone","wash_me","button","chair"})
+                {
+                    var egg=Egg(id);var toward=new Vector2(-egg.X,-egg.Z).normalized*1.6f;
+                    yield return StandAndLook(new Vector3(egg.X+toward.x,0,egg.Z+toward.y),FestivalCampEggView.AimPoint(egg));
+                    Assert.That(Prompt(),Is.EqualTo(FestivalCampEggView.Prompt(id).Substring(3)),"aimed at the "+id+" prop, the prompt offers it");
+                    Assert.That(session.ViewCamera.WorldToViewportPoint(world.CampEggs.Prop(id).GetComponentInChildren<Renderer>().bounds.center).z,Is.GreaterThan(0),"setup: the "+id+" prop is in front of the view");
+                    ((Action)primary.GetValue(hud))();
+                    for(deadline=Time.realtimeSinceStartup+2;Egg(id).ActivationCount==0&&Time.realtimeSinceStartup<deadline;)yield return null;
+                    Assert.That(Egg(id).ActivationCount,Is.EqualTo(1),"E pokes the "+id+": "+session.Message);
+                    Assert.That(player.LastCampEggId,Is.EqualTo(id));
+                }
+                Assert.That(player.FoundCampEggMask,Is.EqualTo(255),"all eight secrets were found through the HUD");
+                yield return new WaitForSeconds(4.3f);
+                Assert.That(FestivalSimulation.CampSeated(game.State,player.Id),Is.False,"setup: the headliner's four seconds are over");
+
+                // Beside the DJ table: aimed at the deck, E is the DJ's; aimed at the button, the button's. An E offered on the button
+                // and pressed once the aim is back on the deck does nothing.
+                var button=Egg("button");var deck=new Vector3(CampFeatures.DjX,.9f,CampFeatures.DjZ);var besideDj=new Vector3(CampFeatures.DjX+1,0,CampFeatures.DjZ+1.4f);
+                yield return StandAndLook(besideDj,deck);
+                Assert.That(Prompt(),Does.StartWith("DJ: "),"aimed at the deck, the DJ keeps E");
+                yield return StandAndLook(besideDj,FestivalCampEggView.AimPoint(button));
+                Assert.That(Prompt(),Is.EqualTo(FestivalCampEggView.Prompt("button").Substring(3)));
+                var offered=(Action)primary.GetValue(hud);int track=game.State.CampMusicTrack;
+                var look=deck-new Vector3(besideDj.x,1.65f,besideDj.z);yaw.SetValue(session,Mathf.Atan2(look.x,look.z)*Mathf.Rad2Deg);pitch.SetValue(session,-Mathf.Asin(look.normalized.y)*Mathf.Rad2Deg);
+                yield return null;yield return null;
+                offered();yield return new WaitForSeconds(.3f);
+                Assert.That(button.ActivationCount,Is.EqualTo(1),"E checks the aim again when pressed");Assert.That(game.State.CampMusicTrack,Is.EqualTo(track));
+
+                // Beside car_1's back window: aimed at the door, E enters the car; aimed at the dust, E writes in it.
+                var dust=Egg("wash_me");var car=CampFeatures.Find("car_1");var besideCar=new Vector3(car.X+1.6f,0,car.Z+3.1f);
+                yield return StandAndLook(besideCar,new Vector3(car.X+1.7f,1,car.Z));
+                Assert.That(Prompt(),Is.EqualTo("ENTER CAR"),"aimed at the door, the car keeps E");
+                yield return StandAndLook(besideCar,FestivalCampEggView.AimPoint(dust));
+                Assert.That(Prompt(),Is.EqualTo(FestivalCampEggView.Prompt("wash_me").Substring(3)));
+                ((Action)primary.GetValue(hud))();
+                for(deadline=Time.realtimeSinceStartup+2;dust.ActivationCount<2&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(dust.ActivationCount,Is.EqualTo(2),"E writes in the dust: "+session.Message);Assert.That(player.CampVisitId,Is.Empty,"and does not open the car");
+
+                // A ready player is not offered a secret.
+                player.Ready=true;yield return StandAndLook(besideCar,FestivalCampEggView.AimPoint(dust));
+                Assert.That(Prompt(),Is.Not.EqualTo(FestivalCampEggView.Prompt("wash_me").Substring(3)),"a ready player keeps E for camp");
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world.gameObject);}
+            yield return null;
+        }
+
+        // The gnome stands where the host's published visit says, in the running session.
+        [UnityTest] public IEnumerator TheLiveSessionShowsTheGnomeAtThePublishedSpot()
+        {
+            var world=new GameObject("impl:U65 gnome world").AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("impl:U65 gnome session");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                yield return null;yield return null;
+                var gnome=world.CampEggs.Prop("gnome");var record=Simulation(session).State.CampEggs.Find(e=>e.Id=="gnome");
+                Assert.That(gnome.localPosition,Is.EqualTo(new Vector3(record.X,0,record.Z)),"the gnome stands at this visit's spot");
+                var other=CampFeatures.GnomeSpots[record.X==CampFeatures.GnomeSpots[0].X?1:0];record.X=other.X;record.Z=other.Z;
+                yield return null;yield return null;
+                Assert.That(gnome.localPosition,Is.EqualTo(new Vector3(other.X,0,other.Z)),"a newly published spot moves the gnome");
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world.gameObject);}
+            yield return null;
+        }
+
         [UnityTest] public IEnumerator DiscoverySaveErrorsSurfaceAndRetryWithoutWritingEveryFrame()
         {
             var host=new GameObject("impl:U31 discovery retry");var session=host.AddComponent<FestivalSession>();yield return null;

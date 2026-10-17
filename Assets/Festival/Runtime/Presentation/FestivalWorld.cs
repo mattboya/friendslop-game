@@ -60,6 +60,7 @@ namespace Festival.Presentation
         /// <summary>CAMP-1: Marigold, the camp seller in front of the supplies table. The HUD turns her to face whoever talks to her
         /// (CampSellerTalk.Face).</summary>
         public FestivalCharacter CampSeller { get; private set; }
+        public FestivalCampEggView CampEggs { get; private set; }
         private void Awake() { Build(); }
         public void Build()
         {
@@ -477,6 +478,7 @@ namespace Festival.Presentation
             }
             // GAS-1: the Giggle Balloons, off the mat's west edge. Nothing in them collides, so the camp's navmesh ignores them.
             FestivalGiggleTank.BuildBalloons(camp).localPosition=new Vector3(CampFeatures.GiggleBalloonX,0,CampFeatures.GiggleBalloonZ);
+            CampEggs=FestivalCampEggView.Build(camp);
             for(int i=0;i<28;i++)
             {
                 float x=-21f+(i*17%43),z=-20f+(i*29%41);

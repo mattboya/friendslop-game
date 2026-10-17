@@ -1740,6 +1740,14 @@ namespace Festival.Presentation
             if(state.Phase=="Shopping")
             {
                 AddHandoffActions(state,player,ref y);
+                // The button sits on the DJ deck and the dust beside car_1's door, so only the aim picks a secret over them. E aims
+                // again when pressed, so a prompt left from a look away sends nothing.
+                string egg=AimedCampEgg(state,player);
+                if(egg!="")
+                {
+                    SetPromptAction(FestivalCampEggView.Prompt(egg),()=>{if(AimedCampEgg(session.State,session.LocalPlayer)==egg)session.Command("CampEgg",egg);});
+                    FinishActions();return;
+                }
                 if(Near(player,CampFeatures.DjX,CampFeatures.DjZ,3f))
                 {
                     int next=(state.CampMusicTrack+1)%CampFeatures.Tracks.Length;
@@ -2017,6 +2025,20 @@ namespace Festival.Presentation
             }
             return best;
         }
+        private string AimedCampEgg(RoundState state,PlayerState player)
+        {
+            if(session.ViewCamera==null)return "";
+            var view=session.ViewCamera.transform;Vector3 forward=view.forward;
+            string egg=FestivalCampEggView.Aimed(state,player,FestivalThirdPerson.AimFrom(view.position,forward,session.EyePosition),forward);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible&&egg!=tracedCampEgg)DevelopmentDiagnostics.GraphicsEvent("CampEggs","prompt_target","egg="+(egg==""?"none":egg));
+            tracedCampEgg=egg;
+#endif
+            return egg;
+        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private string tracedCampEgg="";
+#endif
         private void ChangeSetting(string key,int direction)
         {
             var data=session.Profile.Data;

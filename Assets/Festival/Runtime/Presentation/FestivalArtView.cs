@@ -64,7 +64,8 @@ namespace Festival.Presentation
         }
         public static Material MaterialFor(string color)
         {
-            if(materials.TryGetValue(color,out var material))return material;
+            // An asset unload destroys a cached material that no object holds. Make it again.
+            if(materials.TryGetValue(color,out var material)&&material!=null)return material;
             var template=Resources.Load<Material>("FestivalLit");
             if(template==null)return null;
             material=new Material(template){name="Festival art "+color,color=colors.TryGetValue(color,out var tint)?tint:Color.white};

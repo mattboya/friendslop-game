@@ -602,7 +602,7 @@ namespace Festival.Network
             }
             SaveAcknowledgedHistory();
             FollowCampEggs(State);
-            if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetTwists(State);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State,player);}
+            if(world!=null){world.SetPhase(State.Phase);world.SetLighting(State,LocalPlayerId);world.SetTwists(State);world.SetInterior(player.CampVisitId);world.SetCampAntics(player.CampAntics);world.UpdateShop(State,player);if(world.CampEggs!=null)world.CampEggs.Show(CampEggStates);}
             if(State.Phase=="Loading" && loadedRound!=State.RoundId)
             {
                 if(world!=null&&world.IsReady&&world.NavigationReady){loadedRound=State.RoundId;Command("MapReady");}
