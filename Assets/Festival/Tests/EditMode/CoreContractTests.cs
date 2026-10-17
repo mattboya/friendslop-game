@@ -337,6 +337,18 @@ namespace Festival.Tests
             Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("needs an escort"));
         }
 
+        [Test] public void GiggleBalloonDiagnosticsNameEachAcceptedAndRefusedTake()
+        {
+            var game=new FestivalSimulation(3);var player=game.AddPlayer("host","Host");player.X=CampFeatures.GiggleBalloonX;player.Z=CampFeatures.GiggleBalloonZ;
+            var events=new System.Collections.Generic.List<string>();
+            game.ChatDiagnostic=(action,reason,round,time)=>events.Add(action+"|"+reason+"|"+round);
+            for(int take=0;take<3;take++)game.Execute(player.Id,Command("balloon"+take,FestivalSimulation.TakeGiggleBalloonKind));
+            player.X+=3;game.Execute(player.Id,Command("far",FestivalSimulation.TakeGiggleBalloonKind));
+            string round="|"+game.State.RoundId;
+            Assert.That(events,Is.EqualTo(new[]{"GiggleBalloon|Accepted"+round,"GiggleBalloon|Accepted"+round,
+                "GiggleBalloon|Refused: Two Giggle Balloons at a time: let one wear off"+round,"GiggleBalloon|Refused: Stand by the Giggle Balloons to take one"+round}));
+        }
+
         private static GameCommand Command(string id,string kind)=>new GameCommand{Id=id,Kind=kind};
     }
 }

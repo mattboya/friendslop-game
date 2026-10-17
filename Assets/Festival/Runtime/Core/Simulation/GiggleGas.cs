@@ -30,6 +30,14 @@ namespace Festival.Core
         // Apply lets only a living player outside the camp's tents, cars and potties this far, at camp or at the festival.
         CommandResult TakeGiggleBalloon(PlayerState p)
         {
+            var result=GiggleBalloonTake(p);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            ChatDiagnostic?.Invoke("GiggleBalloon",result.Accepted?"Accepted":"Refused: "+result.Reason,State.RoundId,State.SimulationSeconds);
+#endif
+            return result;
+        }
+        CommandResult GiggleBalloonTake(PlayerState p)
+        {
             if(State.Phase!="Shopping")return Reject("Giggle Balloons stay at camp");
             if(!AtGiggleBalloons(p))return Reject("Stand by the Giggle Balloons to take one");
             if(TwoGiggleBalloonsOn(p))return Reject("Two Giggle Balloons at a time: let one wear off");
