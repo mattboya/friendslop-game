@@ -11,9 +11,9 @@ using Festival.Core;
 // anyone is downed or busy. The round's phase is then "Minigame": the level clock and every danger timer stop, nobody moves,
 // and only the game's own commands go through. It runs at most 90 s, its result shows for 4 s, and then every deadline on the
 // simulation clock moves on by the pause, the result's time is paid (a loss never leaves under 15 s) and the booth is spent.
-// The bag deals MINI-4's Mystery Cups (MysteryCupsTests) and MINI-2's Drum Circle (DrumCircleTests). The pause's own tests play
-// Mystery Cups (Play deals it), whose player up calls it at once for +0 s; those that need a game nobody ends turn it into one this
-// build doesn't know (Endless), which only the cap ends.
+// The bag deals MINI-4's Mystery Cups (MysteryCupsTests), MINI-2's Drum Circle (DrumCircleTests) and MINI-3's Light Show
+// (LightShowTests). The pause's own tests play Mystery Cups (Play deals it), whose player up calls it at once for +0 s; those that
+// need a game nobody ends turn it into one this build doesn't know (Endless), which only the cap ends.
 public static class MinigameTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -110,8 +110,8 @@ public static class MinigameTests
     static double Left(FestivalSimulation s)=>s.State.DurationSeconds-s.State.ElapsedSeconds;
 
     // 300 Day 1s of both festivals: each places one booth, on a listed spot, every spot turns up, and each plays a listed game,
-    // every game the bag holds turning up, the Drum Circle among them. Camp has none, and every level of the weekend, Night 2 too,
-    // has its own.
+    // every game the bag holds turning up, the Drum Circle and the Light Show among them. Camp has none, and every level of the
+    // weekend, Night 2 too, has its own.
     static void EveryLevelPlacesOneBoothOnASeededSpot()
     {
         Check(Festivals.BoothSpots.Length>=3,"at least three listed spots, got "+Festivals.BoothSpots.Length);
@@ -127,6 +127,7 @@ public static class MinigameTests
         }
         Check(Array.IndexOf(used,0)<0,"every spot turns up: "+string.Join(", ",used));
         Check(FestivalSimulation.MinigameKinds.Contains(FestivalSimulation.DrumCircleGame),"the bag holds the Drum Circle");
+        Check(FestivalSimulation.MinigameKinds.Contains(FestivalSimulation.LightShowGame),"the bag holds the Light Show");
         Check(dealt.SetEquals(FestivalSimulation.MinigameKinds),"every game in the bag turns up: "+string.Join(", ",dealt));
         var weekend=Leave(7,2);
         for(int level=0;level<Festivals.LevelCount;level++)

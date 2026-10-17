@@ -299,6 +299,6 @@ public static class LightShowTests
         Check(events.Any(e=>e["EndsAt"].GetValue<float>()==20),"the glover's final colour remains visible through twenty seconds");
         Check(show.ToJsonString()==Show(Started()).ToJsonString(),"same host seed and roster generate identical persisted records");
         Check(events.ToJsonString()!=Show(Started(124))["Events"].ToJsonString(),"a different level spin seed changes the real script");
-        Check(!FestivalSimulation.MinigameKinds.Contains("LightShow"),"the booth bag stays disabled until real presentation and privacy consumers pass");
+        Check(FestivalSimulation.MinigameKinds.Contains("LightShow"),"the bag deals the Light Show now its real presentation and privacy consumers pass");
     }
 }

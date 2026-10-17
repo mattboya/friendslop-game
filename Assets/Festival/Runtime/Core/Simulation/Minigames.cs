@@ -58,9 +58,9 @@ namespace Festival.Core
         public const string MinigamePhase="Minigame",MinigameKind="Minigame";
         public const float MinigameRingRadius=4;
         public const double MinigameRingSeconds=3,MinigameMaxSeconds=90,MinigameBannerSeconds=4,MinigameFloorSeconds=15;
-        // The games a booth deals: MINI-4's Mystery Cups, which took over from MINI-1's no-op stub, and MINI-2's Drum Circle, until
-        // MINI-3's Light Show joins them.
-        public static readonly IReadOnlyList<string> MinigameKinds=new[]{MysteryCupsGame,DrumCircleGame};
+        // The games a booth deals: MINI-4's Mystery Cups, which took over from MINI-1's no-op stub, MINI-2's Drum Circle and MINI-3's
+        // Light Show.
+        public static readonly IReadOnlyList<string> MinigameKinds=new[]{MysteryCupsGame,DrumCircleGame,LightShowGame};
 
         /// <summary>Where this level's booth stands, or null: none (camp, an older snapshot) or spent. It reads only public state,
         /// so the HUD and the world show it from any client's view.</summary>
