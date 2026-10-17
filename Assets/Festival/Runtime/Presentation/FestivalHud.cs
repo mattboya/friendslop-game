@@ -117,7 +117,14 @@ namespace Festival.Presentation
         private string previousRound="";
         private bool? appliedContrast;
         private bool? expandedGear;
-        private int rosterLines,trippingLines;
+        private int rosterLines;
+        // What the dose card was last measured with; a change to any of them measures it again.
+        private string trippingText;
+        private Font trippingFont;
+        private int trippingSize=-1;
+        private float trippingWidth,trippingPixels,trippingCanvas,trippingScale;
+        // Above and below the wrapped text, at 100% text: one line comes to the card's authored height.
+        private const float TripperPadding=22;
         // The debrief ballot: a row per award (up to three) of buttons, one per connected crew member (up to eight).
         private readonly Text[] ballotLabels=new Text[3];
         private readonly GameObject[,] ballotPicks=new GameObject[3,8];
@@ -827,6 +834,7 @@ namespace Festival.Presentation
             if(session==null)return;
             ApplyTextReflow();
             if(!session.Connected)return;
+            UpdateTrippingLayout();
             bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
             foreach(var delivery in session.SpeechDeliveries.Deliveries)
             {
@@ -854,7 +862,7 @@ namespace Festival.Presentation
             }
             if(changed)
             {
-                appliedTextScale=scale;rosterLines=-1;trippingLines=-1;
+                appliedTextScale=scale;rosterLines=-1;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Debug.Log("[Settings] HUD text scale="+scale.ToString("F2")+"; rhythm geometry unchanged.");
 #endif
@@ -913,14 +921,24 @@ namespace Festival.Presentation
 #endif
         }
 
-        private void UpdateTrippingLayout(int lines)
+        // Runs after the text scale reflows and the canvas scaler updates, so it measures this frame's sizes. The sundown warning
+        // stacks under the notice as it was authored to.
+        private void UpdateTrippingLayout()
         {
-            if(trippingLines==lines)return;
-            trippingLines=lines;
-            // Night 2's dose list grows the tripper card down from under the clock; the session notice moves down with it.
-            float scale=textScale,bottom=.906f-(.026f*Mathf.Max(1,lines)+.016f)*scale,noticeTop=Mathf.Min(.849f,bottom-.008f);
-            Place(Rect(trippingPanel),.36f,bottom,.64f+.07f*(scale-1)/.3f,.906f);
-            Place(Rect(noticePanel),.368f,noticeTop-.064f*scale,.695f,noticeTop);
+            float scale=textScale,right=.64f+.07f*(scale-1)/.3f;var card=Rect(trippingPanel);
+            if(card.anchorMax.x!=right)Place(card,.36f,card.anchorMin.y,right,.906f);
+            float width=tripping.rectTransform.rect.width,pixels=tripping.pixelsPerUnit,canvasHeight=((RectTransform)trippingPanel.transform.parent).rect.height;
+            if(tripping.text==trippingText&&tripping.font==trippingFont&&tripping.fontSize==trippingSize&&width==trippingWidth&&pixels==trippingPixels&&canvasHeight==trippingCanvas&&scale==trippingScale)return;
+            trippingText=tripping.text;trippingFont=tripping.font;trippingSize=tripping.fontSize;trippingWidth=width;trippingPixels=pixels;trippingCanvas=canvasHeight;trippingScale=scale;
+            var settings=tripping.GetGenerationSettings(new Vector2(width,0));settings.resizeTextForBestFit=false;settings.verticalOverflow=VerticalWrapMode.Overflow;
+            float height=trippingText==""?0:tripping.cachedTextGeneratorForLayout.GetPreferredHeight(trippingText,settings)/pixels;
+            float bottom=.906f-(height+TripperPadding*scale)/Mathf.Max(1,canvasHeight),noticeTop=Mathf.Min(.849f,bottom-.008f),noticeBottom=noticeTop-.064f*scale,sundownTop=Mathf.Min(.775f,noticeBottom-.01f);
+            Place(card,.36f,bottom,right,.906f);
+            Place(Rect(noticePanel),.368f,noticeBottom,.695f,noticeTop);
+            Place(Rect(sundownPanel),.30f,sundownTop-.065f,.70f,sundownTop);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("HudLayout","dose_card","lines="+(trippingText==""?0:tripping.cachedTextGeneratorForLayout.lineCount)+" text_height="+height.ToString("F1")+" width="+width.ToString("F1")+" scale="+scale.ToString("F2")+" ppu="+pixels.ToString("F3")+" bottom="+bottom.ToString("F3")+" notice_top="+noticeTop.ToString("F3"));
+#endif
         }
 
         private void UpdateText(RoundState state,PlayerState player)
@@ -930,7 +948,6 @@ namespace Festival.Presentation
             objective.text=FestivalHudText.ObjectiveDetail(state,player);
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
-            UpdateTrippingLayout(tripping.text==""?0:tripping.text.Split('\n').Length);
             vitals.text=FestivalHudText.Vitals(state,player);
             for(int i=0;i<slotFrames.Length;i++)
             {

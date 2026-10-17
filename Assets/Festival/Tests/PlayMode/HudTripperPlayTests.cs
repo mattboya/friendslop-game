@@ -1024,5 +1024,147 @@ namespace Festival.Tests
             yield return null;
             Assert.That(failures,Is.Empty,"Night 2, 8 crew, a chat check and a notice at 1920x1080:\n"+string.Join("\n",failures));
         }
+
+        // Night 2's dose card for a crew of 8, every friend named as long as the host allows (24 letters) and on the longest
+        // substances. At each screen shape and size, at both ends of the text size, the card keeps its top under the clock and grows
+        // down to show all of its wrapped text at full size, with the session notice (and on a day, the sundown warning) below it.
+        // A resize, a new text size or font and friends leaving each measure it again; a one-line card leaves the notice in its place.
+        [UnityTest]public IEnumerator TheDoseCardGrowsDownToShowEveryLongNameAndPushesTheNoticeBelowIt()
+        {
+            var world=new GameObject("impl-U46 dose card world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("impl-U46 dose card HUD");
+            var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();
+            yield return null;
+            var failures=new List<string>();Font wide=null;Text tripping=null;Font authored=null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            bool diagnostics=DevelopmentDiagnostics.Visible;DevelopmentDiagnostics.Visible=false;int layoutLogs=0;string layoutLog="";
+            Application.LogCallback layoutTrace=(text,stack,type)=>{if(text.StartsWith("[Festival.HudLayout] action=dose_card ")){layoutLogs++;layoutLog=text;}};
+            Application.logMessageReceived+=layoutTrace;
+#endif
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mates=new List<PlayerState>();
+                foreach(var name in new[]{"Maximiliana Wolfensteins","Bartholomew Winterbottom","Gwendolyn Montgomeryshaw","Wilhelmina Featherstones","Montgomery Wolverhampton","Marguerite Hammerschmidt","Wolfgang Mountbattenwood"})
+                {
+                    Assert.That(name.Length,Is.EqualTo(24),"setup: "+name+" is as long as a name can be");
+                    var mate=sim.AddPlayer("impl_u46_"+mates.Count,name);mate.Ready=true;mates.Add(mate);
+                }
+                yield return StartLevel(session);
+                // Night 2: the first friend trips on four Rolly Pollies, everyone else is on four Tongue Stamps or Rolly Pollies, away from home.
+                sim.State.LevelIndex=3;sim.State.DurationSeconds=600;sim.State.ElapsedSeconds=30;sim.State.Npcs.Clear();
+                sim.State.TripperId=mates[0].Id;sim.State.Doses.Clear();
+                sim.State.Doses.Add(new PlayerDose{PlayerId=mates[0].Id,Dose=4,Substance="ecstasy"});
+                sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="lsd"});
+                for(int i=1;i<mates.Count;i++)sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=4,Substance=i%2==0?"lsd":"ecstasy"});
+                for(int i=0;i<mates.Count;i++){mates[i].X=-30+i*2;mates[i].Z=-30;}
+
+                var canvas=hud.GetComponentInChildren<Canvas>();var scaler=canvas.GetComponent<CanvasScaler>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.localScale=Vector3.one;
+                tripping=hud.GetComponentsInChildren<Text>(true).First(t=>t.name=="Tripping");authored=tripping.font;
+                RectTransform Card(string name)=>hud.GetComponentsInChildren<Image>(true).First(i=>i.name==name).rectTransform;
+                Rect Bounds(RectTransform rect){var corners=new Vector3[4];rect.GetWorldCorners(corners);var min=canvasRect.InverseTransformPoint(corners[0]);var max=canvasRect.InverseTransformPoint(corners[2]);return Rect.MinMaxRect(min.x,min.y,max.x,max.y);}
+                float Height(float y)=>y/canvasRect.rect.height+canvasRect.pivot.y;
+                // The canvas size and scale CanvasScaler gives the HUD (1920x1080 reference, width and height matched equally) on this screen.
+                void ShowOn(int width,int height){float scale=Mathf.Pow(2,Mathf.Lerp(Mathf.Log(width/1920f,2),Mathf.Log(height/1080f,2),scaler.matchWidthOrHeight));scaler.dynamicPixelsPerUnit=scale;canvasRect.sizeDelta=new Vector2(width/scale,height/scale);}
+                int message=0;
+                IEnumerator Settle(){session.SetMessage((message++%2==0?"Your friend found":"A friend found")+" the missing festivalgoer. Get everyone home together.");yield return null;yield return null;yield return null;Canvas.ForceUpdateCanvases();}
+                // What the drawn card shows: every line, full size, under the clock, no taller than it needs; the notice in its own place or
+                // just under the card, the sundown warning in its own place or just under the notice, and no card over another.
+                float Check(string where,bool sundown=false)
+                {
+                    var cardRect=Card("Tripper card");var card=Bounds(cardRect);var notice=Bounds(Card("Session notice"));
+                    if(!cardRect.gameObject.activeInHierarchy||!Card("Session notice").gameObject.activeInHierarchy){failures.Add(where+": the dose card or the notice is hidden");return 0;}
+                    var drawn=tripping.cachedTextGenerator;int visible=Mathf.Max(0,drawn.characterCountVisible);float ppu=tripping.pixelsPerUnit,lines=0,smallest=float.MaxValue,h=canvasRect.rect.height;
+                    foreach(var line in drawn.lines){lines+=line.height/ppu;smallest=Mathf.Min(smallest,line.height/ppu);}
+                    var unshrunk=tripping.GetGenerationSettings(Vector2.zero);unshrunk.resizeTextForBestFit=false;unshrunk.horizontalOverflow=HorizontalWrapMode.Overflow;unshrunk.verticalOverflow=VerticalWrapMode.Overflow;
+                    var measure=new TextGenerator();measure.Populate("X",unshrunk);float fullLine=measure.lines[0].height/ppu;
+                    string seen=where+" (card "+card+", text box "+tripping.rectTransform.rect.size+", font "+tripping.fontSize+", "+drawn.lineCount+" lines "+lines.ToString("F1")+" tall, full-size line "+fullLine.ToString("F1")+", notice "+notice+")";
+                    if(visible<tripping.text.Length&&tripping.text.Substring(visible).Trim().Length>0)failures.Add(seen+": the dose card cuts \""+tripping.text.Substring(visible).Replace("\n"," | ")+"\"");
+                    if(smallest<fullLine-.5f)failures.Add(seen+": a line is drawn "+smallest.ToString("F1")+" tall, smaller than its full size");
+                    if(Mathf.Abs(Height(card.yMax)-.906f)*h>.5f)failures.Add(seen+": the card's top moved from under the clock to "+Height(card.yMax).ToString("F4"));
+                    if(tripping.rectTransform.rect.height-lines>=2*smallest)failures.Add(seen+": the card has room for another line past its padding");
+                    void Below(string name,Rect upper,Rect lower,float own)
+                    {
+                        float gap=upper.yMin-lower.yMax;
+                        if(gap<-.5f)failures.Add(seen+": the "+name+" reaches "+(-gap).ToString("F0")+" px up into the card above it");
+                        else if(Mathf.Abs(Height(lower.yMax)-own)*h>.5f&&gap>12)failures.Add(seen+": the "+name+" is "+gap.ToString("F0")+" px under the card above it, not in its own place ("+own+") or just under");
+                    }
+                    Below("notice",card,notice,.849f);
+                    var shown=new List<(string name,Rect rect)>();
+                    foreach(var image in hud.GetComponentsInChildren<Image>(false))if(System.Array.IndexOf(Cards,image.name)>=0||image.name=="Sundown warning")shown.Add((image.name,Bounds(image.rectTransform)));
+                    if(sundown)
+                    {
+                        var warning=shown.Find(c=>c.name=="Sundown warning");
+                        if(warning.name==null)failures.Add(where+": setup: the sundown warning is hidden");else Below("sundown warning",notice,warning.rect,.775f);
+                    }
+                    for(int i=0;i<shown.Count;i++)for(int j=i+1;j<shown.Count;j++)if(shown[i].rect.Overlaps(shown[j].rect))failures.Add(seen+": "+shown[i].name+" and "+shown[j].name+" overlap");
+                    return card.height;
+                }
+                float NoticeTop()=>Height(Bounds(Card("Session notice")).yMax);
+
+                var screens=new[]{(1280,720),(1920,1080),(2560,1440),(1440,900),(2560,1600),(1024,768),(2560,1080),(3440,1440)};
+                foreach(float textScale in new[]{1f,1.3f})foreach(var (width,height) in screens)
+                {
+                    ShowOn(width,height);session.Profile.Data.TextScale=textScale;
+                    yield return Settle();
+                    if(tripping.text.Split('\n').Length!=5)failures.Add("setup: expected the 5-line dose list, got \""+tripping.text.Replace("\n"," | ")+"\"");
+                    Check(width+"x"+height+" at "+textScale.ToString("P0")+" text");
+                }
+
+                ShowOn(1920,1080);session.Profile.Data.TextScale=1;yield return Settle();
+                float full=Check("1920x1080, the whole crew");
+                var installed=Font.GetOSInstalledFontNames();string monospace=new[]{"Courier New","Courier","Menlo"}.FirstOrDefault(f=>System.Array.IndexOf(installed,f)>=0);
+                if(monospace!=null)
+                {
+                    wide=Font.CreateDynamicFontFromOSFont(monospace,tripping.fontSize);tripping.font=wide;yield return Settle();
+                    if(Mathf.Abs(Check("1920x1080 in "+monospace)-full)<1)failures.Add("the card is measured again for another font ("+monospace+")");
+                    tripping.font=authored;yield return Settle();
+                }
+                foreach(var mate in mates.GetRange(3,4))mate.Connected=false;
+                yield return Settle();
+                if(Check("1920x1080, four friends gone")>=full)failures.Add("with four friends gone the card shrinks");
+                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="ecstasy"});
+                foreach(float textScale in new[]{1f,1.3f})
+                {
+                    session.Profile.Data.TextScale=textScale;yield return Settle();
+                    Check("one line at "+textScale.ToString("P0")+" text");
+                    if(textScale==1&&Mathf.Abs(NoticeTop()-.849f)*canvasRect.rect.height>.5f)failures.Add("one line: the notice's top is "+NoticeTop().ToString("F4")+", not its own .849");
+                }
+
+                // Day 2's last minute, the longest friend tripping: the sundown warning comes up under the notice at either text size.
+                sim.State.LevelIndex=2;sim.State.TripperId=mates[1].Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=mates[1].Id,Dose=4,Substance="lsd"});
+                sim.State.ElapsedSeconds=sim.State.DurationSeconds-50;
+                foreach(float textScale in new[]{1f,1.3f})
+                {
+                    session.Profile.Data.TextScale=textScale;yield return Settle();
+                    Check("Day 2 sundown at "+textScale.ToString("P0")+" text",true);
+                }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                // The layout trace is opt-in, once per new layout, and never names anyone.
+                if(layoutLogs!=0)failures.Add("the dose card's layout trace logs "+layoutLogs+" times before it is opted in");
+                DevelopmentDiagnostics.Visible=true;session.Profile.Data.TextScale=1;yield return Settle();yield return Settle();
+                if(layoutLogs!=1)failures.Add("opted in, one new layout and steady frames log the dose card "+layoutLogs+" times: "+layoutLog);
+                if(layoutLog.ToUpperInvariant().Contains("BARTHOLOMEW"))failures.Add("the layout trace names a player: "+layoutLog);
+#endif
+            }
+            finally
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=layoutTrace;DevelopmentDiagnostics.Visible=diagnostics;
+#endif
+                if(tripping!=null&&authored!=null)tripping.font=authored;
+                if(wide!=null)Object.Destroy(wide);
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Night 2's dose card for 8 crew with the longest names:\n"+string.Join("\n",failures));
+        }
     }
 }
