@@ -35,7 +35,7 @@ namespace Festival.Tests
                 var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
                 var player=sim.Player(session.LocalPlayerId);var me=session.LocalPlayerId;var view=session.ViewCamera;
                 Assert.That(world.GetComponent<Volume>().sharedProfile.TryGet(out ColorAdjustments grade),Is.True,"setup: the world's colour grade");
-                float camp=grade.saturation.value;
+                float camp=grade.saturation.value;var campFog=(RenderSettings.fogStartDistance,RenderSettings.fogEndDistance,RenderSettings.fogColor);
                 Text Find(string name){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
                 var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
                 var campAudio=host.GetComponent<FestivalCampAudio>();
@@ -162,8 +162,13 @@ namespace Festival.Tests
                 for(deadline=Time.realtimeSinceStartup+1;Time.realtimeSinceStartup<deadline&&AudioListener.volume>.8f;)yield return null;
                 Assert.That(AudioListener.volume,Is.LessThan(.8f),"setup: the second hit is dipping the sound");
                 session.Leave();
+                // The camp's own grade and fog are back as Leave returns, before the HUD's next frame could put them back.
+                Assert.That(grade.saturation.value,Is.EqualTo(camp).Within(1e-3f),"as Leave returns: camp's colours");
+                Assert.That((RenderSettings.fogStartDistance,RenderSettings.fogEndDistance,RenderSettings.fogColor),Is.EqualTo(campFog),"as Leave returns: camp's fog");
                 yield return null;
                 Sober("after leaving the session");
+                Assert.That(grade.saturation.value,Is.EqualTo(camp).Within(1e-3f),"after leaving the session: camp's colours");
+                Assert.That((RenderSettings.fogStartDistance,RenderSettings.fogEndDistance,RenderSettings.fogColor),Is.EqualTo(campFog),"after leaving the session: camp's fog");
 
                 // FestivalTrip turned off, or destroyed, with the gas on: the global volume never stays dipped.
                 var trip=host.GetComponent<FestivalTrip>();

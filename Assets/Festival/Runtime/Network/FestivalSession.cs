@@ -1128,6 +1128,11 @@ namespace Festival.Network
         // straight away. ponytail: OnClientStopped alone, as a session is always a host or a client, never a dedicated server.
         public void Leave()
         {
+            // Only a session that showed a game puts the camp back: one that never connected leaves a preview the world shows alone.
+            bool showedGame=State!=null||manager!=null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            string leftPhase=State?.Phase??"";
+#endif
             SpeechBubbles?.Clear();SpeechDeliveries.Retire();
             lastLocalCommandResult=null;localCommandRound="";
             closing=true;Connecting=false;Voice.Leave();ConnectionGeneration++;
@@ -1143,6 +1148,14 @@ namespace Festival.Network
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
             Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;
+            // Before returning, not on the HUD's next frame: whatever runs next sees the camp's light, grade and fog.
+            if(showedGame&&world!=null)
+            {
+                world.ShowCamp();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("WorldLifecycle","leave_reset","from_phase="+leftPhase);
+#endif
+            }
             if(firstPersonHands!=null){Destroy(firstPersonHands.gameObject);firstPersonHands=null;}
             foreach(var tr in actors.Values)if(tr!=null)Destroy(tr.gameObject);actors.Clear();displayedDanceSteps.Clear();names.Clear();foreach(var mat in actorMaterials)Destroy(mat);actorMaterials.Clear();
             Cursor.lockState=CursorLockMode.None;Cursor.visible=true;
