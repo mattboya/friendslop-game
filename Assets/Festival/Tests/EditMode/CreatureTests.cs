@@ -400,6 +400,40 @@ namespace Festival.Tests
             }
         }
 
+        // A scurry weaves up to about a metre to either side, facing the way it runs, yet ends where a straight one would
+        // and faces its target again there; no two scurries weave alike.
+        [Test]public void AScurryWeavesButEndsWhereAStraightOneWould()
+        {
+            var goal=new Vector2(6,40);var state=Hinted(FirstArrival(true),"Clue",goal);var creatures=Creatures();var eye=Eye();float t=0;
+            var body=UntilOneArrives(creatures,state,eye,ref t);var runs=new List<float[]>();
+            for(int run=0;run<2;run++)
+            {
+                var from=AtRest(creatures,state,eye,body,ref t);var line=(goal-from).normalized;var end=from+line*Mathf.Min(6,Vector2.Distance(from,goal)-3);
+                StandBehind(eye,body,goal,3);
+                // One second at 60 frames a second: where it stands and which way it faces each frame.
+                var at=new Vector2[60];var faces=new Vector2[60];var sideways=new float[60];float widest=0,turned=0;
+                for(int frame=0;frame<60;frame++)
+                {
+                    t+=1/60f;state.ElapsedSeconds+=1/60f;creatures.Apply(state,"me",eye,t,1/60f);
+                    at[frame]=Flat(body.position);faces[frame]=new Vector2(body.forward.x,body.forward.z);var off=at[frame]-from;
+                    sideways[frame]=line.x*off.y-line.y*off.x;widest=Mathf.Max(widest,Mathf.Abs(sideways[frame]));
+                }
+                Assert.That(widest,Is.InRange(.5f,1.2f),"scurry "+run+" weaves up to about a metre to one side ("+widest+" m)");
+                for(int frame=15;frame<45;frame++)
+                {
+                    Assert.That(Vector2.Angle(faces[frame],at[frame+1]-at[frame-1]),Is.LessThan(30),"mid-scurry "+run+" it faces the way it runs (frame "+frame+")");
+                    turned=Mathf.Max(turned,Vector2.Angle(faces[frame],goal-at[frame]));
+                }
+                Assert.That(turned,Is.GreaterThan(30),"scurry "+run+" turns it away from its target as it weaves");
+                var stop=AtRest(creatures,state,eye,body,ref t);
+                Assert.That(Vector2.Distance(stop,end),Is.LessThan(.05f),"scurry "+run+" ends where a straight one would ("+stop+" vs "+end+")");
+                Assert.That(Facing(body,goal),Is.LessThan(15),"at rest it faces its target again");
+                runs.Add(sideways);
+            }
+            float apart=0;for(int frame=0;frame<60;frame++)apart=Mathf.Max(apart,Mathf.Abs(runs[0][frame]-runs[1][frame]));
+            Assert.That(apart,Is.GreaterThan(.2f),"no two scurries weave alike");
+        }
+
         // Its target gone (checked, or the tank grabbed), a pointer fades out still facing where its target stood, its sparkles too.
         [Test]public void AFadingPointerKeepsFacingItsTarget()
         {
@@ -544,16 +578,20 @@ namespace Festival.Tests
         {
             var tank=Festivals.GiggleTankSpots[0];var goal=new Vector2(tank.X,tank.Z);
             var state=Round(4);state.GiggleTankSpot=0;var creatures=Creatures();var eye=Eye();var came=new List<float>();var was=new List<Transform>();
+            var stood=new Dictionary<Transform,Vector2>();int still=0;
             for(float t=0;t<10*60;t+=Step)
             {
                 Wander(eye,t);Frame(creatures,state,eye,t);var now=Pointing(creatures);
                 foreach(var body in now)
                 {
-                    if(!was.Contains(body)){came.Add(t);Assert.That(body.name,Is.EqualTo("Creature Jackalope"),"the tank's pointer is a jackalope");}
-                    Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the tank");
+                    if(!was.Contains(body)){came.Add(t);Assert.That(body.name,Is.EqualTo("Creature Jackalope"),"the tank's pointer is a jackalope");stood.Remove(body);}
+                    // Scurrying (a frame's step of .1 m or more) it faces the way it runs; standing, the tank.
+                    if(!stood.TryGetValue(body,out var last)||Vector2.Distance(last,Flat(body.position))<.1f){still++;Assert.That(Facing(body,goal),Is.LessThan(15),"it faces the tank");}
+                    stood[body]=Flat(body.position);
                 }
                 was=now;
             }
+            Assert.That(still,Is.GreaterThan(100),"setup: the jackalopes were seen standing");
             Assert.That(came.Count,Is.InRange(3,5),"ten minutes at four doses bring a jackalope pointer every two minutes or so ("+came.Count+")");
             Assert.That(came[0],Is.GreaterThanOrEqualTo(60f),"the first no sooner than 60 s in");
             for(int i=1;i<came.Count;i++)Assert.That(came[i]-came[i-1],Is.GreaterThanOrEqualTo(120f-Step),"at most one every 120 s");
@@ -697,6 +735,13 @@ namespace Festival.Tests
             }
             Assert.That(frames,Is.GreaterThan(3),"setup: it was seen fading");
             return worst;
+        }
+        // A second of frames, then where a pointer stands between nods (where it leans least, its hop and lean are all but nil).
+        private static Vector2 AtRest(FestivalCreatures creatures,RoundState state,Camera eye,Transform body,ref float t)
+        {
+            float least=180;var at=Vector2.zero;
+            for(int frame=0;frame<10;frame++,t+=Step){Frame(creatures,state,eye,t);float lean=Vector3.Angle(body.up,Vector3.up);if(lean<least){least=lean;at=Flat(body.position);}}
+            return at;
         }
         // Degrees between where body faces, seen from above, and the way to target.
         private static float Facing(Transform body,Vector2 target)=>Vector2.Angle(new Vector2(body.forward.x,body.forward.z),target-Flat(body.position));

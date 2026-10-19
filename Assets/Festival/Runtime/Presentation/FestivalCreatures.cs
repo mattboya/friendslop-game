@@ -46,6 +46,9 @@ namespace Festival.Presentation
         // With the eye within Startle m, a pointer scurries up to ScurryMetres on toward its target over ScurrySeconds, stopping
         // StopShort m short (not for less than MinScurry m); it goes once the player is within Reached m of the target.
         private const float Startle=5,ScurryMetres=6,ScurrySeconds=1,StopShort=3,MinScurry=.5f,Reached=4;
+        // A scurry weaves Wiggles times per ScurryMetres, MinWeave-MaxWeave m to either side at most (both in proportion
+        // for a shorter one), faded out at both ends so it still arrives where a straight one would.
+        private const float Wiggles=2,MinWeave=.7f,MaxWeave=1;
         // The beckon, NodHz times a second: a lean of up to Lean degrees about its feet and a hop PointHop up and HopAhead toward
         // its target. Sparkles flattened glints drift along the ground ahead, SparkleGap m apart, Drift gaps a second, twinkling.
         private const float Lean=18,NodHz=2,PointHop=.08f,HopAhead=.06f,SparkleGap=.6f,SparkleSize=.14f,SparkleFlat=.15f,SparkleLift=.02f,Drift=1.2f,TwinkleHz=1.7f,SparkleGlow=1.5f;
@@ -122,11 +125,12 @@ namespace Festival.Presentation
         }
 
         // A pointer's target is a hinted vision's Id (Hint) or the tank; Goal is where that stands, Scurry the seconds into a scurry
-        // from From to To (-1 none). Its sparkles and voice are made the first time it points and kept in the pool.
+        // from From to To (-1 none). Scurries counts its scurries; each one's Weave (m) and Phase shape its path, and
+        // Heading is the way it runs. Its sparkles and voice are made the first time it points and kept in the pool.
         private sealed class Creature
         {
             public Transform Root; public int Look,Variation,Index; public bool Persists,InView,Seen; public float Age,Life,Fading; public Vector3 Spot;
-            public string Hint=""; public bool Tank; public float Scurry=-1; public Vector3 Goal,From,To; public Transform Trail; public Transform[] Glints; public AudioSource Voice;
+            public string Hint=""; public bool Tank; public float Scurry=-1,Weave,Phase; public int Scurries; public Vector3 Goal,From,To,Heading; public Transform Trail; public Transform[] Glints; public AudioSource Voice;
             public bool Points=>Tank||Hint!="";
         }
         private readonly List<Creature> live=new List<Creature>();
@@ -204,9 +208,9 @@ namespace Festival.Presentation
                 var ahead=c.Goal-c.Spot;ahead.y=0;
                 if(c.Points&&ahead.sqrMagnitude>1e-4f)
                 {
-                    // It faces its target, not you, leaning and hopping toward it.
-                    ahead.Normalize();float nod=Mathf.Abs(Mathf.Sin(c.Age*NodHz*Mathf.PI));
-                    c.Root.SetPositionAndRotation(c.Spot+Vector3.up*(PointHop*nod)+ahead*(HopAhead*nod),Quaternion.LookRotation(ahead)*Quaternion.Euler(Lean*nod,0,0));
+                    // It faces its target, not you (the way it runs while it scurries), leaning and hopping that way.
+                    ahead.Normalize();var facing=c.Scurry>=0?c.Heading:ahead;float nod=Mathf.Abs(Mathf.Sin(c.Age*NodHz*Mathf.PI));
+                    c.Root.SetPositionAndRotation(c.Spot+Vector3.up*(PointHop*nod)+facing*(HopAhead*nod),Quaternion.LookRotation(facing)*Quaternion.Euler(Lean*nod,0,0));
                 }
                 else
                 {
@@ -261,7 +265,9 @@ namespace Festival.Presentation
             c.Goal=at;return true;
         }
         // With the eye close, it scurries on toward its target over the ground, the way Place stands it, and stops short of it. A
-        // spot inside something keeps it where it is.
+        // spot inside something keeps it where it is. It weaves on the way, a sine across the line faded in and out,
+        // each scurry its own from the creature's Index and its count.
+        // ponytail: only To is probed; probe the weave's widest points too if one is seen running through a wall.
         private static void Scurry(Creature c,Vector3 eye,float deltaTime)
         {
             if(c.Scurry<0)
@@ -270,10 +276,15 @@ namespace Festival.Presentation
                 if(c.Fading>=0||room<MinScurry||off.sqrMagnitude>=Startle*Startle)return;
                 var to=c.Spot+ahead/ahead.magnitude*Mathf.Min(ScurryMetres,room);
                 if(!Ground(to.x,to.z,eye.y,out to))return;
-                c.From=c.Spot;c.To=to;c.Scurry=0;
+                c.From=c.Spot;c.To=to;c.Scurry=0;c.Scurries++;
+                c.Weave=Mathf.Lerp(MinWeave,MaxWeave,Mathf.Repeat(c.Index*.618034f+c.Scurries*.381966f,1));c.Phase=2*Mathf.PI*Mathf.Repeat(c.Index*.754878f+c.Scurries*.56984f,1);
             }
-            c.Scurry+=deltaTime;c.Spot=Vector3.Lerp(c.From,c.To,Mathf.SmoothStep(0,1,c.Scurry/ScurrySeconds));
-            if(c.Scurry>=ScurrySeconds)c.Scurry=-1;
+            c.Scurry+=deltaTime;float u=Mathf.SmoothStep(0,1,c.Scurry/ScurrySeconds);
+            var line=c.To-c.From;line.y=0;float length=line.magnitude;var across=new Vector3(line.z,0,-line.x)/length;
+            float weave=c.Weave*length/ScurryMetres,turns=2*Mathf.PI*Wiggles*length/ScurryMetres,wave=turns*u+c.Phase,fade=Mathf.Sin(Mathf.PI*u);
+            c.Spot=Vector3.Lerp(c.From,c.To,u)+across*(weave*Mathf.Sin(wave)*fade*fade);
+            c.Heading=(line+across*(weave*(turns*Mathf.Cos(wave)*fade*fade+Mathf.PI*Mathf.Sin(wave)*Mathf.Sin(2*Mathf.PI*u)))).normalized;
+            if(c.Scurry>=ScurrySeconds){c.Spot=c.To;c.Scurry=-1;}
         }
         // Its sparkles drift along the ground toward the target, swelling and shrinking as they go and twinkling; none past it.
         private static void Twinkle(Creature c,Vector3 ahead,float time)
@@ -309,7 +320,7 @@ namespace Festival.Presentation
             var shelf=pool[arrival.Look*LooksPerKind+arrival.Variation];Creature c;
             if(shelf!=null&&shelf.Count>0){c=shelf[shelf.Count-1];shelf.RemoveAt(shelf.Count-1);}else c=Build(arrival.Look,arrival.Variation);
             c.Persists=arrival.Persists;c.Life=arrival.Life;c.Age=0;c.Fading=-1;c.Spot=spot;c.Seen=false;c.Index=++arrivals;
-            c.Hint="";c.Tank=false;c.Scurry=-1;if(c.Trail!=null)c.Trail.gameObject.SetActive(false);
+            c.Hint="";c.Tank=false;c.Scurry=-1;c.Scurries=0;if(c.Trail!=null)c.Trail.gameObject.SetActive(false);
             c.Root.SetPositionAndRotation(spot,Quaternion.identity);c.Root.localScale=Vector3.zero;c.Root.gameObject.SetActive(true);
             live.Add(c);return c;
         }
