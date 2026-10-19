@@ -241,6 +241,45 @@ namespace Festival.Tests
             finally{typeof(FestivalSpinner).GetMethod("OnDestroy",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);UnityEngine.Object.DestroyImmediate(root);}
         }
 
+        // A topper above the cabinet shows each dose creature, rendered from its own model onto a clear background, and the spinner
+        // frees the pictures with itself.
+        [Test] public void APictureOfEachCreatureTopsTheCabinet()
+        {
+            var kinds=new[]{"Gnome","Pixie","Dragon","Mushroom sprite","Jackalope"};
+            var root=new GameObject("Creature pictures");var spinner=root.AddComponent<FestivalSpinner>();var pictures=new List<Texture2D>();
+            try
+            {
+                typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
+                var cabinet=(RectTransform)root.transform.Find("Festival spinner/Spinner backdrop/Cabinet");
+                var topper=(RectTransform)cabinet.Find("Creature topper");
+                Assert.That(topper,Is.Not.Null,"the cabinet has a creature topper");
+                Rect Box(RectTransform r)=>new Rect(r.anchoredPosition-r.sizeDelta*.5f,r.sizeDelta);
+                var strip=Box(topper);
+                Assert.That(strip.yMin,Is.GreaterThanOrEqualTo(cabinet.sizeDelta.y*.5f-.01f),"the topper sits above the cabinet");
+                Assert.That(strip.yMax,Is.LessThanOrEqualTo(540),"and on screen");
+                var shown=topper.GetComponentsInChildren<UnityEngine.UI.RawImage>(true).ToList();
+                Assert.That(shown.Select(s=>s.name),Is.EqualTo(kinds.Select(k=>"Creature "+k)),"one picture of each dose creature");
+                foreach(var picture in shown)
+                {
+                    var texture=picture.texture as Texture2D;
+                    Assert.That(texture!=null,Is.True,picture.name+" shows a texture");pictures.Add(texture);
+                    var pixels=texture.GetPixels32();
+                    Assert.That(pixels.Count(p=>p.a>0),Is.GreaterThan(pixels.Length/20),picture.name+" shows its creature");
+                    Assert.That(new[]{0,texture.width-1,pixels.Length-texture.width,pixels.Length-1}.Select(i=>(int)pixels[i].a),Is.All.Zero,picture.name+" stands on a clear background");
+                    Assert.That(picture.raycastTarget,Is.False,picture.name+" takes no clicks");
+                }
+                Assert.That(pictures.Distinct().Count(),Is.EqualTo(kinds.Length),"each holds its own texture");
+                Assert.That(pictures.Select(p=>Convert.ToBase64String(p.GetRawTextureData())).Distinct().Count(),Is.EqualTo(kinds.Length),"and each a different picture");
+                var spots=shown.Select(s=>Box(s.rectTransform)).ToList();
+                foreach(var spot in spots)Assert.That(spot.xMin>=-strip.width*.5f&&spot.xMax<=strip.width*.5f&&spot.yMin>=-strip.height*.5f&&spot.yMax<=strip.height*.5f,Is.True,"every picture sits on the topper");
+                var gaps=spots.Skip(1).Select((s,i)=>s.center.x-spots[i].center.x).ToList();
+                Assert.That(gaps.Min(),Is.GreaterThan(spots.Max(s=>s.width)),"side by side, apart");
+                Assert.That(gaps.Max()-gaps.Min(),Is.LessThan(1),"and evenly spaced");
+            }
+            finally{typeof(FestivalSpinner).GetMethod("OnDestroy",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);UnityEngine.Object.DestroyImmediate(root);}
+            Assert.That(pictures.Count(p=>p!=null),Is.Zero,"the spinner destroys its pictures with itself");
+        }
+
         // The level clock and the tripper's dose stand still while the reels, the rest, the take and the reaction run.
         [Test] public void TheLevelClockWaitsOutTheWholeSpin()
         {
@@ -386,10 +425,10 @@ namespace Festival.Tests
         // The corner reel never takes a click from the HUD or the menu over it, nor moves the camera or opens anything.
         [Test] public void TheDeathReelDrawsUnderTheHudAndTakesNoClicks()
         {
-            var root=new GameObject("Death reel canvas");
+            var root=new GameObject("Death reel canvas");var spinner=root.AddComponent<FestivalSpinner>();
             try
             {
-                var spinner=root.AddComponent<FestivalSpinner>();typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
+                typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
                 var hud=root.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
                 var view=Wire(Death(4),"friend");var spin=view.DeathSpins[0];
                 Assert.That(spinner.FollowDeaths(view,view.Players.Find(p=>p.Id=="friend"),spin.AtWorldSeconds+1,false),Is.EqualTo(1),"one reel shows");
@@ -402,16 +441,16 @@ namespace Festival.Tests
                 foreach(var graphic in canvas.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))Assert.That(graphic.raycastTarget,Is.False,graphic.name+" takes no clicks");
                 Assert.That(canvas.renderMode,Is.EqualTo(RenderMode.ScreenSpaceOverlay));
             }
-            finally{UnityEngine.Object.DestroyImmediate(root);}
+            finally{typeof(FestivalSpinner).GetMethod("OnDestroy",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);UnityEngine.Object.DestroyImmediate(root);}
         }
 
         // What the corner reel shows: who died, the frozen amount in the viewer's money as it turns, then KEPT or DROPPED, then nothing.
         [Test] public void TheCornerReelNamesWhoDiedAndReadsTheirCashInYourMoney()
         {
-            var root=new GameObject("Death reel text");
+            var root=new GameObject("Death reel text");var spinner=root.AddComponent<FestivalSpinner>();
             try
             {
-                var spinner=root.AddComponent<FestivalSpinner>();typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
+                typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
                 int seed=1;while(Death(seed).State.DeathSpins[0].CashDropped==0)seed++;
                 string Read(string name)=>root.GetComponentsInChildren<UnityEngine.UI.Text>(false).FirstOrDefault(t=>t.name==name&&t.GetComponentInParent<Canvas>().name==FestivalSpinner.DeathCanvasName)?.text??"(hidden)";
                 var view=Wire(Death(seed),"friend");var spin=view.DeathSpins[0];var friend=view.Players.Find(p=>p.Id=="friend");
@@ -429,7 +468,7 @@ namespace Festival.Tests
                 spinner.FollowDeaths(playa,friend,spin.AtWorldSeconds+Wheel+.1,false);
                 Assert.That(Read("Result"),Is.EqualTo("DROPPED 40 RAMEN PACKETS"),"on Ember Playa, in the viewer's odd objects");
             }
-            finally{UnityEngine.Object.DestroyImmediate(root);}
+            finally{typeof(FestivalSpinner).GetMethod("OnDestroy",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);UnityEngine.Object.DestroyImmediate(root);}
         }
     }
 }

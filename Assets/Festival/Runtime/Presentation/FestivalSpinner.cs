@@ -193,6 +193,11 @@ namespace Festival.Presentation
         // The cabinet, in reference pixels: three reel windows side by side inside the ring of bulbs, the lever on its right.
         const float TileHeight=128,ReelWidth=420,ReelSpacing=470,ReelY=-30,LeverLength=150;
         static readonly Vector2 CabinetSize=new Vector2(1500,600);
+        // The dose creatures on the topper above the cabinet: keep them in step with FestivalCreatures' kinds and models.
+        static readonly (string Kind,string Model)[] Creatures={("Gnome","FestivalCreatureGnome"),("Pixie","FestivalCreaturePixie"),
+            ("Dragon","FestivalCreatureDragon"),("Mushroom sprite","FestivalCreatureMushroomSprite"),("Jackalope","FestivalCreatureJackalope")};
+        const float PictureSize=150,PicturePitch=200,TopperHeight=190;
+        const int PicturePixels=256,PictureLayer=29;
         // The take camera pushes in from TakeFar to TakeNear. It swings to the first of TakeAngles (degrees from the tripper's
         // facing) whose line to their face passes SceneryClearance from the scenery and TakeClearance from every other friend at
         // camp; past 90 it would see the back of the head.
@@ -209,6 +214,7 @@ namespace Festival.Presentation
         Text caption;
         RawImage shot;
         RenderTexture shotTexture;
+        Texture2D[] pictures=Array.Empty<Texture2D>();
         Camera takeCamera;
         FestivalCharacter acting;
         float focusHeight,takeYaw;
@@ -307,7 +313,7 @@ namespace Festival.Presentation
         void StopAudio(){if(slotAudio!=null)slotAudio.Stop();}
         void OnApplicationFocus(bool focused){audioFocused=focused;if(!focused){StopAudio();audioHeld=true;}}
         void OnDisable(){StopAudio();audioHeld=true;if(overlay!=null)overlay.SetActive(false);if(deathOverlay!=null)deathOverlay.SetActive(false);if(takeCamera!=null)takeCamera.enabled=false;}
-        static void DisposeAudio(UnityEngine.Object owned){if(owned==null)return;if(Application.isPlaying)Destroy(owned);else DestroyImmediate(owned);}
+        static void Dispose(UnityEngine.Object owned){if(owned==null)return;if(Application.isPlaying)Destroy(owned);else DestroyImmediate(owned);}
 
         void Awake()
         {
@@ -341,6 +347,8 @@ namespace Festival.Presentation
             var lever=Block(cabinet,"Lever",Paper,new Vector2(CabinetSize.x*.5f+18,ReelY),new Vector2(36,110));
             leverRod=Block(lever,"Rod",Paper,Vector2.zero,new Vector2(12,LeverLength));leverRod.pivot=new Vector2(.5f,0);
             leverKnob=Block(lever,"Knob",Pink,new Vector2(0,LeverLength),new Vector2(54,54));
+            // A headless player has nothing to render with.
+            if(SystemInfo.graphicsDeviceType!=UnityEngine.Rendering.GraphicsDeviceType.Null)Topper(cabinet);
             letterbox=new GameObject("Take letterbox",typeof(RectTransform));letterbox.transform.SetParent(overlay.transform,false);
             Stretch((RectTransform)letterbox.transform);
             // The take renders into this canvas too, so the HUD stays hidden under the cut as it does under the reels.
@@ -354,6 +362,57 @@ namespace Festival.Presentation
             takeCamera.enabled=false;takeCamera.fieldOfView=40;takeCamera.nearClipPlane=.05f;takeCamera.farClipPlane=130;
             takeCamera.cullingMask=~(1<<30); // everyone, the local body included, but no floating name tags
             takeCamera.GetUniversalAdditionalCameraData().renderPostProcessing=true;
+        }
+        void Topper(RectTransform cabinet)
+        {
+            var topper=Block(cabinet,"Creature topper",Orange,new Vector2(0,(CabinetSize.y+TopperHeight)*.5f),new Vector2(PicturePitch*Creatures.Length,TopperHeight));
+            var face=(RectTransform)Panel(topper,"Face",Ink,Vector2.zero,Vector2.one).transform;face.offsetMin=new Vector2(16,16);face.offsetMax=new Vector2(-16,-16);
+            pictures=RenderCreatures();
+            for(int i=0;i<Creatures.Length;i++)
+            {
+                if(pictures[i]==null)continue;
+                var picture=new GameObject("Creature "+Creatures[i].Kind,typeof(RectTransform),typeof(CanvasRenderer),typeof(RawImage)).GetComponent<RawImage>();
+                picture.transform.SetParent(topper,false);picture.texture=pictures[i];picture.raycastTarget=false;
+                picture.rectTransform.sizeDelta=Vector2.one*PictureSize;picture.rectTransform.anchoredPosition=new Vector2((i-(Creatures.Length-1)*.5f)*PicturePitch,0);
+            }
+        }
+        // The cabinet is real, not a vision, so its creatures keep their true colours. Everything but the pictures is destroyed at
+        // once, not at the frame's end, so the stage's key light never lights the world.
+        static Texture2D[] RenderCreatures()
+        {
+            var stage=new GameObject("Creature picture stage"){layer=PictureLayer};stage.transform.position=new Vector3(0,-1000,0);
+            var key=new GameObject("Creature picture light").AddComponent<Light>();key.transform.SetParent(stage.transform,false);
+            key.type=LightType.Directional;key.intensity=1.2f;key.transform.rotation=Quaternion.Euler(35,200,0);
+            var camera=new GameObject("Creature picture camera").AddComponent<Camera>();camera.transform.SetParent(stage.transform,false);camera.enabled=false;
+            camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=Color.clear;camera.cullingMask=1<<PictureLayer;
+            camera.fieldOfView=25;camera.nearClipPlane=.05f;camera.farClipPlane=10;
+            var target=new RenderTexture(PicturePixels,PicturePixels,24,RenderTextureFormat.ARGB32){antiAliasing=4};camera.targetTexture=target;
+            var lit=Resources.Load<Material>("FestivalLit");var paints=new List<Material>();var made=new Texture2D[Creatures.Length];var was=RenderTexture.active;
+            for(int i=0;i<Creatures.Length;i++)
+            {
+                var model=FestivalArtView.Create(stage.transform,Creatures[i].Model,false);if(model==null)continue;
+                var renderers=model.GetComponentsInChildren<MeshRenderer>(true);var bounds=renderers[0].bounds;
+                foreach(var renderer in renderers)
+                {
+                    int mark=renderer.name.LastIndexOf("__P",StringComparison.Ordinal);
+                    if(mark>=0&&int.TryParse(renderer.name.Substring(mark+3).Split('.')[0],out int paint)&&paint<FestivalCreatures.Palette.Count)
+                    {
+                        var paintMaterial=new Material(lit){color=FestivalCreatures.Palette[paint]};paints.Add(paintMaterial);renderer.sharedMaterial=paintMaterial;
+                    }
+                    bounds.Encapsulate(renderer.bounds);
+                }
+                float distance=bounds.extents.magnitude/Mathf.Sin(camera.fieldOfView*.5f*Mathf.Deg2Rad);
+                camera.transform.position=bounds.center+new Vector3(.45f,.3f,1).normalized*distance;camera.transform.LookAt(bounds.center);
+                camera.Render();
+                RenderTexture.active=target;
+                made[i]=new Texture2D(PicturePixels,PicturePixels,TextureFormat.RGBA32,false){name="Creature picture "+Creatures[i].Kind};
+                made[i].ReadPixels(new Rect(0,0,PicturePixels,PicturePixels),0,0);made[i].Apply(false);
+                RenderTexture.active=was;
+                DestroyImmediate(model);
+            }
+            camera.targetTexture=null;DestroyImmediate(target);DestroyImmediate(stage);
+            foreach(var paintMaterial in paints)DestroyImmediate(paintMaterial);
+            return made;
         }
         GameObject Overlay(string name,int order)
         {
@@ -550,7 +609,8 @@ namespace Festival.Presentation
         static void Stretch(RectTransform rect){rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;}
         void OnDestroy()
         {
-            StopAudio();DisposeAudio(slotAudio);DisposeAudio(leverAudio);DisposeAudio(tickAudio);DisposeAudio(clunkAudio);
+            StopAudio();Dispose(slotAudio);Dispose(leverAudio);Dispose(tickAudio);Dispose(clunkAudio);
+            foreach(var picture in pictures)Dispose(picture);
             if(shotTexture!=null)Destroy(shotTexture);
         }
     }
