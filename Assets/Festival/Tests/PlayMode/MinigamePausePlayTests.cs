@@ -201,7 +201,7 @@ namespace Festival.Tests
             typeof(FestivalSimulation).GetMethod("Hush",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(sim,new object[]{owner});
             for(float end=Time.realtimeSinceStartup+3;!delivery.Retracted&&Time.realtimeSinceStartup<end;)yield return null;
             Assert.That(delivery.Retracted,Is.True,"same accepted ID carries Hush cancellation to joined client");yield return null;yield return null;
-            Assert.That(peer.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text=="Hey!"),Is.False,"Hush removes actual latest-line bubble");
+            Assert.That(SpeechTexts(peer).Any(t=>t.text=="Hey!"),Is.False,"Hush removes actual latest-line bubble");
             peer.enabled=false;yield return null;Assert.That(peer.SpeechDeliveries.Deliveries,Is.Empty,"disable retires active delivery references");peer.enabled=true;
             yield return new WaitForSecondsRealtime(.3f);Assert.That(peer.SpeechDeliveries.Find(id),Is.Null,"same-round re-enable cannot replay retired delivery");
             string playerId=owner.Id;peer.Leave();for(float end=Time.realtimeSinceStartup+5;owner.Connected&&Time.realtimeSinceStartup<end;)yield return null;

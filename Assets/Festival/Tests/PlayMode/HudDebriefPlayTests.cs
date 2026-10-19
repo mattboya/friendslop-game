@@ -8,6 +8,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -55,7 +56,7 @@ namespace Festival.Tests
             // A player's floating name tag, as the actor presentation draws it.
             string Tag(string id)
             {
-                foreach(Transform actor in GameObject.Find("Authoritative actor presentation").transform)if(actor.name.Contains(id))return actor.Find("Label/Text")?.GetComponent<TextMesh>()?.text??"(no tag)";
+                foreach(Transform actor in GameObject.Find("Authoritative actor presentation").transform)if(actor.name.Contains(id))return actor.Find("Label/Text")?.GetComponent<TextMeshPro>()?.text??"(no tag)";
                 return "(no tag)";
             }
             try

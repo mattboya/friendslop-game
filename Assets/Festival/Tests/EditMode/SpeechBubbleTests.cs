@@ -23,7 +23,8 @@ namespace Festival.Tests
         }
         [TearDown]public void TearDownBubble(){presenter.Clear();Object.DestroyImmediate(root);Object.DestroyImmediate(body);Object.DestroyImmediate(view);}
         void Draw(string local="you",bool reduced=false)=>presenter.Apply(state,id=>id=="speaker"?body.transform:null,view.transform,Vector3.zero,local,reduced);
-        TextMeshPro Text()=>root.GetComponentInChildren<TextMeshPro>(false);
+        // The bubble's own text: the vision markers under the same root letter their labels in TextMeshPro too.
+        TextMeshPro Text()=>System.Array.Find(root.GetComponentsInChildren<TextMeshPro>(false),t=>t.name=="Speech text");
 
         [Test]public void TheNativeSmokeChecksTheActualSupportedBubbleTextMaterial()
         {

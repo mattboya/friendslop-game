@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Presentation;
+using TMPro;
 using UnityEngine;
 using UnityEngine.TestTools.Constraints;
 using Is=UnityEngine.TestTools.Constraints.Is;
@@ -30,10 +31,10 @@ namespace Festival.Tests
             Assert.That(tag.text,Does.Contain("$"+Catalog.FindItem("merch_bag").Price),"and so does the festival's money");
         }
 
-        static TextMesh Tag(GameObject world,string shelf,string id)
+        static TextMeshPro Tag(GameObject world,string shelf,string id)
         {
             foreach(var t in world.GetComponentsInChildren<Transform>(true))
-                if(t.name==shelf){var holder=t.Find("Shop item "+id);Assert.That(holder,Is.Not.Null,"setup: "+id+" has a holder on "+shelf);return holder.GetComponentInChildren<TextMesh>(true);}
+                if(t.name==shelf){var holder=t.Find("Shop item "+id);Assert.That(holder,Is.Not.Null,"setup: "+id+" has a holder on "+shelf);return holder.GetComponentInChildren<TextMeshPro>(true);}
             Assert.Fail("setup: no "+shelf);return null;
         }
     }

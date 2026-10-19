@@ -38,7 +38,7 @@ namespace Festival.Tests
                 session.Command("Talk",npc.Id);spoke=player.NpcSpeech;deliveryId=player.SpeechDeliveryId;
                 Assert.That(spoke,Is.Not.Empty,"setup: they talk: "+session.Message);
                 yield return new WaitForSeconds(.5f);
-                var bubble=hud.GetComponentsInChildren<TextMeshPro>(false).SingleOrDefault(t=>t.text==spoke);
+                var bubble=SpeechTexts(hud).SingleOrDefault(t=>t.text==spoke);
                 Assert.That(bubble,Is.Not.Null,"setup: actual public TMP speech replaces the corner bark card");
                 Assert.That(session.SpeechDeliveries.Find(deliveryId).Text,Is.EqualTo(spoke));
                 Assert.That(session.SpeechDeliveries.Find(deliveryId).WorldActive,Is.True);
@@ -46,7 +46,7 @@ namespace Festival.Tests
                 float wait=Time.realtimeSinceStartup+15;
                 while(sim.State.SimulationSeconds<player.NpcSpeechUntil+.5&&Time.realtimeSinceStartup<wait)yield return null;
                 yield return new WaitForSeconds(.2f);
-                Assert.That(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==spoke),Is.False,"setup: the actual public bubble expires on its world clock");
+                Assert.That(SpeechTexts(hud).Any(t=>t.text==spoke),Is.False,"setup: the actual public bubble expires on its world clock");
                 Assert.That(session.SpeechDeliveries.Find(deliveryId).WorldActive,Is.False);
                 Assert.That(session.SpeechDeliveries.Find(deliveryId).Text,Is.EqualTo(spoke),"expiry retains the literal and accepted ID");
                 // Leave, and host a new game in the same app run.
@@ -58,7 +58,7 @@ namespace Festival.Tests
                 for(int i=0;i<4;i++)
                 {
                     yield return new WaitForSeconds(.5f);
-                    if(hud.GetComponentsInChildren<TextMeshPro>(false).Any(t=>t.text==spoke)||session.SpeechDeliveries.Find(deliveryId)!=null)failures.Add("old delivery or rendered TMP text survived Leave/rehost");
+                    if(SpeechTexts(hud).Any(t=>t.text==spoke)||session.SpeechDeliveries.Find(deliveryId)!=null)failures.Add("old delivery or rendered TMP text survived Leave/rehost");
                     string shown=Read("Dialogue line");
                     if(shown!="(hidden)")failures.Add("the new game's "+session.State.Phase+" at "+session.EstimatedSimulationSeconds.ToString("0.0")+" s shows \""+shown+"\"");
                 }

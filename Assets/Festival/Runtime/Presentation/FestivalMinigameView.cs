@@ -1,5 +1,6 @@
 using Festival.Core;
 using Festival.Network;
+using TMPro;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -20,9 +21,9 @@ namespace Festival.Presentation
         public const string BoothName="Minigame booth",RingName="Minigame ring",SignRule="\nALL IN THE RING",SignText="MINIGAME"+SignRule;
         private const string SignName="Sign text";
         // The ring's Dashes, each Dash m of its 25 m round. The sign's board stands SignBehind m behind the stranger, its middle
-        // SignHeight up, over their head, its letters readable from the front within SignRange.
+        // SignHeight up, over their head, its letters readable from the front.
         private const int Dashes=24;
-        private const float Dash=.6f,SignBehind=.7f,SignHeight=2.45f,LetterSize=.065f,SignRange=18;
+        private const float Dash=.6f,SignBehind=.7f,SignHeight=2.45f,LetterSize=.065f;
         // MINI-4: the cups, CupGap m apart in a row on a TableTop m high table TableAhead m in front of the stranger, each CupWidth
         // across and CupHeight tall, its number NumberAbove m over its middle. The cup the player up looks at lifts AimLift m; the
         // aim picks the cup nearest its line within AimDegrees. Built for a full crew of eight's cups; ShowCups shows those played.
@@ -31,7 +32,6 @@ namespace Festival.Presentation
         private static readonly int MaxCups=FestivalSimulation.CupsFor(8);
         private FestivalSession session;
         private Transform booth;
-        private Renderer lettering;
         private bool frozen;
         private string signKind;
         /// <summary>The booth this view draws, built on its first frame; null before.</summary>
@@ -41,11 +41,10 @@ namespace Festival.Presentation
         private void LateUpdate()
         {
             if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;}
-            if(booth==null){booth=Build(null);lettering=booth.GetComponentInChildren<TextMesh>(true).GetComponent<Renderer>();signKind=null;}
+            if(booth==null){booth=Build(null);signKind=null;}
             var state=session.State;Show(booth,state);
-            // Only on a new deal: reading a TextMesh's text back each frame would allocate.
             if(state!=null&&state.Booth.Kind!=signKind){signKind=state.Booth.Kind;NameGame(booth,signKind);}
-            var view=FestivalCharacter.ViewTransform;if(view!=null&&booth.gameObject.activeSelf)lettering.enabled=FestivalWorld.Readable(view,lettering.transform,SignRange*SignRange);
+            var view=FestivalCharacter.ViewTransform;
             ShowCups(booth,state,state!=null&&FestivalSimulation.CupsTurn(state)==session.LocalPlayerId?AimedCup(state,view):-1,view);
             bool freeze=state!=null&&state.Phase==FestivalSimulation.MinigamePhase;
             if(freeze!=frozen){frozen=freeze;Time.timeScale=freeze?0:1;}
@@ -67,11 +66,9 @@ namespace Festival.Presentation
             Part(booth,"Sign post",PrimitiveType.Cylinder,new Vector3(0,SignHeight/2,-SignBehind-.06f),new Vector3(.08f,SignHeight/2,.08f),"Wood");
             Part(booth,"Sign rim",PrimitiveType.Cube,new Vector3(0,SignHeight,-SignBehind-.01f),new Vector3(width+.08f,height+.08f,.04f),"StageGlowMint");
             Part(booth,"Sign board",PrimitiveType.Cube,new Vector3(0,SignHeight,-SignBehind),new Vector3(width,height,.04f),"Dark");
-            // TextMesh draws through its board, so its legend faces forward, readable only from in front (LateUpdate).
+            // A label reads from its back (-z), so the legend turns to face forward, just clear of the board that hides it from behind.
             var face=new GameObject(SignName);face.transform.SetParent(booth,false);face.transform.localPosition=new Vector3(0,SignHeight,-SignBehind+.03f);face.transform.localRotation=Quaternion.Euler(0,180,0);
-            var text=face.AddComponent<TextMesh>();text.text=SignText;text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;
-            text.characterSize=LetterSize;text.fontSize=48;text.color=new Color(.96f,.94f,.84f);
-            var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){text.font=font;face.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+            FestivalWorldText.Add(face,SignText,48*LetterSize,FestivalWorldText.Cream);
             var ring=new GameObject(RingName).transform;ring.SetParent(booth,false);
             for(int i=0;i<Dashes;i++)
             {
@@ -86,9 +83,7 @@ namespace Festival.Presentation
                 var cup=new GameObject(CupName(i)).transform;cup.SetParent(cups,false);cup.localPosition=CupLocal(i,MaxCups);
                 Part(cup,"Cup body",PrimitiveType.Cylinder,Vector3.zero,new Vector3(CupWidth,CupHeight/2,CupWidth),CupLook);
                 var number=new GameObject("Cup number");number.transform.SetParent(cup,false);number.transform.localPosition=Vector3.up*NumberAbove;
-                var digits=number.AddComponent<TextMesh>();digits.text=(i+1).ToString();digits.anchor=TextAnchor.MiddleCenter;digits.alignment=TextAlignment.Center;
-                digits.characterSize=LetterSize;digits.fontSize=48;digits.color=new Color(.96f,.94f,.84f);
-                if(font!=null){digits.font=font;number.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+                FestivalWorldText.Add(number,(i+1).ToString(),48*LetterSize,FestivalWorldText.Cream);
             }
             booth.gameObject.SetActive(false);
             return booth;
@@ -105,7 +100,7 @@ namespace Festival.Presentation
             if(shown)booth.SetPositionAndRotation(new Vector3(at.X,0,at.Z),Facing(at));
         }
         /// <summary>The sign names the booth's game (FestivalHudText.MinigameName), or reads MINIGAME for one this build cannot name.</summary>
-        public static void NameGame(Transform booth,string kind)=>booth.Find(SignName).GetComponent<TextMesh>().text=SignFor(kind);
+        public static void NameGame(Transform booth,string kind)=>booth.Find(SignName).GetComponent<TextMeshPro>().text=SignFor(kind);
         // The games a booth can deal and the ones still to join the bag; the board is built wide enough for each name.
         private static readonly string[] SignKinds={FestivalSimulation.MysteryCupsGame,FestivalSimulation.DrumCircleGame,FestivalSimulation.LightShowGame};
         private static readonly string[] Signs=System.Array.ConvertAll(SignKinds,k=>FestivalHudText.MinigameName(k)+SignRule);

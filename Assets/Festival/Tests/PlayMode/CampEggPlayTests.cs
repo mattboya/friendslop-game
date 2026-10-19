@@ -11,6 +11,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 using Object=UnityEngine.Object;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -260,11 +261,11 @@ namespace Festival.Tests
         static string Said(FestivalWorld world,string id)
         {
             var line=world.CampEggs.Prop(id).Find(FestivalCampEggView.LineName);
-            return line!=null&&line.gameObject.activeInHierarchy?line.GetComponent<TextMesh>().text.Replace("\n"," "):null;
+            return line!=null&&line.gameObject.activeInHierarchy?line.GetComponent<TextMeshPro>().text.Replace("\n"," "):null;
         }
         static AudioSource Voice(FestivalWorld world,string id){var voice=world.CampEggs.Prop(id).Find(FestivalCampEggView.VoiceName);return voice!=null?voice.GetComponent<AudioSource>():null;}
         static bool Sounding(FestivalWorld world,string id){var voice=Voice(world,id);return voice!=null&&voice.isPlaying;}
-        static TextMesh Dust(FestivalWorld world)=>Array.Find(world.CampEggs.Prop("wash_me").GetComponentsInChildren<TextMesh>(true),t=>t.text.StartsWith("WASH ME",StringComparison.Ordinal));
+        static TextMeshPro Dust(FestivalWorld world)=>Array.Find(world.CampEggs.Prop("wash_me").GetComponentsInChildren<TextMeshPro>(true),t=>t.text.StartsWith("WASH ME",StringComparison.Ordinal));
         static Transform Air(FestivalWorld world)=>world.CampEggs.Prop("flamingo").Find("Flamingo air");
         static void StandAt(FestivalSimulation game,string player,string egg,float east=0)
         {

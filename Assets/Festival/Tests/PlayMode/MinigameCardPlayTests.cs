@@ -6,6 +6,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -39,7 +40,7 @@ namespace Festival.Tests
                 var at=FestivalSimulation.BoothAt(sim.State);Assert.That(at,Is.Not.Null,"setup: the level has a booth");
                 Assert.That(sim.State.Booth.Kind,Is.EqualTo(FestivalSimulation.MysteryCupsGame),"setup: the bag deals Mystery Cups");
                 yield return Wait(.4f);
-                TextMesh sign=null;foreach(var mesh in Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None))if(mesh.name=="Sign text")sign=mesh;
+                TextMeshPro sign=null;foreach(var mesh in Object.FindObjectsByType<TextMeshPro>(FindObjectsSortMode.None))if(mesh.name=="Sign text")sign=mesh;
                 Assert.That(sign?.text,Is.EqualTo("MYSTERY CUPS\nALL IN THE RING"),"the booth's sign names its game");
                 string tripping=Find("Tripping")?.text;
                 Assert.That(tripping,Is.Not.Empty,"setup: the dose card is up while the crew plays");

@@ -8,6 +8,7 @@ using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -18,6 +19,9 @@ namespace Festival.Tests
     /// <summary>Base for every PlayMode fixture that builds a festival world or hosts a session.</summary>
     public abstract class FestivalPlayModeTest
     {
+        /// <summary>The speech bubbles' text drawn under root, leaving out the vision verdicts and other world labels, which are TextMeshPro too.</summary>
+        protected static TextMeshPro[] SpeechTexts(Component root)=>System.Array.FindAll(root.GetComponentsInChildren<TextMeshPro>(false),t=>t.name=="Speech text");
+        protected static TextMeshPro[] SpeechTexts(GameObject root)=>SpeechTexts(root.transform);
         private string previousProfileFolder,ownedProfileFolder;
         private string previousPreferencesScope,ownedBindingKey;
         private readonly List<FestivalInput> ownedControls=new List<FestivalInput>();

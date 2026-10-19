@@ -11,6 +11,7 @@ using UnityEngine.Rendering;
 using UnityEngine.TestTools.Constraints;
 using Is = UnityEngine.TestTools.Constraints.Is;
 using Object = UnityEngine.Object;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -307,9 +308,9 @@ namespace Festival.Tests
                 if(place)Assert.That(lines.Length,Is.EqualTo(1),kind+" is a spot found by walking to it, so it shows no check line");
                 else
                 {
-                    var check=Regex.Match(lines.Length>1?lines[1]:"","^<size=(\\d+)>"+CheckLine+"</size>$");
+                    var check=Regex.Match(lines.Length>1?lines[1]:"","^<size=([\\d.]+)%>"+CheckLine+"</size>$");
                     Assert.That(lines.Length==2&&check.Success,Is.True,kind+": one line under the claim says how to settle it ("+Label(markers,"seen")+")");
-                    Assert.That(Text(markers,"seen").richText&&int.Parse(check.Groups[1].Value)<Text(markers,"seen").fontSize,Is.True,kind+": the check line is smaller than the claim");
+                    Assert.That(Text(markers,"seen").richText&&double.Parse(check.Groups[1].Value,System.Globalization.CultureInfo.InvariantCulture)<100,Is.True,kind+": the check line is smaller than the claim");
                 }
                 Assert.That(()=>markers.Apply(state,view,actorFor,.02f,.02f),Is.Not.AllocatingGCMemory(),kind+": aiming at an unchecked vision makes no garbage");
                 vision.Confirmed=true;vision.IsTrue=true;markers.Apply(state,view,actorFor,.04f,.02f);
@@ -524,7 +525,7 @@ namespace Festival.Tests
             Assert.That(wide,Is.GreaterThan(deep*1.3f),id+": squat, wider than it is deep ("+wide*2+" by "+deep*2+" m)");
         }
         private const string CheckLine="F CHAT • E DANCE TO CHECK";
-        private static TextMesh Text(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMesh>();
+        private static TextMeshPro Text(FestivalVisionMarkers markers,string id)=>Marker(markers,id).Find("Label").GetComponent<TextMeshPro>();
         private static string Label(FestivalVisionMarkers markers,string id)=>Text(markers,id).text;
         private static Bounds LabelBounds(FestivalVisionMarkers markers,string id)=>Text(markers,id).GetComponent<MeshRenderer>().bounds;
         private static MeshRenderer Outline(FestivalVisionMarkers markers,string id)

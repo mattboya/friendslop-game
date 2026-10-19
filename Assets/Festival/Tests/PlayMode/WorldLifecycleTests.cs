@@ -8,6 +8,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.AI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -684,7 +685,7 @@ namespace Festival.Tests
                     string name=Festival.Core.Festivals.Name(festival);
                     Assert.That(session.State.FestivalIndex,Is.EqualTo(festival),"setup: the level is on "+name);
                     var texts=new List<string>();
-                    foreach(var text in Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None))texts.Add(text.text);
+                    foreach(var text in Object.FindObjectsByType<TextMeshPro>(FindObjectsInactive.Include,FindObjectsSortMode.None))texts.Add(text.text);
                     Assert.That(texts.FindAll(t=>t.ToLowerInvariant().Contains("shuttle")),Is.Empty,name+": world text says shuttle");
                     Assert.That(texts,Does.Contain("BACK TO CAMP"),name+": no sign reads BACK TO CAMP among "+string.Join(" | ",texts));
                 }

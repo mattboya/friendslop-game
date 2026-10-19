@@ -54,9 +54,8 @@ namespace Festival.Presentation
         // POLO-2: the VIP stall's sign stands on the corner poles of the night market's stock stall, which FestivalWorld raises at
         // (VipStallX, 0, StallZ) beside the rules' stall point. The model's anchor strip spans the poles' tops (the generator's pole
         // 2.25 m out, 3.4 m up, just clear of the awning), and the board above it (SignBottom) clears the stall's banner. It faces the
-        // market's footpath to the south, and like FestivalWorld's signs its lettering shows only from that side and within
-        // SignRange, since TextMesh draws through its board.
-        private const float StallZ=-19,SignBottom=3.95f,LetterSize=.12f,SignRange=22;
+        // market's footpath to the south.
+        private const float StallZ=-19,SignBottom=3.95f,LetterSize=.12f;
         // The fire's flames stretch and shrink out of step with each other.
         private const float FlickerHz=9,FlickerDepth=.3f,FireGlow=6;
         // The grounds' middle festoon hangs along z=2 at chest height, through the rules' point, so the figure and its fire stand
@@ -65,7 +64,6 @@ namespace Festival.Presentation
 
         private readonly Transform polo,playa,rotor,fire;
         private readonly Light fireLight;
-        private readonly Renderer vipLettering;
         private readonly Transform[] gondolas=new Transform[Gondolas],cars=new Transform[Festivals.ArtCars];
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
         private float clock;
@@ -78,7 +76,7 @@ namespace Festival.Presentation
         {
             polo=Group(festival,PoloRootName,Vector3.zero);playa=Group(festival,PlayaRootName,Vector3.zero);
             for(int i=0;i<Festivals.VipZones.Length;i++)Ropes(Group(polo,"VIP rope "+i,Vector3.zero),Festivals.VipZones[i]);
-            vipLettering=VipSign(Group(polo,VipSignName,new Vector3(Festivals.VipStallX,0,StallZ)));
+            VipSign(Group(polo,VipSignName,new Vector3(Festivals.VipStallX,0,StallZ)));
             rotor=Wheel(Group(polo,"Ferris wheel",new Vector3(Festivals.WheelX,0,Festivals.WheelZ)));
             for(int k=0;k<cars.Length;k++)cars[k]=ArtCar(Group(playa,"Art car "+k,Vector3.zero),k);
             fire=Effigy(Group(playa,"Effigy",new Vector3(Festivals.EffigyX,0,Festivals.EffigyZ)));fireLight=fire.GetComponentInChildren<Light>(true);
@@ -92,7 +90,6 @@ namespace Festival.Presentation
             // turns on the world's clock, which stands still through the game and runs on from there after it, as the rules' clock doesn't.
             if(state.Phase==FestivalSimulation.MinigamePhase)deltaTime=0;
             clock+=deltaTime;
-            var view=FestivalCharacter.ViewTransform;if(view!=null)vipLettering.enabled=FestivalWorld.Readable(view,vipLettering.transform,SignRange*SignRange);
             double now=FestivalSimulation.WorldSeconds(state),behind=now-(wheelClock+deltaTime);
             wheelClock=System.Math.Abs(behind)>WheelSnap?now:wheelClock+deltaTime+behind*(1-System.Math.Exp(-WheelPull*deltaTime));Turn();
             double lag=state.ElapsedSeconds-carClock;
@@ -126,15 +123,12 @@ namespace Festival.Presentation
         }
 
         // POLO-2 / ART-1: the modeled board (dark, gold trim, a little crown) on the stall's poles: "VIP WRISTBANDS $15", at the rules' price.
-        private static Renderer VipSign(Transform sign)
+        private static void VipSign(Transform sign)
         {
             float height=LetterSize*2.25f+.13f,middle=SignBottom+height/2;
             FestivalArtView.Create(sign,"FestivalVipBoard");
             var face=new GameObject("Text");face.transform.SetParent(sign,false);face.transform.localPosition=new Vector3(0,middle,-.05f);
-            var text=face.AddComponent<TextMesh>();text.text="VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price;
-            text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.characterSize=LetterSize;text.fontSize=48;text.color=new Color(.96f,.94f,.84f);
-            var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){text.font=font;face.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
-            return face.GetComponent<MeshRenderer>();
+            FestivalWorldText.Add(face,"VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price,48*LetterSize,FestivalWorldText.Cream);
         }
 
         // ART-1: the modeled A-frame and platform at the rules' base; the rotor (rim, spokes, bulbs) turns at the axle and the gondolas

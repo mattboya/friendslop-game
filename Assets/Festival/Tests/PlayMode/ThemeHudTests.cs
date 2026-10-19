@@ -7,6 +7,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -97,9 +98,9 @@ namespace Festival.Tests
                 Assert.That(sim.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),"dropped a Tongue Stamp: "+session.Message);
                 player.X+=3;
                 yield return new WaitForSeconds(1f);
-                TextMesh tag=null;
+                TextMeshPro tag=null;
                 foreach(Transform actor in GameObject.Find("Authoritative actor presentation").transform)
-                    if(actor.gameObject.activeSelf&&actor.name.StartsWith("FestivalStockPrism"))tag=actor.Find("Label/Text").GetComponent<TextMesh>();
+                    if(actor.gameObject.activeSelf&&actor.name.StartsWith("FestivalStockPrism"))tag=actor.Find("Label/Text").GetComponent<TextMeshPro>();
                 if(tag==null)failures.Add("no dropped stamp with the FestivalStockPrism model");
                 else if(!tag.gameObject.activeInHierarchy||tag.text!="Tongue Stamps")failures.Add("the dropped stamp's tag reads \""+tag.text+"\" (shown: "+tag.gameObject.activeInHierarchy+"), expected \"Tongue Stamps\"");
                 Check(hud,failures,"dropped stamp",null,null);
@@ -169,7 +170,7 @@ namespace Festival.Tests
             var shown=new List<string>();var labels=new List<string>();
             foreach(var text in hud.GetComponentsInChildren<Text>(false))if(!string.IsNullOrEmpty(text.text))shown.Add(text.name+": "+text.text.Replace("\n"," | "));
             foreach(var button in hud.GetComponentsInChildren<Button>(true))if(button.name.StartsWith("Action:")&&button.gameObject.activeSelf){var label=button.GetComponentInChildren<Text>(true).text;labels.Add(label);shown.Add("Action: "+label);}
-            foreach(var mesh in Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Exclude,FindObjectsSortMode.None))if(!string.IsNullOrEmpty(mesh.text))shown.Add("World "+mesh.transform.parent?.parent?.name+": "+mesh.text.Replace("\n"," | "));
+            foreach(var mesh in Object.FindObjectsByType<TextMeshPro>(FindObjectsInactive.Exclude,FindObjectsSortMode.None))if(!string.IsNullOrEmpty(mesh.text))shown.Add("World "+mesh.transform.parent?.parent?.name+": "+mesh.text.Replace("\n"," | "));
             string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "";}
             if(prompt!=null&&Read("Prompt")!=prompt)failures.Add(where+": prompt reads \""+Read("Prompt")+"\", expected \""+prompt+"\"");
             if(vitals!=null&&!Read("Vitals").Contains(vitals))failures.Add(where+": vitals read \""+Read("Vitals").Replace("\n"," | ")+"\", expected "+vitals);

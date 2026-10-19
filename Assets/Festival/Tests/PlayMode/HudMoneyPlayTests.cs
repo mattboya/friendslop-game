@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -72,7 +73,7 @@ namespace Festival.Tests
                 Fits("at the shelf","Prompt","Objective detail");NoDollars("at the shelf");
                 // The price tags on both shelves, each lettered within its painted card.
                 int tags=0;
-                foreach(var tag in world.GetComponentsInChildren<TextMesh>(true))
+                foreach(var tag in world.GetComponentsInChildren<TextMeshPro>(true))
                 {
                     if(tag.name!="Name and price")continue;tags++;
                     if(tag.text.Contains("$")||!tag.text.Contains("FRIENDSHIP BRACELET"))failures.Add("at the shelf: a price tag reads \""+tag.text.Replace("\n"," | ")+"\"");
@@ -227,7 +228,7 @@ namespace Festival.Tests
                 else
                 {
                     if(actor.name!="FestivalVoucher")failures.Add("landed: the pile is a "+actor.name+", not the voucher model");
-                    string label=actor.GetComponentInChildren<TextMesh>(true)?.text;
+                    string label=actor.GetComponentInChildren<TextMeshPro>(true)?.text;
                     if(label!="$40")failures.Add("landed: the pile's label reads \""+label+"\"");
                 }
                 var take=Action("Pick up $40");

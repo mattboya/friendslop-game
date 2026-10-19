@@ -11,6 +11,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -272,7 +273,7 @@ namespace Festival.Tests
                 IEnumerator Hold(float seconds){for(float end=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<end;){npc.X=-20;npc.Z=4;npc.Mode="Blending";yield return null;}}
                 yield return Hold(.6f);
                 Assert.That(session.ThirdPersonView,Is.True,"setup: the view is over your shoulder");
-                var label=host.transform.Find("Vision "+vision.Id+"/Label")?.GetComponent<TextMesh>();
+                var label=host.transform.Find("Vision "+vision.Id+"/Label")?.GetComponent<TextMeshPro>();
                 Assert.That(label,Is.Not.Null,"setup: the vision is drawn");
                 foreach(float right in new[]{-.1f,.85f})
                 {

@@ -1517,7 +1517,7 @@ namespace Festival.Presentation
             {
                 if(!Catalog.StarterStock(offer))continue;
                 starters++;
-                var holder=camp.Find("Shop item "+offer);var tag=holder?.Find("Name and price")?.GetComponent<TextMesh>();
+                var holder=camp.Find("Shop item "+offer);var tag=holder?.Find("Name and price")?.GetComponent<TextMeshPro>();
                 bool shown=false;var copies=holder?.Find("Individual shelf copies");
                 if(copies!=null)foreach(Transform copy in copies)shown|=copy.gameObject.activeSelf;
                 if(!shown||tag==null||tag.text=="")return offer+" missing from the camp shelf";

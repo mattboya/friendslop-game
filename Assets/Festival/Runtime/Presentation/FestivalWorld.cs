@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -29,7 +30,6 @@ namespace Festival.Presentation
         public FestivalPoloDressing PoloDressing{get;private set;}
         private Transform giggleTank;
         private FestivalClouds clouds;
-        private Font worldFont;
         private Transform owned;
         private Transform camp;
         private NavMeshSurface surface;
@@ -39,9 +39,8 @@ namespace Festival.Presentation
         private Transform campShopRoot,marketShopRoot;
         private readonly List<GameObject> campProps=new List<GameObject>();
         private readonly List<GameObject> marketProps=new List<GameObject>();
-        private readonly List<TextMesh> campTags=new List<TextMesh>();
-        private readonly List<TextMesh> marketTags=new List<TextMesh>();
-        private readonly List<TextMesh> worldSigns=new List<TextMesh>();
+        private readonly List<TextMeshPro> campTags=new List<TextMeshPro>();
+        private readonly List<TextMeshPro> marketTags=new List<TextMeshPro>();
         private readonly Dictionary<string,GameObject> campInteriors=new Dictionary<string,GameObject>();
         private readonly Dictionary<string,Transform> campAnticProps=new Dictionary<string,Transform>();
         private Transform campAnticTarget;
@@ -67,7 +66,6 @@ namespace Festival.Presentation
         public void Build()
         {
             if (owned != null || transform.Find(RootName) != null) return;
-            worldFont=Resources.Load<Font>("FestivalDisplay");
             owned = new GameObject(RootName).transform; owned.SetParent(transform, false);
             var earth = Material(new Color(.80f,.88f,.83f));
             earth.mainTexture=Resources.Load<Texture2D>("FestivalGround");
@@ -684,7 +682,7 @@ namespace Festival.Presentation
                 if(marketTags[i]!=null&&marketTags[i].text!=marketText)marketTags[i].text=marketText;
             }
         }
-        private static void ClearShop(Transform root,List<GameObject> props,List<TextMesh> tags)
+        private static void ClearShop(Transform root,List<GameObject> props,List<TextMeshPro> tags)
         {
             foreach(Transform child in root)Destroy(child.gameObject);
             props.Clear();tags.Clear();
@@ -694,7 +692,7 @@ namespace Festival.Presentation
             if(group==null)return;
             for(int n=0;n<group.transform.childCount;n++)group.transform.GetChild(n).gameObject.SetActive(n<available);
         }
-        private void BuildShopItem(Transform root,List<GameObject> props,List<TextMesh> tags,string id,int index,bool atCamp)
+        private void BuildShopItem(Transform root,List<GameObject> props,List<TextMeshPro> tags,string id,int index,bool atCamp)
         {
             var point=Catalog.ShopPoint(atCamp,index);
             var holder=new GameObject("Shop item "+id).transform;holder.SetParent(root,false);
@@ -718,9 +716,7 @@ namespace Festival.Presentation
             if(card!=null){card.name="Painted price tag";card.transform.localPosition=tagPosition;}
             var label=new GameObject("Name and price");label.transform.SetParent(holder,false);
             label.transform.localPosition=tagPosition+new Vector3(0,0,-.038f);
-            var text=label.AddComponent<TextMesh>();text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.fontSize=50;text.characterSize=.013f;text.color=new Color(.96f,.94f,.84f);
-            if(worldFont!=null){text.font=worldFont;text.GetComponent<MeshRenderer>().sharedMaterial=worldFont.material;}
-            tags.Add(text);
+            tags.Add(FestivalWorldText.Add(label,"",50*.013f,FestivalWorldText.Cream));
         }
         public void SetPhase(string phase)
         {
@@ -776,17 +772,6 @@ namespace Festival.Presentation
                 float remaining=Mathf.Clamp01((campAnticUntil-time)/1.1f);
                 float bounce=Mathf.Abs(Mathf.Sin(time*17f))*remaining;
                 campAnticTarget.localPosition=campAnticRest+Vector3.up*bounce*(visibleInteriorKind=="Potty" ? .36f : .22f);
-            }
-            var view=FestivalCharacter.ViewTransform;
-            if(view!=null)
-            {
-                foreach(var sign in worldSigns)
-                    if(sign!=null)sign.GetComponent<Renderer>().enabled=Readable(view,sign.transform,
-                        sign.text=="CREW STASH"?64f:sign.text=="AFTER HOURS"?1600f:sign.text=="NIGHT MARKET"?484f:225f);
-                foreach(var tag in campTags)
-                    if(tag!=null)tag.GetComponent<Renderer>().enabled=Readable(view,tag.transform,64f);
-                foreach(var tag in marketTags)
-                    if(tag!=null)tag.GetComponent<Renderer>().enabled=Readable(view,tag.transform,64f);
             }
             for(int i=0;i<stageLights.Count;i++)
             {
@@ -1043,17 +1028,10 @@ namespace Festival.Presentation
             Visual(label=="SUN"?"FestivalSun":"FestivalMoon",position);
             Sign(label,position+new Vector3(0,2.95f,-.65f),accent,.075f);
         }
-        // TextMesh font materials ignore depth, so text would draw mirrored through
-        // its own board. Only show a legend within range and from its readable side.
-        internal static bool Readable(Transform view,Transform text,float sqrRange)
-        {
-            var offset=view.position-text.position;
-            return offset.sqrMagnitude<sqrRange&&Vector3.Dot(offset,text.forward)<0;
-        }
         private void Sign(string label,Vector3 position,Material material,float size,float yaw=0,float backZ=0)
         {
             var go=new GameObject(label+" sign");go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localRotation=Quaternion.Euler(0,yaw,0);
-            // Boogaloo glyphs are wider than the TextMesh character-size unit.
+            // Boogaloo glyphs are wider than the character-size unit.
             // Leave real painted board behind the entire legend at every angle.
             float width=Mathf.Max(.98f,label.Length*size*1.45f+.50f);
             float height=Mathf.Max(.29f,size*2.25f+.13f);
@@ -1070,9 +1048,7 @@ namespace Festival.Presentation
         private void SignFace(Transform board,string label,float size,Vector3 position,float yaw)
         {
             var face=new GameObject("Text");face.transform.SetParent(board,false);face.transform.localPosition=position;face.transform.localRotation=Quaternion.Euler(0,yaw,0);
-            var text=face.AddComponent<TextMesh>();text.text=label;text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.characterSize=size;text.fontSize=48;text.color=new Color(.96f,.94f,.84f);
-            if(worldFont!=null){text.font=worldFont;text.GetComponent<MeshRenderer>().sharedMaterial=worldFont.material;}
-            worldSigns.Add(text);
+            FestivalWorldText.Add(face,label,48*size,FestivalWorldText.Cream);
         }
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
         private void OnDestroy()

@@ -5,6 +5,7 @@ using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -208,13 +209,13 @@ namespace Festival.Tests
         }
 
         // POLO-2: a gold-trimmed sign over the night market's stock stall says where the rules sell wristbands, and for how much.
-        // TextMesh draws through its own board, so like the world's signs it shows only from the market's side and within range.
+        // Its lettering is depth-tested, so its board hides it from behind (WorldTextTests).
         [Test]public void AGoldSignMarksTheNightMarketsVipStall()
         {
             var world=Made("VIP stall world").AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");
             var grounds=world.transform.Find(FestivalWorld.RootName);var round=Round(Festivals.PoloFestival);world.SetTwists(round);
             var sign=Part(Part(grounds,FestivalTwistVisuals.PoloRootName),FestivalTwistVisuals.VipSignName);
-            var text=sign.GetComponentInChildren<TextMesh>(true);
+            var text=sign.GetComponentInChildren<TextMeshPro>(true);
             Assert.That(text!=null?text.text:"(no text)",Is.EqualTo("VIP WRISTBANDS $"+Catalog.FindItem(FestivalSimulation.VipWristband).Price),"the sign says what the stall sells, for what the rules charge");
             Assert.That(Painted(sign,"StageGlowGold").sharedMaterial,Is.EqualTo(FestivalArtView.MaterialFor("StageGlowGold")),"its trim is gold, and glows so it reads at night");
             Transform stall=null;foreach(Transform child in grounds)if(child.name=="FestivalStallStock")stall=child;
@@ -224,19 +225,9 @@ namespace Festival.Tests
             Assert.That(board.center.x,Is.InRange(under.min.x,under.max.x),"over the stall, not beside it");
             Assert.That(board.center.z,Is.InRange(under.min.z,under.max.z),"over the stall, not in front of or behind it");
             Assert.That(Vector2.Distance(Flat(board.center),new Vector2(Festivals.VipStallX,Festivals.VipStallZ)),Is.LessThanOrEqualTo(Festivals.VipStallRange),"where the rules sell wristbands");
-            var renderer=text.GetComponent<Renderer>();
-            Assert.That(new[]{renderer.bounds.min.x,renderer.bounds.max.x},Is.EqualTo(new[]{board.center.x,board.center.x}).Within(board.extents.x),"the lettering fits across the board");var previous=FestivalCharacter.ViewTransform;var eye=Made("Eye").transform;
-            try
-            {
-                FestivalCharacter.ViewTransform=eye;
-                foreach(var (at,shown,where) in new[]{(new Vector3(Festivals.VipStallX,1.65f,-24),true,"from the market's footpath"),(new Vector3(Festivals.VipStallX+6,1.65f,-30),true,"from down the path"),
-                    (new Vector3(Festivals.VipStallX,1.65f,-14),false,"from behind, where it would read mirrored"),(new Vector3(Festivals.VipStallX,1.65f,-50),false,"from across the grounds, through everything between")})
-                {
-                    eye.position=at;world.SetTwists(round);
-                    Assert.That(renderer.enabled,Is.EqualTo(shown),"the lettering "+(shown?"shows ":"hides ")+where);
-                }
-            }
-            finally{FestivalCharacter.ViewTransform=previous;}
+            text.ForceMeshUpdate();var renderer=text.GetComponent<Renderer>();
+            Assert.That(new[]{renderer.bounds.min.x,renderer.bounds.max.x},Is.EqualTo(new[]{board.center.x,board.center.x}).Within(board.extents.x),"the lettering fits across the board");
+            Assert.That(text.fontSharedMaterial,Is.SameAs(FestivalWorldText.Font.material),"the lettering is the world's depth-tested text");
         }
 
         // POLO-6 (Matt, 2026-10-01: "what is this pink cone in front of someone?"): an influencer no longer films through a frame drawn
@@ -291,7 +282,7 @@ namespace Festival.Tests
             phone.Show(true,true);
             Assert.That(Blinks(out rec),Is.False,"with you on camera the light stays lit");
             Assert.That(light.enabled&&rec,Is.True,"and REC shows");
-            Assert.That(label.GetComponent<TextMesh>().text,Is.EqualTo("• REC"));
+            Assert.That(label.GetComponent<TextMeshPro>().text,Is.EqualTo("• REC"));
             Assert.That(label.position.y,Is.GreaterThan(look.max.y),"over its head, hat and all");
             Assert.That(Vector2.Distance(Flat(label.position),Flat(head.position)),Is.LessThan(.1f),"right over it");
 

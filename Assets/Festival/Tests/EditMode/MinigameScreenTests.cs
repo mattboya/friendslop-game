@@ -3,6 +3,7 @@ using System.Reflection;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -33,7 +34,7 @@ namespace Festival.Tests
             root=new GameObject("Booth test");var booth=FestivalMinigameView.Build(root.transform);
             Assert.That(booth.name,Is.EqualTo(FestivalMinigameView.BoothName));
             Assert.That(booth.GetComponentInChildren<FestivalCharacter>(true),Is.Not.Null,"a stranger stands at the booth");
-            var sign=booth.GetComponentInChildren<TextMesh>(true);
+            var sign=booth.GetComponentInChildren<TextMeshPro>(true);
             Assert.That(sign!=null&&sign.text.StartsWith("MINIGAME"),Is.True,"under a MINIGAME sign");
             foreach(var collider in booth.GetComponentsInChildren<Collider>(true))Assert.That(collider.enabled,Is.False,collider.name+" would block sight lines or steps the rules don't know about");
             var ring=booth.Find(FestivalMinigameView.RingName);
@@ -63,7 +64,7 @@ namespace Festival.Tests
         [Test]public void TheBoothSignNamesItsSelectedGame()
         {
             root=new GameObject("Sign test");var booth=FestivalMinigameView.Build(root.transform);
-            var sign=booth.Find("Sign text").GetComponent<TextMesh>();var board=booth.Find("Sign board").GetComponent<Renderer>();
+            var sign=booth.Find("Sign text").GetComponent<TextMeshPro>();var board=booth.Find("Sign board").GetComponent<Renderer>();
             var state=new RoundState{Phase="Playing",Booth=new MinigameState{Spot=1}};
             foreach(var kind in FestivalSimulation.MinigameKinds)
             {
@@ -74,7 +75,7 @@ namespace Festival.Tests
             {
                 state.Booth.Kind=kind;FestivalMinigameView.Show(booth,state);FestivalMinigameView.NameGame(booth,kind);booth.rotation=Quaternion.identity;
                 Assert.That(sign.text,Is.EqualTo(name+"\nALL IN THE RING"),kind+"'s sign");
-                var text=sign.GetComponent<Renderer>().bounds.size.x;
+                sign.ForceMeshUpdate();var text=sign.GetComponent<Renderer>().bounds.size.x;
                 Assert.That(text,Is.GreaterThan(0).And.LessThan(board.bounds.size.x),name+" fits its board");
             }
         }
@@ -91,7 +92,7 @@ namespace Festival.Tests
             var cups=booth.Find(FestivalMinigameView.CupsName);Assert.That(cups,Is.Not.Null,"the booth has its cups");
             FestivalMinigameView.Show(booth,state);FestivalMinigameView.ShowCups(booth,state,-1,null);
             Assert.That(Shown(cups),Is.EqualTo(new[]{0,1,2,3,4}),"before the game, the 5 cups three living players will play");
-            Assert.That(cups.Find(FestivalMinigameView.CupName(0)).GetComponentInChildren<TextMesh>().text,Is.EqualTo("1"),"numbered from 1, as the HUD names them");
+            Assert.That(cups.Find(FestivalMinigameView.CupName(0)).GetComponentInChildren<TextMeshPro>().text,Is.EqualTo("1"),"numbered from 1, as the HUD names them");
             for(int i=0;i<5;i++)Assert.That(Vector3.Distance(cups.Find(FestivalMinigameView.CupName(i)).position,FestivalMinigameView.CupAt(at,i,5)),Is.LessThan(1e-4f),"cup "+(i+1)+" stands where it is aimed at");
             Assert.That(FestivalMinigameView.CupAt(at,0,5).y,Is.InRange(.7f,1.2f),"on a table, about waist high");
             Assert.That(Vector3.Dot(FestivalMinigameView.CupAt(at,2,5)-new Vector3(at.X,0,at.Z),booth.forward),Is.GreaterThan(.5f),"in front of the stranger");

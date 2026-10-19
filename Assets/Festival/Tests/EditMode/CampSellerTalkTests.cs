@@ -3,6 +3,7 @@ using NUnit.Framework;
 using Festival.Core;
 using Festival.Presentation;
 using UnityEngine;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -74,7 +75,7 @@ namespace Festival.Tests
                 string id=s.VendorOffers[i];Assert.That(camp.Find("Shop item "+id),Is.Not.Null,"camp retains all offers");
                 var holder=shelves.Find("Shop item "+id);
                 if(Catalog.FindItem(id).Category=="Stock")Assert.That(holder,Is.Null,"stock has no market holder or price tag");
-                else{Assert.That(holder,Is.Not.Null);Assert.That(holder.localPosition.x,Is.EqualTo(Catalog.ShopPoint(false,i).X));Assert.That(holder.GetComponentInChildren<TextMesh>().text,Does.Contain(Catalog.ShopTag(id)));}
+                else{Assert.That(holder,Is.Not.Null);Assert.That(holder.localPosition.x,Is.EqualTo(Catalog.ShopPoint(false,i).X));Assert.That(holder.GetComponentInChildren<TextMeshPro>().text,Does.Contain(Catalog.ShopTag(id)));}
             }
         }
 

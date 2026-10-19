@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Festival.Core;
 using Festival.Network;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
@@ -22,7 +23,7 @@ namespace Festival.Presentation
         // plus a .23 m line and the gaps (VISION-5).
         private const float OverHead=2.45f,StackStep=.95f,OverPlace=1.4f,Size=.32f,LabelGap=.04f;
         // Under an unchecked claim, smaller: how to settle it. E dances and F chats with the festivalgoer (FestivalHud's check).
-        private const string CheckLine="\n<size=40>F CHAT • E DANCE TO CHECK</size>";
+        private const string CheckLine="\n<size=62.5%>F CHAT • E DANCE TO CHECK</size>";
         // Fakes: hue a little off, and a scale shimmer that grows with how fast the camera turns or moves, eased over ShimmerEase
         // seconds so a mouse that reports slower than the screen refreshes cannot make it flicker.
         private const float FakeHueShift=.06f,ShimmerDepth=.18f,ShimmerHz=9,FullShimmerTurn=90,FullShimmerMove=4,ShimmerEase=.15f;
@@ -35,7 +36,7 @@ namespace Festival.Presentation
         // the top of their whole stack of markers (or from its spot on the ground up to the top of its marker).
         private const float AimReach=.5f;
 
-        private sealed class Marker { public Transform Root,Label; public FestivalShadowTellView Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMesh Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask; public FakeShadow Wrong; }
+        private sealed class Marker { public Transform Root,Label; public FestivalShadowTellView Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMeshPro Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask; public FakeShadow Wrong; }
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
@@ -217,8 +218,8 @@ namespace Festival.Presentation
             var shadow=FestivalShadowTellView.Build(root,Pool(night));
             // VISION-5: the label grows up from just over its own glyph, so a second line never reaches down into it.
             var label=new GameObject("Label").transform;label.SetParent(root,false);label.localPosition=Vector3.up*(glyph.GetComponent<MeshFilter>().sharedMesh.bounds.extents.y*Size+LabelGap);
-            var verdict=label.gameObject.AddComponent<TextMesh>();verdict.fontSize=64;verdict.characterSize=.03f;verdict.anchor=TextAnchor.LowerCenter;verdict.alignment=TextAlignment.Center;verdict.color=new Color(.96f,.94f,.84f);
-            var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){verdict.font=font;label.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+            // Its own authored lines only, so rich text stays on for the smaller check line.
+            var verdict=FestivalWorldText.Add(label.gameObject,"",64*.03f,FestivalWorldText.Cream,true);verdict.richText=true;label=verdict.transform;
             // A spot on the ground is checked by walking to it (FindStashes), so it says no more than its claim.
             var ask=vision.NpcId==""?ClaimText(vision.Kind):ClaimText(vision.Kind)+CheckLine;
             return new Marker{Root=root,Label=label,Shadow=shadow,Wrong=ShadowTell(vision.Id),Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring,Ask=ask};

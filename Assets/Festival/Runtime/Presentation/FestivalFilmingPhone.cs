@@ -42,10 +42,7 @@ namespace Festival.Presentation
             Block("Phone screen",PrimitiveType.Cube,new Vector3(0,0,-Size.z/2-.001f),new Vector3(Size.x*.86f,Size.y*.88f,.002f),"StageGlowMint");
             light=Block(LightName,PrimitiveType.Sphere,new Vector3(Size.x*.25f,Size.y*.38f,Size.z/2+.006f),Vector3.one*.03f,"StageGlowRed").GetComponent<Renderer>();
             label=new GameObject(LabelName).transform;label.SetParent(actor,false);label.gameObject.layer=30;
-            var text=label.gameObject.AddComponent<TextMesh>();text.text=LabelText;text.fontSize=64;text.characterSize=LabelSize;
-            text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.color=LabelColor;
-            var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){text.font=font;label.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
-            label.GetComponent<MeshRenderer>().shadowCastingMode=ShadowCastingMode.Off;
+            label=FestivalWorldText.Add(label.gameObject,LabelText,64*LabelSize,LabelColor).transform;
             Show(false,false);
         }
 

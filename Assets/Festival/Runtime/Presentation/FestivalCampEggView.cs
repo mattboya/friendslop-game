@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using Festival.Core;
 using Festival.Network;
+using TMPro;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -39,12 +40,12 @@ namespace Festival.Presentation
         };
         private readonly Dictionary<string,Transform> props=new Dictionary<string,Transform>();
         // Each gag's line over its prop, until when it shows, and each sounding prop's voice.
-        private readonly Dictionary<string,(TextMesh Text,float Until)> lines=new Dictionary<string,(TextMesh,float)>();
+        private readonly Dictionary<string,(TextMeshPro Text,float Until)> lines=new Dictionary<string,(TextMeshPro,float)>();
         private readonly Dictionary<string,AudioSource> voices=new Dictionary<string,AudioSource>();
         private FestivalSession session;
         private AudioClip horn,squeak;
         private Transform air;
-        private TextMesh dust;
+        private TextMeshPro dust;
         private string word="";
         private bool deflated,sagging,live;
         private float deflation;
@@ -63,7 +64,7 @@ namespace Festival.Presentation
                 var point=CampFeatures.EggPoint(egg,0);prop.localPosition=new Vector3(point.X,0,point.Z);
                 Dress(prop,egg.Id);view.props[egg.Id]=prop;
             }
-            view.air=view.props["flamingo"].Find("Flamingo air");view.dust=view.props["wash_me"].Find("Dust window/WASH ME label").GetComponent<TextMesh>();
+            view.air=view.props["flamingo"].Find("Flamingo air");view.dust=view.props["wash_me"].Find("Dust window/WASH ME label").GetComponent<TextMeshPro>();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DevelopmentDiagnostics.GraphicsEvent("CampEggs","props_built","count="+view.props.Count);
 #endif
@@ -126,7 +127,7 @@ namespace Festival.Presentation
         void Write(string written)
         {
             if(written==word)return;
-            word=written;dust.text=word==""?"WASH ME":"WASH ME\n"+word;dust.characterSize=word==""?.04f:.022f;
+            word=written;dust.text=word==""?"WASH ME":"WASH ME\n"+word;dust.fontSize=48*(word==""?.04f:.022f);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DevelopmentDiagnostics.GraphicsEvent("CampEggs","persistent","egg=wash_me word="+(word==""?"none":word));
 #endif
@@ -160,9 +161,7 @@ namespace Festival.Presentation
         {
             if(!lines.TryGetValue(id,out var line))
             {
-                var made=new GameObject(LineName).AddComponent<TextMesh>();made.transform.SetParent(prop,false);
-                made.anchor=TextAnchor.MiddleCenter;made.alignment=TextAlignment.Center;made.characterSize=.025f;made.fontSize=48;made.color=new Color(.96f,.94f,.84f);
-                var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){made.font=font;made.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+                var holder=new GameObject(LineName);holder.transform.SetParent(prop,false);var made=FestivalWorldText.Add(holder,"",48*.025f,FestivalWorldText.Cream);
                 Part(made.transform,"Line bubble",PrimitiveType.Cube,new Vector3(0,0,.03f),Vector3.one,"Dark");
                 line.Text=made;
             }
@@ -170,7 +169,7 @@ namespace Festival.Presentation
             line.Text.transform.Find("Line bubble").localScale=new Vector3(widest*.066f+.2f,rows*.125f+.08f,.02f);
             line.Text.transform.position=at+Vector3.up*1.2f;line.Text.gameObject.SetActive(true);lines[id]=(line.Text,Time.unscaledTime+LineSeconds);
         }
-        // TextMesh does not wrap, so a line breaks between words at about LineWidth letters.
+        // Labels never wrap (FestivalWorldText), so a line breaks between words at about LineWidth letters, sizing its bubble.
         static string Wrap(string said,out int rows,out int widest)
         {
             var wrapped=new StringBuilder();int column=0;rows=1;widest=0;
@@ -325,13 +324,11 @@ namespace Festival.Presentation
             if(Application.isPlaying)Destroy(collider);else DestroyImmediate(collider);
             return go.transform;
         }
-        // TextMesh reads from its back (-z), so a legend facing +z turns 180 degrees.
+        // A label reads from its back (-z), so a legend facing +z turns 180 degrees.
         private static void Label(Transform parent,string legend,Vector3 at,Vector3 euler,float size,bool dark=false)
         {
             var face=new GameObject(legend+" label");face.transform.SetParent(parent,false);face.transform.localPosition=at;face.transform.localRotation=Quaternion.Euler(euler);
-            var text=face.AddComponent<TextMesh>();text.text=legend;text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;
-            text.characterSize=size;text.fontSize=48;text.color=dark?new Color(.16f,.12f,.1f):new Color(.96f,.94f,.84f);
-            var font=Resources.Load<Font>("FestivalDisplay");if(font!=null){text.font=font;face.GetComponent<MeshRenderer>().sharedMaterial=font.material;}
+            FestivalWorldText.Add(face,legend,48*size,dark?new Color(.16f,.12f,.1f):FestivalWorldText.Cream);
         }
     }
 }

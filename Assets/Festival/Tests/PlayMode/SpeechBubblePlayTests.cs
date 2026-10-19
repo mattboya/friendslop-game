@@ -162,13 +162,13 @@ namespace Festival.Tests
             var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook"&&n.Twist=="");
             npc.X=player.X+.6f;npc.Z=player.Z;npc.Mode="Blending";npc.CanTalk=true;npc.LastTalkSeconds=-10;
             session.Command("Talk",npc.Id);yield return null;yield return null;
-            var text=root.GetComponentInChildren<TextMeshPro>(false);Assert.That(text,Is.Not.Null);
+            var spoken=SpeechTexts(root);Assert.That(spoken,Is.Not.Empty);var text=spoken[0];
             var font=text.font;var atlas=font.atlasTexture;var material=text.fontSharedMaterial;
             session.enabled=false;yield return null;yield return null;
-            Assert.That(root.GetComponentsInChildren<TextMeshPro>(true),Is.Empty,"disable releases active and pooled bubble objects");
+            Assert.That(System.Array.FindAll(root.GetComponentsInChildren<TextMeshPro>(true),t=>t.name=="Speech text"),Is.Empty,"disable releases active and pooled bubble objects");
             Assert.That(font==null&&atlas==null&&material==null,Is.True,"disable releases the session-owned font, atlas and material");
             session.enabled=true;yield return null;yield return null;
-            Assert.That(root.GetComponentsInChildren<TextMeshPro>(false),Is.Empty,"the stale host snapshot does not replay");
+            Assert.That(SpeechTexts(root),Is.Empty,"the stale host snapshot does not replay");
             session.Leave();yield return null;
         }
         [UnityTest]public IEnumerator AHostedTalkDrawsTheActualSpeakersTextMeshProBubble()
@@ -186,7 +186,7 @@ namespace Festival.Tests
             string said=player.NpcSpeech;
             Assert.That(said,Is.Not.Empty,"the production Talk command speaks: "+session.Message);
             yield return null;yield return null;
-            var texts=root.GetComponentsInChildren<TextMeshPro>(false);
+            var texts=SpeechTexts(root);
             Assert.That(texts,Has.Length.EqualTo(1),"accepted public Talk must draw a real TMP bubble on its session");
             Assert.That(texts[0].text,Is.EqualTo(said));
             Assert.That(texts[0].font.sourceFontFile,Is.SameAs(Resources.Load<Font>("FestivalDisplay")));
@@ -199,9 +199,9 @@ namespace Festival.Tests
             string danceId=player.SpeechDeliveryId;yield return null;yield return null;
             Assert.That(session.SpeechDeliveries.Deliveries,Has.Count.EqualTo(2),"Talk and Dance accepted before a view retain both identities");
             Assert.That(session.SpeechDeliveries.Find(danceId).SpeakerId,Is.EqualTo(player.Id));
-            Assert.That(root.GetComponentsInChildren<TextMeshPro>(false),Has.Length.EqualTo(1),"the local dosed Dance never adds an own-head bubble");
+            Assert.That(SpeechTexts(root),Has.Length.EqualTo(1),"the local dosed Dance never adds an own-head bubble");
             session.Profile.Data.ThirdPerson=true;yield return null;yield return null;
-            Assert.That(root.GetComponentsInChildren<TextMeshPro>(false),Has.Length.EqualTo(1),"third person also hides your own-head speech");
+            Assert.That(SpeechTexts(root),Has.Length.EqualTo(1),"third person also hides your own-head speech");
         }
         [UnityTest]public IEnumerator AHostedTalkUsesEffectsAndMasterAndDisposesItsAudioOnDisableAndLeave()
         {

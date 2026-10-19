@@ -4,6 +4,7 @@ using Festival.Network;
 using System.Collections.Generic;
 using Festival.Presentation;
 using UnityEngine;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -90,7 +91,7 @@ namespace Festival.Tests
                 var game=new FestivalSimulation(0);game.AddPlayer("host","Host");
                 Assert.That(Poke(game,"host","flamingo","flat").Accepted,Is.True);Assert.That(Poke(game,"host","wash_me","word").Accepted,Is.True);
                 var air=world.CampEggs.Prop("flamingo").Find("Flamingo air");
-                TextMesh Dust()=>System.Array.Find(world.CampEggs.Prop("wash_me").GetComponentsInChildren<TextMesh>(true),t=>t.text.StartsWith("WASH ME",System.StringComparison.Ordinal));
+                TextMeshPro Dust()=>System.Array.Find(world.CampEggs.Prop("wash_me").GetComponentsInChildren<TextMeshPro>(true),t=>t.text.StartsWith("WASH ME",System.StringComparison.Ordinal));
                 Assert.That(air.localScale.y,Is.EqualTo(1),"setup: a new flamingo stands full of air");Assert.That(Dust().text,Is.EqualTo("WASH ME"),"setup: clean dust says WASH ME");
                 world.CampEggs.Show(View(game,"host").CampEggs);
                 Assert.That(air.localScale.y,Is.LessThan(.2f),"a deflated flamingo lies flat on the first state read");

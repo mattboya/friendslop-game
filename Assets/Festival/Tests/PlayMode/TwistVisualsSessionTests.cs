@@ -7,6 +7,7 @@ using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using TMPro;
 
 namespace Festival.Tests
 {
@@ -78,7 +79,7 @@ namespace Festival.Tests
                 }
                 Assert.That(steady,Is.True,cam.Id+"'s light stays lit while it has you on camera");
                 Assert.That(shown,Is.True,"and REC shows over it");
-                Assert.That(label.GetComponent<TextMesh>().text,Is.EqualTo("• REC"));
+                Assert.That(label.GetComponent<TextMeshPro>().text,Is.EqualTo("• REC"));
                 Assert.That(otherOn&&otherOff,Is.True,other.Id+", not filming you, still blinks");
                 Assert.That(otherShown,Is.False,"and shows no REC");
             }
@@ -114,7 +115,7 @@ namespace Festival.Tests
                 {
                     var label=Part(FestivalFilmingPhone.LabelName);Assert.That(label,Is.Not.Null);
                     Assert.That(label.gameObject.activeInHierarchy,Is.True,stage+": the phone still shows REC in the frozen frame");
-                    Assert.That(label.GetComponent<TextMesh>().text,Is.EqualTo("• REC"));
+                    Assert.That(label.GetComponent<TextMeshPro>().text,Is.EqualTo("• REC"));
                     Assert.That(Part(FestivalFilmingPhone.LightName).GetComponent<Renderer>().enabled,Is.True,stage+": the recording light stays lit");
                     Assert.That(session.LocalPlayer.VisualFilmedBy,Does.Contain(cam.Id));
                     Assert.That(FestivalHudText.Condition(session.State,session.LocalPlayer),Does.StartWith("ON CAMERA • "));

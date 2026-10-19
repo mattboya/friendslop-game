@@ -218,7 +218,7 @@ namespace Festival.Network
         private readonly Dictionary<string,Transform> actors=new Dictionary<string,Transform>();
         private readonly Dictionary<string,int> displayedDanceSteps=new Dictionary<string,int>();
         private readonly List<Material> actorMaterials=new List<Material>();
-        private readonly Dictionary<string,TextMesh> names=new Dictionary<string,TextMesh>();
+        private readonly Dictionary<string,TMPro.TextMeshPro> names=new Dictionary<string,TMPro.TextMeshPro>();
         private readonly Dictionary<string,Transform> nameBubbles=new Dictionary<string,Transform>();
         private float yaw,pitch,preVisitYaw,preVisitPitch;
         // TRIP-5: where the camera looks, trailing yaw and pitch (the mouse) by the trip's lag; the same as them without one.
@@ -1075,8 +1075,7 @@ namespace Festival.Network
                 var bubbleCollider=bubble.GetComponent<Collider>();bubbleCollider.enabled=false;Destroy(bubbleCollider);nameBubbles[id]=bubble.transform;
                 var face=new GameObject("Text");face.transform.SetParent(textObject.transform,false);
                 face.transform.localPosition=new Vector3(0,0,-.025f);
-                var text=face.AddComponent<TextMesh>();text.fontSize=64;text.characterSize=.04f;text.anchor=TextAnchor.MiddleCenter;text.alignment=TextAlignment.Center;text.color=new Color(.96f,.94f,.84f);
-                var festivalFont=Resources.Load<Font>("FestivalDisplay");if(festivalFont!=null){text.font=festivalFont;text.GetComponent<MeshRenderer>().sharedMaterial=festivalFont.material;}
+                var text=FestivalWorldText.Add(face,"",64*.04f,FestivalWorldText.Cream);
                 names[id]=text;
                 foreach(var child in textObject.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
             }
