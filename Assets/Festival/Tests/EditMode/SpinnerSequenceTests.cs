@@ -104,21 +104,29 @@ namespace Festival.Tests
             Assert.That(At(FestivalSimulation.SpinSeconds+.1).Stage,Is.EqualTo(FestivalSpinner.Stage.Hidden),"Loading ends the sequence");
         }
 
-        // A fast scroll that eases into the stop: 0.3 s out a reel still runs past several tiles a second, then it passes its
-        // result by a little and settles back onto it.
-        [Test] public void EveryReelScrollsBrisklyThenOvershootsAndSettles()
+        // A reel runs at full speed until 1.5 s before its stop, then slows smoothly (a 0.4 s ease jumps 1.1 tiles a second in
+        // one frame), passes its result by a little and settles back onto it right at its stop.
+        [Test] public void EveryReelEasesOutOverItsLast1_5SecondsThenOvershootsAndSettles()
         {
+            const double Frame=1/120.0;
             for(int seed=1;seed<=20;seed++)
             {
                 int size=1+seed%8;var state=Spin(seed*977,size,seed*7%size,1+seed%4,FestivalSimulation.Substances[seed%5]);var crew=FestivalSpinner.Crew(state);double start=Start(state);
                 FestivalSpinner.Beat At(double seconds)=>FestivalSpinner.At(state,crew,start+seconds);
                 for(int i=0;i<Reels.Length;i++)
                 {
-                    var reel=Reels[i];double stop=First(t=>reel.Landed(At(t)));float rest=reel.Scroll(At(stop));
-                    float speed=(reel.Scroll(At(stop-.29))-reel.Scroll(At(stop-.3)))/.01f,peak=float.MinValue;
-                    for(double t=stop-.3;t<stop;t+=.005)peak=Mathf.Max(peak,reel.Scroll(At(t)));
-                    Assert.That(speed,Is.GreaterThan(5),"seed "+seed+": the "+reel.Name+" reel still scrolls briskly 0.3 s before it stops");
-                    Assert.That(peak-rest,Is.GreaterThan(.05).And.LessThan(.5),"seed "+seed+": the "+reel.Name+" reel overshoots its result by a little, then settles back");
+                    var reel=Reels[i];double stop=FestivalSpinner.ReelStops(i);float rest=reel.Scroll(At(stop));string what="seed "+seed+": the "+reel.Name+" reel";
+                    float Speed(double t)=>(reel.Scroll(At(t+Frame))-reel.Scroll(At(t)))/(float)Frame;
+                    float cruise=Speed(stop-1.6),worst=0,peak=float.MinValue;
+                    for(double t=0;t<stop+.1;t+=Frame)worst=Mathf.Max(worst,Mathf.Abs(Speed(t+Frame)-Speed(t)));
+                    for(double t=stop-1.5;t<stop;t+=.005)peak=Mathf.Max(peak,reel.Scroll(At(t)));
+                    Assert.That(cruise,Is.GreaterThan(15),what+" runs at full speed 1.6 s before its stop");
+                    Assert.That(Speed(stop-1.5-Frame),Is.GreaterThan(cruise*.95f),what+" is still at full speed as its slow-down begins");
+                    Assert.That(Speed(stop-1),Is.InRange(cruise*.1f,cruise*.6f),what+" is slowing, not running or stopped, a second before its stop");
+                    Assert.That(worst,Is.LessThan(.8f),what+" changes speed smoothly: by under 0.8 tiles a second a frame");
+                    Assert.That(peak-rest,Is.GreaterThan(.05).And.LessThan(.5),what+" overshoots its result by a little, then settles back");
+                    Assert.That(reel.Scroll(At(stop-.05)),Is.Not.EqualTo(rest),what+" is still settling just before its stop");
+                    Assert.That(reel.Scroll(At(stop+.5)),Is.EqualTo(rest),what+" rests where it landed");
                 }
             }
         }
@@ -173,6 +181,39 @@ namespace Festival.Tests
             }
             Assert.That(Lit(FestivalSpinner.ReelStops(1)-.3),Is.LessThan(FestivalSpinner.Bulbs/2),"the chase picks up again between stops");
             Assert.That(Lit(FestivalSpinner.TakeStarts-.05),Is.EqualTo(FestivalSpinner.Bulbs),"the row stays lit once every reel rests");
+        }
+
+        // The bulbs ring the reels on all four sides, in order round the ring (the chase runs round it, every third bulb lit,
+        // so it closes without a seam), evenly spaced, on the cabinet and clear of every reel window.
+        [Test] public void TheBulbsRingTheReelWindowsOnAllFourSides()
+        {
+            var root=new GameObject("Bulb ring");var spinner=root.AddComponent<FestivalSpinner>();
+            try
+            {
+                typeof(FestivalSpinner).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);
+                var cabinet=(RectTransform)root.transform.Find("Festival spinner/Spinner backdrop/Cabinet");
+                Rect Box(RectTransform r)=>new Rect(r.anchoredPosition-r.sizeDelta*.5f,r.sizeDelta);
+                var bulbs=cabinet.Cast<Transform>().Where(t=>t.name.StartsWith("Bulb ")).OrderBy(t=>int.Parse(t.name.Substring(5))).Select(t=>(RectTransform)t).ToList();
+                var windows=new[]{"People reel","Dose reel","Substance reel"}.Select(n=>Box((RectTransform)cabinet.Find(n))).ToList();
+                var reels=Rect.MinMaxRect(windows.Min(w=>w.xMin),windows.Min(w=>w.yMin),windows.Max(w=>w.xMax),windows.Max(w=>w.yMax));
+                Assert.That(bulbs.Count,Is.EqualTo(FestivalSpinner.Bulbs),"setup: every bulb is on the cabinet");
+                Assert.That(FestivalSpinner.Bulbs%3,Is.Zero,"a whole number of every-third chases round the ring");
+                Assert.That(bulbs.Count(b=>b.anchoredPosition.y>reels.yMax),Is.GreaterThanOrEqualTo(3),"bulbs run along the top");
+                Assert.That(bulbs.Count(b=>b.anchoredPosition.y<reels.yMin),Is.GreaterThanOrEqualTo(3),"and the bottom");
+                Assert.That(bulbs.Count(b=>b.anchoredPosition.x<reels.xMin),Is.GreaterThanOrEqualTo(3),"and the left");
+                Assert.That(bulbs.Count(b=>b.anchoredPosition.x>reels.xMax),Is.GreaterThanOrEqualTo(3),"and the right");
+                var face=new Rect(-cabinet.sizeDelta*.5f,cabinet.sizeDelta);
+                foreach(var bulb in bulbs)
+                {
+                    float reach=bulb.sizeDelta.x*.71f; // rotated 45 degrees
+                    var lit=Rect.MinMaxRect(bulb.anchoredPosition.x-reach,bulb.anchoredPosition.y-reach,bulb.anchoredPosition.x+reach,bulb.anchoredPosition.y+reach);
+                    Assert.That(face.Contains(lit.min)&&face.Contains(lit.max),Is.True,bulb.name+" sits on the cabinet");
+                    foreach(var window in windows)Assert.That(window.Overlaps(lit),Is.False,bulb.name+" stays clear of the reel windows");
+                }
+                var gaps=bulbs.Select((b,i)=>Vector2.Distance(b.anchoredPosition,bulbs[(i+1)%bulbs.Count].anchoredPosition)).ToList();
+                Assert.That(gaps.Max()/gaps.Min(),Is.LessThan(1.5f),"the bulbs are evenly spaced, in order round the ring");
+            }
+            finally{typeof(FestivalSpinner).GetMethod("OnDestroy",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(spinner,null);UnityEngine.Object.DestroyImmediate(root);}
         }
 
         // The level clock and the tripper's dose stand still while the reels, the rest, the take and the reaction run.

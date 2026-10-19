@@ -5,6 +5,8 @@ using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace Festival.Tests
 {
@@ -49,16 +51,24 @@ namespace Festival.Tests
             Follow(5.99);Assert.That(Follow(6),Is.EqualTo(1));
             Assert.That(Follow(7),Is.Zero,"take camera has no reel ticks");
         }
+        // A spin frame's beat, bulbs and audio follow make no garbage, from the lever to the last reel's slow-down.
+        [Test] public void AFollowedSpinFrameMakesNoGarbage()
+        {
+            var crew=FestivalSpinner.Crew(state);double now=100;Follow(0);
+            TestDelegate frame=()=>{now+=.016;FestivalSpinner.At(state,crew,now);for(int b=0;b<FestivalSpinner.Bulbs;b++)FestivalSpinner.BulbLit((float)(now-100),b);spinner.FollowAudio(state,now,false,profile,true);};frame();
+            Assert.That(frame,Is.Not.AllocatingGCMemory(),"a spin frame makes no garbage");
+        }
         [Test] public void LateStalledRepeatedAndOutOfOrderViewsNeverCatchUp()
         {
             Assert.That(Follow(3),Is.Zero,"late first view baselines");
             Assert.That(Follow(3),Is.Zero);Assert.That(Follow(2),Is.Zero,"older estimated clock ignored");
             Assert.That(Follow(3.1),Is.EqualTo(1),"only current tick");
-            Assert.That(Follow(5),Is.Zero,"stall baselines instead of replaying clunks/ticks");
-            Assert.That(Follow(5.1),Is.EqualTo(1));
-            state.Tick=9;state.SpinSeed=70;Assert.That(Follow(5.2),Is.Zero,"stale timeline identity ignored");
-            state.Tick=11;state.SpinSeed=72;Assert.That(Follow(5.2),Is.Zero,"new identity late baselines");
-            Assert.That(Follow(5.3),Is.EqualTo(1));
+            // The last reel's ticks slow from 4.5 s, so these steps stay while it still runs at full speed.
+            Assert.That(Follow(4.1),Is.Zero,"stall baselines instead of replaying clunks/ticks");
+            Assert.That(Follow(4.2),Is.EqualTo(1));
+            state.Tick=9;state.SpinSeed=70;Assert.That(Follow(4.3),Is.Zero,"stale timeline identity ignored");
+            state.Tick=11;state.SpinSeed=72;Assert.That(Follow(4.3),Is.Zero,"new identity late baselines");
+            Assert.That(Follow(4.4),Is.EqualTo(1));
         }
         [Test] public void HiddenPhaseMutedAndFocusBoundariesBaselineWithoutBursts()
         {

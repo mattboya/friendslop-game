@@ -81,8 +81,9 @@ namespace Festival.Presentation
         public const float WindowTiles=2.2f;
 
         // A reel spins up from rest over SpinUp as the lever drops, runs about Cruise tiles a second, and spends its last EaseSeconds
-        // easing into the stop: a back ease-out whose opening speed matches the run, so it passes the result by a little and settles back.
-        const float Cruise=20,SpinUp=.3f,EaseSeconds=.4f,Back=1.70158f,BackSpeed=3*(Back+1)-2*Back;
+        // easing into the stop: a back ease-out (Settle) whose opening speed matches the run, so it slows gradually, passes the
+        // result by a little and settles back. Back is the death card's pop.
+        const float Cruise=20,SpinUp=.3f,EaseSeconds=1.5f,Settle=.8f,SettleSpeed=3*(Settle+1)-2*Settle,Back=1.70158f;
         // Tiles run by elapsed at one tile a second, for a reel that stops at stop.
         static float Run(float elapsed,float stop)
         {
@@ -90,7 +91,7 @@ namespace Festival.Presentation
             if(t<SpinUp)return t*t/(2*SpinUp);
             if(t<=ease)return t-SpinUp*.5f;
             float u=(t-ease)/EaseSeconds-1;
-            return ease-SpinUp*.5f+EaseSeconds/BackSpeed*(1+(Back+1)*u*u*u+Back*u*u);
+            return ease-SpinUp*.5f+EaseSeconds/SettleSpeed*(1+(Settle+1)*u*u*u+Settle*u*u);
         }
         /// <summary>The scroll, in tiles, elapsed seconds after the lever drops, of a reel of count tiles that starts on a seeded tile
         /// and comes to rest at stop with tile centred on the payline. Every client works out the same scroll from the same seed.</summary>
@@ -102,9 +103,20 @@ namespace Festival.Presentation
         }
         // The lever drops as the reels start and springs back.
         static float Lever(float t)=>t<.15f?Mathf.Clamp01(t/.15f):t<.35f?1:1-Mathf.SmoothStep(0,1,(t-.35f)/.45f);
-        // The cabinet's row of bulbs: while the reels spin every third one is lit, chasing along the row ChaseSteps times a second; the
-        // whole row blinks twice in the FlashSeconds after each reel stops, and stays lit once every reel rests.
-        public const int Bulbs=15;
+        // The cabinet's ring of bulbs, clockwise from the top left: while the reels spin every third one is lit, chasing round
+        // the ring ChaseSteps times a second; the whole ring blinks twice in the FlashSeconds after each reel stops, and stays lit
+        // once every reel rests. A multiple of 3, so the chase closes round the ring without a seam.
+        public const int Bulbs=42;
+        const float BulbInset=34;
+        // Where bulb sits on the cabinet: evenly spaced along a rectangle BulbInset in from the cabinet's edges, round the reels.
+        static Vector2 BulbAt(int bulb)
+        {
+            float x=CabinetSize.x*.5f-BulbInset,y=CabinetSize.y*.5f-BulbInset,along=bulb*4*(x+y)/Bulbs;
+            if(along<2*x)return new Vector2(-x+along,y);along-=2*x;
+            if(along<2*y)return new Vector2(x,y-along);along-=2*y;
+            if(along<2*x)return new Vector2(x-along,-y);along-=2*x;
+            return new Vector2(-x,-y+along);
+        }
         const float ChaseSteps=12,FlashSeconds=.4f;
         public static bool BulbLit(float elapsed,int bulb)
         {
@@ -175,7 +187,7 @@ namespace Festival.Presentation
         // The substance tiles, in Substances order: stamp pink, mushroom violet, warm gold, cool sky blue, leaf green.
         static readonly Color[] SubstanceColors={new Color(1,.38f,.61f),new Color(.66f,.52f,1),new Color(1,.76f,.29f),new Color(.34f,.78f,1),new Color(.55f,.85f,.4f)};
         static readonly string[] Reactions={"","Feels fine. Probably.","Whoa.","The colors are talking.","Oh no. Oh yes. Oh no."};
-        // The cabinet, in reference pixels: three reel windows side by side under the row of bulbs, the lever on its right.
+        // The cabinet, in reference pixels: three reel windows side by side inside the ring of bulbs, the lever on its right.
         const float TileHeight=128,ReelWidth=420,ReelSpacing=470,ReelY=-30,LeverLength=150;
         static readonly Vector2 CabinetSize=new Vector2(1500,600);
         // The take camera pushes in from TakeFar to TakeNear. It swings to the first of TakeAngles (degrees from the tripper's
@@ -242,7 +254,7 @@ namespace Festival.Presentation
         public int FollowAudio(RoundState state,double now,bool hidden,ProfileData profile,bool focused)
         {
             FestivalSettings.ApplyEffects(slotAudio,profile,.45f);
-            bool valid=state!=null&&state.Phase=="Spinning"&&state.Players.Exists(p=>p.Connected||p.Id==state.TripperId);
+            bool valid=state!=null&&state.Phase=="Spinning"&&Spun(state);
             bool held=!valid||hidden||!isActiveAndEnabled||FestivalSettings.EffectsGain(profile)<=0||profile!=null&&profile.MasterVolume<=0
                 ||!focused&&(profile==null||profile.MuteWhenUnfocused);
             if(!valid){StopAudio();audioHeld=true;return 0;}
@@ -275,6 +287,8 @@ namespace Festival.Presentation
             }
             return 0;
         }
+        // A loop, not a lambda over state, so a spin frame makes no garbage.
+        static bool Spun(RoundState state){foreach(var p in state.Players)if(p.Connected||p.Id==state.TripperId)return true;return false;}
         int PlayAudio(AudioClip clip,int reel)
         {
             slotAudio.Stop();slotAudio.clip=clip;slotAudio.Play();
@@ -304,7 +318,7 @@ namespace Festival.Presentation
             var face=(RectTransform)Panel(cabinet,"Face",Ink,Vector2.zero,Vector2.one).transform;face.offsetMin=new Vector2(16,16);face.offsetMax=new Vector2(-16,-16);
             for(int i=0;i<Bulbs;i++)
             {
-                var bulb=Block(cabinet,"Bulb "+i,Unlit,new Vector2((i-(Bulbs-1)*.5f)*92,CabinetSize.y*.5f-50),new Vector2(24,24));
+                var bulb=Block(cabinet,"Bulb "+i,Unlit,BulbAt(i),new Vector2(24,24));
                 bulb.localEulerAngles=new Vector3(0,0,45);bulbs[i]=bulb.GetComponent<Image>();
             }
             people=MakeReel(cabinet,"People reel",-ReelSpacing,"WHO TRIPS?");
