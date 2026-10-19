@@ -37,6 +37,7 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("ARREST WARNING"),"a cop about to detain you, whatever the crowd holds");
             arrester.TargetId="friend";
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"a cop stopping you over visible stock, and what you can do");
+            Assert.That(FestivalHudText.Condition(s,you,"R","K"),Is.EqualTo("SECURITY STOP • TALK (R) • DITCH IT (K) • OR WALK AWAY"),"the bound Interact and Drop keys");
             stopper.Mode="Patrol";
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD 3 / BLENDING"),"a cop back on patrol, or on a friend, leaves the card to the crowd");
             s.Npcs.Remove(wook);

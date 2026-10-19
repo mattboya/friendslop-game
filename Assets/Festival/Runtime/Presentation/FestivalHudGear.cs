@@ -15,15 +15,15 @@ namespace Festival.Presentation
 
         /// <summary>Why p's hands can't switch now, or "": inside a tent, car or potty the host takes no Equip, and an unpaid shelf
         /// item in hand would hide the switch (FestivalHands shows it over what's equipped) until it's paid for or put back with G.</summary>
-        public static string Blocked(PlayerState p)=>p.CampVisitId!=""?"Not inside the "+(CampFeatures.Find(p.CampVisitId)?.Kind.ToLowerInvariant()??"camp space")
-            :p.HeldOfferId!=""?"Holding an unpaid item: pay or put it back (G)":"";
+        public static string Blocked(PlayerState p,string drop="G")=>p.CampVisitId!=""?"Not inside the "+(CampFeatures.Find(p.CampVisitId)?.Kind.ToLowerInvariant()??"camp space")
+            :p.HeldOfferId!=""?"Holding an unpaid item: pay or put it back ("+drop+")":"";
 
         /// <summary>The line over the gear bar as a key or the wheel picks slot `slot` (0-2) of `hand`, the gear bar's items: its number
         /// and what's in it, or why nothing switches (Blocked). "" for a player who isn't up and free: the host refuses them and says why.</summary>
-        public static string Toast(PlayerState p,List<ItemStack> hand,int slot)
+        public static string Toast(PlayerState p,List<ItemStack> hand,int slot,string drop="G")
         {
             if(p.Life!="Alive")return "";
-            string blocked=Blocked(p);if(blocked!="")return blocked;
+            string blocked=Blocked(p,drop);if(blocked!="")return blocked;
             return (slot+1)+Dot+(slot<hand.Count?Catalog.FindItem(hand[slot].ItemId)?.Name.ToUpperInvariant()??hand[slot].ItemId:"EMPTY");
         }
 

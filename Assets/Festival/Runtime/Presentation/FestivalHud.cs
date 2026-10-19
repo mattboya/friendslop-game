@@ -68,6 +68,8 @@ namespace Festival.Presentation
         private readonly Image[] rhythmReceptors=new Image[4];
         private readonly Image[] rhythmReceptorWells=new Image[4];
         private readonly Text[] rhythmKeys=new Text[4];
+        private Text promptKey,rhythmControls,mapHint;
+        private readonly Dictionary<InputAction,(string Path,string Label)> keyLabels=new Dictionary<InputAction,(string Path,string Label)>();
         private readonly float[] rhythmFlashUntil=new float[4];
         private bool[] rhythmConsumed=Array.Empty<bool>(),rhythmHeld=Array.Empty<bool>(),rhythmDropped=Array.Empty<bool>();
         private Image rhythmProgressFill,stopHoldFill,walkHoldFill;
@@ -383,7 +385,7 @@ namespace Festival.Presentation
             promptPanel=Card(root.transform,"Action prompt",new Vector2(.022f,.777f),new Vector2(.355f,.844f),true);
             // Legacy prompt fill is kept for ShowStopHold callers; live chats now leave through the effective Menu binding.
             walkHoldFill=Panel(promptPanel.transform,"Walk hold fill",new Color(Orange.r,Orange.g,Orange.b,.35f),Vector2.zero,new Vector2(0,1)).GetComponent<Image>();walkHoldFill.raycastTarget=false;walkHoldFill.gameObject.SetActive(false);
-            promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));
+            promptKeycap=Keycap(promptPanel.transform,"E",new Vector2(.025f,.19f),new Vector2(.11f,.81f));promptKey=promptKeycap.GetComponentInChildren<Text>();ShrinkToFit(promptKey,12);
             prompt=Label(promptPanel.transform,"Prompt",18,TextAnchor.MiddleLeft);Place(prompt.rectTransform,.135f,.08f,.97f,.92f);promptPanel.SetActive(false);
             // A shelf item's prompt carries its price and description, longer on Ember Playa.
             ShrinkToFit(prompt,14);
@@ -420,7 +422,7 @@ namespace Festival.Presentation
             Accent(sundownPanel.transform,Orange);
             sundownText=Label(sundownPanel.transform,"Sundown",22,TextAnchor.MiddleCenter);sundownText.fontStyle=FontStyle.Normal;sundownText.color=Orange;Fill(sundownText.rectTransform,12);ShrinkToFit(sundownText,14);sundownPanel.SetActive(false);
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
-            inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text="GEAR   /   1–3 EQUIP     Q USE     G DROP";
+            inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text=FestivalHudText.GearHeading(true);
             Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);
             emptyGearLabel=Label(inventoryPanel.transform,"Empty gear",20,TextAnchor.MiddleCenter);
             emptyGearLabel.color=Mint;Fill(emptyGearLabel.rectTransform,6);emptyGearLabel.gameObject.SetActive(false);
@@ -538,7 +540,7 @@ namespace Festival.Presentation
             rhythmTiming=Label(rhythmPanel.transform,"Timing",20,TextAnchor.MiddleCenter);rhythmTiming.color=MutedPaper;Place(rhythmTiming.rectTransform,.06f,.315f,.94f,.37f);
             var progressTrack=Panel(rhythmPanel.transform,"Step progress track",new Color(.33f,.43f,.44f,1),new Vector2(.08f,.055f),new Vector2(.92f,.071f));progressTrack.GetComponent<Image>().raycastTarget=false;
             rhythmProgressFill=Panel(rhythmPanel.transform,"Step progress",Mint,new Vector2(.08f,.055f),new Vector2(.08f,.071f)).GetComponent<Image>();rhythmProgressFill.raycastTarget=false;
-            var controls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);controls.text="ARROWS OR WASD";controls.color=MutedPaper;Place(controls.rectTransform,.06f,.005f,StopHoldLeft-.02f,.049f);
+            rhythmControls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);rhythmControls.text="ARROWS OR WASD";rhythmControls.color=MutedPaper;Place(rhythmControls.rectTransform,.06f,.005f,StopHoldLeft-.02f,.049f);
             // DANCE-12: only a held G stops a challenge; the fill under the words grows while it's held (ShowStopHold).
             stopHoldFill=Panel(rhythmPanel.transform,"Stop hold fill",new Color(Orange.r,Orange.g,Orange.b,.5f),new Vector2(StopHoldLeft,.008f),new Vector2(StopHoldLeft,.046f)).GetComponent<Image>();stopHoldFill.raycastTarget=false;stopHoldFill.gameObject.SetActive(false);
             stopHoldLabel=Label(rhythmPanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);stopHoldLabel.text=FestivalHudText.HoldToStop;Place(stopHoldLabel.rectTransform,StopHoldLeft,.005f,StopHoldRight,.049f);
@@ -746,7 +748,7 @@ namespace Festival.Presentation
             mapPanel=Card(root,"Map",new Vector2(.11f,.10f),new Vector2(.89f,.90f),false);
             Accent(mapPanel.transform,Mint);
             mapTitle=Label(mapPanel.transform,"Map title",38,TextAnchor.MiddleLeft);mapTitle.fontStyle=FontStyle.Normal;mapTitle.color=Ink;Place(mapTitle.rectTransform,.04f,.89f,.96f,.97f);
-            var mapHint=Label(mapPanel.transform,"Map hint",17,TextAnchor.MiddleRight);mapHint.text="HOLD TAB TO VIEW";mapHint.color=new Color(.34f,.43f,.39f);Place(mapHint.rectTransform,.72f,.91f,.96f,.97f);
+            mapHint=Label(mapPanel.transform,"Map hint",17,TextAnchor.MiddleRight);mapHint.text="HOLD TAB TO VIEW";mapHint.color=new Color(.34f,.43f,.39f);Place(mapHint.rectTransform,.72f,.91f,.96f,.97f);
             Rule(mapPanel.transform,.88f);
             var diagram=Card(mapPanel.transform,"Ground plan",new Vector2(.035f,.07f),new Vector2(.67f,.85f),true);
             for(int i=1;i<5;i++)
@@ -893,7 +895,7 @@ namespace Festival.Presentation
             if(checkoutItem!="" && (Catalog.FindItem(checkoutItem)==null || (state.Phase=="Shopping"?(player.HeldOfferId!=checkoutItem||!Near(player,0,7)):(state.Phase!="Playing"||FocusedOffer(state,player)!=checkoutItem))))checkoutItem="";
             var checkoutDefinition=Catalog.FindItem(checkoutItem);
             checkoutPanel.SetActive(!showMenu&&checkoutDefinition!=null);
-            if(checkoutDefinition!=null)checkoutText.text="E  PAY "+FestivalHudText.Money(state,player,checkoutDefinition.Price).ToUpperInvariant()+"  •  "+checkoutDefinition.Name.ToUpperInvariant()+"    G CANCEL";
+            if(checkoutDefinition!=null)checkoutText.text=Bound(session?.Controls?.Interact,"E")+"  PAY "+FestivalHudText.Money(state,player,checkoutDefinition.Price).ToUpperInvariant()+"  •  "+checkoutDefinition.Name.ToUpperInvariant()+"    "+Bound(session?.Controls?.Drop,"G")+" CANCEL";
             promptPanel.SetActive(!showMenu&&!string.IsNullOrEmpty(prompt.text));
             promptKeycap.SetActive(primaryAction!=null);
             nearbyPanel.SetActive(promptPanel.activeSelf&&nearby.text!="");
@@ -1072,10 +1074,11 @@ namespace Festival.Presentation
         {
             levelBanner.text=FestivalHudText.LevelBanner(state);
             objectiveTitle.text=FestivalHudText.ObjectiveTitle(state,player);
-            objective.text=FestivalHudText.ObjectiveDetail(state,player,session!=null&&session.DevelopmentFestivalSelection);
+            objective.text=FestivalHudText.ObjectiveDetail(state,player,session!=null&&session.DevelopmentFestivalSelection,Bound(session?.Controls?.Chat,"F"),Bound(session?.Controls?.Interact,"E"));
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
-            vitals.text=FestivalHudText.Vitals(state,player);
+            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"));
+            promptKey.text=Bound(session?.Controls?.Interact,"E");
             for(int i=0;i<slotFrames.Length;i++)
             {
                 var item=i<handGear.Count?handGear[i]:null;
@@ -1086,7 +1089,7 @@ namespace Festival.Presentation
             }
             int ready=state.Players.FindAll(p=>p.Ready).Count;
             string checklist=FestivalHudText.HomeChecklist(state,player.Id);
-            roster.text=checklist!=""?checklist:state.Players.Count+" CREW"+(state.Phase=="Shopping"?"  •  "+ready+" READY":"  •  TAB MAP");
+            roster.text=checklist!=""?checklist:state.Players.Count+" CREW"+(state.Phase=="Shopping"?"  •  "+ready+" READY":"  •  "+Bound(session?.Controls?.Objectives,"TAB")+" MAP");
             UpdateRosterLayout(checklist==""?0:checklist.Split('\n').Length);
             menuRoster.text=state.Players.Count+" / 8 FRIENDS\n"+string.Join("   •   ",state.Players.ConvertAll(p=>(p.Id==player.Id?"YOU":p.Name)+(p.Ready?" READY":"")));
             menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"BACK TO CAMP":state.Phase==FestivalSimulation.MinigamePhase?"MINIGAME":"GATHERING";
@@ -1153,7 +1156,7 @@ namespace Festival.Presentation
         // menu, map or dance). Laid out again only when its text changes.
         private void UpdateBriefing(RoundState state,PlayerState player,bool clear)
         {
-            string briefing=FestivalHudText.Briefing(state,player.Id);
+            string briefing=FestivalHudText.Briefing(state,player.Id,Bound(session?.Controls?.Chat,"F"));
             if(briefing!=shownBriefing){shownBriefing=briefing;var lines=briefing.Split('\n');briefingGoal.text=lines[0];briefingJob.text=lines.Length>1?lines[1]:"";briefingStakes.text=lines.Length>2?lines[2]:"";}
             if(briefingPanel.activeSelf&&SkipsBriefing())briefingSkipped=state.RoundId;
             briefingPanel.SetActive(clear&&briefing!=""&&briefingSkipped!=state.RoundId);
@@ -1166,7 +1169,7 @@ namespace Festival.Presentation
             if(tipId!=""&&(tipRound!=state.RoundId||tipShown>=FestivalHudText.TipSeconds||state.Phase!="Playing"||player.Life!="Alive"))tipId="";
             if(tipId==""&&clear)
             {
-                var tip=FestivalHudText.Tip(state,player,session.Profile.Data.SeenTips);
+                var tip=FestivalHudText.Tip(state,player,session.Profile.Data.SeenTips,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),Bound(session?.Controls?.Chat,"F"));
                 if(tip.Id!=""){tipId=tip.Id;tipRound=state.RoundId;tipShown=0;tipText.text=tip.Text;session.Profile.SeeTip(tip.Id);}
             }
             tipPanel.SetActive(clear&&tipId!="");
@@ -1227,7 +1230,7 @@ namespace Festival.Presentation
             {
                 CancelGearHold();
                 // HUD-8: the switch flashes over the gear bar, or why not: inside a tent, or behind an unpaid item, nothing switches.
-                string toast=FestivalHudGear.Toast(player,handGear,equipSlot);if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
+                string toast=FestivalHudGear.Toast(player,handGear,equipSlot,Bound(session?.Controls?.Drop,"G"));if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
                 if(FestivalHudGear.Blocked(player)=="")
                 {
                     selectedSlot=equipSlot;selectedThisFrame=true;manualEquipmentTick=state.Tick;
@@ -1275,7 +1278,7 @@ namespace Festival.Presentation
                 {
                     if(TakesOnQ(item,qAsked,qAskedAt,Time.unscaledTime)){qAsked="";session.Command("Use",item:item);}
                     // ECON-3: the first Q on stock asks; the notice stays up as long as a second Q would take it.
-                    else{qAsked=item;qAskedAt=Time.unscaledTime;session.SetMessage(TakeStockAgain);lastNotice=session.Message;noticeUntil=qAskedAt+TakeStockSeconds;}
+                    else{qAsked=item;qAskedAt=Time.unscaledTime;session.SetMessage(TakeStockAgainFor(Bound(session?.Controls?.Use,"Q")));lastNotice=session.Message;noticeUntil=qAskedAt+TakeStockSeconds;}
                 }
             }
             bool dropEligible=heldItem!=""&&heldItem==player.EquippedItemId&&!pendingEquipment&&state.Tick>manualEquipmentTick&&gearKeys&&!selectedThisFrame
@@ -1446,7 +1449,7 @@ namespace Festival.Presentation
             double revealSeconds=RevealSeconds(state);
             reviewText.text=FestivalHudText.ReviewHeadline(state,player);
             reviewReveal.text=FestivalHudText.ReviewReveal(state,player.Id,revealSeconds);
-            reviewStatus.text=FestivalHudText.ReviewStatus(state,player.Id,revealSeconds);
+            reviewStatus.text=FestivalHudText.ReviewStatus(state,player.Id,revealSeconds,Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Interact,"E"));
             ballotCrew.Clear();if(open)foreach(var p in state.Players)if(p.Connected&&ballotCrew.Count<ballotPicks.GetLength(1))ballotCrew.Add(p.Id);
             bool relayout=ballotColumns!=ballotCrew.Count;ballotColumns=ballotCrew.Count;
             for(int award=0;award<ballotLabels.Length;award++)
@@ -1516,7 +1519,7 @@ namespace Festival.Presentation
             if(chatBesidePass!=showMenu){chatBesidePass=showMenu;Place(Rect(chatWindow.gameObject),showMenu?.735f:.60f,.155f,showMenu?.985f:.975f,.652f);}
             bool covered=showMenu&&crewOpen;
             // CAMP-1: at camp the window may be Marigold's talk instead, which the host knows nothing of; she faces whoever talks to her.
-            chatWindow.CloseKey=session.Controls.Label(session.Controls.Menu).ToUpperInvariant();
+            chatWindow.CloseKey=Bound(session?.Controls?.Menu,"ESC");
             var outcome=session.PendingConversationOutcome;
             bool live=!covered&&(sellerTalk.Follow(state,player,Time.unscaledTime,session.Profile.Data.ReducedMotion)
                 ||outcome==null&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
@@ -1538,7 +1541,8 @@ namespace Festival.Presentation
             if(chatWindow.Open)dialoguePanel.SetActive(false);
             // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
             // equip.
-            inventoryHeading.text="GEAR   /   "+(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open?"":"1–3 EQUIP     ")+"Q USE     G DROP";
+            inventoryHeading.text=FestivalHudText.GearHeading(!(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open),
+                Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Use,"Q"),Bound(session?.Controls?.Drop,"G"));
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)
@@ -1574,7 +1578,7 @@ namespace Festival.Presentation
             if(displayedChart==null||displayedInteractionId!=interaction.Id||displayedSeed!=interaction.ChartSeed||displayedNoteCount!=interaction.NoteCount||displayedPhrase!=interaction.Phrase||Math.Abs(displayedBeatSeconds-interaction.BeatSeconds)>.0001)
             {
                 ShowChart(interaction,RhythmChart.For(interaction));
-                rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);stopHoldLabel.text=FestivalHudText.HoldToStopFor(interaction.Kind);
+                rhythmDialogue.text=FestivalHudText.RhythmTitle(interaction.Kind);stopHoldLabel.text=FestivalHudText.HoldToStopFor(interaction.Kind,Bound(session?.Controls?.Drop,"G"));
                 ShowRhythmKeys(session.Controls);
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
@@ -1716,7 +1720,18 @@ namespace Festival.Presentation
             if(held>0){Place(stopHoldFill.rectTransform,StopHoldLeft,.008f,StopHoldLeft+(StopHoldRight-StopHoldLeft)*Mathf.Min(held,1),.046f);Place(walkHoldFill.rectTransform,0,0,Mathf.Min(held,1),1);}
         }
         // Labels each receptor well with its lane's WASD key as bound now, so a rebound key shows its new name. Read once per challenge.
-        public void ShowRhythmKeys(FestivalInput controls){for(int lane=0;lane<4;lane++)rhythmKeys[lane].text=controls.NoteKey(lane);}
+        public void ShowRhythmKeys(FestivalInput controls)
+        {
+            for(int lane=0;lane<4;lane++)rhythmKeys[lane].text=controls.NoteKey(lane);
+            // The bottom line names the keys in W-A-S-D order (up, left, down, right): the arrows as one word while none is moved.
+            string arrows="",alternates="";bool moved=false;
+            foreach(int lane in new[]{2,0,1,3})
+            {
+                var arrow=controls.Notes[lane].bindings[0];moved|=arrow.effectivePath!=arrow.path;
+                arrows+=controls.Notes[lane].GetBindingDisplayString(0);alternates+=controls.NoteKey(lane);
+            }
+            rhythmControls.text=((moved?arrows:"ARROWS")+" OR "+alternates).ToUpperInvariant();
+        }
 
         // Places a note's view `remaining` seconds before its time, with `lead` seconds of look-ahead under the effect: it rises
         // from just above the step progress bar onto its lane's outline arrow, and a missed one fades out as it rises past it.
@@ -1788,13 +1803,13 @@ namespace Festival.Presentation
             mapShade.SetActive(shown);mapPanel.SetActive(shown);if(!shown)return;
             objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);rhythmPanel.SetActive(false);dialoguePanel.SetActive(false);trippingPanel.SetActive(false);chatWindow.Close();
             bool camp=state.Phase=="Shopping"||state.Phase=="Spinning";campMap.SetActive(camp);festivalMap.SetActive(!camp);
-            mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";
+            mapTitle.text=camp?"CAMPSITE  /  FIND YOUR WAY":"FESTIVAL GROUNDS  /  FIND YOUR WAY";mapHint.text="HOLD "+Bound(session?.Controls?.Objectives,"TAB")+" TO VIEW";
             float x=camp?Mathf.InverseLerp(-30,30,player.X):Mathf.InverseLerp(-35,35,player.X);
             float y=camp?Mathf.InverseLerp(-20,25,player.Z):Mathf.InverseLerp(-35,35,player.Z);
             Place(mapPlayerMarker,x-.012f,y-.018f,x+.012f,y+.018f);
             if(camp)
             {
-                mapText.text="CAMP\n\nGEAR\nPick up one item. Pay the seller before you enter.\n\nTRAILHEAD\nPress E to ready. Your crew enters together.\n\nYOU ARE THE ORANGE DOT.";
+                mapText.text="CAMP\n\nGEAR\nPick up one item. Pay the seller before you enter.\n\nTRAILHEAD\nPress "+Bound(session?.Controls?.Interact,"E")+" to ready. Your crew enters together.\n\nYOU ARE THE ORANGE DOT.";
                 return;
             }
             string team="";foreach(var p in state.Players)team+=(p.Id==player.Id?"YOU":p.Name)+"  /  "+p.Life.ToUpperInvariant()+"\n";
@@ -1844,7 +1859,7 @@ namespace Festival.Presentation
                 var site=CampFeatures.Find(player.CampVisitId);
                 string antic=site?.Kind=="Car"?"HONK / FIDDLE":site?.Kind=="Tent"?"SHADOW PUPPET":"MYSTERY FLUSH";
                 if(state.Phase=="Shopping")AddHandoffActions(state,player,ref y);
-                SetPromptAction("E  EXIT "+(site?.Kind??"CAMP SPACE").ToUpperInvariant()+"   •   F "+antic+"   •   G EXIT",()=>session.Command("ExitCamp"));
+                SetPromptAction("E  EXIT "+(site?.Kind??"CAMP SPACE").ToUpperInvariant()+"   •   "+Bound(session?.Controls?.Chat,"F")+" "+antic+"   •   "+Bound(session?.Controls?.Drop,"G")+" EXIT",()=>session.Command("ExitCamp"));
                 FinishActions();return;
             }
             if(state.Phase=="CampReview")
@@ -1858,7 +1873,7 @@ namespace Festival.Presentation
             }
             if(state.Phase=="Results")
             {
-                SetPromptAction(FestivalHudText.ResultsPrompt(state,player.Id),null);
+                SetPromptAction(FestivalHudText.ResultsPrompt(state,player.Id,Bound(session?.Controls?.Menu,"ESC")),null);
                 FinishActions();return;
             }
             // MINI-1: while a minigame runs the host takes only its own command, so its keys are all that is offered. MINI-4: in
@@ -1866,7 +1881,7 @@ namespace Festival.Presentation
             if(state.Phase==FestivalSimulation.MinigamePhase)
             {
                 int cup=FestivalMinigameView.AimedCup(state,FestivalCharacter.ViewTransform);
-                string play=FestivalHudText.MinigamePrompt(state,player,cup);
+                string play=FestivalHudText.MinigamePrompt(state,player,cup,Bound(session?.Controls?.Chat,"F"));
                 SetPromptAction(play,cup<0||play==""?null:(Action)(()=>
                 {
                     int aimed=FestivalMinigameView.AimedCup(session.State,FestivalCharacter.ViewTransform);
@@ -1923,7 +1938,7 @@ namespace Festival.Presentation
                     else SetPromptAction("E  SHOW "+held.Name.ToUpperInvariant()+" TO SELLER",()=>checkoutItem=held.Id);
                 }
                 else if(Near(player,0,19,3.2f))SetPromptAction(player.Ready?"E  UNREADY AT TRAILHEAD":"E  READY AT TRAILHEAD",()=>session.Command("Ready"));
-                else if(player.HeldOfferId!="")SetPromptAction("UNPAID  "+Catalog.FindItem(player.HeldOfferId)?.Name.ToUpperInvariant()+"  •  SELLER AHEAD  •  G RETURN",null);
+                else if(player.HeldOfferId!="")SetPromptAction("UNPAID  "+Catalog.FindItem(player.HeldOfferId)?.Name.ToUpperInvariant()+"  •  SELLER AHEAD  •  "+Bound(session?.Controls?.Drop,"G")+" RETURN",null);
                 else
                 {
                     string itemId=FocusedOffer(state,player);
@@ -1973,7 +1988,7 @@ namespace Festival.Presentation
                 // PLAYA-5: a plain art car ride lists its deck set beside the way off. Both read the view again when chosen, so a list
                 // from just before a set began can neither stop it nor ask for another.
                 bool deck=FestivalSimulation.CanPlayDeckSet(state,player);string listed=player.InteractionId;
-                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player),deck?()=>{if(session.LocalPlayer?.InteractionId==listed)FinishCurrentAction();}:(Action)FinishCurrentAction,ref y);
+                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player,Bound(session?.Controls?.Chat,"F")),deck?()=>{if(session.LocalPlayer?.InteractionId==listed)FinishCurrentAction();}:(Action)FinishCurrentAction,ref y);
                 if(deck)foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))
                     AddAction(label,()=>{if(FestivalSimulation.CanPlayDeckSet(session.State,session.LocalPlayer))session.Command(command.Kind);},ref y);
             }
@@ -2044,7 +2059,7 @@ namespace Festival.Presentation
                         if(FestivalSimulation.Engaged(state,check))AddAction(FestivalHudText.BusyAction,()=>{},ref y);
                         else if(FestivalSimulation.CanCheckVision(state,player,check))
                         {
-                            AddAction(FestivalHudText.CheckDanceAction,()=>session.Command("ConfirmDance",checkId),ref y);
+                            AddAction(FestivalHudText.CheckDanceActionFor(Bound(session?.Controls?.Chat,"F")),()=>session.Command("ConfirmDance",checkId),ref y);
                             AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
                         }
                         else AddAction(FestivalHudText.RopeChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
@@ -2056,7 +2071,7 @@ namespace Festival.Presentation
                 if(npc!=null)
                 {
                     if(npc.Kind=="Cop"){if(npc!=stopper)AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);}
-                    else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id)))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
+                    else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id),Bound(session?.Controls?.Chat,"F")))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
                 }
                 // Offering your gear to a friend in reach follows the errands above, the checks and the festivalgoer beside you: the sober
                 // crew sticks by the tripper, so a friend is often in reach, and E must not hand them your gear (your stock, ECON-3)
@@ -2078,12 +2093,12 @@ namespace Festival.Presentation
             // POLO-2: up on the Ferris wheel nothing is worth E; the prompt counts the turn down instead.
             string riding=FestivalHudText.WheelPrompt(state,player,session.EstimatedSimulationSeconds);
             if(riding!=""){prompt.text=riding;primaryAction=null;}
-            else if(talking)prompt.text=session.Controls.Label(session.Controls.Menu).ToUpperInvariant()+" TO WALK AWAY";
+            else if(talking)prompt.text=Bound(session?.Controls?.Menu,"ESC")+" TO WALK AWAY";
             else prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
             // ECON-3: beside a festivalgoer or a cop, the strip lists what else there is, each a click away in the Esc menu's list.
             nearbyLabels.Clear();
             if(npc!=null&&primaryAction!=null)for(int i=0;i<activeActionCount;i++)nearbyLabels.Add(dynamicActions[i].name.Substring(7));
-            nearby.text=MoreActions(nearbyLabels);UpdateNearbyLayout();
+            nearby.text=MoreActions(nearbyLabels,Bound(session?.Controls?.Menu,"ESC"));UpdateNearbyLayout();
             FinishActions();
         }
         private void AddTwistActions(RoundState state,PlayerState player,ref float y){foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);}
@@ -2129,6 +2144,16 @@ namespace Festival.Presentation
             activeActionCount++;
             if(primaryAction==null)primaryAction=action;y-=.09f;
         }
+        // An action's key as bound, for a prompt; fallback (today's letter) with no controls, as in EditMode. Cached while its bound
+        // path stays the same, because GetBindingDisplayString allocates and the HUD asks every frame.
+        // ponytail: keyed on binding 0, every prompt action's only binding; a keyboard layout switch mid-game keeps the old name.
+        private string Bound(InputAction action,string fallback)
+        {
+            if(action==null)return fallback;
+            string path=action.bindings[0].effectivePath;
+            if(!keyLabels.TryGetValue(action,out var key)||key.Path!=path)keyLabels[action]=key=(path,session.Controls.Label(action).ToUpperInvariant());
+            return key.Label;
+        }
         // Players read an item's display name, never its internal id (THEME-2: "Tongue Stamps", not "stock_lsd").
         private static string ItemName(string id)=>Catalog.FindItem(id)?.Name??id;
         /// <summary>ECON-3: whether Q (Use) on item, pressed at `now` (the HUD's clock), takes it. Using stock is taking it yourself (the
@@ -2137,15 +2162,16 @@ namespace Festival.Presentation
         /// asks, and the HUD says TakeStockAgain. Every other item's Q is unchanged.</summary>
         public static bool TakesOnQ(string item,string armed,float armedAt,float now)=>Catalog.FindItem(item)?.Category!="Stock"||item==armed&&now-armedAt<=TakeStockSeconds;
         public const float TakeStockSeconds=3;
-        public const string TakeStockAgain="Q again to take it yourself (it's stock for selling)";
+        public static readonly string TakeStockAgain=TakeStockAgainFor("Q");
+        public static string TakeStockAgainFor(string use)=>use+" again to take it yourself (it's stock for selling)";
         /// <summary>ECON-3 (Matt: "there is no button to actually sell to people"): the strip under the prompt beside a festivalgoer or a
         /// cop. The prompt is the first action listed, on E; the strip lists the rest, each marked ESC, the key that opens the menu on
         /// that list to click one. "" with nothing else to do there.</summary>
-        public static string MoreActions(List<string> actions)
+        public static string MoreActions(List<string> actions,string menu="ESC")
         {
             int extras=actions.Count-1,shown=extras>5?4:extras;string lines="";
-            for(int i=1;i<=shown;i++)lines+=(i>1?"\n":"")+"ESC  "+actions[i];
-            if(extras>5)lines+="\nESC  +"+(extras-shown)+" more";
+            for(int i=1;i<=shown;i++)lines+=(i>1?"\n":"")+menu+"  "+actions[i];
+            if(extras>5)lines+="\n"+menu+"  +"+(extras-shown)+" more";
             return lines;
         }
         private void FinishActions(){for(int i=activeActionCount;i<dynamicActions.Count;i++)dynamicActions[i].SetActive(false);}

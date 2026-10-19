@@ -51,6 +51,7 @@ namespace Festival.Tests
             var kim=FestivalSession.ViewFor(game,"kim");
             Assert.That(FestivalHudText.ReviewStatus(kim,"kim",0),Is.EqualTo("CLICK A FRIEND FOR EACH AWARD, OR PRESS 1–3\nVOTED  ASH  •  WAITING ON  SAM, YOU"),
                 "a half-done ballot still counts as waiting, and nobody waits for a player who left");
+            Assert.That(FestivalHudText.ReviewStatus(kim,"kim",0,"Z","X"),Does.StartWith("CLICK A FRIEND FOR EACH AWARD, OR PRESS Z–X\n"),"the bound Slot1 and Slot3 keys");
             Assert.That(FestivalHudText.ReviewReveal(kim,"kim",99),Is.Empty,"nothing of the verdict shows before the whole crew has voted");
             Assert.That(FestivalHudText.Ballot(FestivalSession.ViewFor(game,"sam"),"sam",0),Is.EqualTo("1  "+game.State.ReviewAwards[0].ToUpperInvariant()+"  •  YOUR PICK: KIM"),"Sam's own pick comes back to Sam");
         }
@@ -76,6 +77,7 @@ namespace Festival.Tests
             var s=Campfire("sam","sam","ash");Crew(s,"ash","Ash");Crew(s,"sam","Sam");
             Assert.That(FestivalHudText.ReviewStatus(s,"ash",4*Step-.01),Is.Empty,"the verdict is still playing");
             Assert.That(FestivalHudText.ReviewStatus(s,"ash",4*Step),Is.EqualTo("E  OPEN THE CAMP SHOP"));
+            Assert.That(FestivalHudText.ReviewStatus(s,"ash",4*Step,"1","3","R"),Is.EqualTo("R  OPEN THE CAMP SHOP"),"the bound Interact key");
             Assert.That(FestivalHudText.ReviewStatus(s,"sam",4*Step),Is.EqualTo("WAITING FOR THE HOST TO OPEN THE SHOP"));
             var solo=new RoundState{Phase="CampReview",HostPlayerId="ash",ReviewResult="Success"};Crew(solo,"ash","Ash");
             Assert.That(FestivalHudText.ReviewReveal(solo,"ash",0),Is.EqualTo("SOLO PRACTICE: NO AWARDS TONIGHT"));

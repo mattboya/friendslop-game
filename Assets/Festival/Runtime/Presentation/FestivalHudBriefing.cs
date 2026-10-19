@@ -19,7 +19,7 @@ namespace Festival.Presentation
         /// one hint, "Trust, but verify."; anyone else is told whose lead to follow), and how the crew loses. "" in every other phase,
         /// after the window, and for anyone not Alive, a spirit above all.
         /// </summary>
-        public static string Briefing(RoundState s,string localId)
+        public static string Briefing(RoundState s,string localId,string chat="F")
         {
             if(s.Phase!="Playing"||s.ElapsedSeconds>=BriefingSeconds)return "";
             var p=Crew(s,localId);if(p==null||p.Life!="Alive")return "";
@@ -28,7 +28,7 @@ namespace Festival.Presentation
                 :s.LevelIndex==Festivals.LevelCount-1?(two?"RESCUE BOTH FRIENDS":"RESCUE YOUR FRIEND")+", THEN GET EVERYONE HOME"
                 :"FIND YOUR "+(two?"TWO LOST FRIENDS":"LOST FRIEND")+" AND BRING THEM BACK TO CAMP";
             string sees=level.Night?"the clue trail":"who's buying";
-            string job=s.TripperId==localId?"You're tripping: only you can see "+sees+". Trust, but verify: some visions lie, so check one with F first."
+            string job=s.TripperId==localId?"You're tripping: only you can see "+sees+". Trust, but verify: some visions lie, so check one with "+chat+" first."
                 :(Crew(s,s.TripperId)?.Name??"A friend")+" is tripping and can see "+sees+". Stay close and act on what they call out.";
             return level.Name.ToUpperInvariant()+Dot+goal+"\n"+job+"\n"+LoseLine;
         }
@@ -84,7 +84,7 @@ namespace Festival.Presentation
         /// first: a swarm on p, security stopping p, the tripper's first vision, their first checked one, a friend tripping. Only
         /// while p is Alive in play, and never over the level briefing. Asked every frame, so it allocates nothing until it has a tip.
         /// </summary>
-        public static (string Id,string Text) Tip(RoundState s,PlayerState p,ICollection<string> seen)
+        public static (string Id,string Text) Tip(RoundState s,PlayerState p,ICollection<string> seen,string interact="E",string drop="G",string chat="F")
         {
             if(s.Phase!="Playing"||p.Life!="Alive"||s.ElapsedSeconds<BriefingSeconds)return ("","");
             // The card's own rules (Condition, StoppedBy): a festivalgoer swarming p, a cop stopping p over visible stock, read in one
@@ -93,9 +93,9 @@ namespace Festival.Presentation
             foreach(var n in s.Npcs)if(n.TargetId==p.Id){swarmed|=n.Kind=="Wook"&&n.Mode=="Swarming";stopped|=n.Kind=="Cop"&&n.Mode=="Stop";}
             foreach(var v in s.Visions)verdict|=v.Confirmed;
             if(swarmed&&!seen.Contains("swarm"))return ("swarm","Your card says SWARMING: the crowd is after you, and their hits can down you.\nRun, and keep well clear of them until they lose interest.");
-            if(stopped&&!seen.Contains("stop"))return ("stop","Security stopped you: stock out in hand or a deal; a merch bag hides it.\nTalk to them (E), ditch it (G) or walk away out of sight, or they arrest you.");
+            if(stopped&&!seen.Contains("stop"))return ("stop","Security stopped you: stock out in hand or a deal; a merch bag hides it.\nTalk to them ("+interact+"), ditch it ("+drop+") or walk away out of sight, or they arrest you.");
             // A view holds visions only for its tripper (FestivalSimulation.VisibleVisions).
-            if(tripper&&s.Visions.Count>0&&!seen.Contains("vision"))return ("vision","Your visions: green ball buyer, red cube narc, blue pill clue, gold drum secret.\nSome lie: walk up and press F to chat or E to dance to check one.");
+            if(tripper&&s.Visions.Count>0&&!seen.Contains("vision"))return ("vision","Your visions: green ball buyer, red cube narc, blue pill clue, gold drum secret.\nSome lie: walk up and press "+chat+" to chat or "+interact+" to dance to check one.");
             if(tripper&&verdict&&!seen.Contains("verdict"))return ("verdict","Checked! A green ring means it's true, a red ring that it's fake.\nAim at it to read what you found, like "
                 +FestivalVisionMarkers.VerdictText("Narc",false)+" or "+FestivalVisionMarkers.VerdictText("DoubleBuyer",true)+".");
             if(!tripper&&s.TripperId!=""&&!seen.Contains("friend"))return ("friend","Only "+(Crew(s,s.TripperId)?.Name??"the tripper")+" can see the visions.\nStick close and ask what they see.");

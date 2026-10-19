@@ -170,8 +170,8 @@ namespace Festival.Presentation
         /// <summary>The keys while a game runs, for the player whose move it is until it is scored; "" for anyone else, once it is scored,
         /// and in a game with no moves of its own. MINI-4, Mystery Cups: E drinks `cup`, the one under the aim dot
         /// (FestivalMinigameView.AimedCup, -1 none), and F calls it.</summary>
-        public static string MinigamePrompt(RoundState s,PlayerState p,int cup)=>FestivalSimulation.CupsTurn(s)!=p.Id?""
-            :(cup>=0?"E  DRINK CUP "+(cup+1):"LOOK AT A CUP TO DRINK IT")+"   •   F CALL IT";
+        public static string MinigamePrompt(RoundState s,PlayerState p,int cup,string chat="F")=>FestivalSimulation.CupsTurn(s)!=p.Id?""
+            :(cup>=0?"E  DRINK CUP "+(cup+1):"LOOK AT A CUP TO DRINK IT")+"   •   "+chat+" CALL IT";
 
         // Seconds left, in whole seconds rounded up, as the clock counts them.
         static int WholeSeconds(double seconds)=>(int)Math.Ceiling(Math.Max(0,seconds));

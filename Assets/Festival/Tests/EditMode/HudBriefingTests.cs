@@ -29,6 +29,7 @@ namespace Festival.Tests
             Assert.That(Lines(s,"sam"),Is.EqualTo(new[]{"DAY 1  •  SELL $30 BEFORE SUNDOWN",
                 "You're tripping: only you can see who's buying. Trust, but verify: some visions lie, so check one with F first.",Lose}),
                 "the crew's whole quota (two of you at $15), the tripper's job with the game's one hint folded in, and the stakes");
+            Assert.That(FestivalHudText.Briefing(s,"sam","H"),Does.Contain("so check one with H first."),"the bound Chat key");
             Assert.That(Lines(s,"you"),Is.EqualTo(new[]{"DAY 1  •  SELL $30 BEFORE SUNDOWN","Sam is tripping and can see who's buying. Stay close and act on what they call out.",Lose}),
                 "a friend reads the same goal, and who to stick with");
             Assert.That(FestivalHudText.Briefing(s,"you"),Does.Not.Contain("Trust, but verify"),"the one hint is the tripper's alone");
@@ -201,6 +202,7 @@ namespace Festival.Tests
             tip=TipOf(s,"sam",seen);
             foreach(var shape in new[]{"green ball","red cube","blue pill","gold drum"})Assert.That(tip.Text,Does.Contain(shape),"the first vision names every marker shape");
             Assert.That(tip.Text,Does.Contain("F to chat").And.Contain("E to dance"),"and how to check one");
+            Assert.That(FestivalHudText.Tip(s,s.Players.Find(p=>p.Id=="sam"),seen,"R","K","H").Text,Does.Contain("press H to chat or R to dance"),"the bound Chat and Interact keys");
             Assert.That(TipOf(s,"you",seen).Id,Is.Empty,"a friend's view holds no visions, and gets no vision tip");
             seen.Add(tip.Id);
             s.Visions[0].Confirmed=true;
@@ -211,6 +213,7 @@ namespace Festival.Tests
             Assert.That(TipOf(s,"you",seen).Id,Is.Empty,"a friend's stop is not yours");
             tip=TipOf(s,"sam",seen);
             Assert.That(tip.Text,Does.StartWith("Security stopped you").And.Contain("Talk to them (E), ditch it (G) or walk away out of sight"),"the first security stop (ESC-2)");
+            Assert.That(FestivalHudText.Tip(s,s.Players.Find(p=>p.Id=="sam"),seen,"R","K","H").Text,Does.Contain("Talk to them (R), ditch it (K) or walk away"),"the bound Interact and Drop keys");
             seen.Add(tip.Id);
             s.Npcs.Add(new NpcState{Id="wook_2",Kind="Wook",Mode="Swarming",TargetId="sam"});
             tip=TipOf(s,"sam",seen);

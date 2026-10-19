@@ -245,6 +245,7 @@ namespace Festival.Tests
             b.PlayerIds.AddRange(new[]{"you","sam"});b.Cups=4;b.Turns.AddRange(new[]{"sam","you"});
             Assert.That(FestivalHudText.MinigamePrompt(s,sam,2),Is.EqualTo("E  DRINK CUP 3   •   F CALL IT"),"Sam, looking at cup 3");
             Assert.That(FestivalHudText.MinigamePrompt(s,sam,-1),Is.EqualTo("LOOK AT A CUP TO DRINK IT   •   F CALL IT"),"looking at none");
+            Assert.That(FestivalHudText.MinigamePrompt(s,sam,2,"H"),Is.EqualTo("E  DRINK CUP 3   •   H CALL IT"),"the bound Chat key; the keycap carries E");
             Assert.That(FestivalHudText.MinigamePrompt(s,you,2),Is.Empty,"you wait your turn");
             b.ScoredAt=3;Assert.That(FestivalHudText.MinigamePrompt(s,sam,2),Is.Empty,"nothing once it is scored");
         }

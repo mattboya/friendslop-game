@@ -169,6 +169,12 @@ namespace Festival.Tests
                 Assert.That(Key(lane,2)?.text,Is.EqualTo(KeyName("<Keyboard>/j")),"the up lane, its WASD key rebound to J, shows J");
                 Assert.That(Key(lane,0)?.text,Is.EqualTo(KeyName("<Keyboard>/a")),"the other lanes keep their keys");
                 Assert.That(Key(lane,3)?.text,Is.EqualTo(KeyName("<Keyboard>/d")),"the other lanes keep their keys");
+                var bottom=lane.Find("Controls").GetComponent<Text>();
+                string alternates=(KeyName("<Keyboard>/j")+KeyName("<Keyboard>/a")+KeyName("<Keyboard>/s")+KeyName("<Keyboard>/d")).ToUpperInvariant();
+                Assert.That(bottom.text,Is.EqualTo("ARROWS OR "+alternates),"the bottom line names the alternates as bound, in W-A-S-D order");
+                input.Notes[2].ApplyBindingOverride(0,"<Keyboard>/t");
+                hud.ShowRhythmKeys(input);
+                Assert.That(bottom.text,Does.StartWith(KeyName("<Keyboard>/t").ToUpperInvariant()).And.EndWith(" OR "+alternates),"a moved arrow names the arrow keys as bound");
             }
         }
 
