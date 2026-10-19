@@ -466,7 +466,8 @@ namespace Festival.Tests
             // The actions the HUD lists (NEARBY / CREW), first to last; E runs the first.
             string Actions(){var listed=new List<string>();foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.name.StartsWith("Action:")&&b.gameObject.activeSelf)listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
             const string CheckDance="Check by dancing  •  F CHECK BY CHAT (8 s)",CheckChat="Check by chatting (8 s, safe)",FChats="  •  F CHAT";
-            const string GearKeys="GEAR   /   1–3 EQUIP     Q USE     G DROP",GearKeysInChat="GEAR   /   Q USE     G DROP";
+            // G drops nothing while the chat window shows, even its ended transcript, so the gear bar leaves G DROP out.
+            const string GearKeys="GEAR   /   1–3 EQUIP     Q USE",GearKeysInChat="GEAR   /   Q USE";
             // DIALOG-5: the chat window and its thread as drawn, oldest first: "< " their bubbles, "> " yours.
             var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
             void ExpectThread(string where,params string[] lines)
