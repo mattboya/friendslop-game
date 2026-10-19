@@ -31,9 +31,16 @@ namespace Festival.Presentation
         /// <summary>shader names the pattern's shader in a Resources folder; a missing or unsupported one leaves every view plain.</summary>
         public FestivalTripSurfaces(string shader=ShaderName)
         {
-            var found=Resources.Load<Shader>(shader);
-            if(found==null||!found.isSupported)return;
-            pass=new Pass(new Material(found){name="Festival trip surfaces",hideFlags=HideFlags.HideAndDontSave});
+            bool off=false;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // The same build with the pattern off, so the stage benchmark can measure the pattern's own GPU cost.
+            off=Environment.GetEnvironmentVariable("FESTIVAL_TRIP_SURFACES")=="off";
+#endif
+            var found=off?null:Resources.Load<Shader>(shader);
+            if(found!=null&&found.isSupported)pass=new Pass(new Material(found){name="Festival trip surfaces",hideFlags=HideFlags.HideAndDontSave});
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            DevelopmentDiagnostics.GraphicsEvent("Trip","surfaces","available="+Available+" reason="+(off?"switched_off":found==null?"missing_shader":!found.isSupported?"unsupported":"ok"));
+#endif
         }
 
         public bool Available=>pass!=null;
@@ -46,7 +53,23 @@ namespace Festival.Presentation
             // Hooked only while a pattern shows, so a sober view, or an owner torn down without Dispose, leaves nothing behind.
             if(show!=showing){if(show)RenderPipelineManager.beginCameraRendering+=Queue;else RenderPipelineManager.beginCameraRendering-=Queue;showing=show;}
             if(show)pass.Material.SetVector(Look,new Vector4(look.Lattice,look.Cells,look.Drift,look.Breathe));
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)Trace(show,look);
+#endif
         }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private (bool,Camera,float,float) traced;
+        // Drift and Breathe move every frame, so only the camera and the strengths make a change worth a line.
+        private void Trace(bool show,FestivalTrip.Perception look)
+        {
+            var now=show?(true,view,look.Lattice,look.Cells):(false,(Camera)null,0f,0f);
+            if(now==traced)return;
+            string detail=!show?"state=off":"state="+(traced.Item1?"change":"on")+" camera="+view.name+" lattice="+look.Lattice.ToString("F2")
+                +" cells="+look.Cells.ToString("F2")+" drift="+look.Drift.ToString("F2")+" breathe="+look.Breathe.ToString("F2");
+            traced=now;
+            DevelopmentDiagnostics.GraphicsEvent("Trip","surfaces",detail);
+        }
+#endif
 
         private void Queue(ScriptableRenderContext context,Camera camera)
         {
@@ -58,6 +81,9 @@ namespace Festival.Presentation
         public void Dispose()
         {
             Show(null,default);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("Trip","surfaces","state=teardown");
+#endif
             if(pass!=null){if(Application.isPlaying)Object.Destroy(pass.Material);else Object.DestroyImmediate(pass.Material);}
         }
 

@@ -10,7 +10,7 @@ const runtime=folder=>readFileSync(path.join(folder,'Festival.Runtime.dll'));
 const development=runtime(developmentArg??managed(process.env.FESTIVAL_MAC_DEV_OUTPUT||path.join(root,'Builds/macOS/Development/FestivalCoop.app')));
 const release=runtime(releaseArg??managed(path.join(root,'Builds/macOS/Release/FestivalCoop.app')));
 const forbidden=['DevelopmentGraphicsDiagnostics','DevelopmentSmoke','DevelopmentSimulation',
-  'DevelopmentAnimationUpdates','[Festival.Motion]','ArtReviewCapture','DevelopmentStageBenchmark'];
+  'DevelopmentAnimationUpdates','[Festival.Motion]','ArtReviewCapture','DevelopmentStageBenchmark','FESTIVAL_TRIP_SURFACES'];
 for(const marker of forbidden)
 {
   const signatures=[Buffer.from(marker,'utf8'),Buffer.from(marker,'utf16le')];

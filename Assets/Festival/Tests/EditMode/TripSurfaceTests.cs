@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace Festival.Tests
@@ -11,6 +13,7 @@ namespace Festival.Tests
     public sealed class TripSurfaceTests
     {
         private const int Width=160,Height=90;
+        private const string Switch="FESTIVAL_TRIP_SURFACES";
         private readonly List<Object> made=new List<Object>();
         [TearDown]public void Cleanup(){foreach(var thing in made)if(thing!=null)Object.DestroyImmediate(thing);made.Clear();}
 
@@ -21,6 +24,7 @@ namespace Festival.Tests
             var scenery=Block("Scenery",new Vector3(-1.2f,0,6));var person=Block("Unmarked",new Vector3(1.2f,0,6));
             FestivalTripSurfaces.Mark(scenery.transform);
             Color32[] plain;
+            LogAssert.Expect(LogType.Log,"[Festival.Trip] action=surfaces available=True reason=ok");
             using(var surfaces=new FestivalTripSurfaces())
             {
                 Assert.That(surfaces.Available,"the pattern's shader loads from Resources and is supported here");
@@ -47,12 +51,69 @@ namespace Festival.Tests
             var view=Eye("Trip surface view");var scenery=Block("Scenery",new Vector3(0,0,6));
             FestivalTripSurfaces.Mark(scenery.transform);
             var plain=Shot(view);
+            LogAssert.Expect(LogType.Log,"[Festival.Trip] action=surfaces available=False reason=missing_shader");
             using(var surfaces=new FestivalTripSurfaces("Festival trip surface missing"))
             {
                 Assert.That(surfaces.Available,Is.False,"with no shader the pattern is unavailable");
                 surfaces.Show(view,FestivalTrip.Look("lsd",4,false,2));
                 Assert.That(Changed(plain,Shot(view),view,scenery),Is.Zero,"and four Tongue Stamps leave the scenery plain");
             }
+        }
+
+        // A development build run with FESTIVAL_TRIP_SURFACES=off draws every dose plain, so the stage benchmark can measure the
+        // pattern's own cost in one build.
+        [Test]public void SwitchedOffEveryDoseShowsAPlainView()
+        {
+            var view=Eye("Trip surface view");var scenery=Block("Scenery",new Vector3(0,0,6));
+            FestivalTripSurfaces.Mark(scenery.transform);
+            var plain=Shot(view);
+            string was=Environment.GetEnvironmentVariable(Switch);
+            try
+            {
+                Environment.SetEnvironmentVariable(Switch,"off");
+                LogAssert.Expect(LogType.Log,"[Festival.Trip] action=surfaces available=False reason=switched_off");
+                using(var surfaces=new FestivalTripSurfaces())
+                {
+                    Assert.That(surfaces.Available,Is.False,"switched off, the pattern is unavailable though its shader is here");
+                    surfaces.Show(view,FestivalTrip.Look("lsd",4,false,2));
+                    Assert.That(Changed(plain,Shot(view),view,scenery),Is.Zero,"and four Tongue Stamps leave the scenery plain");
+                }
+            }
+            finally{Environment.SetEnvironmentVariable(Switch,was);}
+        }
+
+        // Only with diagnostics on, and only when something changes: the pattern starting in a camera, a new strength, its end and
+        // the teardown. Drift and breathing move every frame, so they never make a line of their own.
+        [Test]public void TransitionsAreTracedOnlyWhileDiagnosticsShow()
+        {
+            var view=Eye("Trip surface view");
+            var heard=new List<string>();const string Prefix="[Festival.Trip] action=surfaces ";
+            void Hear(string message,string stack,LogType type){if(message.StartsWith(Prefix))heard.Add(message.Substring(Prefix.Length));}
+            bool visible=DevelopmentDiagnostics.Visible;
+            Application.logMessageReceived+=Hear;
+            try
+            {
+                DevelopmentDiagnostics.Visible=false;
+                using(var quiet=new FestivalTripSurfaces()){quiet.Show(view,FestivalTrip.Look("lsd",4,false,2));quiet.Show(view,default);}
+                Assert.That(heard,Is.EqualTo(new[]{"available=True reason=ok"}),"with diagnostics hidden, only the construction is logged");
+                heard.Clear();
+                DevelopmentDiagnostics.Visible=true;
+                var first=FestivalTrip.Look("lsd",4,false,2);var weaker=FestivalTrip.Look("lsd",2,false,3);var guys=FestivalTrip.Look("mushrooms",3,false,3);
+                using(var traced=new FestivalTripSurfaces())
+                {
+                    traced.Show(view,first);
+                    for(int frame=1;frame<30;frame++)traced.Show(view,FestivalTrip.Look("lsd",4,false,2+frame*.1f));
+                    traced.Show(view,weaker);traced.Show(view,weaker);
+                    traced.Show(view,guys);
+                    traced.Show(view,default);traced.Show(view,default);
+                    traced.Show(view,first);
+                }
+                Assert.That(FestivalTrip.Look("lsd",4,false,4.9f).Drift,Is.Not.EqualTo(first.Drift),"setup: the lattice drifts between frames");
+                Assert.That(heard,Is.EqualTo(new[]{"available=True reason=ok",On("on",first),On("change",weaker),On("change",guys),"state=off",On("on",first),"state=off","state=teardown"}));
+            }
+            finally{Application.logMessageReceived-=Hear;DevelopmentDiagnostics.Visible=visible;}
+            string On(string state,FestivalTrip.Perception look)=>"state="+state+" camera=Trip surface view lattice="+look.Lattice.ToString("F2")+" cells="+look.Cells.ToString("F2")
+                +" drift="+look.Drift.ToString("F2")+" breathe="+look.Breathe.ToString("F2");
         }
 
         // The festival's own grounds carry the mark on their scenery, but never on a person, the Giggle Tank or the sky's clouds.
