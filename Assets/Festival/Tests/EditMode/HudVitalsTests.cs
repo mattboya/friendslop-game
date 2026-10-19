@@ -74,6 +74,9 @@ namespace Festival.Tests
             double storm=-1;for(double t=0;t<Festivals.NightSeconds&&storm<0;t++){s.ElapsedSeconds=t;if(FestivalSimulation.DustStorm(s))storm=t;}
             Assert.That(storm,Is.GreaterThan(0),"setup: this level calms at first, then a storm rolls in");
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("DUST STORM: SEEN ONLY WITHIN 5 M"),"a storm with nothing else to report");
+            // Nothing sees a spirit, or a detained or downed player, at any range (Danger.Sees), so their card stays clear.
+            foreach(var life in new[]{"Spirit","Detained","Downed"}){you.Life=life;Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"a storm for a "+life+" player");}
+            you.Life="Alive";
             s.ElapsedSeconds=0;
             Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("CROWD CLEAR"),"calm air is clear");
             s.ElapsedSeconds=storm;var arrester=new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",TargetId="you"};s.Npcs.Add(arrester);
