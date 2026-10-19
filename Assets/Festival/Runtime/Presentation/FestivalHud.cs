@@ -191,10 +191,12 @@ namespace Festival.Presentation
         private string deckTipNoticed="";
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
         // it, and the results banner. Each warning, a round's SundownStage, stays SundownNoticeSeconds on screen; its seconds run only
-        // while it shows, so a dance, the map or the menu hiding it never uses them up.
+        // while it shows, so a dance, the map or the menu hiding it never uses them up. Mid-dance the lanes' title line says
+        // it instead (rhythmSundown) for the whole last minute.
         public const float SundownNoticeSeconds=6;
         private GameObject sundownPanel,resultsPanel;
-        private Text sundownText,resultsTitle,resultsDetail;
+        private Text sundownText,resultsTitle,resultsDetail,rhythmSundown;
+        private Image resultsAccent;
         private string sundownRound="";
         private int sundownStage;
         private (int Festival,int Level,int Encore,int Spin) sundownLevel;
@@ -474,7 +476,7 @@ namespace Festival.Presentation
             // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
             // built before the map and the menus so they draw over it, and it catches no clicks.
             resultsPanel=Card(root.transform,"Results banner",new Vector2(.25f,.37f),new Vector2(.75f,.63f),true);resultsPanel.GetComponent<Image>().raycastTarget=false;
-            Accent(resultsPanel.transform,Orange);
+            Accent(resultsPanel.transform,Orange);resultsAccent=resultsPanel.transform.Find("Accent rule").GetComponent<Image>();
             resultsTitle=Label(resultsPanel.transform,"Results title",46,TextAnchor.MiddleCenter);resultsTitle.fontStyle=FontStyle.Normal;Place(resultsTitle.rectTransform,.05f,.55f,.95f,.93f);ShrinkToFit(resultsTitle,24);
             resultsDetail=Label(resultsPanel.transform,"Results detail",22,TextAnchor.MiddleCenter);Place(resultsDetail.rectTransform,.05f,.07f,.95f,.53f);ShrinkToFit(resultsDetail,14);
             resultsPanel.SetActive(false);
@@ -507,6 +509,7 @@ namespace Festival.Presentation
             rhythmPanel=Card(root.transform,"Rhythm lane",new Vector2(.015f,.05f),new Vector2(.495f,.95f),true);
             Accent(rhythmPanel.transform,Orange);
             rhythmDialogue=Label(rhythmPanel.transform,"Challenge title",27,TextAnchor.MiddleLeft);rhythmDialogue.fontStyle=FontStyle.Normal;Place(rhythmDialogue.rectTransform,.085f,.91f,.65f,.975f);
+            rhythmSundown=Label(rhythmPanel.transform,"Sundown line",27,TextAnchor.MiddleLeft);rhythmSundown.fontStyle=FontStyle.Normal;rhythmSundown.color=Orange;Place(rhythmSundown.rectTransform,.085f,.91f,.65f,.975f);ShrinkToFit(rhythmSundown,14);rhythmSundown.gameObject.SetActive(false);
             rhythmStatus=Label(rhythmPanel.transform,"Tempo and steps",19,TextAnchor.MiddleRight);rhythmStatus.color=Mint;Place(rhythmStatus.rectTransform,.60f,.91f,.92f,.975f);
             for(int lane=0;lane<4;lane++)
             {
@@ -1098,10 +1101,12 @@ namespace Festival.Presentation
         // LOOP-5: the results banner, and the sundown warning once per stage (see SundownNoticeSeconds).
         private void UpdateSundownAndResults(RoundState state,PlayerState player,bool showMenu)
         {
-            resultsTitle.text=FestivalHudText.ResultsBannerTitle(state);resultsTitle.color=state.Result=="Success"?Mint:Orange;
+            resultsTitle.text=FestivalHudText.ResultsBannerTitle(state);resultsTitle.color=resultsAccent.color=state.Result=="Success"?Mint:Orange;
             resultsDetail.text=FestivalHudText.ResultsBannerDetail(state,player);
             resultsPanel.SetActive(resultsTitle.text!="");
             int stage=FestivalHudText.SundownStage(state);
+            string line=FestivalHudText.SundownLine(state,player);rhythmSundown.text=line;
+            rhythmSundown.gameObject.SetActive(line!="");rhythmDialogue.gameObject.SetActive(line=="");
             var level=(state.FestivalIndex,state.LevelIndex,state.EncoreTier,state.SpinSeed);
             if(state.RoundId!=sundownRound||level!=sundownLevel)
             {sundownRound=state.RoundId;sundownLevel=level;sundownStage=0;sundownShown=0;Array.Clear(sundownProgress,0,sundownProgress.Length);}

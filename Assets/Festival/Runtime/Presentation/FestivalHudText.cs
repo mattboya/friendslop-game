@@ -64,6 +64,10 @@ namespace Festival.Presentation
             return stage==1?"1 MINUTE TO SUNDOWN: sell "+more+" more or the weekend restarts at Day 1":"15 SECONDS: sell "+more+" more or back to Day 1";
         }
 
+        /// <summary>Mid-dance the clock and these warnings make way for the lanes, so for a day's last minute (SundownStage) the
+        /// lanes' title line says it: "0:14 TO SUNDOWN  •  SELL $12 MORE", in the viewer's money; "" otherwise.</summary>
+        public static string SundownLine(RoundState s,PlayerState viewer)=>SundownStage(s)==0?"":(Clock(s)+" TO SUNDOWN"+Dot+"SELL "+Money(s,viewer,FestivalSimulation.DayQuota(s)-s.LevelSales)+" MORE").ToUpperInvariant();
+
         /// <summary>Objective card heading: the outcome at results, the quota for a free player on a day, otherwise the guidance headline.</summary>
         public static string ObjectiveTitle(RoundState s,PlayerState p)=>s.Phase=="Results"?OutcomeTitle(s):SellingToday(s,p)?Quota(s,p):FestivalGuidance.Headline(s,p);
 

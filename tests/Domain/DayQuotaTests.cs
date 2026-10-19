@@ -122,7 +122,10 @@ public static class DayQuotaTests
         foreach(bool met in new[]{true,false})
         {
             var s=Crew(2);int paid=Sell(s,"p0","buyer_0");int cash=s.Player("p0").Cash;s.State.LevelSales=met?30:paid;Sundown(s);
-            Check(s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="Reset"}).Accepted&&s.State.Phase=="CampReview","host brings the crew back");
+            var back=s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="Reset"});
+            Check(back.Accepted&&s.State.Phase=="CampReview","host brings the crew back");
+            // The review card says where the crew is; a notice saying it again covered the card's heading.
+            Check(back.Reason=="Accepted","bringing the crew back leaves no notice over the review card: "+back.Reason);
             Check(s.State.LevelSales==0,"the next level starts with no sales ("+(met?"after a win":"after a miss")+")");
             if(met)Check(s.Player("p0").Cash==cash&&Festivals.For(s.State).Name=="Night 1","the cash itself carries into Night 1");
             else Check(s.Player("p0").Cash==20&&Festivals.For(s.State).Name=="Day 1","missing the quota restarts Day 1 with a fresh $20");

@@ -79,7 +79,7 @@ namespace Festival.Core
                 StartRound(connected);return Ok();
             }
             if(c.Kind=="MapReady") {if(State.Phase!="Loading")return Reject("Map is not loading");p.MapReady=true;if(!State.Players.Exists(x=>x.Connected&&!x.MapReady)){for(int index=0;index<State.Players.Count;index++){var teammate=State.Players[index];teammate.X=-7+2*index;teammate.Z=-29;}State.Phase="Playing";PourShots();}return Ok();}
-            if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can bring the crew back after results");BeginCampReview();return Ok("Back at camp: review the round before shopping");}
+            if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can bring the crew back after results");BeginCampReview();return Ok();}
             if(c.Kind=="ReviewVote")return VoteForReview(p,c);
             if(c.Kind=="FinishReview")return FinishCampReview(p);
             if(c.Kind=="ChooseFestival")return ChooseFestival(p,c);

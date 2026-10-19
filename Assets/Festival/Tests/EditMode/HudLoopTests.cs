@@ -523,6 +523,39 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.SundownWarning(playa,ash),Is.EqualTo("1 MINUTE TO SUNDOWN: sell 22 buttons more or the weekend restarts at Day 1"),"in the viewer's own odd objects");
         }
 
+        // Mid-dance the clock, the objective card and the sundown card make way for the lanes, so a set started in a day's
+        // last minute used to hide every sign of sundown until the results banner. For that minute the lanes' title line says it
+        // instead: the clock and what the crew has left to sell, in the viewer's money; the title comes back once the quota is met,
+        // and a night never shows it. A win's banner draws its accent rule in its title's mint.
+        [Test] public void ADanceInTheLastMinuteKeepsSundownOnTheLanes()
+        {
+            var go=new GameObject("Sundown lanes HUD");const BindingFlags Private=BindingFlags.NonPublic|BindingFlags.Instance;
+            try
+            {
+                var hud=go.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",Private).Invoke(hud,null);
+                var update=typeof(FestivalHud).GetMethod("UpdateSundownAndResults",Private);
+                ((GameObject)typeof(FestivalHud).GetField("rhythmPanel",Private).GetValue(hud)).SetActive(true);
+                Text Shown(string name){foreach(var t in go.GetComponentsInChildren<Text>(false))if(t.name==name)return t;return null;}
+                var s=Level(0,0);var you=Crew(s,"you","You");s.LevelSales=3;
+                s.ElapsedSeconds=466;update.Invoke(hud,new object[]{s,you,false});
+                Assert.That(Shown("Sundown line")?.text,Is.EqualTo("0:14 TO SUNDOWN  •  SELL $12 MORE"),"in the last 15 s the lanes say sundown is coming");
+                Assert.That(Shown("Challenge title"),Is.Null,"in the title's place");
+                s.ElapsedSeconds=430;update.Invoke(hud,new object[]{s,you,false});
+                Assert.That(Shown("Sundown line")?.text,Is.EqualTo("0:50 TO SUNDOWN  •  SELL $12 MORE"),"for the whole last minute");
+                s.LevelSales=15;update.Invoke(hud,new object[]{s,you,false});
+                Assert.That(Shown("Sundown line"),Is.Null,"the quota met, sundown costs nothing");Assert.That(Shown("Challenge title"),Is.Not.Null,"and the title is back");
+                var playa=Level(1,0);var ash=Crew(playa,"ash","Ash");playa.ElapsedSeconds=playa.DurationSeconds-30;update.Invoke(hud,new object[]{playa,ash,false});
+                Assert.That(Shown("Sundown line")?.text,Is.EqualTo("0:30 TO SUNDOWN  •  SELL 22 BUTTONS MORE"),"in the viewer's own odd objects");
+                var night=Level(0,1);var rescuer=Crew(night,"you","You");night.ElapsedSeconds=night.DurationSeconds-10;update.Invoke(hud,new object[]{night,rescuer,false});
+                Assert.That(Shown("Sundown line"),Is.Null,"a night has no quota to miss");
+                var won=Level(0,0,"Results");var winner=Crew(won,"you","You");won.Result="Success";update.Invoke(hud,new object[]{won,winner,false});
+                var title=Shown("Results title");Assert.That(title,Is.Not.Null,"setup: the results banner shows");
+                Image accent=null;foreach(var image in go.GetComponentsInChildren<Image>(false))if(image.name=="Accent rule"&&image.transform.parent.name=="Results banner")accent=image;
+                Assert.That(accent.color,Is.EqualTo(title.color),"a win's accent rule follows its mint title");
+            }
+            finally{Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+        }
+
         // LOOP-5: results take the middle of the screen. A loss says why, what the crew sold of its quota on a day, and that the
         // festival restarts at Day 1; a win says what was cleared and what comes next. The objective card keeps its own lines.
         [Test] public void TheResultsBannerSaysTheWeekendRestartsOrWhatComesNext()
