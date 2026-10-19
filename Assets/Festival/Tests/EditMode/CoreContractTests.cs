@@ -302,11 +302,8 @@ namespace Festival.Tests
             var game=new FestivalSimulation(21);
             var host=game.AddPlayer("host","Host");
             var guest=game.AddPlayer("guest","Guest");
-            Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("Camp supplies"));
-            host.X=0;host.Z=7;
-            Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("look at shelf props"));
-            host.Ready=true;guest.Ready=true;
-            Assert.That(FestivalGuidance.Hint(game.State,host),Does.Contain("dancing"));
+            // Camp reads its own card (FestivalHudText.ObjectiveDetail), so the hint has nothing to say there.
+            foreach(bool ready in new[]{false,true}){host.Ready=guest.Ready=ready;Assert.That(FestivalGuidance.Hint(game.State,host),Is.Empty,"at camp, ready "+ready);}
 
             // Night 1: only the tripper sees the clue trail.
             game.State.Phase="Playing";game.State.LevelIndex=1;game.State.TripperId=guest.Id;

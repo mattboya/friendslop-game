@@ -187,5 +187,64 @@ namespace Festival.Tests
             }
             finally{session.Leave();if(canvas!=null)UnityEngine.Object.Destroy(canvas);UnityEngine.Object.Destroy(sessionObject);UnityEngine.Object.Destroy(world);}
         }
+
+        // The HUD's "Bought ..." notice follows the buy's money, not the stack, so a handoff in the middle of a buy (the host
+        // takes those mid-buy) neither fakes nor hides it. A friend's unit accepted mid-buy, then the buy cancelled: the price came
+        // back, so no notice. One of your own handed away mid-buy, then the buy talked through: the price was spent, so the notice.
+        [UnityTest] public IEnumerator TheBuyNoticeFollowsTheMoneyThroughAHandoff()
+        {
+            var world=new GameObject("Buy notice world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Buy notice HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            var failures=new System.Collections.Generic.List<string>();
+            try
+            {
+                session.Host("Buyer",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);var mate=game.AddPlayer("econ4_mate","Sam");mate.Ready=true;
+                game.State.FestivalIndex=Festivals.PoloFestival;
+                yield return StartLevel(session);
+                game.State.Npcs.Clear();player.Effects.Clear();player.Cash=20;player.X=0;player.Z=0;mate.X=1;mate.Z=0;
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";mate.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");
+                int sequence=0;
+                bool Do(PlayerState who,string kind,string target="",string item="",int amount=0,int direction=0)=>
+                    game.Execute(who.Id,new GameCommand{Id="econ4_"+(sequence++),Kind=kind,TargetId=target,ItemId=item,Amount=amount,Direction=direction}).Accepted;
+                // Two Wook sellers (no dance first) of the same kind.
+                var sellers=new System.Collections.Generic.List<string>();
+                for(int n=0;sellers.Count<2;n++){string id="econ4_seller_"+n;if(DialogueGrammar.PersonaFor(id,"")=="Wook"&&FestivalSimulation.SellerStock(id)=="stock_lsd")sellers.Add(id);}
+                foreach(var id in sellers)game.State.Npcs.Add(new NpcState{Id=id,Kind="Wook",Role="Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true});
+                const string Bought="Bought Tongue Stamps for $5";
+
+                // 1. Sam's Tongue Stamp accepted mid-buy, then the buy cancelled.
+                player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");mate.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});session.SetMessage("");
+                Assert.That(Do(player,"StartBuy",sellers[0],"stock_lsd"),Is.True,"setup: the first buy starts");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(Do(mate,"Transfer",player.Id,"stock_lsd",1),Is.True,"setup: Sam offers one");
+                Assert.That(Do(player,"AcceptTransfer",game.State.Transfers.Find(t=>t.ToId==player.Id).Id),Is.True,"setup: accepted mid-buy");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(Do(player,"Cancel"),Is.True,"setup: the buy cancelled");
+                yield return new WaitForSeconds(.4f);
+                Assert.That(player.Cash,Is.EqualTo(20),"setup: the price came back");
+                if(session.Message==Bought)failures.Add("a cancelled buy, with a friend's unit taken mid-buy, says \""+session.Message+"\"");
+
+                // 2. That Tongue Stamp handed back to Sam mid-buy, then the buy talked through.
+                session.SetMessage("");
+                Assert.That(Do(player,"StartBuy",sellers[1],"stock_lsd"),Is.True,"setup: the second buy starts");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(Do(player,"Transfer",mate.Id,"stock_lsd",1),Is.True,"setup: one handed to Sam mid-buy");
+                yield return new WaitForSeconds(.3f);
+                var talk=game.Interaction(player.InteractionId);Assert.That(talk?.Kind,Is.EqualTo("Buy"),"setup: still buying");
+                while(talk.Status=="Active"&&talk.Turns.Count>0)
+                {
+                    var turn=talk.Turns[talk.Turns.Count-1];
+                    Assert.That(Do(player,"Reply",amount:Array.IndexOf(turn.Grades,ConversationLines.Smooth),direction:talk.Turns.Count-1),Is.True,"setup: a smooth reply");
+                }
+                yield return new WaitForSeconds(.4f);
+                Assert.That(player.Cash,Is.EqualTo(15),"setup: the price was spent");
+                if(session.Message!=Bought)failures.Add("a bought unit, with one handed away mid-buy, says \""+session.Message+"\", not \""+Bought+"\"");
+                Assert.That(failures,Is.Empty,string.Join("\n",failures));
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(hud);UnityEngine.Object.Destroy(world);}
+        }
     }
 }

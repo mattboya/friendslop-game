@@ -505,8 +505,8 @@ namespace Festival.Presentation
         /// (FestivalSimulation.SellerStock) so the label gives no role away, at its price in the viewer's money.</summary>
         public static string BuyAction(RoundState s,PlayerState viewer,string npcId){var item=Catalog.FindItem(FestivalSimulation.SellerStock(npcId));return "Buy "+item.Name+Dot+Money(s,viewer,item.Price);}
         /// <summary>ECON-2: what a finished buy says, in dollars like the host's replies, for MoneyText: "Bought Tongue Stamps for $5"
-        /// once the buyer holds one more of the kind than when the dance began; "" when a miss or a cancel handed the price back.
-        /// ponytail: a unit dropped at the buyer's feet (hands filled mid-dance) is not counted, so that rare buy says nothing.</summary>
-        public static string BuyReply(string item,int heldBefore,int heldNow){var bought=Catalog.FindItem(item);return heldNow>heldBefore?"Bought "+bought.Name+" for $"+bought.Price:"";}
+        /// when the price it held stays spent (cash as it ends equals cash on its last frame, whatever a handoff did to the stack,
+        /// and wherever the unit landed); "" when a miss, a cancel or a bust handed the price back.</summary>
+        public static string BuyReply(string item,int cashWhileBuying,int cashNow){var bought=Catalog.FindItem(item);return cashNow==cashWhileBuying?"Bought "+bought.Name+" for $"+bought.Price:"";}
     }
 }

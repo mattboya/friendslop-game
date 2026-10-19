@@ -11,7 +11,7 @@ public static class StarterShelfTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{StartersFollowTheUnchangedGearOffers,EightPlayersCanChooseTheSameStarterWithoutMarketSupply,EachPlayerPaysFiveForOneCombinedStarter,UnpaidAndFailedPurchasesPreserveTheAllowance,PaidAllowanceSurvivesReconnectAndRestoreUntilAFreshCamp,LegacyCampRestoreAddsMissingShelfEntriesWithoutDuplicatingReservations,InvalidStarterCountersCannotRestoreABypass,CampGuidanceNamesTheStarterBeforeDaysAndNights,AllEightPlayersCanPayForTheSameStarter})
+        foreach(var test in new Action[]{StartersFollowTheUnchangedGearOffers,EightPlayersCanChooseTheSameStarterWithoutMarketSupply,EachPlayerPaysFiveForOneCombinedStarter,UnpaidAndFailedPurchasesPreserveTheAllowance,PaidAllowanceSurvivesReconnectAndRestoreUntilAFreshCamp,LegacyCampRestoreAddsMissingShelfEntriesWithoutDuplicatingReservations,InvalidStarterCountersCannotRestoreABypass,AllEightPlayersCanPayForTheSameStarter})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" starter shelf test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -159,25 +159,6 @@ public static class StarterShelfTests
             var snapshot=Saved(before);snapshot.Players[0].StarterStockBought=invalid;
             bool refused=false;try{s.Restore(snapshot);}catch(ArgumentException){refused=true;}
             Check(refused&&ReferenceEquals(s.State,before),"invalid starter counters cannot replace the active round: "+invalid);
-        }
-    }
-
-    static void CampGuidanceNamesTheStarterBeforeDaysAndNights()
-    {
-        foreach(int level in new[]{0,1,2,3})
-        {
-            var s=new FestivalSimulation(7);var p=s.AddPlayer("reader","Reader");s.State.LevelIndex=level;
-            foreach(bool carrying in new[]{false,true})
-            {
-                if(carrying)p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
-                string hint=FestivalGuidance.Hint(s.State,p);
-                Check(hint.Contains("One starter each at camp")&&hint.Contains("Tongue Stamps or Fun Guys for $5")&&hint.Contains("festivalgoers ($5 each; some are narcs)"),"every camp advertises the starter, price and crowd risk, level "+level+": "+hint);
-            }
-            Check(Hold(s,p,"stock_lsd").Accepted&&Pay(s,p,"stock_lsd").Accepted,"the advertised starter can be bought");
-            string used=FestivalGuidance.Hint(s.State,p);
-            Check(used.Contains("Starter bought this camp")&&used.Contains("festivalgoers ($5 each; some are narcs)")&&!used.Contains("One starter each at camp"),"after payment the hint explains the spent allowance: "+used);
-            p.X=0;p.Z=19;
-            Check(FestivalGuidance.Hint(s.State,p).Contains("Starter bought this camp"),"trailhead guidance retains the starter status");
         }
     }
 

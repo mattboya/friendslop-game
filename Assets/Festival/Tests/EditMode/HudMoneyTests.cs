@@ -54,10 +54,10 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.BuyAction(palm,you,"wook_17"),Is.EqualTo("Buy Fun Guys  •  $5"));
             var playa=Day(1);var sam=Crew(playa,"sam",1);
             Assert.That(FestivalHudText.BuyAction(playa,sam,"wook_4"),Is.EqualTo("Buy Tongue Stamps  •  5 ramen packets"),"the price in Sam's ramen");
-            Assert.That(FestivalHudText.BuyReply("stock_lsd",0,1),Is.EqualTo("Bought Tongue Stamps for $5"),"one more Tongue Stamp than the buy began with");
-            Assert.That(FestivalHudText.BuyReply("stock_mushrooms",2,3),Is.EqualTo("Bought Fun Guys for $5"));
-            Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.BuyReply("stock_lsd",0,1)),Is.EqualTo("Bought Tongue Stamps for 5 ramen packets"));
-            Assert.That(FestivalHudText.BuyReply("stock_lsd",1,1),Is.EqualTo(""),"a missed or cancelled buy gave the price back and no unit");
+            Assert.That(FestivalHudText.BuyReply("stock_lsd",15,15),Is.EqualTo("Bought Tongue Stamps for $5"),"the held price stayed spent");
+            Assert.That(FestivalHudText.BuyReply("stock_mushrooms",0,0),Is.EqualTo("Bought Fun Guys for $5"));
+            Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.BuyReply("stock_lsd",15,15)),Is.EqualTo("Bought Tongue Stamps for 5 ramen packets"));
+            Assert.That(FestivalHudText.BuyReply("stock_lsd",15,20),Is.EqualTo(""),"a missed or cancelled buy gave the price back");
         }
 
         // LOOP-4: the corner reel's frozen amount and result, in the viewer's money.

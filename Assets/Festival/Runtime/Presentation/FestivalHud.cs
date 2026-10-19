@@ -168,7 +168,7 @@ namespace Festival.Presentation
         // ECON-8: the Pickup sent for a random find, and its amount, until the host answers it.
         private string foundCommand="";
         private int foundAmount;
-        private int heldBeforeBuy;
+        private int cashWhileBuying;
         private readonly HashSet<string> soldToYou=new HashSet<string>();
         private Image effectWash;
         private float baseFov=>session?.Profile?.Data.FieldOfView??75;
@@ -2256,16 +2256,17 @@ namespace Festival.Presentation
         }
         // ECON-2: a buy from a festivalgoer holds the price as its dance starts and hands the unit over as it ends, so the check above
         // never sees both at once; the buy's own reply comes when it ends (FestivalHudText.BuyReply), read in your money by Update.
+        // It reads the held price, not your stack, which a handoff (taken mid-buy) can move either way.
         private void TrackBuy(RoundState state,InteractionState active,PlayerState player)
         {
             if(active!=null&&active.Kind=="Buy")
             {
-                if(active.Id!=buyInteractionId){buyInteractionId=active.Id;buyItem=FestivalSimulation.SellerStock(active.TargetId);heldBeforeBuy=Held(player,buyItem);buySeller=state.RoundId+"/"+active.TargetId;}
-                return;
+                if(active.Id!=buyInteractionId){buyInteractionId=active.Id;buyItem=FestivalSimulation.SellerStock(active.TargetId);buySeller=state.RoundId+"/"+active.TargetId;}
+                cashWhileBuying=player.Cash;return;
             }
             if(buyInteractionId=="")return;
             buyInteractionId="";
-            string reply=FestivalHudText.BuyReply(buyItem,heldBeforeBuy,Held(player,buyItem));
+            string reply=FestivalHudText.BuyReply(buyItem,cashWhileBuying,player.Cash);
             if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
         }
         // ECON-8: a random find is announced only once the host gives it to you, so whoever lost the race to it hears nothing.
@@ -2282,7 +2283,6 @@ namespace Festival.Presentation
             foundCommand="";
             if(result.Accepted){session.SetMessage(FestivalHudText.FoundCashNotice(foundAmount));lastNotice="";}
         }
-        private static int Held(PlayerState player,string item){foreach(var stack in player.Inventory)if(stack.ItemId==item)return stack.Count;return 0;}
         private void ApplyContrast(bool high)
         {
             if(appliedContrast==high)return;appliedContrast=high;

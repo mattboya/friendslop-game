@@ -36,22 +36,8 @@ namespace Festival.Core
         public static string Hint(RoundState state, PlayerState player)
         {
             if(state==null||player==null)return "";
-            if(state.Phase=="Shopping")
-            {
-                if(player.Ready)
-                {
-                    bool allReady=state.Players.FindAll(p=>p.Connected).TrueForAll(p=>p.Ready);
-                    return allReady
-                        ?"Everyone is dancing. Festival opens in "+Math.Max(0,Math.Ceiling(state.LaunchAtSeconds-state.SimulationSeconds)).ToString("0")+" seconds. E to unready."
-                        :"Dancing at the trailhead. Wait for the crew, or press E to unready.";
-                }
-                if(player.HeldOfferId!="")return "Carry your unpaid item to the seller "+Route(player,0,7)+". Press E to pay, or G to return it.";
-                string starter=player.StarterStockBought>0?" Starter bought this camp.":" One starter each at camp: Tongue Stamps or Fun Guys for $5.";
-                starter+=" Buy more from festivalgoers ($5 each; some are narcs).";
-                return Distance(player,0,19)<4
-                    ?"Press E at the lit trailhead to ready up and dance."+starter
-                    :"Camp supplies "+Route(player,0,8)+": look at shelf props and press E."+starter+" Ready at lit trailhead "+Route(player,0,19)+".";
-            }
+            // Camp shows its own card (FestivalHudText.ObjectiveDetail), never this hint.
+            if(state.Phase=="Shopping")return "";
             if(state.Phase=="Spinning")return "The slot machine picks who trips this level, how many doses they take and what they took.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
             // HUD-3: once every vote is in (or solo practice drew none) the ballot is gone and the verdict plays; only the host acts.
