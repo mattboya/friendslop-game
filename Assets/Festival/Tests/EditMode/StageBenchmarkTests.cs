@@ -28,10 +28,25 @@ namespace Festival.Tests
                 Assert.That(saved.ReducedMotion,Is.False);
                 Assert.That(saved.HighContrast,Is.False);
                 Assert.That(saved.ThirdPerson,Is.False);
+                // The older comparison build has no dose roll, so shake stays off to keep both views still.
+                Assert.That(saved.CameraShake,Is.False,"the dose roll stays off, so the fixed-camera check holds");
                 Assert.That(saved.UnlockedFestivalCount,Is.EqualTo(2));
                 Assert.Throws<IOException>(()=>DevelopmentStageBenchmark.PrepareProfile(new[]{"game","--stage-benchmark","--stage-benchmark-output",output,"--profile",profile}),"never reuse/overwrite an existing profile directory");
             }
             finally{LocalProfile.Folder=previous;if(Directory.Exists(output))Directory.Delete(output,true);}
+        }
+        [Test] public void CrewOffHidesTheStageCrewForTheWholeRun()
+        {
+            var world=new GameObject("crew-off world").AddComponent<FestivalWorld>();
+            try
+            {
+                world.Build();var crew=world.GetComponentInChildren<FestivalStageCrew>(true);
+                Assert.That(crew,Is.Not.Null,"setup: the festival has its stage crew");
+                Assert.That(DevelopmentStageBenchmark.HideStageCrew(),Is.EqualTo(6),"all six performers go");
+                Assert.That(crew.enabled,Is.False,"and their culling never shows them again");
+                for(int i=0;i<crew.Count;i++)Assert.That(crew.Member(i).gameObject.activeSelf,Is.False,crew.Member(i).name+" is hidden");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(world.gameObject);}
         }
         [Test] public void CannotOptInUsingTheRealDefaultProfile()
         {

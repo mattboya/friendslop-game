@@ -55,8 +55,21 @@ namespace Festival.Presentation
             var isolated=new LocalProfile(profile);
             isolated.Data.ReducedMotion=false;isolated.Data.HighContrast=false;isolated.Data.ThirdPerson=false;
             isolated.Data.MusicVolume=.35f;isolated.Data.UnlockedFestivalCount=2;
+            // The older comparison build has no dose roll, so shake stays off to keep both views still.
+            isolated.Data.CameraShake=false;
             if(isolated.Save()!="")throw new IOException("Could not prepare disposable benchmark profile.");
             return output;
+        }
+        // The crew's own culling would show them again, so it is switched off too.
+        public static int HideStageCrew()
+        {
+            int hidden=0;
+            foreach(var crew in FindObjectsByType<FestivalStageCrew>(FindObjectsInactive.Include,FindObjectsSortMode.None))
+            {
+                crew.enabled=false;
+                for(int i=0;i<crew.Count;i++){crew.Member(i).gameObject.SetActive(false);hidden++;}
+            }
+            return hidden;
         }
         static string Argument(string[] args,string key)
         {
@@ -101,6 +114,7 @@ namespace Festival.Presentation
                 state.FestivalIndex=festival;state.UnlockedFestivalCount=2;state.LevelIndex=1;state.Phase="Playing";
                 state.DurationSeconds=600;state.GateOpened=true;state.SpinSeed=Seed;state.TripperId=viewer.Id;
                 session.DevelopmentSimulation.Restore(state);session.MenuOpen=false;
+                if(Environment.GetEnvironmentVariable("FESTIVAL_STAGE_BENCHMARK_CREW_OFF")=="1")Debug.Log("[Festival.StageBenchmark] crew_off hidden="+HideStageCrew());
                 double warmStart=Time.realtimeSinceStartupAsDouble;
                 Debug.Log("[Festival.StageBenchmark] warm_start map="+Festivals.Name(festival)+" seed="+Seed);
                 while(Time.realtimeSinceStartupAsDouble-warmStart<WarmSeconds&&!failed)yield return null;
