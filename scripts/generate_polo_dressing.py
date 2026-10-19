@@ -175,42 +175,54 @@ def vip_board(k):
     box("Trim","StageGlowGold",(0,by,.025),(bw+t,bh+t,.045));box("Board","Dark",(0,by,-.012),(bw,bh,.045))
     top=by+(bh+t)/2;box("CrownBase","Gold",(0,top+.03,0),(.7,.08,.06))
     for x in (-.25,0,.25):cyl("Spike"+str(x),"Gold",(x,top+.07,0),(x,top+.32,0),.06,6,r2=.005);ico("Gem"+str(x),"StageGlowRose",(x,top+.32,0),.045,1)
-# creatures face +z, feet at y=0: the gnome's boots and the slanted dragon and jackalope leg ends are lifted by their dip below 0
-def eyes(y,z,dx,r=.012):
-    for s in (-1,1):ico("Eye"+str(s),"P10",(s*dx,y,z),r,1)
+# creatures face +z, feet at y=0: the slanted dragon and jackalope leg ends are lifted by their dip below 0.
+# the creature budget is 2,000-4,000 triangles each: RK-sided lathes and cones, LK-sided limbs, icospheres at subdivision SUB.
+# Curved sides shade smooth while caps, brims and membrane rims stay crisp. Same paints, so the same renderers.
+RK,LK,SUB=32,16,3
+def sm(o): # smooth sides, flat caps: a cap is the fan of triangles ob() cut from its n-gon
+    for p in o.data.polygons:p.use_smooth=len(p.vertices)==4
+    return o
+def leaf(n,m,a,b,w,t,sub=SUB): # an ellipsoid filling slab(n,m,a,b,w,t): wings, ears, membranes with a thickness
+    d=A(*b)-A(*a);z=d.normalized();x=V((1,0,0))-z*z.x
+    if x.length<.1:x=V((0,1,0))-z*z.y
+    x.normalize();bm=bmesh.new();bmesh.ops.create_icosphere(bm,subdivisions=sub,radius=.5);bmesh.ops.scale(bm,vec=(w,t,d.length),verts=bm.verts[:])
+    bmesh.ops.transform(bm,matrix=M.Translation((A(*a)+A(*b))/2)@M((x,z.cross(x),z)).transposed().to_4x4(),verts=bm.verts[:]);return ob(n,m,bm,smooth=True)
+def eyes(y,z,dx,r=.012): # ponytail: SUB-1 under 2 cm, where a pixel or two never shows the facets
+    for s in (-1,1):ico("Eye"+str(s),"P10",(s*dx,y,z),r,SUB-1,smooth=True)
 def gnome(k):
-    kit(k);lathe("Coat","P0",[(.02,0),(.12,.005),(.13,.06),(.11,.16),(.07,.22),(.02,.23)],k=10)
-    for s in (-1,1):ico("Boot"+str(s),"P8",(s*.05,.024,.09),.04,1,s=(1,.6,1.4))
-    ico("Head","P2",(0,.28,0),.075,2,smooth=True);ico("Nose","P2",(0,.28,.075),.025,1)
-    cyl("Beard","P3",(0,.27,.05),(0,.17,.07),.065,8,r2=.01);cyl("Hat","P1",(0,.33,0),(.02,.47,-.02),.08,8,r2=.005);eyes(.3,.065,.028)
+    kit(k);sm(lathe("Coat","P0",[(.02,0),(.115,.002),(.128,.02),(.13,.06),(.122,.11),(.11,.16),(.09,.2),(.07,.22),(.02,.232)],k=RK,smooth=True))
+    for s in (-1,1):ico("Boot"+str(s),"P8",(s*.05,.024,.09),.04,SUB,s=(1,.6,1.4),smooth=True)
+    ico("Head","P2",(0,.28,0),.075,SUB+1,smooth=True);ico("Nose","P2",(0,.275,.075),.025,SUB,s=(1,.9,1),smooth=True)
+    sm(cyl("Beard","P3",(0,.27,.05),(0,.17,.07),.065,RK,r2=.01,smooth=True))
+    sm(cyl("Hat","P1",(0,.33,0),(.02,.47,-.02),.08,RK,r2=.005,smooth=True));sm(cyl("HatBrim","P1",(0,.325,0),(0,.34,0),.092,RK,smooth=True));eyes(.3,.065,.028)
 def pixie(k):
-    kit(k);lathe("Dress","P4",[(.02,0),(.09,.01),(.07,.12),(.04,.2),(.02,.22)],k=10)
-    ico("Head","P2",(0,.27,0),.065,2,smooth=True);ico("Hair","P4",(0,.29,-.01),.07,2,s=(1,.8,1))
+    kit(k);sm(lathe("Dress","P4",[(.02,0),(.09,.004),(.088,.03),(.075,.08),(.06,.13),(.045,.18),(.04,.2),(.02,.22)],k=RK,smooth=True))
+    ico("Head","P2",(0,.27,0),.065,SUB,smooth=True);ico("Hair","P4",(0,.29,-.01),.07,SUB,s=(1,.8,1),smooth=True)
     for s in (-1,1):
-        slab("WingUp"+str(s),"P5",(s*.02,.2,-.04),(s*.16,.32,-.08),.1,.008);slab("WingLow"+str(s),"P5",(s*.02,.18,-.04),(s*.13,.12,-.07),.07,.008)
-        tube("Antenna"+str(s),"P10",[(s*.02,.32,0),(s*.05,.4,.02)],.006,4);ico("AntennaTip"+str(s),"P5",(s*.05,.4,.02),.015,1)
+        leaf("WingUp"+str(s),"P5",(s*.01,.2,-.03),(s*.17,.33,-.08),.1,.008);leaf("WingLow"+str(s),"P5",(s*.01,.18,-.03),(s*.135,.115,-.07),.07,.008)
+        sm(tube("Antenna"+str(s),"P10",[(s*.02,.32,0),(s*.035,.37,.015),(s*.05,.4,.02)],.006,8,smooth=True));ico("AntennaTip"+str(s),"P5",(s*.05,.4,.02),.015,SUB,smooth=True)
     eyes(.28,.058,.024)
 def dragon(k):
-    kit(k);ico("Body","P6",(0,.13,0),.1,2,s=(1,.9,1.5),smooth=True)
+    kit(k);ico("Body","P6",(0,.13,0),.1,SUB+1,s=(1,.9,1.5),smooth=True)
     for sx in (-1,1):
-        for sz in (-1,1):cyl("Leg"+str(sx)+str(sz),"P7",(sx*.06,.08,sz*.07),(sx*.07,.0047,sz*.08),.025,6)
-        slab("Wing"+str(sx),"P7",(sx*.05,.2,0),(sx*.2,.3,-.04),.14,.01);cyl("Horn"+str(sx),"P3",(sx*.03,.29,.13),(sx*.04,.34,.1),.012,5,r2=.002)
-    ico("Head","P6",(0,.24,.15),.07,2,smooth=True);ico("Snout","P6",(0,.23,.22),.045,2,s=(1,.8,1.4))
-    tube("Tail","P6",[(0,.12,-.14),(0,.08,-.25),(.04,.06,-.33)],.03,6);cyl("TailTip","P1",(.04,.06,-.33),(.06,.05,-.38),.025,5,r2=.002)
+        for sz in (-1,1):sm(cyl("Leg"+str(sx)+str(sz),"P7",(sx*.06,.08,sz*.07),(sx*.07,.0047,sz*.08),.025,LK,smooth=True))
+        leaf("Wing"+str(sx),"P7",(sx*.03,.2,0),(sx*.21,.31,-.04),.15,.01);sm(cyl("Horn"+str(sx),"P3",(sx*.03,.29,.13),(sx*.04,.34,.1),.012,LK,r2=.002,smooth=True))
+    ico("Head","P6",(0,.24,.15),.07,SUB,smooth=True);ico("Snout","P6",(0,.23,.22),.045,SUB,s=(1,.8,1.4),smooth=True)
+    sm(tube("Tail","P6",[(0,.12,-.14),(0,.1,-.2),(0,.08,-.25),(.02,.068,-.295),(.04,.06,-.33)],.03,LK,smooth=True));sm(cyl("TailTip","P1",(.04,.06,-.33),(.06,.05,-.38),.025,LK,r2=.002,smooth=True))
     eyes(.27,.2,.03)
 def mushroom_sprite(k):
-    kit(k);lathe("Stem","P3",[(.03,0),(.06,.01),(.055,.1),(.05,.18),(.045,.2)],k=10)
-    lathe("Cap","P1",[(.04,.17),(.14,.18),(.15,.21),(.12,.26),(.06,.29),(.01,.3)],k=12,smooth=True)
-    for i,p in enumerate(((.07,.27,.05),(-.08,.26,.04),(0,.28,-.08),(.1,.265,-.06),(-.03,.29,0))):ico("Spot"+str(i),"P3",p,.022,1)
-    for s in (-1,1):tube("Arm"+str(s),"P3",[(s*.05,.1,0),(s*.09,.06,.02)],.01,4)
+    kit(k);sm(lathe("Stem","P3",[(.03,0),(.06,.006),(.062,.03),(.057,.08),(.053,.13),(.05,.18),(.045,.2)],k=RK,smooth=True))
+    sm(lathe("Cap","P1",[(.04,.17),(.1,.172),(.14,.18),(.152,.2),(.148,.225),(.12,.26),(.09,.28),(.06,.292),(.01,.3)],k=RK,smooth=True))
+    for i,p in enumerate(((.07,.27,.05),(-.08,.26,.04),(0,.28,-.08),(.1,.265,-.06),(-.03,.29,0))):ico("Spot"+str(i),"P3",p,.022,SUB,s=(1,.6,1),smooth=True)
+    for s in (-1,1):sm(tube("Arm"+str(s),"P3",[(s*.05,.1,0),(s*.075,.085,.01),(s*.09,.06,.02)],.01,8,smooth=True));ico("Hand"+str(s),"P3",(s*.09,.06,.02),.014,SUB-1,smooth=True)
     eyes(.12,.05,.022)
 def jackalope(k):
-    kit(k);ico("Body","P8",(0,.11,0),.1,2,s=(1,1,1.3),smooth=True)
+    kit(k);ico("Body","P8",(0,.11,0),.1,SUB+1,s=(1,1,1.3),smooth=True)
     for s in (-1,1):
-        ico("Haunch"+str(s),"P8",(s*.06,.05,-.07),.05,1);cyl("Foot"+str(s),"P8",(s*.04,.06,.08),(s*.045,.0058,.1),.02,5)
-        tube("Ear"+str(s),"P8",[(s*.03,.27,.1),(s*.04,.36,.09)],.018,5)
-        tube("Antler"+str(s),"P9",[(s*.02,.28,.09),(s*.05,.38,.06),(s*.08,.44,.07)],.009,4);tube("Tine"+str(s),"P9",[(s*.05,.38,.06),(s*.02,.43,.05)],.007,4)
-    ico("Head","P8",(0,.22,.11),.07,2,smooth=True);ico("Snout","P3",(0,.2,.17),.03,1);ico("Tail","P3",(0,.14,-.13),.03,1);eyes(.24,.16,.04)
+        ico("Haunch"+str(s),"P8",(s*.06,.05,-.07),.05,SUB,smooth=True);sm(cyl("Foot"+str(s),"P8",(s*.04,.06,.08),(s*.045,.0074,.1),.02,LK,smooth=True))
+        leaf("Ear"+str(s),"P8",(s*.025,.25,.1),(s*.045,.37,.09),.04,.014)
+        sm(tube("Antler"+str(s),"P9",[(s*.02,.28,.09),(s*.035,.33,.075),(s*.05,.38,.06),(s*.08,.44,.07)],.009,8,smooth=True));sm(tube("Tine"+str(s),"P9",[(s*.05,.38,.06),(s*.02,.43,.05)],.007,8,smooth=True))
+    ico("Head","P8",(0,.22,.11),.07,SUB,smooth=True);ico("Snout","P3",(0,.2,.17),.03,SUB,smooth=True);ico("Tail","P3",(0,.14,-.13),.03,SUB-1,smooth=True);eyes(.24,.16,.04)
 BUILD={"FestivalPalmTall":lambda k:palm(k,G["palm"]["tall"]),"FestivalPalmLean":lambda k:palm(k,G["palm"]["lean"]),
 "FestivalWheelBase":wheel_base,"FestivalWheelRotor":wheel_rotor,"FestivalWheelGondola":gondola,
 "FestivalStageMirage":stage_mirage,"FestivalPetalCanopy":petal_canopy,

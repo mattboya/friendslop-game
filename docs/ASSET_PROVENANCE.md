@@ -118,6 +118,8 @@ All new models are original scripted Blender geometry built on the shared helper
 
 `scripts/generate_polo_dressing.py` regenerates `ArtSource/PoloDressing.blend`. It also writes the original scripted Blender models for Palm Mirage's palms, Ferris wheel, stage dressing, petal canopy, rainbow tower, astronaut and desert ridges, plus the Giggle Tank, balloon, VIP board and VISION-2's creatures, and their manifest `ArtSource/polo-dressing-manifest.json`. The astronaut is an original design. No third-party assets or references were copied.
 
+On 2026-10-19 (VISION-11) the same script regenerated only the five creatures as smooth models of 3,024-3,736 triangles each, with Blender 5.2.2. Only their FBX files and manifest rows were committed. The committed `PoloDressing.blend` still holds the older creatures until the next full regeneration.
+
 ## Music (MUSIC-2, October 2)
 
 The camp DJ plays five recorded tracks from `Assets/Festival/Resources/Music/`. Matt added them on 2026-10-01 as music "we can use". They are copied byte for byte (SHA-256 below). Each file's own tags say it was made with Suno, an AI music service, by the account `mattboyj`, and link its Suno song:

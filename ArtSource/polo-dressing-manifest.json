@@ -111,35 +111,35 @@
       "floating": [],
       "blocking": [],
       "renderers": 6,
-      "triangles": 352,
+      "triangles": 3344,
       "separate": []
     },
     "FestivalCreaturePixie": {
       "floating": [],
       "blocking": [],
       "renderers": 4,
-      "triangles": 408,
+      "triangles": 3316,
       "separate": []
     },
     "FestivalCreatureDragon": {
       "floating": [],
       "blocking": [],
       "renderers": 5,
-      "triangles": 464,
+      "triangles": 3296,
       "separate": []
     },
     "FestivalCreatureMushroomSprite": {
       "floating": [],
       "blocking": [],
       "renderers": 3,
-      "triangles": 400,
+      "triangles": 3024,
       "separate": []
     },
     "FestivalCreatureJackalope": {
       "floating": [],
       "blocking": [],
       "renderers": 4,
-      "triangles": 408,
+      "triangles": 3736,
       "separate": []
     }
   }
