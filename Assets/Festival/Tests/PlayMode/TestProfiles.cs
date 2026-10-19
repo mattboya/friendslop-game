@@ -5,8 +5,9 @@ using UnityEngine;
 
 namespace Festival.Tests
 {
-    // CAM-2: this machine's own profiles (Application.persistentDataPath/profiles) are the ones the built game reads too, so a
-    // test never saves one there; every hosted session's "default" profile included (FestivalSession saves through LocalProfile).
+    // Under the Editor, Application.persistentDataPath/profiles is the Editor's Play-mode profile (the built player keeps its
+    // own, on macOS under its bundle id), so a test never saves one there; every hosted session's "default" profile included
+    // (FestivalSession saves through LocalProfile).
     public sealed class PlayModeProfileTests:FestivalPlayModeTest
     {
         [Test]public void ATestNeverSavesIntoThisMachinesOwnProfiles()

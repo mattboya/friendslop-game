@@ -53,8 +53,9 @@ namespace Festival.Presentation
         public string CampEggCountText=>"EASTER EGGS "+CampEggIds().Count+" / "+CampFeatures.Eggs.Length;
         public string CampEggCompletionText=>CampEggIds().Count==CampFeatures.Eggs.Length?"You found every dumb secret. Seek help.":"";
         [Serializable] private sealed class SchemaHeader { public int SchemaVersion=0; }
-        // CAM-2: where profiles are saved. This machine's own folder is the one the built game reads too, so tests point it at a
-        // temp folder for their whole run (TestProfiles); null puts it back.
+        // Where profiles are saved. Under the Editor that is the Editor's Play-mode profile (the built player keeps its own: on
+        // macOS under its bundle id, com.Festival-Co-op-Team.Festival-Co-op-Prototype), so tests point it at a temp folder for their
+        // whole run (TestProfiles); null puts it back.
         public static string Folder {get=>folder??Path.Combine(Application.persistentDataPath,"profiles");set=>folder=value;}
         private static string folder;
         private readonly string path;

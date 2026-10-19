@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace Festival.Tests
 {
-    // CAM-2: this machine's own profiles (Application.persistentDataPath/profiles) are the ones the built game reads too, so a
-    // test never saves one there.
+    // Under the Editor, Application.persistentDataPath/profiles is the Editor's Play-mode profile (the built player keeps its
+    // own, on macOS under its bundle id), so a test never saves one there.
     public sealed class EditModeProfileTests
     {
         [Test]public void ATestNeverSavesIntoThisMachinesOwnProfiles()
