@@ -26,11 +26,12 @@ namespace Festival.Tests
         private static string Name(string id)=>Catalog.FindEffect(id).Name;
         // Every setting, so two looks can be told apart and a failure shows them.
         private static string Describe(FestivalTrip.Perception p)=>
-            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} lattice {p.Lattice:F3} cells {p.Cells:F3} drift {p.Drift:F4} breathe {p.Breathe:F4}";
+            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} eye {p.Eye:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} lattice {p.Lattice:F3} cells {p.Cells:F3} drift {p.Drift:F4} breathe {p.Breathe:F4}";
         // How strongly each setting is felt.
-        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells,Mathf.Abs(p.Drift),Mathf.Abs(p.Breathe)};
-        // Everything but motion: colour, haze, vignette, letterbox, the grade, trails, glow, sound and the surface patterns themselves.
-        private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells};
+        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Eye,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells,Mathf.Abs(p.Drift),Mathf.Abs(p.Breathe)};
+        // Everything but motion: colour, haze, vignette, letterbox, the eyes' rest, the grade, trails, glow, sound and the surface
+        // patterns themselves.
+        private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Eye,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells};
         private static readonly string Nothing=Describe(default);
 
         [Test]public void EachSubstanceLooksDifferentAtOneDose()
@@ -75,10 +76,15 @@ namespace Festival.Tests
                 var pony=Of("ketamine");
                 Assert.That(pony.Vignette>0&&pony.Lag>0&&pony.Muffle>0,"Pony Dust closes the view to a tunnel, drags the camera behind the mouse and muffles the sound: "+Describe(pony)+at);
                 var couch=Of("weed");
-                Assert.That(couch.Haze>0&&couch.Letterbox>0,"Couch Lock is a soft haze between letterbox bars: "+Describe(couch)+at);
+                Assert.That(couch.Haze>0&&couch.Eye>0,"Couch Lock is a soft haze seen through sleepy eyes: "+Describe(couch)+at);
                 Assert.That(couch.Tint.g>couch.Tint.r&&couch.Tint.g>couch.Tint.b,"with a green cast"+at);
+                Assert.That(couch.Letterbox,Is.Zero,"and no straight bars over the eyes"+at);
+                // TRIP-16: Pony Dust and Couch Lock look out through eyes resting as far closed as the dose; the rest keep them open.
+                foreach(var id in new[]{"ketamine","weed"})Assert.That(Of(id).Eye,Is.EqualTo(FestivalTrip.EyeRest(dose)).And.GreaterThan(0),Name(id)+" rests the eyes the dose's way"+at);
+                foreach(var id in new[]{"lsd","mushrooms","ecstasy"})Assert.That(Of(id).Eye,Is.Zero,Name(id)+" keeps the eyes open"+at);
                 foreach(var id in new[]{"ecstasy","ketamine","weed"})Assert.That(Of(id).Roll,Is.Zero,Name(id)+" never tilts the view"+at);
             }
+            foreach(float strength in new[]{.5f,1,2})Assert.That(FestivalTrip.Gas(strength,false,0).Eye,Is.Zero,"Giggle Gas keeps its round vignette, with no eye, at "+strength);
         }
 
         [Test]public void StrengthGrowsWithTheDose()
@@ -110,7 +116,7 @@ namespace Festival.Tests
             foreach(var id in Substances)
             {
                 var full=FestivalTrip.Look(id,4,false,Moment);var calm=FestivalTrip.Look(id,4,true,Moment);
-                Assert.That(Colour(calm),Is.EqualTo(Colour(full)),Name(id)+" keeps its colour, haze, vignette, letterbox, grade, trails, glow and sound");
+                Assert.That(Colour(calm),Is.EqualTo(Colour(full)),Name(id)+" keeps its colour, haze, vignette, letterbox, resting eyes, grade, trails, glow and sound");
                 Assert.That(calm.Fov,Is.EqualTo(full.Fov*.25f).Within(1e-5f),Name(id)+": the swell is cut to a quarter");
                 Assert.That(calm.Roll,Is.EqualTo(full.Roll*.25f).Within(1e-5f),Name(id)+": the tilt is cut to a quarter");
                 Assert.That(calm.Lag,Is.EqualTo(full.Lag*.25f).Within(1e-5f),Name(id)+": the lag is cut to a quarter");
@@ -312,22 +318,165 @@ namespace Festival.Tests
             trip.Apply(couch,"me",view,NoActors,false,Moment,.02f);
             var canvas=trip.GetComponentInChildren<Canvas>(true);
             Assert.That(canvas.renderMode,Is.EqualTo(RenderMode.ScreenSpaceOverlay));
-            Assert.That(canvas.sortingOrder,Is.LessThan(100),"under the HUD (100), so the HUD stays readable over the bars");
+            Assert.That(canvas.sortingOrder,Is.LessThan(100),"under the HUD (100), so the HUD stays readable over the eyes");
             var look=FestivalTrip.For(couch,"me",false,Moment);
             Assert.That(canvas.gameObject.activeSelf,"the overlay is up for a dose");
             Assert.That(Part<Image>(trip,"Trip tint").color,Is.EqualTo(look.Tint),"tinted");
             Assert.That(Part<Image>(trip,"Trip haze").color.a,Is.EqualTo(look.Haze),"hazed");
-            Assert.That(Part<Image>(trip,"Trip letterbox top").rectTransform.anchorMin.y,Is.EqualTo(1-look.Letterbox).Within(1e-5f),"a bar along the top");
-            Assert.That(Part<Image>(trip,"Trip letterbox bottom").rectTransform.anchorMax.y,Is.EqualTo(look.Letterbox).Within(1e-5f),"and one along the bottom");
+            // TRIP-16: an eye's opening across the screen, as tall as the lids rest open, with black bars flush above and below it.
+            Assert.That(look.Eye,Is.GreaterThan(0),"setup: Couch Lock looks through sleepy eyes");
+            Eye(trip,1-look.Eye,"Couch Lock");
             foreach(var graphic in canvas.GetComponentsInChildren<Graphic>(true))Assert.That(graphic.raycastTarget,Is.False,graphic.name+" never catches a click");
             var pony=Round("Playing",4,"ketamine");trip.Apply(pony,"me",view,NoActors,false,Moment,.02f);
             Assert.That(Part<RawImage>(trip,"Trip vignette").color.a,Is.EqualTo(FestivalTrip.For(pony,"me",false,Moment).Vignette),"Pony Dust's tunnel");
+            Eye(trip,1-FestivalTrip.For(pony,"me",false,Moment).Eye,"Pony Dust");
             var muffle=view.GetComponent<AudioLowPassFilter>();
             Assert.That(muffle!=null&&muffle.enabled,"Pony Dust muffles what the view's listener hears");
             Assert.That(muffle.cutoffFrequency,Is.EqualTo(FestivalTrip.LowPassHz(FestivalTrip.For(pony,"me",false,Moment).Muffle)).Within(1),"by its own cutoff");
             trip.Apply(Round("Playing",0),"me",view,NoActors,false,Moment,.02f);
             Assert.That(canvas.gameObject.activeSelf,Is.False,"sober: no overlay");
             Assert.That(muffle.enabled,Is.False,"and the sound comes back");
+            Assert.That(Lids(trip).enabled,Is.False,"no eye");
+            Assert.That(Part<Image>(trip,"Trip letterbox top").rectTransform.anchorMin.y,Is.EqualTo(1),"and the bars fold away");
+            Assert.That(Part<Image>(trip,"Trip letterbox bottom").rectTransform.anchorMax.y,Is.EqualTo(0));
+        }
+        // The eye drawn open to aperture: its opening runs side to side, centred, and the black bars meet it flush above and below.
+        private static void Eye(FestivalTrip trip,float aperture,string who)
+        {
+            var eye=Lids(trip).rectTransform;
+            Assert.That(eye.GetComponent<RawImage>().enabled,who+": the lids are drawn");
+            Assert.That(eye.anchorMin.x==0&&eye.anchorMax.x==1,who+": from one side of the screen to the other");
+            Assert.That(eye.anchorMin.y,Is.EqualTo(.5f-aperture/2).Within(1e-5f),who+": the opening's foot");
+            Assert.That(eye.anchorMax.y,Is.EqualTo(.5f+aperture/2).Within(1e-5f),who+": and its top");
+            Assert.That(Part<Image>(trip,"Trip letterbox top").rectTransform.anchorMin.y,Is.EqualTo(eye.anchorMax.y).Within(1e-6f),who+": black flush above the eye");
+            Assert.That(Part<Image>(trip,"Trip letterbox bottom").rectTransform.anchorMax.y,Is.EqualTo(eye.anchorMin.y).Within(1e-6f),who+": and below it, never over it");
+        }
+        // The trip's eye, and its opening as drawn: its share of the screen's height.
+        private static RawImage Lids(FestivalTrip trip){var eye=trip.GetComponentsInChildren<RawImage>(true).FirstOrDefault(c=>c.name=="Trip eye");Assert.That(eye,Is.Not.Null,"the trip draws an eye");return eye;}
+        private static float Opening(FestivalTrip trip){var eye=Lids(trip).rectTransform;return eye.anchorMax.y-eye.anchorMin.y;}
+
+        // TRIP-16, through the trip's own Apply on a controlled clock: the lids are one cached almond texture. A blink shuts them in
+        // the middle and brings them back to the same resting opening one second after it began, smoothly; reduced motion moves them a
+        // quarter of the way. A frame makes no garbage, resting or blinking.
+        [Test]public void TheEyeBlinksShutAndBackInOneSecondFromOneCachedTextureWithoutGarbage()
+        {
+            var trip=Trip();var view=View();var pony=Round("Playing",4,"ketamine");int draws=0;trip.BlinkWaits=()=>{draws++;return 2;};
+            float open=1-FestivalTrip.EyeRest(4),time=0;bool reduced=false;
+            void Frame(){time+=.02f;trip.Apply(pony,"me",view,NoActors,reduced,time,.02f);}
+            Frame();
+            var eye=Lids(trip);var texture=(Texture2D)eye.texture;
+            var top=Part<Image>(trip,"Trip letterbox top").rectTransform;var bottom=Part<Image>(trip,"Trip letterbox bottom").rectTransform;
+            Assert.That(texture,Is.Not.Null,"the lids are a texture");
+            Assert.That(texture.width,Is.EqualTo(2*texture.height),"twice as wide as tall");
+            Assert.That(texture.wrapMode==TextureWrapMode.Clamp&&texture.filterMode==FilterMode.Bilinear,"clamped and smooth");
+            var pixels=texture.GetPixels();float worst=0;
+            for(int y=0;y<texture.height;y++)for(int x=0;x<texture.width;x++)
+                worst=Mathf.Max(worst,Mathf.Abs(pixels[y*texture.width+x].a-FestivalTrip.EyeShade((x+.5f)*2/texture.width-1,(y+.5f)*2/texture.height-1,1)));
+            Assert.That(worst,Is.LessThan(.003f),"pixel for pixel, the lids open their widest");
+            Assert.That(Opening(trip),Is.EqualTo(open).Within(1e-5f),"setup: resting open");
+
+            float started=-1,ended=-1,shut=-1,last=open,jump=0;
+            for(int frame=0;frame<200&&ended<0;frame++)
+            {
+                Frame();float now=Opening(trip);jump=Mathf.Max(jump,Mathf.Abs(now-last));last=now;
+                if(started<0&&now<open-1e-4f)started=time;
+                if(now<1e-5f&&shut<0){shut=time;Assert.That(top.anchorMin.y==.5f&&bottom.anchorMax.y==.5f,"shut, the black meets in the middle");}
+                if(started>=0&&now>=open-1e-5f)ended=time;
+            }
+            Assert.That(started,Is.EqualTo(2.04f).Within(.03f),"the first blink comes its drawn wait after the eye opened");
+            Assert.That(shut,Is.GreaterThan(started),"and shuts the eyes");
+            Assert.That(ended-started,Is.EqualTo(FestivalTrip.BlinkSeconds).Within(.03f),"back at the same resting opening a second after it began");
+            Assert.That(jump,Is.LessThan(.06f),"with no pop on the way");
+            // A frame on, past the blink's last float-sized sliver of closure.
+            Frame();Assert.That(draws,Is.EqualTo(2),"one wait drawn as the eye opened and one as it reopened");
+
+            reduced=true;float least=open;
+            for(int frame=0;frame<200;frame++){Frame();least=Mathf.Min(least,Opening(trip));}
+            Assert.That(least,Is.EqualTo(open*(1-FestivalTrip.ReducedMotionShare)).Within(1e-4f),"reduced motion: a blink moves the lids a quarter of the way, never shut");
+
+            reduced=false;TestDelegate step=Frame;Frame();
+            Assert.That(step,Is.Not.AllocatingGCMemory(),"a resting frame makes no garbage");
+            for(int frame=0;frame<200&&Opening(trip)>=open-1e-4f;frame++)Frame();
+            Assert.That(Opening(trip),Is.LessThan(open-1e-4f),"setup: blinking");
+            Assert.That(step,Is.Not.AllocatingGCMemory(),"nor a blinking one");
+            Assert.That(eye.texture,Is.SameAs(texture),"the lids' texture is built once and kept");
+        }
+
+        // TRIP-16: no blink closes over something timed or protected. Each moment here, begun as a blink closes, eases the lids open from
+        // where they are and holds them open while it lasts; once it ends, the next blink waits a freshly drawn interval. A friend's
+        // dance or stop holds nothing.
+        [Test]public void TimedAndProtectedMomentsHoldTheEyesOpen()
+        {
+            void Busy(RoundState s,string kind,bool on){var me=s.Players[0];s.Interactions.Clear();me.InteractionId="";if(on){s.Interactions.Add(new InteractionState{Id="busy",PlayerId="me",Kind=kind});me.InteractionId="busy";}}
+            void Cop(RoundState s,string mode,bool on){s.Npcs.Clear();if(on)s.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode=mode,TargetId="me"});}
+            var moments=new (string Name,Action<RoundState,bool> Set)[]
+            {
+                ("a dance",(s,on)=>Busy(s,"Dance",on)),("a talk",(s,on)=>Busy(s,"Conversation",on)),
+                ("a security stop",(s,on)=>Cop(s,"Stop",on)),("an arrest warning",(s,on)=>Cop(s,"ArrestWarning",on)),
+                ("a minigame",(s,on)=>s.Phase=on?FestivalSimulation.MinigamePhase:"Playing"),("the level's results",(s,on)=>s.Phase=on?"Results":"Playing"),
+            };
+            foreach(var (name,set) in moments)foreach(var substance in new[]{"ketamine","weed"})
+            {
+                var trip=Trip();var view=View();var state=Round("Playing",3,substance);int draws=0;trip.BlinkWaits=()=>{draws++;return 1;};
+                float open=1-FestivalTrip.EyeRest(3),time=0;string at=name+", "+Name(substance);
+                float Frame(){time+=.02f;trip.Apply(state,"me",view,NoActors,false,time,.02f);return Opening(trip);}
+                for(int frame=0;frame<61;frame++)Frame();
+                float previous=Opening(trip);
+                Assert.That(previous,Is.LessThan(open-.1f).And.GreaterThan(0),"setup: "+at+" begins as a blink closes");
+                set(state,true);
+                for(int frame=0;frame<1500;frame++)
+                {
+                    float now=Frame();
+                    Assert.That(now,Is.GreaterThanOrEqualTo(previous-1e-5f),at+": the lids only open");
+                    if(frame>=25)Assert.That(now,Is.EqualTo(open).Within(1e-5f),at+": open within half a second, and no blink for the 30 s it lasts");
+                    previous=now;
+                }
+                Assert.That(draws,Is.EqualTo(1),at+": no wait drawn while it lasts");
+                set(state,false);
+                float back=-1;for(int frame=0;frame<150&&back<0;frame++)if(Frame()<open-1e-4f)back=frame*.02f;
+                Assert.That(draws,Is.EqualTo(2),at+": letting go draws a fresh wait");
+                Assert.That(back,Is.EqualTo(1).Within(.05f),at+": and the next blink comes that wait after it ends");
+            }
+            var friendly=Round("Playing",3,"ketamine");friendly.Interactions.Add(new InteractionState{Id="theirs",PlayerId="friend",Kind="Dance"});friendly.Players[1].InteractionId="theirs";
+            friendly.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="Stop",TargetId="friend"});
+            var mine=Trip();mine.BlinkWaits=()=>1;var eyes=View();float shut=1;
+            for(float t=.02f;t<2;t+=.02f){mine.Apply(friendly,"me",eyes,NoActors,false,t,.02f);shut=Mathf.Min(shut,Opening(mine));}
+            Assert.That(shut,Is.Zero,"a friend's dance and a stop on a friend leave your blink alone");
+        }
+
+        // TRIP-16: a shut eye never outlives its dose. Mid-blink, going sober, a dose that ends, a spirit, camp or a new substance
+        // throws the blink away: the eye comes back at its resting opening, and the next blink waits a whole freshly drawn interval.
+        [Test]public void AShutEyeNeverOutlivesItsDose()
+        {
+            var ways=new (string Name,Action<RoundState> Break,Action<RoundState> Mend)[]
+            {
+                ("a dose worn to nothing",s=>s.Players[0].Effects[0].Intensity=0,s=>s.Players[0].Effects[0].Intensity=4),
+                ("an ended dose",s=>s.Players[0].Effects.Clear(),s=>s.Players[0].Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="ketamine"})),
+                ("a spirit",s=>s.Players[0].Life="Spirit",s=>s.Players[0].Life="Alive"),
+                ("camp",s=>s.Phase="Shopping",s=>s.Phase="Playing"),
+                ("a new substance",s=>s.Players[0].Effects[0].Substance="weed",null),
+            };
+            foreach(var (name,brk,mend) in ways)
+            {
+                var trip=Trip();var view=View();var state=Round("Playing",4,"ketamine");int draws=0;trip.BlinkWaits=()=>{draws++;return 1;};
+                float open=1-FestivalTrip.EyeRest(4),time=0;
+                void Frame(){time+=.02f;trip.Apply(state,"me",view,NoActors,false,time,.02f);}
+                for(int frame=0;frame<73;frame++)Frame();
+                var eye=Lids(trip);
+                Assert.That(Opening(trip),Is.Zero,"setup: shut mid-blink before "+name);
+                brk(state);Frame();
+                if(mend!=null)
+                {
+                    Assert.That(eye.enabled,Is.False,name+": the eye goes at once");
+                    Assert.That(Part<Image>(trip,"Trip letterbox top").rectTransform.anchorMin.y,Is.EqualTo(1),name+": and its black with it");
+                    mend(state);Frame();
+                }
+                Assert.That(eye.enabled,name+": back on a dose, the eye shows");
+                Assert.That(Opening(trip),Is.EqualTo(open).Within(1e-5f),name+": at its resting opening, not shut");
+                Assert.That(draws,Is.EqualTo(2),name+": with a freshly drawn wait");
+                float back=-1;for(int frame=0;frame<100&&back<0;frame++){Frame();if(Opening(trip)<open-1e-4f)back=(frame+1)*.02f;}
+                Assert.That(back,Is.EqualTo(1).Within(.05f),name+": so the next blink comes that whole wait later");
+            }
         }
 
         [Test]public void TrailsAndGlowsArePooledCappedUnlitAndFree()

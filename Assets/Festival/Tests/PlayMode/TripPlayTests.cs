@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Festival.Core;
@@ -328,6 +329,334 @@ namespace Festival.Tests
             }
             finally{session.Leave();Object.Destroy(host);}
             yield return null;
+        }
+
+        // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes on the dosed player's own live screen. Each dose rests the lids
+        // further closed, with the black bars flush outside them, and the real per-frame trip blinks them shut and back to the same
+        // opening; reduced motion moves them a quarter of the way. On a clock the test holds, a blink lasts one second. Opted in, the
+        // trip traces the eye's changes, never its frames.
+        [UnityTest]public IEnumerator PonyDustAndCouchLockLookThroughSleepyEyesThatBlink()
+        {
+            var world=new GameObject("Sleepy eyes world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Sleepy eyes session");var session=host.AddComponent<FestivalSession>();host.AddComponent<FestivalHud>();yield return null;
+            var trip=host.GetComponent<FestivalTrip>();float wait=60;int draws=0;trip.BlinkWaits=()=>{draws++;return wait;};
+            bool reduced=session.Profile.Data.ReducedMotion;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            bool diagnostics=DevelopmentDiagnostics.Visible;DevelopmentDiagnostics.Visible=false;var traced=new List<string>();
+            Application.LogCallback eyeLog=(message,stack,type)=>{if(message.StartsWith("[Festival.Trip] action=eye "))traced.Add(message);};
+            Application.logMessageReceived+=eyeLog;
+#endif
+            try
+            {
+                yield return HostALevel(session);
+                var dose=Simulation(session).Player(session.LocalPlayerId).Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
+                Assert.That(dose,Is.Not.Null,"setup: solo practice always trips");
+                session.Profile.Data.ReducedMotion=false;
+                var top=Bar(host,"top");var bottom=Bar(host,"bottom");
+                foreach(var substance in new[]{"ketamine","weed"})for(int doses=1;doses<=4;doses++)
+                {
+                    dose.Substance=substance;dose.Intensity=doses;yield return null;yield return null;
+                    string at=Catalog.FindEffect(substance).Name+" at dose "+doses;var eye=EyeOf(host).rectTransform;
+                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(doses)).Within(1e-4f),at+": the live screen looks through eyes resting the dose's way");
+                    Assert.That(top.anchorMin.y,Is.EqualTo(eye.anchorMax.y).Within(1e-6f),at+": black flush above the eye");
+                    Assert.That(bottom.anchorMax.y,Is.EqualTo(eye.anchorMin.y).Within(1e-6f),at+": and below it");
+                }
+
+                // The real per-frame trip: a fresh blink wait on each new substance, then a whole blink shuts the eyes and opens them
+                // again to the same rest.
+                float open=1-FestivalTrip.EyeRest(4);
+                foreach(var substance in new[]{"ketamine","weed"})
+                {
+                    wait=.25f;dose.Substance=substance;dose.Intensity=4;yield return null;yield return null;
+                    float least=1;bool reopened=false;
+                    for(float deadline=Time.realtimeSinceStartup+4;Time.realtimeSinceStartup<deadline&&!reopened;)
+                    {
+                        yield return null;float now=Opening(host);least=Mathf.Min(least,now);
+                        reopened=least<.05f&&Mathf.Abs(now-open)<1e-4f;
+                    }
+                    Assert.That(least,Is.LessThan(.05f).And.GreaterThanOrEqualTo(0),Catalog.FindEffect(substance).Name+": a blink shuts the eyes on the live screen");
+                    Assert.That(reopened,Catalog.FindEffect(substance).Name+": and opens them again to the same rest");
+                }
+                session.Profile.Data.ReducedMotion=true;float calm=1;
+                for(float deadline=Time.realtimeSinceStartup+3;Time.realtimeSinceStartup<deadline;){yield return null;calm=Mathf.Min(calm,Opening(host));}
+                Assert.That(calm,Is.LessThan(open-.05f),"reduced motion: the live eyes still blink");
+                Assert.That(calm,Is.GreaterThanOrEqualTo(open*(1-FestivalTrip.ReducedMotionShare)-1e-4f),"but only a quarter of the way, never shut");
+                session.Profile.Data.ReducedMotion=false;
+
+                // On the test's clock: a fresh two-second wait on Pony Dust, then one blink, measured frame by frame.
+                wait=2;dose.Substance="ketamine";yield return null;yield return null;
+                float started=-1,shut=-1,ended=-1,clock=0;
+                for(int frame=0;frame<200&&ended<0;frame++)
+                {
+                    float now=Step(session,1);clock+=.02f;
+                    if(started<0&&now<open-1e-4f){started=clock;wait=60;}
+                    if(started>=0&&shut<0&&now<1e-5f)shut=clock;
+                    if(started>=0&&now>=open-1e-5f)ended=clock;
+                }
+                Assert.That(started,Is.GreaterThan(0),"setup: a blink came");
+                Assert.That(shut,Is.GreaterThan(started),"it shuts the eyes");
+                Assert.That(ended-started,Is.EqualTo(FestivalTrip.BlinkSeconds).Within(.03f),"and they are back at rest a second after it began");
+                Step(session,1);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Assert.That(traced,Is.Empty,"the eye stays silent until diagnostics are opted in");
+                DevelopmentDiagnostics.Visible=true;Step(session,50);
+                Assert.That(traced.Count,Is.EqualTo(1),"opted in, the eye is traced once as it stands, not every frame:\n"+string.Join("\n",traced));
+                Assert.That(traced[0],Does.Contain("shown=True substance=ketamine rest=0.40 reduced=False blinking=False held=False"));
+                session.MenuOpen=true;Step(session,30);session.MenuOpen=false;Step(session,1);
+                Assert.That(traced.Count,Is.EqualTo(3),"a held moment is traced as it begins and as it ends:\n"+string.Join("\n",traced));
+                Assert.That(traced[1],Does.Contain("held=True"));Assert.That(traced[2],Does.Contain("held=False").And.Contain("next_blink=60.0"));
+#endif
+                dose.Substance="";yield return null;yield return null;
+                Assert.That(Opening(host),Is.EqualTo(-1),"a dose spun before the substance wheel: no eye");
+                Assert.That(host.transform.Find("Festival trip").gameObject.activeSelf,Is.False,"and no overlay at all");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Assert.That(traced[traced.Count-1],Does.Contain("shown=False"),"the trace says the eye went");
+#endif
+            }
+            finally
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=eyeLog;DevelopmentDiagnostics.Visible=diagnostics;
+#endif
+                session.Profile.Data.ReducedMotion=reduced;session.Leave();Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+        }
+
+        // TRIP-16: on the live screen no blink closes over something timed or protected. The menu, a real dance, a real security stop
+        // and a talk, each begun as a blink closes, ease the lids open from where they are and hold them open through the real per-frame
+        // trip while they last; the talk's chat card holds them too while it lingers after the talk. Once one ends, the next blink waits
+        // a freshly drawn interval.
+        [UnityTest]public IEnumerator TimedMomentsHoldTheLiveEyesOpen()
+        {
+            var world=new GameObject("Held eyes world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Held eyes session");var session=host.AddComponent<FestivalSession>();var hud=host.AddComponent<FestivalHud>();yield return null;
+            var trip=host.GetComponent<FestivalTrip>();int draws=0;trip.BlinkWaits=()=>{draws++;return 1;};
+            bool reduced=session.Profile.Data.ReducedMotion;
+            try
+            {
+                yield return HostALevel(session);
+                var sim=Simulation(session);var me=session.LocalPlayerId;var player=sim.Player(me);
+                var dose=player.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);dose.Substance="ketamine";dose.Intensity=4;
+                session.Profile.Data.ReducedMotion=false;sim.State.Npcs.Clear();sim.HasLineOfSight=(ax,az,bx,bz)=>true;
+                yield return null;yield return null;
+                Assert.That(session.MenuOpen,Is.False,"setup: the menu is closed");
+                var chat=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
+                float open=1-FestivalTrip.EyeRest(4);
+                // The host's view of its own simulation right now, as its next frame would show it.
+                void Refresh()=>typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(sim,me));
+                bool Busy()=>session.State.Interactions.Exists(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");
+                NpcState Beside(string id,string kind){var npc=new NpcState{Id=id,Kind=kind,Role="Regular",CanTalk=true,X=player.X,Z=player.Z+1.5f,Yaw=180};sim.State.Npcs.Add(npc);return npc;}
+                // On the test's clock: from rest into a blink, closing and not yet shut.
+                void Closing(string name)
+                {
+                    float now=Step(session,1);
+                    for(int frame=0;frame<200&&now<open-1e-5f;frame++)now=Step(session,1);
+                    for(int frame=0;frame<200&&!(now<open-.1f&&now>.05f);frame++)now=Step(session,1);
+                    Assert.That(now,Is.LessThan(open-.1f).And.GreaterThan(.05f),"setup: "+name+" begins as a blink closes");
+                }
+                // Begun mid-close: the lids only open, are open within half a second and stay so, with no wait drawn.
+                void Opens(string name,int drawn)
+                {
+                    float previous=Opening(host);
+                    for(int frame=0;frame<250;frame++)
+                    {
+                        float now=Step(session,1);
+                        Assert.That(now,Is.GreaterThanOrEqualTo(previous-1e-5f),name+": the lids only open");
+                        if(frame>=25)Assert.That(now,Is.EqualTo(open).Within(1e-5f),name+": open within half a second, and no blink while it lasts");
+                        previous=now;
+                    }
+                    Assert.That(draws,Is.EqualTo(drawn),name+": no wait drawn while it lasts");
+                }
+                // Ended: the next blink comes a whole freshly drawn wait later.
+                void Freed(string name,int drawn)
+                {
+                    float back=-1;for(int frame=0;frame<150&&back<0;frame++)if(Step(session,1)<open-1e-4f)back=frame*.02f;
+                    Assert.That(draws,Is.EqualTo(drawn+1),name+": letting go draws a fresh wait");
+                    Assert.That(back,Is.EqualTo(1).Within(.05f),name+": and the next blink comes that wait after it ends");
+                }
+                // Real frames of the live screen, each held open while the moment stands.
+                IEnumerator Holds(string name,float seconds,System.Func<bool> stands)
+                {
+                    for(float until=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<until;)
+                    {
+                        yield return null;
+                        Assert.That(stands(),"setup: "+name+" still stands");
+                        Assert.That(Opening(host),Is.EqualTo(open).Within(1e-5f),name+": held open on the live screen");
+                    }
+                }
+
+                Closing("the menu");int drawn=draws;session.MenuOpen=true;Opens("the menu",drawn);
+                yield return Holds("the menu",.4f,()=>session.MenuOpen);
+                session.MenuOpen=false;Freed("the menu",drawn);
+
+                var partner=Beside("held_dance_partner","Wook");
+                Closing("a dance");drawn=draws;session.Command("Dance",partner.Id);Refresh();
+                Assert.That(Busy(),"setup: a real dance starts: "+session.Message);Opens("a dance",drawn);
+                yield return Holds("a dance",.4f,()=>{partner.X=player.X;partner.Z=player.Z+1.5f;return Busy();});
+                session.Command("Cancel");Refresh();Freed("a dance",drawn);sim.State.Npcs.Clear();
+
+                player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
+                Closing("a security stop");drawn=draws;var cop=Beside("held_cop","Cop");cop.Mode="Stop";cop.TargetId=me;Refresh();Opens("a security stop",drawn);
+                yield return Holds("a security stop",.4f,()=>session.State.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==me&&n.Mode=="Stop"));
+                sim.State.Npcs.Clear();player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");player.EquippedItemId="";Refresh();Freed("a security stop",drawn);
+
+                string talkerId="held_talker_0";for(int n=1;n<256&&DialogueGrammar.PersonaFor(talkerId,"")!="Wook";n++)talkerId="held_talker_"+n;
+                var talker=Beside(talkerId,"Wook");
+                Closing("a talk");drawn=draws;session.Command("Conversation",talker.Id);Refresh();
+                Assert.That(Busy(),"setup: a real talk starts: "+session.Message);Opens("a talk",drawn);
+                for(float until=Time.realtimeSinceStartup+5;!chat.Open&&Time.realtimeSinceStartup<until;)
+                {
+                    yield return null;Assert.That(Opening(host),Is.EqualTo(open).Within(1e-5f),"a talk: held open on the live screen");
+                }
+                Assert.That(chat.Open,"setup: the HUD shows the talk's chat card");
+                session.Command("Cancel");yield return null;
+                // Two and a half seconds with a one-second wait: only the card holds the blink off.
+                yield return Holds("the talk's lingering chat card",2.5f,()=>chat.Open&&!Busy()&&!session.MenuOpen);
+                session.HandleMenuPress();
+                Assert.That(chat.Open,Is.False,"the menu key closes the card");Assert.That(session.MenuOpen,Is.False,"without opening the menu");
+                Freed("the talk's chat card",drawn);
+            }
+            finally{session.Profile.Data.ReducedMotion=reduced;session.Leave();Object.Destroy(host);Object.Destroy(world);}
+            yield return null;
+        }
+
+        // TRIP-16: a shut eye never leaks into the next screen. Mid-blink, the dose running out, a new substance, a spirit, the trip
+        // turned off and leaving the session each throw the blink away on the live screen; back on a dose the eyes open at their rest,
+        // with a freshly drawn wait. A stand-in friend trips, so the host's own dose is the test's to end.
+        [UnityTest]public IEnumerator AShutEyeNeverLeaksIntoTheNextScreen()
+        {
+            var world=new GameObject("Leaked eye world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Leaked eye session");var session=host.AddComponent<FestivalSession>();yield return null;
+            var trip=host.GetComponent<FestivalTrip>();int draws=0;trip.BlinkWaits=()=>{draws++;return 1;};
+            bool reduced=session.Profile.Data.ReducedMotion;
+            try
+            {
+                yield return HostALevel(session,besideATripper:true);
+                // A new session hosts a new simulation, so each look goes through the session's own.
+                PlayerState Me()=>Simulation(session).Player(session.LocalPlayerId);
+                ActiveEffect Dose()=>Me().Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
+                session.Profile.Data.ReducedMotion=false;yield return null;yield return null;
+                float open=1-FestivalTrip.EyeRest(4);
+                // On the test's clock: on into the .1 s the lids stay shut.
+                void Shut(string name){float now=Step(session,1);for(int frame=0;frame<200&&now>1e-5f;frame++)now=Step(session,1);Assert.That(now,Is.Zero,"setup: shut mid-blink before "+name);}
+                IEnumerator Gone(string name){yield return null;yield return null;Assert.That(Opening(host),Is.EqualTo(-1),name+": the eye goes at once");}
+                IEnumerator Back(string name,int drawn)
+                {
+                    yield return null;yield return null;
+                    Assert.That(Opening(host),Is.EqualTo(open).Within(1e-5f),name+": back on a dose, the eyes open at their rest, not shut");
+                    Assert.That(draws,Is.GreaterThan(drawn),name+": with a freshly drawn wait");
+                }
+
+                Shut("the dose runs out");int drawn=draws;Dose().RemainingSeconds=.01;
+                for(float until=Time.realtimeSinceStartup+3;Dose()!=null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(Dose(),Is.Null,"setup: the host's own clock ends the dose");yield return Gone("the dose runs out");
+                Me().Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="ketamine",RemainingSeconds=600,StartSeconds=Simulation(session).State.SimulationSeconds});
+                yield return Back("a dose after one ran out",drawn);
+
+                Shut("a new substance");drawn=draws;Dose().Substance="weed";yield return Back("a new substance",drawn);
+
+                Shut("a spirit");drawn=draws;Me().Life="Spirit";yield return Gone("a spirit");
+                Me().Life="Alive";yield return Back("alive again",drawn);
+
+                Shut("the trip turned off");drawn=draws;trip.enabled=false;
+                Assert.That(Opening(host),Is.EqualTo(-1),"the trip turned off: the eye goes at once");
+                Assert.That(host.transform.Find("Festival trip").gameObject.activeSelf,Is.False,"with the whole overlay");
+                yield return null;Assert.That(Opening(host),Is.EqualTo(-1),"and stays gone while it is off");
+                trip.enabled=true;yield return Back("the trip turned on again",drawn);
+
+                Shut("leaving the session");drawn=draws;session.Leave();yield return Gone("leaving the session");
+                Assert.That(host.transform.Find("Festival trip").gameObject.activeSelf,Is.False,"the title screen has no overlay");
+                yield return HostALevel(session,besideATripper:true);yield return Back("the next session",drawn);
+            }
+            finally{session.Profile.Data.ReducedMotion=reduced;session.Leave();Object.Destroy(host);Object.Destroy(world);}
+            yield return null;
+        }
+
+        // TRIP-16: the eyes are the dosed player's own. A sober friend joined to the session sees none while the host's blink. Given a
+        // dose of their own, the friend's own screen rests their eyes its way, and a friend who leaves mid-blink and joins again comes
+        // back with them open at that rest.
+        [UnityTest]public IEnumerator ASoberFriendSeesNoEyesAndAJoinedTripperBlinksOnTheirOwn()
+        {
+            var world=new GameObject("Friend eyes world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Friend eyes host");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("Friend eyes friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            hostObject.GetComponent<FestivalTrip>().BlinkWaits=()=>.5f;
+            int friendDraws=0;friendObject.GetComponent<FestivalTrip>().BlinkWaits=()=>{friendDraws++;return 60;};
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=0;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");yield return StartLevel(host,friend.LocalPlayerId);
+                var me=sim.Player(host.LocalPlayerId);string mateId=mate.Id;
+                // The host trips, so the host keeps no friend dosed in their place.
+                sim.State.TripperId=me.Id;foreach(var p in new[]{me,mate})p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="ketamine",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds});
+                host.Profile.Data.ReducedMotion=friend.Profile.Data.ReducedMotion=false;
+                // Until both screens draw the doses as they stand now: the host's next frame, the friend's next snapshots.
+                yield return new WaitForSeconds(.5f);
+                float hostShut=1;
+                for(float until=Time.realtimeSinceStartup+2.5f;Time.realtimeSinceStartup<until;)
+                {
+                    yield return null;hostShut=Mathf.Min(hostShut,Opening(hostObject));
+                    Assert.That(Opening(friendObject),Is.EqualTo(-1),"a sober friend sees no eyes while the host blinks");
+                    var overlay=friendObject.transform.Find("Festival trip");
+                    Assert.That(overlay==null||!overlay.gameObject.activeSelf,"and no trip overlay at all");
+                }
+                Assert.That(hostShut,Is.LessThan(.05f).And.GreaterThanOrEqualTo(0),"setup: the host's own eyes blinked meanwhile");
+
+                int sober=friendDraws;mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,Substance="weed",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds});
+                for(deadline=Time.realtimeSinceStartup+5;Opening(friendObject)<0&&Time.realtimeSinceStartup<deadline;)yield return null;
+                float rest=1-FestivalTrip.EyeRest(2);
+                Assert.That(Opening(friendObject),Is.EqualTo(rest).Within(1e-4f),"a joined friend's own dose rests their own eyes its way");
+                Assert.That(friendDraws,Is.EqualTo(sober+1),"with a wait their own screen draws");
+
+                float now=Step(friend,1);for(int frame=0;frame<4000&&now>1e-5f;frame++)now=Step(friend,1);
+                Assert.That(now,Is.Zero,"setup: the friend's eyes shut mid-blink, on the test's clock");
+                int drawn=friendDraws;friend.Leave();yield return null;yield return null;
+                Assert.That(Opening(friendObject),Is.EqualTo(-1),"the friend leaves mid-blink: no shut eye on their title screen");
+                friend.Join("Friend","127.0.0.1",port);
+                for(deadline=Time.realtimeSinceStartup+30;(friend.LocalPlayer==null||Opening(friendObject)<0)&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(friend.LocalPlayerId,Is.EqualTo(mateId),"setup: the friend joins back as themselves: "+friend.Message);
+                Assert.That(Opening(friendObject),Is.EqualTo(rest).Within(1e-4f),"back in the festival, their eyes open at their dose's rest, not shut");
+                Assert.That(friendDraws,Is.GreaterThan(drawn),"with a freshly drawn wait");
+            }
+            finally{friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);}
+            yield return null;
+        }
+
+        // TRIP-16: a hosted level. Beside a stand-in friend, Sam (no client of their own), who trips, the host is never dosed in their
+        // place, and the host's own dose is the test's: four doses of Pony Dust, lasting the level.
+        private static IEnumerator HostALevel(FestivalSession session,bool besideATripper=false)
+        {
+            session.Host("Tester",HostPort);
+            for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+            Assert.That(session.LocalPlayer,Is.Not.Null,"setup: the host has a local player: "+session.Message);
+            var sim=Simulation(session);var mate=besideATripper?sim.AddPlayer("eye_mate","Sam"):null;if(mate!=null)mate.Ready=true;
+            yield return StartLevel(session);
+            if(mate==null)yield break;
+            var me=sim.Player(session.LocalPlayerId);sim.State.TripperId=mate.Id;
+            foreach(var p in new[]{me,mate})p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+            mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="lsd",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds});
+            me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="ketamine",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds});
+        }
+        // TRIP-16: the trip's eye on owner's screen, the bars beside it, and the eye's opening: its share of the screen's height, -1 with
+        // no eye drawn.
+        private static RawImage EyeOf(GameObject owner)=>owner.transform.Find("Festival trip/Trip eye")?.GetComponent<RawImage>();
+        private static RectTransform Bar(GameObject owner,string side)=>(RectTransform)owner.transform.Find("Festival trip/Trip letterbox "+side);
+        private static float Opening(GameObject owner){var eye=EyeOf(owner);if(eye==null||!eye.isActiveAndEnabled)return -1;var r=eye.rectTransform;return r.anchorMax.y-r.anchorMin.y;}
+        // TRIP-16: frames of dt seconds through the trip's own Apply on the live session's state, view and comfort setting, all inside
+        // one of the test's frames, so the clock is the test's alone; the eye's opening after the last.
+        private static float Step(FestivalSession session,int frames,float dt=.02f)
+        {
+            var trip=session.GetComponent<FestivalTrip>();
+            for(int i=0;i<frames;i++)trip.Apply(session.State,session.LocalPlayerId,session.ViewCamera.transform,null,session.Profile.Data.ReducedMotion,Time.unscaledTime,dt);
+            return Opening(session.gameObject);
         }
     }
 }
