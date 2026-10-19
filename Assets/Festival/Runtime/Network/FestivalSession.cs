@@ -17,7 +17,7 @@ namespace Festival.Network
     [Serializable] internal sealed class Hello { public string Name="Friend", Token=""; public int Protocol=FestivalSession.ProtocolVersion; }
     [Serializable] internal sealed class Welcome { public string PlayerId="", Token="",HistoryEpoch=""; }
     [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); public string Epoch=""; public long Revision; }
-    [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint,SpinPoi; public int Sequence; }
+    [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint,SpinPoi,SpinSides; public int Sequence; }
     [Serializable] internal sealed class SnapshotPacket { public RoundState State; public double ServerSeconds; }
     internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt; public int Commands; public double Window; }
 
@@ -112,7 +112,12 @@ namespace Festival.Network
         // Confetti: Use confetti is also accepted at camp (Shopping), alive and outdoors, where it is free and distracts nobody.
         // PlayerState.VisualConfettiBurstSequence counts accepted uses in every view that carries the player, zero in older rounds.
         // A Distracted festivalgoer's Mode reaches every living view, with its Yaw facing the burst; TargetId stays the target's alone.
-        public const int ProtocolVersion=7;
+        // 8: wave 2026-10-19 starts a new semantic boundary; published version-7 peers are rejected.
+        // Subsequent units append only the version-8 changes they actually land.
+        // POI-7: MoveIntent.SpinSides asks for the side spin (SpinPoi wins when both are held), and PlayerState.VisualPoiSpinSides
+        // carries it in every view. The host's rules read the spin: a spinner's watchers grow suspicious 10% slower
+        // (WookTrustFactor), and Sprint does nothing mid-spin (FestivalSimulation.MoveSpeed, which TryMove enforces).
+        public const int ProtocolVersion=8;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
@@ -827,11 +832,12 @@ namespace Festival.Network
                 bool fresh=Time.realtimeSinceStartupAsDouble-pair.Value.ReceivedAt<=.25;
                 // POI-1: every step, before a stale input skips the move, so a silent client or a new interaction stops the spin.
                 // MINI-5: fresh presses, releases and stale input preserve the pre-game spin throughout the freeze and banner.
-                if(simulation.State.Phase!=FestivalSimulation.MinigamePhase)player.VisualPoiSpin=fresh&&input.SpinPoi&&FestivalSimulation.CanSpinPoi(player);
+                // POI-7: either button spins; left click (in front) wins when both are held.
+                if(simulation.State.Phase!=FestivalSimulation.MinigamePhase)
+                {player.VisualPoiSpin=fresh&&(input.SpinPoi||input.SpinSides)&&FestivalSimulation.CanSpinPoi(player);player.VisualPoiSpinSides=player.VisualPoiSpin&&!input.SpinPoi;}
                 if(!fresh)continue;
                 var active=simulation.Interaction(player.InteractionId);
-                float speed=(input.Sprint?6:4)*Intoxication.MovementMultiplier(player);if(player.InteractionId!="")speed=1;if(player.DragTargetId!="")speed=2;if(player.Life=="Downed")speed=.8f;
-                speed=Mathf.Min(speed,(float)simulation.CarrySpeed(player));
+                float speed=(float)simulation.MoveSpeed(player,input.Sprint);
                 var local=active!=null&&active.Status=="Active"&&FestivalInput.Roots(active.Kind)?Vector3.zero:Vector3.ClampMagnitude(new Vector3(input.X,0,input.Z),1);
                 float drift=0;
                 if(local.sqrMagnitude>.0001f){drift=Intoxication.LateralDrift(player,simulation.State.SimulationSeconds);local=Vector3.ClampMagnitude(local+new Vector3(drift*local.magnitude,0,0),1);}

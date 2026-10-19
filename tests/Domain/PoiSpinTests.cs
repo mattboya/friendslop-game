@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using Festival.Core;
 
-// POI-1 (Matt, 2026-10-01): hold left click with poi in hand and you spin them, and your friends see it. It is only for show: the
-// one rule is who may spin (FestivalSimulation.CanSpinPoi), which the host turns into PlayerState.VisualPoiSpin each tick. HUD-9:
+// POI-1 (Matt, 2026-10-01): hold left click with poi in hand and you spin them, and your friends see it. Who may spin is
+// FestivalSimulation.CanSpinPoi, which the host turns into PlayerState.VisualPoiSpin each tick. POI-7 (Matt, 2026-10-07): a spinner
+// blends in, so festivalgoers watching grow suspicious 10% slower (19% with the Little Spoon), and Sprint does nothing mid-spin. HUD-9:
 // Equip's reply says what the item in hand does: poi name Q's performance and the spin, and stock never says Q, since Q on stock
 // takes it yourself (ECON-3).
 public static class PoiSpinTests
@@ -14,7 +15,7 @@ public static class PoiSpinTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes,CampPoiEquipOnlyOffersTheSpin,HoldingShelfPoiExplainsTheSpin,BuyingPoiExplainsTheSpin})
+        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes,CampPoiEquipOnlyOffersTheSpin,HoldingShelfPoiExplainsTheSpin,BuyingPoiExplainsTheSpin,SpinnersBlendIn,NoSprintingWhileSpinning})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" poi spin test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -74,6 +75,40 @@ public static class PoiSpinTests
         Check(Act(playa,rider.Id,"RideCar").Accepted,"setup: board an art car");Check(!FestivalSimulation.CanSpinPoi(rider),"not riding an art car");
     }
 
+    // POI-7: one festivalgoer at the origin looks north at player a standing backstage (z 35), where being seen raises suspicion
+    // each second. The suspicion gained in one second, spinning or not, with or without the Little Spoon.
+    static double Seen(bool spinning,bool spoon)
+    {
+        var s=new FestivalSimulation(3);var a=s.AddPlayer("a","A");s.State.Phase="Playing";
+        s.State.Npcs.Clear();s.State.Npcs.Add(new NpcState{Id="watcher",Z=30});a.X=0;a.Z=35;a.VisualPoiSpin=spinning;
+        if(spoon)a.Inventory.Add(new ItemStack{ItemId="little_spoon",Count=1});
+        s.Tick(1);return s.State.Npcs[0].Observers.Find(o=>o.PlayerId=="a").Suspicion;
+    }
+    static void SpinnersBlendIn()
+    {
+        double still=Seen(false,false),spinning=Seen(true,false),spoon=Seen(false,true),both=Seen(true,true);
+        Check(still>0,"setup: standing backstage in view raises suspicion ("+still+")");
+        Check(Math.Abs(spinning-.9*still)<1e-9,"spinning poi, the watcher grows suspicious 10% slower: "+spinning+" against "+still);
+        Check(Math.Abs(spoon-.9*still)<1e-9,"the Little Spoon alone is unchanged: "+spoon+" against "+still);
+        Check(Math.Abs(both-.81*still)<1e-9,"spinning with the Little Spoon stacks to .81: "+both+" against "+still);
+    }
+
+    // POI-7: the host's own speed rule (FestivalSession.ApplyMovement and TryMove both read MoveSpeed) ignores Sprint mid-spin, so
+    // a sprint-length step is refused and a walk-length one taken; let go and sprinting works again.
+    static void NoSprintingWhileSpinning()
+    {
+        var s=Festival();var p=s.Player("p0");p.Effects.Clear();Check(Act(s,p.Id,"Equip","poi_led").Accepted,"setup: equip poi");
+        Check(s.MoveSpeed(p,true)==6&&s.MoveSpeed(p,false)==4,"setup: sober and free, Sprint runs at 6 and a walk is 4");
+        p.VisualPoiSpin=true;
+        Check(s.MoveSpeed(p,true)==4,"spinning, Sprint walks at 4, got "+s.MoveSpeed(p,true));
+        float x=p.X;
+        Check(!s.TryMove(p.Id,x+.6f,p.Z,90,.1),"the host refuses a sprint-length step mid-spin");
+        Check(s.TryMove(p.Id,x+.4f,p.Z,90,.1),"a walk-length step mid-spin is taken");
+        Check(p.SprintUntil<=s.State.SimulationSeconds,"a spinner is never seen sprinting");
+        p.VisualPoiSpin=false;
+        Check(s.MoveSpeed(p,true)==6&&s.TryMove(p.Id,p.X+.6f,p.Z,90,.1),"let go, and Sprint runs again");
+    }
+
     static void BuyingPoiExplainsTheSpin()
     {
         var s=new FestivalSimulation(7);var p=s.AddPlayer("buyer","Buyer");
@@ -83,7 +118,7 @@ public static class PoiSpinTests
             Check(Act(s,p.Id,"HoldOffer",item).Accepted,"setup: take poi to seller");p.X=0;p.Z=7;
             var reply=Act(s,p.Id,"Buy",item);
             Check(reply.Accepted,"setup: pay for poi");
-            Check(reply.Reason==Catalog.FindItem(item).Name+" bought for $"+Catalog.FindItem(item).Price+". Hold left click to spin them.","bought poi explain the spin, got \""+reply.Reason+"\"");
+            Check(reply.Reason==Catalog.FindItem(item).Name+" bought for $"+Catalog.FindItem(item).Price+". Hold left click to spin them in front of you, right click at your sides.","bought poi explain both spins, got \""+reply.Reason+"\"");
             Check(p.EquippedItemId==item&&p.HeldOfferId=="","purchase still equips paid poi");
         }
     }
@@ -96,7 +131,7 @@ public static class PoiSpinTests
             var point=Catalog.ShopPoint(true,s.State.VendorOffers.IndexOf(item));p.X=point.X;p.Z=point.Z;
             var reply=Act(s,p.Id,"HoldOffer",item);
             Check(reply.Accepted,"setup: take poi from shelf");
-            Check(reply.Reason=="Holding "+Catalog.FindItem(item).Name+". Bring it to the seller, or press G to return it. Hold left click to spin them.","shelf poi explain the spin, got \""+reply.Reason+"\"");
+            Check(reply.Reason=="Holding "+Catalog.FindItem(item).Name+". Bring it to the seller, or press G to return it. Hold left click to spin them in front of you, right click at your sides.","shelf poi explain both spins, got \""+reply.Reason+"\"");
             Check(Act(s,p.Id,"ReturnOffer").Accepted,"setup: return shelf poi");
         }
     }
@@ -109,7 +144,7 @@ public static class PoiSpinTests
             p.Inventory.Add(new ItemStack{ItemId=item,Count=1});
             var reply=Act(s,p.Id,"Equip",item);
             Check(reply.Accepted,"camp equips owned poi");
-            Check(reply.Reason=="Equipped "+Catalog.FindItem(item).Name+". Hold left click to spin them.","camp offers only the supported spin, got \""+reply.Reason+"\"");
+            Check(reply.Reason=="Equipped "+Catalog.FindItem(item).Name+". Hold left click to spin them in front of you, right click at your sides.","camp offers only the spins, got \""+reply.Reason+"\"");
             Check(Act(s,p.Id,"Use",item).Reason=="Start the round first","camp still refuses Q performance");
         }
     }
@@ -121,7 +156,7 @@ public static class PoiSpinTests
         string Reply(string item)=>Act(s,p.Id,"Equip",item).Reason;
         string stock=Reply("stock_lsd"),poi=Reply("poi_led"),gear=Reply("confetti");
         Check(stock=="Equipped Tongue Stamps. Walk up to a festivalgoer to offer it.","stock points at a buyer and never says Q (that takes it yourself), got \""+stock+"\"");
-        Check(poi=="Equipped LED poi. Press Q to perform, hold left click to spin.","poi name the performance and the spin, got \""+poi+"\"");
+        Check(poi=="Equipped LED poi. Press Q to perform. Hold left click to spin them in front of you, right click at your sides.","poi name the performance and both spins, got \""+poi+"\"");
         Check(gear=="Equipped Confetti cannon. Press Q to use.","other gear still says Q, got \""+gear+"\"");
     }
 }

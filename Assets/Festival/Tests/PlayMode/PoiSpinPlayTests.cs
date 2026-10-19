@@ -116,7 +116,7 @@ namespace Festival.Tests
     {
         [UnityTest]public IEnumerator PayingForPoiKeepsTheSpinHintInTheDrawnHud()
         {
-            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. Hold left click to spin them.",true);
+            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. "+FestivalSimulation.SpinWords,true);
         }
 
         [UnityTest]public IEnumerator PayingForAStarterKeepsItsPocketToast()
@@ -149,7 +149,7 @@ namespace Festival.Tests
                 Assert.That(Read("Prompt"),Does.StartWith("PICK UP "+title));
                 yield return Tap(Key.E,.25f);
                 Assert.That(player.HeldOfferId,Is.EqualTo(item));
-                if(spin)Assert.That(Read("Notice"),Does.EndWith("Hold left click to spin them."));
+                if(spin)Assert.That(Read("Notice"),Does.EndWith(FestivalSimulation.SpinWords));
                 player.X=0;player.Z=7;yield return new WaitForSeconds(.35f);
                 Assert.That(Read("Prompt"),Does.StartWith("SHOW "+title+" TO SELLER"));
                 yield return Tap(Key.E,.25f);Assert.That(Read("Prompt"),Does.StartWith("PAY $5"));
@@ -241,6 +241,71 @@ namespace Festival.Tests
                 Intent(false);Assert.That(me.VisualPoiSpin,Is.False,"fresh release stops it again after play resumes");
                 Intent(true);peer.GetType().GetField("ReceivedAt").SetValue(peer,Time.realtimeSinceStartupAsDouble-1);Move();
                 Assert.That(me.VisualPoiSpin,Is.False,"stale input still stops the spin during ordinary play");
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
+            yield return null;
+        }
+    }
+}
+
+namespace Festival.Tests
+{
+    // POI-7 through the actual host's intent and movement consumers: right click's side spin reaches the snapshot a friend sees
+    // and left click wins when both are held. A spinner's Sprint walks: TryMove refuses a sprint-length step mid-spin, so a
+    // host that still moved at Sprint's speed would freeze the spinner instead.
+    public sealed class PoiSideSpinIntentPlayTests:FestivalPlayModeTest
+    {
+        static int sequence=2000000;
+        [UnityTest]public IEnumerator TheHostSetsTheSideSpinAndLeftClickWins(){return Hosted(false);}
+        [UnityTest]public IEnumerator ASprintingSpinnerWalksAndSprintsAgainOnRelease(){return Hosted(true);}
+
+        private IEnumerator Hosted(bool sprint)
+        {
+            var world=new GameObject("Side spin world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Side spin host");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var friend=sim.AddPlayer("side_spin_friend","Sam");friend.Ready=true;
+                yield return StartLevel(session);session.enabled=false;sim.State.Npcs.Clear();
+                var me=sim.Player(session.LocalPlayerId);me.Effects.Clear();me.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
+                Assert.That(sim.Execute(me.Id,new GameCommand{Id="side_spin_equip",Kind="Equip",ItemId="poi_practice"}).Accepted,Is.True);
+                var type=typeof(FestivalSession).Assembly.GetType("Festival.Network.MoveIntent");
+                var inputs=(System.Collections.IDictionary)typeof(FestivalSession).GetField("inputs",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                void Move()=>typeof(FestivalSession).GetMethod("ApplyMovement",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new object[]{.1});
+                void Intent(bool front,bool sides,bool run=false,float z=0)
+                {
+                    var intent=System.Activator.CreateInstance(type);
+                    type.GetField("SpinPoi").SetValue(intent,front);type.GetField("SpinSides").SetValue(intent,sides);type.GetField("Sprint").SetValue(intent,run);
+                    type.GetField("Z").SetValue(intent,z);type.GetField("Sequence").SetValue(intent,++sequence);
+                    typeof(FestivalSession).GetMethod("AcceptInput",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new[]{(object)me.Id,intent});
+                    var peer=inputs[me.Id];
+                    Assert.That(type.GetField("Sequence").GetValue(peer.GetType().GetField("Intent").GetValue(peer)),Is.EqualTo(sequence),"setup: the host accepts this fresh input");Move();
+                }
+                if(!sprint)
+                {
+                    PlayerState Seen()=>FestivalSession.ViewFor(sim,friend.Id).Players.Find(p=>p.Id==me.Id);
+                    Intent(false,true);
+                    Assert.That(me.VisualPoiSpin&&me.VisualPoiSpinSides,Is.True,"right click alone spins the poi at your sides");
+                    Assert.That(Seen().VisualPoiSpin&&Seen().VisualPoiSpinSides,Is.True,"your friend sees the side spin");
+                    Intent(true,true);
+                    Assert.That(me.VisualPoiSpin&&!me.VisualPoiSpinSides,Is.True,"with both held, left click's spin in front wins");
+                    Assert.That(Seen().VisualPoiSpinSides,Is.False,"your friend sees the spin in front");
+                    Intent(true,false);Assert.That(me.VisualPoiSpin&&!me.VisualPoiSpinSides,Is.True,"left click alone spins them in front");
+                    Intent(false,false);Assert.That(me.VisualPoiSpin||me.VisualPoiSpinSides,Is.False,"letting go clears both");
+                    Intent(false,true);var peer=inputs[me.Id];peer.GetType().GetField("ReceivedAt").SetValue(peer,Time.realtimeSinceStartupAsDouble-1);Move();
+                    Assert.That(me.VisualPoiSpin||me.VisualPoiSpinSides,Is.False,"a silent client stops the side spin");
+                    yield break;
+                }
+                const float X=0,Z=7;
+                Assert.That(FestivalSession.Navigate(X,Z,X,Z+1,.6).Z,Is.GreaterThan(Z+.5f),"setup: this walking path is clear of colliders");
+                me.X=X;me.Z=Z;Intent(true,false,true,1);
+                Assert.That(me.VisualPoiSpin,Is.True,"setup: spinning");
+                Assert.That(me.Z-Z,Is.EqualTo(.4f).Within(1e-4f),"a spinner holding Sprint walks 0.4 m in 0.1 s");
+                me.X=X;me.Z=Z;Intent(false,false,true,1);
+                Assert.That(me.Z-Z,Is.EqualTo(.6f).Within(1e-4f),"let go, and Sprint runs 0.6 m in 0.1 s again");
             }
             finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
             yield return null;

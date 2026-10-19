@@ -163,9 +163,7 @@ namespace Festival.Core
             }
             if(!InBounds(x,z))return false;
             if(State.Phase=="Shopping"&&p.Ready&&Distance(p.X,p.Z,x,z)>.001)return false;
-            double speed=6*Intoxication.MovementMultiplier(p);if(p.InteractionId!="")speed=1;if(p.DragTargetId!="")speed=2;
-            if(p.Life=="Downed")speed=.8;
-            speed=Math.Min(speed,CarrySpeed(p));
+            double speed=MoveSpeed(p,true);
             double distance=Distance(p.X,p.Z,x,z);if(distance>speed*deltaSeconds+.03)return false;
             Crush(p,ref x,ref z);
             if(p.Life=="Detained"&&Distance(x,z,27,5)>3)return false;
@@ -175,6 +173,9 @@ namespace Festival.Core
             if(Distance(p.X,p.Z,x,z)>.001)ReleaseCampSeat(p.Id);
             p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
         }
+        /// <summary>How fast p may move now, in metres a second. FestivalSession.ApplyMovement moves at it and TryMove refuses faster
+        /// steps, so the host's two movement paths share one rule. A poi spin ignores Sprint, so it can't be held all game for free.</summary>
+        public double MoveSpeed(PlayerState p,bool sprint){double speed=(sprint&&!p.VisualPoiSpin?6:4)*Intoxication.MovementMultiplier(p);if(p.InteractionId!="")speed=1;if(p.DragTargetId!="")speed=2;if(p.Life=="Downed")speed=.8;return Math.Min(speed,CarrySpeed(p));}
         static bool Finite(double d){return !double.IsNaN(d)&&!double.IsInfinity(d);}
         // The festival grounds' walkable square: TryMove refuses steps beyond it, as does a dancer's step back (DanceSpacing.cs).
         static bool InBounds(float x,float z){return Math.Abs(x)<=39&&Math.Abs(z)<=39;}

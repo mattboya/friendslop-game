@@ -15,7 +15,7 @@ public sealed partial class FestivalSimulation {
         var stock=State.ShopStock.Find(s=>s.ItemId==c.ItemId);
         if(stock==null||stock.CampAvailable<=0)return Reject("Sold out or currently held by the crew");
         stock.CampAvailable--;p.HeldOfferId=c.ItemId;
-        return Ok("Holding "+Catalog.FindItem(c.ItemId).Name+". Bring it to the seller, or press G to return it."+(IsPoi(c.ItemId)?" Hold left click to spin them.":""));
+        return Ok("Holding "+Catalog.FindItem(c.ItemId).Name+". Bring it to the seller, or press G to return it."+(IsPoi(c.ItemId)?" "+SpinWords:""));
     }
     CommandResult ReturnHeldOffer(PlayerState p)
     {
@@ -52,7 +52,7 @@ public sealed partial class FestivalSimulation {
         if(c.ItemId!="little_spoon")p.EquippedItemId=c.ItemId;
         if(camp)p.HeldOfferId="";else stock.MarketAvailable--;
         p.VisualReceivedItem=c.ItemId;p.VisualReceiptSequence++;p.VisualReceiptAt=State.SimulationSeconds;
-        return Ok(item.Name+" bought for $"+item.Price+(IsPoi(c.ItemId)?". Hold left click to spin them.":""));
+        return Ok(item.Name+" bought for $"+item.Price+(IsPoi(c.ItemId)?". "+SpinWords:""));
     }
     CommandResult Equip(PlayerState p,GameCommand c)
     {
@@ -61,7 +61,7 @@ public sealed partial class FestivalSimulation {
         if(c.ItemId=="little_spoon")return Reject("Little Spoon is worn automatically as a necklace");
         p.EquippedItemId=c.ItemId;
         // HUD-9: 1-3 and the wheel send this on every switch. Q on stock takes it yourself (ECON-3), so stock never says Q. POI-1: poi spin too.
-        return Ok("Equipped "+Catalog.FindItem(c.ItemId).Name+". "+(IsPoi(c.ItemId)?(State.Phase=="Shopping"?"Hold left click to spin them.":"Press Q to perform, hold left click to spin."):Stock(c.ItemId)?"Walk up to a festivalgoer to offer it.":c.ItemId==GiggleTankItem?Catalog.FindItem(c.ItemId).Description:"Press Q to use."));
+        return Ok("Equipped "+Catalog.FindItem(c.ItemId).Name+". "+(IsPoi(c.ItemId)?(State.Phase=="Shopping"?SpinWords:"Press Q to perform. "+SpinWords):Stock(c.ItemId)?"Walk up to a festivalgoer to offer it.":c.ItemId==GiggleTankItem?Catalog.FindItem(c.ItemId).Description:"Press Q to use."));
     }
     CommandResult Consume(PlayerState p,GameCommand c){var d=Catalog.FindItem(c.ItemId);if(d==null||string.IsNullOrEmpty(d.EffectId)||Count(p,c.ItemId)<1)return Reject("No consumable stock");if(p.Effects.FindAll(Treatable).Count>=2||p.Effects.Exists(e=>e.Id==d.EffectId))return Reject("Maximum two distinct effects; item retained");var effect=Catalog.FindEffect(d.EffectId);if(effect==null)return Reject("Unknown effect");Take(p,c.ItemId,1);p.Effects.Add(new ActiveEffect{Id=effect.Id,InstanceId=Id("effect"),SourceCommandId=c.Id,StartSeconds=State.SimulationSeconds,RemainingSeconds=effect.DurationSeconds});foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))Adjust(n,p,-15);return Ok();}
     CommandResult Use(PlayerState p,GameCommand c){if(c.ItemId=="map")return Ok("Map is free");if(Count(p,c.ItemId)<1)return Reject("Item not owned");switch(c.ItemId){case "stock_lsd":case "stock_mushrooms":return Consume(p,c);case "poi_practice":case "poi_led":return BeginPoi(p,c);case "stage_pass":return BeginDj(p,c);case "merch_bag":return Ok("Carried bag conceals casual stock visibility");case "medical_voucher":if(!Near(p,24,-20)||!p.Effects.Exists(Treatable))return Reject("Medical tent and active effect required");return BeginTask(p,"Medical","medical",3);case ConfettiItem:return Confetti(p);case "stash_box":if(Math.Abs(p.X)>35||p.Z>18||Distance(p.X,p.Z,27,5)<6)return Reject("Place on open festival ground away from stage and holding");Take(p,c.ItemId,1);State.Stashes.Add(new StashState{Id=Id("stash"),X=p.X,Z=p.Z});return Ok();case GiggleTankItem:return Reject(Catalog.FindItem(c.ItemId).Description);default:return Reject("Unsupported use context");}}

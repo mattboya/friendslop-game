@@ -37,7 +37,8 @@ public sealed partial class FestivalSimulation {
     ObserverState Observe(NpcState n,PlayerState p){var o=n.Observers.Find(x=>x.PlayerId==p.Id);if(o==null){o=new ObserverState{PlayerId=p.Id};n.Observers.Add(o);}return o;}
     // Little Spoon has no active use. Its modest social benefit stays in host
     // rules and is intentionally absent from the public item description.
-    static double WookTrustFactor(PlayerState p)=>Count(p,"little_spoon")>0 ? .9 : 1;
+    // POI-7: spinning poi (either style) blends in too, stacking with the spoon to .81.
+    static double WookTrustFactor(PlayerState p)=>(Count(p,"little_spoon")>0 ? .9 : 1)*(p.VisualPoiSpin ? .9 : 1);
     // CROWD-1's pack factor scales a positive rhythm result; a gain that is neither that nor passive (a refused sale) passes packed: false.
     void Adjust(NpcState n,PlayerState p,double delta,bool packed=true){var o=Observe(n,p);o.Suspicion=Math.Max(0,Math.Min(100,o.Suspicion+(delta>0?delta*WookTrustFactor(p)*(packed?PackFactor(p):1):delta)));o.LastSeenSeconds=State.SimulationSeconds;}
     // ESC-1: passive gains (sprinting in view, standing backstage) scale by the level's suspicion multiplier; cooling off does not.

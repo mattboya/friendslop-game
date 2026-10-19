@@ -25,8 +25,10 @@ namespace Festival.Core
         // once; zero in older snapshots.
         public int VisualConfettiBurstSequence;
         // POI-1: the host sets it each tick while this player holds left click and may spin their poi (FestivalSimulation.CanSpinPoi);
-        // every view carries it, so friends see the spin. Only for show; false in older snapshots.
+        // every view carries it, so friends see the spin. The host's suspicion and speed rules read it; false in older snapshots.
         public bool VisualPoiSpin;
+        // POI-7: set with VisualPoiSpin while the spin is right click's, at the sides, not left click's in front; false in older snapshots.
+        public bool VisualPoiSpinSides;
         // POLO-5: view-only, never set on the host: FestivalSession.ViewFor sets it to the SimulationSeconds this player boarded
         // the Ferris wheel, so every client seats them in the same gondola; -1 off the wheel and in older snapshots.
         public double VisualWheelSince=-1;
