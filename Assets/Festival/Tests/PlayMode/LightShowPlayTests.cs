@@ -256,5 +256,48 @@ namespace Festival.Tests
             finally{if(root!=null){session.Leave();Object.Destroy(root);}Object.Destroy(world);}
             yield return null;
         }
+
+        // The questions answer from the keyboard too. The key bound to choice 2 sends one answer, Amount 1, for the open
+        // question (alone in the ring, the next one opens at once). Moved to K through the profile, as SETTINGS saves it, K answers
+        // that next question and 2 no longer does, and the answer wears its key. Each question opens with keyboard focus on its first
+        // answer: the down arrow moves it and Enter sends the one focused.
+        [UnityTest]public IEnumerator TheKeyBoundToAChoiceSendsOneAnswer()
+        {
+            UseAVirtualKeyboard("Light Show answer key keyboard");
+            var world=new GameObject("Light Show answer key world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Light Show answer key host");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Host",HostPort);yield return null;yield return StartLevel(session);var game=Simulation(session);game.State.Booth.Kind=FestivalSimulation.LightShowGame;Sober(game);
+                session.MenuOpen=false;string id=session.LocalPlayerId;
+                yield return Ring(session,null);
+                game.State.Booth.Seconds=19.9;
+                for(double deadline=Time.realtimeSinceStartupAsDouble+3;!Shown(root,"Light Show questions")&&Time.realtimeSinceStartupAsDouble<deadline;)yield return null;
+                yield return null;yield return null;
+                Assert.That(FestivalHudText.LightShowOpen(session.State,id).Slot,Is.EqualTo(0),"setup: the first question is open");
+                var record=game.State.Booth.LightShow.Players.Find(p=>p.PlayerId==id);
+                yield return Tap(Key.Digit2);yield return Wait(.3);
+                Assert.That(record.Answers,Is.EqualTo(new[]{1}),"the key bound to choice 2 sends it, once ("+session.Message+")");
+
+                for(double deadline=Time.realtimeSinceStartupAsDouble+3;FestivalHudText.LightShowOpen(session.State,id).Slot!=1&&Time.realtimeSinceStartupAsDouble<deadline;)yield return null;
+                yield return null;yield return null;
+                var rebound=NewTestControls("answer-rebound");rebound.Map.FindAction("Answer2").ApplyBindingOverride(0,"<Keyboard>/k");
+                session.Profile.Data.BindingOverridesJson=rebound.Map.SaveBindingOverridesAsJson();yield return null;yield return null;
+                Assert.That(Answer(root,2).Find("Key")?.GetComponent<Text>()?.text,Is.EqualTo("K"),"the answer wears its key");
+                yield return Tap(Key.Digit2);yield return Wait(.3);
+                Assert.That(record.Answers.Count,Is.EqualTo(1),"2 no longer answers");
+                yield return Tap(Key.K);yield return Wait(.3);
+                Assert.That(record.Answers,Is.EqualTo(new[]{1,1}),"K answers choice 2 now");
+                for(double deadline=Time.realtimeSinceStartupAsDouble+3;FestivalHudText.LightShowOpen(session.State,id).Slot!=2&&Time.realtimeSinceStartupAsDouble<deadline;)yield return null;
+                yield return null;yield return null;
+                Assert.That(UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject,Is.SameAs(Answer(root,1).gameObject),"the third question opens with focus on its first answer");
+                yield return Tap(Key.DownArrow);
+                Assert.That(UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject,Is.SameAs(Answer(root,2).gameObject),"the down arrow moves it");
+                yield return Tap(Key.Enter);yield return Wait(.3);
+                Assert.That(record.Answers,Is.EqualTo(new[]{1,1,1}),"Enter sends the focused answer");
+            }
+            finally{if(root!=null){session.Leave();Object.Destroy(root);}Object.Destroy(world);}
+            yield return null;
+        }
     }
 }

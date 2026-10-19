@@ -232,8 +232,9 @@ namespace Festival.Presentation
         private GameObject lightShowPanel;
         private Text lightShowPrompt,lightShowReveal;
         private readonly Button[] lightShowAnswers=new Button[5];
-        private readonly Text[] lightShowLabels=new Text[5];
-        private int lightShowSent=-1,lightShowChoice;
+        private readonly Text[] lightShowLabels=new Text[5],lightShowKeys=new Text[5];
+        private int lightShowSent=-1,lightShowChoice,lightShowFocus=-1;
+        private static readonly string[] AnswerKeys={"1","2","3","4","5"};
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private Text diagnostics;
         public bool DevelopmentMapVisible;
@@ -466,6 +467,10 @@ namespace Festival.Presentation
                 int choice=k<4?k:-1;float top=.79f-k*.15f;
                 var answer=Button(lightShowPanel.transform,"",new Vector2(.08f,top-.13f),new Vector2(.92f,top),()=>AnswerLightShow(choice));answer.name="Light Show answer "+(k+1);
                 lightShowAnswers[k]=answer.GetComponent<Button>();lightShowLabels[k]=answer.transform.Find("Text").GetComponent<Text>();ShrinkToFit(lightShowLabels[k],14);
+                Place(lightShowLabels[k].rectTransform,.1f,0,.98f,1);
+                lightShowKeys[k]=Label(answer.transform,"Key",22,TextAnchor.MiddleCenter);lightShowKeys[k].color=Ink;Place(lightShowKeys[k].rectTransform,.015f,0,.09f,1);ShrinkToFit(lightShowKeys[k],12);
+                // Explicit, so the arrows move only between the answers shown (UpdateLightShow links them).
+                var nav=lightShowAnswers[k].navigation;nav.mode=Navigation.Mode.Explicit;lightShowAnswers[k].navigation=nav;
             }
             lightShowReveal=Label(lightShowPanel.transform,"Light Show reveal",19,TextAnchor.MiddleCenter);Place(lightShowReveal.rectTransform,.05f,.04f,.95f,.79f);ShrinkToFit(lightShowReveal,12);
             lightShowPanel.SetActive(false);
@@ -669,8 +674,9 @@ namespace Festival.Presentation
             // CONTROLS holds every key in sections; their buttons take its first row.
             for(int i=0;i<FestivalSettingsScreen.Sections.Length;i++)
             {
-                string section=FestivalSettingsScreen.Sections[i];float x=.04f+i*.186f;
-                var button=Button(settingsPanel.transform,section,new Vector2(x,.742f-SettingRowHeight),new Vector2(x+.176f,.738f),()=>settingsScreen.OpenSection(section));
+                // The sections share the tabs' width, however many there are.
+                string section=FestivalSettingsScreen.Sections[i];float stride=.93f/FestivalSettingsScreen.Sections.Length,x=.04f+i*stride;
+                var button=Button(settingsPanel.transform,section,new Vector2(x,.742f-SettingRowHeight),new Vector2(x+stride-.01f,.738f),()=>settingsScreen.OpenSection(section));
                 var label=button.GetComponentInChildren<Text>();ShrinkToFit(label,12);
                 settingsSections.Add((section,button.GetComponent<Image>(),label,button));
             }
@@ -1145,7 +1151,21 @@ namespace Festival.Presentation
                 lightShowLabels[k].text=k<4?question.Choices[k]:question.Unsure;
                 lightShowAnswers[k].interactable=sent==FestivalHudText.NoAnswer;
                 lightShowAnswers[k].image.color=sent==(k<4?k:-1)?Mint:new Color(.84f,.85f,.76f,1);
+                lightShowKeys[k].text=Bound(session.Controls.Answers[k],AnswerKeys[k]);
             }
+            if(question==null){lightShowFocus=-1;return;}
+            // Up and down ring round the answers shown (the choices, then Not sure). Each new question takes focus on its first answer,
+            // so Enter sends the one picked.
+            int count=question.Choices.Count;
+            Button At(int row)=>lightShowAnswers[row==count?4:row];
+            for(int row=0;row<=count;row++)
+            {
+                var nav=At(row).navigation;nav.selectOnUp=At(row==0?count:row-1);nav.selectOnDown=At(row==count?0:row+1);At(row).navigation=nav;
+            }
+            if(slot!=lightShowFocus&&EventSystem.current!=null){lightShowFocus=slot;EventSystem.current.SetSelectedGameObject(lightShowAnswers[0].gameObject);}
+            // A key goes through AnswerLightShow, so a key and a click together still send one Answer per question.
+            if(!session.MenuOpen&&!session.Controls.Rebinding)for(int k=0;k<lightShowAnswers.Length;k++)
+                if((k==4||k<count)&&session.Controls.Answers[k].WasPressedThisFrame()){AnswerLightShow(k<4?k:-1);break;}
         }
         // A click answers the question still open to you, once: a second click, or one on a question since closed, sends nothing.
         private void AnswerLightShow(int choice)

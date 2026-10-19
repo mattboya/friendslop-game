@@ -115,6 +115,7 @@ namespace Festival.Presentation
             "Slot3"=>"hand 3 • reply 3 in a talk or chat • vote 3 at the campfire","Cycle"=>"next hand down, previous hand up",
             "Spin"=>"hold to spin the poi in your hand",
             "PushToTalk"=>"hold to talk (voice provider required)",
+            "Answer1"=>"Light Show: answer 1","Answer2"=>"Light Show: answer 2","Answer3"=>"Light Show: answer 3","Answer4"=>"Light Show: answer 4","AnswerUnsure"=>"Light Show: not sure",
             "Rhythm0"=>"dance lane: left","Rhythm1"=>"dance lane: down","Rhythm2"=>"dance lane: up","Rhythm3"=>"dance lane: right",_=>"",
         };
     }

@@ -18,7 +18,7 @@ namespace Festival.Presentation
         public enum Tab{Audio,Graphics,Controls,Accessibility,Voice}
         public static readonly Tab[] Tabs={Tab.Audio,Tab.Graphics,Tab.Controls,Tab.Accessibility,Tab.Voice};
         // Every key does not fit on one page, so CONTROLS shows one of these sections at a time.
-        public static readonly string[] Sections={"GENERAL","MOVE","ACTIONS","HANDS","DANCE"};
+        public static readonly string[] Sections={"GENERAL","MOVE","ACTIONS","HANDS","DANCE","LIGHT SHOW"};
         public const string SavedMessage="Saved on this machine. Changes apply immediately.";
         public const string VoiceExplanation="Proximity voice isn't in this build yet; your mic settings are saved for when it is.";
         /// <summary>One setting: its buttons step it, flip it or act on it, and Value reads the saved choice.</summary>
@@ -73,6 +73,7 @@ namespace Festival.Presentation
             Key("HANDS","SLOT 1","Slot1"),Key("HANDS","SLOT 2","Slot2"),Key("HANDS","SLOT 3","Slot3"),Key("HANDS","NEXT SLOT","Cycle"),Key("HANDS","SPIN POI","Spin"),
             Key("DANCE","DANCE LEFT","Rhythm0"),Key("DANCE","DANCE DOWN","Rhythm1"),Key("DANCE","DANCE UP","Rhythm2"),Key("DANCE","DANCE RIGHT","Rhythm3"),
             Key("DANCE","DANCE LEFT ALT","Rhythm0",1),Key("DANCE","DANCE DOWN ALT","Rhythm1",1),Key("DANCE","DANCE UP ALT","Rhythm2",1),Key("DANCE","DANCE RIGHT ALT","Rhythm3",1),
+            Key("LIGHT SHOW","ANSWER 1","Answer1"),Key("LIGHT SHOW","ANSWER 2","Answer2"),Key("LIGHT SHOW","ANSWER 3","Answer3"),Key("LIGHT SHOW","ANSWER 4","Answer4"),Key("LIGHT SHOW","NOT SURE","AnswerUnsure"),
             Switch(Tab.Accessibility,"REDUCED MOTION",d=>d.ReducedMotion,(d,v)=>d.ReducedMotion=v),
             Switch(Tab.Accessibility,"HIGH CONTRAST",d=>d.HighContrast,(d,v)=>d.HighContrast=v),
             Switch(Tab.Accessibility,"CAMERA SHAKE",d=>d.CameraShake,(d,v)=>d.CameraShake=v),

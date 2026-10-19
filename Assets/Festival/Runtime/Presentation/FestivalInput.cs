@@ -21,6 +21,9 @@ namespace Festival.Presentation
         public readonly InputActionMap Map;
         public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle, Spin, PushToTalk;
         public readonly InputAction[] Notes = new InputAction[4];
+        // The Light Show question's four choices, then Not sure, on 1-5 until rebound.
+        private static readonly string[] AnswerNames={"Answer1","Answer2","Answer3","Answer4","AnswerUnsure"};
+        public readonly InputAction[] Answers = new InputAction[5];
         private InputActionRebindingExtensions.RebindingOperation rebind;
         private readonly string saveKey;
         private readonly LocalProfile profile;
@@ -71,6 +74,7 @@ namespace Festival.Presentation
                 Notes[i]=Button("Rhythm"+i,"<Keyboard>/"+arrows[i]);
                 Notes[i].AddBinding("<Keyboard>/"+wasd[i]);
             }
+            for(int k=0;k<Answers.Length;k++)Answers[k]=Button(AnswerNames[k],"<Keyboard>/"+(k+1));
             // Identities are authored from names, independent of process, map order or override paths.
             // Keep these semantic names stable when adding actions; official Input System JSON remains the only save format.
             string json=Map.ToJson();
@@ -95,6 +99,7 @@ namespace Festival.Presentation
                 Notes[lane].performed+=context=>noteHeld[direction]=context.ReadValueAsButton();
                 Notes[lane].canceled+=context=>{if(noteHeld[direction])noteReleased[direction]=true;noteHeld[direction]=false;};
             }
+            for(int k=0;k<Answers.Length;k++)Answers[k]=Map.FindAction(AnswerNames[k]);
             Drop.canceled+=context=>DropCancellationSequence++;
             if(string.IsNullOrEmpty(this.profile.Data.BindingOverridesJson))ImportLegacy();
             SynchronizeBindings();
@@ -154,7 +159,7 @@ namespace Festival.Presentation
             var clashes=new List<string>();
             foreach(var other in Map.actions)
             {
-                bool shared=action==Move&&Array.IndexOf(Notes,other)>=0||other==Move&&Array.IndexOf(Notes,action)>=0;
+                bool shared=action==Move&&Array.IndexOf(Notes,other)>=0||other==Move&&Array.IndexOf(Notes,action)>=0||SlotAndAnswer(action,other)||SlotAndAnswer(other,action);
                 if(shared)continue;
                 for(int index=0;index<other.bindings.Count;index++)
                 {
@@ -167,6 +172,8 @@ namespace Festival.Presentation
             }
             return clashes.Count==0?"":"Already used by "+string.Join(", ",clashes)+".";
         }
+        // A hand slot and a Light Show answer never act at once (no gear keys in a minigame), so they may share a key.
+        private bool SlotAndAnswer(InputAction slot,InputAction answer)=>(slot==Slot1||slot==Slot2||slot==Slot3)&&Array.IndexOf(Answers,answer)>=0;
         private void CheckBinding(InputAction action,int bindingIndex)
         {
             if(action==null||action.actionMap!=Map)throw new ArgumentException("This action belongs to another input map.",nameof(action));

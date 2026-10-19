@@ -175,6 +175,32 @@ namespace Festival.Tests
             }
         }
 
+        // The Light Show's four choices and Not sure are five rebindable keys, 1-5 by default, each with a row in CONTROLS'
+        // LIGHT SHOW section. They share 1-3 with the hand slots, which do nothing while a question is up, so that is no clash; any
+        // other action on one of those keys is.
+        [Test]public void TheLightShowAnswersAreFiveRebindableKeysWithSettingsRows()
+        {
+            var profile=new LocalProfile("settings");
+            using(var input=new FestivalInput("settings",profile))
+            using(var settings=new FestivalSettings(profile))
+            {
+                var screen=new FestivalSettingsScreen(profile,settings,new Festival.Integrations.UnavailableVoiceSession(),input,null,new MicrophoneMonitorTests.Fixture());
+                string[] names={"Answer1","Answer2","Answer3","Answer4","AnswerUnsure"},labels={"ANSWER 1","ANSWER 2","ANSWER 3","ANSWER 4","NOT SURE"};
+                for(int k=0;k<names.Length;k++)
+                {
+                    var action=input.Map.FindAction(names[k]);
+                    Assert.That(action,Is.Not.Null,names[k]+" is an action of its own");
+                    Assert.That(action.bindings[0].effectivePath,Is.EqualTo("<Keyboard>/"+(k+1)),names[k]+" starts on "+(k+1));
+                    var row=FestivalSettingsScreen.Rows.FirstOrDefault(r=>r.Tab==FestivalSettingsScreen.Tab.Controls&&r.Label==labels[k]);
+                    Assert.That(row?.Section,Is.EqualTo("LIGHT SHOW"),labels[k]+" has a row in the LIGHT SHOW section");
+                    Assert.That((screen.Value(row),screen.ButtonLabel(row,0)),Is.EqualTo(((k+1).ToString(),"REBIND")));
+                }
+                Assert.That(FestivalSettingsScreen.Sections,Does.Contain("LIGHT SHOW"));
+                Assert.That(input.BindingClashes(input.Slot1,0),Is.Empty,"hand slot 1 and answer 1 share 1 by design");
+                Assert.That(input.BindingClashes(input.Map.FindAction("Answer4"),0,"<Keyboard>/e"),Does.Contain("Interact"),"any other overlap is shown");
+            }
+        }
+
         [Test]public void RebindingInteractToFOnTheControlsTabWarnsThatChatAlreadyUsesF()
         {
             var keyboard=InputSystem.AddDevice<Keyboard>();var profile=new LocalProfile("settings");
