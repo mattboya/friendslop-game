@@ -26,7 +26,9 @@ namespace Festival.Presentation
 
         // What the HUD shows beside her (the strip under the prompt), her talk's title and the initial on her bubbles. The title says
         // Escape closes it, as an ended chat's does (FestivalChatWindow.OverHeader).
-        public const string TalkPrompt="F  TALK TO MARIGOLD",Header="MARIGOLD  •  CAMP SUPPLIES  •  ESC CLOSE",Mark="M";
+        public const string TalkPrompt="F"+Talk,Header="MARIGOLD  •  CAMP SUPPLIES  •  ESC CLOSE",Mark="M";
+        const string Talk="  TALK TO MARIGOLD";
+        public static string TalkPromptFor(string chat)=>chat+Talk;
         // Where she stands, in front of the supplies table (FestivalWorld puts her there), and which way she faces when nobody talks
         // to her: the camp. F reaches her from as far as the checkout takes payment (Economy.cs: 2.7 m from 0, 7). She turns to
         // face whoever talks to her at TurnDegreesPerSecond.

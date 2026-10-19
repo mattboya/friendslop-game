@@ -160,9 +160,54 @@ namespace Festival.Tests
             });
         }
 
+        // The chat window's reply keycaps, Marigold's prompt, a vision's check line and the host's own words (the objective card
+        // and the notice) follow the profile too.
+        [Test] public void ChatWorldAndHostLinesFollowTheProfile()
+        {
+            WithReboundHud(keys=>
+            {
+                keys.Interact.ApplyBindingOverride(0,"<Keyboard>/r");keys.Chat.ApplyBindingOverride(0,"<Keyboard>/h");keys.Drop.ApplyBindingOverride(0,"<Keyboard>/k");
+                keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/7");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/8");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/9");
+            },(session,hud,go)=>
+            {
+                var day=Level(0,0);var you=Crew(day,"you","You",life:"Downed");
+                typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{day,you});
+                Assert.That(Shown(go,"Objective detail"),Does.StartWith("Press R to distract attackers"),"the host's hint names the bound Interact key");
+                typeof(FestivalHud).GetMethod("UpdateChat",Private).Invoke(hud,new object[]{day,you,false});
+                var window=go.GetComponentInChildren<FestivalChatWindow>(true);
+                for(int i=0;i<3;i++)Assert.That(window.ReplyKey(i),Is.EqualTo((7+i).ToString()),"reply "+(i+1)+"'s keycap names its bound key");
+
+                var camp=Level(0,0,"Shopping");you=Crew(camp,"you","You",CampSellerTalk.X,CampSellerTalk.Z-2);
+                typeof(FestivalHud).GetMethod("UpdateActions",Private).Invoke(hud,new object[]{camp,you});
+                Assert.That(Shown(go,"Nearby"),Is.EqualTo("H  TALK TO MARIGOLD"),"beside Marigold, the bound Chat key talks to her");
+
+                session.SetMessage("Holding Fun Guys. Bring it to the seller, or press G to return it.");
+                typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
+                Assert.That(Shown(go,"Notice"),Is.EqualTo("Holding Fun Guys. Bring it to the seller, or press K to return it."),"the host's reply names the bound Drop key");
+
+                // A vision made before the session reads the keys asks with today's; the next frame's asks with the bound ones.
+                var state=Level(0,0);state.Visions.Add(new VisionState{Id="open",Kind="Buyer",NpcId="b"});
+                var body=new GameObject("Festivalgoer b").transform;var view=new GameObject("View").transform;view.position=new Vector3(0,1.65f,-10);
+                try
+                {
+                    var markers=go.GetComponent<FestivalVisionMarkers>();System.Func<string,Transform> actorFor=id=>id=="b"?body:null;
+                    markers.Apply(state,view,actorFor,0,.02f);
+                    var label=go.transform.Find("Vision open/Label").GetComponent<TMPro.TextMeshPro>();
+                    Assert.That(label.text,Does.Contain("F CHAT • E DANCE TO CHECK"),"setup: an unchecked claim, aimed at, says how to check it");
+                    typeof(FestivalSession).GetProperty("State").SetValue(session,state);
+                    typeof(FestivalVisionMarkers).GetMethod("LateUpdate",Private).Invoke(markers,null);
+                    markers.Apply(state,view,actorFor,0,.02f);
+                    Assert.That(label.text,Does.Contain("H CHAT • R DANCE TO CHECK"),"the check line names the bound Chat and Interact keys");
+                }
+                finally{Object.DestroyImmediate(body.gameObject);Object.DestroyImmediate(view.gameObject);}
+            });
+        }
+
         // Lines built from the keys they are given: the HUD passes the bound ones.
         [Test] public void StopEquipAndCheckLinesNameTheKeysTheyAreGiven()
         {
+            Assert.That(FestivalHudText.PressKeys("Press E. press F, press G or Press Q. Express G, press Esc, press 1.","R","H","K","Z"),
+                Is.EqualTo("Press R. press H, press K or Press Z. Express G, press Esc, press 1."),"each pressed letter names its bound key");
             Assert.That(FestivalHudText.GearHeading(true),Is.EqualTo("GEAR   /   1–3 EQUIP     Q USE     G DROP"),"today's keys by default");
             Assert.That(FestivalHudText.GearHeading(true,"Z","X","U","K"),Is.EqualTo("GEAR   /   Z–X EQUIP     U USE     K DROP"));
             Assert.That(FestivalHudText.GearHeading(false,"Z","X","U","K"),Is.EqualTo("GEAR   /   U USE     K DROP"),"no equip while 1-3 reply");

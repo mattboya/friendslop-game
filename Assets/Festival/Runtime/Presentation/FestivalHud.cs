@@ -850,7 +850,8 @@ namespace Festival.Presentation
             wasConnected=session.Connected;
             // The host's replies name money in dollars; each player reads their own (PLAYA-1).
             string message=session.State!=null&&session.LocalPlayer!=null?FestivalHudText.MoneyText(session.State,session.LocalPlayer,session.Message):session.Message;
-            message=FestivalHudText.DropNotice(message,session.Controls);
+            var keys=session.Controls;
+            message=FestivalHudText.PressKeys(FestivalHudText.DropNotice(message,keys),Bound(keys?.Interact,"E"),Bound(keys?.Chat,"F"),Bound(keys?.Drop,"G"),Bound(keys?.Use,"Q"));
             status.text=connectionError==""?message:connectionError;
             status.color=connectionError==""?new Color(.25f,.35f,.32f):new Color(.58f,.16f,.12f);
             if(session.Message!=lastNotice){lastNotice=session.Message;noticeUntil=Time.unscaledTime+5;}
@@ -1545,6 +1546,7 @@ namespace Festival.Presentation
             bool covered=showMenu&&crewOpen;
             // CAMP-1: at camp the window may be Marigold's talk instead, which the host knows nothing of; she faces whoever talks to her.
             chatWindow.CloseKey=Bound(session?.Controls?.Menu,"ESC");
+            chatWindow.SetReplyKeys(Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"));
             var outcome=session.PendingConversationOutcome;
             bool live=!covered&&(sellerTalk.Follow(state,player,Time.unscaledTime,session.Profile.Data.ReducedMotion)
                 ||outcome==null&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
@@ -1974,8 +1976,7 @@ namespace Festival.Presentation
                     }
                     else SetPromptAction("GEAR SHELVES BESIDE SELLER  •  READY AT LIT TRAILHEAD",null);
                 }
-                // CAMP-1: beside Marigold, the strip under the prompt says F talks to her.
-                if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open){nearby.text=CampSellerTalk.TalkPrompt;UpdateNearbyLayout();}
+                if(CampSellerTalk.CanTalk(state,player)&&!sellerTalk.Open){nearby.text=CampSellerTalk.TalkPromptFor(Bound(session?.Controls?.Chat,"F"));UpdateNearbyLayout();}
                 FinishActions();return;
             }
             // TRIP-8: only a free player shops a shelf. Lying there, E gets you up; mid-dance it runs nothing (DANCE-12).

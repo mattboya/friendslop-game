@@ -91,6 +91,7 @@ namespace Festival.Presentation
                 int index=i;button.onClick.AddListener(()=>window.Pick(index));
                 var key=Panel(reply,"Key cap",Orange,rounded);Pixels(key,new Vector2(0,0),new Vector2(0,1),new Vector2(6,5),new Vector2(36,-5));
                 window.replyKeys[i]=window.Label(key,"Key",21,TextAnchor.MiddleCenter,Ink);window.replyKeys[i].text=(i+1).ToString();Place(window.replyKeys[i].rectTransform,0,0,1,1);
+                window.replyKeys[i].resizeTextForBestFit=true;window.replyKeys[i].resizeTextMinSize=10;window.replyKeys[i].resizeTextMaxSize=21;
                 var question=window.Label(reply,"Question",19,TextAnchor.MiddleLeft,Ink);Pixels(question.rectTransform,Vector2.zero,Vector2.one,new Vector2(46,1),new Vector2(-8,-1));
                 question.resizeTextForBestFit=true;question.resizeTextMinSize=12;question.resizeTextMaxSize=question.fontSize;
                 window.replies[i]=button;window.replyTexts[i]=question;
@@ -145,6 +146,7 @@ namespace Festival.Presentation
         public string Shown(int i)=>thread[i].Line.text;
         public int Replies=>offered;
         public string ReplyKey(int i)=>replyKeys[i].text;
+        public void SetReplyKeys(string first,string second,string third){replyKeys[0].text=first;replyKeys[1].text=second;replyKeys[2].text=third;}
         public string ReplyLabel(int i)=>replyTexts[i].text;
         public bool CanReply(int i)=>i>=0&&i<offered&&replies[i].interactable;
         /// <summary>Whether it shows a conversation that is over (Linger).</summary>

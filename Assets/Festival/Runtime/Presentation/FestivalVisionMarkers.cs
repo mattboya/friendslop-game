@@ -22,8 +22,8 @@ namespace Festival.Presentation
         // its own glyph, and StackStep leaves room for it under the next glyph up: two .64 m glyphs (a clue under a double buyer)
         // plus a .23 m line and the gaps (VISION-5).
         private const float OverHead=2.45f,StackStep=.95f,OverPlace=1.4f,Size=.32f,LabelGap=.04f;
-        // Under an unchecked claim, smaller: how to settle it. E dances and F chats with the festivalgoer (FestivalHud's check).
-        private const string CheckLine="\n<size=62.5%>F CHAT • E DANCE TO CHECK</size>";
+        // Under an unchecked claim, smaller: how to settle it. Interact dances and Chat chats with the festivalgoer (FestivalHud's check).
+        private static string CheckLineFor(string chat,string interact)=>"\n<size=62.5%>"+chat+" CHAT • "+interact+" DANCE TO CHECK</size>";
         // Fakes: hue a little off, and a scale shimmer that grows with how fast the camera turns or moves, eased over ShimmerEase
         // seconds so a mouse that reports slower than the screen refreshes cannot make it flicker.
         private const float FakeHueShift=.06f,ShimmerDepth=.18f,ShimmerHz=9,FullShimmerTurn=90,FullShimmerMove=4,ShimmerEase=.15f;
@@ -36,7 +36,7 @@ namespace Festival.Presentation
         // the top of their whole stack of markers (or from its spot on the ground up to the top of its marker).
         private const float AimReach=.5f;
 
-        private sealed class Marker { public Transform Root,Label; public FestivalShadowTellView Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMeshPro Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask; public FakeShadow Wrong; }
+        private sealed class Marker { public Transform Root,Label; public FestivalShadowTellView Shadow; public MeshRenderer Glyph; public GameObject Ring; public TextMeshPro Verdict; public Material Material,RingMaterial; public float Aimed; public Vector3 Ground; public string Ask,Check; public FakeShadow Wrong; }
         private readonly Dictionary<string,Marker> markers=new Dictionary<string,Marker>();
         private readonly List<string> gone=new List<string>();
         private static readonly List<VisionState> None=new List<VisionState>();
@@ -44,6 +44,8 @@ namespace Festival.Presentation
         private Material shade,glow;
         private FestivalSession session;
         private Func<string,Transform> actorFor;
+        // The check line for the keys as bound, rebuilt only when Chat's or Interact's key moves: a label allocates.
+        private string checkLine=CheckLineFor("F","E"),chatPath,interactPath;
 
         /// <summary>How many markers are drawn this frame.</summary>
         public int Shown {get;private set;}
@@ -53,6 +55,12 @@ namespace Festival.Presentation
         private void LateUpdate()
         {
             if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
+            var keys=session.Controls;
+            if(keys!=null&&(keys.Chat.bindings[0].effectivePath!=chatPath||keys.Interact.bindings[0].effectivePath!=interactPath))
+            {
+                chatPath=keys.Chat.bindings[0].effectivePath;interactPath=keys.Interact.bindings[0].effectivePath;
+                checkLine=CheckLineFor(keys.Label(keys.Chat).ToUpperInvariant(),keys.Label(keys.Interact).ToUpperInvariant());
+            }
             Apply(session.State,session.ViewCamera!=null?session.ViewCamera.transform:null,actorFor,Time.time,Time.unscaledDeltaTime,session.EyePosition);
         }
 
@@ -115,8 +123,16 @@ namespace Festival.Presentation
                 var vision=visions[i];var marker=markers[vision.Id];
                 bool said=marker.Aimed<float.PositiveInfinity&&(i==aimed||vision.NpcId!=""&&vision.NpcId==visions[aimed].NpcId),top=true;
                 for(int j=i+1;j<visions.Count&&said;j++)if(vision.NpcId!=""&&visions[j].NpcId==vision.NpcId)top=false;
-                marker.Verdict.text=!said?"":vision.Confirmed?VerdictText(vision.Kind,vision.IsTrue):top?marker.Ask:ClaimText(vision.Kind);
+                marker.Verdict.text=!said?"":vision.Confirmed?VerdictText(vision.Kind,vision.IsTrue):top?Ask(marker,vision):ClaimText(vision.Kind);
             }
+        }
+
+        // A spot on the ground is checked by walking to it (FindStashes), so it says no more than its claim.
+        private string Ask(Marker marker,VisionState vision)
+        {
+            if(vision.NpcId=="")return ClaimText(vision.Kind);
+            if(marker.Check!=checkLine){marker.Check=checkLine;marker.Ask=ClaimText(vision.Kind)+checkLine;}
+            return marker.Ask;
         }
 
         /// <summary>What a checked vision of kind says it found: the claim it settles, never a bare TRUE or FALSE (VISION-5).</summary>
@@ -220,9 +236,7 @@ namespace Festival.Presentation
             var label=new GameObject("Label").transform;label.SetParent(root,false);label.localPosition=Vector3.up*(glyph.GetComponent<MeshFilter>().sharedMesh.bounds.extents.y*Size+LabelGap);
             // Its own authored lines only, so rich text stays on for the smaller check line.
             var verdict=FestivalWorldText.Add(label.gameObject,"",64*.03f,FestivalWorldText.Cream,true);verdict.richText=true;label=verdict.transform;
-            // A spot on the ground is checked by walking to it (FindStashes), so it says no more than its claim.
-            var ask=vision.NpcId==""?ClaimText(vision.Kind):ClaimText(vision.Kind)+CheckLine;
-            return new Marker{Root=root,Label=label,Shadow=shadow,Wrong=ShadowTell(vision.Id),Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring,Ask=ask};
+            return new Marker{Root=root,Label=label,Shadow=shadow,Wrong=ShadowTell(vision.Id),Glyph=renderer,Ring=outline,Verdict=verdict,Material=material,RingMaterial=ring};
         }
 
         private void OnDestroy(){foreach(var marker in markers.Values){Dispose(marker.Material);Dispose(marker.RingMaterial);}markers.Clear();if(shade!=null)Dispose(shade);if(glow!=null)Dispose(glow);}
