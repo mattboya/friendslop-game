@@ -41,11 +41,20 @@ namespace Festival.Tests
             var sim=new FestivalSimulation(7);world.UpdateShop(sim.State,sim.AddPlayer("p0","P0"));
             FestivalMinigameView.Build(root.transform).gameObject.SetActive(true);
             var eye=new GameObject("Label eye");eye.transform.SetParent(root.transform,false);var camera=eye.AddComponent<Camera>();
-            camera.orthographic=true;camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=Color.black;camera.cullingMask=1<<29;
+            // The holder turns the background's flat grey, so only its depth, never its colour, changes what its label lights.
+            var grey=new Color(.5f,.5f,.5f);var unlit=Shader.Find("Universal Render Pipeline/Unlit");Assert.That(unlit,Is.Not.Null,"setup: the unlit shader");
+            var flat=new Material(unlit){color=grey};
+            camera.orthographic=true;camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=grey;camera.cullingMask=1<<29;
             camera.nearClipPlane=.01f;camera.farClipPlane=3;
             var target=new RenderTexture(96,96,24);var pixels=new Texture2D(96,96,TextureFormat.RGB24,false);camera.targetTexture=target;
             var previous=RenderTexture.active;var failures=new List<string>();var seen=new HashSet<TextMeshPro>();
             Color[] Shot(){camera.Render();RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,96,96),0,0);pixels.Apply();RenderTexture.active=previous;return pixels.GetPixels();}
+            int Lit(TextMeshPro label)
+            {
+                var on=Shot();label.renderer.enabled=false;var off=Shot();label.renderer.enabled=true;
+                int lit=0;for(int i=0;i<on.Length;i++)if(Mathf.Abs(on[i].r-off[i].r)+Mathf.Abs(on[i].g-off[i].g)+Mathf.Abs(on[i].b-off[i].b)>.15f)lit++;
+                return lit;
+            }
             try
             {
                 foreach(var phase in new[]{"Shopping","Playing"})
@@ -56,19 +65,28 @@ namespace Festival.Tests
                         if(label.text==""||!seen.Add(label))continue;
                         var holder=label.transform.parent;var layers=new Dictionary<Transform,int>();
                         foreach(var part in holder.GetComponentsInChildren<Transform>(true)){layers[part]=part.gameObject.layer;part.gameObject.layer=29;}
+                        var parts=new List<(Renderer Part,Material[] Look,bool Shown)>();
+                        foreach(var part in holder.GetComponentsInChildren<Renderer>(true))
+                        {
+                            if(part==label.renderer)continue;
+                            parts.Add((part,part.sharedMaterials,part.enabled));
+                            var flats=new Material[part.sharedMaterials.Length];for(int i=0;i<flats.Length;i++)flats[i]=flat;part.sharedMaterials=flats;
+                        }
                         label.ForceMeshUpdate();var bounds=label.renderer.bounds;
                         camera.orthographicSize=Mathf.Max(.05f,bounds.extents.magnitude*1.2f);
                         camera.transform.SetPositionAndRotation(bounds.center-label.transform.forward*1.5f,Quaternion.LookRotation(label.transform.forward,label.transform.up));
-                        var on=Shot();label.renderer.enabled=false;var off=Shot();label.renderer.enabled=true;
-                        int changed=0;for(int i=0;i<on.Length;i++)if(Mathf.Abs(on[i].r-off[i].r)+Mathf.Abs(on[i].g-off[i].g)+Mathf.Abs(on[i].b-off[i].b)>.15f)changed++;
-                        if(changed<8)failures.Add(phase+" "+holder.name+"/"+label.name+" \""+label.text.Replace("\n"," | ")+"\" draws "+changed+" pixels");
+                        int held=Lit(label);
+                        foreach(var part in parts)part.Part.enabled=false;
+                        int alone=Lit(label);
+                        foreach(var part in parts){part.Part.sharedMaterials=part.Look;part.Part.enabled=part.Shown;}
+                        if(alone<8||held<alone*.9f)failures.Add(phase+" "+holder.name+"/"+label.name+" \""+label.text.Replace("\n"," | ")+"\" lights "+held+" of the "+alone+" pixels it lights alone");
                         foreach(var pair in layers)pair.Key.gameObject.layer=pair.Value;
                     }
                 }
                 Assert.That(seen.Count,Is.GreaterThan(20),"setup: the camp's and the festival's labels were looked at");
                 Assert.That(failures,Is.Empty,"labels hidden by what holds them");
             }
-            finally{RenderTexture.active=previous;camera.targetTexture=null;target.Release();Object.DestroyImmediate(target);Object.DestroyImmediate(pixels);}
+            finally{RenderTexture.active=previous;camera.targetTexture=null;target.Release();Object.DestroyImmediate(target);Object.DestroyImmediate(pixels);Object.DestroyImmediate(flat);}
         }
 
         // A sign seen from in front reads; an opaque wall between it and the eye hides it, and from behind it shows nothing mirrored
