@@ -713,6 +713,52 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // TRIP-11: in a running session the tripper's own camera draws the dose's pattern over the festival's scenery through the real
+        // pass, and a sober friend's camera in the same world draws none. Each count renders a view twice in one frame, the second time
+        // with only the pattern off, so trails, glows and the overlay cannot make a difference.
+        [UnityTest]public IEnumerator TheDosePatternsTheSceneryInTheTrippersOwnViewOnly()
+        {
+            var world=new GameObject("Pattern world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Pattern tripper");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("Pattern friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Tripper",port);float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=1;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");yield return StartLevel(host,friend.LocalPlayerId);
+                var me=sim.Player(host.LocalPlayerId);
+                // The host trips, so the host keeps no friend dosed in their place.
+                sim.State.TripperId=me.Id;foreach(var p in new[]{me,mate})p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                var dose=new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="lsd",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds};
+                me.Effects.Add(dose);host.Profile.Data.ReducedMotion=false;
+                yield return new WaitForSeconds(.5f);
+                var sober=FestivalTrip.For(friend.State,friend.LocalPlayerId,false,Time.unscaledTime);
+                Assert.That(sober.Lattice+sober.Cells+Mathf.Abs(sober.Breathe),Is.Zero,"setup: the friend's own screen is sober");
+
+                Assert.That(Patterned(host),Is.GreaterThan(500),"four Tongue Stamps pattern the scenery in the tripper's view");
+                Assert.That(Patterned(friend),Is.Zero,"and nothing in the sober friend's");
+                host.Profile.Data.ReducedMotion=true;yield return null;yield return null;
+                Assert.That(Patterned(host),Is.GreaterThan(500),"reduced motion keeps the pattern");
+                dose.Substance="mushrooms";yield return null;yield return null;
+                Assert.That(Patterned(host),Is.GreaterThan(500),"four Fun Guys grow their cells on it too");
+                dose.Substance="ecstasy";yield return null;yield return null;
+                Assert.That(Patterned(host),Is.Zero,"Rolly Pollies draw no pattern");
+                dose.Substance="lsd";me.Life="Spirit";yield return null;yield return null;
+                Assert.That(Patterned(host),Is.Zero,"nor does a spirit");
+                me.Life="Alive";yield return null;yield return null;
+                Assert.That(Patterned(host),Is.GreaterThan(500),"alive again, the pattern is back");
+                host.Leave();yield return null;yield return null;
+                Assert.That(Patterned(host),Is.Zero,"leaving the session clears it");
+            }
+            finally{friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);}
+            yield return null;
+        }
+
         // TRIP-16: a hosted level. Beside a stand-in friend, Sam (no client of their own), who trips, the host is never dosed in their
         // place, and the host's own dose is the test's: four doses of Pony Dust, lasting the level.
         private static IEnumerator HostALevel(FestivalSession session,bool besideATripper=false)
@@ -740,6 +786,25 @@ namespace Festival.Tests
             var trip=session.GetComponent<FestivalTrip>();
             for(int i=0;i<frames;i++)trip.Apply(session.State,session.LocalPlayerId,session.ViewCamera.transform,null,session.Profile.Data.ReducedMotion,Time.unscaledTime,dt);
             return Opening(session.gameObject);
+        }
+        // TRIP-11: pixels of session's view (320x180) that change by more than 6 of 255 when its trip's surface pattern alone is switched
+        // off between two renders in one frame; the trip's next LateUpdate puts it back.
+        private static int Patterned(FestivalSession session)
+        {
+            const int width=320,height=180;
+            var eye=session.ViewCamera;
+            var surfaces=(FestivalTripSurfaces)typeof(FestivalTrip).GetField("surfaces",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session.GetComponent<FestivalTrip>());
+            var target=RenderTexture.GetTemporary(width,height,24);var picture=new Texture2D(width,height,TextureFormat.RGBA32,false);var was=RenderTexture.active;
+            Color32[] Shot(){eye.Render();RenderTexture.active=target;picture.ReadPixels(new Rect(0,0,width,height),0,0);RenderTexture.active=was;return picture.GetPixels32();}
+            try
+            {
+                eye.targetTexture=target;
+                var on=Shot();surfaces.Show(null,default);var off=Shot();
+                int changed=0;
+                for(int i=0;i<on.Length;i++)if(Mathf.Max(Mathf.Abs(on[i].r-off[i].r),Mathf.Max(Mathf.Abs(on[i].g-off[i].g),Mathf.Abs(on[i].b-off[i].b)))>6)changed++;
+                return changed;
+            }
+            finally{eye.targetTexture=null;RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);Object.Destroy(picture);}
         }
     }
 }

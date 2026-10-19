@@ -335,6 +335,8 @@ namespace Festival.Presentation
             twists=new FestivalTwistVisuals(owned);
             // ART-1: Palm Mirage's look, shown by SetTwists; like the twists it never collides.
             PoloDressing=new FestivalPoloDressing(owned,groundTrees,earth);
+            // TRIP-11: here, so the Giggle Tank, the clouds and the goods built after stay clean of a dose's pattern.
+            FestivalTripSurfaces.Mark(owned);
             // GAS-2: hidden until a view has a Giggle Tank (SetTwists).
             giggleTank=FestivalGiggleTank.Build(owned);giggleTank.gameObject.SetActive(false);
             // LIGHT-2: the day sky's clouds hang under the festival, so camp has none.

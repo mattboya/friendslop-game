@@ -16,7 +16,7 @@ namespace Festival.Presentation
     /// FestivalSession.UpdateCamera tilts the view by Roll and trails the mouse by Lag (Follow), and FestivalNightLighting adds
     /// Saturation and Brightness to the colour grade. This component draws the rest: its own overlay canvas under the HUD (tint,
     /// haze, vignette, letterbox, and TRIP-16's sleepy eyes that now and then blink), pooled colour trails and glows around other
-    /// people, and a low-pass on the view's listener.
+    /// people, TRIP-11's pattern on the scenery (FestivalTripSurfaces) in the view's camera alone, and a low-pass on the view's listener.
     /// GAS-1: a Giggle Balloon's gas at camp (Gas) goes the same way, and adds a tremolo and (GAS-5) a reverb: FestivalTrip is the
     /// one writer of AudioListener.volume and of the listener's filters.</summary>
     public sealed class FestivalTrip : MonoBehaviour
@@ -280,6 +280,7 @@ namespace Festival.Presentation
         private Material sprites;
         private AudioLowPassFilter lowPass;
         private AudioReverbFilter reverb;
+        private FestivalTripSurfaces surfaces;
         private readonly SpriteRenderer[] trails=new SpriteRenderer[MaxTrails];
         private readonly float[] trailAge=new float[MaxTrails];
         private readonly SpriteRenderer[] glows=new SpriteRenderer[MaxGlows];
@@ -325,6 +326,7 @@ namespace Festival.Presentation
             Listen(view,look);
             Trail(state,localPlayerId,view,actorFor,look.Trails,deltaTime);
             Glow(state,localPlayerId,view,actorFor,look.Glow);
+            surfaces.Show(view!=null&&view.TryGetComponent(out Camera viewCamera)?viewCamera:null,look);
         }
 
         // TRIP-16: the eye's opening across the middle of the screen, as tall as the lids are open (Aperture), with the black bars flush
@@ -480,6 +482,7 @@ namespace Festival.Presentation
             blobTexture=Radial(32,r=>{float a=Mathf.Clamp01(1-r);return a*a;},"Festival trip blob");
             blob=Sprite.Create(blobTexture,new Rect(0,0,32,32),new Vector2(.5f,.5f),32);blob.name="Festival trip blob";
             sprites=new Material(Shader.Find("Sprites/Default")){name="Festival trip sprites"};
+            surfaces=new FestivalTripSurfaces();
         }
         private T Layer<T>(string name,Vector2 min,Vector2 max) where T:Graphic
         {
@@ -504,6 +507,7 @@ namespace Festival.Presentation
             Listen(null,default);
             if(lowPass!=null)Dispose(lowPass);
             if(reverb!=null)Dispose(reverb);
+            surfaces?.Dispose();
             foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,eyeTexture,sprites})if(thing!=null)Dispose(thing);
         }
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
