@@ -1540,9 +1540,9 @@ namespace Festival.Presentation
             session.SpeechBubbles?.FollowCheck(state,player,check,session.ConnectionGeneration,session.EstimatedWorldSeconds);
             if(chatWindow.Open)dialoguePanel.SetActive(false);
             // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
-            // equip.
+            // equip. Held Drop drops nothing while either chat is up (HoldGearDrop's eligibility), so the bar stops offering that too.
             inventoryHeading.text=FestivalHudText.GearHeading(!(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open),
-                Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Use,"Q"),Bound(session?.Controls?.Drop,"G"));
+                Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Use,"Q"),Bound(session?.Controls?.Drop,"G"),!(chatWindow.Open||sellerTalk.Open));
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)

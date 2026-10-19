@@ -6,6 +6,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 using TMPro;
@@ -210,6 +211,52 @@ namespace Festival.Tests
             }
             yield return null;
             Assert.That(failures,Is.Empty,"A security stop on screen:\n"+string.Join("\n",failures));
+        }
+
+        // A security talk that ends with the stop still on leaves its chat up to read. G belongs to the card's ditch then, not to the
+        // chat, and the gear bar stops offering G DROP until the Menu key closes the chat.
+        [UnityTest]public IEnumerator TheFirstGAfterATalkWithSecurityDitchesTheStock()
+        {
+            UseAVirtualKeyboard("Ditch keyboard");
+            var world=new GameObject("Ditch world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Ditch HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);session.MenuOpen=false;
+                sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");player.X=0;player.Z=0;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});player.EquippedItemId="stock_lsd";
+                var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.Evidence.Clear();cop.X=2;cop.Z=0;cop.Yaw=-90;
+                yield return new WaitForSeconds(.4f);
+                Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: security stops you over the stock ("+session.Message+")");
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="ditch_talk",Kind="Police",TargetId=cop.Id}).Accepted,Is.True,"setup: you talk to security");
+                yield return new WaitForSeconds(.5f);
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                Assert.That(window.Open,Is.True,"setup: the talk is on the chat window");
+                // The talk ends without waving you on (walked out of, here on the host), so the stop holds and the chat lingers.
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="ditch_over",Kind="Cancel"}).Accepted,Is.True,"setup: the talk ends");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: the stop holds");Assert.That(window.Open,Is.True,"setup: the ended chat stays up to read");
+                Text heading=null;foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Equipment heading")heading=text;
+                Assert.That(heading.text,Does.EndWith("Q USE"),"held G drops nothing while a chat is up, so the gear bar does not offer it");
+                int held=player.Inventory.Find(i=>i.ItemId=="stock_lsd").Count;
+                yield return Tap(Key.G);yield return new WaitForSeconds(.3f);
+                Assert.That(player.Inventory.Find(i=>i.ItemId=="stock_lsd")?.Count??0,Is.EqualTo(held-1),"the first G ditches a Tongue Stamp ("+session.Message+")");
+                Assert.That(sim.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),Is.True,"at your feet");
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                Assert.That(window.Open,Is.False,"the Menu key closes the ended chat");
+                Assert.That(heading.text,Does.EndWith("G DROP"),"with the chat closed, the gear bar offers G DROP again");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
         }
     }
 }

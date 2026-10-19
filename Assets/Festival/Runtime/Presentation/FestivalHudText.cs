@@ -464,8 +464,9 @@ namespace Festival.Presentation
         /// </summary>
         public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G")=>("HP "+p.Health+Dot+Money(s,p,p.Cash)+Dot+"STASH "+Money(s,p,s.StashCash)+"\n"
             +"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+Dot+Condition(s,p,talk,ditch);
-        /// <summary>The gear bar's heading: Slot1-Slot3 equip (left out while they reply in a chat), Use, Drop.</summary>
-        public static string GearHeading(bool equip,string first="1",string last="3",string use="Q",string drop="G")=>"GEAR   /   "+(equip?first+"–"+last+" EQUIP     ":"")+use+" USE     "+drop+" DROP";
+        /// <summary>The gear bar's heading: Slot1-Slot3 equip (left out while they reply in a chat), Use, Drop (left out while held Drop
+        /// drops nothing).</summary>
+        public static string GearHeading(bool equip,string first="1",string last="3",string use="Q",string drop="G",bool drops=true)=>"GEAR   /   "+(equip?first+"–"+last+" EQUIP     ":"")+use+" USE"+(drops?"     "+drop+" DROP":"");
 
         /// <summary>The rhythm lane's title, naming a check dance as the check it is. DIALOG-3: a talk is on the lanes only for the dance
         /// a wary festivalgoer asks for first, so it reads as that. MINI-2: a Drum Circle part is the player's own. PLAYA-5: an art
