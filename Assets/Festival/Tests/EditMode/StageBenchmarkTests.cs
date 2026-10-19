@@ -3,7 +3,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEditor;
@@ -77,10 +76,12 @@ namespace Festival.Tests
                 string development=Compile("Development",ScriptCompilationOptions.DevelopmentBuild),release=Compile("Release",ScriptCompilationOptions.None);
                 Assert.That(Verify(development,release),Does.StartWith("exit 0").And.Contain("MAC RELEASE DIAGNOSTIC EXCLUSION PASSED"));
                 string leaked=Path.Combine(folder,"Leaked");Directory.CreateDirectory(leaked);
-                File.WriteAllBytes(Path.Combine(leaked,"Festival.Runtime.dll"),File.ReadAllBytes(Path.Combine(release,"Festival.Runtime.dll")).Concat(Encoding.UTF8.GetBytes(nameof(DevelopmentStageBenchmark))).ToArray());
+                File.Copy(Path.Combine(release,"Festival.Runtime.dll"),Path.Combine(leaked,"Festival.Runtime.dll"));File.AppendAllText(Path.Combine(leaked,"Festival.Runtime.dll"),nameof(DevelopmentStageBenchmark));
                 Assert.That(Verify(development,leaked),Does.Not.StartWith("exit 0").And.Contain("Release assembly contains DevelopmentStageBenchmark"),"a Release that kept the benchmark driver is refused");
             }
-            finally{if(Directory.Exists(folder))Directory.Delete(folder,true);}
+            // Editor work left by the compile and verify runs about 0.3 s more and puts GC.Alloc samples on this thread, which fails later fixtures' garbage probes.
+            // A collect does not stop it; only time does. A loaded machine can need a longer wait.
+            finally{if(Directory.Exists(folder))Directory.Delete(folder,true);System.Threading.Thread.Sleep(1000);}
         }
 
         static string Verify(string development,string release)
