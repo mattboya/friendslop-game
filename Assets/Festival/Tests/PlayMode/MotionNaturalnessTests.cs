@@ -646,6 +646,81 @@ namespace Festival.Tests
             finally{Time.captureDeltaTime=0;Object.Destroy(root);}
         }
 
+        // POI-7: hold right click and each poi wheels fast beside its own hand, outside it and never across the body as the butterfly
+        // does, the arms held out a little and kept low; let go and they hang again. Each window spans more than a turn (9 rad/s).
+        [UnityTest]public IEnumerator HoldingRightClickWheelsCarriedPoiBesideTheHandsThenTheyHang()
+        {
+            var root=new GameObject("Poi side spin test");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var actor=Walker(root,"Poi side spin actor");
+                actor.SetEquippedItem("poi_led");
+                yield return new WaitForSeconds(.5f);
+                float Spread()=>Local(actor,"HandL",0)-Local(actor,"HandR",0);
+                float Height()=>(Local(actor,"HandL",1)+Local(actor,"HandR",1))/2;
+                float hangSpread=Spread(),hangHeight=Height();
+                actor.SpinningPoi=true;actor.SpinningPoiSides=true;
+                yield return new WaitForSeconds(.6f);
+                var rigs=actor.GetComponentsInChildren<FestivalPoiRig>().Where(r=>r.gameObject.activeInHierarchy).ToArray();
+                Assert.That(rigs.Length,Is.EqualTo(2),"Side-spun poi are the pair in your hands");
+                Assert.That(rigs.All(r=>r.SideSpin&&!r.Spinning),Is.True,"Right click wheels them at your sides, not the butterfly");
+                var wheel=new SideWheel(actor.transform,rigs.Select(r=>r.GetComponent<LineRenderer>()).ToArray());
+                float spread=0,height=0;int samples=0;
+                for(float start=Time.time;Time.time-start<1.5f;)
+                {
+                    yield return null;
+                    wheel.Sample();spread+=Spread();height+=Height();samples++;
+                }
+                spread/=samples;height/=samples;
+                actor.SpinningPoi=false;actor.SpinningPoiSides=false;
+                var swing=new float[1];
+                yield return new WaitForSeconds(2f);
+                yield return HangSwing(wheel.Cords,.8f,swing);
+                Debug.Log($"[Festival.Test] poi side spin {wheel} hands spread={spread:F2} (hanging {hangSpread:F2}) height={height:F2} (hanging {hangHeight:F2}) released swing={swing[0]:F0}deg");
+                wheel.Check(.5f);
+                Assert.That(spread-hangSpread,Is.InRange(.06f,.4f),"The arms are held out a little");
+                Assert.That(Mathf.Abs(height-hangHeight),Is.LessThan(.1f),"The hands stay low, not raised as in the butterfly");
+                Assert.That(swing[0],Is.LessThan(20f),"Let go, standing, the poi hang again");
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(root);}
+        }
+
+        // POI-7: each head's cord direction in the performer's own frame (x across, y up, z ahead), over a window of frames.
+        sealed class SideWheel
+        {
+            public readonly LineRenderer[] Cords;
+            readonly Transform frame;
+            readonly float[] side=new float[2],outward={1,1},acrossLow={1,1},acrossHigh={-1,-1},aheadLow={1,1},aheadHigh={-1,-1};
+            float low=1,high=-1;
+            public SideWheel(Transform frame,LineRenderer[] cords)
+            {
+                this.frame=frame;Cords=cords;
+                for(int i=0;i<2;i++)side[i]=Mathf.Sign(frame.InverseTransformPoint(cords[i].GetPosition(0)).x);
+            }
+            public void Sample()
+            {
+                for(int i=0;i<2;i++)
+                {
+                    var d=frame.InverseTransformDirection((Cords[i].GetPosition(1)-Cords[i].GetPosition(0)).normalized);
+                    low=Mathf.Min(low,d.y);high=Mathf.Max(high,d.y);outward[i]=Mathf.Min(outward[i],d.x*side[i]);
+                    acrossLow[i]=Mathf.Min(acrossLow[i],d.x);acrossHigh[i]=Mathf.Max(acrossHigh[i],d.x);
+                    aheadLow[i]=Mathf.Min(aheadLow[i],d.z);aheadHigh[i]=Mathf.Max(aheadHigh[i],d.z);
+                }
+            }
+            public void Check(float top)
+            {
+                Assert.That(side[0]*side[1],Is.LessThan(0),"One poi in each hand");
+                Assert.That(low,Is.LessThan(-.5f));Assert.That(high,Is.GreaterThan(top),"Each head circles up over its grip and down");
+                for(int i=0;i<2;i++)
+                {
+                    Assert.That(aheadHigh[i]-aheadLow[i],Is.GreaterThan(1f),"Each head wheels ahead and back beside its hand");
+                    Assert.That(acrossHigh[i]-acrossLow[i],Is.LessThan(.6f),"Each wheel keeps to its own side, not sweeping across in front");
+                    Assert.That(outward[i],Is.GreaterThan(0),"Each head stays outside its own hand");
+                }
+            }
+            public override string ToString()=>$"vertical={low:F2}..{high:F2} ahead={aheadHigh[0]-aheadLow[0]:F2}/{aheadHigh[1]-aheadLow[1]:F2} across={acrossHigh[0]-acrossLow[0]:F2}/{acrossHigh[1]-acrossLow[1]:F2} outward={outward[0]:F2}/{outward[1]:F2}";
+        }
+
         [UnityTest]public IEnumerator ReceivingHandoffSuppressesHiddenPoiHandLoops()
         {
             var cameraObject=new GameObject("POI-4 hidden pair camera");Time.captureDeltaTime=1/60f;
@@ -784,6 +859,41 @@ namespace Festival.Tests
                 Debug.Log($"[Festival.Test] first-person poi spin vertical={low:F2}..{high:F2} hand sweep={reach:F3} released swing={swing[0]:F0}deg");
                 Assert.That(low,Is.LessThan(-.5f));Assert.That(high,Is.GreaterThan(.5f),"Held, the heads circle with the camera still");
                 Assert.That(reach,Is.GreaterThanOrEqualTo(.05f),"Held, your hands swing the poi round");
+                Assert.That(swing[0],Is.LessThan(25f),"Let go, standing, the poi hang again");
+            }
+            finally{Time.captureDeltaTime=0;Object.Destroy(cameraObject);}
+        }
+
+        // POI-7: right click in first person: each head wheels beside its own hand, while the hands hold still rather than ride the
+        // butterfly's loop; let go and they hang again. Measured on a new profile's reduced-motion setting.
+        [UnityTest]public IEnumerator FirstPersonSideSpinWheelsBesideTheHandsThenTheyHang()
+        {
+            var cameraObject=new GameObject("First-person poi side spin camera");Time.captureDeltaTime=1/60f;
+            try
+            {
+                var hands=FestivalHands.Create(cameraObject.AddComponent<Camera>(),"side_spin_hands_player");
+                Assert.That(hands,Is.Not.Null);
+                hands.ReducedMotion=new ProfileData().ReducedMotion;
+                var player=new PlayerState{Id="side_spin_hands_player",Life="Alive",EquippedItemId="poi_practice"};
+                hands.SetState(player,spinning:true,sides:true);
+                yield return new WaitForSeconds(.8f);
+                var rigs=cameraObject.GetComponentsInChildren<FestivalPoiRig>().Where(r=>r.gameObject.activeInHierarchy).ToArray();
+                Assert.That(rigs.Length,Is.EqualTo(2),"First-person poi are a pair, one per hand");
+                Assert.That(rigs.All(r=>r.SideSpin&&!r.Spinning),Is.True,"Right click wheels them at your sides, not the butterfly");
+                var wheel=new SideWheel(cameraObject.transform,rigs.Select(r=>r.GetComponent<LineRenderer>()).ToArray());
+                var sweep=new Bounds(hands.transform.localPosition,Vector3.zero);
+                for(float start=Time.time;Time.time-start<1.5f;)
+                {
+                    yield return null;
+                    wheel.Sample();sweep.Encapsulate(hands.transform.localPosition);
+                }
+                hands.SetState(player);
+                var swing=new float[1];
+                yield return new WaitForSeconds(2f);
+                yield return HangSwing(wheel.Cords,1f,swing);
+                Debug.Log($"[Festival.Test] first-person poi side spin {wheel} hand sweep={sweep.size.x:F3}/{sweep.size.y:F3} released swing={swing[0]:F0}deg");
+                wheel.Check(.3f);
+                Assert.That(sweep.size.x,Is.LessThan(.012f),"The hands hold the wheels out, not riding the butterfly's loop");
                 Assert.That(swing[0],Is.LessThan(25f),"Let go, standing, the poi hang again");
             }
             finally{Time.captureDeltaTime=0;Object.Destroy(cameraObject);}

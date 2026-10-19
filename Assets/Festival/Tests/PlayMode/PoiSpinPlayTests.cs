@@ -95,6 +95,105 @@ namespace Festival.Tests
             finally{Restore();session.Leave();Object.Destroy(host);Object.Destroy(world);}
         }
 
+        // POI-7 on a real hosted festival: hold right click and the pair wheel at your sides, in your hands, your body and what the
+        // host sends your friends; left click alone, or both held, is the butterfly in front. A spinner's Sprint walks. The clicks
+        // and Shift come from a virtual mouse and keyboard through the session's own input.
+        [UnityTest]public IEnumerator HoldingRightClickSpinsYourPoiAtYourSidesForEveryone()
+        {
+            UseAVirtualMouse("Poi side spin mouse");UseAVirtualKeyboard("Poi side spin keyboard");
+            var world=new GameObject("Poi side spin world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Poi side spin session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            void Hold(bool left,bool right)=>InputSystem.QueueStateEvent(TestMouse,new MouseState().WithButton(MouseButton.Left,left).WithButton(MouseButton.Right,right));
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var friend=sim.AddPlayer("poi_side_spin_friend","Sam");friend.Ready=true;
+                yield return StartLevel(session);
+                // Your friend trips, so the level never doses you mid-test (KeepTripper) and you walk at your plain speed.
+                sim.State.Npcs.Clear();player.Effects.Clear();friend.Effects.Clear();
+                friend.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="poi_side_spin_dose",Intensity=1,RemainingSeconds=999});
+                sim.State.TripperId=friend.Id;
+                player.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});session.Command("Equip",item:"poi_practice");
+                friend.EquippedItemId="poi_led";friend.X=player.X+2;friend.Z=player.Z;
+                yield return new WaitForSeconds(.3f);
+                Assert.That(player.EquippedItemId,Is.EqualTo("poi_practice"),"setup: the poi are in hand: "+session.Message);
+                var mine=session.WorldCharacter(player.Id);var theirs=session.WorldCharacter(friend.Id);
+                FestivalPoiRig[] Hands()=>session.ViewCamera.GetComponentsInChildren<FestivalPoiRig>();
+                bool Sides(FestivalPoiRig[] rigs)=>rigs.Length==2&&rigs.All(r=>r.SideSpin&&!r.Spinning&&!r.Carrying);
+                bool Butterfly(FestivalPoiRig[] rigs)=>rigs.Length==2&&rigs.All(r=>r.Spinning&&!r.SideSpin);
+                PlayerState Seen()=>FestivalSession.ViewFor(sim,friend.Id).Players.Find(p=>p.Id==player.Id);
+
+                // Right click: the host, your view, your friend's view, your hands and your body all wheel them at your sides.
+                Hold(false,true);friend.VisualPoiSpin=true;friend.VisualPoiSpinSides=true;yield return new WaitForSeconds(.4f);
+                Assert.That(player.VisualPoiSpin&&player.VisualPoiSpinSides,Is.True,"holding right click spins the poi at your sides");
+                Assert.That(session.LocalPlayer.VisualPoiSpinSides,Is.True,"your own view shows the side spin");
+                Assert.That(Seen().VisualPoiSpin&&Seen().VisualPoiSpinSides,Is.True,"your friend sees you spin them at your sides");
+                Assert.That(Sides(Hands()),Is.True,"your first-person hands wheel both poi at your sides");
+                Assert.That(mine.SpinningPoiSides&&Sides(mine.GetComponentsInChildren<FestivalPoiRig>()),Is.True,"your own body wheels them at its sides");
+                Assert.That(theirs.SpinningPoiSides&&Sides(theirs.GetComponentsInChildren<FestivalPoiRig>()),Is.True,"your friend's side spin shows on their body");
+
+                // Both held, the butterfly in front wins; left click alone is the butterfly too.
+                Hold(true,true);yield return new WaitForSeconds(.4f);
+                Assert.That(player.VisualPoiSpin&&!player.VisualPoiSpinSides,Is.True,"with both held, the spin in front wins");
+                Assert.That(Seen().VisualPoiSpinSides,Is.False,"your friend sees the spin in front");
+                Assert.That(Butterfly(Hands())&&Butterfly(mine.GetComponentsInChildren<FestivalPoiRig>())&&!mine.SpinningPoiSides,Is.True,"with both held, your hands and body spin the butterfly");
+                Hold(true,false);yield return new WaitForSeconds(.4f);
+                Assert.That(player.VisualPoiSpin&&!player.VisualPoiSpinSides,Is.True,"left click alone spins them in front");
+                Assert.That(Butterfly(Hands())&&Butterfly(mine.GetComponentsInChildren<FestivalPoiRig>()),Is.True,"left click alone is the butterfly");
+
+                // Let go: from the side spin, both flags clear within 0.2 s, everywhere.
+                Hold(false,true);yield return new WaitForSeconds(.4f);
+                Assert.That(player.VisualPoiSpinSides,Is.True,"setup: spinning at your sides again");
+                Hold(false,false);float released=Time.realtimeSinceStartup;
+                while((player.VisualPoiSpin||player.VisualPoiSpinSides)&&Time.realtimeSinceStartup-released<1)yield return null;
+                float stopped=Time.realtimeSinceStartup-released;
+                Assert.That(stopped,Is.LessThanOrEqualTo(.2f),"letting go stops the side spin");
+                yield return null;
+                Assert.That(Seen().VisualPoiSpin||Seen().VisualPoiSpinSides,Is.False,"your friend sees you stop");
+                Assert.That(Hands().Any(r=>r.Spinning||r.SideSpin)||mine.SpinningPoiSides,Is.False,"your hands and body stop");
+
+                // The menu is open: right click spins nothing either.
+                session.MenuOpen=true;yield return null;
+                Hold(false,true);yield return new WaitForSeconds(.4f);
+                Assert.That(player.VisualPoiSpin||player.VisualPoiSpinSides,Is.False,"with the menu open, a held right click spins nothing");
+                Assert.That(Hands().Any(r=>r.SideSpin),Is.False,"with the menu open, your hands do not spin");
+                Hold(false,false);yield return null;session.MenuOpen=false;yield return new WaitForSeconds(.2f);
+
+                // Shift held through the host's own movement: spinning at your sides you walk, and let go you run. An unfocused test
+                // run reads no walk keys (FestivalSession), so each frame puts the walk ahead onto the intent the host last accepted.
+                const float X=0,Z=7;
+                var clear=FestivalSession.Navigate(X,Z,X,Z+4,4);
+                Assert.That(Mathf.Abs(clear.X-X)+Mathf.Abs(clear.Z-(Z+4)),Is.LessThan(.05f),"setup: this walking path runs 4 m straight, clear of colliders");
+                var inputs=(System.Collections.IDictionary)typeof(FestivalSession).GetField("inputs",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var intentType=typeof(FestivalSession).Assembly.GetType("Festival.Network.MoveIntent");
+                void Ahead()
+                {
+                    var peer=inputs[player.Id];var intent=peer.GetType().GetField("Intent").GetValue(peer);
+                    intentType.GetField("Z").SetValue(intent,1f);intentType.GetField("Yaw").SetValue(intent,0f);
+                }
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.LeftShift));
+                var speeds=new float[2];
+                for(int run=0;run<2;run++)
+                {
+                    Hold(false,run==0);yield return new WaitForSeconds(.3f);
+                    Assert.That(player.VisualPoiSpinSides,Is.EqualTo(run==0),"setup: "+(run==0?"spinning at your sides":"not spinning"));
+                    player.X=X;player.Z=Z;Ahead();yield return null;Ahead();yield return null;Ahead();
+                    float from=player.Z;double since=sim.State.SimulationSeconds;
+                    for(float end=Time.realtimeSinceStartup+2;sim.State.SimulationSeconds-since<.25&&Time.realtimeSinceStartup<end;){yield return null;Ahead();}
+                    speeds[run]=(float)((player.Z-from)/(sim.State.SimulationSeconds-since));
+                }
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());Hold(false,false);
+                Debug.Log($"[Festival.Test] poi side spin stopped {stopped:F3} s after release; Shift held walks {speeds[0]:F2} m/s spinning, {speeds[1]:F2} m/s not");
+                Assert.That(speeds[0],Is.EqualTo(4).Within(.05f),"spinning at your sides with Shift held, you walk at 4 m/s");
+                Assert.That(speeds[1],Is.EqualTo(6).Within(.05f),"let go, and Shift runs at 6 m/s again");
+            }
+            finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
+        }
+
         // The virtual devices and the input settings go back however the test ended (an error log skips its own finally).
         private Mouse mouse;
         private Keyboard keyboard;

@@ -19,7 +19,7 @@ namespace Festival.Presentation
         /// talk, face to face until it ends or you walk out of it with Cancel.</summary>
         public static bool Roots(string kind) => IsRhythmKind(kind)||FestivalSimulation.Talks(kind);
         public readonly InputActionMap Map;
-        public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle, Spin, PushToTalk;
+        public InputAction Move, Look, Sprint, Interact, Chat, Use, Drop, Objectives, Menu, Slot1, Slot2, Slot3, View, Cycle, Spin, SpinSides, PushToTalk;
         public readonly InputAction[] Notes = new InputAction[4];
         // The Light Show question's four choices, then Not sure, on 1-5 until rebound.
         private static readonly string[] AnswerNames={"Answer1","Answer2","Answer3","Answer4","AnswerUnsure"};
@@ -64,8 +64,9 @@ namespace Festival.Presentation
             View=Button("View","<Keyboard>/v");
             // HUD-8: each notch of the mouse wheel steps through the hand slots, down to the next (FestivalHudGear.Notch).
             Cycle=Map.AddAction("Cycle",InputActionType.Value,"<Mouse>/scroll/y");
-            // POI-1: hold left click with poi in hand to spin them (FestivalSession reads it while the pointer is locked).
-            Spin=Button("Spin","<Mouse>/leftButton");
+            // POI-7: hold left click with poi in hand to spin them in front of you, right click at your sides (FestivalSession reads
+            // both while the pointer is locked).
+            Spin=Button("Spin","<Mouse>/leftButton");SpinSides=Button("SpinSides","<Mouse>/rightButton");
             PushToTalk=Button("PushToTalk","<Keyboard>/t");
             string[] arrows={"leftArrow","downArrow","upArrow","rightArrow"};
             string[] wasd={"a","s","w","d"};
@@ -92,7 +93,7 @@ namespace Festival.Presentation
             Map.Dispose();Map=InputActionMap.FromJson(json)[0];
             Move=Map.FindAction("Move");Look=Map.FindAction("Look");Sprint=Map.FindAction("Sprint");Interact=Map.FindAction("Interact");Chat=Map.FindAction("Chat");
             Use=Map.FindAction("Use");Drop=Map.FindAction("Drop");Objectives=Map.FindAction("Objectives");Menu=Map.FindAction("Menu");
-            Slot1=Map.FindAction("Slot1");Slot2=Map.FindAction("Slot2");Slot3=Map.FindAction("Slot3");View=Map.FindAction("View");Cycle=Map.FindAction("Cycle");Spin=Map.FindAction("Spin");PushToTalk=Map.FindAction("PushToTalk");
+            Slot1=Map.FindAction("Slot1");Slot2=Map.FindAction("Slot2");Slot3=Map.FindAction("Slot3");View=Map.FindAction("View");Cycle=Map.FindAction("Cycle");Spin=Map.FindAction("Spin");SpinSides=Map.FindAction("SpinSides");PushToTalk=Map.FindAction("PushToTalk");
             for(int lane=0;lane<4;lane++)
             {
                 int direction=lane;Notes[lane]=Map.FindAction("Rhythm"+lane);

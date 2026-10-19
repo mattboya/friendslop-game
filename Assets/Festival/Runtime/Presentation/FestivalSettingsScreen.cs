@@ -70,7 +70,7 @@ namespace Festival.Presentation
             // Esc both opens the pass and cancels a rebind, so the pass's own key is not offered: it could never be set back to Esc.
             Key("ACTIONS","INTERACT","Interact"),Key("ACTIONS","CHAT","Chat"),Key("ACTIONS","USE","Use"),Key("ACTIONS","DROP","Drop"),
             Key("ACTIONS","MAP","Objectives"),Key("ACTIONS","PUSH TO TALK","PushToTalk"),
-            Key("HANDS","SLOT 1","Slot1"),Key("HANDS","SLOT 2","Slot2"),Key("HANDS","SLOT 3","Slot3"),Key("HANDS","NEXT SLOT","Cycle"),Key("HANDS","SPIN POI","Spin"),
+            Key("HANDS","SLOT 1","Slot1"),Key("HANDS","SLOT 2","Slot2"),Key("HANDS","SLOT 3","Slot3"),Key("HANDS","NEXT SLOT","Cycle"),Key("HANDS","SPIN IN FRONT","Spin"),Key("HANDS","SPIN AT SIDES","SpinSides"),
             Key("DANCE","DANCE LEFT","Rhythm0"),Key("DANCE","DANCE DOWN","Rhythm1"),Key("DANCE","DANCE UP","Rhythm2"),Key("DANCE","DANCE RIGHT","Rhythm3"),
             Key("DANCE","DANCE LEFT ALT","Rhythm0",1),Key("DANCE","DANCE DOWN ALT","Rhythm1",1),Key("DANCE","DANCE UP ALT","Rhythm2",1),Key("DANCE","DANCE RIGHT ALT","Rhythm3",1),
             Key("LIGHT SHOW","ANSWER 1","Answer1"),Key("LIGHT SHOW","ANSWER 2","Answer2"),Key("LIGHT SHOW","ANSWER 3","Answer3"),Key("LIGHT SHOW","ANSWER 4","Answer4"),Key("LIGHT SHOW","NOT SURE","AnswerUnsure"),

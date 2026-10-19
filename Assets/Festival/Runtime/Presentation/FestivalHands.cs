@@ -112,7 +112,7 @@ namespace Festival.Presentation
             prop.transform.localPosition=position;prop.transform.localRotation=resource.StartsWith("FestivalStock",System.StringComparison.Ordinal)?Quaternion.Euler(0,180,0):Quaternion.identity;prop.transform.localScale=Vector3.one*scale;
             return prop;
         }
-        public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false,bool spinning=false,bool riding=false)
+        public void SetState(PlayerState player,double simulationSeconds=-1,bool receiving=false,bool spinning=false,bool riding=false,bool sides=false)
         {
             this.riding=riding;
             if(player!=null&&receiptSequence!=player.VisualReceiptSequence)
@@ -159,6 +159,7 @@ namespace Festival.Presentation
             // Poi are a pair: one per hand. Held or equipped poi hang still, wheel beside
             // the hands while walking, and a poi performance switches both to the butterfly.
             // POI-1: so does holding left click (spinning), and the hands swing round with them as in the performance (POI-2).
+            // POI-7: right click (sides) wheels each beside its hand instead, the hands holding still.
             bool alive=player!=null&&player.Life=="Alive";
             bool poi=player!=null && player.VisualPose=="Poi";
             string carried=IsPoi(held)?held:held==""&&IsPoi(equipped)?equipped:"";
@@ -172,10 +173,10 @@ namespace Festival.Presentation
                 rightPoi=FestivalPoiRig.Create(attachments,RightPalm,1,wanted=="poi_led",true);
             }
             bool showPoi=wanted!=""&&(alive||poi);
-            bool spin=spinning&&showPoi;
+            bool spin=spinning&&showPoi,butterfly=poi||spin&&!sides;
             foreach(var rig in new[]{leftPoi,rightPoi})
-                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=poi||spin;}
-            carryPoi=!riding&&!poi&&!spin;performing=poi||spin;
+                if(rig!=null){rig.gameObject.SetActive(showPoi);rig.Spinning=butterfly;rig.SideSpin=spin&&sides;}
+            carryPoi=!riding&&!poi&&!spin;performing=butterfly;
             if(carriedBand!=null)carriedBand.SetActive(player!=null && player.Wristbands.Count>0 && !showPoi && held=="");
             if(unpaidProp!=null)unpaidProp.SetActive(alive&&!poi);
             if(equippedProp!=null)equippedProp.SetActive(held==""&&!poi&&alive);

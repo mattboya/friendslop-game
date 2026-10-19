@@ -131,9 +131,11 @@ namespace Festival.Presentation
         public bool HighlyIntoxicated { get; private set; }
         /// <summary>GAS-1: on Giggle Gas, so they giggle (FestivalSession sets it from the view's VisualGiggling).</summary>
         public bool Giggling;
-        /// <summary>POI-1: spinning the poi in hand, held on left click (FestivalSession sets it from the view's VisualPoiSpin, and
+        /// <summary>POI-1: spinning the poi in hand, held on either click (FestivalSession sets it from the view's VisualPoiSpin, and
         /// from the click itself for your own body). Only for show: it shows while carrying poi standing or walking.</summary>
         public bool SpinningPoi;
+        /// <summary>POI-7: with SpinningPoi, the spin is right click's, each poi wheeling beside its hand instead of the butterfly.</summary>
+        public bool SpinningPoiSides;
         public bool RedEyes { get; private set; }
         FestivalFilmingPhone phone;
         FestivalPoiRig poiLeft,poiRight;
@@ -369,7 +371,7 @@ namespace Festival.Presentation
             bool dancingPoi=carriedPoi!=""&&Pose=="Dance";
             // POI-1: held left click spins the carried pair standing or walking, the arms up as in the performance; let go and they
             // carry or hang again.
-            bool spinningPoi=carryingPoi&&SpinningPoi;
+            bool spinningPoi=carryingPoi&&SpinningPoi,sideSpinningPoi=spinningPoi&&SpinningPoiSides,butterflyPoi=spinningPoi&&!sideSpinningPoi;
             bool poiShown=performingPoi||carryingPoi||dancingPoi;
             string pair=carriedPoi!=""?carriedPoi:performingPoi?(poiPairItem==""?"poi_led":poiPairItem):"";
             if(pair!=""&&pair!=poiPairItem)
@@ -379,8 +381,8 @@ namespace Festival.Presentation
                 poiPairItem=pair;PreparePoi(pair=="poi_led");
             }
             float spinRate=dancingPoi?DanceAngularSpeed(danceStyle):9f;
-            if(poiLeft!=null){poiLeft.gameObject.SetActive(poiShown);poiLeft.Spinning=performingPoi||dancingPoi||spinningPoi;poiLeft.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiLeft.SpinRate=spinRate;}
-            if(poiRight!=null){poiRight.gameObject.SetActive(poiShown);poiRight.Spinning=performingPoi||dancingPoi||spinningPoi;poiRight.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiRight.SpinRate=spinRate;}
+            if(poiLeft!=null){poiLeft.gameObject.SetActive(poiShown);poiLeft.Spinning=performingPoi||dancingPoi||butterflyPoi;poiLeft.SideSpin=sideSpinningPoi;poiLeft.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiLeft.SpinRate=spinRate;}
+            if(poiRight!=null){poiRight.gameObject.SetActive(poiShown);poiRight.Spinning=performingPoi||dancingPoi||butterflyPoi;poiRight.SideSpin=sideSpinningPoi;poiRight.Carrying=carryingPoi&&!spinningPoi&&speed>.4f;poiRight.SpinRate=spinRate;}
             // Visibility and held-prop creation still work for culled or newly joined actors.
             // A stopped world never advances bones, IK or wrists by an invented interval.
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -695,7 +697,15 @@ namespace Festival.Presentation
             }
             // Carry a prop with a bent elbow instead of swinging it through the
             // thigh. Keep dedicated interaction and performance poses in charge.
-            if(spinningPoi)PoiArms(AnimationSeconds*9f+phase);
+            if(butterflyPoi)PoiArms(AnimationSeconds*9f+phase);
+            else if(sideSpinningPoi)
+            {
+                // POI-7: the arms held out a little and low, so each wheel turns clear beside the body, the wrists rolling with it.
+                float roll=Mathf.Sin(AnimationSeconds*9f+phase);
+                Aim("ArmL",new Vector3(-24,0,12));Aim("ArmR",new Vector3(-24,0,-12));
+                Aim("ForearmL",new Vector3(-50,0,0));Aim("ForearmR",new Vector3(-50,0,0));
+                Aim("HandL",new Vector3(roll*22,0,0));Aim("HandR",new Vector3(-roll*22,0,0));
+            }
             else if(!dance&&poiCarryPose&&carriedPoi!="")
             {
                 // Both hands lead the wheeling heads at waist height, wrists rolling with each turn.
@@ -784,7 +794,7 @@ namespace Festival.Presentation
             }
             // POI-2: performing poi, dancing with them or spinning them (POI-1), each wrist swings round its own loop in step with its
             // head, and the shoulder and elbow follow it (elbows down and in, as at the DJ deck). It eases in and out over a quarter second.
-            poiSwing=Mathf.MoveTowards(poiSwing,performingPoi||dancingPoi||spinningPoi?1:0,animationDelta*4);
+            poiSwing=Mathf.MoveTowards(poiSwing,performingPoi||dancingPoi||butterflyPoi?1:0,animationDelta*4);
             if(poiSwing>.001f&&bones.Count==15&&poiLeft!=null&&poiRight!=null)
             {
                 FestivalDjHandContact.Reach(transform,bones["ArmL"],bones["ForearmL"],bones["HandL"],Vector3.Lerp(bones["HandL"].position,poiLeft.Wrist(),poiSwing),-1);

@@ -27,7 +27,9 @@ namespace Festival.Presentation
         public bool Spinning;
         /// <summary>Walking spin while poi are equipped: each head wheels beside its hand.</summary>
         public bool Carrying;
-        /// <summary>Butterfly speed in radians per second; a dance sets its own beat.</summary>
+        /// <summary>POI-7: the carry wheel at SpinRate, standing or walking (right click). Spinning's butterfly wins over it.</summary>
+        public bool SideSpin;
+        /// <summary>Butterfly and side wheel speed in radians per second; a dance sets its own beat.</summary>
         public float SpinRate=9f;
         float carryAngle,spinUp,carrySide=1;
         // POI-2: the hand holding a poi runs this far (radians) ahead of its head's orbit round its own loop. With the head's own
@@ -130,7 +132,7 @@ namespace Festival.Presentation
                         1-Mathf.Exp(-23f*dt))*length;
                     velocity=(ball-previousBall)/dt;
                 }
-                else if(Carrying&&performer!=null)
+                else if((Carrying||SideSpin)&&performer!=null)
                 {
                     // Forward wheels in the vertical plane beside each hand, the two
                     // hands half a turn apart like an arm swing. Gravity shows in the
@@ -141,7 +143,7 @@ namespace Festival.Presentation
                     // Pick the wheel up from wherever the head hangs and swing it up to speed.
                     if(spinUp==0)carryAngle=Mathf.Atan2(Vector3.Dot(current,forward),Vector3.Dot(current,Vector3.up));
                     spinUp=Mathf.MoveTowards(spinUp,1,2.5f*dt);
-                    carryAngle+=7.5f*spinUp*(1-.35f*current.y)*dt;
+                    carryAngle+=(SideSpin?SpinRate:7.5f)*spinUp*(1-.35f*current.y)*dt;
                     Vector3 outward=Vector3.Cross(Vector3.up,forward)*(side==0?-1f:1f);
                     if(!firstPerson)
                     {
@@ -196,7 +198,7 @@ namespace Festival.Presentation
             rope.SetPosition(0,grip);rope.SetPosition(1,ball);
             previousGrip=grip;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if(!Carrying||Spinning)diagnosticCarrying=false;
+            if(!Carrying&&!SideSpin||Spinning)diagnosticCarrying=false;
 #endif
         }
         static Vector3 ClearCarryDirection(Vector3 direction,Vector3 outward,float minimum)

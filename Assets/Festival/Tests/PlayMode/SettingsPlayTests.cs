@@ -27,7 +27,7 @@ namespace Festival.Tests
             ("CONTROLS","GENERAL",new[]{"LOOK SPEED","INVERT Y","CAMERA VIEW","RHYTHM TIMING"}),
             ("CONTROLS","MOVE",new[]{"MOVE FORWARD","MOVE BACK","MOVE LEFT","MOVE RIGHT","SPRINT","LOOK","SWITCH VIEW"}),
             ("CONTROLS","ACTIONS",new[]{"INTERACT","CHAT","USE","DROP","MAP","PUSH TO TALK"}),
-            ("CONTROLS","HANDS",new[]{"SLOT 1","SLOT 2","SLOT 3","NEXT SLOT","SPIN POI"}),
+            ("CONTROLS","HANDS",new[]{"SLOT 1","SLOT 2","SLOT 3","NEXT SLOT","SPIN IN FRONT","SPIN AT SIDES"}),
             ("CONTROLS","DANCE",new[]{"DANCE LEFT","DANCE DOWN","DANCE UP","DANCE RIGHT","DANCE LEFT ALT","DANCE DOWN ALT","DANCE UP ALT","DANCE RIGHT ALT"}),
             ("CONTROLS","LIGHT SHOW",new[]{"ANSWER 1","ANSWER 2","ANSWER 3","ANSWER 4","NOT SURE"}),
             ("ACCESSIBILITY","",new[]{"REDUCED MOTION","HIGH CONTRAST","CAMERA SHAKE","TEXT SIZE"}),
@@ -278,6 +278,8 @@ namespace Festival.Tests
                 // The keyboard layout names the arrow key ("LEFT" here, "LEFT ARROW" on others).
                 StringAssert.StartsWith("LEFT",Value("DANCE LEFT").text,"a lane shows its arrow");
                 Assert.That(Value("DANCE LEFT ALT").text,Is.EqualTo("A"),"and its second key");
+                yield return OpenTab("CONTROLS","HANDS");
+                Assert.That(new[]{"SPIN IN FRONT","SPIN AT SIDES"}.Select(r=>Value(r)?.text),Is.EqualTo(new[]{"LMB","RMB"}),"left click spins the poi in front, right click at your sides");
                 yield return OpenTab("CONTROLS","ACTIONS");
                 Assert.That(Value("PUSH TO TALK").text,Is.EqualTo("T"));
                 yield return Press(RowButton("INTERACT","REBIND"));
