@@ -35,3 +35,23 @@ DEV-1 — In a development build the host can pick either festival at camp, with
 ECON-8 — Now and then you spot cash lying on the ground at the festival, and whoever grabs it first keeps it
 POI-4 — POI-1 leftovers from wave 2026-10-03
 MUSIC-5 — All seven supplied music loops are playable in the game
+TRIP-16 — Pony Dust and Couch Lock narrow the view through sleepy eyes and occasionally blink
+POI-7 — Spinning poi helps you blend in: festivalgoers watching grow suspicious 10% slower; left click spins them in front, right click at your sides
+VISION-9 — A pointing creature leads you on a wavy, twisting path instead of a straight line
+VISION-10 — The higher the dose, the bigger the creatures: twice the size at dose 4
+VISION-11 — The dose's creatures get a higher-quality render: smooth, detailed models instead of low-poly blocks
+SPIN-5 — The slot machine eases to a stop, flashes a ring of lights round the reels and shows the mythical creatures on its cabinet
+VISION-7 — VISION-6 leftovers from wave 2026-10-03
+CAMP-2 — CAMP-1 leftovers from wave 2026-10-01 (2)
+LOOP-6 — LOOP-5 leftovers from wave 2026-10-01 (2)
+TRIP-15 — TRIP-8 leftovers from wave 2026-10-03
+PLAYA-7 — PLAYA-3 leftovers from wave 2026-10-01 (2)
+CAM-3 — CAM-2 leftovers from wave 2026-10-03
+TRIP-17 — Rolly Pollies and Pony Dust each change how a dosed player walks, and Pony Dust's stall eases in and out
+DIALOG-10 — Signs, shop tags, vision verdicts and other world text use crisp TextMeshPro and stop showing through walls
+TEST-4 — The trails-and-glows garbage check passes in the full EditMode suite every time
+SET-2 — On-screen key prompts name the key each player has bound
+ECON-4 — ECON-2 leftovers from wave 2026-10-01 (2)
+DIALOG-7 — DIALOG-6 leftovers from wave 2026-10-01 (2)
+MINI-8 — Light Show answers work from the keyboard, and a switched-off session locks the pointer again
+DIALOG-12 — Unity runs rewrite the stock TextMeshPro fallback font asset
