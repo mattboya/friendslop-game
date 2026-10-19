@@ -103,9 +103,9 @@ namespace Festival.Presentation
         }
         // The lever drops as the reels start and springs back.
         static float Lever(float t)=>t<.15f?Mathf.Clamp01(t/.15f):t<.35f?1:1-Mathf.SmoothStep(0,1,(t-.35f)/.45f);
-        // The cabinet's ring of bulbs, clockwise from the top left: while the reels spin every third one is lit, chasing round
-        // the ring ChaseSteps times a second; the whole ring blinks twice in the FlashSeconds after each reel stops, and stays lit
-        // once every reel rests. A multiple of 3, so the chase closes round the ring without a seam.
+        // The cabinet's ring of bulbs, clockwise from the top left. While the reels spin every third one is lit, chasing round the
+        // ring ChaseSteps times a second; in the FlashSeconds after each earlier reel stops they light in order round it; from the
+        // last stop to the take the whole ring blinks. A multiple of 3, so the chase closes round the ring without a seam.
         public const int Bulbs=42;
         const float BulbInset=34;
         // Where bulb sits on the cabinet: evenly spaced along a rectangle BulbInset in from the cabinet's edges, round the reels.
@@ -117,16 +117,19 @@ namespace Festival.Presentation
             if(along<2*x)return new Vector2(x-along,-y);along-=2*x;
             return new Vector2(-x,-y+along);
         }
-        const float ChaseSteps=12,FlashSeconds=.4f;
-        public static bool BulbLit(float elapsed,int bulb)
+        // Reduced motion keeps whole-ring blinks under 3 a second, the usual photosensitivity line, and chases at a third the speed.
+        const float ChaseSteps=12,FlashSeconds=.4f,BlinkHertz=8,ReducedBlinkHertz=2;
+        public static bool BulbLit(float elapsed,int bulb,bool reducedMotion)
         {
-            if(elapsed>=LastReelStops+FlashSeconds)return true;
-            for(int reel=0;reel<FestivalSimulation.ReelStopSeconds.Count;reel++)
+            if(elapsed>=TakeStarts)return true;
+            float since=elapsed-LastReelStops;
+            if(since>=0)return Mathf.Repeat(since*(reducedMotion?ReducedBlinkHertz:BlinkHertz),1)<.5f;
+            for(int reel=0;reel<FestivalSimulation.ReelStopSeconds.Count-1;reel++)
             {
-                float since=elapsed-ReelStops(reel);
-                if(since>=0&&since<FlashSeconds)return since%(FlashSeconds*.5f)<FlashSeconds*.25f;
+                since=elapsed-ReelStops(reel);
+                if(since>=0&&since<FlashSeconds)return bulb*FlashSeconds<=since*Bulbs;
             }
-            return (Mathf.FloorToInt(elapsed*ChaseSteps)-bulb)%3==0;
+            return (Mathf.FloorToInt(elapsed*(reducedMotion?ChaseSteps/3:ChaseSteps))-bulb)%3==0;
         }
         public static Beat At(RoundState state,List<string> crew,double now)
         {
@@ -362,8 +365,8 @@ namespace Festival.Presentation
         }
         void LateUpdate()
         {
-            var state=session!=null?session.State:null;
-            FollowDeaths(state,session!=null?session.LocalPlayer:null,session!=null?session.EstimatedWorldSeconds:0,session!=null&&session.Profile.Data.ReducedMotion);
+            var state=session!=null?session.State:null;bool reducedMotion=session!=null&&session.Profile.Data.ReducedMotion;
+            FollowDeaths(state,session!=null?session.LocalPlayer:null,session!=null?session.EstimatedWorldSeconds:0,reducedMotion);
             if(state!=null&&state.Phase=="Spinning"&&(spinRound!=state.RoundId||spinSeed!=state.SpinSeed))Prepare(state);
             var beat=At(state,crew,session!=null?session.EstimatedSimulationSeconds:0);
             bool hidden=beat.Stage==Stage.Hidden||session==null||session.MenuOpen;
@@ -376,7 +379,7 @@ namespace Festival.Presentation
                 backdrop.SetActive(reeling);letterbox.SetActive(!reeling);
                 Show(people,beat.PeopleScroll);Show(dose,beat.DoseScroll);Show(substance,beat.SubstanceScroll);
                 people.Result.text=beat.PeopleLanded?whoLine:"";dose.Result.text=beat.DoseLanded?doseLine:"";substance.Result.text=beat.SubstanceLanded?tookLine:"";
-                for(int i=0;i<Bulbs;i++)bulbs[i].color=BulbLit(beat.Elapsed,i)?Gold:Unlit;
+                for(int i=0;i<Bulbs;i++)bulbs[i].color=BulbLit(beat.Elapsed,i,reducedMotion)?Gold:Unlit;
                 leverRod.localScale=new Vector3(1,1-2*beat.Lever,1);leverKnob.anchoredPosition=new Vector2(0,LeverLength*(1-2*beat.Lever));
                 caption.text=beat.Stage==Stage.React?reactLine:takeLine;
                 if(!reeling)tripper=session.WorldCharacter(state.TripperId);

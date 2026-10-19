@@ -55,7 +55,7 @@ namespace Festival.Tests
         [Test] public void AFollowedSpinFrameMakesNoGarbage()
         {
             var crew=FestivalSpinner.Crew(state);double now=100;Follow(0);
-            TestDelegate frame=()=>{now+=.016;FestivalSpinner.At(state,crew,now);for(int b=0;b<FestivalSpinner.Bulbs;b++)FestivalSpinner.BulbLit((float)(now-100),b);spinner.FollowAudio(state,now,false,profile,true);};frame();
+            TestDelegate frame=()=>{now+=.016;FestivalSpinner.At(state,crew,now);for(int b=0;b<FestivalSpinner.Bulbs;b++){FestivalSpinner.BulbLit((float)(now-100),b,false);FestivalSpinner.BulbLit((float)(now-100),b,true);}spinner.FollowAudio(state,now,false,profile,true);};frame();
             Assert.That(frame,Is.Not.AllocatingGCMemory(),"a spin frame makes no garbage");
         }
         [Test] public void LateStalledRepeatedAndOutOfOrderViewsNeverCatchUp()

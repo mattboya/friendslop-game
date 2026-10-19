@@ -199,6 +199,61 @@ namespace Festival.Tests
         // The trailhead posts (x = +-2, z = 19) stand inside the 3.2 m circle where everyone readies, so a tripper who stops
         // just in front of one, facing the gate, has a post on the head-on camera's line. In the last three the head-on line
         // misses the post by 1-2 cm, yet the post still covers the side of the face; the other friend stands well clear.
+        // The live cabinet blinks its whole ring from the last stop until the take: fast, or under 3 times a second with reduced motion.
+        [UnityTest]public IEnumerator TheRingBlinksAfterTheLastStopAndGentlyUnderReducedMotion()
+        {
+            var world=new GameObject("Spinner world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Spinner session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            bool reduced=false;
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                reduced=session.Profile.Data.ReducedMotion;
+                var sim=(FestivalSimulation)typeof(FestivalSession).GetProperty("DevelopmentSimulation",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var mate=sim.AddPlayer("spin_mate","Mate");
+                yield return new WaitForSeconds(.5f);
+                var cabinet=host.transform.Find("Festival spinner/Spinner backdrop/Cabinet");
+                var bulbs=Enumerable.Range(0,FestivalSpinner.Bulbs).Select(i=>cabinet.Find("Bulb "+i).GetComponent<Image>()).ToList();
+                var state=sim.State;string idle=state.Phase;
+                double last=FestivalSpinner.LastReelStops,take=FestivalSpinner.TakeStarts;
+                foreach(bool gentle in new[]{false,true})
+                {
+                    session.Profile.Data.ReducedMotion=gentle;
+                    state.Phase="Spinning";state.SpinSeed=gentle?4243:4242;state.TripperId=mate.Id;
+                    state.Doses.Clear();state.Doses.Add(new PlayerDose{PlayerId=mate.Id,Dose=2});
+                    state.SpinEndsAt=state.SimulationSeconds+FestivalSimulation.SpinSeconds-(last-.3);
+                    double start=state.SpinEndsAt-FestivalSimulation.SpinSeconds;
+                    int flashes=0,frames=0;bool on=false,dark=false;
+                    while(session.EstimatedSimulationSeconds-start<take-.05&&Time.realtimeSinceStartup<deadline)
+                    {
+                        yield return null;
+                        double elapsed=session.EstimatedSimulationSeconds-start;
+                        if(elapsed<last+.05||elapsed>=take-.05)continue;
+                        int lit=bulbs.Count(b=>b.color==bulbs[0].color);frames++;
+                        Assert.That(lit,Is.EqualTo(bulbs.Count),"the whole ring blinks together after the last stop, at "+elapsed.ToString("F2")+" s");
+                        bool gold=bulbs[0].color.r>.9f;if(gold&&!on)flashes++;on=gold;dark|=!gold;
+                    }
+                    string mode=gentle?"reduced motion: ":"";
+                    Assert.That(frames,Is.GreaterThan(20),mode+"setup: the frames sample the blink");
+                    Assert.That(dark,mode+"the ring blinks, not just stays lit");
+                    if(gentle)Assert.That(flashes,Is.InRange(1,2),"reduced motion blinks the ring under 3 times a second");
+                    else Assert.That(flashes,Is.GreaterThanOrEqualTo(5),"the ring blinks fast after the last stop");
+                }
+                state.Phase=idle;
+            }
+            finally
+            {
+                session.Profile.Data.ReducedMotion=reduced;session.Leave();
+                foreach(var leftover in new[]{"First-person camera","Authoritative actor presentation"}){var found=GameObject.Find(leftover);if(found!=null)Object.Destroy(found);}
+                Object.Destroy(host);Object.Destroy(world);
+            }
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator TrailheadPostsNeverBlockTheTake()
         {
             var world=new GameObject("Spinner world");world.AddComponent<FestivalWorld>();yield return null;

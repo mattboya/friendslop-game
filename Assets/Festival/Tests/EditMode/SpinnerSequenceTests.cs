@@ -162,25 +162,50 @@ namespace Festival.Tests
             }
         }
 
-        // The lever drops as the reels start and springs back; the bulbs chase while the reels spin, flash as each stops, then stay lit.
+        // The lever drops as the reels start and springs back. The bulbs chase round the ring while the reels spin, light in order
+        // round it as each of the first two reels stops, and the whole ring blinks fast from the last stop until the take.
         [Test] public void TheCabinetPullsItsLeverAndChasesItsBulbs()
         {
             var state=Spin(4242,4,2,3);var crew=FestivalSpinner.Crew(state);double start=Start(state);
             FestivalSpinner.Beat At(double seconds)=>FestivalSpinner.At(state,crew,start+seconds);
             Assert.That(At(.2).Lever,Is.EqualTo(1),"the lever is down as the reels start");
             Assert.That(At(1.2).Lever,Is.Zero,"and has sprung back while they spin");
-            int Lit(double t){int lit=0;for(int b=0;b<FestivalSpinner.Bulbs;b++)if(FestivalSpinner.BulbLit((float)t,b))lit++;return lit;}
-            bool Same(double a,double b){for(int i=0;i<FestivalSpinner.Bulbs;i++)if(FestivalSpinner.BulbLit((float)a,i)!=FestivalSpinner.BulbLit((float)b,i))return false;return true;}
-            Assert.That(Lit(1),Is.GreaterThan(0).And.LessThan(FestivalSpinner.Bulbs/2),"some bulbs are lit while the reels spin");
-            Assert.That(Same(1,1.1),Is.False,"and the lit ones chase along the row");
-            for(int i=0;i<Reels.Length;i++)
+            const int Ring=FestivalSpinner.Bulbs;
+            foreach(bool reduced in new[]{false,true})
             {
-                double stop=FestivalSpinner.ReelStops(i);
-                Assert.That(Lit(stop+.02),Is.EqualTo(FestivalSpinner.Bulbs),"the whole row flashes as the "+Reels[i].Name+" reel stops");
-                Assert.That(Lit(stop+.15),Is.Zero,"on and off");
+                string mode=reduced?"reduced motion: ":"";
+                bool On(double t,int b)=>FestivalSpinner.BulbLit((float)t,b,reduced);
+                int Lit(double t){int lit=0;for(int b=0;b<Ring;b++)if(On(t,b))lit++;return lit;}
+                bool Same(double a,double b){for(int i=0;i<Ring;i++)if(On(a,i)!=On(b,i))return false;return true;}
+                Assert.That(Lit(1),Is.EqualTo(Ring/3),mode+"every third bulb is lit while the reels spin");
+                double next=1;while(Same(1,next))next+=.001;
+                for(int b=0;b<Ring;b++)Assert.That(On(next,b),Is.EqualTo(On(1,(b+Ring-1)%Ring)),mode+"and the lit ones chase one bulb on round the ring");
+                for(int i=0;i<Reels.Length-1;i++)
+                {
+                    double stop=FestivalSpinner.ReelStops(i);int grown=0;
+                    for(double t=stop+.01;t<stop+.3;t+=.01)
+                    {
+                        int lit=Lit(t),arcs=0;for(int b=0;b<Ring;b++)if(On(t,b)&&!On(t,(b+Ring-1)%Ring))arcs++;
+                        Assert.That(arcs,Is.EqualTo(1),mode+"the lit bulbs are one run round the ring as the "+Reels[i].Name+" reel stops, at "+t.ToString("F2")+" s");
+                        Assert.That(lit,Is.GreaterThanOrEqualTo(grown),mode+"and it only grows");grown=lit;
+                    }
+                    Assert.That(Lit(stop+.01),Is.GreaterThan(0).And.LessThan(Ring/4),mode+"the sweep starts as the "+Reels[i].Name+" reel stops");
+                    Assert.That(Lit(stop+.29),Is.GreaterThan(Ring/2),mode+"and runs on round the ring");
+                }
+                Assert.That(Lit(FestivalSpinner.ReelStops(1)-.3),Is.EqualTo(Ring/3),mode+"the chase picks up again between stops");
+                double last=FestivalSpinner.LastReelStops,take=FestivalSpinner.TakeStarts;int flashes=0;bool on=false,dark=false;
+                for(double t=last+.0005;t<take;t+=.001)
+                {
+                    int lit=Lit(t);Assert.That(lit==0||lit==Ring,mode+"the whole ring blinks together after the last stop, at "+t.ToString("F3")+" s");
+                    if(lit==Ring&&!on)flashes++;on=lit==Ring;dark|=lit==0;
+                }
+                Assert.That(Lit(last+.01),Is.EqualTo(Ring),mode+"the ring lights as the last reel lands");
+                Assert.That(dark,mode+"and blinks until the take");
+                if(reduced)Assert.That(flashes/(take-last),Is.LessThan(3),"reduced motion blinks the ring under 3 times a second");
+                else Assert.That(flashes/(take-last),Is.GreaterThanOrEqualTo(6),"the ring blinks fast after the last stop");
             }
-            Assert.That(Lit(FestivalSpinner.ReelStops(1)-.3),Is.LessThan(FestivalSpinner.Bulbs/2),"the chase picks up again between stops");
-            Assert.That(Lit(FestivalSpinner.TakeStarts-.05),Is.EqualTo(FestivalSpinner.Bulbs),"the row stays lit once every reel rests");
+            int Steps(bool reduced){int steps=0;for(double t=.5;t<2;t+=.001)for(int b=0;b<Ring;b++)if(FestivalSpinner.BulbLit((float)t,b,reduced)!=FestivalSpinner.BulbLit((float)(t+.001),b,reduced)){steps++;break;}return steps;}
+            Assert.That(Steps(true)*3,Is.InRange(Steps(false)-3,Steps(false)+3),"reduced motion chases at a third of the speed");
         }
 
         // The bulbs ring the reels on all four sides, in order round the ring (the chase runs round it, every third bulb lit,
