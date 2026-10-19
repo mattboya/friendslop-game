@@ -185,8 +185,8 @@ namespace Festival.Presentation
         private int nearbyLines=-1;
         private readonly List<string> nearbyLabels=new List<string>();
         // ESC-2: whether the stop on the local player has had its session notice (FestivalHudText.StopNotice). TRIP-8: whether the
-        // cloud's stash they found has had its own (FestivalHudText.CloudStashNotice).
-        private bool stopNoticed,stashNoticed;
+        // cloud's stash they found has had its own (FestivalHudText.CloudStashNotice), and a vision's (VisionStashNotice).
+        private bool stopNoticed,stashNoticed,visionStashNoticed;
         // PLAYA-5: the round and receipt of the last deck set tips shown in the session notice.
         private string deckTipNoticed="";
         // LOOP-5: the sundown warning (FestivalHudText.SundownWarning) on a card of its own, so no reply in the session notice replaces
@@ -933,6 +933,8 @@ namespace Festival.Presentation
             // TRIP-8: whoever walks onto the cloud's stash is told so the same way, once.
             if(state.CloudStashFinderId!=player.Id)stashNoticed=false;
             else if(!stashNoticed&&uncovered){stashNoticed=true;session.SetMessage(FestivalHudText.CloudStashNotice);lastNotice="";}
+            if(state.VisionStashFinderId!=player.Id)visionStashNoticed=false;
+            else if(!visionStashNoticed&&uncovered){visionStashNoticed=true;session.SetMessage(FestivalHudText.VisionStashNotice);lastNotice="";}
             // PLAYA-5: what the crowd tipped for your deck set, once. Only your own view carries the receipt.
             string tips=FestivalSimulation.DeckTipSpeech(state,player);
             if(tips!=""&&uncovered&&deckTipNoticed!=state.RoundId+"/"+player.DeckTipDeliveryId){deckTipNoticed=state.RoundId+"/"+player.DeckTipDeliveryId;session.SetMessage(tips);lastNotice="";}

@@ -105,7 +105,7 @@ namespace Festival.Tests
         // TRIP-8 (with ECON-5's items 3 and 7) on a real hosted Day 1. In the middle of anything the host takes only its way out (and
         // a handoff or a call for help), so that is all the HUD lists, and the strip under the prompt stays empty: lying on the
         // grass beside a festivalgoer, a dropped item and a friend's body, lying at the night market looking up at a shelf, mid
-        // chat check and mid talk. Whoever walks onto the cloud's stash is told so.
+        // chat check and mid talk. Whoever walks onto the cloud's stash, or a stash a vision showed, is told so.
         [UnityTest]public IEnumerator InTheMiddleOfAnythingOnlyItsWayOutIsListed()
         {
             var world=new GameObject("Busy HUD world");world.AddComponent<FestivalWorld>();yield return null;
@@ -200,6 +200,17 @@ namespace Festival.Tests
                 session.SetMessage("");
                 yield return new WaitForSeconds(.3f);
                 if(session.Message!="")failures.Add("found the cloud's stash: the notice comes back (\""+session.Message+"\")");
+
+                // 5. A stash the tripper's vision showed: whoever walks onto it is told, once, as for the cloud's.
+                const string HiddenFound="Found a hidden stash! +$15 for camp";
+                var hidden=new VisionState{Id="busy_stash",Kind="Stash",X=stash.X+6,Z=stash.Z,IsTrue=true};sim.State.Visions.Add(hidden);
+                player.X=hidden.X;player.Z=hidden.Z;
+                yield return new WaitForSeconds(.6f);
+                Assert.That(hidden.Confirmed,Is.True,"setup: you find the vision's stash, after:\n"+string.Join("\n",failures));
+                if(session.Message!=HiddenFound||Read("Notice")!=HiddenFound)failures.Add("found the vision's stash: the notice reads \""+Read("Notice")+"\" (message \""+session.Message+"\")");
+                session.SetMessage("");
+                yield return new WaitForSeconds(.3f);
+                if(session.Message!="")failures.Add("found the vision's stash: the notice comes back (\""+session.Message+"\")");
 
                 Assert.That(failures,Is.Empty,string.Join("\n",failures));
             }

@@ -168,10 +168,15 @@ public static class VisionTests
         var doubler=Npc(s,s.State.Visions.Find(v=>v.Kind=="DoubleBuyer").NpcId);
         Check(Sell(s,"p0",doubler)==35,"the secret double buyer pays twice: $17.50 x 2 at dose 4");
         var stash=s.State.Visions.Find(v=>v.Kind=="Stash");var p=s.Player("p1");int banked=s.State.StashCash;
-        s.Tick(.1);Check(s.State.StashCash==banked&&!stash.Confirmed,"nobody has reached the stash yet");
+        s.Tick(.1);Check(s.State.StashCash==banked&&!stash.Confirmed&&s.State.VisionStashFinderId=="","nobody has reached the stash yet");
         p.X=stash.X;p.Z=stash.Z;s.Tick(.1);
         Check(s.State.StashCash==banked+15&&stash.Confirmed,"reaching the secret stash banks $15 for the crew");
-        p.X+=10;s.Tick(.1);p.X-=10;s.Tick(.2);Check(s.State.StashCash==banked+15,"a stash pays once");
+        Check(s.State.VisionStashFinderId=="p1","it names p1 as the finder, for their notice, got \""+s.State.VisionStashFinderId+"\"");
+        p.X+=10;s.Tick(.1);p.X-=10;s.Tick(.2);Check(s.State.StashCash==banked+15&&s.State.VisionStashFinderId=="p1","a stash pays once");
+        // Back at camp, the crew readies up again: the next level's stash has no finder yet, so the same finder is told again.
+        foreach(var q in s.State.Players)Act(s,q.Id,"Cancel");
+        s.State.Phase="Shopping";foreach(var q in s.State.Players){q.X=0;q.Z=19;Check(Act(s,q.Id,"Ready").Accepted,"setup: "+q.Id+" readies again");}
+        s.Tick(5.2);Check(s.State.Phase=="Spinning"&&s.State.VisionStashFinderId=="","the next level starts with no finder, got \""+s.State.VisionStashFinderId+"\" in "+s.State.Phase);
         // VISION-3: a night deals the same two secrets, no dud shortcut. Its double buyer stands on open ground for the sale, since
         // one inside Palm Mirage's VIP zones pays double again.
         var night=Dosed(4,1,ref seed);night.State.Npcs.RemoveAll(n=>n.Kind=="Cop");

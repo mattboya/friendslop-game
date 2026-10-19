@@ -119,6 +119,8 @@ namespace Festival.Network
         // (WookTrustFactor), and Sprint does nothing mid-spin (FestivalSimulation.MoveSpeed, which TryMove enforces).
         // TRIP-17: MoveSpeed reads the simulation clock. A Pony Dust dose stalls the walk every 10 s (Intoxication.Stall, from the
         // dose's StartSeconds, which only its owner's view carries), and a Rolly Pollies dose walks 8% faster.
+        // TRIP-15: snapshots name who found the level's vision stash (RoundState.VisionStashFinderId), for their notice;
+        // older rounds default empty.
         public const int ProtocolVersion=8;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -922,6 +924,8 @@ namespace Festival.Network
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
                 // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
                 CloudStashFinderId=source.CloudStashFinderId,
+                // Likewise who found the vision's stash: it is found by then, so this gives no spot away.
+                VisionStashFinderId=source.VisionStashFinderId,
                 // Who grabbed the Giggle Tank, named for spirits too, who see no living player; where it stood stays living-only.
                 GiggleTankGrabberId=source.GiggleTankGrabberId,GiggleTankGrabberName=source.GiggleTankGrabberName,
                 // MINI-1: the booth and its game are public, and spirits watch; the weekend's bag of games stays here. MINI-4: all but

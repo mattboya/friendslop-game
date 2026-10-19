@@ -411,6 +411,8 @@ namespace Festival.Presentation
         /// <summary>TRIP-8: the session notice for whoever finds the cloud's stash (RoundState.CloudStashFinderId), in dollars like the
         /// host's replies, for MoneyText.</summary>
         public static readonly string CloudStashNotice="Found the cloud's stash! +$"+FestivalSimulation.SecretStashCash+" for camp";
+        /// <summary>The same for whoever finds a stash the tripper's vision showed (RoundState.VisionStashFinderId).</summary>
+        public static readonly string VisionStashNotice="Found a hidden stash! +$"+FestivalSimulation.SecretStashCash+" for camp";
         /// <summary>ECON-8: what whoever picks up a random find is told, in dollars like the host's replies, for MoneyText.</summary>
         public static string FoundCashNotice(int amount)=>"Found $"+amount+" on the ground!";
         /// <summary>What a friend or a spirit is told as someone grabs the level's Giggle Tank, by the name the grab carries

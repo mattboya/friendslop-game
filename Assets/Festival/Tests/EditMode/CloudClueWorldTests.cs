@@ -72,6 +72,10 @@ namespace Festival.Tests
             // TRIP-8: once someone has found the stash, every view names them, for their notice.
             s.CloudStashFound=true;s.CloudStashFinderId="sober";
             foreach(var id in new[]{"trip","sober","ghost","held"})Assert.That(Wire(game,id).CloudStashFinderId,Is.EqualTo("sober"),id+"'s view names who found the stash");
+            // So does every view for a stash the tripper's vision showed; an older snapshot names nobody.
+            s.VisionStashFinderId="sober";
+            foreach(var id in new[]{"trip","sober","ghost","held"})Assert.That(Wire(game,id).VisionStashFinderId,Is.EqualTo("sober"),id+"'s view names who found the vision's stash");
+            Assert.That(JsonUtility.FromJson<RoundState>("{\"Phase\":\"Playing\"}").VisionStashFinderId,Is.EqualTo(""),"an older snapshot names nobody");
             s.TripperId="sober";
             Assert.That(Wire(game,"trip").CloudClueLandmark,Is.EqualTo(-1),"a tripper replaced by a stand-in no longer holds it");
             var old=JsonUtility.FromJson<RoundState>("{\"Phase\":\"Playing\",\"StashCash\":5}");

@@ -58,7 +58,7 @@ namespace Festival.Core
                 var n=crowd[i];n.Role=i<narcs?"Narc":i<narcs+holders?"ClueHolder":i<narcs+holders+buyers?"Buyer":"Regular";
                 if(n.Role=="ClueHolder")Chain((i-narcs)/chain).Add(n.Id);
             }
-            int dose=TripperDose(State);bool night=level.Night;State.Visions.Clear();
+            int dose=TripperDose(State);bool night=level.Night;State.Visions.Clear();State.VisionStashFinderId="";
             var seen=night?ClueVisions(random,dose,0,State.Visions):DayMarks(random,dose);if(trails>1)seen.AddRange(ClueVisions(random,dose,1,seen));
             seen.AddRange(SecretSights(random,dose,night));Show(seen,random);ArmVisionHint(HintRandom(0));
         }
@@ -131,7 +131,7 @@ namespace Festival.Core
         }
         int SalePayout(NpcState buyer,int pay)=>(int)Math.Round(pay*PayoutMultiplier(State)*(buyer!=null&&State.Visions.Exists(v=>v.Kind=="DoubleBuyer"&&v.NpcId==buyer.Id)?2:1),MidpointRounding.AwayFromZero);
         // Whoever reaches a secret stash first banks it for the crew, and the tripper sees it confirmed.
-        void FindStashes(){foreach(var v in State.Visions)if(v.Kind=="Stash"&&!v.Confirmed&&State.Players.Exists(p=>p.Connected&&p.Life=="Alive"&&Near(p,v.X,v.Z))){v.Confirmed=true;State.StashCash+=SecretStashCash;}}
+        void FindStashes(){foreach(var v in State.Visions)if(v.Kind=="Stash"&&!v.Confirmed){var finder=State.Players.Find(p=>p.Connected&&p.Life=="Alive"&&Near(p,v.X,v.Z));if(finder!=null){v.Confirmed=true;State.StashCash+=SecretStashCash;State.VisionStashFinderId=finder.Id;}}}
         // VISION-3: a found clue goes once it has said TRUE for its few seconds (FollowTrail).
         void DropFoundClues()=>State.Visions.RemoveAll(v=>v.ShowUntil>0&&State.SimulationSeconds>=v.ShowUntil);
 
