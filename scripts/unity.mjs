@@ -1,4 +1,4 @@
-import {existsSync, mkdirSync, readFileSync, unlinkSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -35,6 +35,16 @@ if(!editor)
   process.exit(2);
 }
 
+// A Unity run must leave the stock TextMesh Pro files as committed, or the clean-tree checks waves rely on fail.
+// A plain copy inside another checkout (a builder snapshot) has no own .git to compare against, so it is skipped.
+function changedStockFiles()
+{
+  const top=spawnSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'});
+  if(top.status!==0||top.stdout.trim()!==realpathSync(root))return '';
+  const diff=spawnSync('git',['-C',root,'diff','--name-only','HEAD','--','Assets/TextMesh Pro'],{encoding:'utf8'});
+  return diff.status===0?diff.stdout.trim():'';
+}
+
 function run(label,args,expectedMarker='')
 {
   const log=path.join(artifacts,`unity-${label}.log`);
@@ -56,6 +66,12 @@ function run(label,args,expectedMarker='')
       console.error(`Unity exited without the expected ${expectedMarker} marker; inspect ${log}`);
       process.exit(1);
     }
+  }
+  const changed=changedStockFiles();
+  if(changed)
+  {
+    console.error(`Unity changed committed TextMesh Pro files:\n${changed}`);
+    process.exit(3);
   }
 }
 
