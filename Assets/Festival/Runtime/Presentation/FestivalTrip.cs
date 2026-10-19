@@ -36,9 +36,14 @@ namespace Festival.Presentation
             public float Trails,Glow,Muffle;
             // How far the volume of everything heard dips right now (0-1): GAS-1's tremolo. How much everything heard echoes (0-1): GAS-5.
             public float Tremolo,Reverb;
+            // TRIP-11: the pattern on the scenery's surfaces. How strongly Tongue Stamps' crisp lattice and Fun Guys' curved cells show
+            // (0-1, colour), and the pattern's motion right now: how far it drifts along the surfaces (metres) and how far they swell
+            // (a signed share of the pattern's size).
+            public float Lattice,Cells,Drift,Breathe;
         }
 
-        /// <summary>Reduced motion keeps every colour but cuts camera motion, the swell, the roll and the lag, to this share.</summary>
+        /// <summary>Reduced motion keeps every colour, the surface patterns included, but cuts camera motion, the swell, the roll and the
+        /// lag, and the patterns' drift and breathing (TRIP-11), to this share.</summary>
         public const float ReducedMotionShare=.25f;
         /// <summary>LIGHT-1 took a level-long murk off the neon night, so at night a substance's tint and haze stay this faint.</summary>
         public const float NightTint=.03f;
@@ -53,10 +58,14 @@ namespace Festival.Presentation
             {
                 case "lsd": // Tongue Stamps: a slowly cycling rainbow tint, colour trails behind moving people, a wobble and richer colour.
                     var hue=Color.HSVToRGB(Mathf.Repeat(time*.05f,1),.75f,1);look.Tint=new Color(hue.r,hue.g,hue.b,.07f*s);look.Trails=s;
-                    look.Roll=Sway(substance,time)*s*motion;look.Saturation=DoseSaturation*s;break;
+                    look.Roll=Sway(substance,time)*s*motion;look.Saturation=DoseSaturation*s;
+                    // TRIP-11: a crisp lattice on the scenery, subtle at one dose, that slowly drifts to and fro from three.
+                    look.Lattice=s;look.Drift=Mathf.Sin(time*.23f)*PatternDrift*From(s,.6f)*motion;break;
                 case "mushrooms": // Fun Guys: the world breathes (the field of view swells) and sways under a faint violet, in richer colour.
                     look.Fov=Mathf.Sin(time*.8f)*4*s*motion;look.Tint=new Color(.6f,.45f,1,.035f*s);
-                    look.Roll=Sway(substance,time)*s*motion;look.Saturation=DoseSaturation*s;break;
+                    look.Roll=Sway(substance,time)*s*motion;look.Saturation=DoseSaturation*s;
+                    // TRIP-11: the scenery breathes, slow and irregular (two waves out of step), and grows curved cells from two doses.
+                    look.Cells=From(s,.4f);look.Breathe=(Mathf.Sin(time*.37f)+.6f*Mathf.Sin(time*.61f+2))/1.6f*PatternBreathe*s*motion;break;
                 case "ecstasy": // Rolly Pollies: warm, bright, saturated colours, and a soft glow around other people.
                     look.Tint=new Color(1,.6f,.35f,.05f*s);look.Saturation=30*s;look.Brightness=.15f*s;look.Glow=s;break;
                 case "ketamine": // Pony Dust: tunnel vision, a camera that lags behind the mouse, and muffled sound.
@@ -69,6 +78,11 @@ namespace Festival.Presentation
 
         // Tongue Stamps' and Fun Guys' grade saturation at full strength: below Rolly Pollies' 30, with no brightness of their own.
         private const float DoseSaturation=20;
+        // TRIP-11 at full strength: how far Tongue Stamps' lattice drifts each way (metres), and how far Fun Guys' surfaces swell (a share
+        // of the pattern's size). Starting points for the captures.
+        private const float PatternDrift=.6f,PatternBreathe=.08f;
+        // A strength's share above from (0 at or below it, 1 at full strength), so a part of a look starts at a later dose.
+        private static float From(float strength,float from)=>Mathf.Clamp01((strength-from)/(1-from));
 
         /// <summary>The view's roll in degrees at time t that a shop-bought Tongue Stamp (a wobble) or Fun Guy (a sway) gives at full
         /// strength; a dose of either rolls by this times its strength. Anything else rolls nothing.</summary>

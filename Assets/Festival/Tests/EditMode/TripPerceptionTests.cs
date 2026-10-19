@@ -26,11 +26,11 @@ namespace Festival.Tests
         private static string Name(string id)=>Catalog.FindEffect(id).Name;
         // Every setting, so two looks can be told apart and a failure shows them.
         private static string Describe(FestivalTrip.Perception p)=>
-            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3}";
+            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} lattice {p.Lattice:F3} cells {p.Cells:F3} drift {p.Drift:F4} breathe {p.Breathe:F4}";
         // How strongly each setting is felt.
-        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle};
-        // Everything but camera motion: colour, haze, vignette, letterbox, the grade, trails, glow and sound.
-        private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle};
+        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells,Mathf.Abs(p.Drift),Mathf.Abs(p.Breathe)};
+        // Everything but motion: colour, haze, vignette, letterbox, the grade, trails, glow, sound and the surface patterns themselves.
+        private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells};
         private static readonly string Nothing=Describe(default);
 
         [Test]public void EachSubstanceLooksDifferentAtOneDose()
@@ -115,6 +115,95 @@ namespace Festival.Tests
                 Assert.That(calm.Roll,Is.EqualTo(full.Roll*.25f).Within(1e-5f),Name(id)+": the tilt is cut to a quarter");
                 Assert.That(calm.Lag,Is.EqualTo(full.Lag*.25f).Within(1e-5f),Name(id)+": the lag is cut to a quarter");
             }
+            // TRIP-11: the surface pattern stays, but its drift and its breathing move a quarter as far, all through the cycle.
+            Assert.That(Mathf.Abs(FestivalTrip.Look("lsd",4,false,Moment).Drift),Is.GreaterThan(0),"setup: Tongue Stamps' lattice drifts");
+            Assert.That(Mathf.Abs(FestivalTrip.Look("mushrooms",4,false,Moment).Breathe),Is.GreaterThan(0),"setup: Fun Guys' surfaces breathe");
+            foreach(var id in new[]{"lsd","mushrooms"})for(int dose=1;dose<=4;dose++)for(float t=0;t<Cycle;t+=1)
+            {
+                var full=FestivalTrip.Look(id,dose,false,t);var calm=FestivalTrip.Look(id,dose,true,t);string at=Name(id)+" dose "+dose+" t="+t;
+                Assert.That(calm.Drift,Is.EqualTo(full.Drift*FestivalTrip.ReducedMotionShare).Within(1e-5f),at+": the drift is cut to a quarter");
+                Assert.That(calm.Breathe,Is.EqualTo(full.Breathe*FestivalTrip.ReducedMotionShare).Within(1e-5f),at+": the breathing is cut to a quarter");
+                Assert.That(calm.Lattice,Is.EqualTo(full.Lattice),at+": the lattice stays");Assert.That(calm.Cells,Is.EqualTo(full.Cells),at+": the cells stay");
+            }
+        }
+
+        // TRIP-11: each part of the surface pattern at its peak over a whole cycle (two minutes, not one moment), per substance and dose.
+        private const float Cycle=120,Step=.05f;
+        private static float[] Peaks(string id,int dose)
+        {
+            var most=new float[4];
+            for(float t=0;t<Cycle;t+=Step)
+            {
+                var p=FestivalTrip.Look(id,dose,false,t);float[] now={p.Lattice,p.Cells,Mathf.Abs(p.Drift),Mathf.Abs(p.Breathe)};
+                for(int i=0;i<4;i++)most[i]=Mathf.Max(most[i],now[i]);
+            }
+            return most;
+        }
+        private const int Lattice=0,Cells=1,Drift=2,Breathe=3;
+
+        // Tongue Stamps lay a crisp lattice on the scenery, subtle at one dose and clearer with each, which starts to drift at three.
+        // Fun Guys make surfaces breathe from one dose and grow curved cells from two. Neither borrows the other's, the other three
+        // substances draw none, and no part's peak over the cycle shrinks as the dose grows.
+        [Test]public void TheSurfacePatternGrowsWithTheDoseOverAWholeCycle()
+        {
+            var peaks=new Dictionary<string,float[][]>();
+            foreach(var id in Substances){peaks[id]=new float[5][];peaks[id][0]=new float[4];for(int dose=1;dose<=4;dose++)peaks[id][dose]=Peaks(id,dose);}
+            string[] parts={"lattice","cells","drift","breathing"};
+            foreach(var id in Substances)for(int dose=1;dose<=4;dose++)for(int i=0;i<4;i++)
+                Assert.That(peaks[id][dose][i],Is.GreaterThanOrEqualTo(peaks[id][dose-1][i]),Name(id)+"'s "+parts[i]+" never fades from dose "+(dose-1)+" to "+dose);
+            for(int dose=1;dose<=4;dose++)
+            {
+                string at=" at dose "+dose;float[] stamps=peaks["lsd"][dose],less=peaks["lsd"][dose-1],guys=peaks["mushrooms"][dose],fewer=peaks["mushrooms"][dose-1];
+                Assert.That(stamps[Lattice],Is.GreaterThan(less[Lattice]),"Tongue Stamps' lattice shows, clearer with each dose"+at);
+                if(dose<3)Assert.That(stamps[Drift],Is.Zero,"and holds still below three doses"+at);
+                else Assert.That(stamps[Drift],Is.GreaterThan(less[Drift]),"and drifts further from three"+at);
+                Assert.That(stamps[Cells]+stamps[Breathe],Is.Zero,"Tongue Stamps never grow Fun Guys' cells or breathing"+at);
+                Assert.That(guys[Breathe],Is.GreaterThan(fewer[Breathe]),"Fun Guys' surfaces breathe, deeper with each dose"+at);
+                if(dose<2)Assert.That(guys[Cells],Is.Zero,"with no cells yet"+at);
+                else Assert.That(guys[Cells],Is.GreaterThan(fewer[Cells]),"curved cells grow from two doses"+at);
+                Assert.That(guys[Lattice]+guys[Drift],Is.Zero,"Fun Guys never draw Tongue Stamps' lattice or drift"+at);
+                foreach(var id in new[]{"ecstasy","ketamine","weed"})Assert.That(peaks[id][dose].Sum(),Is.Zero,Name(id)+" draws no surface pattern"+at);
+                Assert.That(Mathf.Max(stamps[Lattice],guys[Cells]),Is.LessThanOrEqualTo(1),"a pattern's strength is a share"+at);
+                Assert.That(stamps[Drift],Is.LessThanOrEqualTo(1),"the drift stays within a metre"+at);
+                Assert.That(guys[Breathe],Is.LessThanOrEqualTo(.2f),"and the breathing within a fifth of the pattern's size"+at);
+            }
+            // Both move to and fro, and Fun Guys' breathing is irregular: its swells are not all the same depth.
+            float least=0,most=0,shallowest=float.MaxValue,deepest=0,before=0,last=0;
+            for(float t=0;t<Cycle;t+=Step)
+            {
+                float drift=FestivalTrip.Look("lsd",4,false,t).Drift,breathe=FestivalTrip.Look("mushrooms",4,false,t).Breathe;
+                least=Mathf.Min(least,drift);most=Mathf.Max(most,drift);
+                if(t>=2*Step&&last>before&&last>=breathe&&last>0){shallowest=Mathf.Min(shallowest,last);deepest=Mathf.Max(deepest,last);}
+                before=last;last=breathe;
+            }
+            Assert.That(least<0&&most>0,"Tongue Stamps' lattice drifts one way and back");
+            Assert.That(deepest-shallowest,Is.GreaterThan(.2f*deepest),"Fun Guys' swells vary in depth, slow and irregular rather than one steady sine");
+        }
+
+        // TRIP-11: the surface pattern is the local player's own dose, day and night (it is on the scenery, not a murk over the view,
+        // so the night's tint cap leaves it alone), and clears the moment the dose, the level or the session goes.
+        [Test]public void TheSurfacePatternIsYourOwnDoseAndClearsAtOnce()
+        {
+            string Pattern(FestivalTrip.Perception p)=>$"lattice {p.Lattice:F4} cells {p.Cells:F4} drift {p.Drift:F4} breathe {p.Breathe:F4}";
+            string None=Pattern(default);
+            foreach(var id in new[]{"lsd","mushrooms"})for(int dose=1;dose<=4;dose++)foreach(int level in new[]{0,1,2,3})
+            {
+                var state=Round("Playing",dose,id);state.LevelIndex=level;
+                Assert.That(Pattern(FestivalTrip.For(state,"me",false,Moment)),Is.EqualTo(Pattern(FestivalTrip.Look(id,dose,false,Moment))).And.Not.EqualTo(None),Name(id)+" dose "+dose+" level "+level+": the dose's own pattern");
+            }
+            string For(RoundState state)=>Pattern(FestivalTrip.For(state,"me",false,Moment));
+            Assert.That(For(Round("Playing",0,"lsd")),Is.EqualTo(None),"sober, though a friend is on four doses");
+            Assert.That(For(Round("Playing",4,"lsd",life:"Spirit")),Is.EqualTo(None),"a spirit");
+            foreach(var phase in new[]{"Shopping","Spinning","Loading","CampReview"})Assert.That(For(Round(phase,4,"mushrooms")),Is.EqualTo(None),"at camp ("+phase+")");
+            var shop=Round("Playing",0);shop.Players[0].Effects.Add(new ActiveEffect{Id="lsd",Intensity=4,RemainingSeconds=60});shop.Players[0].Effects.Add(new ActiveEffect{Id="mushrooms",Intensity=4,RemainingSeconds=60});
+            Assert.That(For(shop),Is.EqualTo(None),"shop-bought effects draw no pattern");
+            Assert.That(Pattern(FestivalTrip.Gas(2,false,.1f)),Is.EqualTo(None),"nor does Giggle Gas");
+            var changing=Round("Playing",4,"lsd");var dosed=changing.Players[0].Effects[0];
+            dosed.Substance="mushrooms";
+            Assert.That(For(changing),Is.EqualTo(Pattern(FestivalTrip.Look("mushrooms",4,false,Moment))),"a new substance swaps the pattern at once, no lattice left behind");
+            dosed.Intensity=0;Assert.That(For(changing),Is.EqualTo(None),"a dose worn down to nothing clears it");
+            changing.Players[0].Effects.Clear();Assert.That(For(changing),Is.EqualTo(None),"and so does an ended dose");
+            Assert.That(For(null),Is.EqualTo(None),"a client that left");
         }
 
         // Cross-cutting call 3: a dose layer shows only while the festival is shown, for the local player's own dose of 1 or more,
