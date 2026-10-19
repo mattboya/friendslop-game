@@ -168,10 +168,11 @@ namespace Festival.Presentation
         /// <summary>
         /// The CarryBody action p gets for body b (the command toggles), or "" when there is none:
         /// pick it up, take the other end, or put it down, saying when it is too heavy to move alone.
+        /// None in the middle of anything (lying down, a talk, a task): the host refuses a carry or put-down then.
         /// </summary>
         public static string BodyAction(RoundState s,PlayerState p,BodyState b)
         {
-            if(p.Life!="Alive")return "";
+            if(p.Life!="Alive"||p.InteractionId!="")return "";
             string body=(s.Players.Find(x=>x.Id==b.PlayerId)?.Name??"a friend")+"'s body";
             if(p.CarryBodyId==b.PlayerId)return "Put down "+body+(FestivalSimulation.BodyMoves(s,b)?"":Dot+"too heavy alone: get a second carrier");
             double dx=p.X-b.X,dz=p.Z-b.Z;

@@ -103,9 +103,9 @@ namespace Festival.Tests
         }
 
         // TRIP-8 (with ECON-5's items 3 and 7) on a real hosted Day 1. In the middle of anything the host takes only its way out (and
-        // a handoff, a body, a call for help), so that is all the HUD lists, and the strip under the prompt stays empty: lying on the
-        // grass beside a festivalgoer and a dropped item, lying at the night market looking up at a shelf, mid chat check and mid talk.
-        // Whoever walks onto the cloud's stash is told so.
+        // a handoff or a call for help), so that is all the HUD lists, and the strip under the prompt stays empty: lying on the
+        // grass beside a festivalgoer, a dropped item and a friend's body, lying at the night market looking up at a shelf, mid
+        // chat check and mid talk. Whoever walks onto the cloud's stash is told so.
         [UnityTest]public IEnumerator InTheMiddleOfAnythingOnlyItsWayOutIsListed()
         {
             var world=new GameObject("Busy HUD world");world.AddComponent<FestivalWorld>();yield return null;
@@ -132,7 +132,7 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
-                var mate=sim.AddPlayer("busy_mate","Sam");mate.Ready=true;
+                var mate=sim.AddPlayer("busy_mate","Sam");mate.Ready=true;var kim=sim.AddPlayer("busy_spirit","Kim");kim.Ready=true;
                 sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;
                 yield return StartLevel(session);
                 // As in the test above: Sam trips, far off at the way back to camp; you are sober, with empty hands.
@@ -145,8 +145,10 @@ namespace Festival.Tests
                 var npc=new NpcState{Id=talker,Role="Buyer",X=-20,Z=-2,Yaw=90,CanTalk=true};sim.State.Npcs.Clear();sim.State.Npcs.Add(npc);
                 player.X=npc.X+.8f;player.Z=npc.Z;
                 sim.State.Drops.Add(new DropState{Id="busy_drop",ItemId="confetti",Count=1,X=player.X,Z=player.Z});
+                // Kim is a spirit, far off, and her body lies beside you.
+                kim.Life="Spirit";kim.X=Festivals.CampGateX;kim.Z=Festivals.CampGateZ;sim.State.Bodies.Add(new BodyState{PlayerId=kim.Id,X=player.X+.5f,Z=player.Z});
                 yield return new WaitForSeconds(.6f);
-                if(!Listed().Contains("Pick up")||Read("Nearby")=="(hidden)")failures.Add("setup: standing there, the pickup and the festivalgoer's strip are not offered: \""+Listed()+"\"");
+                if(!Listed().Contains("Pick up")||!Listed().Contains("Carry Kim's body")||Read("Nearby")=="(hidden)")failures.Add("setup: standing there, the pickup, the body and the festivalgoer's strip are not offered: \""+Listed()+"\"");
 
                 // 1. Lying there: only Get up, and E gets you up.
                 session.Command(FestivalSimulation.LieDownKind);

@@ -368,6 +368,9 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.BodyAction(s,kim,second),Is.EqualTo("Take the other end of Alex's body"));
             kim.CarryBodyId="alex";
             Assert.That(FestivalHudText.BodyAction(s,you,second),Is.EqualTo("Put down Alex's body"),"with two carriers it moves");
+            you.InteractionId="you_task";
+            Assert.That(FestivalHudText.BodyAction(s,you,second),Is.Empty,"mid-task the host refuses the put-down, so none is listed");
+            you.InteractionId="";
             kim.Life="Downed";
             Assert.That(FestivalHudText.BodyAction(s,you,second),Does.EndWith("too heavy alone: get a second carrier"),"a carrier who goes down lets go");
             kim.Life="Alive";

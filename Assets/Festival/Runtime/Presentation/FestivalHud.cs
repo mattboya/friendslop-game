@@ -2000,7 +2000,7 @@ namespace Festival.Presentation
             var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             // TRIP-8: in the middle of anything (lying on the grass, a talk, a check, a task) the host takes only its way out above, a
-            // handoff, a body or a call for help, so nothing else is listed; with no festivalgoer beside you the strip stays empty (ECON-5).
+            // handoff or a call for help, so nothing else is listed; with no festivalgoer beside you the strip stays empty (ECON-5).
             NpcState npc=null;
             if(player.InteractionId=="")
             {
