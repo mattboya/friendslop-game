@@ -107,7 +107,8 @@ what it points at, beckons toward it and squeaks once as it appears. When you
 come close it scurries on ahead along a wavy, twisting path, so following it
 looks a little crazy but leads you there. The rest of the creatures are just
 there. Each kind comes in 8 looks (its colours and a slightly different size);
-the kind, not the look, tells you a pointer's job.
+the kind, not the look, tells you a pointer's job. The higher the dose, the
+bigger the creatures: twice the size at dose 4.
 
 **Checking a vision:**
 

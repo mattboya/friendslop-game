@@ -9,7 +9,8 @@ using Object = UnityEngine.Object;
 namespace Festival.Presentation
 {
     /// <summary>VISION-2: a dosed player's own client sometimes shows little mythical creatures, 0.2 to 0.5 m tall (gnomes,
-    /// pixies, tiny dragons, mushroom sprites and jackalopes), more often at higher doses. Only the local player's own dose counts,
+    /// pixies, tiny dragons, mushroom sprites and jackalopes), more often and bigger at higher doses (twice the size at
+    /// dose 4). Only the local player's own dose counts,
     /// a spirit sees none, and nothing here touches the simulation or the network. Arrivals run on the view's level clock
     /// (ElapsedSeconds), so they come only while Playing, seeded by the round seed, the level and the player. Each creature's own
     /// life runs on frame time, so it finishes fading while the clock stands still at Results. The dose invents them, so they
@@ -33,7 +34,7 @@ namespace Festival.Presentation
         // Near-Far metres off, on a bearing across the view's width and up to EdgeMargin degrees past either edge, on whatever a
         // probe down from eye height lands on (y=0 where it finds nothing). A spot inside something drops the arrival.
         private const float Near=4,Far=15,EdgeMargin=5,InsideProbe=.3f,InsideRadius=.2f;
-        // A creature is on screen while this box at its feet is inside the camera's frustum.
+        // A creature is on screen while this box at its feet (sized with it) is inside the camera's frustum.
         private const float Box=.5f;
         // A little hop, and a slight glow so they read at night.
         private const float Hop=.05f,HopHz=1.5f,Glow=.3f;
@@ -70,7 +71,7 @@ namespace Festival.Presentation
         private static readonly (string Name,string Model)[] Looks={("Gnome","FestivalCreatureGnome"),("Pixie","FestivalCreaturePixie"),
             ("Dragon","FestivalCreatureDragon"),("Mushroom sprite","FestivalCreatureMushroomSprite"),("Jackalope","FestivalCreatureJackalope")};
         // VISION-6: each kind's 8 looks, in Looks' order; look 0 is the model as painted. A look swaps palette colours (from>to) and
-        // sizes the model. The gnome is about .48 m tall, so it never grows: every creature stays .2-.5 m tall.
+        // sizes the model. The gnome is about .48 m tall, so it never grows: every creature is .2-.5 m tall at dose 1.
         private const int LooksPerKind=8;
         private static readonly (string Swaps,float Size)[] Variations={
             ("",1),("0>6",1),("0>1 1>0",.9f),("0>11 1>13",1),("0>12",.9f),("0>14 1>4",1),("1>6 3>8",.9f),("0>7 1>12",1),            // gnome: coat 0, hat 1, beard 3
@@ -129,7 +130,7 @@ namespace Festival.Presentation
         // Heading is the way it runs. Its sparkles and voice are made the first time it points and kept in the pool.
         private sealed class Creature
         {
-            public Transform Root; public int Look,Variation,Index; public bool Persists,InView,Seen; public float Age,Life,Fading; public Vector3 Spot;
+            public Transform Root; public int Look,Variation,Index; public bool Persists,InView,Seen; public float Age,Life,Fading,Size; public Vector3 Spot;
             public string Hint=""; public bool Tank; public float Scurry=-1,Weave,Phase; public int Scurries; public Vector3 Goal,From,To,Heading; public Transform Trail; public Transform[] Glints; public AudioSource Voice;
             public bool Points=>Tank||Hint!="";
         }
@@ -184,7 +185,7 @@ namespace Festival.Presentation
             // Those already on screen keep their places; one coming into view takes a free place or stays hidden, so turning back
             // to the ones left behind never shows more than the cap.
             GeometryUtility.CalculateFrustumPlanes(view,frustum);OnScreen=0;
-            foreach(var c in live){c.InView=InView(c.Spot);if(!c.InView)c.Seen=false;else if(c.Seen)OnScreen++;}
+            foreach(var c in live){c.InView=InView(c.Spot,c.Size);if(!c.InView)c.Seen=false;else if(c.Seen)OnScreen++;}
             foreach(var c in live)if(c.InView&&!c.Seen&&OnScreen<cap){c.Seen=true;OnScreen++;}
             // Arrivals only while the level clock runs. One over the cap is dropped (only those in view count) and the schedule
             // keeps ticking. A hint not pointed at yet, or else a due tank, makes the arrival its pointer (only its kind, bearing
@@ -195,8 +196,8 @@ namespace Festival.Presentation
                     var hint=Unpointed(state,me,out var goal);bool tank=hint==null&&arrival.At>=nextTank&&Target(state,me,"",true,out goal);
                     // It keeps its drawn distance but stands on its target's side, so it never faces back at you.
                     if(hint!=null||tank){arrival.Look=hint!=null?JobOf(hint.Kind):Jackalope;arrival.Persists=true;arrival.Bearing=Mathf.Clamp(Mathf.DeltaAngle(view.transform.eulerAngles.y,Mathf.Atan2(goal.x-eye.x,goal.z-eye.z)*Mathf.Rad2Deg)/HalfWidth(view),-1,1);}
-                    if(!(OnScreen<cap&&Place(view,arrival,out var spot)))continue;
-                    var c=Spawn(arrival,spot);c.InView=InView(spot);if(c.InView){c.Seen=true;OnScreen++;}
+                    if(!(OnScreen<cap&&Place(view,arrival,SizeAt(dose),out var spot)))continue;
+                    var c=Spawn(arrival,spot,SizeAt(dose));c.InView=InView(spot,c.Size);if(c.InView){c.Seen=true;OnScreen++;}
                     if(hint!=null){pointed.Add(hint.Id);c.Hint=hint.Id;}else if(tank){nextTank=arrival.At+TankEvery;c.Tank=true;}
                     if(c.Points){Aim(state,me,c);Beckon(c);}
                 }
@@ -218,12 +219,14 @@ namespace Festival.Presentation
                     var toEye=eye-c.Spot;toEye.y=0;if(toEye.sqrMagnitude>1e-4f)c.Root.rotation=Quaternion.LookRotation(toEye);
                 }
                 float grown=Mathf.SmoothStep(0,1,c.Age/FadeSeconds)*(1-Mathf.SmoothStep(0,1,Mathf.Max(0,c.Fading)/FadeSeconds));
-                float scale=grown*FestivalVisionMarkers.ShimmerScale(shimmer,time,c.Index);c.Root.localScale=Vector3.one*scale;
+                float scale=grown*c.Size*FestivalVisionMarkers.ShimmerScale(shimmer,time,c.Index);c.Root.localScale=Vector3.one*scale;
                 // Placed after the body is scaled (they grow and fade with it); at no size at all there is nothing to place.
                 if(c.Points&&ahead.sqrMagnitude>1e-4f&&scale>1e-3f)Twinkle(c,ahead,time);
             }
         }
 
+        // How much the dose a creature arrives at sizes it, 1 at dose 1 to 2 at dose 4; it keeps that size while it stays.
+        private static float SizeAt(int dose)=>1+(Math.Min(dose,Caps.Length)-1)/3f;
         private static PlayerState Find(RoundState state,string playerId){foreach(var p in state.Players)if(p.Id==playerId)return p;return null;}
         // Only the local player's own dose counts, never another effect; a spirit sees none.
         private static int DoseOf(PlayerState p)
@@ -275,7 +278,7 @@ namespace Festival.Presentation
                 var ahead=c.Goal-c.Spot;ahead.y=0;float room=ahead.magnitude-StopShort;var off=eye-c.Spot;off.y=0;
                 if(c.Fading>=0||room<MinScurry||off.sqrMagnitude>=Startle*Startle)return;
                 var to=c.Spot+ahead/ahead.magnitude*Mathf.Min(ScurryMetres,room);
-                if(!Ground(to.x,to.z,eye.y,out to))return;
+                if(!Ground(to.x,to.z,eye.y,c.Size,out to))return;
                 c.From=c.Spot;c.To=to;c.Scurry=0;c.Scurries++;
                 c.Weave=Mathf.Lerp(MinWeave,MaxWeave,Mathf.Repeat(c.Index*.618034f+c.Scurries*.381966f,1));c.Phase=2*Mathf.PI*Mathf.Repeat(c.Index*.754878f+c.Scurries*.56984f,1);
             }
@@ -297,29 +300,29 @@ namespace Festival.Presentation
                 c.Glints[i].SetPositionAndRotation(c.Spot+ahead*at+Vector3.up*SparkleLift,Quaternion.identity);c.Glints[i].localScale=new Vector3(size,size*SparkleFlat,size);
             }
         }
-        private bool InView(Vector3 spot)=>GeometryUtility.TestPlanesAABB(frustum,new Bounds(spot+Vector3.up*(Box/2),Vector3.one*Box));
+        private bool InView(Vector3 spot,float size)=>GeometryUtility.TestPlanesAABB(frustum,new Bounds(spot+Vector3.up*(Box*size/2),Vector3.one*(Box*size)));
         // ponytail: one spot per arrival, dropped when it is inside something; retry nearer if crowded places feel too empty.
-        private static bool Place(Camera view,Schedule.Arrival arrival,out Vector3 spot)
+        private static bool Place(Camera view,Schedule.Arrival arrival,float size,out Vector3 spot)
         {
             var eye=view.transform.position;var along=Quaternion.Euler(0,view.transform.eulerAngles.y+arrival.Bearing*HalfWidth(view),0)*Vector3.forward*arrival.Distance;
-            return Ground(eye.x+along.x,eye.z+along.z,eye.y,out spot);
+            return Ground(eye.x+along.x,eye.z+along.z,eye.y,size,out spot);
         }
         // Degrees from the view's middle to an arrival's widest bearing: half the view's width and EdgeMargin past it.
         private static float HalfWidth(Camera view)=>Mathf.Atan(Mathf.Tan(view.fieldOfView*.5f*Mathf.Deg2Rad)*view.aspect)*Mathf.Rad2Deg+EdgeMargin;
         // The ground at x, z: whatever a probe down from eye height lands on (y=0 where it finds nothing); false when a creature
-        // standing there would be inside something.
-        private static bool Ground(float x,float z,float eyeHeight,out Vector3 spot)
+        // standing there would be inside something (the probe sized with the creature).
+        private static bool Ground(float x,float z,float eyeHeight,float size,out Vector3 spot)
         {
             spot=new Vector3(x,0,z);
             if(Physics.Raycast(new Vector3(x,eyeHeight,z),Vector3.down,out var hit,eyeHeight+1,~0,QueryTriggerInteraction.Ignore))spot.y=hit.point.y;
-            return !Physics.CheckSphere(spot+Vector3.up*InsideProbe,InsideRadius,~0,QueryTriggerInteraction.Ignore);
+            return !Physics.CheckSphere(spot+Vector3.up*(InsideProbe*size),InsideRadius*size,~0,QueryTriggerInteraction.Ignore);
         }
 
-        private Creature Spawn(Schedule.Arrival arrival,Vector3 spot)
+        private Creature Spawn(Schedule.Arrival arrival,Vector3 spot,float size)
         {
             var shelf=pool[arrival.Look*LooksPerKind+arrival.Variation];Creature c;
             if(shelf!=null&&shelf.Count>0){c=shelf[shelf.Count-1];shelf.RemoveAt(shelf.Count-1);}else c=Build(arrival.Look,arrival.Variation);
-            c.Persists=arrival.Persists;c.Life=arrival.Life;c.Age=0;c.Fading=-1;c.Spot=spot;c.Seen=false;c.Index=++arrivals;
+            c.Persists=arrival.Persists;c.Life=arrival.Life;c.Age=0;c.Fading=-1;c.Size=size;c.Spot=spot;c.Seen=false;c.Index=++arrivals;
             c.Hint="";c.Tank=false;c.Scurry=-1;c.Scurries=0;if(c.Trail!=null)c.Trail.gameObject.SetActive(false);
             c.Root.SetPositionAndRotation(spot,Quaternion.identity);c.Root.localScale=Vector3.zero;c.Root.gameObject.SetActive(true);
             live.Add(c);return c;

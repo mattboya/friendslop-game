@@ -176,6 +176,27 @@ namespace Festival.Tests
                 }
         }
 
+        // The higher the dose, the bigger the creatures, 1+(dose-1)/3 times: one 0.2 to 0.5 m tall at dose 1 is twice that
+        // at dose 4, and it needs that much more room to stand.
+        [Test]public void TheHigherTheDoseTheBiggerTheCreatures()
+        {
+            var eye=Eye();float one=0;
+            for(int dose=1;dose<=4;dose++)
+            {
+                // The same first arrival at each dose: the schedule draws the same, only sooner.
+                var state=FirstArrival(true);state.Players[0].Effects[0].Intensity=dose;var creatures=Creatures();float t=0;
+                var body=UntilOneArrives(creatures,state,eye,ref t);for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+                float size=1+(dose-1)/3f,height=Extent(body).size.y;
+                Assert.That(body.localScale.x,Is.EqualTo(size).Within(1e-4f),"grown, still camera: at dose "+dose+" it is "+size+" times its size");
+                if(dose==1){one=height;Assert.That(height,Is.InRange(.2f,.5f),"at dose 1 it is 0.2 to 0.5 m tall ("+height+")");}
+                else Assert.That(height/one,Is.EqualTo(size).Within(size*.02f),"at dose "+dose+" it is "+size+" times as tall");
+            }
+            // Under a slab 0.7 m up a dose 1 creature fits, but one twice the size would stand inside it.
+            Solid("Slab",new Vector3(0,1.85f,10),new Vector3(60,2.3f,60));
+            Assert.That(Watch(Round(1),eye,_=>{}),Is.GreaterThan(0),"setup: a dose 1 creature fits under the slab");
+            Assert.That(Watch(Round(4),eye,_=>{}),Is.Zero,"a dose 4 creature never stands inside it");
+        }
+
         [Test]public void NoMoreThan1_2_4_6AreOnScreenAtOnce()
         {
             for(int dose=1;dose<=4;dose++)
