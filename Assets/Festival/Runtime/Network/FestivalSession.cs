@@ -909,7 +909,7 @@ namespace Festival.Network
             int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
-                CampEggs=source.CampEggs.ConvertAll(e=>JsonUtility.FromJson<CampEggState>(JsonUtility.ToJson(e))),
+                CampEggs=source.CampEggs.ConvertAll(e=>e.Copy()),
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
                 // CROWD-2: a big crew's second lost friend, shown like the first. Its clue chain stays on the host.

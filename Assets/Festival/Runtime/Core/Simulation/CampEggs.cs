@@ -8,6 +8,8 @@ namespace Festival.Core
         public string Id="",LastActorId="",LastLine="",Word="",SeatedPlayerId="";
         public float X,Z; public int ActivationCount; public long Sequence; public double LastActivationAt=-1,SeatedUntil;
         public bool Deflated;
+        // Shallow is whole here: every field is a value or a string (CampEggTests checks it).
+        public CampEggState Copy()=>(CampEggState)MemberwiseClone();
     }
     public sealed partial class FestivalSimulation
     {

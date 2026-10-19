@@ -123,6 +123,11 @@ public static class VisionEdgeTests
         Check(FestivalSimulation.Engaged(s.State,npc),"someone in a friend's dance is engaged");
         var busy=Act(s,tripper.Id,"ConfirmChat",npc.Id);Check(!busy.Accepted&&busy.Reason=="NPC is busy","and the host refuses the check: "+busy.Reason);
         Check(Act(s,other.Id,"Cancel").Accepted&&!FestivalSimulation.Engaged(s.State,npc),"free again once the dance stops");
+        // The host's view (FestivalSession.ViewFor) asks it of every festivalgoer every frame, so asking makes no garbage.
+        long before=GC.GetAllocatedBytesForCurrentThread();
+        for(int i=0;i<100;i++)FestivalSimulation.Engaged(s.State,npc);
+        long garbage=GC.GetAllocatedBytesForCurrentThread()-before;
+        Check(garbage==0,"asking makes no garbage, not "+garbage+" bytes a hundred asks");
         Check(Act(s,tripper.Id,"ConfirmChat",npc.Id).Accepted,"and the check goes ahead");
         var seen=new NpcState{Id=npc.Id,Busy=true};
         Check(FestivalSimulation.Engaged(new RoundState{Npcs={seen}},seen),"a client's view, with no modes or other players' interactions, says busy by Busy alone");

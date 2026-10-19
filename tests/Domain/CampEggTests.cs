@@ -17,6 +17,23 @@ public static class CampEggTests
         RefusedEggsNeverChangePropsAndAllEightDiscoveriesAccumulate();
         RestoreKeepsActivePropsAndRejectsCorruptRecords();
         DustWordsHaveVariedHostDrawsAcrossVisits();
+        ACopyCarriesEveryFieldInOneNewObject();
+        EveryEggFieldIsAValueOrAString();
+    }
+    // The host's view copies every egg every frame (FestivalSession.ViewFor), so a copy is the egg's fields in one new object.
+    static void ACopyCarriesEveryFieldInOneNewObject()
+    {
+        var egg=new CampEggState{Id="gnome",LastActorId="host",LastLine="psst",Word="snack",SeatedPlayerId="p1",X=-11,Z=16,ActivationCount=3,Sequence=7,LastActivationAt=12.5,SeatedUntil=16.5,Deflated=true};
+        egg.Copy();long before=GC.GetAllocatedBytesForCurrentThread();var copy=egg.Copy();long bytes=GC.GetAllocatedBytesForCurrentThread()-before;
+        Check(!ReferenceEquals(copy,egg),"a copy is its own object, so the view never moves with the host's egg");
+        Check(Wire(copy).ToString()==Wire(egg).ToString(),"with every field: "+Wire(copy));
+        Check(bytes<=160,"and nothing else: "+bytes+" bytes");
+    }
+    // Copy is a shallow clone: a list or other reference field would leave the view sharing it with the host's egg.
+    static void EveryEggFieldIsAValueOrAString()
+    {
+        foreach(var f in typeof(CampEggState).GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance))
+            Check(f.FieldType.IsValueType||f.FieldType==typeof(string),"an egg's "+f.Name+" is a "+f.FieldType.Name+", which a shallow copy would share");
     }
     static void APlayerFindsTheGnomeAtItsVisitPoint()
     {

@@ -23,7 +23,8 @@ namespace Festival.Core
         /// <summary>VISION-3: whether n is too taken up for anyone to check: worked up (swarming or accusing anyone) or the target of an
         /// interaction under way. A client's view hides both and carries the host's answer in Busy (FestivalSession.ViewFor), so the
         /// HUD asks it of the view and says they're busy instead of offering a check the host would refuse.</summary>
-        public static bool Engaged(RoundState s,NpcState n)=>n.Busy||WorkedUp(n)||s.Interactions.Exists(x=>x.TargetId==n.Id&&x.Status=="Active");
+        // A loop, not a lambda: the host's view asks it of every festivalgoer every frame, and a capturing lambda allocates each call.
+        public static bool Engaged(RoundState s,NpcState n){if(n.Busy||WorkedUp(n))return true;foreach(var x in s.Interactions)if(x.TargetId==n.Id&&x.Status=="Active")return true;return false;}
         static bool WorkedUp(NpcState n)=>n.Mode=="Swarming"||n.Mode=="Accusing";
 
         CommandResult BeginConfirm(PlayerState p,GameCommand c)
