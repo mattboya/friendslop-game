@@ -183,13 +183,14 @@ namespace Festival.Presentation
             foreach(var c in live){c.InView=InView(c.Spot);if(!c.InView)c.Seen=false;else if(c.Seen)OnScreen++;}
             foreach(var c in live)if(c.InView&&!c.Seen&&OnScreen<cap){c.Seen=true;OnScreen++;}
             // Arrivals only while the level clock runs. One over the cap is dropped (only those in view count) and the schedule
-            // keeps ticking. VISION-6: a hint not pointed at yet, or else a due tank, makes the arrival its pointer (only its kind
+            // keeps ticking. A hint not pointed at yet, or else a due tank, makes the arrival its pointer (only its kind, bearing
             // and staying change, so the schedule draws what it always drew); dropped, the hint waits for the next.
             if(state.Phase=="Playing")
                 while(schedule.Due(state.ElapsedSeconds,dose,out var arrival))
                 {
-                    var hint=Unpointed(state,me);bool tank=hint==null&&arrival.At>=nextTank&&Target(state,me,"",true,out _);
-                    if(hint!=null||tank){arrival.Look=hint!=null?JobOf(hint.Kind):Jackalope;arrival.Persists=true;}
+                    var hint=Unpointed(state,me,out var goal);bool tank=hint==null&&arrival.At>=nextTank&&Target(state,me,"",true,out goal);
+                    // It keeps its drawn distance but stands on its target's side, so it never faces back at you.
+                    if(hint!=null||tank){arrival.Look=hint!=null?JobOf(hint.Kind):Jackalope;arrival.Persists=true;arrival.Bearing=Mathf.Clamp(Mathf.DeltaAngle(view.transform.eulerAngles.y,Mathf.Atan2(goal.x-eye.x,goal.z-eye.z)*Mathf.Rad2Deg)/HalfWidth(view),-1,1);}
                     if(!(OnScreen<cap&&Place(view,arrival,out var spot)))continue;
                     var c=Spawn(arrival,spot);c.InView=InView(spot);if(c.InView){c.Seen=true;OnScreen++;}
                     if(hint!=null){pointed.Add(hint.Id);c.Hint=hint.Id;}else if(tank){nextTank=arrival.At+TankEvery;c.Tank=true;}
@@ -230,9 +231,10 @@ namespace Festival.Presentation
         // VISION-6: which kind points at a vision of this kind, or -1 for none.
         private static int JobOf(string kind)=>kind=="Clue"?MushroomSprite:kind=="Buyer"?Pixie:kind=="Narc"?Dragon:kind=="Stash"||kind=="DoubleBuyer"?Gnome:-1;
         // The first hinted vision in the view this client has not pointed at yet and whose target is there to point at, or null.
-        private VisionState Unpointed(RoundState state,PlayerState me)
+        private VisionState Unpointed(RoundState state,PlayerState me,out Vector3 at)
         {
-            for(int i=0;i<state.Visions.Count;i++){var v=state.Visions[i];if(v.Hinted&&JobOf(v.Kind)>=0&&!pointed.Contains(v.Id)&&Target(state,me,v.Id,false,out _))return v;}
+            at=default;
+            for(int i=0;i<state.Visions.Count;i++){var v=state.Visions[i];if(v.Hinted&&JobOf(v.Kind)>=0&&!pointed.Contains(v.Id)&&Target(state,me,v.Id,false,out at))return v;}
             return null;
         }
         // Where a pointer's target stands now (the vision's festivalgoer, its spot, or the tank), false once there is nothing left
@@ -288,10 +290,11 @@ namespace Festival.Presentation
         // ponytail: one spot per arrival, dropped when it is inside something; retry nearer if crowded places feel too empty.
         private static bool Place(Camera view,Schedule.Arrival arrival,out Vector3 spot)
         {
-            float half=Mathf.Atan(Mathf.Tan(view.fieldOfView*.5f*Mathf.Deg2Rad)*view.aspect)*Mathf.Rad2Deg+EdgeMargin;
-            var eye=view.transform.position;var along=Quaternion.Euler(0,view.transform.eulerAngles.y+arrival.Bearing*half,0)*Vector3.forward*arrival.Distance;
+            var eye=view.transform.position;var along=Quaternion.Euler(0,view.transform.eulerAngles.y+arrival.Bearing*HalfWidth(view),0)*Vector3.forward*arrival.Distance;
             return Ground(eye.x+along.x,eye.z+along.z,eye.y,out spot);
         }
+        // Degrees from the view's middle to an arrival's widest bearing: half the view's width and EdgeMargin past it.
+        private static float HalfWidth(Camera view)=>Mathf.Atan(Mathf.Tan(view.fieldOfView*.5f*Mathf.Deg2Rad)*view.aspect)*Mathf.Rad2Deg+EdgeMargin;
         // The ground at x, z: whatever a probe down from eye height lands on (y=0 where it finds nothing); false when a creature
         // standing there would be inside something.
         private static bool Ground(float x,float z,float eyeHeight,out Vector3 spot)

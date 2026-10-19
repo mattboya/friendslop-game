@@ -379,6 +379,27 @@ namespace Festival.Tests
             }
         }
 
+        // A pointer keeps its arrival's distance but stands on its target's bearing, held to the view's width (and its
+        // EdgeMargin), so one whose target is behind you faces across or away from you, never back at you.
+        [Test]public void APointerStandsOnItsTargetsSideOfTheView()
+        {
+            var eye=Eye();float half=Mathf.Atan(Mathf.Tan(eye.fieldOfView*.5f*Mathf.Deg2Rad)*eye.aspect)*Mathf.Rad2Deg+5;
+            // First the worst case: the target 30 m behind the eye, straight back from where the arrival's own draws would stand it.
+            float drawn=Arrivals(FestivalCreatures.SeedFor(FirstArrival(true),"me"),1,200)[0].Bearing*half*Mathf.Deg2Rad;
+            foreach(var goal in new[]{new Vector2(-Mathf.Sin(drawn),-Mathf.Cos(drawn))*30,new Vector2(6,-30),new Vector2(-40,5),new Vector2(6,30)})
+            {
+                var state=Hinted(FirstArrival(true),"Clue",goal);var creatures=Creatures();float t=0;
+                var body=UntilOneArrives(creatures,state,eye,ref t);for(float until=t+1.5f;t<until;t+=Step)Frame(creatures,state,eye,t);
+                Assert.That(Pointing(creatures),Is.EqualTo(new[]{body}),"setup: it points at "+goal);
+                Assert.That(Facing(body,Flat(eye.transform.position)),Is.GreaterThan(goal.y<0?20:90),"with its target at "+goal+" it does not face the eye");
+                Assert.That(Facing(body,goal),Is.LessThan(15),"it faces its target at "+goal);
+                var off=Flat(body.position)-Flat(eye.transform.position);
+                Assert.That(off.magnitude,Is.EqualTo(Arrivals(FestivalCreatures.SeedFor(state,"me"),1,200)[0].Distance).Within(.1f),"it keeps its arrival's distance");
+                float target=Mathf.Clamp(Mathf.Atan2(goal.x,goal.y)*Mathf.Rad2Deg,-half,half);
+                Assert.That(Mathf.Atan2(off.x,off.y)*Mathf.Rad2Deg,Is.EqualTo(target).Within(1f),"it stands on its target's bearing, held to the view's width");
+            }
+        }
+
         // Its target gone (checked, or the tank grabbed), a pointer fades out still facing where its target stood, its sparkles too.
         [Test]public void AFadingPointerKeepsFacingItsTarget()
         {
