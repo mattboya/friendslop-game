@@ -92,6 +92,37 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // TRIP-17: the host's own mover eases a Pony Dust walker into the stall's near stop and out again, never snapping, on the
+        // simulation clock; a Rolly Pollies host step is 8% longer than the dose alone.
+        [UnityTest]public IEnumerator PonyDustStallsAndRecoversSmoothlyThroughTheHostMover()
+        {
+            var world=new GameObject("TRIP-17 stall world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("TRIP-17 stall host");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                session.Host("Walker",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);session.enabled=false;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                Place(player);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="ketamine",StartSeconds=0});
+                float free=4*FestivalSimulation.DoseMovementMultiplier(1)*.1f,least=free,previous=-1;
+                for(double at=7.5;at<=11;at+=.05)
+                {
+                    sim.State.SimulationSeconds=at;player.X=OriginX;player.Z=OriginZ;Step(session,0,1);
+                    float stride=player.Z-OriginZ;
+                    Assert.That(stride,Is.EqualTo(free*(1-(1-Intoxication.StallFloor)*Intoxication.Stall(player,at))).Within(1e-4f),"the host's step follows the stall at "+at+" s");
+                    if(previous>=0)Assert.That(Mathf.Abs(stride-previous),Is.LessThan(.3f*free),"no snap between .05 s steps at "+at+" s: "+previous+" to "+stride);
+                    least=Mathf.Min(least,stride);previous=stride;
+                }
+                Assert.That(least,Is.LessThanOrEqualTo(.15f*free).And.GreaterThan(0),"Pony Dust drags the walker to a near stop, never a dead one");
+                Assert.That(previous,Is.EqualTo(free).Within(1e-4f),"and lets go");
+                Place(player);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="ecstasy"});Step(session,0,1);
+                Assert.That(player.Z-OriginZ,Is.EqualTo(free*1.08f).Within(1e-4f),"a Rolly Pollies step is 8% longer than the dose alone");
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(host);UnityEngine.Object.Destroy(world);}
+            yield return null;
+        }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         [UnityTest]public IEnumerator HostMovementSamplingIsOptInAndThrottled()
         {

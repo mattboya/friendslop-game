@@ -20,8 +20,9 @@ namespace Festival.Core
         // The dose wheel draws these same slices, so what players see is what the spinner rolls.
         public static IReadOnlyList<int> DoseSlices=>DoseWeights;
         // TRIP-5: the substance spinner's five equal slices, as catalog effect ids (Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust,
-        // Couch Lock); Shot stays the debrief's. Substance sets perception and arrow travel, plus Tongue Stamps/Fun Guys sway
-        // and Couch Lock's slower walk. Visions, payouts and all other rules still read only the dose.
+        // Couch Lock); Shot stays the debrief's. Substance sets perception and arrow travel, plus Tongue Stamps/Fun Guys sway,
+        // Couch Lock's slower walk, Rolly Pollies' quicker one and Pony Dust's stall (Intoxication.cs). Visions, payouts
+        // and all other rules still read only the dose.
         public static readonly IReadOnlyList<string> Substances=new[]{"lsd","mushrooms","ecstasy","ketamine","weed"};
         // TRIP-7: where each level's DealSeed comes from, set by the host like HasLineOfSight and Navigate (FestivalSession.Host asks
         // a fresh Guid). Null, as in tests and previews, deals with 0, as before.

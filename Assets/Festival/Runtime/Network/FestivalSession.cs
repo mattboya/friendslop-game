@@ -117,6 +117,8 @@ namespace Festival.Network
         // POI-7: MoveIntent.SpinSides asks for the side spin (SpinPoi wins when both are held), and PlayerState.VisualPoiSpinSides
         // carries it in every view. The host's rules read the spin: a spinner's watchers grow suspicious 10% slower
         // (WookTrustFactor), and Sprint does nothing mid-spin (FestivalSimulation.MoveSpeed, which TryMove enforces).
+        // TRIP-17: MoveSpeed reads the simulation clock. A Pony Dust dose stalls the walk every 10 s (Intoxication.Stall, from the
+        // dose's StartSeconds, which only its owner's view carries), and a Rolly Pollies dose walks 8% faster.
         public const int ProtocolVersion=8;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

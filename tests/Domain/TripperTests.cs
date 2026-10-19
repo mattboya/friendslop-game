@@ -183,9 +183,11 @@ public static class TripperTests
             var played=FestivalSimulation.Substances.Select(id=>PlayedWith(level,id)).ToList();
             Check(played[0].Checked,"setup: level "+level+"'s tripper checks a vision");
             Check(played.Select(p=>p.Raw).Distinct().Count()==played.Count,"setup: level "+level+" really played with five different substances");
-            for(int i=1;i<played.Count-1;i++)
-                Check(played[i].Stripped==played[0].Stripped,"level "+level+": "+FestivalSimulation.Substances[i]+" plays out exactly as "+FestivalSimulation.Substances[0]+" does, but parts at "+Parting(played[i].Stripped,played[0].Stripped));
+            Check(played[1].Stripped==played[0].Stripped,"level "+level+": mushrooms plays out exactly as lsd does, but parts at "+Parting(played[1].Stripped,played[0].Stripped));
             Check(played[4].East<played[0].East,"level "+level+": Couch Lock's dosed players walk less far east than Tongue Stamps', got "+played[4].East+" / "+played[0].East);
+            // TRIP-17: Rolly Pollies walk further, and Pony Dust's stall never lets its dosed players walk further.
+            Check(played[2].East>played[0].East,"level "+level+": Rolly Pollies' dosed players walk further east than Tongue Stamps', got "+played[2].East+" / "+played[0].East);
+            Check(played[3].East<=played[0].East,"level "+level+": Pony Dust's dosed players walk no further east than Tongue Stamps', got "+played[3].East+" / "+played[0].East);
         }
     }
     // Where two texts first differ, with a little of each.

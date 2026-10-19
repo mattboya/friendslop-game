@@ -61,11 +61,13 @@ The two hooks the design is built around:
   Tongue Stamps, Fun Guys, Rolly Pollies, Pony Dust or Couch Lock. Each
   sets the dosed player's screen look and rhythm-arrow travel. Tongue Stamps
   and Fun Guys also add their shop versions' walking sway, from the dose's
-  own start time; Couch Lock adds a further 10% walking slowdown. These
-  walking twists require a positive dose, keep the 65% speed floor and
-  ±0.24 sway clamp, and never move a rooted dancer. Rolly Pollies and Pony
-  Dust have lane twists only. Visions, payouts and every other rule still
-  depend only on the dose. On Night 2 every dosed friend rolls their own.
+  own start time; Couch Lock adds a further 10% walking slowdown and Rolly
+  Pollies walk 8% faster. Pony Dust eases the walk to a near stop (10% of
+  its speed) for one second every 10 s of the dose, over 0.3 s each way.
+  These walking twists require a positive dose, keep the 65% speed floor
+  (the stall alone goes below it) and ±0.24 sway clamp, and never move a
+  rooted dancer. Visions, payouts and every other rule still depend only on
+  the dose. On Night 2 every dosed friend rolls their own.
 - **Presentation:** the three spinners are one slot machine. Its reels
   start together and stop left to right: who, then how many, then what.
   Then an animation shows the tripper taking the dose and reacting.
