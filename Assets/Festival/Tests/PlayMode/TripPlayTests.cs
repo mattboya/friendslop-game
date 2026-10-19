@@ -331,6 +331,89 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // TRIP-16 and TRIP-17: through the session's one camera writer, Pony Dust sways the dosed player's own view, and wobbles it while
+        // their walk stalls. The host's camera reaches the wobble at the stall's floor, where camera shake off holds it level and reduced
+        // motion keeps a quarter. A joined client's stall runs on the session's estimated clock between the host's snapshots. The sober
+        // player on the other screen stays level throughout.
+        [UnityTest]public IEnumerator PonyDustWobblesOnlyTheDosedPlayersOwnCameraThroughTheStall()
+        {
+            var world=new GameObject("Wobble world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Wobble host");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("Wobble friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=0;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");yield return StartLevel(host,friend.LocalPlayerId);
+                var me=sim.Player(host.LocalPlayerId);
+                foreach(var data in new[]{host.Profile.Data,friend.Profile.Data}){data.ReducedMotion=false;data.CameraShake=true;}
+                // How far into a dose its stall starts easing in.
+                double eases=Intoxication.StallPeriod-Intoxication.StallHold-2*Intoxication.StallEase;
+                void StallIn(ActiveEffect dose,double seconds)=>dose.StartSeconds=sim.State.SimulationSeconds+seconds-eases;
+                // The one tripper: doses of Pony Dust whose stall starts a second from now; the other is sober.
+                ActiveEffect Trip(PlayerState tripper,int doses)
+                {
+                    sim.State.TripperId=tripper.Id;foreach(var p in new[]{me,mate})p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                    var dose=new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=doses,Substance="ketamine",RemainingSeconds=600};
+                    StallIn(dose,1);tripper.Effects.Add(dose);return dose;
+                }
+                bool Dosed(FestivalSession s)=>s.LocalPlayer.Effects.Exists(e=>e.Id==FestivalSimulation.DoseEffect);
+                IEnumerator Until(System.Func<bool> done,string what){for(float until=Time.realtimeSinceStartup+5;!done()&&Time.realtimeSinceStartup<until;)yield return null;Assert.That(done(),"setup: "+what);}
+                float Roll(FestivalSession s)=>Mathf.DeltaAngle(0,s.ViewCamera.transform.eulerAngles.z);
+                // Real frames through one stall: every frame the tripper's camera rolls by the dose's sway plus the wobble of the stall
+                // on their session's estimated clock, and the other's stays level. The largest wobble at the floor, beyond the sway.
+                int ahead=0;
+                IEnumerator Through(FestivalSession tripper,FestivalSession sober,int doses,float[] floor,System.Action each=null)
+                {
+                    bool reached=false,passed=false;
+                    for(float until=Time.realtimeSinceStartup+6;Time.realtimeSinceStartup<until&&!passed;)
+                    {
+                        each?.Invoke();yield return null;
+                        var own=tripper.LocalPlayer;float t=Time.unscaledTime,stall=Intoxication.Stall(own,tripper.EstimatedSimulationSeconds);
+                        if(stall!=Intoxication.Stall(own,tripper.State.SimulationSeconds))ahead++;
+                        string who=tripper==host?"host":"friend",at=" at "+tripper.EstimatedSimulationSeconds.ToString("F3")+" s (snapshot "+tripper.State.SimulationSeconds.ToString("F3")+" s), stall "+stall.ToString("F3");
+                        Assert.That(Roll(tripper),Is.EqualTo(FestivalTrip.Look("ketamine",doses,false,t,stall).Roll).Within(1e-3f),"the tripping "+who+"'s camera sways and wobbles by their own stall"+at);
+                        Assert.That(Roll(sober),Is.EqualTo(0).Within(1e-4f),"the sober player's view stays level while the "+who+" trips"+at);
+                        if(stall>=1){reached=true;floor[0]=Mathf.Max(floor[0],Mathf.Abs(Roll(tripper)-FestivalTrip.Look("ketamine",doses,false,t).Roll));}
+                        passed=reached&&stall<=0;
+                    }
+                    Assert.That(passed,"setup: the walk stalls and lets go");
+                }
+
+                var hosted=Trip(me,4);
+                yield return Until(()=>Dosed(host)&&!Dosed(friend),"the host trips and the friend's screen is sober");
+                Assert.That(me.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms")||mate.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms"),Is.False,"setup: no shop-bought effect rolls a view");
+                StallIn(hosted,.3);var hostFloor=new float[1];
+                yield return Through(host,friend,4,hostFloor);
+                Assert.That(hostFloor[0],Is.GreaterThan(.8f),"at the stall's floor the host's camera wobbles by about a degree");
+                StallIn(hosted,-Intoxication.StallEase-.05);host.Profile.Data.CameraShake=false;yield return null;
+                Assert.That(Intoxication.Stall(host.LocalPlayer,host.EstimatedSimulationSeconds),Is.EqualTo(1),"setup: at the stall's floor");
+                Assert.That(Roll(host),Is.EqualTo(0).Within(1e-4f),"camera shake off: the floor's wobble leaves the view level");
+                host.Profile.Data.CameraShake=true;host.Profile.Data.ReducedMotion=true;yield return null;
+                Assert.That(Intoxication.Stall(host.LocalPlayer,host.EstimatedSimulationSeconds),Is.EqualTo(1),"setup: still at the stall's floor");
+                Assert.That(Roll(host),Is.EqualTo(FestivalTrip.Look("ketamine",4,false,Time.unscaledTime,1).Roll*FestivalTrip.ReducedMotionShare).Within(1e-3f),"reduced motion: a quarter of the sway and the wobble");
+                host.Profile.Data.ReducedMotion=false;
+
+                // Two doses on the joined friend: a wobble as big as the host's four, on the friend's own screen alone.
+                var joined=Trip(mate,2);
+                yield return Until(()=>Dosed(friend)&&!Dosed(host),"the friend trips and the host's screen is sober");
+                // A slow link: the host sends a snapshot only every quarter of a second, so the friend's estimated clock runs ahead between.
+                var sends=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);double held=0;
+                void Slow(){double next=(double)sends.GetValue(host);if(next!=held){held=next+.15;sends.SetValue(host,held);}}
+                StallIn(joined,.3);var friendFloor=new float[1];ahead=0;
+                yield return Through(friend,host,2,friendFloor,Slow);
+                Assert.That(ahead,Is.GreaterThan(0),"setup: the friend's estimated clock ran ahead of a snapshot through the stall");
+                Assert.That(friendFloor[0],Is.GreaterThan(.8f),"at the stall's floor the friend's camera wobbles by about a degree too");
+            }
+            finally{friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);}
+            yield return null;
+        }
+
         // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes on the dosed player's own live screen. Each dose rests the lids
         // further closed, with the black bars flush outside them, and the real per-frame trip blinks them shut and back to the same
         // opening; reduced motion moves them a quarter of the way. On a clock the test holds, a blink lasts one second. Opted in, the
@@ -539,7 +622,7 @@ namespace Festival.Tests
                 session.Profile.Data.ReducedMotion=false;yield return null;yield return null;
                 float open=1-FestivalTrip.EyeRest(4);
                 // On the test's clock: on into the .1 s the lids stay shut.
-                void Shut(string name){float now=Step(session,1);for(int frame=0;frame<200&&now>1e-5f;frame++)now=Step(session,1);Assert.That(now,Is.Zero,"setup: shut mid-blink before "+name);}
+                void Shut(string name){float now=Step(session,1);for(int frame=0;frame<200&&now>0;frame++)now=Step(session,1);Assert.That(now,Is.Zero,"setup: shut mid-blink before "+name);}
                 IEnumerator Gone(string name){yield return null;yield return null;Assert.That(Opening(host),Is.EqualTo(-1),name+": the eye goes at once");}
                 IEnumerator Back(string name,int drawn)
                 {
@@ -616,7 +699,7 @@ namespace Festival.Tests
                 Assert.That(Opening(friendObject),Is.EqualTo(rest).Within(1e-4f),"a joined friend's own dose rests their own eyes its way");
                 Assert.That(friendDraws,Is.EqualTo(sober+1),"with a wait their own screen draws");
 
-                float now=Step(friend,1);for(int frame=0;frame<4000&&now>1e-5f;frame++)now=Step(friend,1);
+                float now=Step(friend,1);for(int frame=0;frame<4000&&now>0;frame++)now=Step(friend,1);
                 Assert.That(now,Is.Zero,"setup: the friend's eyes shut mid-blink, on the test's clock");
                 int drawn=friendDraws;friend.Leave();yield return null;yield return null;
                 Assert.That(Opening(friendObject),Is.EqualTo(-1),"the friend leaves mid-blink: no shut eye on their title screen");

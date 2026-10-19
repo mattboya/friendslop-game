@@ -1144,8 +1144,9 @@ namespace Festival.Network
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;bool shake=Profile.Data.CameraShake;
             if(!Profile.Data.ReducedMotion&&shake)foreach(var effect in player.Effects)roll+=FestivalTrip.Sway(effect.Id,(float)State.SimulationSeconds);
-            // The dose's own roll runs on the HUD and overlay's unscaled clock; a shop effect's stays on the simulation clock.
-            var trip=FestivalTrip.For(State,LocalPlayerId,Profile.Data.ReducedMotion,Time.unscaledTime);
+            // The dose's own roll runs on the HUD and overlay's unscaled clock; a shop effect's stays on the simulation clock. Pony
+            // Dust's stall follows the estimated clock, as a client's snapshots step only ten times a second.
+            var trip=FestivalTrip.For(State,LocalPlayerId,Profile.Data.ReducedMotion,Time.unscaledTime,simulationSeconds:EstimatedSimulationSeconds);
             if(shake)roll+=trip.Roll;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(DevelopmentDiagnostics.Visible)TraceTripLook(player,trip);

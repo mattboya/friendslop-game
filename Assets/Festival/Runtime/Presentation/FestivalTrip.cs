@@ -52,8 +52,9 @@ namespace Festival.Presentation
         public const float NightTint=.03f;
         public const int MaxTrails=48,MaxGlows=12;
 
-        /// <summary>A dose of substance (a catalog effect id) at time t. An id off the wheel (or none) looks plain.</summary>
-        public static Perception Look(string substance,int dose,bool reducedMotion,float time)
+        /// <summary>A dose of substance (a catalog effect id) at time t. An id off the wheel (or none) looks plain. stall is how deep
+        /// the walk is in Pony Dust's stall (Intoxication.Stall, 0-1), which wobbles a Pony Dust view.</summary>
+        public static Perception Look(string substance,int dose,bool reducedMotion,float time,float stall=0)
         {
             var look=new Perception();float s=(float)EffectPresentation.Strength(dose),motion=reducedMotion?ReducedMotionShare:1;
             if(s<=0)return look;
@@ -72,7 +73,9 @@ namespace Festival.Presentation
                 case "ecstasy": // Rolly Pollies: warm, bright, saturated colours, and a soft glow around other people.
                     look.Tint=new Color(1,.6f,.35f,.05f*s);look.Saturation=30*s;look.Brightness=.15f*s;look.Glow=s;break;
                 case "ketamine": // Pony Dust: tunnel vision through sleepy eyes, a camera that lags behind the mouse, and muffled sound.
-                    look.Tint=new Color(.55f,.65f,.8f,.03f*s);look.Vignette=.75f*s;look.Eye=EyeRest(dose);look.Lag=.25f*s*motion;look.Muffle=s;break;
+                    look.Tint=new Color(.55f,.65f,.8f,.03f*s);look.Vignette=.75f*s;look.Eye=EyeRest(dose);look.Lag=.25f*s*motion;look.Muffle=s;
+                    // TRIP-16: a slow sway, by the dose. TRIP-17: while the walk stalls, a faster wobble, alike at every dose.
+                    look.Roll=(PonySway(time)*s+StallWobble(time)*stall)*motion;break;
                 case "weed": // Couch Lock: a soft haze with a green cast, through sleepy eyes.
                     look.Tint=new Color(.35f,.8f,.35f,.05f*s);look.Haze=.12f*s;look.Eye=EyeRest(dose);break;
             }
@@ -90,6 +93,12 @@ namespace Festival.Presentation
         /// <summary>The view's roll in degrees at time t that a shop-bought Tongue Stamp (a wobble) or Fun Guy (a sway) gives at full
         /// strength; a dose of either rolls by this times its strength. Anything else rolls nothing.</summary>
         public static float Sway(string id,float time)=>id=="lsd"?Mathf.Sin(time*2.1f)*2.2f:id=="mushrooms"?Mathf.Sin(time*1.3f+1.1f)*1.5f:0;
+
+        /// <summary>TRIP-16: Pony Dust's roll in degrees at time t at full strength: two slow waves out of step, so it sways unevenly,
+        /// never past 1.5 degrees. A starting point for the captures.</summary>
+        public static float PonySway(float time)=>.75f*(Mathf.Sin(time*.7f)+Mathf.Sin(time*1.1f+1.3f));
+        // TRIP-17: the roll in degrees at the floor of Pony Dust's stall, fast enough to wobble through its second. A starting point.
+        private static float StallWobble(float time)=>Mathf.Sin(time*4.5f)*1f;
 
         // At full strength: the vignette's floor and its pulse on top, the field-of-view kick in degrees, the colour drained from the
         // grade, the haze, the low-pass's floor (it pulses up to 1) and how far the tremolo dips the volume. GAS-5 set the vignette,
@@ -124,8 +133,9 @@ namespace Festival.Presentation
         /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
         /// Giggle Gas shows by the summed strength of the player's hits (GAS-4: up to two); it lives only at camp (the host clears it
         /// as the crew leaves), so never with a dose. It pulses on beat, the camp music's phase (FestivalCampAudio.Beat); with no music
-        /// (null) it keeps a 120 BPM clock, so it never stops.</summary>
-        public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time,float? beat=null)
+        /// (null) it keeps a 120 BPM clock, so it never stops. Pony Dust's stall runs on simulationSeconds, the state's own clock if
+        /// none is given.</summary>
+        public static Perception For(RoundState state,string localPlayerId,bool reducedMotion,float time,float? beat=null,double? simulationSeconds=null)
         {
             if(state==null)return default;
             foreach(var p in state.Players)
@@ -136,7 +146,7 @@ namespace Festival.Presentation
                 {
                     if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(p,state.SimulationSeconds),reducedMotion,beat??Mathf.Repeat(time*2,1));
                     if(e.Id!=FestivalSimulation.DoseEffect||e.Intensity<1||!FestivalWorld.ShowsFestival(state.Phase))continue;
-                    var look=Look(e.Substance,e.Intensity,reducedMotion,time);
+                    var look=Look(e.Substance,e.Intensity,reducedMotion,time,Intoxication.Stall(p,simulationSeconds??state.SimulationSeconds));
                     if(FestivalNightLighting.IsNight(state)){look.Tint.a=Mathf.Min(look.Tint.a,NightTint);look.Haze=Mathf.Min(look.Haze,NightTint);}
                     return look;
                 }

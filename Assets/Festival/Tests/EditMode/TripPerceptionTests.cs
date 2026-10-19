@@ -82,7 +82,7 @@ namespace Festival.Tests
                 // TRIP-16: Pony Dust and Couch Lock look out through eyes resting as far closed as the dose; the rest keep them open.
                 foreach(var id in new[]{"ketamine","weed"})Assert.That(Of(id).Eye,Is.EqualTo(FestivalTrip.EyeRest(dose)).And.GreaterThan(0),Name(id)+" rests the eyes the dose's way"+at);
                 foreach(var id in new[]{"lsd","mushrooms","ecstasy"})Assert.That(Of(id).Eye,Is.Zero,Name(id)+" keeps the eyes open"+at);
-                foreach(var id in new[]{"ecstasy","ketamine","weed"})Assert.That(Of(id).Roll,Is.Zero,Name(id)+" never tilts the view"+at);
+                foreach(var id in new[]{"ecstasy","weed"})Assert.That(Of(id).Roll,Is.Zero,Name(id)+" never tilts the view"+at);
             }
             foreach(float strength in new[]{.5f,1,2})Assert.That(FestivalTrip.Gas(strength,false,0).Eye,Is.Zero,"Giggle Gas keeps its round vignette, with no eye, at "+strength);
         }
@@ -131,6 +131,56 @@ namespace Festival.Tests
                 Assert.That(calm.Breathe,Is.EqualTo(full.Breathe*FestivalTrip.ReducedMotionShare).Within(1e-5f),at+": the breathing is cut to a quarter");
                 Assert.That(calm.Lattice,Is.EqualTo(full.Lattice),at+": the lattice stays");Assert.That(calm.Cells,Is.EqualTo(full.Cells),at+": the cells stay");
             }
+        }
+
+        // TRIP-16: over a minute, Pony Dust sways the view to and fro, smooth and slow, further with each dose and never past 1.5 degrees.
+        // TRIP-17: while the walk stalls the view also wobbles, as far at every dose, eased in and out with the stall and gone once it
+        // ends. Reduced motion keeps a quarter of both.
+        [Test]public void PonyDustSwaysTheViewAndWobblesItThroughTheStall()
+        {
+            const float Tick=.01f;float before=0;
+            for(int dose=1;dose<=4;dose++)
+            {
+                var state=Round("Playing",dose,"ketamine");var me=state.Players[0];float s=(float)EffectPresentation.Strength(dose);string at=" at dose "+dose;
+                float peak=0,least=0,most=0,floor=0,last=0;int stalled=0;
+                for(int i=0;i<6000;i++)
+                {
+                    float t=i*Tick;state.SimulationSeconds=t;string when=", t="+t+at;
+                    float stall=Intoxication.Stall(me,t),roll=FestivalTrip.For(state,"me",false,t).Roll,sway=FestivalTrip.Look("ketamine",dose,false,t).Roll;
+                    Assert.That(FestivalTrip.For(state,"me",true,t).Roll,Is.EqualTo(roll*FestivalTrip.ReducedMotionShare).Within(1e-5f),"a quarter under reduced motion, through the stall too"+when);
+                    if(i>0)Assert.That(Mathf.Abs(roll-last),Is.LessThan(.1f),"smooth: no jump from one moment to the next"+when);
+                    last=roll;
+                    if(stall<=0)
+                    {
+                        Assert.That(roll,Is.EqualTo(sway),"walking freely, the view only sways"+when);
+                        Assert.That(Mathf.Abs(roll),Is.LessThanOrEqualTo(1.5f*s+1e-5f),"by at most 1.5 degrees at full strength"+when);
+                        peak=Mathf.Max(peak,Mathf.Abs(roll));least=Mathf.Min(least,roll);most=Mathf.Max(most,roll);
+                    }
+                    else
+                    {
+                        stalled++;
+                        Assert.That(Mathf.Abs(roll-sway),Is.LessThanOrEqualTo(stall+1e-5f),"the stall's wobble is a degree at most, as deep as the stall"+when);
+                        if(stall>=1)floor=Mathf.Max(floor,Mathf.Abs(roll-sway));
+                    }
+                }
+                Assert.That(stalled,Is.GreaterThan(0),"setup: the walk stalls"+at);
+                Assert.That(least<0&&most>0,"Pony Dust sways the view one way and back"+at);
+                Assert.That(peak,Is.GreaterThan(before),"further with each dose"+at);before=peak;
+                Assert.That(floor,Is.GreaterThan(.9f),"at the stall's floor the view wobbles by about a degree, whatever the dose"+at);
+            }
+            Assert.That(before,Is.GreaterThan(1.4f),"four doses sway the view nearly the whole 1.5 degrees");
+
+            // A client's clock runs on past its last snapshot (FestivalSession.EstimatedSimulationSeconds), and the stall follows it.
+            float hold=(float)(Intoxication.StallPeriod-Intoxication.StallEase-Intoxication.StallHold/2);
+            var behind=Round("Playing",4,"ketamine");
+            Assert.That(Intoxication.Stall(behind.Players[0],hold),Is.EqualTo(1),"setup: the stall's floor");
+            Assert.That(FestivalTrip.For(behind,"me",false,hold,simulationSeconds:hold).Roll,Is.EqualTo(FestivalTrip.Look("ketamine",4,false,hold,1).Roll)
+                .And.Not.EqualTo(FestivalTrip.For(behind,"me",false,hold).Roll),"the stall follows the clock it is given, not the snapshot's");
+            var sober=Round("Playing",0);sober.SimulationSeconds=hold;
+            Assert.That(Intoxication.Stall(sober.Players[1],hold),Is.EqualTo(1),"setup: the friend on Pony Dust stalls");
+            Assert.That(FestivalTrip.For(sober,"me",false,hold).Roll,Is.Zero,"a sober player's view stays level meanwhile");
+            var couch=Round("Playing",4,"weed");couch.SimulationSeconds=hold;
+            Assert.That(FestivalTrip.For(couch,"me",false,hold).Roll,Is.Zero,"Couch Lock neither sways nor wobbles");
         }
 
         // TRIP-11: each part of the surface pattern at its peak over a whole cycle (two minutes, not one moment), per substance and dose.
