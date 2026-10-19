@@ -93,7 +93,7 @@ namespace Festival.Presentation
         public static string Grab(RoundState s,PlayerState p)
         {
             bool night=Festivals.For(s).Night,needsStock=FestivalGuidance.NeedsStock(s,p);
-            string line=(night?"No selling tonight, hon: rescue your missing friend and bring them home. "
+            string line=(night?"No quota tonight, hon: rescue your missing friend and bring them home. "
                 :needsStock?"Start here, sugar. ":"You're stocked up, sugar. ")
                 +FestivalHudText.CampStockGuidance(s,p).Replace("One starter each","I sell one starter each")
                 +(night||!needsStock?Extras(s):"");
@@ -129,7 +129,7 @@ namespace Festival.Presentation
             var level=Festivals.For(s);bool finale=s.LevelIndex==Festivals.LevelCount-1;
             string job=!level.Night?"the crew has to sell "+FestivalHudText.Money(s,p,FestivalSimulation.DayQuota(s))+" before sundown."
                 :finale?"the big one. Rescue whoever's missing, then get every one of you home, carrying anyone who falls."
-                :"no selling, just the tripper's clue trail to whoever's gone missing, and getting them back to camp.";
+                :"no quota, just the tripper's clue trail to whoever's gone missing, and getting them back to camp.";
             string twists=s.FestivalIndex==Festivals.PoloFestival
                 ?"Influencers film the crowd, and being in their shot gets folks suspicious. Buyers past the VIP ropes pay double, and the Ferris wheel shows you every cop on the field."
                 :"Your money comes out as odd stuff, dust storms cut everyone's sight to "+Festivals.DustStormSightRange+" m, and the art cars take riders."+(finale?" "+Effigy:"");

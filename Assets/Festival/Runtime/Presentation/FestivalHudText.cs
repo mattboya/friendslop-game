@@ -77,7 +77,7 @@ namespace Festival.Presentation
         public static string ObjectiveDetail(RoundState s,PlayerState p,bool developmentSelection=false,string chat="F",string interact="E")
         {
             if(s.Phase=="Results")return OutcomeDetail(s,p);
-            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id,developmentSelection,chat),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue, with no selling. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
+            if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id,developmentSelection,chat),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
             if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return FestivalGuidance.Hint(s,p);
             // A paused game refuses every next step, and E is the game's own key then.
             return FestivalSimulation.DayQuotaMet(s)||s.Phase==FestivalSimulation.MinigamePhase?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p,interact);

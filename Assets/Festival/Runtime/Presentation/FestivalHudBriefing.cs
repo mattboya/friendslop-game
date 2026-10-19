@@ -71,7 +71,7 @@ namespace Festival.Presentation
                     +" dragged; a spirit walks to the medical tent. In an Ember Playa dust storm nobody sees past "+Festivals.DustStormSightRange+" m."
                     +" Palm Mirage's influencers film the crowd: while your card says ON CAMERA, festivalgoers near you grow suspicious."),
                 ("CAMP","The shelves sell gear. "+CampStockGuidance(state,viewer).Replace("One starter each","Buy one starter each")+" Pick it up ("+act+"), carry it to the seller and pay. At the campfire, vote the silly"
-                    +" awards; the worst take a shot. Ready up at the lit trailhead ("+act+")."),
+                    +" awards; the worst take a shot. Ask Marigold at the supplies table ("+chat+") for tips. Ready up at the lit trailhead ("+act+")."),
                 ("KEYS",string.Join("\n",keys)),
             };
         }

@@ -232,6 +232,31 @@ namespace Festival.Tests
             }
         }
 
+        // Nights still deal buyers (a double buyer too) and a sale there pays, so nothing at camp says there's no selling;
+        // a night just has no quota. Marigold's two night answers and the camp card, before both nights.
+        [Test] public void BeforeANightNothingSaysThereIsNoSelling()
+        {
+            foreach(int level in new[]{1,3})
+            {
+                var s=Camp(Festivals.PlayaFestival,level,out var you);
+                foreach(var (what,line) in new[]{("Grab",CampSellerTalk.Grab(s,you)),("Today",CampSellerTalk.Today(s,you)),("the camp card",FestivalHudText.ObjectiveDetail(s,you))})
+                    Assert.That(line,Does.Not.Contain("no selling").IgnoreCase,what+" before "+Festivals.Level(Festivals.PlayaFestival,level,0).Name);
+            }
+        }
+
+        // A game that ends mid-talk (LEAVE SESSION, a drop) comes back to the title, where the HUD ends her talk and never
+        // turns her again; ShowCamp, the title's camp reset, puts her back facing the camp and idling.
+        [Test] public void ShowCampTurnsHerBackAndIdlesAfterAGameEndsMidTalk()
+        {
+            worldObject=new GameObject("Camp seller world");var world=worldObject.AddComponent<FestivalWorld>();world.Build();
+            var seller=world.CampSeller;var s=Camp(Festivals.PoloFestival,0,out var you);you.X=CampSellerTalk.X+2;you.Z=CampSellerTalk.Z;
+            var talk=new CampSellerTalk(4);talk.Begin(Window(),s,you,0);talk.Face(seller,you,1);
+            Assert.That(seller.Pose,Is.EqualTo("Conversation"),"setup: mid-talk she is in the Talk pose");
+            talk.End();world.ShowCamp();
+            Assert.That(Quaternion.Angle(seller.transform.localRotation,Quaternion.Euler(0,CampSellerTalk.RestYaw,0)),Is.LessThan(.1f),"on the title she faces the camp");
+            Assert.That(seller.Pose,Is.EqualTo("Idle"),"and idles");
+        }
+
         [Test] public void TodayNamesTheFestivalDayOrNightTheQuotaAndTheTwists()
         {
             var s=Camp(Festivals.PoloFestival,0,out var you);string today=CampSellerTalk.Today(s,you);

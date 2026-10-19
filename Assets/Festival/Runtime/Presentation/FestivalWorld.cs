@@ -740,7 +740,12 @@ namespace Festival.Presentation
         }
         /// <summary>MENU-1: the campsite as the world opened, for the title once a game ends: the camp up in its own daylight, whatever
         /// level, night, dose or freeze the game left showing. Only a connected session drives the world.</summary>
-        public void ShowCamp(){SetPhase("Shopping");lightingState=campLighting;lightingPlayer="";if(lighting!=null)lighting.Apply(campLighting,"",userBrightness);}
+        public void ShowCamp()
+        {
+            SetPhase("Shopping");lightingState=campLighting;lightingPlayer="";if(lighting!=null)lighting.Apply(campLighting,"",userBrightness);
+            // Only the HUD's talk turns her, and the title never runs it: a game that ends mid-talk would leave her facing nobody.
+            if(CampSeller!=null){CampSeller.Pose="Idle";CampSeller.transform.localRotation=Quaternion.Euler(0,CampSellerTalk.RestYaw,0);}
+        }
         // MINI-1: a minigame holds the festival on screen as a freeze-frame.
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase==FestivalSimulation.MinigamePhase||phase=="Results";
         // LIGHT-1: night levels and the local player's dose, straight from the round state. LIGHT-2: the day sky's clouds, kept
