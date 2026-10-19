@@ -52,6 +52,8 @@ namespace Festival.Presentation
         private string visibleInterior="";
         private string visibleInteriorKind="";
         private string displayedRound="";
+        // Each offer's tags depend only on this key (the price reads festival and viewer), so an equal key needs no rewrite.
+        private readonly List<(int festival,int ordinal,int camp,int market)> shownTags=new List<(int,int,int,int)>();
         public bool IsReady { get; private set; }
         public bool NavigationReady => surface != null && surface.navMeshData != null;
         public bool CampNavigationReady => campSurface != null && campSurface.navMeshData != null;
@@ -655,7 +657,7 @@ namespace Festival.Presentation
             if(displayedRound!=state.RoundId)
             {
                 displayedRound=state.RoundId;
-                ClearShop(campShopRoot,campProps,campTags);ClearShop(marketShopRoot,marketProps,marketTags);
+                ClearShop(campShopRoot,campProps,campTags);ClearShop(marketShopRoot,marketProps,marketTags);shownTags.Clear();
                 for(int i=0;i<state.VendorOffers.Count;i++)
                 {
                     BuildShopItem(campShopRoot,campProps,campTags,state.VendorOffers[i],i,true);
@@ -666,8 +668,13 @@ namespace Festival.Presentation
             }
             for(int i=0;i<state.VendorOffers.Count&&i<campProps.Count;i++)
             {
-                var item=Catalog.FindItem(state.VendorOffers[i]);var stock=state.ShopStock.Find(s=>s.ItemId==item.Id);
+                var item=Catalog.FindItem(state.VendorOffers[i]);ShopStockState stock=null;
+                foreach(var s in state.ShopStock)if(s.ItemId==item.Id){stock=s;break;}
                 int campCount=stock?.CampAvailable??0,marketCount=stock?.MarketAvailable??0;
+                var shown=(state.FestivalIndex,viewer.Ordinal,campCount,marketCount);
+                if(i<shownTags.Count&&shownTags[i]==shown)continue;
+                while(shownTags.Count<=i)shownTags.Add((-1,-1,-1,-1));
+                shownTags[i]=shown;
                 ShowCopies(campProps[i],campCount);
                 ShowCopies(marketProps[i],marketCount);
                 string price=FestivalHudText.Money(state,viewer,item.Price).ToUpperInvariant();
