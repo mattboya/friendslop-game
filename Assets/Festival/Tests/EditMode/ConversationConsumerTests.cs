@@ -128,11 +128,11 @@ namespace Festival.Tests
 
         [Test] public void AuthenticatedHistoryRejectsForeignDelayedAndUnsafePacketsAndRetriesSaving()
         {
-            string previous=LocalProfile.Folder,owned=Path.Combine(Path.GetTempPath(),"impl-U14-history-"+Guid.NewGuid().ToString("N"));GameObject root=null;
+            string previous=LocalProfile.Folder,owned=Path.Combine(Path.GetTempPath(),"impl-U14-history-"+Guid.NewGuid().ToString("N"));GameObject root=null;FestivalSession session=null;
             try
             {
                 Directory.CreateDirectory(owned);LocalProfile.Folder=Path.Combine(owned,"blocked");File.WriteAllText(LocalProfile.Folder,"owned blocker");
-                root=new GameObject("impl-U14 history consumer");var session=root.AddComponent<FestivalSession>();Call(session,"InitializePreferences",(object)new[]{"--profile","default"});
+                root=new GameObject("impl-U14 history consumer");session=root.AddComponent<FestivalSession>();Call(session,"InitializePreferences",(object)new[]{"--profile","default"});
                 typeof(FestivalSession).GetField("historyEpoch",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,"epoch");
                 Type packetType=typeof(FestivalSession).Assembly.GetType("Festival.Network.DialogueHistoryPacket");
                 object Packet(long revision,params string[] keys)=>JsonUtility.FromJson(JsonUtility.ToJson(new History{Revision=revision,Seen=keys.ToList()}),packetType);
@@ -152,7 +152,12 @@ namespace Festival.Tests
                 Assert.That(typeof(FestivalSession).GetMethod("MergeHistorySeed",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{player,new List<string>{"seed_key","seed_key"}}),Is.True);
                 Assert.That(player.Dialogue.Seen,Is.EqualTo(new[]{"seed_key","live_key"}),"late seed merges behind newer live history");
             }
-            finally{if(root!=null)UnityEngine.Object.DestroyImmediate(root);LocalProfile.Folder=previous;if(Directory.Exists(owned))Directory.Delete(owned,true);}
+            finally
+            {
+                // EditMode never runs OnDestroy, so give back the quality level and input that the preferences took.
+                if(session!=null){session.Settings?.Dispose();session.Controls?.Dispose();}
+                if(root!=null)UnityEngine.Object.DestroyImmediate(root);LocalProfile.Folder=previous;if(Directory.Exists(owned))Directory.Delete(owned,true);
+            }
         }
         [Serializable] sealed class History { public string Epoch="epoch"; public long Revision; public List<string> Seen=new List<string>(); }
 

@@ -16,13 +16,14 @@ namespace Festival.Tests
         const BindingFlags Private=BindingFlags.Instance|BindingFlags.NonPublic;
         string previousFolder,previousScope,caller,callerKey;
         byte[] callerBytes;
+        int qualityLevel;
         readonly List<GameObject> holders=new List<GameObject>();
         const string Profile="smoke_solo",Bindings="caller-owned malformed controls";
         string CallerPath=>Path.Combine(caller,Profile+".json");
 
         [SetUp]public void SeedOnlyDisposableCallerData()
         {
-            previousFolder=LocalProfile.Folder;previousScope=FestivalInput.PreferencesScope;
+            qualityLevel=QualitySettings.GetQualityLevel();previousFolder=LocalProfile.Folder;previousScope=FestivalInput.PreferencesScope;
             caller=Path.Combine(previousFolder,"jfix-CP01-caller-"+Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(caller);LocalProfile.Folder=caller;FestivalInput.PreferencesScope=caller;
             var seed=new LocalProfile(Profile);seed.Data.PlayerName="Caller sentinel";seed.Data.SeenTips.Add("caller-only-tip");
@@ -32,6 +33,8 @@ namespace Festival.Tests
         [TearDown]public void ReleaseOnlyThisTestsData()
         {
             foreach(var holder in holders)if(holder!=null)Destroy(holder.GetComponent<FestivalSession>());holders.Clear();
+            // Sessions torn down oldest-first leave the quality level the newer one found, and the editor saves it into ProjectSettings.
+            QualitySettings.SetQualityLevel(qualityLevel,false);
             LocalProfile.Folder=previousFolder;FestivalInput.PreferencesScope=previousScope;
             PlayerPrefs.DeleteKey(callerKey);PlayerPrefs.Save();
             if(Directory.Exists(caller))Directory.Delete(caller,true);
