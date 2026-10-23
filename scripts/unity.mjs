@@ -35,13 +35,15 @@ if(!editor)
   process.exit(2);
 }
 
-// A Unity run must leave the stock TextMesh Pro files as committed, or the clean-tree checks waves rely on fail.
+// A Unity run must leave the stock TextMesh Pro files as committed, or the clean-tree checks waves rely on fail. An EditMode
+// run must also leave the editor's saved quality and graphics settings as committed; PlayMode is not held to that yet.
 // A plain copy inside another checkout (a builder snapshot) has no own .git to compare against, so it is skipped.
 function changedStockFiles()
 {
   const top=spawnSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'});
   if(top.status!==0||top.stdout.trim()!==realpathSync(root))return '';
-  const diff=spawnSync('git',['-C',root,'diff','--name-only','HEAD','--','Assets/TextMesh Pro'],{encoding:'utf8'});
+  const stock=['Assets/TextMesh Pro',...(process.argv[2]==='test-edit'?['ProjectSettings/QualitySettings.asset','ProjectSettings/GraphicsSettings.asset']:[])];
+  const diff=spawnSync('git',['-C',root,'diff','--name-only','HEAD','--',...stock],{encoding:'utf8'});
   return diff.status===0?diff.stdout.trim():'';
 }
 
@@ -70,7 +72,7 @@ function run(label,args,expectedMarker='')
   const changed=changedStockFiles();
   if(changed)
   {
-    console.error(`Unity changed committed TextMesh Pro files:\n${changed}`);
+    console.error(`Unity changed committed stock files:\n${changed}`);
     process.exit(3);
   }
 }
