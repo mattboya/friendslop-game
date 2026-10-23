@@ -788,23 +788,27 @@ namespace Festival.Tests
             return Opening(session.gameObject);
         }
         // TRIP-11: pixels of session's view (320x180) that change by more than 6 of 255 when its trip's surface pattern alone is switched
-        // off between two renders in one frame; the trip's next LateUpdate puts it back.
+        // off between two renders in one frame; the trip's next LateUpdate puts it back. Both renders hide every renderer the pattern
+        // never draws on, people above all, so walkers cannot cover or shadow the patterned scenery from one count to the next.
         private static int Patterned(FestivalSession session)
         {
             const int width=320,height=180;
             var eye=session.ViewCamera;
             var surfaces=(FestivalTripSurfaces)typeof(FestivalTrip).GetField("surfaces",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session.GetComponent<FestivalTrip>());
             var target=RenderTexture.GetTemporary(width,height,24);var picture=new Texture2D(width,height,TextureFormat.RGBA32,false);var was=RenderTexture.active;
+            var hidden=new List<Renderer>();
             Color32[] Shot(){eye.Render();RenderTexture.active=target;picture.ReadPixels(new Rect(0,0,width,height),0,0);RenderTexture.active=was;return picture.GetPixels32();}
             try
             {
+                foreach(var renderer in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                    if(renderer.enabled&&(renderer.renderingLayerMask&FestivalTripSurfaces.SurfaceLayer)==0){renderer.enabled=false;hidden.Add(renderer);}
                 eye.targetTexture=target;
                 var on=Shot();surfaces.Show(null,default);var off=Shot();
                 int changed=0;
                 for(int i=0;i<on.Length;i++)if(Mathf.Max(Mathf.Abs(on[i].r-off[i].r),Mathf.Max(Mathf.Abs(on[i].g-off[i].g),Mathf.Abs(on[i].b-off[i].b)))>6)changed++;
                 return changed;
             }
-            finally{eye.targetTexture=null;RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);Object.Destroy(picture);}
+            finally{foreach(var renderer in hidden)if(renderer!=null)renderer.enabled=true;eye.targetTexture=null;RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);Object.Destroy(picture);}
         }
     }
 }
