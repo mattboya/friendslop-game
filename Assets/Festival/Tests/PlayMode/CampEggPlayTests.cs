@@ -488,7 +488,8 @@ namespace Festival.Tests
         }
 
         // Every body shape the game draws sits on the headliner's low camp chair: the seat of its trousers on the canvas, feet on the
-        // grass, nothing through the seat. Measured on the real chair prop and the real skinned bodies.
+        // grass, nothing through the seat. Each wears the backpack, the deepest accessory: nothing shows through the chair's back or the
+        // board above it, and the backpack is back on when they stand. Measured on the real chair prop and the real skinned bodies.
         [UnityTest] public IEnumerator EveryBodyShapeSitsOnTheHeadlinersChairWithItsFeetOnTheGrass()
         {
             var world=new GameObject("impl:U66 chair world").AddComponent<FestivalWorld>();yield return null;
@@ -497,21 +498,24 @@ namespace Festival.Tests
             {
                 var chair=world.CampEggs.Prop("chair");var seat=chair.Find("Chair seat").GetComponent<Renderer>().bounds;
                 Assert.That(seat.size.y,Is.LessThan(.06f),"setup: the seat is a thin canvas");
-                for(int i=0;i<200&&shapes.Count<6;i++)
+                for(int i=0;i<2000&&shapes.Count<6;i++)
                 {
-                    var look=FestivalAppearance.For("player_"+i);if(!shapes.Add(look.Gender+" "+look.Shape))continue;
+                    var look=FestivalAppearance.For("player_"+i);if(look.Accessory!=0||!shapes.Add(look.Gender+" "+look.Shape))continue;
                     var body=FestivalCharacter.Create(bodies.transform,"player_"+i,Color.white);
                     body.transform.position=new Vector3(seated.Count*3,0,40);body.transform.rotation=Quaternion.Euler(0,180,0);
                     body.transform.localScale=Vector3.Scale(Vector3.one*.82f,body.ShapeScale);body.Pose=FestivalSimulation.CampChairPose;seated.Add(body);
                 }
-                Assert.That(seated.Count,Is.EqualTo(6),"setup: every body shape");
+                Assert.That(seated.Count,Is.EqualTo(6),"setup: every body shape, in a backpack");
                 yield return new WaitForSeconds(1.5f);
                 var mesh=new Mesh();var failures=new List<string>();
                 // The seat's footprint about the chair's point, the way the host turns its headliner (yaw 180, facing -z).
                 var footprint=new Rect(seat.min.x-chair.position.x,seat.min.z-chair.position.z,seat.size.x,seat.size.z);
+                // The back and the RESERVED board over it, about the chair's point: a body reaches through them past their front face.
+                var backs=new List<Bounds>();
+                foreach(var name in new[]{"Chair back","Reserved board"}){var b=chair.Find(name).GetComponent<Renderer>().bounds;b.center-=chair.position;backs.Add(b);}
                 foreach(var body in seated)
                 {
-                    var at=body.transform.position;float lowest=float.MaxValue,onSeat=float.MaxValue;
+                    var at=body.transform.position;float lowest=float.MaxValue,onSeat=float.MaxValue,through=float.MinValue;string reaching="";
                     foreach(var skin in body.GetComponentsInChildren<SkinnedMeshRenderer>())
                     {
                         if(!skin.enabled)continue;skin.BakeMesh(mesh,true);var toWorld=skin.transform.localToWorldMatrix;
@@ -520,14 +524,21 @@ namespace Festival.Tests
                             var p=toWorld.MultiplyPoint3x4(vertex)-at;lowest=Mathf.Min(lowest,p.y);
                             // Under the hips, behind the knees: the seat of the trousers.
                             if(Mathf.Abs(p.x)<.18f&&p.z>-.05f&&footprint.Contains(new Vector2(p.x,p.z)))onSeat=Mathf.Min(onSeat,p.y);
+                            foreach(var back in backs)
+                                if(Mathf.Abs(p.x-back.center.x)<back.extents.x&&Mathf.Abs(p.y-back.center.y)<back.extents.y&&p.z-back.min.z>through){through=p.z-back.min.z;reaching=skin.name;}
                         }
                     }
                     string who=body.name+" ("+body.Appearance.Gender+" "+body.Appearance.Shape+")";
                     if(Mathf.Abs(onSeat-(seat.max.y-chair.position.y))>.03f)failures.Add(who+" sits at "+onSeat.ToString("0.000")+" m, the seat is at "+seat.max.y.ToString("0.000")+" m");
                     if(lowest<-.02f||lowest>.03f)failures.Add(who+"'s feet are at "+lowest.ToString("0.000")+" m, not on the grass");
+                    if(through>0)failures.Add(who+"'s "+reaching+" reaches "+through.ToString("0.000")+" m into the chair's back");
                 }
                 Object.Destroy(mesh);
                 Assert.That(failures,Is.Empty,"Seated on the headliner's chair:\n"+string.Join("\n",failures));
+                foreach(var body in seated)body.Pose="Idle";
+                yield return null;
+                foreach(var body in seated)
+                    Assert.That(Array.Find(body.GetComponentsInChildren<SkinnedMeshRenderer>(true),skin=>skin.name=="Accessory_0").enabled,Is.True,body.name+" stands up in their backpack");
             }
             finally{Object.Destroy(bodies);Object.Destroy(world.gameObject);}
             yield return null;
