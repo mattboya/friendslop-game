@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
@@ -85,6 +86,14 @@ namespace Festival.Tests
                 double held=owner.EstimatedWorldSeconds,song=drums.WorldSeconds;yield return Wait(.8);
                 Assert.That(owner.EstimatedWorldSeconds,Is.EqualTo(held).Within(1e-9),"the world clock stands still");
                 Assert.That(drums.WorldSeconds-song,Is.InRange(.6,1.0),"while the song runs on");
+                // Sampled where the transport vouches for the song: the frame of its own drift check, or as that check's re-cue sounds.
+                // Between checks a long frame on a loaded machine costs the game's clock time while the song plays on.
+                var transport=typeof(FestivalDrumAudio).GetField("transport",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(drums);
+                object Field(string name)=>transport.GetType().GetField(name,BindingFlags.NonPublic|BindingFlags.Instance).GetValue(transport);
+                double check=(double)Field("nextCheck");
+                for(double deadline=Time.realtimeSinceStartupAsDouble+2;(double)Field("nextCheck")==check&&Time.realtimeSinceStartupAsDouble<deadline;)yield return null;
+                Assert.That((double)Field("nextCheck"),Is.Not.EqualTo(check),"setup: the transport checks the song's drift");
+                for(double deadline=Time.realtimeSinceStartupAsDouble+2;(bool)Field("handoff")&&Time.realtimeSinceStartupAsDouble<deadline;)yield return null;
                 Assert.That(SongMiss(owner,drums),Is.LessThan(.075),"at the held world position plus the game's own seconds");
                 Assert.That(Ticking(ownerRoot),Is.True,"the part's tick is cued on the game clock");
 
