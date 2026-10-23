@@ -55,3 +55,22 @@ ECON-4 — ECON-2 leftovers from wave 2026-10-01 (2)
 DIALOG-7 — DIALOG-6 leftovers from wave 2026-10-01 (2)
 MINI-8 — Light Show answers work from the keyboard, and a switched-off session locks the pointer again
 DIALOG-12 — Unity runs rewrite the stock TextMeshPro fallback font asset
+CAMP-4 — In the headliner's chair the first-person view sits down, no backpack shows through the chair, and a test reads the round line
+DIALOG-13 — Each sign board covers its whole legend
+DOCS-1 — The status docs and the README say what the game is today
+GAS-7 — Snapshot restore refuses negative event counters, and two stale comments and a compiler warning go
+HUD-13 — Two PlayMode tests stop failing at random in long combined runs
+MINI-7 — Three minigame PlayMode tests stop failing at random
+NET-4 — A recorder prints the protocol recordings, and every stage track has a guard
+NET-5 — The host holds clients to separate command and move limits, one history per connection and one connection per token
+PLAYA-8 — A late E press on a joined client cannot stop a deck set that just started
+POI-8 — A held side spin continues through a gear swap, and the poi comment matches the rule
+SET-4 — A full EditMode run leaves the project settings unchanged
+SET-5 — Text on the screen names the bound key for awards and poi spins
+SPIN-6 — The slot machine's win blink stays below three flashes a second
+TEST-5 — The paired smoke waits for what the client saw, and the smoke docs and probe are correct
+TEST-6 — The Light Show switch-off test keeps the host sober
+TEST-7 — The dose-pattern test measures a still scene
+TRIP-19 — The design doc names the stall wobble, and the cups walk check works for every substance
+TRIP-20 — The dead letterbox code goes, and a debug line shows each Pony Dust stall
+WAVE-1 — Ferris wheel riders keep their gondola, and a rider's name tag is clear of the roof
