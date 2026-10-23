@@ -199,7 +199,7 @@ namespace Festival.Tests
         // The trailhead posts (x = +-2, z = 19) stand inside the 3.2 m circle where everyone readies, so a tripper who stops
         // just in front of one, facing the gate, has a post on the head-on camera's line. In the last three the head-on line
         // misses the post by 1-2 cm, yet the post still covers the side of the face; the other friend stands well clear.
-        // The live cabinet blinks its whole ring from the last stop until the take: fast, or under 3 times a second with reduced motion.
+        // The live cabinet blinks its whole ring from the last stop until the take, under 3 times a second for every player.
         [UnityTest]public IEnumerator TheRingBlinksAfterTheLastStopAndGentlyUnderReducedMotion()
         {
             var world=new GameObject("Spinner world");world.AddComponent<FestivalWorld>();yield return null;
@@ -235,13 +235,12 @@ namespace Festival.Tests
                         if(elapsed<last+.05||elapsed>=take-.05)continue;
                         int lit=bulbs.Count(b=>b.color==bulbs[0].color);frames++;
                         Assert.That(lit,Is.EqualTo(bulbs.Count),"the whole ring blinks together after the last stop, at "+elapsed.ToString("F2")+" s");
-                        bool gold=bulbs[0].color.r>.9f;if(gold&&!on)flashes++;on=gold;dark|=!gold;
+                        bool gold=bulbs[0].color.r>.9f;if(gold&&!on&&dark)flashes++;on=gold;dark|=!gold;
                     }
                     string mode=gentle?"reduced motion: ":"";
                     Assert.That(frames,Is.GreaterThan(20),mode+"setup: the frames sample the blink");
                     Assert.That(dark,mode+"the ring blinks, not just stays lit");
-                    if(gentle)Assert.That(flashes,Is.InRange(1,2),"reduced motion blinks the ring under 3 times a second");
-                    else Assert.That(flashes,Is.GreaterThanOrEqualTo(5),"the ring blinks fast after the last stop");
+                    Assert.That(flashes,Is.InRange(1,2),mode+"the ring lights again after dark under 3 times a second");
                 }
                 state.Phase=idle;
             }
