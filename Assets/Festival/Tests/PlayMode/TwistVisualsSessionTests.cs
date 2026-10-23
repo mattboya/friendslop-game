@@ -286,6 +286,66 @@ namespace Festival.Tests
         // Holds this machine's frames near 30 a second, as a slow one runs them.
         private sealed class SlowFrames:MonoBehaviour{private void Update()=>System.Threading.Thread.Sleep(30);}
 
+        // Seen from the grass beside the wheel, a riding friend's name tag floats clear of their gondola's roof. Solids hide tags, so
+        // this counts the pixels the tag lights with that gondola drawn against those it lights with the gondola hidden.
+        [UnityTest]public IEnumerator ARidingFriendsNameTagShowsAboveTheirGondolasRoof()
+        {
+            var world=new GameObject("Tag world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Tag session");var session=host.AddComponent<FestivalSession>();
+            yield return null;
+            var target=new RenderTexture(640,360,24);var pixels=new Texture2D(640,360,TextureFormat.RGB24,false);
+            try
+            {
+                Assert.That(Object.FindObjectsByType<FestivalWorld>(FindObjectsSortMode.None),Has.Length.EqualTo(1),"setup: a world leaked from an earlier test");
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);
+                const string friend="player_4";
+                sim.AddPlayer(friend,friend).Ready=true;
+                yield return StartLevel(session);
+                var rider=sim.Player(friend);rider.X=Festivals.WheelX;rider.Z=Festivals.WheelZ+1.5f;
+                Assert.That(sim.Execute(friend,new GameCommand{Id=friend+" boards",Kind=FestivalSimulation.RideWheelKind}).Accepted,Is.True,"setup: "+friend+" boards the wheel");
+                // Out of the wheel's plane, so its rim does not stand between the host and the gondola.
+                var you=sim.Player(session.LocalPlayerId);you.X=Festivals.WheelX+3.5f;you.Z=Festivals.WheelZ;
+                yield return new WaitForSeconds(1f);
+                var body=GameObject.Find(friend);Assert.That(body,Is.Not.Null,"setup: "+friend+" is drawn");
+                var label=body.transform.Find("Label");var text=label.GetComponentInChildren<TextMeshPro>(true);
+                Transform hips=null;foreach(var t in body.GetComponentsInChildren<Transform>())if(t.name=="Hips")hips=t;
+                Transform cabin=null;foreach(var g in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))if(g.name=="Gondola"&&g.gameObject.activeInHierarchy&&Encased(g).Contains(hips.position))cabin=g;
+                Assert.That(cabin,Is.Not.Null,"setup: "+friend+" sits in a gondola");
+                // The host looks at the tag; the tag turns to the host's view (FestivalSession.Actor).
+                var look=label.position-session.EyePosition;
+                foreach(var field in new[]{"yaw","viewYaw"})typeof(FestivalSession).GetField(field,BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,Mathf.Atan2(look.x,look.z)*Mathf.Rad2Deg);
+                foreach(var field in new[]{"pitch","viewPitch"})typeof(FestivalSession).GetField(field,BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,-Mathf.Asin(look.normalized.y)*Mathf.Rad2Deg);
+                yield return null;yield return null;
+                Assert.That(label.gameObject.activeInHierarchy,Is.True,"setup: the tag shows "+Vector3.Distance(session.ViewCamera.transform.position,body.transform.position).ToString("0.0")+" m away");
+                // Narrowed for these shots alone, so the small far tag covers enough pixels to count.
+                var camera=session.ViewCamera;var previous=RenderTexture.active;float zoom=camera.fieldOfView;camera.fieldOfView=20;
+                Color[] Shot(){camera.targetTexture=target;camera.Render();camera.targetTexture=null;RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,640,360),0,0);pixels.Apply();RenderTexture.active=previous;return pixels.GetPixels();}
+                int Lit()
+                {
+                    var on=Shot();text.renderer.enabled=false;var off=Shot();text.renderer.enabled=true;
+                    int lit=0;for(int i=0;i<on.Length;i++)if(Mathf.Abs(on[i].r-off[i].r)+Mathf.Abs(on[i].g-off[i].g)+Mathf.Abs(on[i].b-off[i].b)>.15f)lit++;
+                    return lit;
+                }
+                int held=Lit();
+                var parts=cabin.GetComponentsInChildren<Renderer>();foreach(var part in parts)part.enabled=false;
+                int alone=Lit();
+                foreach(var part in parts)part.enabled=true;camera.fieldOfView=zoom;
+                Assert.That(alone,Is.GreaterThan(30),"setup: the tag is in view");
+                Assert.That(held,Is.GreaterThanOrEqualTo(alone*.9f),friend+"'s gondola hides "+(alone-held)+" of the "+alone+" pixels their name tag lights");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(host);Object.Destroy(world);target.Release();Object.Destroy(target);Object.Destroy(pixels);
+            }
+            yield return null;
+        }
+
         // POLO-5: a rider is drawn at FestivalTwistVisuals.RiderScale, and what they hold goes round at their size, whenever it was
         // made. The rules take Equip on the wheel (the HUD's number keys send it), so a friend equips the map at the base and boards,
         // then equips their poi and their confetti mid-ride, and after the turn shows the poi again. Each held item is measured

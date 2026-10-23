@@ -234,7 +234,7 @@ namespace Festival.Network
         private float viewYaw,viewPitch;
         private string lastCampVisit="";
         // TRIP-4: lying on the grass the view drops to LyingEyeHeight and looks up at the sky; getting up looks where it did before.
-        private const float LyingEyeHeight=.3f,LyingPitch=-80;
+        private const float LyingEyeHeight=.3f,LyingPitch=-80,NameTagHeight=2.65f;
         private bool wasLying;private float preLiePitch;
         // MINI-3: a Light Show holds its players' view on the glover (FestivalLightShowView.FacesGlover), kept here and given back after.
         private bool showViewHeld;private float showHeldYaw,showHeldPitch;
@@ -1043,6 +1043,8 @@ namespace Festival.Network
                 {
                     // Before anything here can remake a held item, so the body's scale and its RideScale always agree.
                     exchangeCharacter.Ride(wheel?FestivalTwistVisuals.RiderScale:1);
+                    // A rider's tag keeps its own size and height over the shrunk body, so it floats above the gondola's roof, not inside it.
+                    var tag=names[p.Id].transform.parent;tag.localPosition=Vector3.up*NameTagHeight/exchangeCharacter.RideScale;tag.localScale/=exchangeCharacter.RideScale;
                     var peer=string.IsNullOrEmpty(p.VisualOfferTarget)?State.Players.Find(other=>other.VisualOfferTarget==p.Id):State.Players.Find(other=>other.Id==p.VisualOfferTarget);
                     bool exchange=peer!=null&&peer.Connected&&p.Life=="Alive"&&peer.Life=="Alive"&&p.CampVisitId==peer.CampVisitId;
                     var contact=exchange?new Vector3(togetherInside?(p.CampInteriorX+peer.CampInteriorX)*.5f:(p.X+peer.X)*.5f,1.08f,togetherInside?(p.CampInteriorZ+peer.CampInteriorZ)*.5f:(p.Z+peer.Z)*.5f):Vector3.zero;
@@ -1093,7 +1095,7 @@ namespace Festival.Network
                     if(go==null){go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.transform.SetParent(actorRoot);var c=go.GetComponent<Collider>();c.enabled=false;Destroy(c);}
                 }
                 tr=go.transform;tr.position=new Vector3(x,0,z);actors[id]=tr;
-                var textObject=new GameObject("Label");textObject.transform.SetParent(tr,false);textObject.transform.localPosition=new Vector3(0,2.65f,0);
+                var textObject=new GameObject("Label");textObject.transform.SetParent(tr,false);textObject.transform.localPosition=Vector3.up*NameTagHeight;
                 var bubble=GameObject.CreatePrimitive(PrimitiveType.Cube);bubble.name="Name bubble";bubble.transform.SetParent(textObject.transform,false);
                 bubble.transform.localPosition=new Vector3(0,0,.035f);bubble.transform.localScale=new Vector3(.9f,.29f,.05f);
                 bubble.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Dark");
