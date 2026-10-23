@@ -30,6 +30,8 @@ namespace Festival.Tests
                 var sam=sim.AddPlayer("impl-U60-sam","Sam");sam.Ready=true;var ash=sim.AddPlayer("impl-U60-ash","Ash");ash.Ready=true;
                 var ghost=sim.AddPlayer("impl-U60-ghost","Ghost");ghost.Ready=true;
                 sim.State.FestivalIndex=Festivals.PoloFestival;sim.State.LevelIndex=0;
+                // The host trips (the people spinner's bag holds only them), so the host's own card carries the hunch.
+                sim.State.TripperBag.Clear();sim.State.TripperBag.Add(session.LocalPlayerId);
                 yield return StartLevel(session);sim.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
                 Text Find(string name){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
                 IEnumerator Wait(float seconds){for(float until=Time.realtimeSinceStartup+seconds;Time.realtimeSinceStartup<until;)yield return null;}
@@ -52,25 +54,24 @@ namespace Festival.Tests
                 deadline=Time.realtimeSinceStartup+8;
                 while(sim.State.Phase=="Playing"&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(sim.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"setup: the game starts: "+session.Message);
+                Assert.That(sim.State.TripperId,Is.EqualTo(me.Id),"setup: the host trips");
+                // The host drinks last, so the spirit reads two friends' turns.
+                sim.State.Booth.Turns.Remove(me.Id);sim.State.Booth.Turns.Add(me.Id);
                 yield return Wait(.4f);
                 Assert.That(Find("Tripping")?.text,Is.EqualTo(tripping),"the dose card stays up while the crew plays cups");
                 Assert.That(Find("Objective title")?.text,Is.EqualTo(quota),"and so does the quota");
 
                 var b=sim.State.Booth;int safe=b.Spiked==0?1:0;string up=FestivalSimulation.CupsTurn(sim.State);
-                if(up!=me.Id)
-                {
-                    var spirit=FestivalSession.ViewFor(sim,ghost.Id);
-                    Assert.That(spirit.Players.Exists(p=>p.Id==up),Is.False,"setup: the spirit's view lists no living player");
-                    var living=FestivalSession.ViewFor(sim,me.Id);
-                    Assert.That(FestivalHudText.MinigameCard(spirit,spirit.Players.Find(p=>p.Id==ghost.Id)),Is.EqualTo(FestivalHudText.MinigameCard(living,living.Players.Find(p=>p.Id==me.Id))),"the spirit reads whose turn it is as the living do");
-                }
+                Assert.That(up,Is.Not.EqualTo(me.Id),"setup: a friend drinks first");
+                var spirit=FestivalSession.ViewFor(sim,ghost.Id);
+                Assert.That(spirit.Players.Exists(p=>p.Id==up),Is.False,"setup: the spirit's view lists no living player");
+                var living=FestivalSession.ViewFor(sim,me.Id);var seen=FestivalHudText.MinigameCard(spirit,spirit.Players.Find(p=>p.Id==ghost.Id));
+                Assert.That(FestivalHudText.MinigameCard(living,living.Players.Find(p=>p.Id==me.Id)),Is.EqualTo((seen.Title,seen.Detail+" Your hunch: cup "+(b.Hint+1)+" is spiked.")),"the spirit reads whose turn it is as the living do, and only the tripper's own card adds their hunch");
                 Assert.That(Play(up,FestivalSimulation.DrinkCup,safe).Accepted,Is.True,"a safe cup");
                 up=FestivalSimulation.CupsTurn(sim.State);
-                if(up!=me.Id)
-                {
-                    var spirit=FestivalSession.ViewFor(sim,ghost.Id);
-                    Assert.That(FestivalHudText.MinigameCard(spirit,spirit.Players.Find(p=>p.Id==ghost.Id)).Detail,Does.StartWith(sim.Player(up).Name+"'s turn"),"the spirit reads whose turn it is by name");
-                }
+                Assert.That(up,Is.Not.EqualTo(me.Id),"setup: a second friend drinks next");
+                spirit=FestivalSession.ViewFor(sim,ghost.Id);
+                Assert.That(FestivalHudText.MinigameCard(spirit,spirit.Players.Find(p=>p.Id==ghost.Id)).Detail,Does.StartWith(sim.Player(up).Name+"'s turn"),"the spirit reads whose turn it is by name");
                 Assert.That(Play(up,FestivalSimulation.CallCups).Accepted,Is.True,"then a call");
                 Assert.That(sim.State.LevelSales,Is.EqualTo(sales+5),"setup: the pot counts as sales");
                 yield return Wait(.4f);
