@@ -184,6 +184,10 @@ public static class GiggleGasTests
         p.CampVisitId="tent_2";Refused("inside a tent");p.CampVisitId="";
         p.Life="Downed";Refused("downed");p.Life="Alive";
         s.State.Phase="Playing";Refused("at the festival");s.State.Phase="CampReview";Refused("in the review");s.State.Phase="Shopping";
+        // A minigame pauses the festival, and the pause refuses the take before the balloons' own camp-only rule can.
+        s.State.Phase=FestivalSimulation.MinigamePhase;var paused=Act(s,p.Id,Take);
+        Check(!paused.Accepted&&paused.Reason=="Wait: the festival is paused for a minigame"&&Takes(p)==2&&Hits(p)==0,"a take during a minigame is paused and counts nothing, got "+paused.Accepted+" \""+paused.Reason+"\" and "+Takes(p));
+        s.State.Phase="Shopping";
         s.Disconnect(p.Id);Refused("disconnected");s.AddPlayer(p.Id,p.Name);
         Check(Act(s,p.Id,Take).Accepted&&Takes(p)==3,"back at the balloons a take counts again, got "+Takes(p));
         Check(Takes(s.Player("p1"))==0,"a friend who took none counts none");
