@@ -31,6 +31,9 @@ namespace Festival.Tests
             var game=Simulation(session);game.State.Npcs.Clear();game.State.DurationSeconds=100000;
         }
         static string Failed(DevelopmentSmoke smoke)=>(string)typeof(DevelopmentSmoke).GetField("failed",Private).GetValue(smoke);
+        // A slow client. While held, the host sends the client no snapshot at all; let go, the next one is the newest.
+        static void HoldSnapshots(FestivalSession host,bool hold)=>typeof(FestivalSession).GetField("nextSnapshot",Private).SetValue(host,hold?double.PositiveInfinity:0d);
+        static IEnumerator Then(IEnumerator step,System.Action done){yield return step;done();}
 
         [UnityTest]public IEnumerator ASoloSelfRevivalOnLoadedFramesGetsItsFullFifteenSimulationSeconds()
         {
@@ -72,6 +75,57 @@ namespace Festival.Tests
                 Assert.That(finished,Is.Null);
             }
             finally{session.Leave();Object.Destroy(holder);Object.Destroy(world);}
+        }
+
+        [UnityTest]public IEnumerator AClientWhoseSnapshotsAreHeldBackStillSeesTheDaysResultsBeforeCamp()
+        {
+            var world=new GameObject("TEST-5 settle world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("TEST-5 settle host");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("TEST-5 settle friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=0;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");
+                yield return StartLevel(host,friend.LocalPlayerId);
+                // Day 1 with its quota sold and both friends at the camp gate: the host's own extraction ends the day in success.
+                sim.State.Npcs.Clear();sim.State.LevelSales=FestivalSimulation.DayQuota(sim.State);
+                foreach(var p in sim.State.Players){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
+                host.MenuOpen=false;host.Command("Extract");
+                var extract=sim.Interaction(sim.Player(host.LocalPlayerId).InteractionId);
+                Assert.That(extract?.Kind,Is.EqualTo("Extract"),"setup: the host's extraction starts: "+host.Message);
+                for(deadline=Time.realtimeSinceStartup+15;sim.State.SimulationSeconds<extract.StartSeconds+extract.DurationSeconds-.5&&Time.realtimeSinceStartup<deadline;)yield return null;
+                // Half a second before the day ends the client's snapshots stop; both run the smoke's own Day 1 settlement.
+                HoldSnapshots(host,true);
+                Assert.That(friend.State.Phase,Is.EqualTo("Playing"),"setup: the client's last snapshot is still the day");
+                var hostSmoke=hostObject.AddComponent<DevelopmentSmoke>();hostSmoke.enabled=false;
+                var clientSmoke=friendObject.AddComponent<DevelopmentSmoke>();clientSmoke.enabled=false;
+                var settle=typeof(DevelopmentSmoke).GetMethod("SettleTheDay",Private);
+                bool hostDone=false,clientDone=false;
+                host.StartCoroutine(Then((IEnumerator)settle.Invoke(hostSmoke,new object[]{host}),()=>hostDone=true));
+                friend.StartCoroutine(Then((IEnumerator)settle.Invoke(clientSmoke,new object[]{friend}),()=>clientDone=true));
+                for(deadline=Time.realtimeSinceStartup+15;sim.State.Phase=="Playing"&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(sim.State.Phase,Is.EqualTo("Results"),"setup: the host's extraction ends the day: "+host.Message);
+                // The client hears nothing for at least 2.5 s after the day ends, longer than the host's old 2 s pause, and for up to 4 s
+                // while the host still shows the results.
+                for(float back=Time.realtimeSinceStartup+2.5f,cap=back+1.5f;Time.realtimeSinceStartup<back||sim.State.Phase=="Results"&&Time.realtimeSinceStartup<cap;)yield return null;
+                HoldSnapshots(host,false);
+                for(deadline=Time.realtimeSinceStartup+30;!(hostDone&&clientDone)&&Time.realtimeSinceStartup<deadline;)yield return null;
+                string hostFailed=Failed(hostSmoke),clientFailed=Failed(clientSmoke);
+                TestContext.WriteLine("TEST-5 SETTLE host="+(hostFailed??"passed")+" client="+(clientFailed??"passed")+" phase="+friend.State?.Phase);
+                Assert.That(hostDone&&clientDone,Is.True,"both settlements end");
+                Assert.That(clientFailed,Is.Null,"the client sees the day's results, however late its snapshots arrive");
+                Assert.That(hostFailed,Is.Null,"the host brings the crew back once the client has seen them");
+                Assert.That(friend.State.Phase,Is.EqualTo("CampReview"),"both are back at camp for the debrief");
+            }
+            finally{HoldSnapshots(host,false);friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
         }
 
         // A festivalgoer who talks without asking for a dance first, standing in front of the hosted player.
