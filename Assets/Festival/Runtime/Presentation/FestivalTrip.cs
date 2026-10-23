@@ -287,7 +287,7 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Vector3> lastDrop=new Dictionary<string,Vector3>();
         private int nextTrail;
         private float sinceDrop;
-        private ProfileData audio;
+        private ProfileData soundSettings;
         private bool focused=true;
         private Perception listening;
 
@@ -384,8 +384,8 @@ namespace Festival.Presentation
         private void Listen(Transform view,Perception look)
         {
             if(session==null)TryGetComponent(out session);
-            if(session?.Profile!=null)audio=session.Profile.Data;
-            var settings=audio;
+            if(session?.Profile!=null)soundSettings=session.Profile.Data;
+            var settings=soundSettings;
             if(session!=null)FestivalSettings.ConfigureVoice(session.Voice,settings);
             listening=look;
             // ponytail: a frame-rate tremolo on the global listener volume; an OnAudioFilterRead tremolo if it ever sounds stepped.
