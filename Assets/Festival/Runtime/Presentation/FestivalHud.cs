@@ -1945,7 +1945,7 @@ namespace Festival.Presentation
                     SetPromptAction("E  DJ: "+CampFeatures.Tracks[next],()=>session.Command("ChooseCampTrack",amount:next));
                     FinishActions();return;
                 }
-                // GAS-1: beside the Giggle Balloons, E takes one, unless the last one is still on.
+                // Beside the Giggle Balloons, E takes one. While two are on, the prompt only reminds, with nothing to press.
                 string balloon=FestivalHudText.GiggleBalloonPrompt(player);
                 if(balloon!="")
                 {
