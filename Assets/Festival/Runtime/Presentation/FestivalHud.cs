@@ -69,7 +69,7 @@ namespace Festival.Presentation
         private readonly Image[] rhythmReceptorWells=new Image[4];
         private readonly Text[] rhythmKeys=new Text[4];
         private Text promptKey,rhythmControls,mapHint;
-        private readonly Dictionary<InputAction,(string Path,string Label)> keyLabels=new Dictionary<InputAction,(string Path,string Label)>();
+        private readonly Dictionary<InputAction,(string Path,int Layout,string Label)> keyLabels=new Dictionary<InputAction,(string Path,int Layout,string Label)>();
         private readonly float[] rhythmFlashUntil=new float[4];
         private bool[] rhythmConsumed=Array.Empty<bool>(),rhythmHeld=Array.Empty<bool>(),rhythmDropped=Array.Empty<bool>();
         private Image rhythmProgressFill,stopHoldFill,walkHoldFill;
@@ -2175,13 +2175,14 @@ namespace Festival.Presentation
             if(primaryAction==null)primaryAction=action;y-=.09f;
         }
         // An action's key as bound, for a prompt; fallback (today's letter) with no controls, as in EditMode. Cached while its bound
-        // path stays the same, because GetBindingDisplayString allocates and the HUD asks every frame.
-        // ponytail: keyed on binding 0, every prompt action's only binding; a keyboard layout switch mid-game keeps the old name.
+        // path and the keyboard layout (FestivalInput.LayoutChanges) stay the same, because GetBindingDisplayString allocates and the
+        // HUD asks every frame.
+        // ponytail: keyed on binding 0, every prompt action's only binding.
         private string Bound(InputAction action,string fallback)
         {
             if(action==null)return fallback;
-            string path=action.bindings[0].effectivePath;
-            if(!keyLabels.TryGetValue(action,out var key)||key.Path!=path)keyLabels[action]=key=(path,session.Controls.Label(action).ToUpperInvariant());
+            string path=action.bindings[0].effectivePath;int layout=session.Controls.LayoutChanges;
+            if(!keyLabels.TryGetValue(action,out var key)||key.Path!=path||key.Layout!=layout)keyLabels[action]=key=(path,layout,session.Controls.Label(action).ToUpperInvariant());
             return key.Label;
         }
         // Players read an item's display name, never its internal id (THEME-2: "Tongue Stamps", not "stock_lsd").

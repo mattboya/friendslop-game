@@ -203,6 +203,37 @@ namespace Festival.Tests
             });
         }
 
+        // A keyboard layout change renames keys on the same binding paths (the Q key reads A on AZERTY). The Input System reports
+        // it as the keyboard's configuration change, and the HUD's key names and a vision's check line are read again. A test keyboard
+        // cannot rename its keys, so each cache first holds a stale name.
+        [Test] public void AKeyboardLayoutChangeReadsTheKeyNamesAgain()
+        {
+            var keyboard=InputSystem.AddDevice<Keyboard>("Layout change keyboard");
+            try
+            {
+                WithReboundHud(keys=>{},(session,hud,go)=>
+                {
+                    var bound=typeof(FestivalHud).GetMethod("Bound",Private);
+                    string Use()=>(string)bound.Invoke(hud,new object[]{session.Controls.Use,"Q"});
+                    Assert.That(Use(),Is.EqualTo("Q"),"setup: the HUD reads and keeps the Use key's name");
+                    var labels=(System.Collections.IDictionary)typeof(FestivalHud).GetField("keyLabels",Private).GetValue(hud);
+                    object entry=labels[session.Controls.Use];var fields=entry.GetType().GetFields();fields[fields.Length-1].SetValue(entry,"A");labels[session.Controls.Use]=entry;
+                    Assert.That(Use(),Is.EqualTo("A"),"setup: the HUD holds the old layout's name");
+                    var markers=go.GetComponent<FestivalVisionMarkers>();var line=typeof(FestivalVisionMarkers).GetField("checkLine",Private);
+                    void Late()=>typeof(FestivalVisionMarkers).GetMethod("LateUpdate",Private).Invoke(markers,null);
+                    typeof(FestivalSession).GetProperty("State").SetValue(session,Level(0,0));
+                    Late();line.SetValue(markers,"OLD");Late();
+                    Assert.That(line.GetValue(markers),Is.EqualTo("OLD"),"setup: the check line holds the old layout's names");
+
+                    InputSystem.QueueConfigChangeEvent(keyboard);InputSystem.Update();
+                    Assert.That(Use(),Is.EqualTo("Q"),"the HUD reads the Use key's name again");
+                    Late();
+                    Assert.That(line.GetValue(markers),Does.Contain("F CHAT • E DANCE TO CHECK"),"the check line reads the keys again");
+                });
+            }
+            finally{InputSystem.RemoveDevice(keyboard);}
+        }
+
         // Lines built from the keys they are given: the HUD passes the bound ones.
         [Test] public void StopEquipAndCheckLinesNameTheKeysTheyAreGiven()
         {
