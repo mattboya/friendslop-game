@@ -89,6 +89,36 @@ namespace Festival.Tests
             finally{RenderTexture.active=previous;camera.targetTexture=null;target.Release();Object.DestroyImmediate(target);Object.DestroyImmediate(pixels);Object.DestroyImmediate(flat);}
         }
 
+        // Every letter of a sign legend, front and back, lies on its dark board. The letters are the legend's vertex quads:
+        // textBounds is the line box (ascender to descender), taller than capital letters.
+        [Test]public void EverySignsBoardIsBehindItsWholeLegend()
+        {
+            root=new GameObject("Sign world");var world=root.AddComponent<FestivalWorld>();world.Build();
+            var outside=new List<string>();int legends=0;
+            foreach(var sign in root.GetComponentsInChildren<Transform>(true))
+            {
+                var board=sign.Find("Label bubble");if(board==null||!sign.name.EndsWith(" sign"))continue;
+                foreach(var label in sign.GetComponentsInChildren<TextMeshPro>(true))
+                {
+                    // Inactive (the festival's signs while the camp shows) unless told to draw anyway.
+                    label.ForceMeshUpdate(true);legends++;
+                    float halfWidth=0,halfHeight=0;int quads=0;
+                    foreach(var mesh in label.textInfo.meshInfo)
+                        for(int v=0;v<mesh.vertexCount;v++)
+                        {
+                            var corner=sign.InverseTransformPoint(label.transform.TransformPoint(mesh.vertices[v]));quads++;
+                            halfWidth=Mathf.Max(halfWidth,Mathf.Abs(corner.x));halfHeight=Mathf.Max(halfHeight,Mathf.Abs(corner.y));
+                        }
+                    Assert.That(halfWidth,Is.GreaterThan(0),"setup: "+sign.name+"'s legend is drawn ("+quads/4+" quads)");
+                    var size=board.localScale;
+                    if(halfWidth>size.x/2||halfHeight>size.y/2)
+                        outside.Add(sign.name+": the legend spans "+(halfWidth*2).ToString("0.000")+" x "+(halfHeight*2).ToString("0.000")+" m, its board "+size.x.ToString("0.000")+" x "+size.y.ToString("0.000")+" m");
+                }
+            }
+            Assert.That(legends,Is.GreaterThan(10),"setup: the camp's and the festival's signs were looked at");
+            Assert.That(outside,Is.Empty,"Sign legends that run off their board:\n"+string.Join("\n",outside));
+        }
+
         // A sign seen from in front reads; an opaque wall between it and the eye hides it, and from behind it shows nothing mirrored
         // (its board hides it there in play; here the board is left out of the picture).
         [Test]public void ASignBehindAWallIsHidden()

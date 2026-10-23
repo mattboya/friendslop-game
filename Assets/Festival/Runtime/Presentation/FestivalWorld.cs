@@ -1038,24 +1038,38 @@ namespace Festival.Presentation
         private void Sign(string label,Vector3 position,Material material,float size,float yaw=0,float backZ=0)
         {
             var go=new GameObject(label+" sign");go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localRotation=Quaternion.Euler(0,yaw,0);
-            // Boogaloo glyphs are wider than the character-size unit.
-            // Leave real painted board behind the entire legend at every angle.
+            // Leave real painted board behind the entire legend at every angle. The guess from the legend's length runs short of
+            // Boogaloo's wide glyphs, so a legend drawn past it gets a board from its drawn quads.
+            var drawn=DrawnHalfSize(SignFace(go.transform,label,size,new Vector3(0,0,-.050f),0));
             float width=Mathf.Max(.98f,label.Length*size*1.45f+.50f);
             float height=Mathf.Max(.29f,size*2.25f+.13f);
+            // Only a board its legend runs off grows: the boards it already covers keep their look until a playtest.
+            if(2*drawn.x>width||2*drawn.y>height){width=Mathf.Max(width,2*drawn.x+.50f);height=Mathf.Max(height,2*drawn.y+.13f);}
             var border=GameObject.CreatePrimitive(PrimitiveType.Cube);border.name="Label bubble rim";border.transform.SetParent(go.transform,false);
             border.transform.localPosition=new Vector3(0,0,.025f);border.transform.localScale=new Vector3(width+.075f,height+.075f,.045f);
             border.GetComponent<Renderer>().sharedMaterial=material;var borderCollider=border.GetComponent<Collider>();borderCollider.enabled=false;Dispose(borderCollider);
             var backing=GameObject.CreatePrimitive(PrimitiveType.Cube);backing.name="Label bubble";backing.transform.SetParent(go.transform,false);
             backing.transform.localPosition=new Vector3(0,0,-.012f);backing.transform.localScale=new Vector3(width,height,.045f);
             backing.GetComponent<Renderer>().sharedMaterial=artMaterials["Dark"];var backingCollider=backing.GetComponent<Collider>();backingCollider.enabled=false;Dispose(backingCollider);
-            SignFace(go.transform,label,size,new Vector3(0,0,-.050f),0);
             // backZ>0 repeats the legend on the rear face of whatever the board is mounted on.
             if(backZ>0)SignFace(go.transform,label,size,new Vector3(0,0,backZ),180);
         }
-        private void SignFace(Transform board,string label,float size,Vector3 position,float yaw)
+        private TextMeshPro SignFace(Transform board,string label,float size,Vector3 position,float yaw)
         {
             var face=new GameObject("Text");face.transform.SetParent(board,false);face.transform.localPosition=position;face.transform.localRotation=Quaternion.Euler(0,yaw,0);
-            FestivalWorldText.Add(face,label,48*size,FestivalWorldText.Cream);
+            return FestivalWorldText.Add(face,label,48*size,FestivalWorldText.Cream);
+        }
+        // Half the extent of the legend's glyph quads about its centre. Not textBounds: that is the line box, ascender to descender,
+        // much taller than capital letters. Forced, because the festival's signs are built under a hidden root.
+        private static Vector2 DrawnHalfSize(TextMeshPro legend)
+        {
+            legend.ForceMeshUpdate(true);var info=legend.textInfo;var half=Vector2.zero;
+            for(int i=0;i<info.characterCount;i++)
+            {
+                var glyph=info.characterInfo[i];if(!glyph.isVisible)continue;
+                half=Vector2.Max(half,new Vector2(Mathf.Max(-glyph.bottomLeft.x,glyph.topRight.x),Mathf.Max(-glyph.bottomLeft.y,glyph.topRight.y)));
+            }
+            return half;
         }
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
         private void OnDestroy()
