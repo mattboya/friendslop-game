@@ -19,7 +19,7 @@ namespace Festival.Network
     [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); public string Epoch=""; public long Revision; }
     [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint,SpinPoi,SpinSides; public int Sequence; }
     [Serializable] internal sealed class SnapshotPacket { public RoundState State; public double ServerSeconds; }
-    internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt; public int Commands; public double Window; }
+    internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt,Window,MoveWindow; public int Commands,Moves; public bool HistorySeeded; }
 
     /// <summary>Native Unity Transport session. Host owns all rules; clients submit input and render filtered state.</summary>
     public sealed class FestivalSession : MonoBehaviour
@@ -396,7 +396,9 @@ namespace Festival.Network
                 var hello=ReadHello(Encoding.UTF8.GetString(request.Payload));
                 if(hello==null)throw new ArgumentException("Incompatible game version.");
                 bool reconnect=hello.Token!=""&&tokens.TryGetValue(hello.Token,out var unused);
-                if(reconnect && peers.ContainsValue(tokens[hello.Token]))throw new ArgumentException("This session identity is already connected.");
+                // A join still waiting to connect holds its token too, or two quick joins with one token would both drive one player.
+                // A join that never connects holds the token until the transport times it out and PeerDisconnected drops it.
+                if(reconnect && (peers.ContainsValue(tokens[hello.Token])||pending.Values.Any(waiting=>waiting.Token==hello.Token)))throw new ArgumentException("This session identity is already connected.");
                 if(!reconnect && simulation.State.Phase!="Shopping" && simulation.State.Phase!="Lobby")throw new ArgumentException("Round in progress. Join the next round.");
                 if(!reconnect && simulation.State.Players.Count+pending.Count>=8)throw new ArgumentException("Festival full: eight players including host.");
                 pending[request.ClientNetworkId]=hello;response.Approved=true;
@@ -449,7 +451,7 @@ namespace Festival.Network
                 State=packet.State;FollowLocalCommandRound(State.RoundId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=packet.ServerSeconds;
             });
             messages.RegisterNamedMessageHandler("festival.command",(sender,reader)=>{
-                if(!IsHost||!peers.TryGetValue(sender,out var id)||!Admit(id,60))return;
+                if(!IsHost||!peers.TryGetValue(sender,out var id)||!inputs.TryGetValue(id,out var peer)||!Admit(peer,false,Time.realtimeSinceStartupAsDouble))return;
                 var command=ReadJson<GameCommand>(reader,2048);if(command==null)return;
                 var result=simulation.Execute(id,command);SendJson("festival.result",sender,CorrelatedResult(result,command.Id));
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -457,7 +459,7 @@ namespace Festival.Network
 #endif
             });
             messages.RegisterNamedMessageHandler("festival.move",(sender,reader)=>{
-                if(!IsHost||!peers.TryGetValue(sender,out var id)||!Admit(id,90))return;
+                if(!IsHost||!peers.TryGetValue(sender,out var id)||!inputs.TryGetValue(id,out var peer)||!Admit(peer,true,Time.realtimeSinceStartupAsDouble))return;
                 var input=ReadJson<MoveIntent>(reader,512);if(input==null)return;AcceptInput(id,input);
             });
             messages.RegisterNamedMessageHandler("festival.result",(sender,reader)=>{
@@ -465,18 +467,27 @@ namespace Festival.Network
                 var result=ReadJson<CommandResult>(reader,2048);if(result!=null)ReceiveLocalCommandResult(result);
             });
             messages.RegisterNamedMessageHandler("festival.history",(sender,reader)=>{
-                if(!IsHost||!peers.TryGetValue(sender,out var id))return;
-                var packet=ReadJson<DialogueHistoryPacket>(reader,96*1024);var player=simulation.Player(id);
-                if(packet==null||player==null)return;MergeHistorySeed(player,packet.Seen);
+                // Checked before the 96 KB read, so a repeated seed costs the host one lookup.
+                if(!IsHost||!peers.TryGetValue(sender,out var id)||!inputs.TryGetValue(id,out var peer)||peer.HistorySeeded)return;
+                SeedHistory(peer,simulation.Player(id),ReadJson<DialogueHistoryPacket>(reader,96*1024));
             });
             messages.RegisterNamedMessageHandler("festival.history-update",(sender,reader)=>{
                 ReceiveAcknowledgedHistory(sender,ReadJson<DialogueHistoryPacket>(reader,96*1024));
             });
         }
-        bool Admit(string id,int limit)
+        // Separate budgets, so a client's 20 moves a second cannot eat the 60 commands that rhythm presses and releases need.
+        // A refused message still counts.
+        internal static bool Admit(PeerInput peer,bool move,double now)
         {
-            if(!inputs.TryGetValue(id,out var peer))return false;double now=Time.realtimeSinceStartupAsDouble;
-            if(now-peer.Window>=1){peer.Window=now;peer.Commands=0;}return ++peer.Commands<=limit;
+            if(move){if(now-peer.MoveWindow>=1){peer.MoveWindow=now;peer.Moves=0;}return ++peer.Moves<=90;}
+            if(now-peer.Window>=1){peer.Window=now;peer.Commands=0;}return ++peer.Commands<=60;
+        }
+        // A connection seeds its dialogue history once, on connect. A repeat would bump DialogueRevision, and the host would then
+        // send the whole history back.
+        internal static bool SeedHistory(PeerInput peer,PlayerState player,DialogueHistoryPacket packet)
+        {
+            if(peer==null||peer.HistorySeeded)return false;peer.HistorySeeded=true;
+            return packet!=null&&player!=null&&MergeHistorySeed(player,packet.Seen);
         }
         private static T ReadJson<T>(FastBufferReader reader,int maxBytes) where T:class
         {

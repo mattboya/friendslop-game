@@ -549,7 +549,8 @@ namespace Festival.Tests
                 Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty);Hands("");
                 p.EquippedItemId="stock_lsd";for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!="stock_lsd"&&Time.realtimeSinceStartup<until;)yield return null;
                 Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("stock_lsd"));nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
-                var admit=typeof(FestivalSession).GetMethod("Admit",BindingFlags.NonPublic|BindingFlags.Instance);for(int i=0;i<61;i++)admit.Invoke(host,new object[]{friend.LocalPlayerId,60});
+                var peer=((IDictionary)typeof(FestivalSession).GetField("inputs",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(host))[friend.LocalPlayerId];
+                var admit=typeof(FestivalSession).GetMethod("Admit",BindingFlags.NonPublic|BindingFlags.Static);for(int i=0;i<61;i++)admit.Invoke(null,new object[]{peer,false,Time.realtimeSinceStartupAsDouble});
                 before=game.State.Commands.Count;yield return Tap(Key.Digit2,.15f);Hands("");
                 Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Assert.That(game.State.Commands.Count,Is.EqualTo(before),"the real host admission gate drops this command without dispatching a result");
                 yield return new WaitForSeconds(2.1f);Hands("stock_lsd");
