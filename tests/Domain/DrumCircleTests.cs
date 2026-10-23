@@ -107,7 +107,11 @@ public static class DrumCircleTests
         foreach(string withdrawal in new[]{"silent","disconnect","cancel","life"})
         {
             var s=Started();var i=RequiredPart(s,"p1");if(withdrawal=="disconnect")s.Disconnect("p1");
-            if(withdrawal=="cancel")Check(Act(s,"p1","Cancel").Accepted,"participant can withdraw while world is paused");
+            if(withdrawal=="cancel")
+            {
+                Check(!s.Execute("p1",new GameCommand{Id="drum"+(sequence++),Kind="Cancel",TargetId="ended_interaction"}).Accepted&&i.Status=="Active","a Cancel naming an interaction p1 no longer has leaves the part playing");
+                Check(Act(s,"p1","Cancel").Accepted,"participant can withdraw while world is paused");
+            }
             if(withdrawal=="life")s.Player("p1").Life="Spirit";
             var chart=RhythmChart.For(RequiredPart(s,"p0"));foreach(var note in chart.Notes){AdvanceTo(s,note.TimeSeconds);Check(Act(s,"p0","Rhythm",note.Direction,note.TimeSeconds).Accepted,"remaining drummer plays");}
             Finish(s);Check(s.State.Booth.PlayerIds.Count==2&&Accuracy(s,"p1")==0&&s.State.Booth.ClockChange==-30,"silent/disconnected/withdrawn frozen participant sinks crew: "+withdrawal);

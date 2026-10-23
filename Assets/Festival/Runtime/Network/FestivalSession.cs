@@ -121,7 +121,14 @@ namespace Festival.Network
         // dose's StartSeconds, which only its owner's view carries), and a Rolly Pollies dose walks 8% faster.
         // TRIP-15: snapshots name who found the level's vision stash (RoundState.VisionStashFinderId), for their notice;
         // older rounds default empty.
-        public const int ProtocolVersion=8;
+        // 9: wave 2026-10-23 starts a new semantic boundary; published version-8 peers are rejected.
+        // Subsequent units append only the version-9 changes they actually land.
+        // PLAYA-8: Cancel can name the interaction its sender saw (GameCommand.TargetId). The host refuses one that names anything
+        // but the player's current interaction ("That action already ended"), with no suspicion, refund or camp seat change. A
+        // Cancel that names nothing keeps its meaning, so a version-8 client's late E would still stop a deck set F just began.
+        // SET-5: Core text names rebindable keys by action and each HUD reads in its own bound keys: poi replies carry {Spin} and
+        // {SpinSides}, the camp vote hint {Slot1}-{Slot3}. A version-8 client would show a host's poi reply tokens raw.
+        public const int ProtocolVersion=9;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
