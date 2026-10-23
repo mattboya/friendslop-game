@@ -57,6 +57,10 @@ namespace Festival.Tests
                 var canvas=root.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
                 var buyer=new NpcState{Id="nearby_buyer_2",Kind="Wook",Role="Buyer",CanTalk=true,X=0,Z=1.5f,Yaw=180};game.State.Npcs.Add(buyer);
                 foreach(var mate in mates){mate.X=1;mate.Z=0;mate.Effects.Clear();}
+                // The friend tip names the tripper, the longest name. The bag pins KeepTripper's next pick to the host, so an
+                // undosed tripper would hand the trip to the host every time and the host's own view has no friend tip.
+                game.State.TripperBag.Clear();game.State.TripperBag.Add(player.Id);
+                mates[0].Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="lsd",RemainingSeconds=600});
                 game.State.TripperId=mates[0].Id;yield return new WaitForSeconds(.5f);session.Profile.ShowTipsAgain();yield return null;yield return null;
                 var strip=Card("Nearby actions");var tip=Card("First-time tip card");Assert.That(strip.gameObject.activeInHierarchy&&tip.gameObject.activeInHierarchy,Is.True,"real nearby actions and a first-time friend tip are visible together: strip="+strip.gameObject.activeInHierarchy+", tip="+tip.gameObject.activeInHierarchy+", phase="+session.State.Phase+", elapsed="+session.State.ElapsedSeconds+", life="+player.Life+", prompt="+DropText(root,"Prompt")?.text+", seen="+string.Join(",",session.Profile.Data.SeenTips));
                 var nearby=DropText(root,"Nearby");Assert.That(nearby.text.Split('\n').Length,Is.EqualTo(5));Assert.That(nearby.text,Does.EndWith("ESC  +7 more"));
