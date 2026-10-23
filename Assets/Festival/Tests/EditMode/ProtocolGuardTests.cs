@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using Festival.Core;
 using Festival.Network;
 using NUnit.Framework;
@@ -8,6 +11,7 @@ namespace Festival.Tests
 {
     // Clients build rhythm charts and play the spin from shared seeds and constants, so a change to either must raise
     // ProtocolVersion. Each version keeps an immutable recording: add one for a new version and never edit an old one.
+    // A version with no recording fails with Record's printout of the current code, ready to paste. Never record an older version.
     public sealed class ProtocolGuardTests
     {
         sealed class StageRecording
@@ -142,13 +146,41 @@ namespace Festival.Tests
         static Recording Current()
         {
             if(!Recordings.TryGetValue(FestivalSession.ProtocolVersion,out var recording))
-                Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+" has no recording. Record its charts and spin timeline in ProtocolGuardTests.");
+                Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+" has no recording. Paste this recording of the current code, printed by ProtocolGuardTests.Record, into ProtocolGuardTests.Recordings:\n"+Record(FestivalSession.ProtocolVersion));
             return recording;
+        }
+        static readonly double[] StageStarts={10.25,1000.5};
+        static readonly string[] StageKinds={"Dance","ConfirmDance"};
+        static IEnumerable<int> PlayedTracks()=>Enumerable.Range(0,Festivals.Count).SelectMany(festival=>Enumerable.Range(0,Festivals.LevelCount).Select(level=>RhythmChart.StageTrackFor(festival,level))).Distinct().OrderBy(track=>track);
+        static InteractionState CheckDance()=>new InteractionState{Kind="ConfirmDance",ChartSeed=42,NoteCount=4,BeatSeconds=.5,ChartDifficulty=3};
+        static InteractionState Stage(int track,double startWorldSeconds,string kind)
+        {
+            var i=new InteractionState{Kind=kind,ChartSeed=42,NoteCount=kind=="Dance"?16:4,BeatSeconds=.5,ChartDifficulty=3};
+            RhythmChart.InitializeStage(i,track,startWorldSeconds);return i;
+        }
+        static string Chart(RhythmChart chart)=>R(chart.DurationSeconds)+"|"+string.Join(";",chart.Notes.Select(n=>n.Id+","+n.Direction+","+R(n.TimeSeconds)+","+R(n.HoldSeconds)));
+        internal static string Record(int version)
+        {
+            const string indent="            ";var text=new StringBuilder();
+            text.Append(indent).Append('[').Append(version).Append("]=new Recording(\n").Append(indent).Append("    new[]{\n");
+            for(int difficulty=-1;difficulty<=3;difficulty++)text.Append(indent).Append("        \"").Append(Chart(RhythmChart.Create(42,12,.5,difficulty))).Append("\",\n");
+            text.Append(indent).Append("    },\n").Append(indent).Append("    \"").Append(Chart(RhythmChart.For(CheckDance()))).Append("\",\n");
+            text.Append(indent).Append("    \"").Append(string.Join(",",FestivalSimulation.ReelStopSeconds.Select(R))).Append('|').Append(R(FestivalSimulation.RestSeconds)).Append('|')
+                .Append(R(FestivalSimulation.TakeSeconds)).Append('|').Append(R(FestivalSimulation.ReactSeconds)).Append('|').Append(R(FestivalSimulation.SpinSeconds)).Append("\",\n");
+            text.Append(indent).Append("    new[]{\n");
+            foreach(int track in PlayedTracks())foreach(double start in StageStarts)foreach(string kind in StageKinds)
+            {
+                var i=Stage(track,start,kind);
+                text.Append(indent).Append("        new StageRecording(").Append(track).Append(',').Append(R(start)).Append(",\"").Append(kind).Append("\",\"")
+                    .Append(R(i.StageFirstHeadWorldSeconds)).Append(',').Append(R(i.StageFirstHeadDelaySeconds)).Append(',').Append(R(i.StageBeatStride)).Append(',').Append(R(i.DurationSeconds)).Append("\",\n")
+                    .Append(indent).Append("            \"").Append(Chart(RhythmChart.For(i))).Append("\"),\n");
+            }
+            return text.Append(indent).Append("    }),\n").ToString();
         }
         static string R(double value)=>value.ToString("R",CultureInfo.InvariantCulture);
         static double D(string value)=>double.Parse(value,NumberStyles.Float,CultureInfo.InvariantCulture);
         static int I(string value)=>int.Parse(value,NumberStyles.Integer,CultureInfo.InvariantCulture);
-        static void Changed(string part,string what)=>Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+": "+part+" changed at "+what+". Raise ProtocolVersion and add a recording for it.");
+        static void Changed(string part,string what)=>Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+": "+part+" changed at "+what+". Raise ProtocolVersion: the guard then prints the new version's recording to paste (ProtocolGuardTests.Record).");
         // Recorded numbers are parsed and compared exactly, so the check does not depend on how a runtime formats a double.
         static void Same(string part,string field,double recorded,double now){if(recorded!=now)Changed(part,field+" (recorded "+R(recorded)+", now "+R(now)+")");}
         static void Same(string part,string field,int recorded,int now){if(recorded!=now)Changed(part,field+" (recorded "+recorded+", now "+now+")");}
@@ -183,7 +215,7 @@ namespace Festival.Tests
         [Test] public void TheCheckDanceChartMatchesTheRecording()
         {
             var recording=Current();
-            Matches("the check dance chart",recording.Check,RhythmChart.For(new InteractionState{Kind="ConfirmDance",ChartSeed=42,NoteCount=4,BeatSeconds=.5,ChartDifficulty=3}));
+            Matches("the check dance chart",recording.Check,RhythmChart.For(CheckDance()));
         }
 
         [Test] public void TheSpinTimelineMatchesTheRecording()
@@ -200,17 +232,49 @@ namespace Festival.Tests
         [Test] public void StageChartsMatchTheRecording()
         {
             var stage=Current().Stage;
-            if(stage==null)Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+" has no stage chart recording. Record its stage charts in ProtocolGuardTests.");
+            if(stage==null)Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+" has no stage chart recording. Paste its recording from ProtocolGuardTests.Record.");
             foreach(var entry in stage)
             {
                 string part="the track "+entry.Track+" "+entry.Kind+" stage chart from "+R(entry.StartWorldSeconds)+" s";
-                var i=new InteractionState{Kind=entry.Kind,ChartSeed=42,NoteCount=entry.Kind=="Dance"?16:4,BeatSeconds=.5,ChartDifficulty=3};
-                RhythmChart.InitializeStage(i,entry.Track,entry.StartWorldSeconds);
+                var i=Stage(entry.Track,entry.StartWorldSeconds,entry.Kind);
                 var anchor=entry.Anchor.Split(',');
                 Same(part,"StageFirstHeadWorldSeconds",D(anchor[0]),i.StageFirstHeadWorldSeconds);
                 Same(part,"StageFirstHeadDelaySeconds",D(anchor[1]),i.StageFirstHeadDelaySeconds);
                 Same(part,"StageBeatStride",D(anchor[2]),i.StageBeatStride);
                 Matches(part,entry.Chart,RhythmChart.For(i));
+            }
+        }
+
+        // A dance on a track with no stage recording would change with that track's grid and pass every guard.
+        [Test] public void EveryStageTrackAFestivalPlaysHasAStageRecording()
+        {
+            var stage=Current().Stage;Assert.That(stage,Is.Not.Null,"ProtocolVersion "+FestivalSession.ProtocolVersion+" has stage charts");
+            foreach(int track in PlayedTracks())foreach(double start in StageStarts)foreach(string kind in StageKinds)
+                Assert.That(stage.Any(s=>s.Track==track&&s.StartWorldSeconds==start&&s.Kind==kind),Is.True,"track "+track+" has a "+kind+" stage recording from "+R(start)+" s");
+        }
+
+        // Mono and .NET print some doubles with different digits that parse to the same value, so numbers are compared, not text.
+        [Test] public void TheRecorderPrintsTheCurrentVersionsRecording()
+        {
+            var stored=Current();string printed=Record(FestivalSession.ProtocolVersion);
+            Assert.That(printed,Does.StartWith("            ["+FestivalSession.ProtocolVersion+"]=new Recording(\n"),"the printout is a Recordings entry for this version");
+            var strings=Regex.Matches(printed,"\"([^\"]*)\"").Cast<Match>().Select(m=>m.Groups[1].Value).ToList();
+            var stages=Regex.Matches(printed,"new StageRecording\\((\\d+),([^,]+),\"(\\w+)\"").Cast<Match>().ToList();
+            var expected=stored.Charts.Concat(new[]{stored.Check,stored.Spin}).Concat(stored.Stage.SelectMany(s=>new[]{s.Kind,s.Anchor,s.Chart})).ToList();
+            Assert.That(strings.Count,Is.EqualTo(expected.Count),"one printed string for each recorded one");
+            Assert.That(stages.Count,Is.EqualTo(stored.Stage.Count),"one printed stage entry for each recorded one");
+            for(int k=0;k<stages.Count;k++)
+            {
+                Assert.That(I(stages[k].Groups[1].Value),Is.EqualTo(stored.Stage[k].Track),"stage entry "+k+" track");
+                Assert.That(D(stages[k].Groups[2].Value),Is.EqualTo(stored.Stage[k].StartWorldSeconds),"stage entry "+k+" start");
+            }
+            for(int k=0;k<expected.Count;k++)
+            {
+                string[] want=expected[k].Split('|',';',','),got=strings[k].Split('|',';',',');
+                Assert.That(got.Length,Is.EqualTo(want.Length),"printed string "+k+" field count");
+                for(int f=0;f<want.Length;f++)
+                    if(double.TryParse(want[f],NumberStyles.Float,CultureInfo.InvariantCulture,out double number))Assert.That(D(got[f]),Is.EqualTo(number),"printed string "+k+" field "+f);
+                    else Assert.That(got[f],Is.EqualTo(want[f]),"printed string "+k+" field "+f);
             }
         }
     }
