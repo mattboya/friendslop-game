@@ -23,6 +23,8 @@ public static class MysteryCupsTests
     static CommandResult Call(FestivalSimulation s)=>Act(s,FestivalSimulation.CupsTurn(s.State),FestivalSimulation.CallCups);
     // A cup still on the table that isn't the spiked one (the host knows which that is).
     static int Safe(FestivalSimulation s){var b=s.State.Booth;for(int i=0;i<b.Cups;i++)if(i!=b.Spiked&&!b.Drunk.Contains(i))return i;return -1;}
+    // The walk of a player with only this dose: Couch Lock and Rolly Pollies change it, so compare per substance.
+    static float DosedWalk(ActiveEffect dose)=>Intoxication.MovementMultiplier(new PlayerState{Effects={new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=dose.Intensity,Substance=dose.Substance}}});
 
     // Every scenario runs, so one red run shows each missing rule.
     public static void Run()
@@ -131,7 +133,7 @@ public static class MysteryCupsTests
     }
 
     // The spiked cup ends the game and the pot is lost: nobody is paid. Its drinker gets a dose for the rest of the level, the
-    // substance rolled from its own stream, and walks like any dosed player; one already dosed takes one stronger, up to 4. The
+    // substance rolled from its own stream, and walks like any player on that dose; one already dosed takes one stronger, up to 4. The
     // spin's doses, and so the tripper's visions, stay as they were.
     static void TheSpikedCupLosesThePotAndDosesTheDrinker()
     {
@@ -148,7 +150,7 @@ public static class MysteryCupsTests
         Check(string.Join(",",s.State.Players.Select(p=>p.Cash))+"|"+s.State.LevelSales+"|"+s.State.GrossSales+"|"+s.State.StashCash==money&&b.Pot==pot,"the $"+pot+" pot is lost: nobody is paid");
         var dose=drinker.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
         Check(dose!=null&&dose.Intensity==1&&FestivalSimulation.Substances.Contains(dose.Substance),"the drinker is dosed, got "+(dose==null?"nothing":dose.Intensity+" of '"+dose.Substance+"'"));
-        Check(Intoxication.MovementMultiplier(drinker)==FestivalSimulation.DoseMovementMultiplier(1),"and walks like any dosed player");
+        Check(Intoxication.MovementMultiplier(drinker)==DosedWalk(dose),"and walks like any player on one dose of '"+dose.Substance+"'");
         Check(JsonSerializer.Serialize(s.State.Doses,Json)==doses&&JsonSerializer.Serialize(s.State.Visions,Json)==visions,"the spin's doses and the tripper's visions stay as they were");
         for(double t=0;t<5&&Running(s);t+=.1)s.Tick(.1);
         Check(s.State.Phase=="Playing","setup: play resumes");s.Tick(30);
@@ -160,9 +162,11 @@ public static class MysteryCupsTests
             while(FestivalSimulation.CupsTurn(t.State)==t.State.TripperId)Check(Drink(t,Safe(t)).Accepted,"setup: the tripper drinks a safe cup");
             var sober=t.Player(FestivalSimulation.CupsTurn(t.State));
             Check(Drink(t,t.State.Booth.Spiked).Accepted,"setup: a sober friend drinks the spiked cup");
-            substances.Add(sober.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect)?.Substance??"none");
+            var rolled=sober.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);substances.Add(rolled?.Substance??"none");
+            Check(rolled!=null&&Intoxication.MovementMultiplier(sober)==DosedWalk(rolled),"seed "+seed+": the drinker walks like any player on one dose of '"+rolled?.Substance+"'");
         }
         Check(substances.Count>=3,"its substance is rolled, got "+string.Join(",",substances));
+        Check(substances.Contains("ecstasy")&&substances.Contains("weed"),"setup: Rolly Pollies and Couch Lock, whose walks differ, are among them, got "+string.Join(",",substances));
 
         var u=Poured(550,2);var tripper=u.Player(u.State.TripperId);var spun=tripper.Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
         int was=spun.Intensity,listed=u.State.Doses.Find(d=>d.PlayerId==tripper.Id).Dose;
