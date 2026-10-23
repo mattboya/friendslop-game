@@ -766,7 +766,11 @@ namespace Festival.Presentation
         }
         /// <summary>POLO-5: where a Ferris wheel rider in state sits (FestivalTwistVisuals.Seat), on from the wheel as SetTwists last
         /// drew it by the GlideLead of a glide at rate over this frame, so that glide keeps them on their seat (POLO-7).</summary>
-        public Vector3 WheelSeat(RoundState state,PlayerState rider,float rate)=>FestivalTwistVisuals.Seat(state,rider,(twists!=null?twists.WheelClock:FestivalSimulation.WorldSeconds(state))+GlideLead(rate,Time.unscaledDeltaTime));
+        public Vector3 WheelSeat(RoundState state,PlayerState rider,float rate)
+        {
+            float lead=GlideLead(rate,Time.unscaledDeltaTime);
+            return twists!=null?twists.Seat(state,rider,twists.WheelClock+lead):FestivalTwistVisuals.Seat(state,rider,FestivalSimulation.WorldSeconds(state)+lead,null);
+        }
         /// <summary>POLO-7: how many seconds ahead of a target moving at a steady pace to aim a glide that closes 1-exp(-rate·dt) of
         /// the gap each dt-second frame, so it keeps up with the target: dt·q/(1-q), q=exp(-rate·dt). Under 1/rate by less than half a
         /// frame, and 1/rate when there is no frame time to measure.</summary>

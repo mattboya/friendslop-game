@@ -260,8 +260,8 @@ namespace Festival.Tests
                 {
                     yield return null;
                     var state=session.State;
-                    bodyOff.Add(Vector3.Distance(body.transform.position,FestivalTwistVisuals.Seat(state,state.Players.Find(p=>p.Id==friend),twists.WheelClock)));
-                    eyeOff.Add(Vector3.Distance(session.EyePosition,FestivalTwistVisuals.Seat(state,session.LocalPlayer,twists.WheelClock)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight));
+                    bodyOff.Add(Vector3.Distance(body.transform.position,twists.Seat(state,state.Players.Find(p=>p.Id==friend),twists.WheelClock)));
+                    eyeOff.Add(Vector3.Distance(session.EyePosition,twists.Seat(state,session.LocalPlayer,twists.WheelClock)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight));
                     frames.Add(Time.unscaledDeltaTime);
                 }
                 foreach(var id in riders)Assert.That(FestivalSimulation.OnWheel(sim.State,id),Is.True,"setup: "+id+" is still on the wheel");
