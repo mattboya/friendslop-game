@@ -1005,10 +1005,11 @@ namespace Festival.Network
         }
         /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
-        // Local click prediction yields to the captured host state throughout the game and banner.
-        private bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
+        // Local click prediction yields to the captured host state throughout the game and banner. Internal: the HUD sets the
+        // first-person hands during a pending gear swap after this session does, so it must pass the same spins.
+        internal bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
         // POI-7: left click wins when both are held, as on the host (ApplyMovement).
-        private bool PresentedPoiSpinSides(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpinSides;
+        internal bool PresentedPoiSpinSides(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpinSides;
         private void UpdateActors()
         {
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();
