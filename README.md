@@ -4,11 +4,11 @@ Native Unity/C# source for a festival social-stealth game playable solo or with 
 
 ## Current status
 
-The Unity project compiles, automated rule and Unity tests pass, and a macOS development player has passed a two-client scripted cooperative mission and render smoke test. The first level also has a solo route, including slower clue interpretation and limited self-revival at medical. Original Blender character, hands, locations and props support the first playable art pass. A complete human-paced playthrough, performance profiling, the full wardrobe library and Windows/Steam release validation remain open. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), the [reference research](docs/FRIENDSLOP_RESEARCH_2026-09-27.md), and the [approved design direction](docs/APPROVED_DIRECTION.md).
+A playable macOS prototype of the [festival-weekend design](docs/GAME_DESIGN_2026-09-30.md) for a LAN crew or one player: camp, a spin that picks the tripper and their dose, then Day 1, Night 1, Day 2 and Night 2, with a debrief at the campfire after each level. Automated tests and scripted solo and two-player runs pass. Nobody has played a full weekend by hand yet, and Windows, Steam and proximity voice are not built. [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) says what works today, on which commit, and the evidence for each claim.
 
 ## Open the playable build
 
-Open `Builds/macOS/Development/FestivalCoop.app`. On the title screen, choose **PLAY**, then **HOST A GAME** to enter the campsite immediately; friends choose **PLAY**, then **JOIN A FRIEND** with your LAN address. Pick up a shelf item with E, carry it to the seller, then press E twice to inspect and pay. Handheld gear equips automatically; the Little Spoon is worn as a necklace. Press 1–3 to equip another handheld item and Q to use it. Explore a car, tent or porta potty with E, use E for its gag, and G to leave; use E at the camp DJ to change the music. At the lit trailhead, press E to ready. When every connected player is ready, a five-second countdown starts the ten-minute festival level. After the round, everyone votes for a silly award with 1–3, and the host opens the shop with E. One player can also complete the full route alone.
+Open `Builds/macOS/Development/FestivalCoop.app`. On the title screen, choose **PLAY**, then **HOST A GAME** to enter the campsite immediately; friends choose **PLAY**, then **JOIN A FRIEND** with your LAN address. Pick up a shelf item with E, carry it to the seller, then press E twice to inspect and pay. Handheld gear equips automatically; the Little Spoon is worn as a necklace. Press 1–3 to equip another handheld item and Q to use it. Explore a car, tent or porta potty with E, use F for its gag, and E or G to leave; use E at the camp DJ to change the music. At the lit trailhead, press E to ready. When every connected player is ready, a five-second countdown and the spin start Day 1, an eight-minute level. After the round, everyone votes for a silly award with 1–3, and the host opens the shop with E. One player can also complete the full route alone.
 
 See [the playtest guide](docs/PLAYTEST_2026-09-24.md) for the complete objective and recovery steps.
 
@@ -36,20 +36,27 @@ node scripts/launch-local-clients.mjs --binary "Builds/macOS/Development/Festiva
 
 ## Controls
 
-| Input | Action |
+| Default key | Action |
 | --- | --- |
-| WASD / mouse | Move / look |
-| Shift | Sprint |
-| E | Primary nearby interaction; exit a camp interior |
-| F | Chat with a nearby talkative festivalgoer; perform an interior antic |
-| Q / G | Use / drop equipped item; G also exits a camp interior |
-| 1–3 | Equip inventory slot; vote for a review award after a round |
-| Arrow keys | Rhythm inputs |
-| Tab | Hold festival map/objective view |
-| Escape | Menu, shop, detailed nearby actions |
-| F8 | Development-build diagnostics only |
+| W A S D / mouse | Move / look around |
+| Left Shift | Sprint (the crowd notices) |
+| E | The top action on your list; leave a camp interior |
+| F | Talk to someone; the tripper checks a vision; an antic inside a camp interior; at camp before Day 1, the host switches festival; call the cups in Mystery Cups |
+| Q | Use what is in your hand |
+| G | Leave a camp interior or put back a shelf item; hold 0.5 s to drop what is in your hand; in a security stop, ditch your stock; hold 1 s to stop dancing |
+| 1 / 2 / 3 | Hand slot 1–3; reply 1–3 in a talk or chat; vote at the campfire debrief |
+| Mouse wheel | Next hand slot down, previous hand slot up |
+| Hold left click | Spin the poi in front of you |
+| Hold right click | Spin the poi at your sides |
+| V | First or third person |
+| Hold Tab | Map |
+| Arrow keys, or W A S D | The four dance lanes: left, down, up, right |
+| 1–5 | Light Show answers 1–4, and 5 for not sure |
+| Hold T | Push to talk (no voice provider is configured yet) |
+| Escape | End or close a chat; menu and settings |
+| F8 / F9 | Development builds only: diagnostics overlay / graphics overlay |
 
-Create/Join accepts a display name, address and port. Purchased gear enters the timed festival when every connected player readies at the trailhead. Solo games are supported in development and release builds; cooperative clue interpretation and teammate revival remain faster than the solo alternatives.
+The table shows the default keys. SETTINGS > CONTROLS rebinds every one except Escape and F8 / F9.
 
 ## Architecture
 
@@ -60,4 +67,4 @@ Create/Join accepts a display name, address and port. Purchased gear enters the 
 
 Claude-of-Tanks informed lifecycle and network testing patterns. No upstream source or reserved assets were copied. Unity remains responsible for rendering, input, physics, navigation and transport.
 
-See [docs/RUNBOOK.md](docs/RUNBOOK.md), [docs/DECISIONS.md](docs/DECISIONS.md), and [CAPABILITIES.md](CAPABILITIES.md) for operational detail.
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) and [docs/DECISIONS.md](docs/DECISIONS.md) for operational detail, and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for what works today.

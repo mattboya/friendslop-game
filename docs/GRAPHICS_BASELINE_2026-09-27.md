@@ -23,7 +23,7 @@ This is the recoverable source and native-render comparison point for the [graph
 | Face effects | [client-face-states.png](graphics-baseline-2026-09-27/client-face-states.png) |
 | Rhythm camera | [client-rhythm.png](graphics-baseline-2026-09-27/client-rhythm.png) |
 
-The eight PNGs are source-controlled in `docs/graphics-baseline-2026-09-27/`; the same files are in the ignored local baseline directory. The scripted two-client mission and solo mission passed in their existing logs. The client rhythm log reported 512 frame samples, 8.3 ms p95 and 8.3 ms maximum. That is the harness's frame interval sample, not an isolated CPU/GPU profile; the earlier 17.3 ms p95 in `IMPLEMENTATION_STATUS.md` used a different run. Neither number establishes a minimum-spec graphics budget.
+The eight PNGs are source-controlled in `docs/graphics-baseline-2026-09-27/`; the same files are in the ignored local baseline directory. The scripted two-client mission and solo mission passed in their existing logs. The client rhythm log reported 512 frame samples, 8.3 ms p95 and 8.3 ms maximum. That is the harness's frame interval sample, not an isolated CPU/GPU profile; the earlier 17.3 ms p95 in `docs/STATUS_HISTORY_2026-09.md` (then `IMPLEMENTATION_STATUS.md`) used a different run. Neither number establishes a minimum-spec graphics budget.
 
 ## Source and rendering inventory
 
