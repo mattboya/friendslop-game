@@ -132,7 +132,7 @@ namespace Festival.Presentation
         /// <summary>GAS-1: on Giggle Gas, so they giggle (FestivalSession sets it from the view's VisualGiggling).</summary>
         public bool Giggling;
         /// <summary>POI-1: spinning the poi in hand, held on either click (FestivalSession sets it from the view's VisualPoiSpin, and
-        /// from the click itself for your own body). Only for show: it shows while carrying poi standing or walking.</summary>
+        /// from the click itself for your own body). It shows while carrying poi standing or walking.</summary>
         public bool SpinningPoi;
         /// <summary>POI-7: with SpinningPoi, the spin is right click's, each poi wheeling beside its hand instead of the butterfly.</summary>
         public bool SpinningPoiSides;
