@@ -1056,12 +1056,23 @@ namespace Festival.Tests
                     var mate=sim.AddPlayer("impl_u46_"+mates.Count,name);mate.Ready=true;mates.Add(mate);
                 }
                 yield return StartLevel(session);
+                // Everyone on the dose list carries that dose, and nobody else any, so Core's KeepTripper never
+                // hands the trip, and the card, to someone else mid-measure.
+                void Dosed()
+                {
+                    foreach(var p in sim.State.Players)
+                    {
+                        p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);var d=sim.State.Doses.Find(x=>x.PlayerId==p.Id);
+                        if(d!=null)p.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=d.Dose,Substance=d.Substance,RemainingSeconds=600});
+                    }
+                }
                 // Night 2: the first friend trips on four Rolly Pollies, everyone else is on four Tongue Stamps or Rolly Pollies, away from home.
                 sim.State.LevelIndex=3;sim.State.DurationSeconds=600;sim.State.ElapsedSeconds=30;sim.State.Npcs.Clear();
                 sim.State.TripperId=mates[0].Id;sim.State.Doses.Clear();
                 sim.State.Doses.Add(new PlayerDose{PlayerId=mates[0].Id,Dose=4,Substance="ecstasy"});
                 sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="lsd"});
                 for(int i=1;i<mates.Count;i++)sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=4,Substance=i%2==0?"lsd":"ecstasy"});
+                Dosed();
                 for(int i=0;i<mates.Count;i++){mates[i].X=-30+i*2;mates[i].Z=-30;}
 
                 var canvas=hud.GetComponentInChildren<Canvas>();var scaler=canvas.GetComponent<CanvasScaler>();canvas.renderMode=RenderMode.WorldSpace;
@@ -1129,7 +1140,7 @@ namespace Festival.Tests
                 foreach(var mate in mates.GetRange(3,4))mate.Connected=false;
                 yield return Settle();
                 if(Check("1920x1080, four friends gone")>=full)failures.Add("with four friends gone the card shrinks");
-                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="ecstasy"});
+                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="ecstasy"});Dosed();
                 foreach(float textScale in new[]{1f,1.3f})
                 {
                     session.Profile.Data.TextScale=textScale;yield return Settle();
@@ -1138,7 +1149,8 @@ namespace Festival.Tests
                 }
 
                 // Day 2's last minute, the longest friend tripping: the sundown warning comes up under the notice at either text size.
-                sim.State.LevelIndex=2;sim.State.TripperId=mates[1].Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=mates[1].Id,Dose=4,Substance="lsd"});
+                sim.State.LevelIndex=2;sim.State.TripperId=mates[1].Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=mates[1].Id,Dose=4,Substance="lsd"});Dosed();
+                string card=FestivalHudText.Tripping(sim.State,player.Id);
                 sim.State.ElapsedSeconds=sim.State.DurationSeconds-50;
                 foreach(float textScale in new[]{1f,1.3f})
                 {
@@ -1152,6 +1164,9 @@ namespace Festival.Tests
                 if(layoutLogs!=1)failures.Add("opted in, one new layout and steady frames log the dose card "+layoutLogs+" times: "+layoutLog);
                 if(layoutLog.ToUpperInvariant().Contains("BARTHOLOMEW"))failures.Add("the layout trace names a player: "+layoutLog);
 #endif
+                for(long tick=sim.State.Tick;sim.State.Tick==tick;)yield return null;
+                yield return Settle();
+                if(tripping.text!=card)failures.Add("a sim tick later the dose card reads \""+tripping.text.Replace("\n"," | ")+"\", not the test's \""+card.Replace("\n"," | ")+"\"");
             }
             finally
             {
