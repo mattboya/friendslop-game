@@ -74,11 +74,11 @@ namespace Festival.Presentation
         /// <summary>Objective card detail, matching ObjectiveTitle. At camp the host is offered the festival pick instead of the shopping line;
         /// either way the card says the viewer's paid starter allowance and the crowd stock source. This card, not FestivalGuidance.Hint, is what camp reads. By day the quota's line is followed
         /// by p's next step to a sale (NextStep). A Ferris wheel rider reads what they spot from up there instead (FestivalGuidance.Hint, POLO-1).</summary>
-        public static string ObjectiveDetail(RoundState s,PlayerState p,bool developmentSelection=false,string chat="F",string interact="E")
+        public static string ObjectiveDetail(RoundState s,PlayerState p,bool developmentSelection=false,string chat="F",string interact="E",string slot1="1",string slot2="2",string slot3="3")
         {
             if(s.Phase=="Results")return OutcomeDetail(s,p);
             if(s.Phase=="Shopping"){string choice=FestivalChoice(s,p.Id,developmentSelection,chat),stock=" • "+(Festivals.For(s).Night?"Tonight is a rescue. ":"")+CampStockGuidance(s,p);string camp=choice!=""?choice+stock:"Browse shelves • pay the seller"+stock+" • meet at the trailhead";string reset=CampResetDisclosure(s,p);return reset!=""?reset+"\n"+camp:camp;}
-            if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return PressKeys(FestivalGuidance.Hint(s,p),interact,chat);
+            if(!SellingToday(s,p)||FestivalSimulation.OnWheel(s,p.Id))return PressKeys(FestivalGuidance.Hint(s,p),interact,chat,slot1:slot1,slot2:slot2,slot3:slot3);
             // A paused game refuses every next step, and E is the game's own key then.
             return FestivalSimulation.DayQuotaMet(s)||s.Phase==FestivalSimulation.MinigamePhase?QuotaHint(s,p):QuotaHint(s,p)+" "+NextStep(s,p,interact);
         }
@@ -202,15 +202,22 @@ namespace Festival.Presentation
         public static string FreshPocketsDisclosure(RoundState s,PlayerState viewer=null)=>"EVERYONE STARTS OVER WITH "+(s!=null&&viewer!=null?Money(s,viewer,20):"$20").ToUpperInvariant()+" AND EMPTY POCKETS";
         public static string ResetDisclosure(RoundState s,PlayerState viewer=null)=>"BACK TO DAY 1"+Dot+FreshPocketsDisclosure(s,viewer);
         private static string CampResetDisclosure(RoundState s,PlayerState viewer)=>s.ReviewResult==""?"":s.ReviewResult!="Success"?ResetDisclosure(s,viewer):s.LevelIndex==0?"NEW WEEKEND"+Dot+FreshPocketsDisclosure(s,viewer):"";
-        /// <summary>The host's words name today's letters ("press E"); each "press X" here names the key bound to that action instead.</summary>
-        // ponytail: only "press E/F/G/Q"; "press 1, 2 or 3" and "Open Escape menu" keep their words until Core names actions.
-        public static string PressKeys(string text,string interact="E",string chat="F",string drop="G",string use="Q")
+        /// <summary>The host's words name today's letters ("press E"); each "press X" here names the key bound to that action instead.
+        /// Core names the other rebindable keys by action ("{Slot1}", "{Spin}", "{SpinSides}"), and each reads as its bound key, a mouse
+        /// button as a click ("left click").</summary>
+        public static string PressKeys(string text,string interact="E",string chat="F",string drop="G",string use="Q",string slot1="1",string slot2="2",string slot3="3",string spin="LMB",string sides="RMB")
         {
             // The HUD runs this every frame, and the regex allocates.
-            if(text.IndexOf("ress ",StringComparison.Ordinal)<0||interact=="E"&&chat=="F"&&drop=="G"&&use=="Q")return text;
-            return PressedKey.Replace(text,m=>m.Groups[1].Value+(m.Groups[2].Value=="E"?interact:m.Groups[2].Value=="F"?chat:m.Groups[2].Value=="G"?drop:use));
+            if(text.IndexOf("ress ",StringComparison.Ordinal)>=0&&!(interact=="E"&&chat=="F"&&drop=="G"&&use=="Q"))
+                text=PressedKey.Replace(text,m=>m.Groups[1].Value+(m.Groups[2].Value=="E"?interact:m.Groups[2].Value=="F"?chat:m.Groups[2].Value=="G"?drop:use));
+            // After the letters, so a slot bound to E is not read again as Interact.
+            if(text.IndexOf('{')<0)return text;
+            return ActionToken.Replace(text,m=>Spoken(m.Groups[1].Value=="Slot1"?slot1:m.Groups[1].Value=="Slot2"?slot2:m.Groups[1].Value=="Slot3"?slot3:m.Groups[1].Value=="Spin"?spin:sides));
         }
         static readonly Regex PressedKey=new Regex(@"\b([Pp]ress )([EFGQ])\b");
+        static readonly Regex ActionToken=new Regex(@"\{(Slot1|Slot2|Slot3|Spin|SpinSides)\}");
+        // A mouse button's short name, as CONTROLS lists it ("LMB"), reads as a click in a sentence.
+        static string Spoken(string key)=>key=="LMB"?"left click":key=="RMB"?"right click":key=="MMB"?"middle click":key;
         /// <summary>Only a ground gear drop offers pickup; stop ditch and shared-stash results keep their destination.</summary>
         public static string DropNotice(string message,FestivalInput input)=>message.StartsWith("Dropped ",StringComparison.Ordinal)?message+Dot+input.Label(input.Interact).ToUpperInvariant()+" to pick it up":message;
 

@@ -213,9 +213,11 @@ namespace Festival.Tests
 {
     public sealed class PoiPurchaseHudPlayTests:FestivalPlayModeTest
     {
+        // The host's reply names the spins by action ({Spin}); the drawn HUD reads in the default buttons.
+        const string SpinWordsShown="Hold left click to spin them in front of you, right click at your sides.";
         [UnityTest]public IEnumerator PayingForPoiKeepsTheSpinHintInTheDrawnHud()
         {
-            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. "+FestivalSimulation.SpinWords,true);
+            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. "+SpinWordsShown,true);
         }
 
         [UnityTest]public IEnumerator PayingForAStarterKeepsItsPocketToast()
@@ -248,7 +250,7 @@ namespace Festival.Tests
                 Assert.That(Read("Prompt"),Does.StartWith("PICK UP "+title));
                 yield return Tap(Key.E,.25f);
                 Assert.That(player.HeldOfferId,Is.EqualTo(item));
-                if(spin)Assert.That(Read("Notice"),Does.EndWith(FestivalSimulation.SpinWords));
+                if(spin)Assert.That(Read("Notice"),Does.EndWith(SpinWordsShown));
                 player.X=0;player.Z=7;yield return new WaitForSeconds(.35f);
                 Assert.That(Read("Prompt"),Does.StartWith("SHOW "+title+" TO SELLER"));
                 yield return Tap(Key.E,.25f);Assert.That(Read("Prompt"),Does.StartWith("PAY $5"));

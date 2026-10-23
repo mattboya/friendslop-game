@@ -6,7 +6,7 @@ using Festival.Core;
 // FestivalSimulation.CanSpinPoi, which the host turns into PlayerState.VisualPoiSpin each tick. POI-7 (Matt, 2026-10-07): a spinner
 // blends in, so festivalgoers watching grow suspicious 10% slower (19% with the Little Spoon), and Sprint does nothing mid-spin. HUD-9:
 // Equip's reply says what the item in hand does: poi name Q's performance and the spin, and stock never says Q, since Q on stock
-// takes it yourself (ECON-3).
+// takes it yourself (ECON-3). The replies name the spin buttons by action ({Spin}, {SpinSides}); the HUD reads in the bound ones.
 public static class PoiSpinTests
 {
     static int sequence;
@@ -118,7 +118,7 @@ public static class PoiSpinTests
             Check(Act(s,p.Id,"HoldOffer",item).Accepted,"setup: take poi to seller");p.X=0;p.Z=7;
             var reply=Act(s,p.Id,"Buy",item);
             Check(reply.Accepted,"setup: pay for poi");
-            Check(reply.Reason==Catalog.FindItem(item).Name+" bought for $"+Catalog.FindItem(item).Price+". Hold left click to spin them in front of you, right click at your sides.","bought poi explain both spins, got \""+reply.Reason+"\"");
+            Check(reply.Reason==Catalog.FindItem(item).Name+" bought for $"+Catalog.FindItem(item).Price+". Hold {Spin} to spin them in front of you, {SpinSides} at your sides.","bought poi explain both spins, got \""+reply.Reason+"\"");
             Check(p.EquippedItemId==item&&p.HeldOfferId=="","purchase still equips paid poi");
         }
     }
@@ -131,7 +131,7 @@ public static class PoiSpinTests
             var point=Catalog.ShopPoint(true,s.State.VendorOffers.IndexOf(item));p.X=point.X;p.Z=point.Z;
             var reply=Act(s,p.Id,"HoldOffer",item);
             Check(reply.Accepted,"setup: take poi from shelf");
-            Check(reply.Reason=="Holding "+Catalog.FindItem(item).Name+". Bring it to the seller, or press G to return it. Hold left click to spin them in front of you, right click at your sides.","shelf poi explain both spins, got \""+reply.Reason+"\"");
+            Check(reply.Reason=="Holding "+Catalog.FindItem(item).Name+". Bring it to the seller, or press G to return it. Hold {Spin} to spin them in front of you, {SpinSides} at your sides.","shelf poi explain both spins, got \""+reply.Reason+"\"");
             Check(Act(s,p.Id,"ReturnOffer").Accepted,"setup: return shelf poi");
         }
     }
@@ -144,7 +144,7 @@ public static class PoiSpinTests
             p.Inventory.Add(new ItemStack{ItemId=item,Count=1});
             var reply=Act(s,p.Id,"Equip",item);
             Check(reply.Accepted,"camp equips owned poi");
-            Check(reply.Reason=="Equipped "+Catalog.FindItem(item).Name+". Hold left click to spin them in front of you, right click at your sides.","camp offers only the spins, got \""+reply.Reason+"\"");
+            Check(reply.Reason=="Equipped "+Catalog.FindItem(item).Name+". Hold {Spin} to spin them in front of you, {SpinSides} at your sides.","camp offers only the spins, got \""+reply.Reason+"\"");
             Check(Act(s,p.Id,"Use",item).Reason=="Start the round first","camp still refuses Q performance");
         }
     }
@@ -156,7 +156,7 @@ public static class PoiSpinTests
         string Reply(string item)=>Act(s,p.Id,"Equip",item).Reason;
         string stock=Reply("stock_lsd"),poi=Reply("poi_led"),gear=Reply("confetti");
         Check(stock=="Equipped Tongue Stamps. Walk up to a festivalgoer to offer it.","stock points at a buyer and never says Q (that takes it yourself), got \""+stock+"\"");
-        Check(poi=="Equipped LED poi. Press Q to perform. Hold left click to spin them in front of you, right click at your sides.","poi name the performance and both spins, got \""+poi+"\"");
+        Check(poi=="Equipped LED poi. Press Q to perform. Hold {Spin} to spin them in front of you, {SpinSides} at your sides.","poi name the performance and both spins, got \""+poi+"\"");
         Check(gear=="Equipped Confetti cannon. Press Q to use.","other gear still says Q, got \""+gear+"\"");
     }
 }

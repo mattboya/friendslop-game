@@ -222,6 +222,38 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.CancelAction(s,you,"H"),Is.EqualTo("Cancel current action  •  H PLAY A DECK SET"));
         }
 
+        // Core names the other rebindable keys by action. Each token reads as the key it is given, a mouse button as a
+        // click, and with no key given as today's words.
+        [Test] public void CoreActionTokensReadAsTheKeysTheyAreGiven()
+        {
+            string words=FestivalSimulation.SpinWords,vote="Click a friend for each award, or press {Slot1}, {Slot2} or {Slot3}.";
+            Assert.That(FestivalHudText.PressKeys(words),Is.EqualTo("Hold left click to spin them in front of you, right click at your sides."),"today's words with no override");
+            Assert.That(FestivalHudText.PressKeys(words,spin:"K",sides:"L"),Is.EqualTo("Hold K to spin them in front of you, L at your sides."),"the bound Spin and SpinSides keys");
+            Assert.That(FestivalHudText.PressKeys(words,spin:"RMB",sides:"LMB"),Is.EqualTo("Hold right click to spin them in front of you, left click at your sides."),"swapped mouse buttons read as clicks");
+            Assert.That(FestivalHudText.PressKeys(vote),Is.EqualTo("Click a friend for each award, or press 1, 2 or 3."),"today's slot keys with no override");
+            Assert.That(FestivalHudText.PressKeys(vote,slot1:"7",slot2:"8",slot3:"9"),Is.EqualTo("Click a friend for each award, or press 7, 8 or 9."),"the bound slot keys");
+            Assert.That(FestivalHudText.PressKeys("Press E, or press {Slot1}.","R",slot1:"E"),Is.EqualTo("Press R, or press E."),"a slot key on E is not read again as Interact");
+        }
+
+        // The host's words follow the profile's slot and spin keys too: the vote hint on the objective card, and a poi reply in
+        // the notice.
+        [Test] public void TheVoteHintAndThePoiReplyNameTheBoundSlotAndSpinKeys()
+        {
+            WithReboundHud(keys=>
+            {
+                keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/7");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/8");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/9");
+                keys.Spin.ApplyBindingOverride(0,"<Keyboard>/k");keys.SpinSides.ApplyBindingOverride(0,"<Keyboard>/l");
+            },(session,hud,go)=>
+            {
+                var review=Level(0,1,"CampReview");review.ReviewAwards.AddRange(new[]{"Worst Dancer","Got Lost","MVP Tripper"});var you=Crew(review,"you","You");
+                typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{review,you});
+                Assert.That(Shown(go,"Objective detail"),Is.EqualTo("Click a friend for each award, or press 7, 8 or 9. Then the host opens the camp shop."),"the vote hint names the bound slot keys");
+                session.SetMessage("Equipped Practice poi. "+FestivalSimulation.SpinWords);
+                typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
+                Assert.That(Shown(go,"Notice"),Is.EqualTo("Equipped Practice poi. Hold K to spin them in front of you, L at your sides."),"the poi reply names the bound spin keys");
+            });
+        }
+
         [Test] public void BannerNamesTheFestivalAndLevel()
         {
             Assert.That(FestivalHudText.LevelBanner(Level(0,0)),Is.EqualTo("PALM MIRAGE  •  DAY 1"));

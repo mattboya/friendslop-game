@@ -851,7 +851,8 @@ namespace Festival.Presentation
             // The host's replies name money in dollars; each player reads their own (PLAYA-1).
             string message=session.State!=null&&session.LocalPlayer!=null?FestivalHudText.MoneyText(session.State,session.LocalPlayer,session.Message):session.Message;
             var keys=session.Controls;
-            message=FestivalHudText.PressKeys(FestivalHudText.DropNotice(message,keys),Bound(keys?.Interact,"E"),Bound(keys?.Chat,"F"),Bound(keys?.Drop,"G"),Bound(keys?.Use,"Q"));
+            message=FestivalHudText.PressKeys(FestivalHudText.DropNotice(message,keys),Bound(keys?.Interact,"E"),Bound(keys?.Chat,"F"),Bound(keys?.Drop,"G"),Bound(keys?.Use,"Q"),
+                Bound(keys?.Slot1,"1"),Bound(keys?.Slot2,"2"),Bound(keys?.Slot3,"3"),Bound(keys?.Spin,"LMB"),Bound(keys?.SpinSides,"RMB"));
             status.text=connectionError==""?message:connectionError;
             status.color=connectionError==""?new Color(.25f,.35f,.32f):new Color(.58f,.16f,.12f);
             if(session.Message!=lastNotice){lastNotice=session.Message;noticeUntil=Time.unscaledTime+5;}
@@ -1086,7 +1087,8 @@ namespace Festival.Presentation
         {
             levelBanner.text=FestivalHudText.LevelBanner(state);
             objectiveTitle.text=FestivalHudText.ObjectiveTitle(state,player);
-            objective.text=FestivalHudText.ObjectiveDetail(state,player,session!=null&&session.DevelopmentFestivalSelection,Bound(session?.Controls?.Chat,"F"),Bound(session?.Controls?.Interact,"E"));
+            objective.text=FestivalHudText.ObjectiveDetail(state,player,session!=null&&session.DevelopmentFestivalSelection,Bound(session?.Controls?.Chat,"F"),Bound(session?.Controls?.Interact,"E"),
+                Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"));
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"));
