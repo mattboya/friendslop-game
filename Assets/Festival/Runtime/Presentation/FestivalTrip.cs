@@ -15,7 +15,7 @@ namespace Festival.Presentation
     /// reach the screen through the single writers: FestivalHud.ApplyEffects adds Fov to the view's field of view,
     /// FestivalSession.UpdateCamera tilts the view by Roll and trails the mouse by Lag (Follow), and FestivalNightLighting adds
     /// Saturation and Brightness to the colour grade. This component draws the rest: its own overlay canvas under the HUD (tint,
-    /// haze, vignette, letterbox, and TRIP-16's sleepy eyes that now and then blink), pooled colour trails and glows around other
+    /// haze, vignette, and sleepy eyes that now and then blink, black above and below), pooled colour trails and glows around other
     /// people, TRIP-11's pattern on the scenery (FestivalTripSurfaces) in the view's camera alone, and a low-pass on the view's listener.
     /// GAS-1: a Giggle Balloon's gas at camp (Gas) goes the same way, and adds a tremolo and (GAS-5) a reverb: FestivalTrip is the
     /// one writer of AudioListener.volume and of the listener's filters.</summary>
@@ -27,8 +27,8 @@ namespace Festival.Presentation
             // Over the whole view, alpha included, and a milky veil's alpha.
             public Color Tint;
             public float Haze;
-            // How dark the edges close in (0-1), and each letterbox bar's share of the screen's height.
-            public float Vignette,Letterbox;
+            // How dark the edges close in (0-1).
+            public float Vignette;
             // Degrees added to the field of view and to the view's roll right now, and the seconds the camera trails the mouse by.
             public float Fov,Roll,Lag;
             // Added to the colour grade's saturation and post exposure.
@@ -319,7 +319,7 @@ namespace Festival.Presentation
 
         private void Show(Perception look,RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,bool reducedMotion,float deltaTime)
         {
-            bool shown=look.Tint.a>0||look.Haze>0||look.Vignette>0||look.Letterbox>0||look.Eye>0;
+            bool shown=look.Tint.a>0||look.Haze>0||look.Vignette>0||look.Eye>0;
             if(overlay.activeSelf!=shown)overlay.SetActive(shown);
             tint.color=look.Tint;haze.color=new Color(HazeColor.r,HazeColor.g,HazeColor.b,look.Haze);vignette.color=new Color(0,0,0,look.Vignette);
             Lids(look,state,localPlayerId,reducedMotion,deltaTime);
@@ -330,7 +330,7 @@ namespace Festival.Presentation
         }
 
         // TRIP-16: the eye's opening across the middle of the screen, as tall as the lids are open (Aperture), with the black bars flush
-        // above and below it. With no eye, the blink goes, so a shut eye never outlives its dose, and the bars are the letterbox.
+        // above and below it. With no eye, the blink goes, so a shut eye never outlives its dose, and the bars fold away.
         private void Lids(Perception look,RoundState state,string localPlayerId,bool reducedMotion,float deltaTime)
         {
             float rest=look.Eye,closure=0,aperture=1;bool drawn=rest>0,held=false;
@@ -338,7 +338,7 @@ namespace Festival.Presentation
             if(!drawn)
             {
                 blinker=null;blinkingOn="";
-                top.rectTransform.anchorMin=new Vector2(0,1-look.Letterbox);bottom.rectTransform.anchorMax=new Vector2(1,look.Letterbox);
+                top.rectTransform.anchorMin=new Vector2(0,1);bottom.rectTransform.anchorMax=new Vector2(1,0);
             }
             else
             {

@@ -26,12 +26,12 @@ namespace Festival.Tests
         private static string Name(string id)=>Catalog.FindEffect(id).Name;
         // Every setting, so two looks can be told apart and a failure shows them.
         private static string Describe(FestivalTrip.Perception p)=>
-            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} eye {p.Eye:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} lattice {p.Lattice:F3} cells {p.Cells:F3} drift {p.Drift:F4} breathe {p.Breathe:F4}";
+            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} eye {p.Eye:F4} fov {p.Fov:F4} roll {p.Roll:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} lattice {p.Lattice:F3} cells {p.Cells:F3} drift {p.Drift:F4} breathe {p.Breathe:F4}";
         // How strongly each setting is felt.
-        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Eye,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells,Mathf.Abs(p.Drift),Mathf.Abs(p.Breathe)};
-        // Everything but motion: colour, haze, vignette, letterbox, the eyes' rest, the grade, trails, glow, sound and the surface
+        private static float[] Amounts(FestivalTrip.Perception p)=>new[]{p.Tint.a,p.Haze,p.Vignette,p.Eye,Mathf.Abs(p.Fov),Mathf.Abs(p.Roll),p.Lag,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells,Mathf.Abs(p.Drift),Mathf.Abs(p.Breathe)};
+        // Everything but motion: colour, haze, vignette, the eyes' rest, the grade, trails, glow, sound and the surface
         // patterns themselves.
-        private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Letterbox,p.Eye,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells};
+        private static float[] Colour(FestivalTrip.Perception p)=>new[]{p.Tint.r,p.Tint.g,p.Tint.b,p.Tint.a,p.Haze,p.Vignette,p.Eye,p.Saturation,p.Brightness,p.Trails,p.Glow,p.Muffle,p.Lattice,p.Cells};
         private static readonly string Nothing=Describe(default);
 
         [Test]public void EachSubstanceLooksDifferentAtOneDose()
@@ -78,7 +78,6 @@ namespace Festival.Tests
                 var couch=Of("weed");
                 Assert.That(couch.Haze>0&&couch.Eye>0,"Couch Lock is a soft haze seen through sleepy eyes: "+Describe(couch)+at);
                 Assert.That(couch.Tint.g>couch.Tint.r&&couch.Tint.g>couch.Tint.b,"with a green cast"+at);
-                Assert.That(couch.Letterbox,Is.Zero,"and no straight bars over the eyes"+at);
                 // TRIP-16: Pony Dust and Couch Lock look out through eyes resting as far closed as the dose; the rest keep them open.
                 foreach(var id in new[]{"ketamine","weed"})Assert.That(Of(id).Eye,Is.EqualTo(FestivalTrip.EyeRest(dose)).And.GreaterThan(0),Name(id)+" rests the eyes the dose's way"+at);
                 foreach(var id in new[]{"lsd","mushrooms","ecstasy"})Assert.That(Of(id).Eye,Is.Zero,Name(id)+" keeps the eyes open"+at);
@@ -116,7 +115,7 @@ namespace Festival.Tests
             foreach(var id in Substances)
             {
                 var full=FestivalTrip.Look(id,4,false,Moment);var calm=FestivalTrip.Look(id,4,true,Moment);
-                Assert.That(Colour(calm),Is.EqualTo(Colour(full)),Name(id)+" keeps its colour, haze, vignette, letterbox, resting eyes, grade, trails, glow and sound");
+                Assert.That(Colour(calm),Is.EqualTo(Colour(full)),Name(id)+" keeps its colour, haze, vignette, resting eyes, grade, trails, glow and sound");
                 Assert.That(calm.Fov,Is.EqualTo(full.Fov*.25f).Within(1e-5f),Name(id)+": the swell is cut to a quarter");
                 Assert.That(calm.Roll,Is.EqualTo(full.Roll*.25f).Within(1e-5f),Name(id)+": the tilt is cut to a quarter");
                 Assert.That(calm.Lag,Is.EqualTo(full.Lag*.25f).Within(1e-5f),Name(id)+": the lag is cut to a quarter");

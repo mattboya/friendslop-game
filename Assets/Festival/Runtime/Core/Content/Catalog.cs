@@ -53,7 +53,7 @@ namespace Festival.Core
             Effect("ecstasy","Rolly Pollies",1.6,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
             Effect("ketamine","Pony Dust",2.4,false,"Longer visibility lead; unchanged hit times."),
             Effect("alcohol","Shot",2,false,"Spinning notes converge at fixed receptors; optional camera roll off."),
-            Effect("weed","Couch Lock",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8),
+            Effect("weed","Couch Lock",2,false,"Green haze through sleepy eyes that blink, under the HUD; host movement multiplier 0.8; same-BPM audio.",0.8),
             // GAS-1: a Giggle Balloon's gas, taken at camp and gone before any level, so it never meets a rhythm lane.
             Effect("giggle_gas","Giggle Gas",2,false,"Camp only; the hitter's own view and sound pulse; no rule changes.")
         };

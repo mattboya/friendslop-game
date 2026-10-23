@@ -23,7 +23,7 @@ namespace Festival.Tests
         [TearDown]public void Cleanup(){foreach(var go in made)if(go!=null)Object.DestroyImmediate(go);made.Clear();AudioListener.volume=1;}
 
         private static string Describe(FestivalTrip.Perception p)=>
-            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} letterbox {p.Letterbox:F4} fov {p.Fov:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} tremolo {p.Tremolo:F3} reverb {p.Reverb:F3}";
+            $"tint {p.Tint} haze {p.Haze:F4} vignette {p.Vignette:F4} fov {p.Fov:F4} lag {p.Lag:F4} saturation {p.Saturation:F3} brightness {p.Brightness:F4} trails {p.Trails:F3} glow {p.Glow:F3} muffle {p.Muffle:F3} tremolo {p.Tremolo:F3} reverb {p.Reverb:F3}";
         private static readonly string Nothing=Describe(default);
         // The gas at simulation time now and local time t, for "me" at camp, on the music's beat (none: the music is off).
         private static FestivalTrip.Perception At(double now,float t=0,bool reduced=false,float? beat=null)=>FestivalTrip.For(Camp(now),"me",reduced,t,beat);
