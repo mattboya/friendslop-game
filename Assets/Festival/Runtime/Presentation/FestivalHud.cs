@@ -653,7 +653,7 @@ namespace Festival.Presentation
             campSecrets=Label(menuHome.transform,"Easter eggs",17,TextAnchor.MiddleRight);campSecrets.fontStyle=FontStyle.Normal;campSecrets.color=new Color(.31f,.42f,.38f);Place(campSecrets.rectTransform,.45f,.61f,.955f,.69f);ShrinkToFit(campSecrets,10);
             preview=Label(menuHome.transform,"Preview",21,TextAnchor.MiddleLeft);Place(preview.rectTransform,.045f,.51f,.95f,.62f);preview.color=Ink;
             nextButton=Button(menuHome.transform,"NEXT CAMP",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>session.Command("Reset"));
-            cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),FinishCurrentAction);
+            cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>FinishCurrentAction(session?.LocalPlayer?.InteractionId));
             resumeButton=Button(menuHome.transform,"RESUME FESTIVAL",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>{session.MenuOpen=false;settingsOpen=false;});
             Button(menuHome.transform,"CREW + NEARBY",new Vector2(.045f,.26f),new Vector2(.955f,.375f),()=>{crewOpen=!crewOpen;});
             Button(menuHome.transform,"SETTINGS",new Vector2(.045f,.135f),new Vector2(.495f,.25f),()=>{settingsOpen=true;});
@@ -1452,7 +1452,7 @@ namespace Festival.Presentation
             if(key==null||session.MenuOpen||!key.IsPressed())stopHeldSince=-1;
             else if(key.WasPressedThisFrame())stopHeldSince=Time.unscaledTime;
             float held=stopHeldSince<0?0:(Time.unscaledTime-stopHeldSince)/FestivalHudText.HoldToStopSeconds;
-            if(held>=1){stopHeldSince=-1;held=0;session.Command("Cancel");}
+            if(held>=1){stopHeldSince=-1;held=0;session.Command("Cancel",session.LocalPlayer?.InteractionId);}
             ShowStopHold(held);
         }
 
@@ -1874,10 +1874,12 @@ namespace Festival.Presentation
         }
 
         private static InteractionState ActiveConfirmation(RoundState state,PlayerState player)=>player==null?null:state?.Interactions.Find(i=>i.Id==player.InteractionId&&i.PlayerId==player.Id&&i.Status=="Active"&&i.Kind=="ConfirmChat");
-        private void FinishCurrentAction()
+        // `seen` is the interaction the player acted on. The host refuses the Cancel once that one has ended, so a joined view
+        // that lags can't stop what replaced it.
+        private void FinishCurrentAction(string seen)
         {
             var check=ActiveConfirmation(session.State,session.LocalPlayer);
-            if(check!=null)session.Command("EndChat",check.Id);else session.Command("Cancel");
+            if(check!=null)session.Command("EndChat",check.Id);else session.Command("Cancel",seen);
         }
         private void UpdateActions(RoundState state,PlayerState player)
         {
@@ -2003,7 +2005,8 @@ namespace Festival.Presentation
             }
             // TRIP-4: E runs the first action listed, so lying on the grass E gets you up before anything else.
             bool lying=FestivalSimulation.LyingDown(state,player.Id);
-            if(lying)AddAction(FestivalHudText.GetUpAction,()=>session.Command("Cancel"),ref y);
+            string doing=player.InteractionId;
+            if(lying)AddAction(FestivalHudText.GetUpAction,()=>session.Command("Cancel",doing),ref y);
             // E runs the first action listed. Ending the level comes before the carry prompts, so the leader standing beside
             // a body already home at the gate still ends Night 2 with E, and a carrier arriving there does too.
             if(state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId==""&&FestivalSimulation.CanExtract(state,player))AddAction(FestivalHudText.ExtractAction(state),()=>session.Command("Extract"),ref y);
@@ -2016,9 +2019,10 @@ namespace Festival.Presentation
             if(!lying&&FestivalHudText.CanCancel(state,player))
             {
                 // PLAYA-5: a plain art car ride lists its deck set beside the way off. Both read the view again when chosen, so a list
-                // from just before a set began can neither stop it nor ask for another.
-                bool deck=FestivalSimulation.CanPlayDeckSet(state,player);string listed=player.InteractionId;
-                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player,Bound(session?.Controls?.Chat,"F")),deck?()=>{if(session.LocalPlayer?.InteractionId==listed)FinishCurrentAction();}:(Action)FinishCurrentAction,ref y);
+                // from just before a set began can neither stop it nor ask for another. The way off names the ride it listed, so the
+                // host refuses it too when the view itself is behind.
+                bool deck=FestivalSimulation.CanPlayDeckSet(state,player);
+                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player,Bound(session?.Controls?.Chat,"F")),()=>{if(!deck||session.LocalPlayer?.InteractionId==doing)FinishCurrentAction(doing);},ref y);
                 if(deck)foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))
                     AddAction(label,()=>{if(FestivalSimulation.CanPlayDeckSet(session.State,session.LocalPlayer))session.Command(command.Kind);},ref y);
             }
