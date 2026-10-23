@@ -1189,16 +1189,17 @@ namespace Festival.Network
             return true;
         }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private (string,int,bool,bool,bool) tracedLook=("",-1,false,false,false);
-        // Opt-in: the dose look the camera holds, each time its substance, dose, showing or a comfort setting changes.
+        private (string,int,bool,bool,bool,bool) tracedLook=("",-1,false,false,false,false);
+        // Opt-in: the dose look the camera holds, each time its substance, dose, showing or a comfort setting changes, and at each edge
+        // of a Pony Dust stall on the camera's own estimated clock, so the roll printed is the roll the camera used then.
         private void TraceTripLook(PlayerState player,FestivalTrip.Perception trip)
         {
             ActiveEffect dose=null;foreach(var effect in player.Effects)if(effect.Id==FestivalSimulation.DoseEffect){dose=effect;break;}
-            var look=(dose?.Substance??"",dose?.Intensity??0,Profile.Data.ReducedMotion,FestivalWorld.ShowsFestival(State.Phase)&&player.Life!="Spirit",Profile.Data.CameraShake);
+            var look=(dose?.Substance??"",dose?.Intensity??0,Profile.Data.ReducedMotion,FestivalWorld.ShowsFestival(State.Phase)&&player.Life!="Spirit",Profile.Data.CameraShake,Intoxication.Stall(player,EstimatedSimulationSeconds)>0);
             if(look==tracedLook)return;
             tracedLook=look;
             DevelopmentDiagnostics.GraphicsEvent("Trip","look","substance="+look.Item1+" dose="+look.Item2+" reduced="+look.Item3+" share="+(look.Item3?FestivalTrip.ReducedMotionShare:1).ToString("F2")
-                +" shown="+look.Item4+" camera_shake="+look.Item5+" roll="+trip.Roll.ToString("F2")+" saturation="+trip.Saturation.ToString("F1"));
+                +" shown="+look.Item4+" camera_shake="+look.Item5+" stall="+look.Item6+" roll="+trip.Roll.ToString("F2")+" saturation="+trip.Saturation.ToString("F1"));
         }
 #endif
         private void TransportFailed(){if(!closing)Fail("Network transport failed. Leave and try another port or host address.");}

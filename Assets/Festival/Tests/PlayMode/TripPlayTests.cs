@@ -230,7 +230,8 @@ namespace Festival.Tests
 
                 // Pony Dust in a live dance: the HUD's arrows rise into view 2.4 s ahead of their beat, not the plain 2 s. Each
                 // frame, how far ahead of its beat the farthest arrow on screen is; the partner is held in place so the dance runs on.
-                dose.Substance="ketamine";dose.Intensity=4;session.Profile.Data.ReducedMotion=true;
+                // The dose starts now, so its first Pony Dust stall, 8.4 s in, comes after the dance and the look traces once.
+                dose.Substance="ketamine";dose.Intensity=4;dose.StartSeconds=sim.State.SimulationSeconds;session.Profile.Data.ReducedMotion=true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Assert.That(laneDiagnosticCount,Is.Zero,"lane diagnostics stay silent until opted in");
                 Assert.That(lookDiagnosticCount,Is.Zero,"through every look so far the camera's trip trace stays silent until opted in");DevelopmentDiagnostics.Visible=true;
@@ -340,6 +341,10 @@ namespace Festival.Tests
             var world=new GameObject("Wobble world");world.AddComponent<FestivalWorld>();yield return null;
             var hostObject=new GameObject("Wobble host");var host=hostObject.AddComponent<FestivalSession>();
             var friendObject=new GameObject("Wobble friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            bool diagnostics=DevelopmentDiagnostics.Visible;var looks=new List<string>();
+            Application.LogCallback lookLog=(message,stack,type)=>{if(message.StartsWith("[Festival.Trip] action=look substance=ketamine "))looks.Add(message);};
+#endif
             try
             {
                 ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
@@ -389,7 +394,17 @@ namespace Festival.Tests
                 yield return Until(()=>Dosed(host)&&!Dosed(friend),"the host trips and the friend's screen is sober");
                 Assert.That(me.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms")||mate.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms"),Is.False,"setup: no shop-bought effect rolls a view");
                 StallIn(hosted,.3);var hostFloor=new float[1];
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                // Opted in a frame ahead, so the look before the stall traces uncounted; then one line as the stall starts, one as it ends.
+                DevelopmentDiagnostics.Visible=true;yield return null;Application.logMessageReceived+=lookLog;
+#endif
                 yield return Through(host,friend,4,hostFloor);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=lookLog;DevelopmentDiagnostics.Visible=diagnostics;
+                Assert.That(looks.Count,Is.EqualTo(2),"opted in, one look line at the stall's start and one at its end: "+string.Join(" | ",looks));
+                Assert.That(looks[0],Does.Contain(" stall=True ").And.Contain(" roll="),"the first as the walk stalls, with the roll");
+                Assert.That(looks[1],Does.Contain(" stall=False ").And.Contain(" roll="),"the second as it walks again, with the roll");
+#endif
                 Assert.That(hostFloor[0],Is.GreaterThan(.8f),"at the stall's floor the host's camera wobbles by about a degree");
                 StallIn(hosted,-Intoxication.StallEase-.05);host.Profile.Data.CameraShake=false;yield return null;
                 Assert.That(Intoxication.Stall(host.LocalPlayer,host.EstimatedSimulationSeconds),Is.EqualTo(1),"setup: at the stall's floor");
@@ -410,7 +425,13 @@ namespace Festival.Tests
                 Assert.That(ahead,Is.GreaterThan(0),"setup: the friend's estimated clock ran ahead of a snapshot through the stall");
                 Assert.That(friendFloor[0],Is.GreaterThan(.8f),"at the stall's floor the friend's camera wobbles by about a degree too");
             }
-            finally{friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);}
+            finally
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=lookLog;DevelopmentDiagnostics.Visible=diagnostics;
+#endif
+                friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);
+            }
             yield return null;
         }
 
