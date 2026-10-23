@@ -81,9 +81,26 @@ public static class SimulationTests {
   Assert(q.VisualConfettiBurstSequence==0,"an older snapshot counts no burst");
   Assert(old.Execute(q.Id,C("Use","confetti")).Accepted&&q.VisualConfettiBurstSequence==1,"its next burst counts one, got "+q.VisualConfettiBurstSequence);
  }
+ // Restore refuses a negative public event count on any player, as it refuses a negative CampEggSequence, and keeps the
+ // round it had. A count of zero or more restores as saved.
+ static void RestoreRefusesANegativeEventCount(){
+  var options=new JsonSerializerOptions{IncludeFields=true};var s=new FestivalSimulation();s.AddPlayer("a","A");s.AddPlayer("b","B");
+  string json=JsonSerializer.Serialize(s.State,options);
+  foreach(var counter in new (string Name,Action<PlayerState,int> Set,Func<PlayerState,int> Get)[]{
+   ("VisualGiggleTakeSequence",(p,v)=>p.VisualGiggleTakeSequence=v,p=>p.VisualGiggleTakeSequence),
+   ("VisualConfettiBurstSequence",(p,v)=>p.VisualConfettiBurstSequence=v,p=>p.VisualConfettiBurstSequence),
+   ("GiggleTankBankSequence",(p,v)=>p.GiggleTankBankSequence=v,p=>p.GiggleTankBankSequence)}){
+   var good=JsonSerializer.Deserialize<RoundState>(json,options);counter.Set(good.Players[1],3);
+   var restored=new FestivalSimulation();restored.Restore(good);Assert(counter.Get(restored.Player("b"))==3,counter.Name+" = 3 restores as saved");
+   var bad=JsonSerializer.Deserialize<RoundState>(json,options);counter.Set(bad.Players[1],-1);
+   var game=new FestivalSimulation();var kept=game.State;bool refused=false;
+   try{game.Restore(bad);}catch(ArgumentException){refused=true;}
+   Assert(refused,"Restore refuses a snapshot with "+counter.Name+" = -1");Assert(game.State==kept,"and keeps the round it had after refusing "+counter.Name);
+  }
+ }
  static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
  public static void Run(){
-  ConfettiTellsThePlayerHowManyItDistracted();ConfettiSaysWhyItFooledNobody();FooledFestivalgoersFaceTheBurst();CampConfettiIsAFreePartyTrick();OlderSnapshotsCountBurstsFromZero();
+  ConfettiTellsThePlayerHowManyItDistracted();ConfettiSaysWhyItFooledNobody();FooledFestivalgoersFaceTheBurst();CampConfettiIsAFreePartyTrick();OlderSnapshotsCountBurstsFromZero();RestoreRefusesANegativeEventCount();
   var capacity=new FestivalSimulation();for(int i=0;i<8;i++)capacity.AddPlayer(i.ToString(),"P");bool denied=false;try{capacity.AddPlayer("9","P");}catch(InvalidOperationException){denied=true;}Assert(denied&&capacity.State.Players.Count==8,"capacity");
   var shop=new FestivalSimulation();var p=shop.AddPlayer("a","A");var shelf=Catalog.ShopPoint(true,shop.State.VendorOffers.IndexOf("medical_voucher"));p.X=shelf.X;p.Z=shelf.Z;Assert(shop.Execute("a",C("HoldOffer","medical_voucher")).Accepted,"hold shelf copy");Assert(!shop.Execute("a",C("HoldOffer","poi_practice")).Accepted,"one held item");p.X=0;p.Z=7;var buy=C("Buy","medical_voucher",amount:1);Assert(shop.Execute("a",buy).Accepted,"buy");shop.Execute("a",buy);Assert(p.Cash==15&&p.Inventory[0].Count==1,"buy exactly once");Assert(!shop.Execute("a",C("Buy","medical_voucher",amount:-1)).Accepted,"negative buy");
   var spoonShelf=Catalog.ShopPoint(true,shop.State.VendorOffers.IndexOf("little_spoon"));p.X=spoonShelf.X;p.Z=spoonShelf.Z;Assert(shop.Execute("a",C("HoldOffer","little_spoon")).Accepted,"spoon pickup");p.X=0;p.Z=7;Assert(shop.Execute("a",C("Buy","little_spoon",amount:1)).Accepted,"spoon purchase");Assert(p.EquippedItemId!="little_spoon"&&!shop.Execute("a",C("Equip","little_spoon")).Accepted,"spoon remains passive necklace");
