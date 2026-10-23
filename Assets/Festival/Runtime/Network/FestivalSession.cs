@@ -1164,10 +1164,10 @@ namespace Festival.Network
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
             // the eye's glide (rate 20) so it keeps it there as it turns, at any frame rate (POLO-7); the mouse still aims it, and the
-            // turn ends back by the base.
+            // turn ends back by the base. In the headliner's chair it sits down with the body, by the pose friends see.
             var target=visit!=null?new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ)
                 :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,20)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
-                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
+                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:player.VisualPose==FestivalSimulation.CampChairPose?FestivalCampEggView.ChairEyeHeight:1.65f,player.Z);
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;bool shake=Profile.Data.CameraShake;
             if(!Profile.Data.ReducedMotion&&shake)foreach(var effect in player.Effects)roll+=FestivalTrip.Sway(effect.Id,(float)State.SimulationSeconds);

@@ -243,9 +243,16 @@ namespace Festival.Tests
             var actor=actors[player.Id].GetComponent<FestivalCharacter>();
             Assert.That(actor,Is.Not.Null,"the real actor presenter creates the local attendee");
             Assert.That(actor.Pose,Is.EqualTo(FestivalSimulation.CampChairPose),"the live actor consumes the snapshot pose");
-            yield return new WaitForSeconds(4.3f);
+            // Your own view sits down with your body, the eye just over the seated Head bone; it stands back up when the seat ends.
+            yield return new WaitForSeconds(.5f);
+            Transform head=null;foreach(var bone in actor.GetComponentsInChildren<Transform>())if(bone.name=="Head")head=bone;
+            Assert.That(session.EyePosition.y,Is.LessThan(1.65f-.3f),"seated, the eye drops well under standing height");
+            Assert.That(session.EyePosition.y,Is.GreaterThan(head.position.y).And.LessThan(head.position.y+.4f),"seated, the eye is at the seated head, its Head bone at "+head.position.y.ToString("0.00")+" m");
+            yield return new WaitForSeconds(3.8f);
             Assert.That(game.State.CampEggs[2].SeatedPlayerId,Is.Empty,"the host's real Update ticks expire the owner");
             Assert.That(session.LocalPlayer.VisualPose,Is.EqualTo("Idle"));Assert.That(actor.Pose,Is.EqualTo("Idle"));
+            yield return Until(()=>session.EyePosition.y>1.64f,1);
+            Assert.That(session.EyePosition.y,Is.EqualTo(1.65f).Within(.01f),"standing again, the eye is back at standing height");
             session.Leave();Object.Destroy(host);Object.Destroy(world);yield return null;
         }
 
@@ -351,8 +358,12 @@ namespace Festival.Tests
             var host=new GameObject("impl:U66 diagnostics");var session=host.AddComponent<FestivalSession>();yield return null;
             try
             {
+                // The view names each new round once, when it arms its first snapshot silently.
+                LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=round round=[0-9a-f]{32} baseline=silent$"));
                 yield return Hosted(session);
                 yield return Frames(2);
+                string round=Simulation(session).State.RoundId;
+                Assert.That(lines.FindAll(l=>l.Contains(" action=round ")),Is.EqualTo(new[]{"[Festival.CampEggs] action=round round="+round+" baseline=silent"}),"one round line, for the hosted round");
                 LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=persistent egg=flamingo deflated=True$"));
                 LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=effect egg=flamingo line=own sound=squeak confetti=no$"));
                 yield return Poke(session,"flamingo");yield return Frames(2);
@@ -363,6 +374,7 @@ namespace Festival.Tests
                 LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=attach session=off$"));
                 session.Leave();Object.Destroy(host);yield return Frames(2);
                 Assert.That(session.Profile.Data.FoundCampEggIds.Count,Is.EqualTo(3),"setup: three discoveries saved");
+                Assert.That(lines.FindAll(l=>l.Contains(" action=round ")).Count,Is.EqualTo(1),"frames and pokes later, still one round line");
                 foreach(string line in lines)Assert.That(line,Does.Not.Contain("EASTER").And.Not.Contain("Found").And.Not.Contain("mask").And.Not.Contain("Tester"),"no collection, profile or name in "+line);
             }
             finally{Application.logMessageReceived-=log;if(host!=null){session.Leave();Object.Destroy(host);}Object.Destroy(world.gameObject);}
