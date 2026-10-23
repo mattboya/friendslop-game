@@ -26,6 +26,8 @@ node scripts/native-solo-smoke.mjs
 node scripts/native-smoke.mjs
 ```
 
+Each smoke ends with one pass line per player, for example `SOLO NATIVE SMOKE PASSED in 105.2 s real; 61 gameplay waits ended, 0 failed; slowest solo night 1 start sim 15.10/250.00 s real 15.09 s`. The two-player smoke prints a `HOST NATIVE SMOKE PASSED` and a `CLIENT NATIVE SMOKE PASSED` line. Each gameplay wait has a budget of simulation seconds, not real seconds. A failed run names its wait as `FAILED <wait> (<reason>)`, and the player logs are in `artifacts/native-smoke/`. A whole smoke stops after 900 real seconds. On a heavily loaded machine, raise that limit with `FESTIVAL_SMOKE_TIMEOUT_SECONDS`, for example `FESTIVAL_SMOKE_TIMEOUT_SECONDS=1800 node scripts/native-solo-smoke.mjs`.
+
 The generator creates `Assets/Festival/Generated/Bootstrap.unity`; generated content is deliberately kept separate from hand-authored source.
 
 Run a host and one local client after building:
