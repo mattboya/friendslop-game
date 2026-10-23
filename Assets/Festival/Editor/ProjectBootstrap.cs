@@ -71,7 +71,8 @@ namespace Festival.Editor
             PlayerSettings.productName="Festival Co-op Prototype";
             PlayerSettings.runInBackground=true;
             PlayerSettings.colorSpace=ColorSpace.Linear;
-            PlayerSettings.meshDeformation=MeshDeformation.GPU;
+            // One dispatch for each skinned part made the GPU frame wait on the dispatch stream with a crowd in view.
+            PlayerSettings.meshDeformation=MeshDeformation.GPUBatched;
             // Input System Package only. The next batch invocation runs after this setting reloads.
             // ProjectSettings is not a normal AssetDatabase asset. Unity exposes
             // its serialized singleton to editor tooling for project bootstrap.
