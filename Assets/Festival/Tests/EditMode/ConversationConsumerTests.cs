@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
@@ -9,6 +10,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Festival.Tests
 {
@@ -270,6 +272,37 @@ namespace Festival.Tests
             Assert.That(events.Where(e=>e.StartsWith("TalkSettled")),Is.EqualTo(new[]{"TalkSettled Conversation"}),"debugging emits only the event and kind, without dialogue, grade or identity");
             Assert.That(game.Execute(player.Id,new GameCommand{Id="late",Kind="Reply",Direction=FestivalSimulation.ConversationTurns-1,Amount=0}).Accepted,Is.False);
             Assert.That(events.Count(e=>e.StartsWith("TalkSettled")),Is.EqualTo(1));Assert.That(events.All(e=>e=="TalkSettled Conversation"||e=="HistoryAcknowledged Talk"||e=="OutcomeDelivered Conversation"),Is.True,"lifecycle diagnostics carry no private contents");Assert.That(talk.Status,Is.EqualTo("Complete"));
+        }
+
+        [UnityTearDown] public IEnumerator LeaveOwnedPlayMode(){if(Application.isPlaying)yield return new ExitPlayMode();}
+        // The chat window acknowledges each line as it shows, seconds after a sale's notice went up. Accepted, an acknowledgement
+        // leaves the notice; refused, it says why. The same command sent any other way still clears the message.
+        [UnityTest] public IEnumerator TalkAcknowledgementsLeaveTheNoticeUnlessRefused()
+        {
+            yield return new EnterPlayMode();string previous=LocalProfile.Folder,scope=FestivalInput.PreferencesScope;string folder=Path.Combine(Path.GetTempPath(),"fix-U7-quiet-acks-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;
+            var root=new GameObject("fix-U7 quiet acks");
+            try
+            {
+                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Ack host",8597);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
+                var game=Pair(0,out var player,out var partner);var talk=Start(game,player,partner);
+                typeof(FestivalSession).GetField("simulation",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,game);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,player.Id);
+                const string Sold="SOLD Tongue Stamps  •  +$20";
+                void Quietly(string ack,Action send)
+                {
+                    typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(game,player.Id));session.SetMessage(Sold);send();
+                    Assert.That(session.LastLocalCommandResult?.Accepted,Is.True,ack+" goes out and is accepted ("+session.Message+")");Assert.That(session.Message,Is.EqualTo(Sold),ack+" leaves the notice");
+                }
+                Quietly("a line's acknowledgement",()=>session.AcknowledgeConversationTurn(talk));
+                session.SetMessage(Sold);session.SendCommand("TalkAck",talk.Id,direction:0);
+                Assert.That(session.LastLocalCommandResult.Accepted,Is.True,"setup: the same acknowledgement as a plain command");Assert.That(session.Message,Is.Empty,"a plain accepted command clears the message");
+                session.SetMessage(Sold);session.AcknowledgeConversationTurn(new InteractionState{Id="talk_gone",Kind=talk.Kind,PlayerId=player.Id,Turns=talk.Turns});
+                Assert.That(session.LastLocalCommandResult.Accepted,Is.False,"setup: the host refuses a line of a talk it has no more");Assert.That(session.Message,Is.EqualTo("Dialogue is not active"),"a refused acknowledgement says why");
+                Finish(game,player,talk);var outcome=player.ConversationOutcomes.Single();
+                Quietly("the outcome's acknowledgement",()=>session.AcknowledgeConversationOutcome(outcome));
+                Quietly("the outcome's dismissal",()=>session.DismissConversationOutcome(outcome.DeliveryId));
+            }
+            finally{UnityEngine.Object.DestroyImmediate(root);LocalProfile.Folder=previous;FestivalInput.PreferencesScope=scope;if(Directory.Exists(folder))Directory.Delete(folder,true);}
+            yield return new ExitPlayMode();
         }
     }
 }
