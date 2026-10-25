@@ -249,8 +249,8 @@ public static class DjSetTests
         Check(seen.Suspicion>before+1,"anyone else up there is still trespassing");
     }
 
-    // The DJ stands on the riser, inside the stage's solid block, where the host's waist-high sight line never reaches: the crowd
-    // and the cops see them there all the same, as they did at the stage front.
+    // The DJ stands on the riser, inside the stage's solid block, where the host's waist-high sight line never reaches: the crowd,
+    // the cops and the influencers' phones see them there all the same, as they did at the stage front.
     static void TheCrowdAndTheCopsSeeTheDjOnTheRiser()
     {
         var game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;var p=game.Player("p0");
@@ -264,5 +264,7 @@ public static class DjSetTests
         game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cop=new NpcState{Id="cop_0",Kind="Cop",X=3,Z=22,Yaw=0};game.State.Npcs.Add(cop);
         Start(game);p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";game.Tick(.05);
         Check(cop.Evidence.Exists(e=>e.PlayerId=="p0"&&e.Kind=="VisibleStock"),"a cop facing the riser sees the stock in the DJ's hand");
+        game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=24,Yaw=0};game.State.Npcs.Add(cam);
+        Start(game);Check(game.IsOnCamera(cam,p),"an influencer filming the riser has the DJ in frame");
     }
 }

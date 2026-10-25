@@ -74,7 +74,7 @@ namespace Festival.Core
             double d=Distance(cam.X,cam.Z,p.X,p.Z);if(p.Life!="Alive"||d>Festivals.FilmRange)return false;
             double yaw=cam.Yaw*Math.PI/180;
             if(d>.1&&(Math.Sin(yaw)*(p.X-cam.X)+Math.Cos(yaw)*(p.Z-cam.Z))/d<Math.Cos(Festivals.FilmConeDegrees*Math.PI/360))return false;
-            return HasLineOfSight==null||HasLineOfSight(cam.X,cam.Z,p.X,p.Z);
+            return ClearSight(cam.X,cam.Z,p);
         }
 
         bool InVip(float x,float z)=>Festivals.InVipZone(State.FestivalIndex,x,z);

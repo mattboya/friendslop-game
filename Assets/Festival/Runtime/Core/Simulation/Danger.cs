@@ -32,9 +32,11 @@ public sealed partial class FestivalSimulation {
     }
     // PLAYA-1: a dust storm cuts everyone's sight (PLAYA-3: cops' too), and festivalgoers never see an art car's rider
     // (FestivalTwists.cs). Suspicion of someone in the burn's crush cools faster (Calm), and an accusation made there carries
-    // only a few metres (ShoutRange). The set's DJ stands up on the riser, inside the stage's solid block, where the host's
-    // waist-high sight line never reaches, so they are in plain view of anyone in range who faces them.
-    bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>SightRange(n)||p.Life!="Alive"||Hidden(n,p))return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return HasLineOfSight==null||Djing(p)||HasLineOfSight(n.X,n.Z,p.X,p.Z);}
+    // only a few metres (ShoutRange).
+    bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>SightRange(n)||p.Life!="Alive"||Hidden(n,p))return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return ClearSight(n.X,n.Z,p);}
+    // The set's DJ stands up on the riser, inside the stage's solid block, where the host's waist-high sight line never reaches,
+    // so they are in plain view of anyone in range who faces them, an influencer's phone included (InFrame).
+    bool ClearSight(float x,float z,PlayerState p)=>HasLineOfSight==null||Djing(p)||HasLineOfSight(x,z,p.X,p.Z);
     bool Djing(PlayerState p)=>Interaction(p.InteractionId)?.Kind=="Dj";
     ObserverState Observe(NpcState n,PlayerState p){var o=n.Observers.Find(x=>x.PlayerId==p.Id);if(o==null){o=new ObserverState{PlayerId=p.Id};n.Observers.Add(o);}return o;}
     // Little Spoon has no active use. Its modest social benefit stays in host
