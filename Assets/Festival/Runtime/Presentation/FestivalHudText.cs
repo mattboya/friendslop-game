@@ -454,38 +454,58 @@ namespace Festival.Presentation
         public const string StopApproachAction="Security is coming over";
 
         /// <summary>
-        /// The player card's warning: security about to detain p, else a festivalgoer swarming p, else security stopping p (with the
-        /// ways out of it), else the crowd's worst suspicion, else an Ember Playa dust storm, else "CROWD CLEAR"; then p's effects.
-        /// The warning always comes first: the spinner's dose lasts the whole level (everyone's on Night 2) and must never hide it.
+        /// The player card's warning: security about to detain p, else security stopping p (with the ways out of it), else ON CAMERA
+        /// and an Ember Playa dust storm, joined as one; "" with nothing to report. Then p's effects. The crowd's suspicion is on the
+        /// threat bar (Threat), not this line. The warning always comes first: the spinner's dose lasts the whole level
+        /// (everyone's on Night 2) and must never hide it.
         /// </summary>
         public static string Condition(RoundState s,PlayerState p,string talk="E",string ditch="G")
         {
-            double suspicion=0,swarm=-1;string mode="clear";
-            // CROWD-3: a festivalgoer scattering from an arrest isn't after you while it flees, so it never shows here.
-            foreach(var npc in s.Npcs)if(npc.Kind=="Wook"&&npc.Mode!=FestivalSimulation.Scattering){if(npc.Suspicion>suspicion){suspicion=npc.Suspicion;mode=npc.Mode;}if(npc.Mode=="Swarming"&&npc.TargetId==p.Id&&npc.Suspicion>swarm)swarm=npc.Suspicion;}
-            // An arrest warning detains you in seconds, so it always wins. HUD-5: next, a festivalgoer swarming you lunges for 20 HP a
-            // hit, so it shows over a cop stopping you over visible stock; a swarm on a friend, or one a distraction broke off, doesn't.
-            // Security on you then outranks the crowd: after a deal in view some festivalgoer nearly always holds a little suspicion.
-            // The worse of two cops on you shows; a cop on patrol is no warning. ESC-2: a stop names its three ways out, joined by
-            // single-spaced dots so it reads as one warning before the effects. PLAYA-3: with nothing else to report, a dust storm
-            // says how far everyone, security too, can see; the view's festival, spin seed and clock are enough to know it. Only the
-            // living get it, as nothing sees anyone else at any range (Danger.Sees). POLO-6: an influencer filming you (your own
-            // view's VisualFilmedBy) puts the crowd round you on alert, so ON CAMERA leads the crowd or storm line,
-            // joined as one warning; the three above still take the whole line.
+            // An arrest warning detains you in seconds, so it always wins; security on you then outranks the rest. The worse of two
+            // cops on you shows; a cop on patrol is no warning. ESC-2: a stop names its three ways out, joined by single-spaced dots
+            // so it reads as one warning before the effects. PLAYA-3: a dust storm says how far everyone, security too, can see; the
+            // view's festival, spin seed and clock are enough to know it. Only the living get it, as nothing sees anyone else at any
+            // range (Danger.Sees). POLO-6: an influencer filming you (your own view's VisualFilmedBy) puts the crowd round you on
+            // alert, so ON CAMERA leads the storm line, joined as one warning; the two above still take the whole line.
             bool arrest=s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
-            string Crowd(double level,string crowdMode)=>"CROWD "+level.ToString("0")+" / "+crowdMode.ToUpperInvariant();
-            string warning=arrest?"ARREST WARNING":swarm>=0?Crowd(swarm,"Swarming"):StoppedBy(s,p)!=null?"SECURITY STOP • TALK ("+talk+") • DITCH IT ("+ditch+") • OR WALK AWAY"
-                :(p.VisualFilmedBy.Count>0?"ON CAMERA • ":"")+(suspicion>0?Crowd(suspicion,mode)
-                :FestivalWorld.ShowsFestival(s.Phase)&&p.Life=="Alive"&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"CROWD CLEAR");
-            return p.Effects.Count>0?warning+Dot+Catalog.EffectsLine(p.Effects).ToUpperInvariant():warning;
+            string storm=FestivalWorld.ShowsFestival(s.Phase)&&p.Life=="Alive"&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"";
+            string warning=arrest?"ARREST WARNING":StoppedBy(s,p)!=null?"SECURITY STOP • TALK ("+talk+") • DITCH IT ("+ditch+") • OR WALK AWAY"
+                :p.VisualFilmedBy.Count>0?(storm==""?"ON CAMERA":"ON CAMERA • "+storm):storm;
+            if(p.Effects.Count==0)return warning;
+            string effects=Catalog.EffectsLine(p.Effects).ToUpperInvariant();
+            return warning==""?effects:warning+Dot+effects;
         }
+
+        /// <summary>The threat bar's band words, calm to swarming (Threat's Band).</summary>
+        public static readonly string[] ThreatBands={"CALM","WATCHING","QUESTIONING","ACCUSING","SWARMING"};
+        /// <summary>
+        /// The player card's threat bar, how sketchy the crowd thinks p is: the worst festivalgoer's suspicion of p as a 0-1
+        /// fill, and its band (ThreatBands) by the thresholds the crowd acts on: it watches at 25, questions at 45 and accuses at 70
+        /// (Danger.WookTick). A festivalgoer swarming p fills the bar. A view carries each festivalgoer's suspicion of its viewer
+        /// alone, and its real mode only to the player it targets. One scattering from an arrest isn't after you while it flees, so
+        /// it never counts. Security isn't the crowd: its stops keep their own warnings (Condition).
+        /// </summary>
+        public static (float Fill,int Band) Threat(RoundState s,PlayerState p)
+        {
+            double worst=0;bool swarm=false;
+            foreach(var npc in s.Npcs)if(npc.Kind=="Wook"&&npc.Mode!=FestivalSimulation.Scattering){if(npc.Suspicion>worst)worst=npc.Suspicion;swarm|=npc.Mode=="Swarming"&&npc.TargetId==p.Id;}
+            if(swarm)return (1,4);
+            return ((float)Math.Min(1,worst/100),worst>=70?3:worst>=45?2:worst>=25?1:0);
+        }
+        /// <summary>One frame of the bar easing toward fill, never past it; reduced motion jumps straight there.</summary>
+        public static float EaseThreat(float shown,float fill,float deltaTime,bool reducedMotion)=>reducedMotion?fill:shown+(fill-shown)*(1-(float)Math.Exp(-ThreatEaseRate*deltaTime));
+        // About a third of a second to close most of the gap: quick enough to warn, slow enough to read as a change.
+        const float ThreatEaseRate=6;
 
         /// <summary>
         /// The player card: health, pocket and the crew's stash, then the level's sales, life and the warning (Condition). The warning
         /// leads and the effects trail it, so a long effects list wraps off the card before the warning does.
         /// </summary>
-        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G")=>("HP "+p.Health+Dot+Money(s,p,p.Cash)+Dot+"STASH "+Money(s,p,s.StashCash)+"\n"
-            +"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+Dot+Condition(s,p,talk,ditch);
+        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G")
+        {
+            string condition=Condition(s,p,talk,ditch);
+            return ("HP "+p.Health+Dot+Money(s,p,p.Cash)+Dot+"STASH "+Money(s,p,s.StashCash)+"\n"+"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+(condition==""?"":Dot+condition);
+        }
         /// <summary>The gear bar's heading: Slot1-Slot3 equip (left out while they reply in a chat), Use, Drop (left out while held Drop
         /// drops nothing).</summary>
         public static string GearHeading(bool equip,string first="1",string last="3",string use="Q",string drop="G",bool drops=true)=>"GEAR   /   "+(equip?first+"–"+last+" EQUIP     ":"")+use+" USE"+(drops?"     "+drop+" DROP":"");

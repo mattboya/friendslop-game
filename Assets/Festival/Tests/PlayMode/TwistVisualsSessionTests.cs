@@ -118,7 +118,7 @@ namespace Festival.Tests
                     Assert.That(label.GetComponent<TextMeshPro>().text,Is.EqualTo("• REC"));
                     Assert.That(Part(FestivalFilmingPhone.LightName).GetComponent<Renderer>().enabled,Is.True,stage+": the recording light stays lit");
                     Assert.That(session.LocalPlayer.VisualFilmedBy,Does.Contain(cam.Id));
-                    Assert.That(FestivalHudText.Condition(session.State,session.LocalPlayer),Does.StartWith("ON CAMERA • "));
+                    Assert.That(FestivalHudText.Condition(session.State,session.LocalPlayer),Does.StartWith("ON CAMERA"));
                     Assert.That(sim.Films(cam,me),Is.False,stage+": the camera flag never reactivates danger");
                 }
                 Recording("game");var heat=cam.Observers.ConvertAll(o=>o.Suspicion);

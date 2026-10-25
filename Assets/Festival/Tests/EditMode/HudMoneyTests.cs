@@ -26,9 +26,9 @@ namespace Festival.Tests
         [Test] public void ThePlayerCardCountsInYourObjects()
         {
             var palm=Day(0);var you=Crew(palm,"you",1);you.Cash=87;palm.StashCash=5;palm.LevelSales=120;
-            Assert.That(FestivalHudText.Vitals(palm,you),Is.EqualTo("HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE  •  CROWD CLEAR"));
+            Assert.That(FestivalHudText.Vitals(palm,you),Is.EqualTo("HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE"));
             var playa=Day(1);var sam=Crew(playa,"sam",1);sam.Cash=87;playa.StashCash=1;playa.LevelSales=120;
-            Assert.That(FestivalHudText.Vitals(playa,sam),Is.EqualTo("HP 100  •  87 RAMEN PACKETS  •  STASH 1 RAMEN PACKET\nSALES 120 RAMEN PACKETS  •  ALIVE  •  CROWD CLEAR"),
+            Assert.That(FestivalHudText.Vitals(playa,sam),Is.EqualTo("HP 100  •  87 RAMEN PACKETS  •  STASH 1 RAMEN PACKET\nSALES 120 RAMEN PACKETS  •  ALIVE"),
                 "your pocket, the crew's stash and the level's sales, all in your ramen");
         }
 

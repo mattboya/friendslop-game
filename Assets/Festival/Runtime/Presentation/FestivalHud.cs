@@ -21,6 +21,12 @@ namespace Festival.Presentation
         private static readonly Color Orange=new Color(.99f,.465f,.255f,1);
         private static readonly Color Mint=new Color(.385f,.86f,.725f,1);
         private static readonly Color Hairline=new Color(.51f,.56f,.50f,.35f);
+        // The threat bar warms from mint to a hot red with the band (ThreatBands). Its word always names the band too, so colour is
+        // never the only cue.
+        private static readonly Color[] ThreatColors={Mint,new Color(1,.76f,.29f,1),Orange,new Color(1,.33f,.3f,1),new Color(1,.16f,.24f,1)};
+        /// <summary>The lowest edge of the top band's cards (the objective card's foot; the clock, tripper and player cards end above it),
+        /// as a share of the screen's height.</summary>
+        public const float TopCardsBottom=.858f;
         private static readonly Color[] RhythmColors={new Color(1,.38f,.61f,1),new Color(1,.76f,.29f,1),new Color(.34f,.78f,1,1),new Color(.46f,.95f,.68f,1)};
         private static readonly float[] RhythmAngles={90,180,0,-90};
         // The rhythm lane's receptor wells span WellBottom to WellTop with each outline arrow centred in its well, so a note
@@ -40,6 +46,10 @@ namespace Festival.Presentation
         private GameObject titlePanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
+        private RectTransform threatFill;
+        private Image threatFillImage;
+        private Text threatWord;
+        private float threatShown;
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
@@ -359,7 +369,7 @@ namespace Festival.Presentation
             }
             effectWash=Panel(root.transform,"Effect wash",new Color(0,0,0,0),Vector2.zero,Vector2.one).GetComponent<Image>();effectWash.raycastTarget=false;
 
-            objectivePanel=Card(root.transform,"Objective card",new Vector2(.022f,.858f),new Vector2(.355f,.974f),true);
+            objectivePanel=Card(root.transform,"Objective card",new Vector2(.022f,TopCardsBottom),new Vector2(.355f,.974f),true);
             Accent(objectivePanel.transform,Orange);
             levelBanner=Label(objectivePanel.transform,"Level banner",14,TextAnchor.MiddleLeft);levelBanner.fontStyle=FontStyle.Normal;levelBanner.color=Orange;Place(levelBanner.rectTransform,.06f,.69f,.96f,.94f);
             objectiveTitle=Label(objectivePanel.transform,"Objective title",23,TextAnchor.MiddleLeft);objectiveTitle.fontStyle=FontStyle.Normal;Place(objectiveTitle.rectTransform,.06f,.43f,.96f,.73f);
@@ -376,9 +386,15 @@ namespace Festival.Presentation
             tripping=Label(trippingPanel.transform,"Tripping",16,TextAnchor.MiddleCenter);tripping.fontStyle=FontStyle.Normal;Fill(tripping.rectTransform,4);ShrinkToFit(tripping,16);trippingPanel.SetActive(false);
             vitalPanel=Card(root.transform,"Player card",new Vector2(.725f,.89f),new Vector2(.978f,.974f),true);
             Accent(vitalPanel.transform,Mint);
-            // Three lines (85 px at 1080p) of health, money, life and the crowd or security warning, then any effects. Ember Playa's
-            // odd objects can push the warning to a fourth line, so the text shrinks to fit rather than cut it (TRIP-1, PLAYA-1).
-            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.03f,.94f,.97f);ShrinkToFit(vitals,14);
+            // Health, money, life and the security warning, then any effects, over the threat bar. Ember Playa's odd objects
+            // can push the warning to another line, so the text shrinks to fit rather than cut it (TRIP-1, PLAYA-1).
+            vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.30f,.94f,.97f);ShrinkToFit(vitals,14);
+            // Ticks where the crowd watches, questions and accuses. The bar stays inside the card, so the top band keeps TopCardsBottom.
+            var threatTrack=Panel(vitalPanel.transform,"Threat bar",new Color(1,1,1,.12f),new Vector2(.045f,.13f),new Vector2(.62f,.22f)).transform;
+            threatFillImage=Panel(threatTrack,"Threat fill",Mint,Vector2.zero,new Vector2(0,1)).GetComponent<Image>();threatFill=threatFillImage.rectTransform;
+            foreach(float tick in new[]{.25f,.45f,.70f}){var mark=Rect(Panel(threatTrack,"Threat tick",Paper,new Vector2(tick,-.35f),new Vector2(tick,1.35f)));mark.offsetMin=new Vector2(-1,0);mark.offsetMax=new Vector2(1,0);}
+            foreach(var part in threatTrack.GetComponentsInChildren<Image>(true))part.raycastTarget=false;
+            threatWord=Label(vitalPanel.transform,"Threat level",15,TextAnchor.MiddleRight);threatWord.fontStyle=FontStyle.Normal;Place(threatWord.rectTransform,.64f,.03f,.94f,.32f);ShrinkToFit(threatWord,11);
 
             rosterPanel=Card(root.transform,"Crew card",new Vector2(.835f,.846f),new Vector2(.978f,.882f),true);
             roster=Label(rosterPanel.transform,"Roster",16,TextAnchor.MiddleRight);Fill(roster.rectTransform,3);ShrinkToFit(roster,12);
@@ -1092,6 +1108,9 @@ namespace Festival.Presentation
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"));
+            var threat=FestivalHudText.Threat(state,player);
+            threatShown=FestivalHudText.EaseThreat(threatShown,threat.Fill,Time.unscaledDeltaTime,session?.Profile?.Data.ReducedMotion??true);
+            threatFill.anchorMax=new Vector2(threatShown,1);threatFillImage.color=threatWord.color=ThreatColors[threat.Band];threatWord.text=FestivalHudText.ThreatBands[threat.Band];
             promptKey.text=Bound(session?.Controls?.Interact,"E");
             for(int i=0;i<slotFrames.Length;i++)
             {

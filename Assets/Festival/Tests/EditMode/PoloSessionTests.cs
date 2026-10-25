@@ -147,7 +147,7 @@ namespace Festival.Tests
                 Assert.That(view.Players.TrueForAll(p=>p.Id==me.Id||p.VisualFilmedBy.Count==0),Is.True,viewer.Id+"'s client has nobody else on camera");
             }
             var own=Wire(game,me.Id);
-            Assert.That(FestivalHudText.Condition(own,own.Players.Find(p=>p.Id==me.Id)),Does.StartWith("ON CAMERA • "),"the recipient HUD retains its camera warning in "+phase);
+            Assert.That(FestivalHudText.Condition(own,own.Players.Find(p=>p.Id==me.Id)),Does.StartWith("ON CAMERA"),"the recipient HUD retains its camera warning in "+phase);
             Assert.That(me.VisualFilmedBy,Is.Empty,"the host's own state never holds it");
             Stand(me,-3);
             Assert.That(Wire(game,me.Id).Players.Find(p=>p.Id==me.Id).VisualFilmedBy,Is.Empty,"behind the phone, I'm off camera");

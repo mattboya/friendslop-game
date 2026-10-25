@@ -61,8 +61,8 @@ namespace Festival.Tests
             }
         }
 
-        // The card names the most suspicious festivalgoer's mode, but one scattering isn't after you while it flees: p1's card shows
-        // the 30 of the two still watching them, not the 60 of those running off.
+        // The threat bar reads the most suspicious festivalgoer, but one scattering isn't after you while it flees: p1's bar
+        // shows the 30 of the two still watching them, not the 60 of those running off.
         [Test] public void AScatteringFestivalgoerNeverReadsAsSuspicionOnYourCard()
         {
             var game=RunIn();
@@ -71,7 +71,7 @@ namespace Festival.Tests
             Assert.That(view.Npcs.Exists(n=>n.Mode==FestivalSimulation.Scattering&&n.Suspicion==60),Is.True,"setup: p1's client sees festivalgoers 60 suspicious of them scatter");
             var card=FestivalHudText.Condition(view,p1);
             Assert.That(card,Does.Not.Contain("SCATTERING"),"a scattering festivalgoer never reads on the card");
-            Assert.That(card,Does.StartWith("CROWD 30 / WATCHING"),"the card shows those still watching p1");
+            Assert.That(FestivalHudText.Threat(view,p1),Is.EqualTo((.3f,1)),"the bar shows those still watching p1");
         }
 
         // A scattering festivalgoer runs in the Panic clip on its upper body, its legs left to the speed-driven run.
