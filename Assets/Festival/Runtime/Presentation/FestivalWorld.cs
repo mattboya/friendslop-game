@@ -58,6 +58,8 @@ namespace Festival.Presentation
         public bool CampNavigationReady => campSurface != null && campSurface.navMeshData != null;
         public bool IsCampVisible => camp != null && camp.gameObject.activeSelf;
         public Transform PlayerDjConsole { get; private set; }
+        /// <summary>The riser's top, where the stage DJ stands at the main mixer (Catalog.StageDjX/Z).</summary>
+        public const float StageDjHeight=1.48f;
         /// <summary>CAMP-1: Marigold, the camp seller in front of the supplies table. The HUD turns her to face whoever talks to her
         /// (CampSellerTalk.Face).</summary>
         public FestivalCharacter CampSeller { get; private set; }

@@ -544,12 +544,17 @@ namespace Festival.Presentation
         /// <summary>DANCE-2: every four-lane challenge (FestivalInput.IsRhythm, a talk's trust dance included) shows the live dancer
         /// beside its lanes, unless the menu covers it. MINI-2: nobody dances in the Drum Circle, so its parts show the crew's
         /// accuracy there instead (FestivalHud).</summary>
-        public static bool ShowsDancer(InteractionState i,bool menuOpen)=>FestivalInput.IsRhythm(i)&&i.Kind!=FestivalSimulation.DrumPartKind&&!menuOpen;
+        public static bool ShowsDancer(InteractionState i,bool menuOpen)=>FestivalInput.IsRhythm(i)&&i.Kind!=FestivalSimulation.DrumPartKind&&i.Kind!="Dj"&&!menuOpen;
+        /// <summary>The stage DJ set rides the highway (FestivalDjRide), not the arrow lanes. The view from behind the decks shows the DJ,
+        /// so no dancer panel either. It still roots you and stops by holding G (FestivalInput.IsRhythm).</summary>
+        public static bool ShowsRide(InteractionState i)=>FestivalInput.IsRhythm(i)&&i.Kind=="Dj";
+        public const string RideTitle="DJ SET  /  RIDE THE BEAT";
+        public static string RideControls(string left,string right)=>"STEER  "+left+"  "+right;
         /// <summary>The live dancer's heading. A check dance reads as a dance. DIALOG-3: a talk shows the dancer only in its trust dance,
         /// whatever the talk, so it says what that dance is for.</summary>
-        public static string DancerHeading(string kind)=>FestivalSimulation.Talks(kind)?"YOU  /  DANCING FOR TRUST":kind switch{"Poi"=>"YOU  /  POI CIRCLE","Dj"=>"YOU  /  AT THE DECK",FestivalSimulation.DeckSetKind=>"YOU  /  ON THE ART CAR",_=>"YOU  /  ON THE FLOOR"};
+        public static string DancerHeading(string kind)=>FestivalSimulation.Talks(kind)?"YOU  /  DANCING FOR TRUST":kind switch{"Poi"=>"YOU  /  POI CIRCLE",FestivalSimulation.DeckSetKind=>"YOU  /  ON THE ART CAR",_=>"YOU  /  ON THE FLOOR"};
         /// <summary>The caption under the live dancer, shown while nobody is saying a line.</summary>
-        public static string DancerCaption(string kind)=>FestivalSimulation.Talks(kind)?"YOUR LOOK • THEIR TRUST":kind switch{"Poi"=>"YOUR POI • YOUR FLOW","Dj"=>"YOUR LOOK • YOUR MIX",FestivalSimulation.DeckSetKind=>"YOUR LOOK • YOUR SET",_=>"YOUR LOOK • YOUR MOVES"};
+        public static string DancerCaption(string kind)=>FestivalSimulation.Talks(kind)?"YOUR LOOK • THEIR TRUST":kind switch{"Poi"=>"YOUR POI • YOUR FLOW",FestivalSimulation.DeckSetKind=>"YOUR LOOK • YOUR SET",_=>"YOUR LOOK • YOUR MOVES"};
 
         /// <summary>What p can do beside festivalgoer n, as the HUD lists them; E runs the first. ECON-3 (Matt: "there is no button to
         /// actually sell to people"): by day that is p's next step to a sale, the offer while holding stock and otherwise a buy from

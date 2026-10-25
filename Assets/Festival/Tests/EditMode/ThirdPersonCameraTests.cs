@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
+using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -32,6 +35,31 @@ namespace Festival.Tests
             Physics.SyncTransforms();
         }
         private static Vector3 Place(float yaw,float pitch,out float boom)=>FestivalThirdPerson.Place(Eye,yaw,pitch,out boom);
+
+        // The stage DJ plays the set seen from behind and above the decks, looking down and out over the crowd, whatever the
+        // camera setting; the set over, the view is your own again.
+        [Test]public void TheStageDjSeesTheirSetFromBehindAndAboveTheDecks()
+        {
+            var host=new GameObject("DJ view");made.Add(host);var session=host.AddComponent<FestivalSession>();
+            try
+            {
+                typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
+                session.Profile.Data.ThirdPerson=false;
+                var update=typeof(FestivalSession).GetMethod("UpdateCamera",BindingFlags.NonPublic|BindingFlags.Instance);
+                var dj=new PlayerState{Id="me",VisualPose="Dj",X=Catalog.StageDjX,Z=Catalog.StageDjZ,Yaw=180};
+                update.Invoke(session,new object[]{dj});
+                var view=session.ViewCamera.transform;
+                Assert.That(session.ThirdPersonView,Is.True,"the set is seen from outside, though this player chose first person");
+                Assert.That(view.position.z,Is.GreaterThan(Catalog.StageDjZ+1.5f),"from behind the DJ, got "+view.position);
+                Assert.That(view.position.y,Is.GreaterThan(FestivalWorld.StageDjHeight+1.65f+.4f),"and above them, got "+view.position);
+                Assert.That(view.forward.z,Is.LessThan(-.9f),"looking out over the crowd, got "+view.forward);
+                Assert.That(view.forward.y,Is.LessThan(-.15f),"and down at it, got "+view.forward);
+                update.Invoke(session,new object[]{new PlayerState{Id="me",VisualPose="Idle",X=Catalog.StageTakeoverX,Z=Catalog.StageTakeoverZ,Yaw=180}});
+                Assert.That(session.ThirdPersonView,Is.False,"the set over, the camera is the player's own choice again");
+                Assert.That(view.forward.y,Is.EqualTo(0).Within(.02f),"looking level again");
+            }
+            finally{GraphicsApplicationTests.Close(host,session);}
+        }
 
         [Test]public void TheBoomSitsBehindAndOverTheRightShoulder()
         {

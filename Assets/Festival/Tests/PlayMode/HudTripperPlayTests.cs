@@ -788,7 +788,7 @@ namespace Festival.Tests
         }
 
         // Every challenge the live dancer can head: the four-lane kinds, and (DIALOG-3) a sale's, a buy's and a chat's trust dance.
-        private static readonly string[] DancerKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation"};
+        private static readonly string[] DancerKinds={"Dance","ConfirmDance","Poi","Sale","Buy","Conversation"};
 
         private const string VirtualKeyboard="HUD tripper keyboard";
         private void UseAVirtualKeyboard()=>base.UseAVirtualKeyboard(VirtualKeyboard);

@@ -219,6 +219,7 @@ namespace Festival.Network
         /// <summary>CAM-1: whether the view is over your shoulder right now: your setting, except lying down, in a camp visit or on the
         /// Ferris wheel (FestivalThirdPerson.Applies). Your own body is on screen then.</summary>
         public bool ThirdPersonView {get;private set;}
+        bool djViewHeld;
         public double EstimatedSimulationSeconds => State==null?0:State.SimulationSeconds
             +(State.Phase=="Results"||manager==null?0:Math.Max(0,Math.Min(.4,manager.ServerTime.Time-serverClockAtSnapshot)));
         public double EstimatedWorldSeconds => State==null?0:FestivalSimulation.WorldSeconds(State)
@@ -1175,7 +1176,11 @@ namespace Festival.Network
             }
             else if(!watching)ReleaseShowView();
             if(watching){yaw=glover+Mathf.Clamp(Mathf.DeltaAngle(glover,yaw),-FestivalLightShowView.LookDegrees,FestivalLightShowView.LookDegrees);pitch=0;}
-            ThirdPersonView=!watching&&FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
+            // The DJ must see themselves at the decks and the crowd, so the view is held whatever the camera setting, mouse look included.
+            bool djing=player.VisualPose=="Dj";
+            if(djing){djViewHeld=true;yaw=viewYaw=180;pitch=viewPitch=FestivalDjRide.ViewPitch;}
+            else if(djViewHeld){djViewHeld=false;pitch=viewPitch=0;}
+            ThirdPersonView=!watching&&(djing||FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0));
             if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),PresentedPoiSpin(player),FestivalSimulation.ArtCarOf(State,player.Id)>=0,PresentedPoiSpinSides(player));}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
@@ -1183,7 +1188,7 @@ namespace Festival.Network
             // turn ends back by the base. In the headliner's chair it sits down with the body, by the pose friends see.
             var target=visit!=null?new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ)
                 :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,20)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
-                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:player.VisualPose==FestivalSimulation.CampChairPose?FestivalCampEggView.ChairEyeHeight:1.65f,player.Z);
+                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:player.VisualPose==FestivalSimulation.CampChairPose?FestivalCampEggView.ChairEyeHeight:djing?FestivalWorld.StageDjHeight+1.65f:1.65f,player.Z);
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;bool shake=Profile.Data.CameraShake;
             if(!Profile.Data.ReducedMotion&&shake)foreach(var effect in player.Effects)roll+=FestivalTrip.Sway(effect.Id,(float)State.SimulationSeconds);

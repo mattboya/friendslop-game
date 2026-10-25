@@ -43,6 +43,12 @@ namespace Festival.Presentation
         private readonly Dictionary<Text,(int Size,int Minimum,int Maximum)> authoredTextSizes=new Dictionary<Text,(int,int,int)>();
         private float appliedTextScale=1;
         private float textScale=>session?.Profile?.Data.TextScale??1;
+        private GameObject ridePanel;
+        private FestivalDjRide ride;
+        private Text rideCombo,rideControls;
+        private RhythmChart rideChart;
+        private string rideId="";
+        private int rideLane=DjRide.StartLane,ridePhrase=-1;
         private GameObject titlePanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
@@ -584,6 +590,15 @@ namespace Festival.Presentation
             stopHoldFill=Panel(rhythmPanel.transform,"Stop hold fill",new Color(Orange.r,Orange.g,Orange.b,.5f),new Vector2(StopHoldLeft,.008f),new Vector2(StopHoldLeft,.046f)).GetComponent<Image>();stopHoldFill.raycastTarget=false;stopHoldFill.gameObject.SetActive(false);
             stopHoldLabel=Label(rhythmPanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);stopHoldLabel.text=FestivalHudText.HoldToStop;Place(stopHoldLabel.rectTransform,StopHoldLeft,.005f,StopHoldRight,.049f);
             rhythmPanel.SetActive(false);
+            // No dimmer under the highway, so the crowd stays in sight.
+            ridePanel=new GameObject("DJ ride",typeof(RectTransform));ridePanel.transform.SetParent(root.transform,false);Place(Rect(ridePanel),.2f,.02f,.8f,.46f);
+            ride=new GameObject("Highway",typeof(RectTransform),typeof(CanvasRenderer),typeof(FestivalDjRide)).GetComponent<FestivalDjRide>();ride.transform.SetParent(ridePanel.transform,false);Fill(Rect(ride.gameObject),0);ride.raycastTarget=false;
+            var rideTitle=Label(ridePanel.transform,"Ride title",27,TextAnchor.MiddleCenter);rideTitle.text=FestivalHudText.RideTitle;rideTitle.color=Orange;Place(rideTitle.rectTransform,.1f,.9f,.9f,1);
+            rideTitle.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);
+            rideCombo=Label(ridePanel.transform,"Combo",48,TextAnchor.MiddleCenter);rideCombo.font=displayFont;rideCombo.fontStyle=FontStyle.Normal;Place(rideCombo.rectTransform,.25f,.5f,.75f,.7f);
+            rideCombo.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);
+            rideControls=Label(ridePanel.transform,"Controls",17,TextAnchor.MiddleCenter);rideControls.color=MutedPaper;Place(rideControls.rectTransform,.05f,-.08f,.95f,.0f);
+            ridePanel.SetActive(false);
             dialoguePanel=Card(root.transform,"Interaction dialogue",new Vector2(.70f,.52f),new Vector2(.96f,.69f),false);
             Accent(dialoguePanel.transform,Orange);
             dialogueSpeaker=Label(dialoguePanel.transform,"Speaker",17,TextAnchor.MiddleLeft);dialogueSpeaker.fontStyle=FontStyle.Normal;dialogueSpeaker.color=new Color(.17f,.47f,.40f);Place(dialogueSpeaker.rectTransform,.045f,.56f,.95f,.90f);
@@ -1624,11 +1639,11 @@ namespace Festival.Presentation
             var interaction=state.Interactions.Find(i=>i.Id==player.InteractionId&&i.Status=="Active");
             TrackBuy(state,interaction,player);
             // DIALOG-3: a talk is on the chat window (UpdateChat), and on the lanes only for its trust dance.
-            bool rhythm=FestivalInput.IsRhythm(interaction);
-            rhythmPanel.SetActive(rhythm);
+            bool rhythm=FestivalInput.IsRhythm(interaction),riding=FestivalHudText.ShowsRide(interaction);
+            rhythmPanel.SetActive(rhythm&&!riding);ridePanel.SetActive(riding&&!session.MenuOpen);
             // DANCE-2: every four-lane challenge shows the live dancer beside its lanes. MINI-2: a drummer sees the crew's accuracy there.
             bool showDancer=FestivalHudText.ShowsDancer(interaction,session.MenuOpen),drumming=rhythm&&interaction.Kind==FestivalSimulation.DrumPartKind&&!session.MenuOpen,beside=showDancer||drumming;
-            rhythmShade.SetActive(rhythm&&!session.MenuOpen);
+            rhythmShade.SetActive(rhythm&&!riding&&!session.MenuOpen);
             Place(rhythmPanel.GetComponent<RectTransform>(),beside ? .015f : .32f,beside ? .05f : .06f,beside ? .495f : .68f,beside ? .95f : .87f);
             dancePanel.SetActive(showDancer);
             drumPanel.SetActive(drumming);
@@ -1648,7 +1663,8 @@ namespace Festival.Presentation
             Place(dialoguePanel.GetComponent<RectTransform>(),beside ? .525f : .70f,beside ? .085f : .52f,beside ? .965f : .96f,beside ? .215f : .69f);
             dancerCaption.gameObject.SetActive(showDancer&&!showDialogue);
             if(speech!=null){dialogueSpeaker.text=speech.Speaker;dialogueLine.text=speech.Text;dialogueReveal.VisibleCharacters=speech.VisibleCharacters;}
-            if(!rhythm||!session.enabled){ResetRhythm();return;}
+            if(!rhythm||!session.enabled){ResetRhythm();rideChart=null;return;}
+            if(riding){UpdateRide(interaction,player);return;}
             if(displayedChart==null||displayedInteractionId!=interaction.Id||displayedSeed!=interaction.ChartSeed||displayedNoteCount!=interaction.NoteCount||displayedPhrase!=interaction.Phrase||Math.Abs(displayedBeatSeconds-interaction.BeatSeconds)>.0001)
             {
                 ShowChart(interaction,RhythmChart.For(interaction));
@@ -1681,6 +1697,25 @@ namespace Festival.Presentation
                 rhythmReceptors[direction].color=flashing?RhythmColors[direction]:new Color(.76f,.85f,.84f,.9f);
                 rhythmReceptorWells[direction].color=flashing?new Color(.25f,.43f,.44f,1):new Color(.22f,.32f,.35f,1);
             }
+        }
+
+        // Each phrase starts in the middle lane, as the host replays it (DjRide.Replay). A lane change goes as a Rhythm input whose
+        // Direction is the new lane.
+        private void UpdateRide(InteractionState interaction,PlayerState player)
+        {
+            if(rideChart==null||rideId!=interaction.Id||ridePhrase!=interaction.Phrase)
+            {
+                rideId=interaction.Id;ridePhrase=interaction.Phrase;rideLane=DjRide.StartLane;rideChart=RhythmChart.For(interaction);
+                rideControls.text=FestivalHudText.RideControls(session.Controls.NoteKey(0),session.Controls.NoteKey(3))+"   •   "+FestivalHudText.HoldToStopFor(interaction.Kind,Bound(session?.Controls?.Drop,"G"));
+            }
+            double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
+            bool keys=now>=0&&rhythmFocused&&!session.MenuOpen&&!session.Controls.Rebinding&&!session.Controls.Objectives.IsPressed();
+            int lane=FestivalDjRide.Steer(rideLane,keys&&session.Controls.Notes[0].WasPressedThisFrame(),keys&&session.Controls.Notes[3].WasPressedThisFrame());
+            if(lane!=rideLane){rideLane=lane;session.Rhythm(lane,now);}
+            string effect=FestivalTrip.LaneEffect(player);
+            ride.Show(rideChart,now,rideLane,Catalog.FindEffect(effect)?.LeadSeconds??2);
+            int combo=DjRide.Replay(rideChart,interaction.Inputs,interaction.GoodWindowSeconds,now).Combo;
+            rideCombo.text=now<0?(now<=-1?Math.Ceiling(-now).ToString("0"):"1"):combo>=2?combo+" COMBO":"";
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
