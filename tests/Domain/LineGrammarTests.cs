@@ -16,7 +16,8 @@ public static class LineGrammarTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EverySlotFillsFromItsOwnTable,AKindDrawsEachOfItsTemplatesAndParts,TheSameSeedGivesTheSameLine,
             EachFestivalUsesOnlyItsOwnTaggedParts,AOrAnFollowsTheSoundOfTheNextWord,VerbsAndNounsAgreeWithThePartBeforeThem,
-            EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly})
+            EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly,
+            EveryTalkRoundHasItsOwnRepliesInEveryStyle})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" line grammar test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -149,6 +150,39 @@ public static class LineGrammarTests
         }
         Check(lines.Count>=8&&lines.Contains("Hey, Sam! My friend waved, again.")&&lines.Contains("Oi! My friend waved."),"the line says its dressing: "+string.Join(" / ",lines));
         Check(bodies.SetEquals(new[]{"My friend waved.","My friends waved."}),"the body is the line without its dressing, nor the dressing's own parts: "+string.Join(" / ",bodies));
+    }
+
+    // Speech bubbles hold 80 characters. A body shared between two rounds of one topic and style makes the rounds read alike.
+    static readonly string[] TheirRoundLines={"line.talk.ask","line.talk.close","line.sale.small","line.sale.close","line.buy.small","line.buy.close","line.security.close"};
+    static void EveryTalkRoundHasItsOwnRepliesInEveryStyle()
+    {
+        Check(ConversationLines.Rounds.Length==4,"a talk has four rounds, got "+ConversationLines.Rounds.Length);
+        var faults=new List<string>();
+        HashSet<string> Draw(string kind,int festival)
+        {
+            var bodies=new HashSet<string>();
+            for(int seed=0;seed<200;seed++)
+            {
+                string line=ConversationLines.Grammar.Line(kind,festival,new ContentRandom(seed),out var body);bodies.Add(body);
+                if(line.Length>80||line.IndexOfAny(new[]{'{','}'})>=0||!char.IsUpper(line[0])||".!?".IndexOf(line[line.Length-1])<0||DialogueGrammar.HasNarcTell(line))faults.Add(kind+" on festival "+festival+": \""+line+"\"");
+            }
+            if(bodies.Count<6)faults.Add(kind+" on festival "+festival+" says only "+bodies.Count+" different things");
+            return bodies;
+        }
+        foreach(var topic in ConversationLines.Topics)foreach(var style in ConversationLines.Styles)for(int festival=0;festival<Festivals.Count;festival++)
+        {
+            var earlier=new List<HashSet<string>>();
+            for(int round=0;round<ConversationLines.Rounds.Length;round++)
+            {
+                string kind=ConversationLines.ReplyKind(topic,round,style);
+                Check(kind=="reply."+topic+"."+ConversationLines.Rounds[round]+"."+style,"a round's reply pool is named for its topic, round and style, got "+kind);
+                var own=Draw(kind,festival);
+                if(earlier.Exists(e=>e.Overlaps(own)))faults.Add(kind+" on festival "+festival+" repeats a sentence of an earlier round");
+                earlier.Add(own);
+            }
+        }
+        foreach(var kind in TheirRoundLines)for(int festival=0;festival<Festivals.Count;festival++)Draw(kind,festival);
+        Check(faults.Count==0,faults.Count+" fault(s) in the talk rounds' lines:\n  "+string.Join("\n  ",faults.Take(20)));
     }
 
     static void AuthoringMistakesFailLoudly()
