@@ -15,6 +15,9 @@ A short shared moment in the middle of a level. The whole crew plays together, a
 windfall, or a mess everyone blames each other for at the debrief. Minigames are optional, and each one costs
 something to start, so the pause is a gamble and never a free rest.
 
+Booth minigames pause the festival. Performance games run inside a performance and never pause it
+([PERFORMANCE_GAMES_2026-10-23.md](PERFORMANCE_GAMES_2026-10-23.md)).
+
 ## The rules every minigame shares (MINI-1)
 
 **Booths.** Each level has one booth: a stranger with a sign. It sits on a spot at the edge of a crowd, chosen by

@@ -137,6 +137,9 @@ gone, because checking replaces it.
   the Steam work.
 - **Group dancing:** the worst dancer among the crew near the watchers sets
   the crew's suspicion.
+- **Performance games:** each dance, poi spin, DJ set or drum part draws a
+  short game from a growing pool, while the character keeps performing. See
+  [PERFORMANCE_GAMES_2026-10-23.md](PERFORMANCE_GAMES_2026-10-23.md).
 - **Debrief at the campfire after each level:**
   1. Everyone votes on the players at once.
   2. The results are revealed together, in a funny way.
