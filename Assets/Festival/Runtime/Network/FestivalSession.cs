@@ -146,6 +146,9 @@ namespace Festival.Network
         // (Festivals.InHolding), so a version-9 peer would show the old shack and the old spot by the pay desk.
         // DEV-2: RoundState.TestMode reaches every view (off in older rounds), and the host takes TestMode, TestFree and
         // TestClearLevel only from a test build's host (TestFree from any detained player).
+        // MINI-10: Mystery Cups' first turn clock starts CupsIntroSeconds (3 s) after the pour, so Booth.TurnAt can lie ahead of
+        // Booth.Seconds, and the tripper's Booth.Hint marks the spiked cup at HunchReliability: one reliability step lower when one
+        // player is at the table.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

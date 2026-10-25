@@ -10,7 +10,8 @@ using Festival.Core;
 // that runs out calls it. The nth safe cup adds $5 × n to the pot. The spiked cup loses the pot and gives the drinker a dose for the
 // rest of the level, or one stronger, up to 4, without touching the spin's doses, so the tripper's visions stay as they are. Calling
 // it pays the pot as sales: by day split across the players' cash, toward the quota; by night into the stash. Once only the spiked
-// cup is left, the game calls it. Only the tripper is shown a cup marked spiked, right at their vision reliability.
+// cup is left, the game calls it. Only the tripper is shown a hunch cup, right at their vision reliability, one step less alone,
+// and the first turn's clock starts after the card's 3 s rules intro.
 public static class MysteryCupsTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -32,7 +33,7 @@ public static class MysteryCupsTests
         var failures=new List<string>();
         foreach(var test in new Action[]{OneCupIsSpikedBySeedAmongTwoMoreThanTheCrew,TurnsGoRoundInASeededOrder,ATurnThatRunsOutCallsIt,
             ThePotGrowsByFiveDollarsTimesTheCupsDrunk,TheSpikedCupLosesThePotAndDosesTheDrinker,CallingItPaysTheCrewByDayAndTheStashByNight,
-            TheLastSafeCupCallsIt,TheCapCallsIt,TheHintIsRightAtTheTrippersReliability,OnlyTheTrippersViewIsShownTheHint,ASnapshotKeepsTheCupsGame,AVisibleBoothCannotRewriteHostOrAnotherViewer})
+            TheLastSafeCupCallsIt,TheCapCallsIt,TheFirstTurnStartsAfterTheRulesIntro,TheHintIsRightAtTheTrippersReliability,ASoloHunchIsOneStepLessSure,OnlyTheTrippersViewIsShownTheHint,ASnapshotKeepsTheCupsGame,AVisibleBoothCannotRewriteHostOrAnotherViewer})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" Mystery Cups test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -218,6 +219,18 @@ public static class MysteryCupsTests
         s.Tick(.4);Check(b.ScoredAt>=0&&s.State.LevelSales==sales+5,"at the cap it is called and the pot paid, got $"+(s.State.LevelSales-sales));
     }
 
+    // The card reads the rules for 3 s before the first turn's clock starts, so the first player up has the intro and then
+    // a whole turn. They may still drink or call it during the intro.
+    static void TheFirstTurnStartsAfterTheRulesIntro()
+    {
+        var s=Poured(320,2);string first=FestivalSimulation.CupsTurn(s.State);var b=s.State.Booth;
+        Check(FestivalSimulation.CupsIntroSeconds==3&&Math.Abs(b.TurnAt-b.Seconds-3)<1e-9,"the first turn's clock starts 3 s after the pour, got "+(b.TurnAt-b.Seconds)+" s");
+        s.Tick(3+FestivalSimulation.CupTurnSeconds-.3);
+        Check(Running(s)&&s.State.Booth.ScoredAt<0&&FestivalSimulation.CupsTurn(s.State)==first,"the first turn has the 3 s intro and its own 10 s: still up just before they run out");
+        s.Tick(.5);Check(s.State.Booth.ScoredAt>=0,"then it runs out and calls it");
+        var t=Poured(321,2);Check(Drink(t,Safe(t)).Accepted,"the player up may drink during the intro");
+    }
+
     // The tripper is shown one cup as spiked: the spiked cup at their vision reliability for their spun dose (75 / 50 / 25 / 10%),
     // and otherwise a safe cup.
     static void TheHintIsRightAtTheTrippersReliability()
@@ -225,7 +238,7 @@ public static class MysteryCupsTests
         var s=Poured(900,2);var b=s.State.Booth;var spun=s.State.Doses.Find(d=>d.PlayerId==s.State.TripperId);
         foreach(var (dose,reliability) in new[]{(1,.75),(2,.50),(3,.25),(4,.10)})
         {
-            spun.Dose=dose;Check(FestivalSimulation.VisionReliability(s.State)==reliability,"dose "+dose+"'s visions are true "+reliability+" of the time");
+            spun.Dose=dose;Check(FestivalSimulation.VisionReliability(s.State)==reliability&&FestivalSimulation.HunchReliability(s.State)==reliability,"dose "+dose+"'s visions, and a crew's hunch, are true "+reliability+" of the time");
             int right=0,trials=600;
             for(int k=0;k<trials;k++)
             {
@@ -235,6 +248,22 @@ public static class MysteryCupsTests
             }
             double rate=(double)right/trials;
             Check(Math.Abs(rate-reliability)<.06,"at dose "+dose+" the hint is right "+reliability+" of the time, got "+rate.ToString("F3"));
+        }
+    }
+
+    // Alone at the table nobody argues the hunch over, so it is one reliability step less sure than the tripper's visions
+    // (50 / 25 / 10 / 10% by dose), and a lone player cannot skip the marked cup for a free pot. A crew game keeps the visions' odds.
+    static void ASoloHunchIsOneStepLessSure()
+    {
+        var s=Poured(950,1);var b=s.State.Booth;var spun=s.State.Doses.Find(d=>d.PlayerId==s.State.TripperId);
+        Check(b.PlayerIds.Count==1&&s.State.TripperId=="p0","setup: a solo game, its player the tripper");
+        foreach(var (dose,reliability) in new[]{(1,.50),(2,.25),(3,.10),(4,.10)})
+        {
+            spun.Dose=dose;int right=0,trials=600;
+            Check(FestivalSimulation.HunchReliability(s.State)==reliability,"solo at dose "+dose+" the card names "+reliability+", got "+FestivalSimulation.HunchReliability(s.State));
+            for(int k=0;k<trials;k++){s.State.DealSeed=2000+k;s.PourCups();if(b.Hint==b.Spiked)right++;}
+            double rate=(double)right/trials;
+            Check(Math.Abs(rate-reliability)<.06,"solo at dose "+dose+" the hunch is right "+reliability+" of the time, got "+rate.ToString("F3"));
         }
     }
 
