@@ -154,6 +154,7 @@ namespace Festival.Network
         // Drum Circle parts (by their booth) and deck sets (where they start) chart to the nearer stage's song, and the DJ set to
         // the main stage's, so StageTrack 3, 6 and 7 now reach charts and snapshots. A version-9 client would play the old fixed
         // song and refuse those snapshots.
+        // NET-8: ProtocolGuardTests records both stage fronts and the pick for fixed spin seeds.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

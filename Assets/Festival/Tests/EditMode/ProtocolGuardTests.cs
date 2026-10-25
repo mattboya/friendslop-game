@@ -22,13 +22,14 @@ namespace Festival.Tests
         sealed class Recording
         {
             public readonly IReadOnlyList<string> Charts;public readonly string Check,Spin;public readonly IReadOnlyList<StageRecording> Stage;
-            // The DJ ride's drawn charts, one for each step; null before version 10.
-            public readonly IReadOnlyList<string> Rides;
-            public Recording(string[] charts,string check,string spin,StageRecording[] stage=null,string[] rides=null){Charts=charts;Check=check;Spin=spin;Stage=stage;Rides=rides;}
+            // The DJ ride's drawn charts, one for each step, and the stages; null before version 10.
+            public readonly IReadOnlyList<string> Rides;public readonly string Stages;
+            public Recording(string[] charts,string check,string spin,StageRecording[] stage=null,string[] rides=null,string stages=null){Charts=charts;Check=check;Spin=spin;Stage=stage;Rides=rides;Stages=stages;}
         }
         // A chart reads "DurationSeconds|Id,Direction,TimeSeconds,HoldSeconds;...", and a grey on the DJ ride adds ",1".
         // The spin reads "reel stops|rest|take|react|total".
         // A stage anchor reads "StageFirstHeadWorldSeconds,StageFirstHeadDelaySeconds,StageBeatStride".
+        // The stages read "MainX,MainZ,SmallX,SmallZ|spin seed=main track,small track;..." for each of PickSeeds.
         static readonly IReadOnlyDictionary<int,Recording> Recordings=new Dictionary<int,Recording>
         {
             // Version 5: exact archive a1c99e295610a6c312c391f72fcb9bf0392b0976. Version 5 notes had no holds, so each hold reads 0.
@@ -292,7 +293,8 @@ namespace Festival.Tests
                     "8|0,0,2,0;1,1,2.5,0;2,0,3,0;3,2,3.5,0;4,0,4,0;5,1,4.5,0;6,1,5,0;7,2,5.5,0;8,2,6,0;9,1,6.25,0;10,2,6.5,0;11,2,7,0;12,0,7.5,0",
                     "8|0,0,2,0;1,1,2.5,0;2,0,3,0;3,0,3.25,0,1;4,2,3.5,0;5,1,3.75,0;6,0,4,0;7,1,4.25,0;8,1,4.5,0;9,1,5,0;10,2,5.5,0;11,2,6,0;12,2,6.5,0;13,2,7,0;14,1,7.25,0;15,0,7.5,0",
                     "8|0,0,2,0;1,1,2.5,0;2,0,3,0;3,1,3.25,0;4,2,3.5,0;5,1,3.75,0;6,0,4,0;7,1,4.25,0;8,1,4.5,0;9,0,4.75,0;10,1,5,0;11,0,5.25,0;12,2,5.5,0;13,1,5.75,0;14,2,6,0;15,2,6.5,0;16,1,6.75,0;17,2,7,0;18,1,7.25,0;19,0,7.5,0",
-                }),
+                },
+                "0,27.5,-12,-28.5|0=4,5;1=2,4;2=5,7;3=5,3;4=4,2;5=1,3;6=4,3;7=1,5;8=4,7;9=2,6;10=1,7;11=3,7;12=7,5;13=6,2;14=1,4;15=5,2;-1=3,1;123456789=2,4;2147483647=2,6;-2147483648=4,7"),
         };
 
         static Recording Current()
@@ -307,6 +309,9 @@ namespace Festival.Tests
         static RhythmChart Ride(int step)=>DjRide.Create(42,12,.5,step,step>=1);
         // Each level shuffles two of every measured loop onto the stages (StageMusic).
         static IEnumerable<int> PlayedTracks()=>Enumerable.Range(1,StageBeats.Tracks.Length);
+        static readonly int[] PickSeeds=Enumerable.Range(0,16).Concat(new[]{-1,123456789,int.MaxValue,int.MinValue}).ToArray();
+        static string Stages()=>string.Join(",",new[]{StageMusic.MainX,StageMusic.MainZ,StageMusic.SmallX,StageMusic.SmallZ}.Select(v=>R(v)))+"|"
+            +string.Join(";",PickSeeds.Select(seed=>seed.ToString(CultureInfo.InvariantCulture)+"="+StageMusic.Track(seed,StageMusic.Main)+","+StageMusic.Track(seed,StageMusic.Small)));
         static InteractionState CheckDance()=>new InteractionState{Kind="ConfirmDance",ChartSeed=42,NoteCount=4,BeatSeconds=.5,ChartDifficulty=3};
         static InteractionState Stage(int track,double startWorldSeconds,string kind)
         {
@@ -332,7 +337,7 @@ namespace Festival.Tests
             }
             text.Append(indent).Append("    },\n").Append(indent).Append("    new[]{\n");
             for(int step=0;step<RideSteps;step++)text.Append(indent).Append("        \"").Append(Chart(Ride(step))).Append("\",\n");
-            return text.Append(indent).Append("    }),\n").ToString();
+            return text.Append(indent).Append("    },\n").Append(indent).Append("    \"").Append(Stages()).Append("\"),\n").ToString();
         }
         static string R(double value)=>value.ToString("R",CultureInfo.InvariantCulture);
         static double D(string value)=>double.Parse(value,NumberStyles.Float,CultureInfo.InvariantCulture);
@@ -420,6 +425,24 @@ namespace Festival.Tests
                 Assert.That(stage.Any(s=>s.Track==track&&s.StartWorldSeconds==start&&s.Kind==kind),Is.True,"track "+track+" has a "+kind+" stage recording from "+R(start)+" s");
         }
 
+        // A client works out each stage's song from the public spin seed, and the host charts a dance to the nearer stage's song,
+        // so a change to the shuffle or to a stage's front would pass every chart guard.
+        [Test] public void TheStagePickAndFrontsMatchTheRecording()
+        {
+            var stages=Current().Stages;
+            if(stages==null)Assert.Fail("ProtocolVersion "+FestivalSession.ProtocolVersion+" has no stage pick recording. Paste its recording from ProtocolGuardTests.Record:\n"+Record(FestivalSession.ProtocolVersion));
+            var halves=stages.Split('|');var fronts=halves[0].Split(',');var picks=halves[1].Split(';');
+            Same("the stage fronts","the main stage's x",D(fronts[0]),StageMusic.MainX);Same("the stage fronts","the main stage's z",D(fronts[1]),StageMusic.MainZ);
+            Same("the stage fronts","the small stage's x",D(fronts[2]),StageMusic.SmallX);Same("the stage fronts","the small stage's z",D(fronts[3]),StageMusic.SmallZ);
+            Same("the stage pick","the recorded spin seed count",picks.Length,PickSeeds.Length);
+            foreach(var entry in picks)
+            {
+                var pair=entry.Split('=');int seed=I(pair[0]);var tracks=pair[1].Split(',');
+                Same("the stage pick","spin seed "+seed+"'s main stage track",I(tracks[0]),StageMusic.Track(seed,StageMusic.Main));
+                Same("the stage pick","spin seed "+seed+"'s small stage track",I(tracks[1]),StageMusic.Track(seed,StageMusic.Small));
+            }
+        }
+
         // Mono and .NET print some doubles with different digits that parse to the same value, so numbers are compared, not text.
         [Test] public void TheRecorderPrintsTheCurrentVersionsRecording()
         {
@@ -427,7 +450,7 @@ namespace Festival.Tests
             Assert.That(printed,Does.StartWith("            ["+FestivalSession.ProtocolVersion+"]=new Recording(\n"),"the printout is a Recordings entry for this version");
             var strings=Regex.Matches(printed,"\"([^\"]*)\"").Cast<Match>().Select(m=>m.Groups[1].Value).ToList();
             var stages=Regex.Matches(printed,"new StageRecording\\((\\d+),([^,]+),\"(\\w+)\"").Cast<Match>().ToList();
-            var expected=stored.Charts.Concat(new[]{stored.Check,stored.Spin}).Concat(stored.Stage.SelectMany(s=>new[]{s.Kind,s.Anchor,s.Chart})).Concat(stored.Rides??new string[0]).ToList();
+            var expected=stored.Charts.Concat(new[]{stored.Check,stored.Spin}).Concat(stored.Stage.SelectMany(s=>new[]{s.Kind,s.Anchor,s.Chart})).Concat(stored.Rides??new string[0]).Concat(new[]{stored.Stages??""}).ToList();
             Assert.That(strings.Count,Is.EqualTo(expected.Count),"one printed string for each recorded one");
             Assert.That(stages.Count,Is.EqualTo(stored.Stage.Count),"one printed stage entry for each recorded one");
             for(int k=0;k<stages.Count;k++)
