@@ -173,8 +173,9 @@ namespace Festival.Core
                 var npc=State.Npcs.Find(n=>n.Id==i.TargetId);int pay=SalePay(i.Ask,i.Score);
                 if(pay>0)
                 {
-                    int payout=SalePayout(npc,pay*VipPayout(State,p,npc)),full=SalePayout(npc,SalePay(i.Ask,1)*VipPayout(State,p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;
-                    notice=MoneyNotice("SOLD "+(Catalog.FindItem(i.ReservedItemId)?.Name??"stock"),payout)+(pay<SalePay(i.Ask,1)?"  •  talked down from $"+full:"");result="SOLD +$"+payout;i.ReservedItemId="";
+                    int payout=SalePayout(npc,pay*VipPayout(State,p,npc)),full=SalePayout(npc,SalePay(i.Ask,1)*VipPayout(State,p,npc));string name=Catalog.FindItem(i.ReservedItemId)?.Name??"stock";
+                    p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;CrewNews(p,"Sales",MoneyNotice("SALES",payout)+"  •  "+p.Name+" sold "+name);if(npc!=null)npc.Sales++;
+                    notice=MoneyNotice("SOLD "+name,payout)+(pay<SalePay(i.Ask,1)?"  •  talked down from $"+full:"");result="SOLD +$"+payout;i.ReservedItemId="";
                 }
                 else{PushedAskFailed(i,p);if(i.ReservedItemId!=""){notice=HandBack(i,p,i.TrustDance&&i.Turns.Count==0?"They walk off":"NO SALE");result="NO SALE";}}
             }

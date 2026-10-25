@@ -34,7 +34,7 @@ namespace Festival.Core
         {
             var seller=State.Npcs.Find(n=>n.Id==i.TargetId);
             if(seller?.Role=="Narc"&&i.Turns.Count>0){Detain(p);return;}
-            if(i.Score<BuyScore){p.Cash+=i.ReservedCash;return;}
+            if(i.Score<BuyScore){Refund(p,i);return;}
             string item=SellerStock(i.TargetId);if(seller!=null)seller.StockSold++;
             if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});return;}
             Add(p,item,1);p.EquippedItemId=item;p.VisualReceivedItem=item;p.VisualReceiptSequence++;p.VisualReceiptAt=State.SimulationSeconds;

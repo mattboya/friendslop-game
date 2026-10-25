@@ -155,6 +155,8 @@ namespace Festival.Network
         // the main stage's, so StageTrack 3, 6 and 7 now reach charts and snapshots. A version-9 client would play the old fixed
         // song and refuse those snapshots.
         // NET-8: ProtocolGuardTests records both stage fronts and the pick for fixed spin seeds.
+        // HUD-16: snapshots carry each player's own money news (PlayerState.MoneyNewsLog and MoneyNewsSequence, owner-only in
+        // views); a version-9 client ignores it.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -1005,7 +1007,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
+                if(p.Id!=viewer){copy.MoneyNewsLog=new List<MoneyNews>();copy.MoneyNewsSequence=0;copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
             }
             if(!spirit)
             {

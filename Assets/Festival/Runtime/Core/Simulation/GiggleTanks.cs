@@ -35,7 +35,7 @@ namespace Festival.Core
         {
             if(State.Phase!="Playing")return;
             foreach(var p in State.Players)if(p.Connected&&(p.Life=="Alive"||p.Life=="Downed")&&Count(p,GiggleTankItem)>0&&AtCampGate(p.X,p.Z))
-            {Take(p,GiggleTankItem,1);State.StashCash+=Festivals.GiggleTankCash;p.GiggleTankBankSequence++;}
+            {Take(p,GiggleTankItem,1);State.StashCash+=Festivals.GiggleTankCash;p.GiggleTankBankSequence++;CrewNews(p,"Stash",MoneyNotice("STASH",Festivals.GiggleTankCash)+"  •  "+p.Name+" brought the Giggle Tank home");}
         }
         // Detention, death and the next level lose a tank, one still on offer included: returning it to full hands would drop it.
         void LoseGiggleTank(PlayerState p)

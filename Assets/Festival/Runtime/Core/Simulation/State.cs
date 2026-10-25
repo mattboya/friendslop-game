@@ -66,6 +66,9 @@ namespace Festival.Core
         public long DialogueRevision,ConversationOutcomeSequence,ConversationDismissedSequence;
         public string ConversationThreadId="",ConversationDismissedId="";
         public List<ConversationOutcome> ConversationOutcomes=new List<ConversationOutcome>();
+        // Owner-only news of each change to this player's cash or carried items and to the crew's stash or sales, newest last, at
+        // most FestivalSimulation.MoneyNewsCap. Empty in older snapshots.
+        public long MoneyNewsSequence; public List<MoneyNews> MoneyNewsLog=new List<MoneyNews>();
     }
     [Serializable] public sealed class PublicSpeechState {
         public string DeliveryId="",SpeakerId="",Speaker="",Text="";
@@ -78,6 +81,9 @@ namespace Festival.Core
         public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="",Result="";
         public long Sequence; public List<string> GrammarKeys=new List<string>();
     }
+    // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind is what the HUD flashes: Cash, Stash,
+    // Sales or Items.
+    [Serializable] public sealed class MoneyNews { public long Sequence; public string Kind="",Text=""; }
     // RefusesSales: PlayerId's High or Greedy ask failed with this festivalgoer, who buys nothing more from them this level.
     // Host-only, as ViewFor copies only Suspicion; false in older snapshots.
     [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; public bool RefusesSales; }

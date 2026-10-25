@@ -82,7 +82,7 @@ namespace Festival.Core
         void Recruited(InteractionState i,PlayerState p)
         {
             var second=State.SecondFriend;bool other=i.TargetId==SecondFriendTarget;
-            if(!(other?second.Found:State.FriendFound)){State.ObjectiveReward+=FriendReward;State.StashCash+=FriendReward;}
+            if(!(other?second.Found:State.FriendFound)){State.ObjectiveReward+=FriendReward;State.StashCash+=FriendReward;CrewNews(null,"Stash",MoneyNotice("STASH",FriendReward)+"  •  "+p.Name+" found a lost friend");}
             if(other){second.Found=true;second.LeaderId=p.Id;}else{State.FriendFound=true;State.FriendLeaderId=p.Id;}
         }
         // Every Playing step: a found friend walks after their escort at 4 m/s until 1.5 m away. An escort who falls, leaves or is caught lets go.

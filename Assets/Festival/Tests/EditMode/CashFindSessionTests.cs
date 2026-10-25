@@ -37,6 +37,17 @@ namespace Festival.Tests
                 Assert.That(view.Drops.Count(d=>d.CashFind),Is.EqualTo(id=="spirit"?0:game.State.Drops.Count(d=>d.CashFind)),"living recipients see actual scheduled finds; spirits keep no drop view");
             }
         }
+        // Money news is owner-only, like the balance it reports: your view carries yours, a friend's view none of it.
+        [Test]public void MoneyNewsReachesOnlyItsOwnersView()
+        {
+            var game=Playing();var owner=game.Player("owner");owner.X=-28;owner.Z=16;
+            Assert.That(game.Execute("owner",new GameCommand{Id="news"+(sequence++),Kind="LostProperty"}).Accepted,Is.True);game.Tick(5.1);
+            Assert.That(owner.MoneyNewsLog.Last().Text,Is.EqualTo("LOST PROPERTY RETURNED  •  +$5"),"setup: the host holds the owner's news");
+            var mine=Wire(game,"owner").Players.Find(p=>p.Id=="owner");
+            Assert.That(mine.MoneyNewsLog.Last().Text,Is.EqualTo("LOST PROPERTY RETURNED  •  +$5"));Assert.That(mine.MoneyNewsSequence,Is.EqualTo(owner.MoneyNewsSequence));
+            var theirs=Wire(game,"friend").Players.Find(p=>p.Id=="owner");
+            Assert.That(theirs.MoneyNewsLog,Is.Empty,"a friend never reads your pocket's news");Assert.That(theirs.MoneyNewsSequence,Is.Zero);
+        }
         [Test]public void CashDropDtosAreDetachedFromTheAuthoritativeFinancialClaim()
         {
             var game=Playing();var view=FestivalSession.ViewFor(game,"friend");var source=game.State.Drops.Find(d=>d.CashFind);var copy=view.Drops.Find(d=>d.Id==source.Id);
