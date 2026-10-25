@@ -206,6 +206,15 @@ public static class LineGrammarTests
         }
         Check(pools>=47,"every sale and buy pool is checked, got "+pools);
         Check(faults.Count==0,faults.Count+" deal line(s) name an amount:\n  "+string.Join("\n  ",faults));
+        // Their line at the ask is FestivalLines' "sale" or "buy". A {count} can say "five" (five songs, five of each), so only
+        // money words fail here.
+        var priced=new SortedSet<string>();
+        foreach(var kind in new[]{"sale","buy"})for(int festival=0;festival<2;festival++)for(int seed=0;seed<3000;seed++)
+        {
+            string line=ConversationLines.Grammar.Line(kind,festival,seed);
+            if(Regex.IsMatch(line,@"\b(fives|twenty|ten|dollars?|bucks?)\b|\$|\d",RegexOptions.IgnoreCase))priced.Add(kind+": "+line);
+        }
+        Check(priced.Count==0,priced.Count+" ask line(s) name an amount:\n  "+string.Join("\n  ",priced));
     }
 
     static void AuthoringMistakesFailLoudly()
