@@ -109,7 +109,8 @@ public static class DrumCircleTests
             var s=Started();var i=RequiredPart(s,"p1");if(withdrawal=="disconnect")s.Disconnect("p1");
             if(withdrawal=="cancel")
             {
-                Check(!s.Execute("p1",new GameCommand{Id="drum"+(sequence++),Kind="Cancel",TargetId="ended_interaction"}).Accepted&&i.Status=="Active","a Cancel naming an interaction p1 no longer has leaves the part playing");
+                var stale=s.Execute("p1",new GameCommand{Id="drum"+(sequence++),Kind="Cancel",TargetId="ended_interaction"});
+                Check(!stale.Accepted&&stale.Reason=="That action already ended"&&i.Status=="Active","a Cancel naming an interaction p1 no longer has is refused as already ended and leaves the part playing: "+stale.Reason);
                 Check(Act(s,"p1","Cancel").Accepted,"participant can withdraw while world is paused");
             }
             if(withdrawal=="life")s.Player("p1").Life="Spirit";
