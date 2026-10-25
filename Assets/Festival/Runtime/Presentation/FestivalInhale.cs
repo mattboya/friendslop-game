@@ -18,7 +18,8 @@ namespace Festival.Presentation
         public const float Range=15;
         const int Rate=24000;
         // The breath swells for BreathSeconds, the balloon's neck squeaks from SqueakFrom to SqueakTo, and the rest is a held breath.
-        const double Seconds=1.1,BreathSeconds=.86,SqueakFrom=.62,SqueakTo=.88,Loudness=.6;
+        // The squeak glides up through the breath's last third and ends just past it.
+        const double Seconds=3,BreathSeconds=2.4,SqueakFrom=1.6,SqueakTo=2.45,Loudness=.6;
         // A friend's inhale comes from about mouth height on their body.
         const float MouthHeight=1.6f;
 
@@ -61,7 +62,8 @@ namespace Festival.Presentation
         void OnEnable(){if(session!=null)session.GiggleBalloonTaken+=Heard;}
         void OnDisable(){if(session!=null)session.GiggleBalloonTaken-=Heard;foreach(var voice in voices.Values)if(voice!=null)voice.Stop();}
 
-        // One inhale for each report, however many takes it counts: two at once would only sound like one louder inhale.
+        // One inhale for each report, however many takes it counts: two at once would only sound like one louder inhale. A take while
+        // the hitter's inhale still plays starts it over, so two never layer.
         void Heard(string playerId,int takes)
         {
             bool own=playerId==session.LocalPlayerId;var body=own?null:session.WorldCharacter(playerId);
@@ -72,7 +74,7 @@ namespace Festival.Presentation
             if(!audible)return;
             var voice=Voice(playerId);voice.spatialBlend=own?0:1;
             if(!own)voice.transform.position=body.transform.position+Vector3.up*MouthHeight;
-            FestivalSettings.ApplyEffects(voice,session.Profile?.Data);voice.PlayOneShot(clip);Played++;
+            FestivalSettings.ApplyEffects(voice,session.Profile?.Data);voice.Play();Played++;
         }
         AudioSource Voice(string playerId)
         {

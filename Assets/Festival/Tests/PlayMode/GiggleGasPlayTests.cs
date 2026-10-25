@@ -222,7 +222,7 @@ namespace Festival.Tests
                 var own=Voice(mine,me);
                 Assert.That(own!=null&&own.isPlaying,"the host's own inhale plays");
                 Assert.That(own.spatialBlend,Is.Zero,"in their own head: 2-D");
-                Assert.That(own.clip.length,Is.InRange(.8f,1.4f),"the inhale");
+                Assert.That(own.clip.length,Is.EqualTo(3).Within(.05f),"the 3 s inhale");
                 Assert.That(theirs.Played,Is.EqualTo(1),"the friend hears it once");
                 var heard=Voice(theirs,me);
                 Assert.That(heard!=null&&heard.isPlaying,"the host's inhale plays for the friend");
@@ -239,7 +239,7 @@ namespace Festival.Tests
                 Assert.That(Voice(mine,pal).spatialBlend,Is.EqualTo(1),"in 3-D");
                 Assert.That(Vector3.Distance(Voice(mine,pal).transform.position,host.WorldCharacter(pal).transform.position),Is.LessThan(2),"from the friend's body, where the host sees it");
 
-                yield return Settle(1.6f);
+                yield return Settle(3.4f);
                 Assert.That((mine.Played,theirs.Played),Is.EqualTo((2,2)),"each take plays once, never again");
                 Assert.That(Voice(mine,me).isPlaying||Voice(theirs,me).isPlaying,Is.False,"and the inhales end");
 
@@ -248,6 +248,35 @@ namespace Festival.Tests
                 Assert.That(Take(sim,me)&&Take(sim,me),"setup: two takes in one step");
                 yield return Until(()=>theirs.Played>2,3);yield return Settle(.3f);
                 Assert.That((mine.Played,theirs.Played),Is.EqualTo((3,3)),"two takes reported together play one inhale");
+            }
+            finally{LeaveCrew();}
+            yield return null;
+        }
+
+        // PlayOneShot leaves a voice's time at 0, so a voice whose time runs is playing its own clip, which a new take can restart.
+        [UnityTest]public IEnumerator ASecondTakeWithinTheInhaleStartsItOverInsteadOfLayering()
+        {
+            yield return HostAndFriend("Inhale again");
+            try
+            {
+                var sim=Simulation(host);string me=host.LocalPlayerId,pal=friend.LocalPlayerId;
+                var mine=hostObject.GetComponent<FestivalInhale>();var theirs=friendObject.GetComponent<FestivalInhale>();
+                Stand(sim,me,1.2f);Stand(sim,pal,-1.2f);yield return Settle(.8f);
+                Assert.That(Take(sim,me),"setup: a take");
+                yield return Until(()=>mine.Played>0&&theirs.Played>0,3);
+                var own=Voice(mine,me);var heard=Voice(theirs,me);
+                yield return Settle(1);
+                foreach(var (voice,who) in new[]{(own,"in the hitter's head"),(heard,"for the friend")})
+                    Assert.That(voice.isPlaying&&voice.time>.7f,"a second in, the inhale itself plays "+who+": "+voice.isPlaying+" at "+voice.time+" s");
+                Assert.That(Take(sim,me),"setup: a second take, a second later");
+                yield return Until(()=>mine.Played>1&&theirs.Played>1,3);
+                foreach(var (voice,who) in new[]{(own,"in the hitter's head"),(heard,"for the friend")})
+                    Assert.That(voice.isPlaying&&voice.time<.4f,"the second take starts the inhale over "+who+": "+voice.isPlaying+" at "+voice.time+" s");
+                Assert.That((Voices(mine).Count,Voices(theirs).Count),Is.EqualTo((1,1)),"on the one voice each session keeps for the hitter");
+                yield return Settle(2.3f);
+                Assert.That(own.isPlaying&&heard.isPlaying,"so it still plays past the first take's 3 s");
+                yield return Settle(1.2f);
+                Assert.That(own.isPlaying||heard.isPlaying,Is.False,"and ends 3 s after the second take, with nothing layered under it");
             }
             finally{LeaveCrew();}
             yield return null;
