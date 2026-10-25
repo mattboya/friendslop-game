@@ -414,6 +414,24 @@ namespace Festival.Tests
             Assert.That(actions.Count,Is.EqualTo(9),"rendering the strip never removes menu actions");
         }
 
+        // Each banner shows once. The first view of a round or a connection only takes note, so nothing old replays.
+        [Test] public void DyingAndComingBackEachShowTheirBannerOnce()
+        {
+            var s=Level(0,0);s.RoundId="life";var you=Crew(s,"you","You",life:"Downed");var news=new FestivalHudText.LifeNews();
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("","")),"the first view only takes note");
+            you.Life="Spirit";
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("YOU DIED","You're a spirit: you float through anything, and only other spirits see you. Reach the medical tent to come back (2 revivals left).")),"the step to a spirit");
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("","")),"once");
+            you.Life="Alive";you.RevivalCount=1;
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("YOU'RE BACK","Back on your feet at the medical tent. Walls and the stage stop you again.")),"a revival");
+            you.Life="Spirit";Assert.That(news.Follow(s,you,1).Detail,Does.EndWith("(1 revival left)."),"a second death counts what is left");
+            you.Life="Alive";you.RevivalCount=2;news.Follow(s,you,1);you.Life="Spirit";
+            Assert.That(news.Follow(s,you,1).Detail,Does.EndWith("No revivals left this level."),"and never sends you to the tent for nothing");
+            Assert.That(new FestivalHudText.LifeNews().Follow(s,you,1),Is.EqualTo(("","")),"joining as a spirit stays quiet");
+            Assert.That(news.Follow(s,you,2),Is.EqualTo(("","")),"so does a reconnect");
+            s.RoundId="next";you.Life="Alive";Assert.That(news.Follow(s,you,2),Is.EqualTo(("","")),"and a new level's fresh start");
+        }
+
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
         {
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.

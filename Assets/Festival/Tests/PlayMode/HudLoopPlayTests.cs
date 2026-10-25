@@ -280,6 +280,45 @@ namespace Festival.Tests
             yield return null;
         }
 
+        [UnityTest]public IEnumerator DyingShowsTheBannerAndTheSpiritLookAndARevivalClearsBoth()
+        {
+            var world=new GameObject("Life banner world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Life banner HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            GameObject Shown(string name){foreach(var rect in root.GetComponentsInChildren<RectTransform>(false))if(rect.name==name)return rect.gameObject;return null;}
+            Rect Area(GameObject go){var corners=new Vector3[4];((RectTransform)go.transform).GetWorldCorners(corners);return new Rect(corners[0].x,corners[0].y,corners[2].x-corners[0].x,corners[2].y-corners[0].y);}
+            try
+            {
+                session.Host("Ghost",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);yield return StartLevel(session);
+                var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);player.Cash=40;
+                // No tripper, so KeepTripper never doses the view while it is checked.
+                game.State.TripperId="";yield return new WaitForSeconds(.3f);yield return null;yield return null;
+                Assert.That(Shown("Life banner"),Is.Null,"setup: alive, no banner");Assert.That(Shown("Spirit tag"),Is.Null,"and no tag");
+                var trip=root.transform.Find("Festival trip");Assert.That(trip==null||!trip.gameObject.activeSelf,"setup: a sober view");
+                player.Life="Downed";player.DownedRemaining=.05;yield return new WaitForSeconds(.4f);yield return null;yield return null;
+                Assert.That(player.Life,Is.EqualTo("Spirit"),"setup: alone, the downed time runs out");
+                Assert.That(DropText(root,"Life title")?.text,Is.EqualTo("YOU DIED"),"dying is a moment");
+                Assert.That(DropText(root,"Life detail")?.text,Does.Contain("float through anything").And.Contain("(2 revivals left)"));
+                Assert.That(DropText(root,"Spirit tag text")?.text,Is.EqualTo("SPIRIT"),"the tag is up");
+                trip=root.transform.Find("Festival trip");Assert.That(trip!=null&&trip.gameObject.activeSelf,"the view turns ghostly");
+                var look=FestivalTrip.Spirit(FestivalNightLighting.IsNight(session.State));
+                foreach(var image in trip.GetComponentsInChildren<RawImage>(false))if(image.name=="Trip vignette")Assert.That(image.color.a,Is.EqualTo(look.Vignette),"with the spirit's soft edges");
+                foreach(var image in trip.GetComponentsInChildren<Image>(false))if(image.name=="Trip tint")Assert.That(image.color,Is.EqualTo(look.Tint),"and its cool cast");
+                GameObject reel=null;foreach(var rect in root.GetComponentsInChildren<RectTransform>(false))if(rect.name=="Death card 0")reel=rect.gameObject;
+                Assert.That(reel,Is.Not.Null,"setup: a death with $40 spins the death reel");
+                Assert.That(Area(Shown("Life banner")).Overlaps(Area(reel.transform.Find("Card").gameObject)),Is.False,"the banner leaves the death reel clear");
+                player.X=24;player.Z=-20;
+                var revive=game.Execute(player.Id,new GameCommand{Id="life_hud_revive",Kind="BeginRevival",TargetId=player.Id});Assert.That(revive.Accepted,Is.True,revive.Reason);
+                game.State.Interactions.Find(i=>i.Kind=="Revival"&&i.Status=="Active").StartSeconds-=15;yield return new WaitForSeconds(.4f);yield return null;yield return null;
+                Assert.That(player.Life,Is.EqualTo("Alive"),"setup: the self-revival finishes");
+                Assert.That(DropText(root,"Life title")?.text,Is.EqualTo("YOU'RE BACK"),"coming back is clear");
+                Assert.That(Shown("Spirit tag"),Is.Null,"the tag goes");
+                Assert.That(trip.gameObject.activeSelf,Is.False,"and so does the ghostly view");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator ResetDisclosuresFitActualResultsCampReviewShoppingAndHelpInBothCurrencies()
         {
             var world=new GameObject("impl-U53 reset world");world.AddComponent<FestivalWorld>();yield return null;

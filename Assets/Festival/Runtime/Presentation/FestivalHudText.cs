@@ -449,6 +449,31 @@ namespace Festival.Presentation
             /// <summary>The notice still to show, once; "" for none.</summary>
             public string Take(){string taken=notice;notice="";return taken;}
         }
+        /// <summary>The life banner's headings: as you become a spirit, and as a revival brings you back.</summary>
+        public const string DeathTitle="YOU DIED",BackTitle="YOU'RE BACK";
+        /// <summary>Under YOU DIED, what being a spirit means and how many revivals p has left this level.</summary>
+        public static string DeathDetail(PlayerState p)
+        {
+            int left=FestivalGuidance.RevivalsLeft(p);
+            return "You're a spirit: you float through anything, and only other spirits see you. "+(left==0?"No revivals left this level.":"Reach the medical tent to come back ("+left+(left==1?" revival":" revivals")+" left).");
+        }
+        /// <summary>Under YOU'RE BACK: walking through things ended with the spirit.</summary>
+        public const string BackDetail="Back on your feet at the medical tent. Walls and the stage stop you again.";
+        /// <summary>Follows the viewer's own life in their view for the HUD's life banner. Follow gives the banner a change earns,
+        /// once: YOU DIED as they become a spirit, YOU'RE BACK as a spirit comes back to life; ("","") otherwise. The first view of a
+        /// connection or a round only takes note, so joining as a spirit, or a new level's fresh start, stays quiet.</summary>
+        public sealed class LifeNews
+        {
+            string round,life="";
+            int connection=-1;
+            public (string Title,string Detail) Follow(RoundState s,PlayerState viewer,int connectionGeneration)
+            {
+                string was=life;life=viewer.Life;
+                if(round!=s.RoundId||connection!=connectionGeneration){round=s.RoundId;connection=connectionGeneration;return ("","");}
+                if(was!="Spirit"&&life=="Spirit")return (DeathTitle,DeathDetail(viewer));
+                return was=="Spirit"&&life!="Spirit"?(BackTitle,BackDetail):("","");
+            }
+        }
         /// <summary>ESC-2: E during a stop while the guard is still walking over, out of talking reach (the host's 2.5 m): said, not
         /// offered, so until the talk is in reach E does nothing, never a sale or a buy in the guard's sight, which is an arrest.</summary>
         public const string StopApproachAction="Security is coming over";

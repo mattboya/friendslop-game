@@ -229,6 +229,11 @@ namespace Festival.Presentation
         // while nothing covers it, as the sundown warning's do.
         private GameObject tipPanel;
         private Text tipText;
+        private GameObject lifePanel,spiritTag;
+        private Text lifeTitle,lifeDetail;
+        private float lifeUntil;
+        private readonly FestivalHudText.LifeNews lifeNews=new FestivalHudText.LifeNews();
+        private const float LifeBannerSeconds=6;
         private string tipId="",tipRound="";
         private float tipShown;
         // MINI-1: the minigame card (FestivalHudText.MinigameCard): the booth's ring and countdown, the game under way, its result.
@@ -494,6 +499,16 @@ namespace Festival.Presentation
             tipPanel=Card(root.transform,"First-time tip card",new Vector2(.022f,.535f),new Vector2(.42f,.615f),true);
             Accent(tipPanel.transform,Mint);
             tipText=Label(tipPanel.transform,"First-time tip",18,TextAnchor.MiddleLeft);Place(tipText.rectTransform,.035f,.06f,.97f,.90f);ShrinkToFit(tipText,13);tipPanel.SetActive(false);
+            // Clear of the death reels in the bottom-left (their first row tops out at .29) and under the sundown card (.71).
+            lifePanel=Card(root.transform,"Life banner",new Vector2(.30f,.56f),new Vector2(.70f,.70f),true);lifePanel.GetComponent<Image>().raycastTarget=false;
+            Accent(lifePanel.transform,Mint);
+            lifeTitle=Label(lifePanel.transform,"Life title",30,TextAnchor.MiddleCenter);lifeTitle.fontStyle=FontStyle.Normal;Place(lifeTitle.rectTransform,.04f,.56f,.96f,.94f);
+            lifeDetail=Label(lifePanel.transform,"Life detail",18,TextAnchor.MiddleCenter);lifeDetail.color=MutedPaper;Place(lifeDetail.rectTransform,.05f,.05f,.95f,.56f);ShrinkToFit(lifeDetail,13);
+            lifePanel.SetActive(false);
+            // Between the voice line and the equipment bar.
+            spiritTag=Card(root.transform,"Spirit tag",new Vector2(.44f,.03f),new Vector2(.56f,.08f),true);spiritTag.GetComponent<Image>().raycastTarget=false;
+            var spiritWord=Label(spiritTag.transform,"Spirit tag text",20,TextAnchor.MiddleCenter);spiritWord.text="SPIRIT";spiritWord.fontStyle=FontStyle.Normal;spiritWord.color=new Color(.62f,.8f,1,1);Fill(spiritWord.rectTransform,2);
+            spiritTag.SetActive(false);
             // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
             // built before the map and the menus so they draw over it, and it catches no clicks.
             resultsPanel=Card(root.transform,"Results banner",new Vector2(.25f,.37f),new Vector2(.75f,.63f),true);resultsPanel.GetComponent<Image>().raycastTarget=false;
@@ -899,7 +914,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){lifeUntil=0;lifePanel.SetActive(false);spiritTag.SetActive(false);ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -939,6 +954,7 @@ namespace Festival.Presentation
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
             bool uncovered=!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf;
+            UpdateLife(state,player,uncovered);
             UpdateMinigame(state,player,uncovered);
             UpdateLightShow(state,player,uncovered);
             UpdateBriefing(state,player,uncovered&&!minigamePanel.activeSelf);
@@ -1126,6 +1142,14 @@ namespace Festival.Presentation
             UpdateRosterLayout(checklist==""?0:checklist.Split('\n').Length);
             menuRoster.text=state.Players.Count+" / 8 FRIENDS\n"+string.Join("   •   ",state.Players.ConvertAll(p=>(p.Id==player.Id?"YOU":p.Name)+(p.Ready?" READY":"")));
             menuPhase.text=state.Phase=="Shopping"?"CAMPSITE":state.Phase=="CampReview"?"ROUND REVIEW":state.Phase=="Playing"?"FESTIVAL":state.Phase=="Results"?"BACK TO CAMP":state.Phase==FestivalSimulation.MinigamePhase?"MINIGAME":"GATHERING";
+        }
+
+        private void UpdateLife(RoundState state,PlayerState player,bool uncovered)
+        {
+            var news=lifeNews.Follow(state,player,session.ConnectionGeneration);
+            if(news.Title!=""){lifeTitle.text=news.Title;lifeDetail.text=news.Detail;lifeUntil=Time.unscaledTime+LifeBannerSeconds;}
+            lifePanel.SetActive(uncovered&&state.Phase=="Playing"&&Time.unscaledTime<lifeUntil);
+            spiritTag.SetActive(uncovered&&player.Life=="Spirit"&&FestivalWorld.ShowsFestival(state.Phase));
         }
 
         // LOOP-5: the results banner, and the sundown warning once per stage (see SundownNoticeSeconds).
