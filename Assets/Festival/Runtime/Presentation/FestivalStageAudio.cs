@@ -5,28 +5,47 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>The main stage's recorded song follows shared world time, holding during a booth game or Results. Dances ride
-    /// the song at full volume. A DJ takeover silences it while its transport continues, ready for the handoff.</summary>
+    /// <summary>The main stage's recorded song follows shared world time, holding during a booth game or Results. Dances and the
+    /// DJ set ride the song at full volume. After each phrase of a set the crowd in front of the stage roars as loud as the
+    /// phrase was good.</summary>
     public sealed class FestivalStageAudio : MonoBehaviour
     {
         static readonly Vector3 Front=new Vector3(0,3,27.5f);
-        const float Full=12,FadeOutSeconds=.3f,RecoverSeconds=1;
-        GameObject speakers;
+        static readonly Vector3 Crowd=new Vector3(0,1.6f,18);
+        const float Full=12,RoarFull=8,RoarGain=.5f,RoarRiseSeconds=.45f,RoarFallSeconds=1.5f;
+        GameObject speakers,crowd;
         AudioSource[] decks;
+        AudioSource roar;
+        AudioClip roarClip;
         FestivalSession session;
         FestivalMusic.Transport transport;
-        float level=1;
+        float roarLevel;
 
         /// <summary>Palm Mirage's disco/tech house day/night and Ember Playa's dub/drum and bass stay on the original catalog.</summary>
         public static FestivalMusic.Track TrackFor(int festival,int level)=>FestivalMusic.For(RhythmChart.StageTrackFor(festival,level));
         public static FestivalMusic.Track For(RoundState state)=>state!=null&&(state.Phase=="Playing"||state.Phase==FestivalSimulation.MinigamePhase||state.Phase=="Results")?TrackFor(state.FestivalIndex,state.LevelIndex):null;
-        /// <summary>Only a stage-front DJ takeover changes the song's gain. Dances and talks keep the song full.</summary>
-        public static float Level(RoundState state,string localId)
+        /// <summary>0-1 while the host's cheer for the DJ's last phrase lasts: nothing for a flop, a murmur at 0.4, the full roar
+        /// for a perfect phrase. A booth game freezes the cheer's clock, so the roar waits with the held song.</summary>
+        public static float RoarLevel(RoundState state)=>state==null||state.Phase!="Playing"||state.StageCheerScore<0||FestivalSimulation.WorldSeconds(state)>=state.StageCheerUntilWorldSeconds?0:Mathf.Clamp01(((float)state.StageCheerScore-.25f)/.75f);
+        public static float EaseRoar(float level,float target,float dt)=>Mathf.MoveTowards(level,target,dt/(target>level?RoarRiseSeconds:RoarFallSeconds));
+        /// <summary>Three seconds of filtered noise with slow, uneven swells, cross-faded into its own start so it loops without
+        /// a click.</summary>
+        public static AudioClip CreateRoar()
         {
-            if(state!=null)foreach(var p in state.Players)if(p.VisualPose=="Dj")return 0;
-            return 1;
+            const int Rate=24000,Length=Rate*3,Fade=Rate/5;
+            var raw=new float[Length+Fade];uint seed=0x2545f491;double low=0,band=0;
+            for(int n=0;n<raw.Length;n++)
+            {
+                double t=n/(double)Rate;seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;
+                double white=(seed&0xffff)/32767.5-1;low+=(white-low)*.12;band+=(low-band)*.35;
+                double swell=.65+.2*Math.Sin(2*Math.PI*t*2/3)+.15*Math.Sin(2*Math.PI*t*5/3+1.3);
+                raw[n]=(float)((low-band)*swell);
+            }
+            var samples=new float[Length];float peak=0;
+            for(int n=0;n<Length;n++){float w=n<Fade?n/(float)Fade:1;samples[n]=raw[n]*w+(n<Fade?raw[Length+n]*(1-w):0);peak=Math.Max(peak,Math.Abs(samples[n]));}
+            for(int n=0;n<Length;n++)samples[n]*=.7f/peak;
+            var clip=AudioClip.Create("Stage crowd roar",Length,1,Rate,false);clip.SetData(samples,0);return clip;
         }
-        public static float Ease(float level,float target,float dt)=>Mathf.MoveTowards(level,target,dt/(target<level?FadeOutSeconds:RecoverSeconds));
         public static GameObject Speakers()
         {
             var speakers=new GameObject("Main stage speakers");speakers.transform.position=Front;
@@ -47,6 +66,9 @@ namespace Festival.Presentation
         {
             session=GetComponent<FestivalSession>();speakers=Speakers();decks=speakers.GetComponents<AudioSource>();
             transport=new FestivalMusic.Transport(decks);
+            crowd=new GameObject("Stage crowd roar");crowd.transform.position=Crowd;roar=crowd.AddComponent<AudioSource>();
+            roar.playOnAwake=false;roar.loop=true;roar.spatialBlend=1;roar.rolloffMode=AudioRolloffMode.Logarithmic;roar.minDistance=RoarFull;roar.dopplerLevel=0;
+            roar.clip=roarClip=CreateRoar();
         }
         void Update(){if(session!=null)Follow(session.State,session.EstimatedSimulationSeconds,AudioSettings.dspTime);}
         /// <summary>One public clock boundary used by the session and isolated stage views. The estimate advances only Playing;
@@ -57,11 +79,13 @@ namespace Festival.Presentation
             double world=next==null?0:FestivalSimulation.WorldSeconds(state);
             if(next!=null&&state.Phase=="Playing")world+=Math.Max(0,estimatedSimulationSeconds-state.SimulationSeconds);
             transport.Follow(next,state?.RoundId??"",Math.Max(0,world),state?.Phase!="Playing",dspSeconds);
-            level=Ease(level,Level(state,session?.LocalPlayerId),Time.unscaledDeltaTime);
-            float volume=FestivalSettings.MusicGain(session?.Profile?.Data,.6f*level);
+            float volume=FestivalSettings.MusicGain(session?.Profile?.Data,.6f);
             foreach(var deck in decks)deck.volume=volume;
+            roarLevel=EaseRoar(roarLevel,RoarLevel(state),Time.unscaledDeltaTime);
+            FestivalSettings.ApplyEffects(roar,session?.Profile?.Data,RoarGain*roarLevel);
+            if(roarLevel>0&&!roar.isPlaying)roar.Play();else if(roarLevel<=0&&roar.isPlaying)roar.Stop();
         }
-        void OnDisable(){transport?.Stop();}
-        void OnDestroy(){if(speakers!=null)Destroy(speakers);}
+        void OnDisable(){transport?.Stop();if(roar!=null)roar.Stop();}
+        void OnDestroy(){if(speakers!=null)Destroy(speakers);if(crowd!=null)Destroy(crowd);if(roarClip!=null)Destroy(roarClip);}
     }
 }

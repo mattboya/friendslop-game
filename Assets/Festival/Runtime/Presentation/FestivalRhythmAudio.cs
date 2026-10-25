@@ -5,7 +5,8 @@ using UnityEngine;
 
 namespace Festival.Presentation
 {
-    /// <summary>A light Effects tick follows the recorded grid. The DJ's separate set and legacy fixed charts keep their pulse.</summary>
+    /// <summary>A light Effects tick follows the recorded grid; legacy fixed charts keep their pulse. The DJ set is played on
+    /// the stage song itself, so it hears neither.</summary>
     public sealed class FestivalRhythmAudio : MonoBehaviour
     {
         const float FeedbackGain=.35f/.6f,TickGain=.22f;
@@ -41,7 +42,7 @@ namespace Festival.Presentation
         /// to the judge. The exact click-free loop span is kept, rather than rounding its length to a whole beat.</summary>
         public static double NextTick(InteractionState interaction,double afterChartSeconds)
         {
-            if(interaction.StageTrack==0||interaction.Kind=="Dj")return 2+Math.Ceiling((afterChartSeconds-2)/interaction.BeatSeconds)*interaction.BeatSeconds;
+            if(interaction.StageTrack==0)return 2+Math.Ceiling((afterChartSeconds-2)/interaction.BeatSeconds)*interaction.BeatSeconds;
             var track=FestivalMusic.For(interaction.StageTrack);
             double origin=interaction.StageFirstHeadWorldSeconds-interaction.StageFirstHeadDelaySeconds;
             return FestivalMusic.NextStageBeat(track,origin+Math.Max(afterChartSeconds,interaction.StageFirstHeadDelaySeconds))-origin;
@@ -58,8 +59,8 @@ namespace Festival.Presentation
         /// <summary>Also accepts a booth-owned advancing raw chart clock while the stage is held.</summary>
         public void Follow(InteractionState interaction,double chartSeconds,bool held,ProfileData profile,double dspSeconds)
         {
-            if(!FestivalInput.IsRhythm(interaction)||held){Stop();return;}
-            bool authored=interaction.StageTrack!=0&&interaction.Kind!="Dj";
+            if(!FestivalInput.IsRhythm(interaction)||held||interaction.Kind=="Dj"){Stop();return;}
+            bool authored=interaction.StageTrack!=0;
             if(authored&&!RhythmChart.ValidStageAnchor(interaction)){Stop();return;}
             float gain=authored?TickGain:FeedbackGain;
             FestivalSettings.ApplyEffects(beat,profile,gain);FestivalSettings.ApplyEffects(other,profile,gain);

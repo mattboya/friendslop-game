@@ -7,8 +7,9 @@ using UnityEngine;
 
 namespace Festival.Tests
 {
-    // The recorded stage follows shared world time and exact sample joins. Dances keep its full gain; booth games/results hold
-    // its position and a DJ takeover silences it. The tick follows the authored grid without changing calibrated input time.
+    // The recorded stage follows shared world time and exact sample joins. Dances and the DJ set keep its full gain; booth
+    // games/results hold its position. The tick follows the authored grid without changing calibrated input time. After each
+    // phrase of a set the crowd roars with its score.
     public sealed class StageAudioTests
     {
         private static string Clip(FestivalMusic.Track track)=>track==null?"nothing":track.Clip;
@@ -76,37 +77,50 @@ namespace Festival.Tests
             finally{UnityEngine.Object.DestroyImmediate(speakers);}
         }
 
-        [Test]public void DancesAndTrustDancesKeepTheStageFullAndOnlyADjTakeoverMutesIt()
+        // Nothing a player does sets the stage's gain. StageAudioPlayTests hears it at full volume through a whole set.
+        [Test]public void NoTakeoverDanceOrTalkMutesTheStageSong()
         {
-            var s=new RoundState{Phase="Playing"};var you=new PlayerState{Id="you"};var mate=new PlayerState{Id="mate"};s.Players.Add(you);s.Players.Add(mate);
-            Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),"nothing on: full volume");
-            InteractionState Doing(PlayerState p,string kind,string status="Active"){var i=new InteractionState{Id=p.Id+"_"+kind,PlayerId=p.Id,Kind=kind,Status=status};s.Interactions.Clear();s.Interactions.Add(i);p.InteractionId=i.Id;return i;}
-            foreach(var kind in new[]{"Dance","Poi","ConfirmDance"})
-            {
-                Doing(you,kind);
-                Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),kind+": the song leads the dance without ducking");
-            }
-            foreach(var kind in new[]{"Sale","Buy","Conversation","Police"})
-            {
-                var talk=Doing(you,kind);
-                Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),kind+": a talk is not a dance, so the stage plays on");
-                talk.TrustDance=true;
-                Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),kind+": the song leads the trust dance");
-                talk.Turns.Add(new ConversationTurn());
-                Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),kind+": once the talking starts, the stage is back");
-            }
-            Doing(you,"Dance","Complete");
-            Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),"a finished dance no longer ducks");
-            Doing(mate,"Dance");you.InteractionId="";
-            Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),"a friend's dance is theirs: your stage plays on");
-            Assert.That(FestivalStageAudio.Level(s,"mate"),Is.EqualTo(1),"and stays full for them");
+            Assert.That(typeof(FestivalStageAudio).GetMethod("Level"),Is.Null,"no takeover, dance or talk mutes or ducks the stage song");
+            Assert.That(typeof(FestivalStageAudio).GetMethod("Ease"),Is.Null,"so there is no fade to fade");
+        }
 
-            // The DJ takeover: whoever is on the stage-front deck, their set is the stage's sound, for everyone.
-            Doing(mate,"Dj");mate.VisualPose="Dj";
-            Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(0),"a friend's takeover mutes the stage track");
-            Assert.That(FestivalStageAudio.Level(s,"mate"),Is.EqualTo(0),"and the DJ's own");
-            mate.VisualPose="Idle";s.Interactions.Clear();mate.InteractionId="";
-            Assert.That(FestivalStageAudio.Level(s,"you"),Is.EqualTo(1),"the set over, the stage track is back");
+        [Test]public void TheCrowdRoarsWithTheLastPhrasesScoreWhileItsCheerLasts()
+        {
+            var s=new RoundState{Phase="Playing",SimulationSeconds=50};
+            Assert.That(FestivalStageAudio.RoarLevel(s),Is.Zero,"no set yet, no roar");
+            Assert.That(FestivalStageAudio.RoarLevel(null),Is.Zero,"no state, no roar");
+            s.StageCheerUntilWorldSeconds=56;
+            float last=-1;
+            foreach(double score in new[]{0,.3,.4,.6,.75,1})
+            {
+                s.StageCheerScore=score;float roar=FestivalStageAudio.RoarLevel(s);
+                Assert.That(roar,Is.GreaterThanOrEqualTo(last).And.InRange(0f,1f),"the roar swells with the score ("+score+")");last=roar;
+            }
+            s.StageCheerScore=.2;Assert.That(FestivalStageAudio.RoarLevel(s),Is.Zero,"a flop gets no roar");
+            s.StageCheerScore=.4;Assert.That(FestivalStageAudio.RoarLevel(s),Is.InRange(.1f,.35f),"a middling phrase gets a murmur");
+            s.StageCheerScore=1;Assert.That(FestivalStageAudio.RoarLevel(s),Is.EqualTo(1),"a perfect phrase gets the full roar");
+            s.Phase=FestivalSimulation.MinigamePhase;Assert.That(FestivalStageAudio.RoarLevel(s),Is.Zero,"a booth game holds the song, so the crowd waits too");
+            s.Phase="Playing";
+            s.SimulationSeconds=56;Assert.That(FestivalStageAudio.RoarLevel(s),Is.Zero,"and the roar ends with the cheer");
+            const float frame=1/60f;float level=0,t=0;
+            while(level<1-1e-4f&&t<3){level=FestivalStageAudio.EaseRoar(level,1,frame);t+=frame;}
+            Assert.That(t,Is.InRange(.3f,.6f),"the roar swells up in about half a second");
+            t=0;while(level>1e-4f&&t<4){level=FestivalStageAudio.EaseRoar(level,0,frame);t+=frame;}
+            Assert.That(t,Is.InRange(1.2f,1.8f),"and dies away over about a second and a half");
+        }
+
+        [Test]public void TheRoarIsAProceduralLoopThatJoinsWithoutAClick()
+        {
+            var roar=FestivalStageAudio.CreateRoar();
+            try
+            {
+                Assert.That(roar.length,Is.EqualTo(3).Within(.01f),"a three second loop");
+                var samples=new float[roar.samples];Assert.That(roar.GetData(samples,0),Is.True);
+                float peak=0,step=0;for(int n=0;n<samples.Length;n++){peak=Math.Max(peak,Math.Abs(samples[n]));if(n>0)step=Math.Max(step,Math.Abs(samples[n]-samples[n-1]));}
+                Assert.That(peak,Is.InRange(.3f,.85f),"loud enough to hear, never clipping");
+                Assert.That(Math.Abs(samples[0]-samples[samples.Length-1]),Is.LessThanOrEqualTo(step+1e-4f),"the join is no bigger a jump than any step inside the loop");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(roar);}
         }
 
         static AudioSource[] Decks(FestivalStageAudio stage)=>(AudioSource[])typeof(FestivalStageAudio).GetField("decks",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);
@@ -119,6 +133,9 @@ namespace Festival.Tests
         static void RemoveStage(GameObject host)
         {
             var stage=host.GetComponent<FestivalStageAudio>();if(stage!=null&&Decks(stage)!=null)UnityEngine.Object.DestroyImmediate(Decks(stage)[0].gameObject);
+            // EditMode skips OnDestroy, so the crowd roar's source and clip go here too.
+            var roar=stage==null?null:typeof(FestivalStageAudio).GetField("roar",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage) as AudioSource;
+            if(roar!=null){UnityEngine.Object.DestroyImmediate(roar.clip);UnityEngine.Object.DestroyImmediate(roar.gameObject);}
             UnityEngine.Object.DestroyImmediate(host);
         }
         static RoundState Clock(double world,string phase="Playing")=>new RoundState{Phase=phase,RoundId="same-song",SimulationSeconds=world,FestivalIndex=0,LevelIndex=1};
@@ -176,7 +193,7 @@ namespace Festival.Tests
                 }
             }
         }
-        [Test]public void TheStageTickIsBriefAndQuieterWhileTheDjKeepsItsOwnPulse()
+        [Test]public void TheStageTickIsBriefAndTheDjSetHearsNoPulse()
         {
             var host=new GameObject("Authored tick");
             try
@@ -188,8 +205,9 @@ namespace Festival.Tests
                 var samples=new float[tick.samples];Assert.That(tick.GetData(samples,0),Is.True);
                 float peak=0;foreach(var sample in samples)peak=Math.Max(peak,Math.Abs(sample));Assert.That(peak,Is.LessThanOrEqualTo(.14f));
                 Assert.That(samples[0],Is.Zero);Assert.That(Math.Abs(samples[samples.Length-1]),Is.LessThan(1e-5f),"smooth ends avoid a tick-edge click");
-                var dj=new InteractionState{Kind="Dj",BeatSeconds=.4};
-                Assert.That(FestivalRhythmAudio.NextTick(dj,2.01),Is.EqualTo(2.4).Within(1e-9),"DJ own fixed-tempo set remains unchanged");
+                var dj=new InteractionState{Id="set",Kind="Dj",BeatSeconds=.4,StartSeconds=10};
+                audio.Follow(dj,.5,false,null,AudioSettings.dspTime);
+                foreach(var source in host.GetComponents<AudioSource>())Assert.That(source.clip,Is.Null,"a DJ set loads no pulse or tick ("+source.clip?.name+")");
             }
             finally
             {
@@ -200,19 +218,5 @@ namespace Festival.Tests
             }
         }
 
-        [Test]public void TheDjTakeoverFadesOutAndComesBackOverASecond()
-        {
-            const float frame=1/60f;
-            float level=1,t=0;
-            while(level>1e-4f&&t<2){level=FestivalStageAudio.Ease(level,0,frame);t+=frame;}
-            Assert.That(t,Is.LessThanOrEqualTo(.4f),"DJ silence within 0.4 s");
-            Assert.That(t,Is.GreaterThan(.2f),"a quick fade, not a cut");
-            Assert.That(FestivalStageAudio.Ease(level,0,frame),Is.EqualTo(0).Within(1e-4f),"and it stays silent during the takeover");
-            t=0;
-            while(level<1-1e-4f&&t<3){level=FestivalStageAudio.Ease(level,1,frame);t+=frame;}
-            Assert.That(t,Is.InRange(.9f,1.1f),"back to full over about a second");
-            Assert.That(FestivalStageAudio.Ease(0,0,frame),Is.EqualTo(0),"a muted stage stays muted");
-            Assert.That(FestivalStageAudio.Ease(1,1,frame),Is.EqualTo(1),"a full stage stays full");
-        }
     }
 }
