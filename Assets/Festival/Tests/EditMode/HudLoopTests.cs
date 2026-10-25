@@ -170,7 +170,8 @@ namespace Festival.Tests
                 keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/7");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/8");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/9");
             },(session,hud,go)=>
             {
-                var day=Level(0,0);var you=Crew(day,"you","You",life:"Downed");
+                // Sam is there to help: alone, the downed hint names the medical tent and no key.
+                var day=Level(0,0);var you=Crew(day,"you","You",life:"Downed");Crew(day,"sam","Sam");
                 typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{day,you});
                 Assert.That(Shown(go,"Objective detail"),Does.StartWith("Press R to distract attackers"),"the host's hint names the bound Interact key");
                 typeof(FestivalHud).GetMethod("UpdateChat",Private).Invoke(hud,new object[]{day,you,false});
@@ -418,6 +419,16 @@ namespace Festival.Tests
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.
             var s=Level(0,2);var spirit=Crew(s,"you","You",life:"Spirit");s.ConnectedCrewCount=3;s.LevelSales=20;
             Assert.That(FestivalHudText.Quota(s,spirit),Is.EqualTo("DAY QUOTA  $20 / $60"));
+        }
+
+        [Test] public void ADownedCardCountsTheSecondsAndAloneNamesTheMedicalTent()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You",life:"Downed");you.Connected=true;you.DownedRemaining=27.4;var sam=Crew(s,"sam","Sam");sam.Connected=true;
+            Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("DOWNED • 28 s"),"the seconds left, rounded up");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you,interact:"R"),Is.EqualTo("Press R to distract attackers; a teammate can rescue or drag you."),"with a friend, the bound key");
+            sam.Connected=false;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Does.Contain("Nobody can help you up alone").And.Contain("spirit").And.Contain("medical tent"),"alone, the way back");
+            you.DownedRemaining=.3;Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("DOWNED • 1 s"),"never 0 s while still down");
         }
 
         [Test] public void TheWayBackToCampOffersTheExtractOnlyWithSomethingToFinish()
