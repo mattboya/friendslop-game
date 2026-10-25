@@ -24,7 +24,8 @@ namespace Festival.Presentation
         // The threat bar warms from mint to a hot red with the band (ThreatBands). Its word always names the band too, so colour is
         // never the only cue.
         private static readonly Color[] ThreatColors={Mint,new Color(1,.76f,.29f,1),Orange,new Color(1,.33f,.3f,1),new Color(1,.16f,.24f,1)};
-        /// <summary>The objective card's foot, as a share of the screen's height.</summary>
+        /// <summary>The objective card's foot, as a share of the screen's height. The top cards' live foot over any part of the
+        /// screen, with the cards that hang lower or grow down, is TopCardsFoot.</summary>
         public const float TopCardsBottom=.858f;
         private static readonly Color[] RhythmColors={new Color(1,.38f,.61f,1),new Color(1,.76f,.29f,1),new Color(.34f,.78f,1,1),new Color(.46f,.95f,.68f,1)};
         private static readonly float[] RhythmAngles={90,180,0,-90};
@@ -53,6 +54,7 @@ namespace Festival.Presentation
         private GameObject titlePanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
+        private GameObject[] topCards;
         private GameObject testModeTag, testModeButton, clearLevelButton;
         private RectTransform crewButton;
         private RectTransform threatFill;
@@ -463,6 +465,7 @@ namespace Festival.Presentation
             sundownPanel=Card(root.transform,"Sundown warning",new Vector2(.30f,.71f),new Vector2(.70f,.775f),true);
             Accent(sundownPanel.transform,Orange);
             sundownText=Label(sundownPanel.transform,"Sundown",22,TextAnchor.MiddleCenter);sundownText.fontStyle=FontStyle.Normal;sundownText.color=Orange;Fill(sundownText.rectTransform,12);ShrinkToFit(sundownText,14);sundownPanel.SetActive(false);
+            topCards=new[]{objectivePanel,timerPanel,testModeTag,trippingPanel,vitalPanel,rosterPanel,noticePanel,sundownPanel};
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
             inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text=FestivalHudText.GearHeading(true);
             Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);ShrinkToFit(inventoryHeading,12);
@@ -1062,6 +1065,7 @@ namespace Festival.Presentation
             ApplyTextReflow(textScale);
             if(!session.Connected)return;
             UpdateTrippingLayout();
+            if(session.SpeechBubbles!=null&&session.SpeechBubbles.Ceiling==null)session.SpeechBubbles.Ceiling=TopCardsFoot;
             bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
             foreach(var delivery in session.SpeechDeliveries.Deliveries)
             {
@@ -1154,6 +1158,19 @@ namespace Festival.Presentation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(DevelopmentDiagnostics.Visible)DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","nearby_rows","shown="+lines);
 #endif
+        }
+
+        /// <summary>The lowest foot of the top cards showing over a screen x-range, as shares of the screen; 1 with none. Speech
+        /// bubbles keep under it (FestivalSpeechBubbles.Ceiling).</summary>
+        public float TopCardsFoot(float xMin,float xMax)
+        {
+            float foot=1;
+            foreach(var card in topCards)
+            {
+                if(card==null||!card.activeInHierarchy)continue;
+                var rect=Rect(card);if(rect.anchorMin.x<xMax&&rect.anchorMax.x>xMin)foot=Mathf.Min(foot,rect.anchorMin.y);
+            }
+            return foot;
         }
 
         // Runs after the text scale reflows and the canvas scaler updates, so it measures this frame's sizes. The sundown warning

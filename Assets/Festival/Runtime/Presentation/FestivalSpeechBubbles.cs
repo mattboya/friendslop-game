@@ -119,7 +119,11 @@ namespace Festival.Presentation
         public const float CapHeight=19f/1080;
         /// <summary>The band a bubble keeps inside, as shares of the screen's height: under the top cards and over the bottom
         /// HUD (the equipment bar's top reaches .185 at the largest text scale).</summary>
-        public const float BandTop=FestivalHud.TopCardsBottom-.01f,BandBottom=.2f;
+        public const float BandTop=FestivalHud.TopCardsBottom-CardGap,BandBottom=.2f;
+        /// <summary>Where the HUD's showing top cards end over a screen x-range, as a share of the screen's height
+        /// (FestivalHud.TopCardsFoot). A bubble keeps under it as well, as the notice and the cards that grow down hang into the band.</summary>
+        public Func<float,float,float> Ceiling;
+        const float CardGap=.01f;
         // Lead: how far a bubble sits in front of its speaker's head, toward the view, so one pulled down never cuts through the face.
         const float Width=4f,Padding=.16f,FontSize=3,Gap=.1f,Lead=.35f;
         sealed class Bubble { public Transform Root; public TextMeshPro Text; public Transform Head,Body; public int LastVisible; public float Height; }
@@ -226,7 +230,8 @@ namespace Festival.Presentation
                     bubble.Root.position=foot+Vector3.up*(offset+bubble.Height*.5f);bubble.Root.localScale=Vector3.one*pop;continue;
                 }
                 float depth=at.z-Lead,frustum=lens.orthographic?2*lens.orthographicSize:2*depth*Mathf.Tan(lens.fieldOfView*.5f*Mathf.Deg2Rad);
-                float low=Mathf.Max(BandBottom,Mathf.Min(at.y,BandTop-tall[speaker]*unit));
+                float half=(Width+Padding*2)*.5f*unit/lens.aspect,top=Mathf.Min(BandTop,(Ceiling?.Invoke(at.x-half,at.x+half)??1)-CardGap);
+                float low=Mathf.Max(BandBottom,Mathf.Min(at.y,top-tall[speaker]*unit));
                 bubble.Root.position=lens.ViewportToWorldPoint(new Vector3(at.x,low+(offset+bubble.Height*.5f)*unit,depth));
                 bubble.Root.localScale=Vector3.one*(unit*frustum*pop);
             }
