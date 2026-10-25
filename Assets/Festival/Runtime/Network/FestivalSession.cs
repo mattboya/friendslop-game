@@ -1056,13 +1056,14 @@ namespace Festival.Network
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
         /// <summary>A festivalgoer near the stage reacts to the DJ's last phrase while its cheer lasts. The Id's hash picks a fixed half
         /// to sway at a middling score, so every view shows the same fans moving.</summary>
-        public static string StageCrowdPose(RoundState s,NpcState n)
+        public static string StageCrowdPose(RoundState s,NpcState n)=>n.Kind=="Wook"&&(n.Mode=="Blending"||n.Mode=="Distracted")?StageCrowdPose(s,n.Id,n.X,n.Z,NpcPose(n)):NpcPose(n);
+        /// <summary>The same cheer for anyone at x,z who otherwise holds `pose`: the scenery pods in front of the stage too.</summary>
+        public static string StageCrowdPose(RoundState s,string id,float x,float z,string pose)
         {
-            string pose=NpcPose(n);
-            if(s==null||n.Kind!="Wook"||(n.Mode!="Blending"&&n.Mode!="Distracted")||s.StageCheerScore<0||FestivalSimulation.WorldSeconds(s)>=s.StageCheerUntilWorldSeconds)return pose;
-            if(Vector2.Distance(new Vector2(n.X,n.Z),new Vector2(Catalog.StageTakeoverX,Catalog.StageTakeoverZ))>Catalog.StageCheerRange)return pose;
+            if(s==null||s.StageCheerScore<0||FestivalSimulation.WorldSeconds(s)>=s.StageCheerUntilWorldSeconds)return pose;
+            if(Vector2.Distance(new Vector2(x,z),new Vector2(Catalog.StageTakeoverX,Catalog.StageTakeoverZ))>Catalog.StageCheerRange)return pose;
             if(s.StageCheerScore>=.75)return "Cheer";
-            int hash=17;foreach(char c in n.Id)hash=unchecked(hash*31+c);
+            int hash=17;foreach(char c in id)hash=unchecked(hash*31+c);
             return s.StageCheerScore>=.4?((hash&1)==0?"Dance":pose):"Idle";
         }
         // Local click prediction yields to the captured host state throughout the game and banner. Internal: the HUD sets the
@@ -1116,7 +1117,7 @@ namespace Festival.Network
                 if(p.VisualPose=="Dance"&&p.VisualDanceStepSequence>previousStep&&actors[p.Id].TryGetComponent<FestivalCharacter>(out var dancer))dancer.PulseDanceStep(p.VisualDanceStepDirection);
                 displayedDanceSteps[p.Id]=p.VisualDanceStepSequence;
             }
-            world?.SetStageTakeover(State.Players.Exists(p=>p.VisualPose=="Dj"&&p.Life=="Alive"));
+            world?.SetStageTakeover(State.Players.Exists(p=>p.VisualPose=="Dj"&&p.Life=="Alive"));world?.SetStageCheer(State);
             // Festivalgoers, lost friends, drops and bodies while the festival shows: MINI-1's freeze-frame too, each where they stood.
             if(!spirit && FestivalWorld.ShowsFestival(State.Phase))
             {

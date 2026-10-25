@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Festival.Core;
+using Festival.Network;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -172,6 +173,16 @@ namespace Festival.Presentation
             var c=vertex+outgoing*radius;
             float inverse=1-t;
             return inverse*inverse*a+2*inverse*t*vertex+t*t*c;
+        }
+        /// <summary>The stage pods take the festivalgoers' cheer for the DJ's last phrase, and their own poses back once it ends.
+        /// Only the stage pods: the poi circles and hangouts within 20 m face their own show.</summary>
+        public void Cheer(RoundState state)
+        {
+            for(int i=0;i<fixedSpots.Length&&i<members.Count;i++)
+            {
+                var spot=fixedSpots[i];var actor=members[i].Actor;
+                if(spot.Zone=="Stage"&&actor!=null)actor.Pose=FestivalSession.StageCrowdPose(state,actor.name,spot.Position.x,spot.Position.z,spot.Pose);
+            }
         }
         /// <summary>Place the authored walkers on the same elapsed clock used by the live crowd.</summary>
         public void UpdateWalkers(float elapsed)

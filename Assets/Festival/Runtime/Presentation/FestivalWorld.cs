@@ -66,6 +66,7 @@ namespace Festival.Presentation
         // While a player DJs, the resident hypes the crowd from the riser's west edge, opposite the crew's MC.
         static readonly Vector3 ResidentAside=new Vector3(-2.8f,1.4f,31.2f);
         FestivalCharacter resident;
+        FestivalAmbientCrowd ambient;
         /// <summary>CAMP-1: Marigold, the camp seller in front of the supplies table. The HUD turns her to face whoever talks to her
         /// (CampSellerTalk.Face).</summary>
         public FestivalCharacter CampSeller { get; private set; }
@@ -260,7 +261,7 @@ namespace Festival.Presentation
                     ProxyBox("Festival picnic table base",table+new Vector3(side*1.05f,.4f,0),new Vector3(.1f,.8f,1.9f),wood);
                 }
             }
-            var ambient=owned.gameObject.AddComponent<FestivalAmbientCrowd>();
+            ambient=owned.gameObject.AddComponent<FestivalAmbientCrowd>();
             ambient.Build();
             for(int i=0;i<12;i++)
             {
@@ -788,6 +789,8 @@ namespace Festival.Presentation
             resident.Pose=taken?FestivalCharacter.McPose:"Dj";resident.DjConsole=taken?null:StageDjConsole;
             resident.transform.localPosition=taken?ResidentAside:new Vector3(Catalog.StageDjX,StageDjHeight,Catalog.StageDjZ);
         }
+        /// <summary>The scenery pods in front of the stage react to the DJ's last phrase as the festivalgoers do.</summary>
+        public void SetStageCheer(RoundState state){if(ambient!=null)ambient.Cheer(state);}
         // MINI-1: a minigame holds the festival on screen as a freeze-frame.
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase==FestivalSimulation.MinigamePhase||phase=="Results";
         // LIGHT-1: night levels and the local player's dose, straight from the round state. LIGHT-2: the day sky's clouds, kept

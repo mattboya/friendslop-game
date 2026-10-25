@@ -375,7 +375,7 @@ namespace Festival.Tests
         static Dictionary<string,Transform> Actors(FestivalSession s)=>(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(s);
         // A stage-pass set is played up on the riser at the main mixer: the host's view and a joined friend's both show the
         // DJ there, facing the crowd in the Dj pose, hands on the mixer, with the resident stepped aside. After a perfect phrase the
-        // festivalgoers near the stage cheer in both views; after a flop none do.
+        // festivalgoers near the stage and the scenery pods in front of it cheer; after a flop none do.
         [UnityTest]public IEnumerator TheStageDjPlaysAtTheMainMixerInEveryViewAndTheCrowdCheersAGoodPhrase()
         {
             var world=new GameObject("Stage DJ world");var built=world.AddComponent<FestivalWorld>();yield return null;
@@ -431,10 +431,20 @@ namespace Festival.Tests
                     Assert.That(Actors(view)[near.Id].GetComponent<FestivalCharacter>().Pose,Is.EqualTo("Cheer"),who+": a festivalgoer near the stage cheers");
                     Assert.That(Actors(view)[far.Id].GetComponent<FestivalCharacter>().Pose,Is.Not.EqualTo("Cheer"),who+": one far off does not");
                 }
+                // The scenery pods fill the lawn in front of the stage, the DJ's whole view.
+                var pods=built.GetComponentsInChildren<FestivalCharacter>(true).Where(c=>c.name.StartsWith("ambient_Stage_",System.StringComparison.Ordinal)).ToArray();
+                Assert.That(pods.Length,Is.EqualTo(FestivalAmbientCrowd.FixedSpots.Count(s=>s.Zone=="Stage")),"setup: every stage pod fan");
+                Assert.That(pods.Where(c=>c.Pose!="Cheer").Select(c=>c.name+" "+c.Pose),Is.Empty,"every stage pod fan cheers a perfect phrase");
+                var spinner=built.GetComponentsInChildren<FestivalCharacter>(true).First(c=>c.name.StartsWith("ambient_PoiPerformer_",System.StringComparison.Ordinal)&&Vector2.Distance(new Vector2(c.transform.position.x,c.transform.position.z),new Vector2(Catalog.StageTakeoverX,Catalog.StageTakeoverZ))<Catalog.StageCheerRange);
+                Assert.That(spinner.Pose,Is.EqualTo("Poi"),"a poi performer within the cheer's range keeps spinning for their own circle");
                 sim.State.StageCheerScore=.2;
                 yield return new WaitForSeconds(.6f);
                 foreach(var view in new[]{host,friend})
                     Assert.That(Actors(view)[near.Id].GetComponent<FestivalCharacter>().Pose,Is.Not.EqualTo("Cheer"),(view==host?"the host's view":"the friend's view")+": nobody cheers a flop");
+                Assert.That(pods.Where(c=>c.Pose!="Idle").Select(c=>c.name+" "+c.Pose),Is.Empty,"the stage pods shrug and idle at a flop");
+                sim.State.StageCheerUntilWorldSeconds=FestivalSimulation.WorldSeconds(sim.State);
+                yield return new WaitForSeconds(.6f);
+                foreach(var pod in pods)Assert.That(pod.Pose,Is.EqualTo(FestivalAmbientCrowd.FixedSpots[int.Parse(pod.name.Substring("ambient_Stage_".Length))].Pose),pod.name+" goes back to its own pose when the cheer ends");
             }
             finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
             yield return null;
