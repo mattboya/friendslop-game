@@ -94,12 +94,12 @@ public static class DayQuotaTests
     }
 
     // Random sales on a real Palm Mirage Day 1, on fixed seeds: its cops, narcs and buyers, wary festivalgoers' trust dances
-    // danced well or badly, random asks and replies with time between them, walk-offs, and hands that fill mid-talk. Every sale ends
+    // danced perfectly or skipped, random asks and replies with time between them, walk-offs, and hands that fill mid-talk. Every sale ends
     // one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says, the unit gone), handed back (the unit
     // in your hand again, equipped if it was), dropped at your feet, or busted (detained, the stock gone).
     static void EverySaleEndsOneClearWay()
     {
-        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["dropped"]=0,["busted"]=0};
+        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};
         foreach(int seed in new[]{3,17,29,41,53,67})
         {
             var s=new FestivalSimulation(seed);var p=s.AddPlayer("p0","P0");p.X=0;p.Z=19;Act(s,"p0","Ready");s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);Act(s,"p0","MapReady");
@@ -117,12 +117,12 @@ public static class DayQuotaTests
                 int cash=p.Cash,sales=s.State.LevelSales,units=p.Inventory.Find(x=>x.ItemId==item).Count,drops=s.State.Drops.FindAll(d=>d.ItemId==item).Count;string held=p.EquippedItemId;
                 var started=s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="StartSale",TargetId=npc.Id,ItemId=item,Amount=random.Next(3)});
                 if(!started.Accepted)continue;
-                var i=s.Interaction(p.InteractionId);
+                var i=s.Interaction(p.InteractionId);bool dance=random.Next(3)>0;
                 if(i==null){Check(p.Life=="Detained"&&!p.Inventory.Exists(x=>x.ItemId==item),"seed "+seed+": a sale that ends at the offer is a narc's bust");endings["busted"]++;continue;}
                 for(int guard=0;i.Status=="Active"&&guard<400;guard++)
                 {
                     int roll=random.Next(24);
-                    if(FestivalSimulation.TrustDancing(i)){if(i.Inputs.Count==0&&roll<16)foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});}
+                    if(FestivalSimulation.TrustDancing(i)){if(i.Inputs.Count==0&&dance)foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});}
                     else if(roll==0)Act(s,"p0","Cancel");
                     else if(roll==1){foreach(var gear in new[]{"map","confetti","stage_pass"})if(p.Inventory.FindAll(x=>x.ItemId!="little_spoon").Count<3&&!p.Inventory.Exists(x=>x.ItemId==gear))p.Inventory.Add(new ItemStack{ItemId=gear,Count=1});}
                     else if(i.Turns.Count>0&&i.Turns[i.Turns.Count-1].Pick<0&&roll<18)s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=random.Next(3),Direction=i.Turns.Count-1});
@@ -142,7 +142,7 @@ public static class DayQuotaTests
                 else
                 {
                     Check(left==units&&p.Cash==cash&&s.State.LevelSales==sales&&notice.EndsWith("back in your hand")&&outcome.Result=="NO SALE",where+": otherwise the unit is back, and it says so");
-                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings["back"]++;
+                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings[notice.StartsWith("They walk off")?"walked off":"back"]++;
                 }
             }
         }
