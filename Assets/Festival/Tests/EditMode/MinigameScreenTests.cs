@@ -105,6 +105,13 @@ namespace Festival.Tests
             Assert.That(OnTable(FestivalMinigameView.CupAt(at,0,6)-under)&&OnTable(FestivalMinigameView.CupAt(at,5,6)-under),Is.True,"on a table as long as their row");
             Assert.That(OnTable(FestivalMinigameView.CupAt(at,0,6)-under-gap*2)||OnTable(FestivalMinigameView.CupAt(at,5,6)-under+gap*2),Is.False,"and no longer");
             for(int i=0;i<6;i++)if(i!=1)Assert.That(Look(cups,i),Is.EqualTo(FestivalArtView.MaterialFor(i==3?FestivalMinigameView.HunchLook:FestivalMinigameView.CupLook)),"in the tripper's view only cup 4 glows, cup "+(i+1));
+            Assert.That(FestivalMinigameView.HunchLook,Is.EqualTo("StageGlowGold"),"the hunch cup glows amber");
+            FestivalMinigameView.ShowCups(booth,state,-1,null,FestivalMinigameView.HunchBeat*1.5f);
+            Assert.That(Look(cups,3),Is.EqualTo(FestivalArtView.MaterialFor(FestivalMinigameView.HunchDimLook)),"then dims, a shimmer");
+            FestivalMinigameView.ShowCups(booth,state,-1,null,FestivalMinigameView.HunchBeat*1.5f,true);
+            Assert.That(Look(cups,3),Is.EqualTo(FestivalArtView.MaterialFor(FestivalMinigameView.HunchLook)),"with reduced motion it stays lit");
+            FestivalMinigameView.ShowCups(booth,state,-1,null,FestivalMinigameView.HunchBeat*2.5f);
+            Assert.That(Look(cups,3),Is.EqualTo(FestivalArtView.MaterialFor(FestivalMinigameView.HunchLook)),"and lights again");
             b.Hint=-1;FestivalMinigameView.ShowCups(booth,state,-1,null);
             for(int i=0;i<6;i++)if(i!=1)Assert.That(Look(cups,i),Is.EqualTo(FestivalArtView.MaterialFor(FestivalMinigameView.CupLook)),"in anyone else's none does, cup "+(i+1));
             FestivalMinigameView.ShowCups(booth,state,4,null);

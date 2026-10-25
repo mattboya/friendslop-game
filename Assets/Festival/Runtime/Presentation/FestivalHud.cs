@@ -1028,7 +1028,7 @@ namespace Festival.Presentation
         private void LateUpdate()
         {
             if(session==null)return;
-            ApplyTextReflow();
+            ApplyTextReflow(textScale);
             if(!session.Connected)return;
             UpdateTrippingLayout();
             bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
@@ -1043,9 +1043,9 @@ namespace Festival.Presentation
         }
 
         // Scale authored text and its local cards; the canvas and rhythm geometry keep their gameplay coordinates.
-        private void ApplyTextReflow()
+        private void ApplyTextReflow(float scale)
         {
-            float scale=textScale;bool changed=!Mathf.Approximately(appliedTextScale,scale);
+            bool changed=!Mathf.Approximately(appliedTextScale,scale);
             foreach(var label in authoredLabels)
             {
                 if(label==null)continue;
@@ -1067,6 +1067,7 @@ namespace Festival.Presentation
             float passHeight=Mathf.Min(.95f,.81f*scale),passWidth=.45f*scale;
             Place(Rect(menuPanel),.5f-passWidth/2,.5f-passHeight/2,.5f+passWidth/2,.5f+passHeight/2);
             Place(Rect(briefingPanel),.25f,.455f-.17f*scale,.75f,.455f);
+            Place(Rect(minigamePanel),.31f,.42f-.135f*scale,.69f,.42f);
             Place(Rect(inventoryPanel),.978f-.264f*scale,.024f,.978f,.024f+.124f*scale);
             foreach(var action in dynamicActions)if(action!=null)action.GetComponent<LayoutElement>().preferredHeight=64*scale;
         }

@@ -34,26 +34,41 @@ namespace Festival.Presentation
             return ("MINIGAME BOOTH",inRing+" / "+crew+" in the ring. Everyone alive steps in to play, and the clock stops.");
         }
 
-        /// <summary>MINI-4: Mystery Cups on the card. While it runs: the pot, who is up and their seconds, what the next safe cup adds,
-        /// and the cup the tripper's hunch marks while it is on the table (only the tripper's view carries it). Then what became of the
-        /// pot: lost to the spiked cup, split across the crew by day with the odd amount to the stash, or banked by night; and when
-        /// the festival starts again.</summary>
+        /// <summary>MINI-4: Mystery Cups on the card. Until the first turn's clock starts and while no cup is drunk, the rules. While it
+        /// runs: the pot, who is up and their seconds, what the next safe cup adds and what calling now banks, the cups left, and to the
+        /// tripper alone the hunch with its odds, never as fact. Then what became of the pot, whether the hunch was right, and when the
+        /// festival starts again.</summary>
         static (string Title,string Detail) CupsCard(RoundState s,PlayerState p)
         {
             var b=s.Booth;
             if(b.ScoredAt>=0)
             {
-                string again=" The festival starts again in "+WholeSeconds(b.ScoredAt+FestivalSimulation.MinigameBannerSeconds-b.Seconds)+".";
+                string again=HunchResult(b)+" The festival starts again in "+WholeSeconds(b.ScoredAt+FestivalSimulation.MinigameBannerSeconds-b.Seconds)+".";
                 if(b.SpikedBy!="")return ("SPIKED!",(b.SpikedBy==p.Id?"You":NameOf(s,b.SpikedBy))+" drank the spiked cup"+(b.Pot>0?" and lost the "+Money(s,p,b.Pot)+" pot.":".")+again);
                 string paid=b.Pot==0?"Called it with nothing in the pot."
                     :Festivals.For(s).Night?"Called it: "+Money(s,p,b.Pot)+" to the stash."
                     :DayPayout(s,p,b)+", counted as sales.";
                 return ("+"+Money(s,p,b.Pot),paid+again);
             }
-            string up=FestivalSimulation.CupsTurn(s),seconds=WholeSeconds(b.TurnAt+FestivalSimulation.CupTurnSeconds-b.Seconds)+" s",next=Money(s,p,FestivalSimulation.NextCupPays(b));
-            string hunch=b.Hint>=0&&!b.Drunk.Contains(b.Hint)?" Your hunch: cup "+(b.Hint+1)+" is spiked.":"";
-            return ((MinigameName(b.Kind)+Dot+"POT "+Money(s,p,b.Pot)).ToUpperInvariant(),
-                (up==p.Id?"Your turn: "+seconds+". Drink a cup for "+next+", or call it. One is spiked.":NameOf(s,up)+"'s turn: "+seconds+". A safe cup adds "+next+"; the spiked one loses the pot.")+hunch);
+            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\nCall it any time to bank the pot."
+                +"\nThe spiked cup loses the pot and doses whoever drinks it.");
+            string up=FestivalSimulation.CupsTurn(s),seconds=WholeSeconds(b.TurnAt+FestivalSimulation.CupTurnSeconds-b.Seconds)+" s",next=Money(s,p,FestivalSimulation.NextCupPays(b)),pot=Money(s,p,b.Pot);
+            string hunch=b.Hint>=0&&!b.Drunk.Contains(b.Hint)?" Your trip says cup "+(b.Hint+1)+"… trips like yours are right "+HunchOdds(FestivalSimulation.HunchReliability(s))+".":"";
+            return ((MinigameName(b.Kind)+Dot+"POT "+pot).ToUpperInvariant(),
+                (up==p.Id?"Your turn: "+seconds+". Drink a cup for "+next+", or call it and bank "+pot+".":NameOf(s,up)+"'s turn: "+seconds+". A safe cup adds "+next+"; calling it banks "+pot+".")
+                +"\n1 spiked among "+(b.Cups-b.Drunk.Count)+" left."+hunch);
+        }
+        static string HunchOdds(double reliability)=>reliability>=.75?"about 3 times in 4":reliability>=.5?"about half the time":reliability>=.25?"about 1 time in 4":"about 1 time in 10";
+        // The spiked cup never leaves the host, so the result is only what the table shows: the spiked cup is the last one drunk, or
+        // the one cup left when the game called it.
+        static string HunchResult(MinigameState b)
+        {
+            if(b.Hint<0)return "";
+            int spiked=-1;
+            if(b.SpikedBy!=""&&b.Drunk.Count>0)spiked=b.Drunk[b.Drunk.Count-1];
+            else if(b.SpikedBy==""&&b.Drunk.Count==b.Cups-1)for(int i=0;i<b.Cups;i++)if(!b.Drunk.Contains(i))spiked=i;
+            if(spiked>=0)return " Your hunch was "+(spiked==b.Hint?"right":"wrong")+": cup "+(spiked+1)+" was spiked.";
+            return b.Drunk.Contains(b.Hint)?" Your hunch was wrong: cup "+(b.Hint+1)+" was safe.":" Nobody drank cup "+(b.Hint+1)+", so your hunch stays a guess.";
         }
         /// <summary>MINI-2: the Drum Circle on the card. While it runs, every part's live accuracy in roster order, the viewer's own as
         /// "You". Once scored: the worst part's verdict, whose part it was, what the result did to the clock and the crowd, and when the

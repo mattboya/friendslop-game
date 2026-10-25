@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
@@ -202,22 +203,30 @@ namespace Festival.Tests
             Assert.That(Card(s,new PlayerState{Id="late",Life="Alive"}).Item1,Is.EqualTo("−12 s"),"the banner is up for everyone, in the ring or not");
         }
 
-        // MINI-4, Mystery Cups under way, for everyone at the table: the pot, who is up and their seconds, and what the next safe cup
-        // adds; to the tripper alone (whose view alone carries the hint), the cup their hunch says is spiked while it is on the table.
+        // MINI-4, Mystery Cups under way, for everyone at the table: the pot, who is up and their seconds, what the next safe cup adds
+        // and what calling now banks, and how many cups are left. To the tripper alone (whose view alone carries the hint), the cup their
+        // hunch marks while it is on the table, with how often a hunch like theirs is right, never as fact.
         [Test]public void MysteryCupsShowsThePotWhoIsUpAndOnlyTheTrippersHunch()
         {
             var s=Level(out var you,out var sam);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;
             b.PlayerIds.AddRange(new[]{"you","sam"});b.Cups=4;b.Turns.AddRange(new[]{"sam","you"});b.TurnAt=2;b.Seconds=4.6;
             var ghost=new PlayerState{Id="ghost",Name="Ghost",Life="Spirit"};s.Players.Add(ghost);
-            Assert.That(Card(s,you),Is.EqualTo(("MYSTERY CUPS  •  POT $0","Sam's turn: 8 s. A safe cup adds $5; the spiked one loses the pot.")),"Sam is up");
+            Assert.That(Card(s,you),Is.EqualTo(("MYSTERY CUPS  •  POT $0","Sam's turn: 8 s. A safe cup adds $5; calling it banks $0.\n1 spiked among 4 left.")),"Sam is up");
             Assert.That(Card(s,ghost),Is.EqualTo(Card(s,you)),"a spirit watches the same");
-            Assert.That(Card(s,sam),Is.EqualTo(("MYSTERY CUPS  •  POT $0","Your turn: 8 s. Drink a cup for $5, or call it. One is spiked.")),"Sam's own card");
+            Assert.That(Card(s,sam),Is.EqualTo(("MYSTERY CUPS  •  POT $0","Your turn: 8 s. Drink a cup for $5, or call it and bank $0.\n1 spiked among 4 left.")),"Sam's own card");
             b.Drunk.Add(2);b.Pot=5;b.Turn=1;b.TurnAt=5;b.Seconds=6;
-            Assert.That(Card(s,you),Is.EqualTo(("MYSTERY CUPS  •  POT $5","Your turn: 9 s. Drink a cup for $10, or call it. One is spiked.")),"a safe cup later, you are up");
-            b.Hint=3;
-            Assert.That(Card(s,you).Item2,Does.EndWith("One is spiked. Your hunch: cup 4 is spiked."),"the tripper's view carries the hunch, numbered as the cups are");
-            Assert.That(Card(s,sam).Item2,Does.EndWith("Your hunch: cup 4 is spiked."),"whoever's turn it is");
-            b.Hint=2;Assert.That(Card(s,you).Item2,Does.EndWith("One is spiked."),"once that cup is drunk the hunch is gone with it");
+            Assert.That(Card(s,you),Is.EqualTo(("MYSTERY CUPS  •  POT $5","Your turn: 9 s. Drink a cup for $10, or call it and bank $5.\n1 spiked among 3 left.")),"a safe cup later, you are up");
+            b.Hint=3;s.TripperId=you.Id;
+            foreach(var (dose,odds) in new[]{(1,"about 3 times in 4"),(2,"about half the time"),(3,"about 1 time in 4"),(4,"about 1 time in 10")})
+            {
+                s.Doses.Clear();s.Doses.Add(new PlayerDose{PlayerId=you.Id,Dose=dose});
+                Assert.That(Card(s,you).Item2,Does.EndWith("1 spiked among 3 left. Your trip says cup 4… trips like yours are right "+odds+"."),"dose "+dose+": the hunch, numbered as the cups are, says how often it is right");
+                Assert.That(Card(s,you).Item2,Does.Not.Contain("is spiked"),"a hunch never reads as the answer");
+            }
+            Assert.That(Card(s,sam).Item2,Does.EndWith("Your trip says cup 4… trips like yours are right about 1 time in 10."),"whoever's turn it is");
+            b.PlayerIds.Remove("sam");s.Doses[0].Dose=1;
+            Assert.That(Card(s,you).Item2,Does.EndWith("trips like yours are right about half the time."),"alone at the table a hunch is one step less sure");
+            b.PlayerIds.Add("sam");b.Hint=2;Assert.That(Card(s,you).Item2,Does.EndWith("1 spiked among 3 left."),"once that cup is drunk the hunch is gone with it");
         }
 
         // Mystery Cups' banner says what became of the pot: lost to the spiked cup, split across the crew by day, or banked at night.
@@ -236,6 +245,75 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.MinigameWon(s),Is.True,"a win");
             s.LevelIndex=1;Assert.That(Card(s,you),Is.EqualTo(("+$15","Called it: $15 to the stash."+again)),"called at night, banked");
             b.Pot=0;Assert.That(Card(s,you),Is.EqualTo(("+$0","Called it with nothing in the pot."+again)),"called before a cup was drunk");
+        }
+
+        // Before the first turn's clock starts everyone at the booth reads the rules, and the tripper's hunch waits. The player up may
+        // drink at once, which ends the intro.
+        [Test]public void MysteryCupsOpensWithItsRules()
+        {
+            var s=Level(out var you,out var sam);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;s.TripperId=you.Id;b.Hint=1;
+            b.PlayerIds.AddRange(new[]{"you","sam"});b.Cups=4;b.Turns.AddRange(new[]{"sam","you"});b.Seconds=.5;b.TurnAt=FestivalSimulation.CupsIntroSeconds;
+            const string rules="One of these 4 cups is spiked. Each safe cup grows the pot.\nCall it any time to bank the pot.\nThe spiked cup loses the pot and doses whoever drinks it.";
+            Assert.That(Card(s,you),Is.EqualTo(("MYSTERY CUPS",rules)),"the tripper reads the rules, the hunch not yet");
+            Assert.That(Card(s,sam),Is.EqualTo(Card(s,you)),"and so does the player up");
+            Assert.That(rules.Split('\n').Length,Is.EqualTo(3),"in three lines");
+            b.Seconds=FestivalSimulation.CupsIntroSeconds;Assert.That(Card(s,you).Item1,Is.EqualTo("MYSTERY CUPS  •  POT $0"),"then the game's own card");
+            b.Seconds=1;b.Drunk.Add(0);b.Pot=5;b.Turn=1;b.TurnAt=1;Assert.That(Card(s,you).Item1,Is.EqualTo("MYSTERY CUPS  •  POT $5"),"a cup drunk early ends it");
+        }
+
+        // The tripper's end card says whether the hunch was right only as far as the drunk cups show it, since the spiked cup never
+        // leaves the host.
+        [Test]public void MysteryCupsEndCardSaysWhetherTheHunchWasRight()
+        {
+            var s=Level(out var you,out var sam);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;s.TripperId=you.Id;
+            b.PlayerIds.AddRange(new[]{"you","sam"});b.Cups=4;b.Turns.AddRange(new[]{"sam","you"});b.ScoredAt=12;b.Seconds=12.5;
+            const string again=" The festival starts again in 4.";
+            b.Hint=2;b.Drunk.AddRange(new[]{0,2});b.Pot=5;b.SpikedBy="sam";
+            Assert.That(Card(s,you).Item2,Is.EqualTo("Sam drank the spiked cup and lost the $5 pot. Your hunch was right: cup 3 was spiked."+again),"the spiked cup drunk was the hunch");
+            b.Hint=3;Assert.That(Card(s,you).Item2,Is.EqualTo("Sam drank the spiked cup and lost the $5 pot. Your hunch was wrong: cup 3 was spiked."+again),"it was another");
+            b.Hint=-1;Assert.That(Card(s,sam).Item2,Is.EqualTo("You drank the spiked cup and lost the $5 pot."+again),"a view with no hunch has no hunch line");
+            b.SpikedBy="";b.Drunk.Clear();b.Drunk.AddRange(new[]{0,1,3});b.Pot=30;b.Hint=2;
+            Assert.That(Card(s,you).Item2,Is.EqualTo("Called it: $15 each, counted as sales. Your hunch was right: cup 3 was spiked."+again),"only the hunch cup was left");
+            b.Drunk.Clear();b.Drunk.Add(2);b.Pot=5;
+            Assert.That(Card(s,you).Item2,Is.EqualTo("Called it: $2 each, $1 to the stash, counted as sales. Your hunch was wrong: cup 3 was safe."+again),"the hunch cup was drunk safely");
+            b.Drunk.Clear();b.Drunk.Add(0);
+            Assert.That(Card(s,you).Item2,Is.EqualTo("Called it: $2 each, $1 to the stash, counted as sales. Nobody drank cup 3, so your hunch stays a guess."+again),"called with the hunch cup still on the table");
+        }
+
+        // At 1920x1080, at normal and the largest text, the longest Mystery Cups cards fit the minigame card uncut: a crew of eight with
+        // long names, a hunch and a $1,000 pot.
+        [Test]public void EveryMysteryCupsCardFitsTheMinigameCard()
+        {
+            var root=new GameObject("Cups card fit HUD");
+            try
+            {
+                var hud=root.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(hud,null);
+                var canvas=root.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);canvas.transform.localScale=Vector3.one;
+                Text title=null,detail=null;foreach(var t in root.GetComponentsInChildren<Text>(true)){if(t.name=="Minigame title")title=t;if(t.name=="Minigame detail")detail=t;}
+                Assert.That(detail,Is.Not.Null,"setup: the minigame card's detail");Canvas.ForceUpdateCanvases();
+                var s=Level(out var you,out _);s.Phase=FestivalSimulation.MinigamePhase;s.TripperId=you.Id;s.Doses.Add(new PlayerDose{PlayerId=you.Id,Dose=4});var b=s.Booth;
+                for(int i=0;i<7;i++){var p=new PlayerState{Id="long"+i,Name="Long Festival Friend "+i};s.Players.Add(p);b.PlayerIds.Add(p.Id);b.Turns.Add(p.Id);}
+                b.PlayerIds.Add(you.Id);b.Turns.Add(you.Id);b.Cups=FestivalSimulation.CupsFor(8);b.Hint=9;
+                var cards=new List<(string,string)>();
+                b.Seconds=.5;b.TurnAt=3;cards.Add(Card(s,you));
+                b.Seconds=3;b.Pot=1000;b.Drunk.AddRange(new[]{0,1,2});cards.Add(Card(s,you));
+                b.Turn=7;cards.Add(Card(s,you));
+                b.ScoredAt=4;b.Seconds=4;b.SpikedBy="long3";b.Drunk.Add(8);cards.Add(Card(s,you));
+                b.SpikedBy="";b.Drunk.Clear();b.Drunk.Add(4);b.Pot=1003;cards.Add(Card(s,you));
+                b.Drunk.Clear();cards.Add(Card(s,you));
+                var measure=new TextGenerator();var cut=new List<string>();var reflow=typeof(FestivalHud).GetMethod("ApplyTextReflow",BindingFlags.Instance|BindingFlags.NonPublic);
+                foreach(float scale in new[]{1f,1.3f})
+                {
+                    reflow.Invoke(hud,new object[]{scale});
+                    foreach(var (heading,line) in cards)
+                    {
+                        measure.Populate(line,detail.GetGenerationSettings(detail.rectTransform.rect.size));if(measure.characterCountVisible<line.Length)cut.Add(scale+"x in "+detail.rectTransform.rect.size+": "+line.Replace("\n"," | "));
+                        measure.Populate(heading,title.GetGenerationSettings(title.rectTransform.rect.size));if(measure.characterCountVisible<heading.Length)cut.Add(scale+"x: "+heading);
+                    }
+                }
+                Assert.That(cut,Is.Empty,"cut in the minigame card");
+            }
+            finally{Object.DestroyImmediate(root);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
         }
 
         // E drinks the cup under the aim dot and F calls it, for the player who is up alone, until the game is scored.
