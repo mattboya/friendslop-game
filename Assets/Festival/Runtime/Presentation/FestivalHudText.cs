@@ -671,7 +671,8 @@ namespace Festival.Presentation
         public static string BuyAction(RoundState s,PlayerState viewer,string npcId){var item=Catalog.FindItem(FestivalSimulation.SellerStock(npcId));return "Buy "+item.Name+Dot+Money(s,viewer,item.Price);}
         /// <summary>ECON-2: what a finished buy says, in dollars like the host's replies, for MoneyText: "Bought Tongue Stamps for $5"
         /// when the price it held stays spent (cash as it ends equals cash on its last frame, whatever a handoff did to the stack,
-        /// and wherever the unit landed); "" when a miss, a cancel or a bust handed the price back.</summary>
-        public static string BuyReply(string item,int cashWhileBuying,int cashNow){var bought=Catalog.FindItem(item);return cashNow==cashWhileBuying?"Bought "+bought.Name+" for $"+bought.Price:"";}
+        /// and wherever the unit landed); "" when a miss, a cancel or a bust handed the price back. A bust's fine or a death's dropped
+        /// cash can cancel that refund out exactly, so a buyer no longer Alive bought nothing whatever the cash says.</summary>
+        public static string BuyReply(string item,int cashWhileBuying,PlayerState now){var bought=Catalog.FindItem(item);return now.Cash==cashWhileBuying&&now.Life=="Alive"?"Bought "+bought.Name+" for $"+bought.Price:"";}
     }
 }

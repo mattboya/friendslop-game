@@ -55,10 +55,37 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.BuyAction(palm,you,"wook_17"),Is.EqualTo("Buy Fun Guys  •  $5"));
             var playa=Day(1);var sam=Crew(playa,"sam",1);
             Assert.That(FestivalHudText.BuyAction(playa,sam,"wook_4"),Is.EqualTo("Buy Tongue Stamps  •  5 ramen packets"),"the price in Sam's ramen");
-            Assert.That(FestivalHudText.BuyReply("stock_lsd",15,15),Is.EqualTo("Bought Tongue Stamps for $5"),"the held price stayed spent");
-            Assert.That(FestivalHudText.BuyReply("stock_mushrooms",0,0),Is.EqualTo("Bought Fun Guys for $5"));
-            Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.BuyReply("stock_lsd",15,15)),Is.EqualTo("Bought Tongue Stamps for 5 ramen packets"));
-            Assert.That(FestivalHudText.BuyReply("stock_lsd",15,20),Is.EqualTo(""),"a missed or cancelled buy gave the price back");
+            Assert.That(FestivalHudText.BuyReply("stock_lsd",15,new PlayerState{Cash=15}),Is.EqualTo("Bought Tongue Stamps for $5"),"the held price stayed spent");
+            Assert.That(FestivalHudText.BuyReply("stock_mushrooms",0,new PlayerState{Cash=0}),Is.EqualTo("Bought Fun Guys for $5"));
+            Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.BuyReply("stock_lsd",15,new PlayerState{Cash=15})),Is.EqualTo("Bought Tongue Stamps for 5 ramen packets"));
+            Assert.That(FestivalHudText.BuyReply("stock_lsd",15,new PlayerState{Cash=20}),Is.EqualTo(""),"a missed or cancelled buy gave the price back");
+        }
+
+        // From exactly $5, a narc's bust or an arrest mid-buy gives the held $5 back and then fines $5, so the cash matches the buy's
+        // last frame with nothing bought. The real rules end each buy here.
+        [Test] public void ABuyThatEndsInABustNeverSaysItBought()
+        {
+            var game=Hosted(0);var ash=game.Player("ash");int sequence=0;
+            string Buy(string role,bool arrested)
+            {
+                string seller=role+"_0";for(int n=1;DialogueGrammar.PersonaFor(seller,"")!="Wook"||FestivalSimulation.SellerStock(seller)!="stock_lsd";n++)seller=role+"_"+n;
+                game.State.Npcs.Clear();game.State.Npcs.Add(new NpcState{Id=seller,Kind="Wook",Role=role,X=0,Z=1.5f,Yaw=180,CanTalk=true});
+                ash.Life="Alive";ash.X=0;ash.Z=0;ash.Cash=5;ash.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");ash.EquippedItemId="";
+                Assert.That(game.Execute("ash",new GameCommand{Id="bust-buy-"+(sequence++),Kind="StartBuy",TargetId=seller,ItemId="stock_lsd"}).Accepted,Is.True,"setup: the buy from a "+role+" starts");
+                var talk=game.Interaction(ash.InteractionId);int cashWhileBuying=ash.Cash;
+                if(arrested)typeof(FestivalSimulation).GetMethod("Detain",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(game,new object[]{ash});
+                for(int guard=0;talk.Status=="Active"&&guard<300;guard++)
+                {
+                    var turn=talk.Turns.Count>0?talk.Turns[talk.Turns.Count-1]:null;
+                    if(turn==null||turn.Pick>=0){game.Tick(.1);continue;}
+                    Assert.That(game.Execute("ash",new GameCommand{Id="bust-buy-"+(sequence++),Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=talk.Turns.Count-1}).Accepted,Is.True,"setup: a smooth reply");
+                }
+                Assert.That(talk.Status,Is.Not.EqualTo("Active"),"setup: the buy from a "+role+" ended");
+                return FestivalHudText.BuyReply("stock_lsd",cashWhileBuying,ash);
+            }
+            Assert.That(Buy("Regular",false),Is.EqualTo("Bought Tongue Stamps for $5"),"setup: a regular sells for the held $5");
+            Assert.That(Buy("Narc",false),Is.EqualTo(""),"a narc's bust bought nothing ($"+ash.Cash+", "+ash.Life+")");
+            Assert.That(Buy("Regular",true),Is.EqualTo(""),"an arrest mid-buy bought nothing ($"+ash.Cash+", "+ash.Life+")");
         }
 
         // LOOP-4: the corner reel's frozen amount and result, in the viewer's money.

@@ -2453,7 +2453,7 @@ namespace Festival.Presentation
             }
             if(buyInteractionId=="")return;
             buyInteractionId="";
-            string reply=FestivalHudText.BuyReply(buyItem,cashWhileBuying,player.Cash);
+            string reply=FestivalHudText.BuyReply(buyItem,cashWhileBuying,player);
             if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
         }
         // Built over the pass, the map and a dance's dimmer, the stamp hides under them as the panels built before them do.
