@@ -136,6 +136,9 @@ namespace Festival.Network
         // DIALOG-15: a talk is four turns (ConversationTurns), the greeting, small talk, the ask and the close, each with its own
         // replies ("reply.<topic>.<round>.<style>") and lines. Reply takes turns 0-3 and TalkAck names a retained outcome at
         // Direction 4, not 3, so a version-9 client's outcome acknowledgment and dismissal would land on the fourth turn instead.
+        // ECON-10: StartSale's Amount is the sale's ask (FairAsk 0, HighAsk 1 or GreedyAsk 2; any other is refused), kept on
+        // InteractionState.Ask beside the host-only ObserverState.RefusesSales, Fair and false in older snapshots; a version-9
+        // client always asks Fair.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

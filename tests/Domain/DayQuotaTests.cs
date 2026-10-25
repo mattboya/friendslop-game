@@ -22,10 +22,10 @@ public static class DayQuotaTests
     static void AtGate(PlayerState p){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
     static void Sundown(FestivalSimulation s){s.State.ElapsedSeconds=s.State.DurationSeconds-.05;s.Tick(.1);}
     // Sell one stock to a buyer, played perfectly (perform false picks every awkward reply, a botched sale). Returns the cash it paid.
-    static int Sell(FestivalSimulation s,string id,string buyer,bool perform=true)
+    static int Sell(FestivalSimulation s,string id,string buyer,bool perform=true,int ask=FestivalSimulation.FairAsk)
     {
         var p=s.Player(id);var npc=s.State.Npcs.Find(n=>n.Id==buyer);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
-        int before=p.Cash;Check(Act(s,id,"StartSale",buyer,"stock_lsd").Accepted,id+" starts a sale to "+buyer);
+        int before=p.Cash;Check(s.Execute(id,new GameCommand{Id="quota_"+(++sequence),Kind="StartSale",TargetId=buyer,ItemId="stock_lsd",Amount=ask}).Accepted,id+" starts a sale to "+buyer);
         var sale=s.Interaction(p.InteractionId);
         for(int guard=0;sale.Status=="Active"&&guard<200;guard++){if(perform)Perfectly(s,sale);else if(sale.Turns.Count>0){var turn=sale.Turns[sale.Turns.Count-1];Check(s.Execute(id,new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Awkward),Direction=sale.Turns.Count-1}).Accepted,"reply awkwardly to the buyer");}s.Tick(.1);}
         Check(sale.Status=="Complete","the sale to "+buyer+" settles");return p.Cash-before;
@@ -45,6 +45,7 @@ public static class DayQuotaTests
     {
         QuotaScalesWithCrewAndTable();
         SalesCountTowardTheQuota();
+        PushedAsksCountWhatTheyPaid();
         ExtractWaitsForTheQuota();
         SundownSettlesTheDay();
         NobodyIsLostByDay();
@@ -80,6 +81,15 @@ public static class DayQuotaTests
         Check(Sell(s,"p0","buyer_2",perform:false)==0&&s.State.LevelSales==paid&&a.Inventory.Exists(i=>i.ItemId=="stock_lsd"),"a botched sale pays nothing, counts nothing and hands the stock back");
         int cash=a.Cash;a.X=-28;a.Z=16;Check(Act(s,"p0","LostProperty").Accepted,"lost-property task starts");s.Tick(5.1);
         Check(a.Cash==cash+5&&s.State.LevelSales==paid,"lost-property cash is not a sale");
+    }
+
+    // A High or Greedy sale counts what it paid toward the quota: $15 and $20 at dose 1, played perfectly.
+    static void PushedAsksCountWhatTheyPaid()
+    {
+        var s=Crew(1);
+        int high=Sell(s,"p0","buyer_0",ask:FestivalSimulation.HighAsk);Check(high==15&&s.State.LevelSales==15,"a perfect High sale pays $15 and counts $15, got "+high+" and "+s.State.LevelSales);
+        int greedy=Sell(s,"p0","buyer_1",ask:FestivalSimulation.GreedyAsk);Check(greedy==20&&s.State.LevelSales==35,"a perfect Greedy sale pays $20 and counts it too, got "+greedy+" and "+s.State.LevelSales);
+        Check(FestivalSimulation.DayQuotaMet(s.State),"two pushed sales meet a solo Day 1's $15 quota twice over");
     }
 
     static void ExtractWaitsForTheQuota()

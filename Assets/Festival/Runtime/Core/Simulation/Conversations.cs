@@ -33,7 +33,7 @@ namespace Festival.Core
             bool wary=Wary(npc,p);if(wary)GiveDanceRoom(p,npc);
             var i=NewInteraction(p,kind,npc.Id,0);p.ConversationThreadId=i.Id;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);
-            if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;}
+            if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
             if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;PublishSpeech(p,npc.Id,"FESTIVALGOER",TrustAsk,i.StartSeconds+i.DurationSeconds-State.SimulationSeconds,i.Id);}else AddTurn(i,p);
@@ -160,11 +160,11 @@ namespace Festival.Core
             ChatDiagnostic?.Invoke("OutcomeDelivered",i.Kind,State.RoundId,State.SimulationSeconds);
 #endif
         }
-        // What a finished talk settles on its Score: a sale pays in full at .75 and half at .4, and its stock comes back below;
-        // a buy (StockBuys.cs); and security at .75 waves off its stop, or gives the warning it held back (HeardOut).
+        // What a finished talk settles on its Score: a sale pays by its ask (SalePay), or else its stock comes back and a pushed ask
+        // costs suspicion; a buy (StockBuys.cs); and security at .75 waves off its stop, or gives the warning it held back (HeardOut).
         void SettleTalk(InteractionState i,PlayerState p)
         {
-            if(i.Kind=="Sale"){var npc=State.Npcs.Find(n=>n.Id==i.TargetId);if(i.Score>=.4){int payout=SalePayout(npc,(i.Score>=.75?PerfectSalePay:5)*VipPayout(p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;}else if(i.ReservedItemId!=""){if(CanAdd(p,i.ReservedItemId,1))Add(p,i.ReservedItemId,1);else State.Drops.Add(new DropState{Id=Id("drop"),ItemId=i.ReservedItemId,Count=1,X=p.X,Z=p.Z});}i.ReservedItemId="";}
+            if(i.Kind=="Sale"){var npc=State.Npcs.Find(n=>n.Id==i.TargetId);int pay=SalePay(i.Ask,i.Score);if(pay>0){int payout=SalePayout(npc,pay*VipPayout(State,p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;}else{PushedAskFailed(i,p);if(i.ReservedItemId!=""){if(CanAdd(p,i.ReservedItemId,1))Add(p,i.ReservedItemId,1);else State.Drops.Add(new DropState{Id=Id("drop"),ItemId=i.ReservedItemId,Count=1,X=p.X,Z=p.Z});}}i.ReservedItemId="";}
             if(i.Kind=="Buy")SettleBuy(i,p);
             if(i.Kind=="Police"){if(i.Score>=.75)WaveOn(i.TargetId,p);else HeardOut(i.TargetId,p);}
             DeliverConversationOutcome(i,p);

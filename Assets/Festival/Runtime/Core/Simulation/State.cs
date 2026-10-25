@@ -77,7 +77,9 @@ namespace Festival.Core
         public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="";
         public long Sequence; public List<string> GrammarKeys=new List<string>();
     }
-    [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }
+    // RefusesSales: PlayerId's High or Greedy ask failed with this festivalgoer, who buys nothing more from them this level.
+    // Host-only, as ViewFor copies only Suspicion; false in older snapshots.
+    [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; public bool RefusesSales; }
     // A cop's case on a player (Danger.cs, SecurityStops.cs): Kind VisibleStock is a security stop, WavedOn one talked down,
     // and WitnessedDeal or IgnoredStop an arrest warning, detaining at DetainAt. ESC-2: a stop runs from StartSeconds, and the
     // cop last saw them at SeenSeconds; -1 in older snapshots, whose stops are timed from the load.
@@ -119,6 +121,8 @@ namespace Festival.Core
         // festivalgoer asked for a dance first, on this interaction's chart; Hunch, what a chat or a buy left the player feeling,
         // set as its last turn begins. Empty and false in older snapshots.
         public List<ConversationTurn> Turns=new List<ConversationTurn>(); public bool TrustDance; public string Hunch="";
+        // A sale's ask (FestivalSimulation.FairAsk, HighAsk or GreedyAsk), from StartSale's Amount; Fair in older snapshots.
+        public int Ask;
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).

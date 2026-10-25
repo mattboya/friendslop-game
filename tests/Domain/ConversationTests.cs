@@ -27,7 +27,8 @@ public static class ConversationTests
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
-            ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction})
+            ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
+            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -631,6 +632,84 @@ public static class ConversationTests
         var shy=Pair("Buy");Partner(shy).Role="Narc";Partner(shy).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});var r=shy.Player("p0");var walked=Start(shy,"Buy");
         for(int guard=0;walked.Status=="Active"&&guard<100;guard++)shy.Tick(.1);
         Check(walked.TrustDance&&walked.Turns.Count==0&&r.Life=="Alive"&&r.Cash==20,"a narc who walks off after a poor trust dance busts no one ("+r.Life+", $"+r.Cash+")");
+    }
+
+    // A sale makes an ask (StartSale's Amount): Fair $10, High $15 or Greedy $20 before the multipliers. Fair pays in full at .75
+    // and half at .4; High in full at .75, and between .5 and .75 they talk you down to Fair's $10; Greedy in full at .875,
+    // talked down to $10 from .6; less is no sale. The dose's multiplier follows, and the offer's price is what a full sale pays.
+    static InteractionState Sale(FestivalSimulation s,int ask){var started=Act(s,"p0","StartSale",Partner(s).Id,"stock_lsd",amount:ask);Check(started.Accepted,"setup: the sale at ask "+ask+" starts: "+started.Reason);return s.Interaction(s.Player("p0").InteractionId);}
+    static void EachAskPaysByItsTable()
+    {
+        int Fair=FestivalSimulation.FairAsk,High=FestivalSimulation.HighAsk,Greedy=FestivalSimulation.GreedyAsk;
+        foreach(var (score,fair,high,greedy) in new[]{(1.0,10,15,20),(.875,10,15,20),(.75,10,15,10),(.6,5,10,10),(.5,5,10,0),(.25,0,0,0)})
+        {
+            int[] paid={FestivalSimulation.SalePay(Fair,score),FestivalSimulation.SalePay(High,score),FestivalSimulation.SalePay(Greedy,score)};
+            Check(paid[0]==fair&&paid[1]==high&&paid[2]==greedy,"at "+score+" Fair, High and Greedy pay "+fair+", "+high+", "+greedy+" before multipliers, got "+string.Join(", ",paid));
+        }
+        Check(FestivalSimulation.SalePay(Fair,.4)==5&&FestivalSimulation.SalePay(Fair,.3999)==0&&FestivalSimulation.SalePay(Fair,.7499)==5&&FestivalSimulation.SalePay(High,.4999)==0&&FestivalSimulation.SalePay(High,.7499)==10
+            &&FestivalSimulation.SalePay(Greedy,.5999)==0&&FestivalSimulation.SalePay(Greedy,.8749)==10,"each floor and need is its own edge");
+        Check(FestivalSimulation.SaleNeeds(Fair)==.75&&FestivalSimulation.SaleNeeds(High)==.75&&FestivalSimulation.SaleNeeds(Greedy)==.875,"the score each ask needs for its full price");
+        foreach(int bad in new[]{-1,3})
+        {
+            var s=Pair("Sale");var refused=Act(s,"p0","StartSale",Partner(s).Id,"stock_lsd",amount:bad);
+            Check(!refused.Accepted&&refused.Reason=="Ask Fair, High or Greedy"&&s.Player("p0").InteractionId==""&&s.Player("p0").Inventory.Exists(x=>x.ItemId=="stock_lsd"),"ask "+bad+" is refused and keeps the stock: "+refused.Reason);
+            s.Player("p0").Inventory.Clear();
+            Check(Act(s,"p0","StartSale",Partner(s).Id,"stock_lsd",amount:bad).Reason=="Ask Fair, High or Greedy","the ask is checked before the stock");
+        }
+        // At dose 2 (x1.25), whole talks: all smooth (1) pays the ask's price, all so-so (.5) Fair's half, High talked down to Fair's
+        // price, Greedy nothing; all awkward (0) is no sale at any ask.
+        foreach(var (ask,smooth,soso) in new[]{(Fair,13,6),(High,19,13),(Greedy,25,0)})
+            foreach(var (grade,expected) in new[]{(Smooth,smooth),(SoSo,soso),(Awkward,0)})
+            {
+                var s=Pair("Sale");s.State.TripperId="tripper";s.State.Doses.Add(new PlayerDose{PlayerId="tripper",Dose=2});var p=s.Player("p0");int cash=p.Cash,sales=s.State.LevelSales;
+                var i=Sale(s,ask);Check(i.Ask==ask,"the interaction keeps its ask");
+                if(grade==Smooth)Check(FestivalSimulation.SalePrice(s.State,p,Partner(s),ask)==expected,"ask "+ask+"'s offer names what a full sale pays, "+expected+", got "+FestivalSimulation.SalePrice(s.State,p,Partner(s),ask));
+                Talk(s,i,Every(grade));
+                Check(p.Cash-cash==expected&&s.State.LevelSales-sales==expected,"ask "+ask+" at "+i.Score+" pays "+expected+" at dose 2, got "+(p.Cash-cash));
+                Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(expected==0),"only a no-sale hands the stock back");
+            }
+    }
+
+    // A High or Greedy ask that ends in no sale, or that you walk away from, adds 15 or 30 suspicion of you to the buyer and to
+    // every watcher, on top of what the talk or the walk-off adds, and that buyer won't buy from you again this level. A failed
+    // Fair sale moves them by RhythmDelta only, and the buyer still hears your next offer.
+    static void APushedAskThatFailsRaisesSuspicion()
+    {
+        foreach(string end in new[]{"fail","end","leave"})
+            foreach(var (ask,extra) in new[]{(FestivalSimulation.FairAsk,0),(FestivalSimulation.HighAsk,15),(FestivalSimulation.GreedyAsk,30)})
+            {
+                var s=Pair("Sale");var buyer=Partner(s);var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+                var i=Sale(s,ask);Check(i.WitnessIds.Contains("watcher")&&i.WitnessIds.Contains(buyer.Id),"setup: the watcher and the buyer see the sale");
+                double Of(NpcState n)=>n.Observers.Find(o=>o.PlayerId=="p0")?.Suspicion??0;
+                if(end=="end"){Say(s,i,Awkward);Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away from the sale");}
+                else if(end=="leave"){Say(s,i,Awkward);s.Player("p0").X=6;s.Tick(.1);Check(i.Status=="Moved away or target changed","setup: you move out of reach of the sale ("+i.Status+")");}
+                else Talk(s,i,Every(Awkward));
+                // Ending the talk moves its watchers, the buyer facing you among them, 20 (Cancel); a talk that ends at 0 moves them by
+                // RhythmDelta(0), 20 too. Moving out of reach moves them by nothing but the ask.
+                double moved=end=="leave"?0:20,watched=20+moved+extra,bought=moved+extra;
+                Check(Of(watcher)==watched&&Of(buyer)==bought,end+" at ask "+ask+" leaves the watcher at "+watched+" and the buyer at "+bought+", got "+Of(watcher)+" and "+Of(buyer));
+                var p=s.Player("p0");p.X=0;var again=Act(s,"p0","StartSale",buyer.Id,"stock_lsd");
+                Check(again.Accepted==(extra==0)&&(extra==0||again.Reason=="Not after that ask. They won't buy from you again."),end+" at ask "+ask+": the buyer "+(extra==0?"hears your next offer":"won't buy from you again")+": "+again.Reason);
+                if(extra>0)Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"a refused offer keeps the stock");
+            }
+        // Another seller is still welcome.
+        var crew=Pair("Sale");crew.State.Phase="Shopping";crew.AddPlayer("p1","P1");crew.State.Phase="Playing";var friend=crew.Player("p1");friend.X=0;friend.Z=0;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        Talk(crew,Sale(crew,FestivalSimulation.GreedyAsk),Every(Awkward));
+        Check(crew.Execute("p1",new GameCommand{Id="talk"+(sequence++),Kind="StartSale",TargetId=Partner(crew).Id,ItemId="stock_lsd"}).Accepted,"a friend can still sell to them");
+    }
+
+    // A snapshot keeps a sale's ask; one from before asks restores it as Fair, and an ask outside Fair to Greedy is refused.
+    static void ASaleKeepsItsAskThroughASnapshot()
+    {
+        var s=Pair("Sale");var i=Sale(s,FestivalSimulation.GreedyAsk);
+        RoundState Saved(Action<JsonObject> edit){var json=JsonNode.Parse(JsonSerializer.Serialize(s.State,new JsonSerializerOptions{IncludeFields=true}));edit(json["Interactions"].AsArray().Single(x=>x["Id"].GetValue<string>()==i.Id).AsObject());return JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),new JsonSerializerOptions{IncludeFields=true});}
+        var kept=new FestivalSimulation();kept.Restore(Saved(_=>{}));Check(kept.Interaction(i.Id).Ask==FestivalSimulation.GreedyAsk,"a saved Greedy sale restores Greedy");
+        var older=new FestivalSimulation();older.Restore(Saved(o=>o.Remove("Ask")));Check(older.Interaction(i.Id).Ask==FestivalSimulation.FairAsk,"a sale saved before asks restores Fair");
+        foreach(int bad in new[]{-1,3})
+        {
+            string failure="nothing thrown";try{new FestivalSimulation().Restore(Saved(o=>o["Ask"]=bad));}catch(ArgumentException error){failure=error.Message;}
+            Check(failure=="Incomplete snapshot","a saved ask of "+bad+" is refused, got "+failure);
+        }
     }
 
     // A talk in a snapshot from before conversations (no turns, no trust dance) restores, and carries on as a conversation.

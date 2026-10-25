@@ -88,7 +88,7 @@ namespace Festival.Core
             return State.Phase!="Playing"||p.Life=="Spirit"||!InVip(x,z)||InVip(p.X,p.Z)||Count(p,VipWristband)>0;
         }
         // A sale made inside a VIP zone, to a buyer inside, pays VipPayoutFactor times: one over the rope pays as usual.
-        int VipPayout(PlayerState seller,NpcState buyer)=>buyer!=null&&InVip(seller.X,seller.Z)&&InVip(buyer.X,buyer.Z)?Festivals.VipPayoutFactor:1;
+        static int VipPayout(RoundState s,PlayerState seller,NpcState buyer)=>buyer!=null&&Festivals.InVipZone(s.FestivalIndex,seller.X,seller.Z)&&Festivals.InVipZone(s.FestivalIndex,buyer.X,buyer.Z)?Festivals.VipPayoutFactor:1;
         // Wristbands are sold only at the festival's night-market VIP stall, never at camp. One takes a slot like any gear, but
         // unlike a shelf buy it is not put in your hand.
         CommandResult BuyVipWristband(PlayerState p)
