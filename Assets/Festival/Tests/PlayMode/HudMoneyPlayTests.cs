@@ -272,6 +272,62 @@ namespace Festival.Tests
             finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
         }
 
+        // A money line from the same moment waits MoneyNewsSeconds behind the line that just appeared: a buy that ends in full hands
+        // still names its price, and an offer to an undercover narc still says why you were busted.
+        [UnityTest]public IEnumerator AMoneyLineWaitsBehindTheLineThatJustAppeared()
+        {
+            var world=new GameObject("Money line world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Money line HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            var failures=new List<string>();
+            IEnumerator Expect(string what,string first,string then)
+            {
+                float drawn=0;var seen=new List<string>();
+                for(float end=Time.realtimeSinceStartup+6;Time.realtimeSinceStartup<end&&!seen.Contains(then);)
+                {
+                    string shown=Read("Notice");if(shown==first)drawn+=Time.unscaledDeltaTime;
+                    if(seen.Count==0||seen[seen.Count-1]!=shown)seen.Add(shown);yield return null;
+                }
+                if(drawn<FestivalHudText.MoneyNewsSeconds-.5f||!seen.Contains(then))failures.Add(what+": \""+first+"\" drawn for "+drawn.ToString("0.00")+" s; the line showed "+string.Join(" | ",seen));
+            }
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                sim.State.Npcs.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.Effects.Clear();player.Cash=20;player.X=0;player.Z=0;
+                int sequence=0;
+                bool Do(string kind,string target="",string item="",int amount=0,int direction=0)=>
+                    sim.Execute(player.Id,new GameCommand{Id="line_"+(sequence++),Kind=kind,TargetId=target,ItemId=item,Amount=amount,Direction=direction}).Accepted;
+                string seller="";for(int n=0;seller=="";n++)if(DialogueGrammar.PersonaFor("line_seller_"+n,"")=="Wook"&&FestivalSimulation.SellerStock("line_seller_"+n)=="stock_lsd")seller="line_seller_"+n;
+                sim.State.Npcs.Add(new NpcState{Id=seller,Kind="Wook",Role="Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true});
+                player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
+                foreach(var item in new[]{"poi_practice","stage_pass"})player.Inventory.Add(new ItemStack{ItemId=item,Count=1});
+                session.SetMessage("");yield return new WaitForSeconds(.3f);
+                Assert.That(Do("StartBuy",seller,"stock_lsd"),Is.True,"setup: the buy starts");
+                yield return new WaitForSeconds(.3f);
+                var talk=sim.Interaction(player.InteractionId);Assert.That(talk?.Kind,Is.EqualTo("Buy"),"setup: buying");
+                // A buy needs a free hand to start; a handoff accepted mid-buy (the host allows it) fills the last one.
+                player.Inventory.Add(new ItemStack{ItemId="medical_voucher",Count=1});
+                while(talk.Status=="Active"&&talk.Turns.Count>0)
+                    Assert.That(Do("Reply",amount:System.Array.IndexOf(talk.Turns[talk.Turns.Count-1].Grades,ConversationLines.Smooth),direction:talk.Turns.Count-1),Is.True,"setup: a smooth reply");
+                yield return Expect("a buy into full hands","Bought Tongue Stamps for $5","HANDS FULL  •  Tongue Stamps dropped at your feet");
+
+                sim.State.Npcs.Clear();player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
+                string narc="line_narc_0";for(int n=1;DialogueGrammar.PersonaFor(narc,"")!="Wook";n++)narc="line_narc_"+n;
+                sim.State.Npcs.Add(new NpcState{Id=narc,Kind="Wook",Role="Narc",X=0,Z=1.5f,Yaw=180,CanTalk=true});
+                // The buy's own money line holds the notice for its MoneyNewsSeconds first.
+                session.SetMessage("");yield return new WaitForSeconds(FestivalHudText.MoneyNewsSeconds+.5f);
+                session.Command("StartSale",target:narc,item:"stock_lsd",amount:FestivalSimulation.FairAsk);
+                yield return Expect("an offer to an undercover narc","Busted! That was an undercover narc.","SECURITY FINE  •  −$10  •  SECURITY TOOK 1 Tongue Stamps");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+            Assert.That(failures,Is.Empty,"A money line and the line that just appeared:\n"+string.Join("\n",failures));
+        }
+
         // LOOP-4: a real joined friend dies with $40 and the roll drops it. The host and the dead friend both see the corner reel name
         // them. The host keeps walking and works the menu while it turns; the menu offers no pickup until the reel lands, then offers
         // the pile, read in dollars over the voucher model, and taking it adds the $40 to the host's cash.

@@ -143,7 +143,8 @@ namespace Festival.Presentation
         private AudioClip ohYeah;
         private readonly FestivalHudText.GiggleTankNews giggleTankNews=new FestivalHudText.GiggleTankNews();
         private readonly FestivalHudText.MoneyNewsFollower moneyNews=new FestivalHudText.MoneyNewsFollower();
-        private float moneyNoticeAt;
+        private float moneyNoticeAt,moneyLineSeenAt;
+        private string moneyLineSeen;
         public int OhYeahPlays{get;private set;}
         private Texture2D discTexture;
         private Sprite discSprite;
@@ -1029,13 +1030,16 @@ namespace Festival.Presentation
             }
             if(uncovered){string tank=giggleTankNews.Take();if(tank!=""){session.SetMessage(tank);lastNotice="";}}
             UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
-            // One money notice per MoneyNewsSeconds, so a queue of them each holds the line. The death reel's gear notice writes the
+            // One money notice per MoneyNewsSeconds, so a queue of them each holds the line, and none over any other line younger than
+            // that: a reply from the same step (a narc's bust, a buy's price) must stay readable. The death reel's gear notice writes the
             // notice text itself for its 5 s, so a queued line waits for it rather than being hidden under it.
             moneyNews.Follow(state,player,session.ConnectionGeneration);
-            if(uncovered&&gearLossNotice==""&&Time.unscaledTime>=moneyNoticeAt)
+            if(session.Message!=moneyLineSeen){moneyLineSeen=session.Message;moneyLineSeenAt=Time.unscaledTime;}
+            bool freshLine=!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<moneyLineSeenAt+FestivalHudText.MoneyNewsSeconds;
+            if(uncovered&&gearLossNotice==""&&!freshLine&&Time.unscaledTime>=moneyNoticeAt)
             {
                 var news=moneyNews.Take();
-                if(news!=null){session.SetMessage(news.Text);lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;if(FestivalHudText.FlashesMoney(news))moneyFlashAt=Time.unscaledTime;}
+                if(news!=null){session.SetMessage(news.Text);moneyLineSeen=news.Text;lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;if(FestivalHudText.FlashesMoney(news))moneyFlashAt=Time.unscaledTime;}
             }
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf&&!lightShowPanel.activeSelf);
             ApplyEffects(player);

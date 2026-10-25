@@ -20,8 +20,8 @@ namespace Festival.Tests
             var hostObject=new GameObject("Giggle Tank host");var session=hostObject.AddComponent<FestivalSession>();var hud=hostObject.AddComponent<FestivalHud>();
             yield return null;
             var failures=new List<string>();
-            // Up to a second of frames, until done.
-            IEnumerator Until(System.Func<bool> done){for(float until=Time.realtimeSinceStartup+1;!done()&&Time.realtimeSinceStartup<until;)yield return null;}
+            // Up to a second of frames (or the given seconds), until done.
+            IEnumerator Until(System.Func<bool> done,float seconds=1){for(float until=Time.realtimeSinceStartup+seconds;!done()&&Time.realtimeSinceStartup<until;)yield return null;}
             try
             {
                 session.Host("Tester",HostPort);
@@ -47,7 +47,8 @@ namespace Festival.Tests
                 yield return Until(()=>session.State.StashCash==stash+Festivals.GiggleTankCash);
                 if(session.State.StashCash!=stash+Festivals.GiggleTankCash)failures.Add("the friend home at the gate leaves the host's stash at "+session.State.StashCash+", not "+(stash+Festivals.GiggleTankCash));
                 const string Paid="STASH  •  +$25  •  Sam brought the Giggle Tank home";
-                yield return Until(()=>session.Message==Paid);
+                // The crew's STASH line waits its MoneyNewsSeconds behind the grab's line.
+                yield return Until(()=>session.Message==Paid,1+FestivalHudText.MoneyNewsSeconds);
                 if(session.Message!=Paid)failures.Add("the friend's payout tells the host \""+session.Message+"\"");
 
                 // A level has one tank, so the host's view first sees nobody holding one.
