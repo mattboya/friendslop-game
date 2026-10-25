@@ -63,11 +63,10 @@ namespace Festival.Tests
             game.State.LevelIndex=3;game.State.Npcs.Clear();game.State.Doses.Clear();player.Effects.Clear();player.X=0;player.Z=0;
             game.HasLineOfSight=(x,z,tx,tz)=>true;game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
             game.State.Npcs.Add(new NpcState{Id="paired_partner",X=0,Z=1.5f,CanTalk=true});
-            owner.Command("Dance","paired_partner");
+            game.State.SpinSeed=LongHoldSpin(game,player.Id,"paired_partner");owner.Command("Dance","paired_partner");
             for(float deadline=Time.realtimeSinceStartup+5;player.InteractionId==""&&Time.realtimeSinceStartup<deadline;)yield return null;
             var interaction=game.Interaction(player.InteractionId);Assert.That(interaction,Is.Not.Null,owner.Message);
-            RhythmChart chart=null;RhythmNote hold=null;
-            for(int seed=0;seed<128&&hold==null;seed++){interaction.ChartSeed=seed;chart=RhythmChart.For(interaction);hold=chart.Notes.Find(note=>note.HoldSeconds>=.9);}
+            var hold=LongHold(interaction,out var chart);
             Assert.That(hold,Is.Not.Null);owner.Profile.Data.TimingCalibrationMs=-80;
             game.State.SimulationSeconds=interaction.StartSeconds+hold.TimeSeconds-.08;
             for(float deadline=Time.realtimeSinceStartup+5;owner.State.Interactions.Find(i=>i.Id==interaction.Id)?.ChartSeed!=interaction.ChartSeed&&Time.realtimeSinceStartup<deadline;)yield return null;
@@ -121,6 +120,25 @@ namespace Festival.Tests
             typeof(FestivalHud).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(hud,null);
         }
 
+        // Leaves the interaction on the first chart seed with a hold of .9 s or more. Null when the song has none.
+        private static RhythmNote LongHold(InteractionState interaction,out RhythmChart chart)
+        {
+            chart=null;
+            for(int seed=0;seed<128;seed++){interaction.ChartSeed=seed;chart=RhythmChart.For(interaction);var hold=chart.Notes.Find(note=>note.HoldSeconds>=.9);if(hold!=null)return hold;}
+            return null;
+        }
+        // The spin seed picks the main stage's song, and some songs have no hold that long. Take the first seed that gives one by
+        // starting the same dance on a copy of the round.
+        private static int LongHoldSpin(FestivalSimulation game,string playerId,string partnerId)
+        {
+            for(int spin=0;spin<64;spin++)
+            {
+                var copy=new FestivalSimulation();copy.Restore(JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(game.State)));copy.State.SpinSeed=spin;
+                if(copy.Execute(playerId,new GameCommand{Id="long_hold_probe",Kind="Dance",TargetId=partnerId}).Accepted&&LongHold(copy.Interaction(copy.Player(playerId).InteractionId),out _)!=null)return spin;
+            }
+            Assert.Fail("setup: no stage song gives a hold of .9 s");return 0;
+        }
+
         private IEnumerator Edges(string mode)
         {
             UseAVirtualKeyboard("impl:U44 hold keyboard");
@@ -132,13 +150,10 @@ namespace Festival.Tests
             var game=Simulation(session);var player=game.Player(session.LocalPlayerId);game.State.Npcs.Clear();game.State.Doses.Clear();player.Effects.Clear();
             game.HasLineOfSight=(x,z,tx,tz)=>true;game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
             player.X=0;player.Z=0;game.State.LevelIndex=3;
-            var partner=new NpcState{Id="hold_partner",X=0,Z=1.5f,CanTalk=true};game.State.Npcs.Add(partner);session.Command("Dance",partner.Id);
+            var partner=new NpcState{Id="hold_partner",X=0,Z=1.5f,CanTalk=true};game.State.Npcs.Add(partner);
+            game.State.SpinSeed=LongHoldSpin(game,player.Id,partner.Id);session.Command("Dance",partner.Id);
             var interaction=game.Interaction(player.InteractionId);Assert.That(interaction,Is.Not.Null,session.Message);
-            RhythmChart chart=null;RhythmNote hold=null;
-            for(int seed=0;seed<128&&hold==null;seed++)
-            {
-                interaction.ChartSeed=seed;chart=RhythmChart.For(interaction);hold=chart.Notes.Find(note=>note.HoldSeconds>=.9);
-            }
+            var hold=LongHold(interaction,out var chart);
             Assert.That(hold,Is.Not.Null,"a bounded production search supplies an authored long hold");
             hud.enabled=false;session.Profile.Data.TimingCalibrationMs=60;
             void Consume(double raw)=>HoldRhythmPlayTests.Consume(session,hud,game,interaction,raw);
