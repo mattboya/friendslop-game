@@ -241,8 +241,8 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.PressKeys("Press E. press F, press G or Press Q. Express G, press Esc, press 1.","R","H","K","Z"),
                 Is.EqualTo("Press R. press H, press K or Press Z. Express G, press Esc, press 1."),"each pressed letter names its bound key");
             Assert.That(FestivalHudText.GearHeading(true),Is.EqualTo("GEAR   /   1–3 EQUIP     Q USE     G DROP"),"today's keys by default");
-            Assert.That(FestivalHudText.GearHeading(true,"Z","X","U","K"),Is.EqualTo("GEAR   /   Z–X EQUIP     U USE     K DROP"));
-            Assert.That(FestivalHudText.GearHeading(false,"Z","X","U","K"),Is.EqualTo("GEAR   /   U USE     K DROP"),"no equip while 1-3 reply");
+            Assert.That(FestivalHudText.GearHeading(true,"Z","X","C","U","K"),Is.EqualTo("GEAR   /   Z, X, C EQUIP     U USE     K DROP"),"each bound slot key");
+            Assert.That(FestivalHudText.GearHeading(false,"Z","X","C","U","K"),Is.EqualTo("GEAR   /   U USE     K DROP"),"no equip while 1-3 reply");
             Assert.That(FestivalHudText.HoldToStopFor("Dance","K"),Is.EqualTo("HOLD K TO STOP DANCING"));
             Assert.That(FestivalHudText.HoldToStopFor(FestivalSimulation.DrumPartKind,"K"),Is.EqualTo("HOLD K TO STOP DRUMMING"));
             Assert.That(FestivalHudText.HoldToStopFor(FestivalSimulation.DeckSetKind,"K"),Is.EqualTo("HOLD K TO HOP OFF"));
@@ -262,6 +262,8 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.PressKeys(words),Is.EqualTo("Hold left click to spin them in front of you, right click at your sides."),"today's words with no override");
             Assert.That(FestivalHudText.PressKeys(words,spin:"K",sides:"L"),Is.EqualTo("Hold K to spin them in front of you, L at your sides."),"the bound Spin and SpinSides keys");
             Assert.That(FestivalHudText.PressKeys(words,spin:"RMB",sides:"LMB"),Is.EqualTo("Hold right click to spin them in front of you, left click at your sides."),"swapped mouse buttons read as clicks");
+            Assert.That(FestivalHudText.PressKeys(words,spin:"BACK",sides:"FORWARD"),Is.EqualTo("Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
+                "the side buttons, which have no short name, read as mouse buttons, never a way to walk");
             Assert.That(FestivalHudText.PressKeys(vote),Is.EqualTo("Click a friend for each award, or press 1, 2 or 3."),"today's slot keys with no override");
             Assert.That(FestivalHudText.PressKeys(vote,slot1:"7",slot2:"8",slot3:"9"),Is.EqualTo("Click a friend for each award, or press 7, 8 or 9."),"the bound slot keys");
             Assert.That(FestivalHudText.PressKeys("Press E, or press {Slot1}.","R",slot1:"E"),Is.EqualTo("Press R, or press E."),"a slot key on E is not read again as Interact");
@@ -283,6 +285,37 @@ namespace Festival.Tests
                 session.SetMessage("Equipped Practice poi. "+FestivalSimulation.SpinWords);
                 typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
                 Assert.That(Shown(go,"Notice"),Is.EqualTo("Equipped Practice poi. Hold K to spin them in front of you, L at your sides."),"the poi reply names the bound spin keys");
+            });
+        }
+
+        // A range of rebound slot keys hides the middle one, so each line that names them must name all three.
+        [Test] public void EveryLineThatNamesTheSlotKeysNamesEachBoundKey()
+        {
+            WithReboundHud(keys=>{keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/z");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/x");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/c");},(session,hud,go)=>
+            {
+                var review=Level(0,1,"CampReview");review.ReviewResult="Success";review.ReviewAwards.AddRange(new[]{"Worst Dancer","Got Lost","MVP Tripper"});
+                var you=Crew(review,"you","You");you.Connected=true;var sam=Crew(review,"sam","Sam");sam.Connected=true;
+                typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{review,you});
+                typeof(FestivalHud).GetMethod("UpdateReview",Private).Invoke(hud,new object[]{review,you});
+                Assert.That(Shown(go,"Objective detail"),Does.Contain("press Z, X or C"),"setup: the vote hint names each bound slot key");
+                Assert.That(Shown(go,"Review status"),Does.StartWith("CLICK A FRIEND FOR EACH AWARD, OR PRESS Z, X OR C\n"),"the review card's foot names them as the hint does");
+                var day=Level(0,0);you=Crew(day,"you","You");
+                typeof(FestivalHud).GetMethod("UpdateChat",Private).Invoke(hud,new object[]{day,you,false});
+                Assert.That(Shown(go,"Equipment heading"),Does.StartWith("GEAR   /   Z, X, C EQUIP     "),"the gear bar names each bound slot key");
+                string reply=null;foreach(var (title,text) in FestivalHudText.HowToPlay(session.Controls))if(title=="EVERYONE ELSE")reply=text;
+                Assert.That(reply,Does.Contain("answer with Z, X or C the way"),"How to Play names each bound reply key");
+            });
+        }
+
+        // The Input System names the mouse side buttons Back and Forward, which read like a way to walk.
+        [Test] public void TheMouseSideButtonsReadAsMouseButtons()
+        {
+            WithReboundHud(keys=>{keys.Spin.ApplyBindingOverride(0,"<Mouse>/backButton");keys.SpinSides.ApplyBindingOverride(0,"<Mouse>/forwardButton");},(session,hud,go)=>
+            {
+                session.SetMessage("Equipped Practice poi. "+FestivalSimulation.SpinWords);
+                typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
+                Assert.That(Shown(go,"Notice"),Is.EqualTo("Equipped Practice poi. Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
+                    "the poi reply names the side buttons as mouse buttons");
             });
         }
 

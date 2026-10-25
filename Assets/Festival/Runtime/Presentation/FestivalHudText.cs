@@ -217,8 +217,12 @@ namespace Festival.Presentation
         }
         static readonly Regex PressedKey=new Regex(@"\b([Pp]ress )([EFGQ])\b");
         static readonly Regex ActionToken=new Regex(@"\{(Slot1|Slot2|Slot3|Spin|SpinSides)\}");
-        // A mouse button's short name, as CONTROLS lists it ("LMB"), reads as a click in a sentence.
-        static string Spoken(string key)=>key=="LMB"?"left click":key=="RMB"?"right click":key=="MMB"?"middle click":key;
+        // A mouse button's short name, as CONTROLS lists it ("LMB"), reads as a click in a sentence. The side buttons have no short
+        // name, and their own reads like a way to walk.
+        static string Spoken(string key)=>key=="LMB"?"left click":key=="RMB"?"right click":key=="MMB"?"middle click"
+            :key=="BACK"?"the mouse back button":key=="FORWARD"?"the mouse forward button":key;
+        // A range of rebound keys would hide the middle one, so only today's 1, 2, 3 read as a range.
+        static string SlotKeys(string slot1,string slot2,string slot3,string or)=>slot1=="1"&&slot2=="2"&&slot3=="3"?"1–3":slot1+", "+slot2+or+slot3;
         /// <summary>Only a ground gear drop offers pickup; stop ditch and shared-stash results keep their destination.</summary>
         public static string DropNotice(string message,FestivalInput input)=>message.StartsWith("Dropped ",StringComparison.Ordinal)?message+Dot+input.Label(input.Interact).ToUpperInvariant()+" to pick it up":message;
 
@@ -292,13 +296,13 @@ namespace Festival.Presentation
         /// The debrief card's foot: while the vote is open, how to vote and who has voted on every award (never whom they picked);
         /// once the verdict has played, the host's key to open the shop.
         /// </summary>
-        public static string ReviewStatus(RoundState s,string localId,double revealSeconds,string first="1",string last="3",string interact="E")
+        public static string ReviewStatus(RoundState s,string localId,double revealSeconds,string slot1="1",string slot2="2",string slot3="3",string interact="E")
         {
             if(VoteOpen(s))
             {
                 var voted=new List<string>();var waiting=new List<string>();
                 foreach(var p in s.Players)if(p.Connected)(FestivalSimulation.VotedOnEveryAward(s,p.Id)?voted:waiting).Add(CrewName(s,localId,p.Id));
-                return "CLICK A FRIEND FOR EACH AWARD, OR PRESS "+first+"–"+last+"\n"+(voted.Count>0?"VOTED  "+string.Join(", ",voted)+Dot:"")+"WAITING ON  "+string.Join(", ",waiting);
+                return "CLICK A FRIEND FOR EACH AWARD, OR PRESS "+SlotKeys(slot1,slot2,slot3," OR ")+"\n"+(voted.Count>0?"VOTED  "+string.Join(", ",voted)+Dot:"")+"WAITING ON  "+string.Join(", ",waiting);
             }
             if(!RevealDone(s,revealSeconds))return "";
             return s.HostPlayerId==localId?interact+"  OPEN THE CAMP SHOP":"WAITING FOR THE HOST TO OPEN THE SHOP";
@@ -534,7 +538,8 @@ namespace Festival.Presentation
         }
         /// <summary>The gear bar's heading: Slot1-Slot3 equip (left out while they reply in a chat), Use, Drop (left out while held Drop
         /// drops nothing).</summary>
-        public static string GearHeading(bool equip,string first="1",string last="3",string use="Q",string drop="G",bool drops=true)=>"GEAR   /   "+(equip?first+"–"+last+" EQUIP     ":"")+use+" USE"+(drops?"     "+drop+" DROP":"");
+        public static string GearHeading(bool equip,string slot1="1",string slot2="2",string slot3="3",string use="Q",string drop="G",bool drops=true)
+            =>"GEAR   /   "+(equip?SlotKeys(slot1,slot2,slot3,", ")+" EQUIP     ":"")+use+" USE"+(drops?"     "+drop+" DROP":"");
 
         /// <summary>The rhythm lane's title, naming a check dance as the check it is. DIALOG-3: a talk is on the lanes only for the dance
         /// a wary festivalgoer asks for first, so it reads as that. MINI-2: a Drum Circle part is the player's own. PLAYA-5: an art

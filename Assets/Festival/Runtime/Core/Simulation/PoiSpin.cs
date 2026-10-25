@@ -8,7 +8,7 @@ namespace Festival.Core
     public sealed partial class FestivalSimulation
     {
         public static bool IsPoi(string item)=>item=="poi_practice"||item=="poi_led";
-        /// <summary>POI-7: how every poi reply (hold, buy, equip) names the two spins, by action, so the HUD reads in each player's
+        /// <summary>How every poi reply (hold, buy, equip) names the two spins, by action, so the HUD reads in each player's
         /// bound buttons (FestivalHudText.PressKeys); by default "Hold left click to spin them in front of you, right click at your sides."</summary>
         public const string SpinWords="Hold {Spin} to spin them in front of you, {SpinSides} at your sides.";
         /// <summary>Whether p may spin the poi in hand: alive, doing nothing else (no performance, check, ride or lying down), holding no

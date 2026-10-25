@@ -453,7 +453,7 @@ namespace Festival.Presentation
             sundownText=Label(sundownPanel.transform,"Sundown",22,TextAnchor.MiddleCenter);sundownText.fontStyle=FontStyle.Normal;sundownText.color=Orange;Fill(sundownText.rectTransform,12);ShrinkToFit(sundownText,14);sundownPanel.SetActive(false);
             inventoryPanel=Card(root.transform,"Equipment bar",new Vector2(.714f,.024f),new Vector2(.978f,.148f),true);
             inventoryHeading=Label(inventoryPanel.transform,"Equipment heading",17,TextAnchor.UpperLeft);inventoryHeading.fontStyle=FontStyle.Normal;inventoryHeading.color=Mint;inventoryHeading.text=FestivalHudText.GearHeading(true);
-            Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);
+            Place(inventoryHeading.rectTransform,.045f,.75f,.98f,.96f);ShrinkToFit(inventoryHeading,12);
             emptyGearLabel=Label(inventoryPanel.transform,"Empty gear",20,TextAnchor.MiddleCenter);
             emptyGearLabel.color=Mint;Fill(emptyGearLabel.rectTransform,6);emptyGearLabel.gameObject.SetActive(false);
             for(int i=0;i<3;i++)
@@ -1537,7 +1537,7 @@ namespace Festival.Presentation
             double revealSeconds=RevealSeconds(state);
             reviewText.text=FestivalHudText.ReviewHeadline(state,player);
             reviewReveal.text=FestivalHudText.ReviewReveal(state,player.Id,revealSeconds);
-            reviewStatus.text=FestivalHudText.ReviewStatus(state,player.Id,revealSeconds,Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Interact,"E"));
+            reviewStatus.text=FestivalHudText.ReviewStatus(state,player.Id,revealSeconds,Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Interact,"E"));
             ballotCrew.Clear();if(open)foreach(var p in state.Players)if(p.Connected&&ballotCrew.Count<ballotPicks.GetLength(1))ballotCrew.Add(p.Id);
             bool relayout=ballotColumns!=ballotCrew.Count;ballotColumns=ballotCrew.Count;
             for(int award=0;award<ballotLabels.Length;award++)
@@ -1631,7 +1631,7 @@ namespace Festival.Presentation
             // 1-3 ask the chat's questions, or reply in a talk, while it runs (UpdateKeyboard), so the gear bar stops offering them to
             // equip. Held Drop drops nothing while either chat is up (HoldGearDrop's eligibility), so the bar stops offering that too.
             inventoryHeading.text=FestivalHudText.GearHeading(!(FestivalChatWindow.TakesReplies(state,player)&&!chatWindow.IsDismissed(state,FestivalChatWindow.LiveChat(state,player))||sellerTalk.Open),
-                Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Use,"Q"),Bound(session?.Controls?.Drop,"G"),!(chatWindow.Open||sellerTalk.Open));
+                Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"),Bound(session?.Controls?.Use,"Q"),Bound(session?.Controls?.Drop,"G"),!(chatWindow.Open||sellerTalk.Open));
         }
 
         private void UpdateRhythm(RoundState state,PlayerState player)

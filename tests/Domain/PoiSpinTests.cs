@@ -6,7 +6,7 @@ using Festival.Core;
 // FestivalSimulation.CanSpinPoi, which the host turns into PlayerState.VisualPoiSpin each tick. POI-7 (Matt, 2026-10-07): a spinner
 // blends in, so festivalgoers watching grow suspicious 10% slower (19% with the Little Spoon), and Sprint does nothing mid-spin. HUD-9:
 // Equip's reply says what the item in hand does: poi name Q's performance and the spin, and stock never says Q, since Q on stock
-// takes it yourself (ECON-3). The replies name the spin buttons by action ({Spin}, {SpinSides}); the HUD reads in the bound ones.
+// takes it yourself. The replies name the spin buttons by action ({Spin}, {SpinSides}); the HUD reads in the bound ones.
 public static class PoiSpinTests
 {
     static int sequence;
