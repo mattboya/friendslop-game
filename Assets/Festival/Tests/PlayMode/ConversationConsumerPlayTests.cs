@@ -51,7 +51,7 @@ namespace Festival.Tests
                 Assert.That(owner.Life,Is.EqualTo("Detained"));game.State.Interactions.Clear();
                 while((client.PendingConversationOutcome==null||client.Profile.Data.SeenDialogue.Count==0)&&Time.realtimeSinceStartup<deadline)yield return null;
                 var outcome=client.PendingConversationOutcome;Assert.That(outcome,Is.Not.Null,"the skipped terminal interaction still reaches its owner's real session consumer");
-                Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));Assert.That(client.LocalPlayer.X,Is.EqualTo(27));Assert.That(client.LocalPlayer.Z,Is.EqualTo(5));
+                Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));Assert.That(Festivals.InHolding(client.LocalPlayer.X,client.LocalPlayer.Z),Is.True,"the joined owner sees themself held inside the security building, at "+client.LocalPlayer.X+", "+client.LocalPlayer.Z);
                 Assert.That(new LocalProfile(clientProfile).Data.SeenDialogue,Is.Not.Empty,"joined owner's reliable history reaches the isolated real profile");
                 Assert.That(host.Profile.Data.SeenDialogue,Is.Empty,"host player receives no remote-owner grammar payload");
                 Assert.That(JsonUtility.ToJson(host.State),Does.Not.Contain(outcome.Notice));

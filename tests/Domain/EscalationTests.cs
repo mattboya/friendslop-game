@@ -11,7 +11,8 @@ public static class EscalationTests
     {
         var failures=new List<string>();
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
-            AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel})
+            AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
+            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -368,5 +369,58 @@ public static class EscalationTests
         Check(cop.Mode=="Stop","back on their feet in sight with the stock, a fresh stop: 21 s after the first began it is no arrest (mode "+cop.Mode+")");
         s.State.ElapsedSeconds=s.State.DurationSeconds;s.Tick(.1);
         Check(s.State.Phase=="Results"&&cop.Mode=="Patrol"&&cop.TargetId==""&&cop.Evidence.Count==0,"when the level ends so does the stop (phase "+s.State.Phase+", mode "+cop.Mode+")");
+    }
+
+    // The security building's outer wall faces, written out so a moved wall fails here. The pay desk (27,5) and the release
+    // spot (24,2) stay outside.
+    const float West=24,Front=5.5f,East=33,Back=12.2f;
+    static bool InsideTheWalls(PlayerState p,float clear)=>p.X>West+clear&&p.X<East-clear&&p.Z>Front+clear&&p.Z<Back-clear;
+    // A bust puts you inside the building, clear of its walls, and the host keeps you there: a step across the front, a side or
+    // the back is refused, a step about the room is taken. A paid release, a free one and the four-step escape all let you out
+    // at 24,2, alive. Nobody can put a stash box against the building, as nobody could at the old front.
+    static void DetentionHoldsYouInsideTheSecurityBuilding()
+    {
+        var s=Stopped(out var cop,out var a);s.Tick(24.3);Check(a.Life=="Detained","setup: an ignored stop ends in an arrest ("+a.Life+")");
+        Check(InsideTheWalls(a,.5f),"a detained player stands inside the security building, clear of its walls, not at the pay desk ("+a.X+", "+a.Z+")");
+        bool Step(float fromX,float fromZ,float toX,float toZ){a.X=fromX;a.Z=fromZ;return s.TryMove("a",toX,toZ,0,.1);}
+        float midX=(West+East)/2,midZ=(Front+Back)/2;
+        Check(Step(midX,midZ,midX+.3f,midZ),"a step about the room is taken");
+        Check(Step(midX,midZ,midX,midZ-.3f)&&a.Z==midZ-.3f,"a step toward the bars is taken");
+        Check(!Step(midX,Front+.9f,midX,Front+.4f),"a step through the bars of the front is refused");
+        Check(!Step(27,Front+.9f,27,Front+.4f),"so is one through the bars right by the pay desk");
+        Check(!Step(West+.9f,midZ,West+.4f,midZ),"a step through the west wall is refused");
+        Check(!Step(East-.9f,midZ,East-.4f,midZ),"a step through the east wall is refused");
+        Check(!Step(midX,Back-.9f,midX,Back-.4f),"a step through the back wall is refused");
+        Check(a.X==midX&&a.Z==Back-.9f,"a refused step leaves the player where they stood ("+a.X+", "+a.Z+")");
+        // Released, a player walks free again, anywhere on the grounds.
+        var r=new FestivalSimulation(1);r.AddPlayer("a","A");var friend=r.AddPlayer("b","B");r.State.Phase="Playing";
+        a=r.Player("a");a.Life="Detained";a.X=midX;a.Z=midZ;friend.X=27;friend.Z=5;friend.Cash=20;
+        var paid=new GameCommand{Id="escalation_paid",Kind="BeginRelease",TargetId="a",Amount=1};
+        Check(r.Execute("b",paid).Accepted,"a friend at the pay desk pays the release, however far inside their friend stands");r.Tick(3.1);
+        Check(a.Life=="Alive"&&a.X==24&&a.Z==2,"a paid release lets them out at 24,2, alive ("+a.Life+" at "+a.X+", "+a.Z+")");
+        Check(r.TryMove("a",24.3f,2,0,.1),"out of the building they walk free");
+        // The four-step escape lets them out at the same spot.
+        s=Stopped(out cop,out a);s.Tick(24.3);Check(a.Life=="Detained","setup: arrested again ("+a.Life+")");
+        for(int i=0;i<4;i++){a.HelpUntil=0;Check(s.Execute("a",Command("HelpSelf")).Accepted,"escape step "+(i+1)+" is taken");}
+        Check(a.Life=="Alive"&&a.X==24&&a.Z==2,"the four-step escape lets them out at 24,2, alive ("+a.Life+" at "+a.X+", "+a.Z+")");
+        // A stash box can't go against the building's east wall, any more than at the old front by the pay desk.
+        var box=Level(1);var b=box.Player("a");b.Inventory.Add(new ItemStack{ItemId="stash_box",Count=3});
+        b.X=East+.8f;b.Z=(Front+Back)/2;Check(!box.Execute("a",Command("Use","","stash_box")).Accepted,"a stash box against the east wall is refused");
+        b.X=27;b.Z=4;Check(!box.Execute("a",Command("Use","","stash_box")).Accepted,"a stash box at the pay desk is refused");
+        b.X=-10;b.Z=0;Check(box.Execute("a",Command("Use","","stash_box")).Accepted,"a stash box on open ground is placed");
+    }
+    // The bigger building takes no festivalgoer's place, Giggle Tank or friend's spot, and leaves the pay desk, the release spot,
+    // the gathering tree beside it and the fence outside it.
+    static void TheSecurityBuildingStandsClearOfTheGrounds()
+    {
+        bool Clear(float x,float z,float room)=>x<West-room||x>East+room||z<Front-room||z>Back+room;
+        // A festivalgoer starts up to .21 m off their place and stands about .3 m wide.
+        for(int i=0;i<FestivalCrowdLayout.Count;i++){var at=FestivalCrowdLayout.Spot(i);Check(Clear(at.X,at.Z,.6f),"festivalgoer "+i+"'s place ("+at.X+", "+at.Z+") stands clear of the security building");}
+        foreach(var tank in Festivals.GiggleTankSpots)Check(Clear(tank.X,tank.Z,Festivals.GiggleTankReach+.2f),"the Giggle Tank spot ("+tank.X+", "+tank.Z+") keeps its reach clear of the building");
+        for(int seed=0;seed<40;seed++){var f=new FestivalSimulation(seed).State.FriendPosition;Check(Clear(f.X,f.Z,1),"seed "+seed+"'s lost friend ("+f.X+", "+f.Z+") stands clear of the building");}
+        Check(Clear(27,5,.4f)&&Clear(24,2,.4f),"the pay desk and the release spot stay outside");
+        // The gathering tree's trunk is .76 m across, and the building's roof reaches .37 m past its back wall.
+        Check(Clear(23,13.5f,.38f+.37f),"the gathering tree's trunk stands clear of the building and its roof");
+        Check(East<39-2,"the building stands well inside the fence (x 39)");
     }
 }

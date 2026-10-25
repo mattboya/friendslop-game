@@ -169,7 +169,8 @@ namespace Festival.Core
             double speed=MoveSpeed(p,true);
             double distance=Distance(p.X,p.Z,x,z);if(distance>speed*deltaSeconds+.03)return false;
             Crush(p,ref x,ref z);
-            if(p.Life=="Detained"&&Distance(x,z,27,5)>3)return false;
+            // ApplyMovement slides the host's player and every client's through here, so this one rule holds them all.
+            if(p.Life=="Detained"&&!Festivals.InHolding(x,z))return false;
             if(!MayStep(p,x,z))return false;
             if(!CarryTo(p,x,z))return false;
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;

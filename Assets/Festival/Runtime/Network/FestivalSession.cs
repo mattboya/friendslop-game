@@ -142,6 +142,8 @@ namespace Festival.Network
         // ECON-11: a sale's ConversationOutcome carries Result ("SOLD +$N", "NO SALE" or "BUSTED"; "" for other talks and in older
         // snapshots) and a Notice for every ending, a cancelled sale now delivers one with no reaction, and a handed-back unit is
         // equipped again when InteractionState.ReservedEquipped says it left the hand (false in older snapshots).
+        // ESC-4: a bust holds the player inside Festivals.SecurityBuilding, and the host refuses a detained step outside it
+        // (Festivals.InHolding), so a version-9 peer would show the old shack and the old spot by the pay desk.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

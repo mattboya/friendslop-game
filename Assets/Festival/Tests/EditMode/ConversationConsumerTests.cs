@@ -108,7 +108,7 @@ namespace Festival.Tests
             var game=Pair(0,out var player,out var partner);partner.Role="Narc";
             Assert.That(game.Execute(player.Id,new GameCommand{Id="narc",Kind="StartBuy",TargetId=partner.Id,ItemId=FestivalSimulation.SellerStock(partner.Id)}).Accepted,Is.True);
             var talk=game.Interaction(player.InteractionId);Finish(game,player,talk);
-            Assert.That(player.Life,Is.EqualTo("Detained"));Assert.That(player.X,Is.EqualTo(27));Assert.That(player.Z,Is.EqualTo(5));
+            Assert.That(player.Life,Is.EqualTo("Detained"));Assert.That(Festivals.InHolding(player.X,player.Z),Is.True,"held inside the security building, at "+player.X+", "+player.Z);
             var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));
             game.State.Interactions.Clear();game.Tick(20);
             Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Notice,Is.EqualTo(outcome.Notice));
