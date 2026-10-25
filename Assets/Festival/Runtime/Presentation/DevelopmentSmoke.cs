@@ -426,16 +426,24 @@ namespace Festival.Presentation
                 captureCamera=session.ViewCamera;
                 foreach(var location in new[]{
                     new {Name="medical",Camera=new Vector3(18,2.2f,-23),Target=new Vector3(24,1.7f,-17)},
-                    new {Name="security",Camera=new Vector3(21,2.2f,2),Target=new Vector3(27,1.7f,8)},
+                    new {Name="security",Camera=new Vector3(25.5f,1.9f,1.5f),Target=new Vector3(Festivals.SecurityBuilding.CentreX,1.3f,Festivals.SecurityBuilding.CentreZ)},
                     new {Name="shuttle",Camera=new Vector3(8,2.2f,-30),Target=new Vector3(0,1.6f,-36)} })
                 {
                     capturePosition=location.Camera;
                     captureRotation=Quaternion.LookRotation(location.Target-location.Camera);
+                    FestivalCharacter held=null;
+                    if(location.Name=="security")
+                    {
+                        held=FestivalCharacter.Create(transform,GalleryId(0,1,-1,-1),Color.white);held.Pose="Detained";
+                        held.transform.position=new Vector3(location.Target.x,0,location.Target.z);held.transform.rotation=Quaternion.Euler(0,200,0);
+                        held.transform.localScale=Vector3.Scale(Vector3.one*.84f,held.ShapeScale);
+                    }
                     yield return new WaitForSeconds(.25f);
                     var locationPath=Path.Combine(liveCrowdDir,"client-"+location.Name+".png");
                     if(File.Exists(locationPath))File.Delete(locationPath);
                     ScreenCapture.CaptureScreenshot(locationPath);
                     yield return new WaitForSeconds(.7f);
+                    if(held!=null)Destroy(held.gameObject);
                     if(!File.Exists(locationPath)){Fail(location.Name+" location render");yield break;}
                     Debug.Log("FESTIVAL SMOKE LOCATION "+location.Name.ToUpperInvariant()+" RENDER PASSED: "+locationPath);
                 }

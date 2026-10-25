@@ -175,8 +175,7 @@ namespace Festival.Presentation
             Visual("FestivalStallStock",new Vector3(-12,0,-19));
             Booth("Medical",new Vector3(24,0,-20),mint,wood,"MEDICAL +");
             Visual("FestivalMedical",new Vector3(24,0,-17));
-            Booth("Holding",new Vector3(27,0,5),gold,wood,"SECURITY");
-            Visual("FestivalSecurity",new Vector3(27,0,8));
+            Holding(gold,wood);
             Booth("Lost property",new Vector3(-28,0,16),mint,wood,"LOST + FOUND");
             // Keep the exact interaction position open; geometry stands 3m behind it.
             Box("Stash",new Vector3(-25,.5f,-5),new Vector3(2,1,1),gold);
@@ -1029,7 +1028,7 @@ namespace Festival.Presentation
         }
         private void Booth(string name,Vector3 p,Material accent,Material wood,string label)
         {
-            if(name=="Medical"||name=="Holding")
+            if(name=="Medical")
             {
                 var center=p+new Vector3(0,0,3);
                 ProxyBox(name+" floor",center+new Vector3(0,.12f,0),new Vector3(6,.24f,5),wood);
@@ -1044,10 +1043,49 @@ namespace Festival.Presentation
                 var canopy=Box(name+" canopy",p+new Vector3(0,3,3),new Vector3(6,.25f,4),accent);
                 if(name=="Vendor")canopy.GetComponent<Renderer>().enabled=false;
             }
-            bool locationEntrance=name=="Medical"||name=="Holding";
+            bool locationEntrance=name=="Medical";
             Sign(label,p+(locationEntrance?new Vector3(0,3.02f,.1f):new Vector3(0,2.4f,2.2f)),
                 accent,locationEntrance ? .12f : .055f);
         }
+        // The model merges every part of one paint into one mesh, so its walls and windows can only hide whole: the back and
+        // sides are rebuilt solid in its blue, and the front is bars. The walls, bars and door are placeholders until the art pass.
+        private void Holding(Material accent,Material wood)
+        {
+            var building=Festivals.SecurityBuilding;float width=building.MaxX-building.MinX,depth=building.MaxZ-building.MinZ;
+            var centre=new Vector3(building.CentreX,0,building.CentreZ);
+            var shack=Visual("FestivalSecurity",centre);var paint=artMaterials["Blue"];var metal=artMaterials["Metal"];
+            var stretch=new Vector3(width/ShackWidth,1,depth/ShackDepth);
+            if(shack!=null)
+            {
+                shack.transform.localScale=stretch;
+                foreach(var renderer in shack.GetComponentsInChildren<Renderer>(true))
+                    if(renderer.name.EndsWith("__Blue",System.StringComparison.Ordinal)||renderer.name.EndsWith("__AutoGlass",System.StringComparison.Ordinal))renderer.enabled=false;
+            }
+            // The walls stand where the stretched model's did: 3 m tall from .15 m up, .25 m thick before the stretch.
+            float side=.25f*width/ShackWidth,back=.25f*depth/ShackDepth,front=building.MinZ+BarsInset;
+            ProxyBox("Holding floor",centre+new Vector3(0,.12f,0),new Vector3(width,.24f,depth),wood);
+            // The model's cell side bars, its bench and the officer's desk stop a body too, so nobody held inside walks through them.
+            foreach(float x in new[]{-1.72f,1.72f})ProxyBox("Holding cell side",centre+Vector3.Scale(new Vector3(x,1.5f,1.3f),stretch),Vector3.Scale(new Vector3(.12f,3,1.95f),stretch),wood);
+            ProxyBox("Holding bench",centre+Vector3.Scale(new Vector3(0,.7f,1.55f),stretch),Vector3.Scale(new Vector3(3.3f,.35f,.6f),stretch),wood);
+            ProxyBox("Holding officer desk",centre+Vector3.Scale(new Vector3(2.1f,.6f,-.75f),stretch),Vector3.Scale(new Vector3(1.3f,1.2f,.9f),stretch),wood);
+            Box("Holding back",new Vector3(building.CentreX,1.65f,building.MaxZ-back/2),new Vector3(width,3,back),paint);
+            Box("Holding west",new Vector3(building.MinX+side/2,1.65f,building.CentreZ),new Vector3(side,3,depth),paint);
+            Box("Holding east",new Vector3(building.MaxX-side/2,1.65f,building.CentreZ),new Vector3(side,3,depth),paint);
+            // ponytail: one collider along the bars, so a body slides along them as along a wall. It blocks a cop's sight through
+            // them too, but nobody held inside is ever a cop's or a festivalgoer's target, so no rule sees the difference.
+            ProxyBox("Holding front collider",new Vector3(building.CentreX,1.5f,front),new Vector3(width,3,.2f),wood);
+            for(float x=building.MinX+side+BarGap/2;x<building.MaxX-side;x+=BarGap)
+                Box("Holding front bar",new Vector3(x,1.6f,front),new Vector3(.06f,2.9f,.06f),metal,false);
+            foreach(float y in new[]{.24f,3.05f})Box("Holding front rail",new Vector3(building.CentreX,y,front),new Vector3(width-2*side,.08f,.08f),metal,false);
+            // The model's doorway is 2.4 m wide before the stretch.
+            float door=1.2f*width/ShackWidth;
+            foreach(float x in new[]{-door,door})Box("Holding door jamb",new Vector3(building.CentreX+x,1.45f,front-.07f),new Vector3(.1f,2.9f,.08f),accent,false);
+            Box("Holding door header",new Vector3(building.CentreX,2.85f,front-.07f),new Vector3(2*door,.1f,.08f),accent,false);
+            Box("Holding door lock",new Vector3(building.CentreX+door-.3f,1.1f,front-.1f),new Vector3(.22f,.3f,.06f),accent,false);
+            Sign("SECURITY",new Vector3(building.CentreX,3.02f,building.MinZ-.4f),accent,.12f);
+        }
+        // The shack model's footprint before the stretch, and the bars' line behind its front face.
+        private const float ShackWidth=6,ShackDepth=5,BarsInset=.2f,BarGap=.25f;
         private void Totem(string label,Vector3 position,Material accent,Material wood,Material ink)
         {
             ProxyBox(label+" plinth",position+new Vector3(0,.25f,0),new Vector3(1.3f,.5f,1),wood);

@@ -276,14 +276,15 @@ namespace Festival.Tests
                 // The crew list is open on the pause menu.
                 session.MenuOpen=true;yield return null;
                 foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="CREW + NEARBY")b.onClick.Invoke();
-                // At the holding desk beside your detained friend.
-                player.X=26.4f;player.Z=5;
+                // At the holding desk, your detained friend held inside the security building, out of arm's reach.
+                mate.X=Festivals.SecurityBuilding.CentreX;mate.Z=Festivals.SecurityBuilding.CentreZ;player.X=26.4f;player.Z=5;
                 yield return new WaitForSeconds(.6f);
                 AllFit("at the holding desk","Pay "+ten+" release for "+mate.Name);
                 // At lost property, your friend still held.
                 player.X=-28;player.Z=16;
                 yield return new WaitForSeconds(.6f);
                 AllFit("at lost property","Free release task for "+mate.Name);
+                if(Listed().Contains("release for "+mate.Name))failures.Add("at lost property the paid release is listed too: \""+Listed()+"\"");
                 // At the shared stash, your friend downed beside you.
                 mate.Life="Downed";mate.X=-25.6f;mate.Z=-8;player.X=-25;player.Z=-8.6f;
                 yield return new WaitForSeconds(.6f);

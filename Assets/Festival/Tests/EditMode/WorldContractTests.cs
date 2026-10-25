@@ -262,5 +262,65 @@ namespace Festival.Tests
                 foreach(var collider in root.GetComponentsInChildren<Collider>())
                     if(collider.enabled)Assert.That(Vector3.Distance(collider.ClosestPoint(point),point),Is.GreaterThan(.4f),"Blocked interaction landmark "+point);
         }
+
+        // Sight lines are tested against rendered meshes, not colliders: the bars have none, and the front collider is invisible.
+        [Test]public void ADetainedPlayerIsHeldInsideTheSecurityBuildingWhereFriendsCanSeeThem()
+        {
+            root=new GameObject("Holding world");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");Physics.SyncTransforms();
+            var grounds=root.transform.Find(FestivalWorld.RootName);var building=Festivals.SecurityBuilding;
+            var held=new Vector3(building.CentreX,0,building.CentreZ);
+            Assert.That(Festivals.InHolding(held.x,held.z),Is.True,"setup: the rules hold a detained player in the middle");
+            // Walking out of the middle any way, a body (the host's .32 m capsule, as FestivalSession.Slide casts it) meets one of the
+            // building's walls while still inside the room the rules allow, so walls slide it along and the rules never stop it dead.
+            for(int angle=0;angle<360;angle+=15)
+            {
+                var way=Quaternion.Euler(0,angle,0)*Vector3.forward;
+                Assert.That(Physics.CapsuleCast(held+Vector3.up*.38f,held+Vector3.up*1.4f,.32f,way,out var hit,20,~0,QueryTriggerInteraction.Ignore),Is.True,"walking out at "+angle+" degrees meets a wall");
+                var stop=held+way*hit.distance;
+                Assert.That(building.Contains(stop.x,stop.z),Is.True,"at "+angle+" degrees the wall is the building's own ("+hit.collider.name+" at "+stop+")");
+                Assert.That(Festivals.InHolding(stop.x,stop.z),Is.True,"at "+angle+" degrees the wall stops a body, sliding it along, before the rules refuse the step ("+hit.collider.name+" at "+stop+")");
+            }
+            foreach(var outside in new[]{new Vector3(27,1,5),new Vector3(24,1,2)})
+                Assert.That(building.Contains(outside.x,outside.z),Is.False,"setup: "+outside+" is outside");
+            // A friend at the desk, standing a little to either side: bars hide the chest from some eyes, never a wall from any.
+            var chest=held+Vector3.up*1.3f;int clear=0,eyes=0;var bars=new List<string>();
+            for(float across=-.4f;across<.45f;across+=.1f)
+            {
+                var eye=new Vector3(27+across,1.65f,5);eyes++;
+                string blocker=Blocker(grounds,eye,chest,false);
+                Assert.That(blocker,Is.Null,"from the pay desk at "+eye+", the line to the held player's chest meets "+blocker);
+                string bar=Blocker(grounds,eye,chest,true);if(bar==null)clear++;else bars.Add(bar);
+            }
+            Assert.That(clear*2,Is.GreaterThanOrEqualTo(eyes),"from most places at the desk the chest shows between the bars; hidden by "+string.Join(", ",bars));
+            for(float yaw=0;yaw<360;yaw+=45)foreach(float pitch in new[]{-30f,0,30})
+            {
+                FestivalThirdPerson.Place(held+Vector3.up*1.65f,yaw,pitch,out float boom);
+                Assert.That(FestivalThirdPerson.Mask(0,boom),Is.Not.Zero,"held in the middle, looking "+yaw+" degrees round and "+pitch+" up or down, the over-the-shoulder view stays out of your head (boom "+boom+" m)");
+            }
+        }
+        // The first rendered mesh of the festival grounds the line from a to b meets, or null. Bars and their rails count only
+        // when bars is true; the rules' invisible colliders never do.
+        static string Blocker(Transform grounds,Vector3 a,Vector3 b,bool bars)
+        {
+            var ray=new Ray(a,b-a);float length=Vector3.Distance(a,b);
+            foreach(var renderer in grounds.GetComponentsInChildren<MeshRenderer>())
+            {
+                if(!renderer.enabled||!renderer.gameObject.activeInHierarchy||!renderer.bounds.IntersectRay(ray,out float near)||near>length)continue;
+                if(!bars&&renderer.name.StartsWith("Holding front",System.StringComparison.Ordinal))continue;
+                var mesh=renderer.GetComponent<MeshFilter>()?.sharedMesh;if(mesh==null)continue;
+                var vertices=mesh.vertices;var triangles=mesh.triangles;var toWorld=renderer.transform.localToWorldMatrix;
+                for(int i=0;i<triangles.Length;i+=3)
+                    if(Meets(ray,length,toWorld.MultiplyPoint3x4(vertices[triangles[i]]),toWorld.MultiplyPoint3x4(vertices[triangles[i+1]]),toWorld.MultiplyPoint3x4(vertices[triangles[i+2]])))return renderer.name;
+            }
+            return null;
+        }
+        // Moller-Trumbore: whether the ray meets triangle abc within length.
+        static bool Meets(Ray ray,float length,Vector3 a,Vector3 b,Vector3 c)
+        {
+            Vector3 ab=b-a,ac=c-a,p=Vector3.Cross(ray.direction,ac);float det=Vector3.Dot(ab,p);if(Mathf.Abs(det)<1e-8f)return false;
+            Vector3 s=ray.origin-a;float u=Vector3.Dot(s,p)/det;if(u<0||u>1)return false;
+            Vector3 q=Vector3.Cross(s,ab);float v=Vector3.Dot(ray.direction,q)/det;if(v<0||u+v>1)return false;
+            float t=Vector3.Dot(ac,q)/det;return t>0&&t<length;
+        }
     }
 }

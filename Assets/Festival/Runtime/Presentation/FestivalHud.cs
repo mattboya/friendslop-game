@@ -2133,9 +2133,10 @@ namespace Festival.Presentation
                 }
                 foreach(var mate in state.Players)
                 {
+                    // Before the reach check: a detained friend is held out of arm's reach, and the host's Release checks only the payer's spot.
+                    if(mate.Id!=player.Id&&mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay "+FestivalHudText.Money(state,player,10)+" release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
                     if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
                     if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
-                    if(mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay "+FestivalHudText.Money(state,player,10)+" release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
                 }
                 NpcState check=null;
                 if(player.Life=="Spirit")
