@@ -36,7 +36,7 @@ namespace Festival.Core
             if(seller?.Role=="Narc"&&i.Turns.Count>0){Detain(p);return;}
             if(i.Score<BuyScore){Refund(p,i);return;}
             string item=SellerStock(i.TargetId);if(seller!=null)seller.StockSold++;
-            if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});return;}
+            if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});News(p,"Items","HANDS FULL  •  "+Catalog.FindItem(item).Name+" dropped at your feet");return;}
             Add(p,item,1);p.EquippedItemId=item;p.VisualReceivedItem=item;p.VisualReceiptSequence++;p.VisualReceiptAt=State.SimulationSeconds;
         }
     }

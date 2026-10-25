@@ -66,7 +66,7 @@ namespace Festival.Core
             if(!continuing)return;
             next.StashCash=old.StashCash;next.TripperBag=old.TripperBag;next.MinigameBag=old.MinigameBag;next.Stashes=old.Stashes;next.EntitySequence=Math.Max(next.EntitySequence,old.EntitySequence);
             foreach(var before in old.Players){var after=Player(before.Id);after.Cash=before.Cash;after.Inventory=before.Inventory;after.EquippedItemId=before.EquippedItemId;LoseGiggleTank(after);}
-            foreach(var stash in next.Stashes)stash.Items.RemoveAll(x=>x.ItemId==GiggleTankItem);
+            int stashed=0;foreach(var stash in next.Stashes)stashed+=stash.Items.RemoveAll(x=>x.ItemId==GiggleTankItem);if(stashed>0)CrewNews(null,"Stash","STASH  •  −"+stashed+" Giggle Tank  •  tanks never leave the level");
         }
         // Clearing Night 2 of festival k unlocks k+1. End runs this on the win itself, so the host's profile saves the unlock
         // even when they leave from the results screen instead of pressing NEXT CAMP.

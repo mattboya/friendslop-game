@@ -131,7 +131,7 @@ public sealed partial class FestivalSimulation {
         if(p.Life!="Downed")return;
         LoseGiggleTank(p);
         var active=Interaction(p.InteractionId);
-        bool dropsGear=p.Inventory.Exists(stack=>stack.Count>0)||(active!=null&&active.Status=="Active"&&active.Kind=="Sale"&&active.ReservedItemId!="")||State.Transfers.Exists(t=>t.FromId==p.Id&&t.Amount>0);
+        bool dropsGear=p.Inventory.Exists(stack=>stack.Count>0)||(active!=null&&active.Status=="Active"&&active.Kind=="Sale"&&active.ReservedItemId!="")||State.Transfers.Exists(t=>t.FromId==p.Id&&t.Amount>0)||p.Wristbands.Count>0;
         Cancel(p,"Death");ReturnOffers(p.Id);FreezeDeathCash(p);
         foreach(var stack in p.Inventory)if(stack.Count>0)State.Drops.Add(new DropState{Id=Id("drop"),ItemId=stack.ItemId,Count=stack.Count,X=p.X,Z=p.Z});
         p.Inventory.Clear();p.EquippedItemId="";

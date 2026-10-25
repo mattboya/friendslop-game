@@ -40,7 +40,7 @@ namespace Festival.Core
         // Detention, death and the next level lose a tank, one still on offer included: returning it to full hands would drop it.
         void LoseGiggleTank(PlayerState p)
         {
-            State.Transfers.RemoveAll(t=>t.FromId==p.Id&&t.ItemId==GiggleTankItem);p.Inventory.RemoveAll(x=>x.ItemId==GiggleTankItem);
+            int lost=State.Transfers.RemoveAll(t=>t.FromId==p.Id&&t.ItemId==GiggleTankItem)+p.Inventory.RemoveAll(x=>x.ItemId==GiggleTankItem);if(lost>0)News(p,"Items","GIGGLE TANK LOST");
             if(p.EquippedItemId==GiggleTankItem)p.EquippedItemId="";
         }
     }
