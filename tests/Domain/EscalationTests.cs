@@ -12,7 +12,7 @@ public static class EscalationTests
         var failures=new List<string>();
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
-            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds})
+            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -422,5 +422,27 @@ public static class EscalationTests
         // The gathering tree's trunk is .76 m across, and the building's roof reaches .37 m past its back wall.
         Check(Clear(23,13.5f,.38f+.37f),"the gathering tree's trunk stands clear of the building and its roof");
         Check(East<39-2,"the building stands well inside the fence (x 39)");
+    }
+    // A dragged friend lies at the dragger's west side. Along the outside of the east wall they wait in front of the building,
+    // never inside its closed walls (nobody but the detained gets out), and past its back they follow again.
+    static void ADraggedFriendStaysOutsideTheSecurityBuilding()
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();
+        var a=s.Player("a");var b=s.Player("b");b.Life="Downed";b.DownedRemaining=35;b.X=East+1.4f;b.Z=Front+1;a.X=East+1.4f;a.Z=Front-.5f;
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+        // A body is .32 m wide (FestivalSession.Slide's capsule), so the dragger can walk as close as East+.35.
+        void Walk(float toX,float toZ)
+        {
+            while(a.X!=toX||a.Z!=toZ)
+            {
+                float x=a.X+Math.Max(-.15f,Math.Min(.15f,toX-a.X)),z=a.Z+Math.Max(-.15f,Math.Min(.15f,toZ-a.Z));
+                Check(s.TryMove("a",x,z,0,.1),"the dragger's step to "+x+", "+z+" is taken");
+                if(Festivals.SecurityBuilding.Contains(b.X,b.Z,.32f))throw new Exception("Escalation: the dragged friend lands inside the security building's walls at "+b.X+", "+b.Z+" (dragger at "+a.X+", "+a.Z+")");
+            }
+        }
+        Walk(East+.35f,a.Z);Walk(East+.35f,(Front+Back)/2);
+        Check(b.Life=="Downed"&&a.DragTargetId=="b","the friend is still downed and dragged beside the east wall");
+        Walk(East+.35f,Back+1.5f);
+        Check(b.X==a.X-1&&b.Z==a.Z,"past the back the friend follows at the dragger's side again ("+b.X+", "+b.Z+")");
     }
 }

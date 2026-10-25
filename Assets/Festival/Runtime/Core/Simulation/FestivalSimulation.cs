@@ -177,7 +177,10 @@ namespace Festival.Core
             if(!CarryTo(p,x,z))return false;
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
             if(Distance(p.X,p.Z,x,z)>.001)ReleaseCampSeat(p.Id);
-            p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
+            p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);
+            // A dragged body skips the walls, and only Free lets anyone out of the closed security building, so the body waits outside.
+            // ponytail: it can jump round a corner when it follows again; route the body if that reads badly.
+            if(target!=null&&target.Life=="Downed"&&!Festivals.SecurityBuilding.Contains(x-1,z,.4f)){target.X=x-1;target.Z=z;}return true;
         }
         /// <summary>How fast p may move now, in metres a second. FestivalSession.ApplyMovement moves at it and TryMove refuses faster
         /// steps, so the host's two movement paths share one rule. A poi spin ignores Sprint, so it can't be held all game for free.</summary>
