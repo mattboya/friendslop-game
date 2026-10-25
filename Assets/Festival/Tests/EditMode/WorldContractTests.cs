@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Festival.Core;
+using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
@@ -148,6 +149,20 @@ namespace Festival.Tests
                 }
             }
             world.SetPhase("Shopping");foreach(var actor in crew)Assert.That(actor.gameObject.activeInHierarchy,Is.False,actor.name+" is hidden at camp");
+        }
+        // The stage block hides its riser from the host's waist-high sight line, yet a festivalgoer watching the DJ set there keeps the
+        // DJ in view through the whole set, so the set never quietly cools their suspicion.
+        [Test]public void AWatcherKeepsTheDjOnTheRiserInViewThroughTheHostsSightCheck()
+        {
+            root=new GameObject("DJ riser sight");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");Physics.SyncTransforms();
+            Assert.That(FestivalSession.LineOfSight(0,20,Catalog.StageDjX,Catalog.StageDjZ),Is.False,"setup: the stage blocks the host's sight line to the mixer");
+            var game=new FestivalSimulation(9);var p=game.AddPlayer("p0","P0");game.State.Phase="Playing";game.State.SimulationSeconds=10;game.State.Npcs.Clear();game.HasLineOfSight=FestivalSession.LineOfSight;
+            p.X=Catalog.StageTakeoverX;p.Z=Catalog.StageTakeoverZ;p.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+            var seen=new ObserverState{PlayerId="p0",Suspicion=40};var watcher=new NpcState{Id="watcher",Kind="Wook",X=0,Z=20,Yaw=0};watcher.Observers.Add(seen);game.State.Npcs.Add(watcher);
+            Assert.That(game.Execute("p0",new GameCommand{Id="dj",Kind="Dj"}).Accepted,Is.True,"setup: the set starts");
+            for(int step=0;step<2000&&p.InteractionId!="";step++){game.Tick(.05);if(p.InteractionId!="")Assert.That(game.State.SimulationSeconds-seen.LastSeenSeconds,Is.LessThan(.1),"the watcher sees the DJ at "+game.State.SimulationSeconds+", last saw them at "+seen.LastSeenSeconds);}
+            Assert.That(p.InteractionId,Is.Empty,"setup: the whole set played");
+            Assert.That(seen.Suspicion,Is.EqualTo(40).Within(.001),"the set leaves the watcher's suspicion where it was");
         }
         private static Renderer[] Drawn(Transform prop)=>System.Array.FindAll(prop.GetComponentsInChildren<Renderer>(),r=>r.enabled);
         private static Bounds Bounds(Renderer[] renderers){var b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);return b;}

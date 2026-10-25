@@ -13,7 +13,7 @@ public static class DjSetTests
         foreach(var test in new Action[]{TheSetPutsYouOnTheRiserAndItsEndPutsYouBack,TheRideRidesTheStageSongsBeatInThreeLanes,
             GreysComeFromNightOneAndLaterPhrasesGetBusier,CatchingEveryBlockAndDodgingEveryGreyScoresOne,StayingInOneLaneScoresAboutAThird,
             AGreyHitCostsATenthAndOnlyLaneChangesCount,ALaneChangeThatCatchesNothingCostsATenth,BlindMashingNeverEarnsTheCrowd,
-            AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage})
+            AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage,TheCrowdAndTheCopsSeeTheDjOnTheRiser})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" DJ set test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -223,8 +223,9 @@ public static class DjSetTests
         Check(i.Score==1,"setup: a perfect phrase");
         Check(near.DistractedUntil>now&&far.DistractedUntil>now,"a phrase at .75 or more distracts the crowd within 120 m, as before");
         Check(game.State.StageCheerScore==1&&game.State.StageCheerUntilWorldSeconds>world&&game.State.StageCheerUntilWorldSeconds<=world+10,"the crowd is told to cheer that phrase's score for a few seconds");
-        double toStage=Math.Atan2(Catalog.StageDjX-near.X,Catalog.StageDjZ-near.Z)*180/Math.PI;
-        Check(Math.Abs(near.Yaw-toStage)<.01,"a festivalgoer within 20 m of the stage turns to face it, got "+near.Yaw);
+        // The facing the sim's sight cone reads: x along the sine of the yaw, z along its cosine.
+        double yaw=near.Yaw*Math.PI/180,dx=Catalog.StageDjX-near.X,dz=Catalog.StageDjZ-near.Z;
+        Check((Math.Sin(yaw)*dx+Math.Cos(yaw)*dz)/Math.Sqrt(dx*dx+dz*dz)>.9999,"a festivalgoer within 20 m of the stage turns to face the DJ, got "+near.Yaw);
         Check(far.Yaw==-90,"one far off keeps their facing");
         Check(wary.Yaw==-90,"one watching someone keeps watching");
         game.Tick(.01);near.DistractedUntil=far.DistractedUntil=0;
@@ -245,5 +246,22 @@ public static class DjSetTests
         Check(game.Execute("p0",new GameCommand{Id="dj-off"+(sequence++),Kind="Cancel"}).Accepted,"setup: the set stops");
         p.X=Catalog.StageDjX;p.Z=Catalog.StageDjZ;var before=seen.Suspicion;for(int t=0;t<20;t++)game.Tick(.05);
         Check(seen.Suspicion>before+1,"anyone else up there is still trespassing");
+    }
+
+    // The DJ stands on the riser, inside the stage's solid block, where the host's waist-high sight line never reaches: the crowd
+    // and the cops see them there all the same, as they did at the stage front.
+    static void TheCrowdAndTheCopsSeeTheDjOnTheRiser()
+    {
+        var game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;var p=game.Player("p0");
+        var watcher=new NpcState{Id="watcher",Kind="Wook",X=0,Z=20,Yaw=0};var seen=new ObserverState{PlayerId="p0",Suspicion=40};watcher.Observers.Add(seen);game.State.Npcs.Add(watcher);
+        Start(game);for(int t=0;t<200;t++)game.Tick(.05);
+        Check(p.InteractionId!=""&&game.State.SimulationSeconds-seen.LastSeenSeconds<.1,"a festivalgoer facing the riser keeps the DJ in view through the set, last saw them at "+seen.LastSeenSeconds+" of "+game.State.SimulationSeconds);
+        Check(seen.Suspicion==40,"so the set leaves their suspicion of the DJ where it was, got "+seen.Suspicion);
+        Check(game.Execute("p0",new GameCommand{Id="dj-off"+(sequence++),Kind="Cancel"}).Accepted,"setup: the set stops");
+        double last=seen.LastSeenSeconds;for(int t=0;t<20;t++)game.Tick(.05);
+        Check(seen.LastSeenSeconds==last,"back on the lawn, a blocked sight line hides them again: the clear view is the DJ's alone");
+        game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cop=new NpcState{Id="cop_0",Kind="Cop",X=3,Z=22,Yaw=0};game.State.Npcs.Add(cop);
+        Start(game);p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";game.Tick(.05);
+        Check(cop.Evidence.Exists(e=>e.PlayerId=="p0"&&e.Kind=="VisibleStock"),"a cop facing the riser sees the stock in the DJ's hand");
     }
 }
