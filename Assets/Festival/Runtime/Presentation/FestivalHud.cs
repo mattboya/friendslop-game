@@ -24,8 +24,7 @@ namespace Festival.Presentation
         // The threat bar warms from mint to a hot red with the band (ThreatBands). Its word always names the band too, so colour is
         // never the only cue.
         private static readonly Color[] ThreatColors={Mint,new Color(1,.76f,.29f,1),Orange,new Color(1,.33f,.3f,1),new Color(1,.16f,.24f,1)};
-        /// <summary>The lowest edge of the top band's cards (the objective card's foot; the clock, tripper and player cards end above it),
-        /// as a share of the screen's height.</summary>
+        /// <summary>The objective card's foot, as a share of the screen's height.</summary>
         public const float TopCardsBottom=.858f;
         private static readonly Color[] RhythmColors={new Color(1,.38f,.61f,1),new Color(1,.76f,.29f,1),new Color(.34f,.78f,1,1),new Color(.46f,.95f,.68f,1)};
         private static readonly float[] RhythmAngles={90,180,0,-90};
@@ -413,7 +412,7 @@ namespace Festival.Presentation
             // Health, money, life and the security warning, then any effects, over the threat bar. Ember Playa's odd objects
             // can push the warning to another line, so the text shrinks to fit rather than cut it (TRIP-1, PLAYA-1).
             vitals=Label(vitalPanel.transform,"Vitals",19,TextAnchor.MiddleRight);Place(vitals.rectTransform,.045f,.30f,.94f,.97f);ShrinkToFit(vitals,14);
-            // Ticks where the crowd watches, questions and accuses. The bar stays inside the card, so the top band keeps TopCardsBottom.
+            // Ticks where the crowd watches, questions and accuses.
             var threatTrack=Panel(vitalPanel.transform,"Threat bar",new Color(1,1,1,.12f),new Vector2(.045f,.13f),new Vector2(.62f,.22f)).transform;
             threatFillImage=Panel(threatTrack,"Threat fill",Mint,Vector2.zero,new Vector2(0,1)).GetComponent<Image>();threatFill=threatFillImage.rectTransform;
             foreach(float tick in new[]{.25f,.45f,.70f}){var mark=Rect(Panel(threatTrack,"Threat tick",Paper,new Vector2(tick,-.35f),new Vector2(tick,1.35f)));mark.offsetMin=new Vector2(-1,0);mark.offsetMax=new Vector2(1,0);}
@@ -1101,8 +1100,13 @@ namespace Festival.Presentation
             Place(Rect(briefingPanel),.25f,.455f-.17f*scale,.75f,.455f);
             Place(Rect(minigamePanel),.31f,.42f-.135f*scale,.69f,.42f);
             Place(Rect(inventoryPanel),.978f-.264f*scale,.024f,.978f,.024f+.124f*scale);
+            Place(Rect(vitalPanel),.725f,PlayerCardFoot(scale),.978f,.974f);
             foreach(var action in dynamicActions)if(action!=null)action.GetComponent<LayoutElement>().preferredHeight=64*scale;
         }
+
+        // From 110% text Ember Playa's longest money and a stop wrap the vitals to four lines, so the card grows most at the first
+        // step. It stays short enough that a crew of eight's checklist still fits under it at 130%.
+        private static float PlayerCardFoot(float scale)=>.89f-.075f*Mathf.Sqrt(Mathf.Max(0,scale-1));
 
         private void UpdateGearLayout(bool hasGear)
         {
@@ -1123,8 +1127,10 @@ namespace Festival.Presentation
             if(rosterLines==checklistLines)return;
             rosterLines=checklistLines;
             // Night 2's everyone-home checklist grows the crew card downward, one row per line plus the card's padding,
-            // so a one-row checklist (a solo crew) still shows its row under the header at 1080p.
-            Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?.876f-.024f*checklistLines:.846f,.978f,.882f);
+            // so a one-row checklist (a solo crew) still shows its row under the header at 1080p. The card hangs under the player
+            // card, and a long checklist stops short of the chat window (top .652) at any text size.
+            float top=PlayerCardFoot(textScale)-.008f;
+            Place(Rect(rosterPanel),checklistLines>0?.78f:.835f,checklistLines>0?Mathf.Max(.66f,top-.006f-.024f*checklistLines):top-.036f,.978f,top);
         }
 
         // Measure only the rendered extras. Long friend names share the existing bounded best-fit range,

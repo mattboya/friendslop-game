@@ -115,6 +115,22 @@ namespace Festival.Tests
                 session.Command("Extract");yield return new WaitForSeconds(.4f);
                 Expect("leaving early","Notice","Sell "+(quota-12)+" friendship bracelets more to meet the day's quota");
                 Fits("leaving early","Notice");NoDollars("leaving early");
+                // At every larger text size the card still draws the warning whole after the longest money in the game, and a stop's
+                // ways out too.
+                foreach(float scale in new[]{1.1f,1.2f,1.3f})
+                {
+                    session.Profile.Data.TextScale=scale;string at=" at "+Mathf.RoundToInt(scale*100)+"% text";
+                    cop.Evidence.Clear();cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
+                    yield return new WaitForSeconds(.4f);
+                    Expect("Day 1"+at,"Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  ARREST WARNING");
+                    Fits("Day 1"+at,"Vitals");
+                    cop.Evidence.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
+                    yield return new WaitForSeconds(.4f);
+                    Expect("stopped"+at,"Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  SECURITY STOP • TALK (E) • DITCH IT (G) • OR WALK AWAY");
+                    Fits("stopped"+at,"Vitals");
+                    player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");player.EquippedItemId="";
+                }
+                session.Profile.Data.TextScale=1;
 
                 // ECON-2: beside a festivalgoer the HUD offers their kind of stock at its price in your bracelets. Bought out of the
                 // cops' sight, the talk says it's a buy, and the reply names the price in bracelets too.

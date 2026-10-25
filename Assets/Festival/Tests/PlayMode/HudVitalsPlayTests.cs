@@ -19,13 +19,13 @@ namespace Festival.Tests
         const string StopNotice="SECURITY SAW YOUR STOCK: talk, ditch it or walk away within 20 s, or you're arrested";
 
         // TRIP-1: the player card draws its security warning whole at 1920x1080, after the cash, stash, sales and life, for a dosed
-        // tripper mid-day with a cop about to detain them and on Night 2 with a debrief shot on top. The effects after the warning
-        // may run off the card; the warning may not. The crowd turning on you shows whole on the threat bar's word.
+        // tripper mid-day with a cop about to detain them and on Night 2 with a debrief shot on top, at 100% and 130% text. The
+        // effects after the warning may run off the card; the warning may not. The crowd turning on you shows whole on the threat bar's word.
         [UnityTest]public IEnumerator ThePlayerCardDrawsTheWholeWarningAt1080p()
         {
             var world=new GameObject("HUD vitals world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("HUD vitals");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
-            var failures=new List<string>();
+            var failures=new List<string>();float textScale=session.Profile.Data.TextScale;
             // The warning runs from its lead ("ARREST ", "SECURITY ") to the next separator, where the effects start.
             void WarningDrawn(string where,string lead)
             {
@@ -49,36 +49,40 @@ namespace Festival.Tests
                 var sim=Simulation(session);
                 var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("vitals_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
-
-                // You trip on a dose with 431 s left, alone in the field with $87 made and $120 sold, and no crowd around.
-                var wooks=sim.State.Npcs.FindAll(n=>n.Kind=="Wook");sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
-                sim.State.TripperId=player.Id;player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
-                player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="vitals_dose",Intensity=2,RemainingSeconds=431});
-                player.Cash=87;sim.State.StashCash=0;sim.State.LevelSales=120;player.X=0;player.Z=0;mate.X=30;mate.Z=0;
-                // A cop saw the deal and is about to detain you.
-                var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.X=1.5f;cop.Z=0;cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
-                yield return new WaitForSeconds(.4f);
-                WarningDrawn("a dosed tripper mid-day, a cop about to detain them","ARREST WARNING");
-                // Night 2's numbers, with the debrief's shot on top of the dose.
-                player.Effects.Add(new ActiveEffect{Id="shot",InstanceId="vitals_shot",RemainingSeconds=90});player.Cash=187;sim.State.StashCash=45;sim.State.LevelSales=225;
-                yield return new WaitForSeconds(.4f);
-                WarningDrawn("dosed with a shot, $187 / $45 / $225","ARREST WARNING");
-                // ESC-2: the cop stops you over the stock you carry instead, and the card names every way out, whole.
-                cop.Evidence.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
-                yield return new WaitForSeconds(.4f);
-                WarningDrawn("dosed with a shot, a cop stopping you",Stop);
-                // The crowd turns on you instead: a festivalgoer beside you at 80.
-                player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");cop.Evidence.Clear();cop.X=35;cop.Z=35;cop.TargetId="";
-                var watcher=wooks[0];watcher.X=3;watcher.Z=0;watcher.TargetId=player.Id;watcher.Suspicion=80;
-                watcher.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=80,LastSeenSeconds=sim.State.SimulationSeconds});sim.State.Npcs.Add(watcher);
-                yield return new WaitForSeconds(.4f);
-                Canvas.ForceUpdateCanvases();Text word=null,card=null;foreach(var text in hud.GetComponentsInChildren<Text>(false)){if(text.name=="Threat level")word=text;if(text.name=="Vitals")card=text;}
-                if(word==null||word.text!="ACCUSING"||word.cachedTextGenerator.characterCountVisible<word.text.Length)failures.Add("the crowd turning: the threat bar reads \""+word?.text+"\" drawn "+word?.cachedTextGenerator.characterCountVisible);
-                if(card!=null&&card.text.Contains("CROWD"))failures.Add("the crowd turning: the vitals still read \""+card.text.Replace("\n"," | ")+"\"");
+                var wooks=sim.State.Npcs.FindAll(n=>n.Kind=="Wook");var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");
+                foreach(float scale in new[]{1f,1.3f})
+                {
+                    session.Profile.Data.TextScale=scale;string at=" at "+Mathf.RoundToInt(scale*100)+"% text";
+                    // You trip on a dose with 431 s left, alone in the field with $87 made and $120 sold, and no crowd around.
+                    sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
+                    sim.State.TripperId=player.Id;player.Effects.Clear();
+                    player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="vitals_dose",Intensity=2,RemainingSeconds=431});
+                    player.Cash=87;sim.State.StashCash=0;sim.State.LevelSales=120;player.X=0;player.Z=0;mate.X=30;mate.Z=0;
+                    // A cop saw the deal and is about to detain you.
+                    cop.X=1.5f;cop.Z=0;cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
+                    yield return new WaitForSeconds(.4f);
+                    WarningDrawn("a dosed tripper mid-day, a cop about to detain them"+at,"ARREST WARNING");
+                    // Night 2's numbers, with the debrief's shot on top of the dose.
+                    player.Effects.Add(new ActiveEffect{Id="shot",InstanceId="vitals_shot",RemainingSeconds=90});player.Cash=187;sim.State.StashCash=45;sim.State.LevelSales=225;
+                    yield return new WaitForSeconds(.4f);
+                    WarningDrawn("dosed with a shot, $187 / $45 / $225"+at,"ARREST WARNING");
+                    // ESC-2: the cop stops you over the stock you carry instead, and the card names every way out, whole.
+                    cop.Evidence.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
+                    yield return new WaitForSeconds(.4f);
+                    WarningDrawn("dosed with a shot, a cop stopping you"+at,Stop);
+                    // The crowd turns on you instead: a festivalgoer beside you at 80.
+                    player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");player.EquippedItemId="";cop.Evidence.Clear();cop.X=35;cop.Z=35;cop.TargetId="";
+                    var watcher=wooks[0];watcher.X=3;watcher.Z=0;watcher.TargetId=player.Id;watcher.Suspicion=80;watcher.Observers.Clear();
+                    watcher.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=80,LastSeenSeconds=sim.State.SimulationSeconds});sim.State.Npcs.Add(watcher);
+                    yield return new WaitForSeconds(.4f);
+                    Canvas.ForceUpdateCanvases();Text word=null,card=null;foreach(var text in hud.GetComponentsInChildren<Text>(false)){if(text.name=="Threat level")word=text;if(text.name=="Vitals")card=text;}
+                    if(word==null||word.text!="ACCUSING"||word.cachedTextGenerator.characterCountVisible<word.text.Length)failures.Add("the crowd turning"+at+": the threat bar reads \""+word?.text+"\" drawn "+word?.cachedTextGenerator.characterCountVisible);
+                    if(card!=null&&card.text.Contains("CROWD"))failures.Add("the crowd turning"+at+": the vitals still read \""+card.text.Replace("\n"," | ")+"\"");
+                }
             }
             finally
             {
-                session.Leave();
+                session.Profile.Data.TextScale=textScale;session.Leave();
                 foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
                 Object.Destroy(hud);Object.Destroy(world);
             }
