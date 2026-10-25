@@ -73,8 +73,9 @@ namespace Festival.Core
         // Host routing only. ViewFor copies the public delivery fields explicitly.
         public string OwnerId="",InteractionId="";
     }
+    // Result: the short stamp a sale ends on ("SOLD +$10", "NO SALE", "BUSTED"), in dollars; "" for other talks and in older snapshots.
     [Serializable] public sealed class ConversationOutcome {
-        public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="";
+        public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="",Result="";
         public long Sequence; public List<string> GrammarKeys=new List<string>();
     }
     // RefusesSales: PlayerId's High or Greedy ask failed with this festivalgoer, who buys nothing more from them this level.
@@ -122,7 +123,8 @@ namespace Festival.Core
         // set as its last turn begins. Empty and false in older snapshots.
         public List<ConversationTurn> Turns=new List<ConversationTurn>(); public bool TrustDance; public string Hunch="";
         // A sale's ask (FestivalSimulation.FairAsk, HighAsk or GreedyAsk), from StartSale's Amount; Fair in older snapshots.
-        public int Ask;
+        // ReservedEquipped: the unit on offer left the seller's hand, so a handed-back one is equipped again; false in older snapshots.
+        public int Ask; public bool ReservedEquipped;
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).

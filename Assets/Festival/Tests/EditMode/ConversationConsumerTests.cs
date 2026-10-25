@@ -97,7 +97,9 @@ namespace Festival.Tests
             for(int n=0;talk.Status=="Active"&&n<100;n++)game.Tick(.1);
             Assert.That(talk.Status,Is.EqualTo("Complete"));Assert.That(player.Cash,Is.EqualTo(cash));
             Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
-            var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));Assert.That(outcome.Notice,Is.EqualTo("They walk off."));
+            var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));
+            // A sale's walk-off also says where the unit went.
+            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"They walk off  •  Tongue Stamps back in your hand":"They walk off."));
             game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Notice,Is.EqualTo(outcome.Notice));
             Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Notice));
         }

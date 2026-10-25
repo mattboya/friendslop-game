@@ -331,7 +331,7 @@ namespace Festival.Tests
                     if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;talk.Status=="Active"&&n<400;n++)sim.Tick(.1);}
                     else for(int t=0;t<FestivalSimulation.ConversationTurns;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
                     Assert.That(player.InteractionId,Is.Empty);var outcome=player.ConversationOutcomes.Last();
-                    if(trust){Assert.That(outcome.Notice,Is.EqualTo("They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
+                    if(trust){Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"They walk off  •  Tongue Stamps back in your hand":"They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
                     if(scenario=="narc")Assert.That(player.Life,Is.EqualTo("Detained"));
                     view.enabled=true;yield return null;yield return new WaitForSeconds(.7f);
                     Assert.That(window.Open&&window.Lingering,Is.True,scenario+": a terminal delivery survives an entirely missed live view");

@@ -46,6 +46,7 @@ public static class DayQuotaTests
         QuotaScalesWithCrewAndTable();
         SalesCountTowardTheQuota();
         PushedAsksCountWhatTheyPaid();
+        EverySaleEndsOneClearWay();
         ExtractWaitsForTheQuota();
         SundownSettlesTheDay();
         NobodyIsLostByDay();
@@ -90,6 +91,62 @@ public static class DayQuotaTests
         int high=Sell(s,"p0","buyer_0",ask:FestivalSimulation.HighAsk);Check(high==15&&s.State.LevelSales==15,"a perfect High sale pays $15 and counts $15, got "+high+" and "+s.State.LevelSales);
         int greedy=Sell(s,"p0","buyer_1",ask:FestivalSimulation.GreedyAsk);Check(greedy==20&&s.State.LevelSales==35,"a perfect Greedy sale pays $20 and counts it too, got "+greedy+" and "+s.State.LevelSales);
         Check(FestivalSimulation.DayQuotaMet(s.State),"two pushed sales meet a solo Day 1's $15 quota twice over");
+    }
+
+    // Random sales on a real Palm Mirage Day 1, on fixed seeds: its cops, narcs and buyers, wary festivalgoers' trust dances
+    // danced well or badly, random asks and replies with time between them, walk-offs, and hands that fill mid-talk. Every sale ends
+    // one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says, the unit gone), handed back (the unit
+    // in your hand again, equipped if it was), dropped at your feet, or busted (detained, the stock gone).
+    static void EverySaleEndsOneClearWay()
+    {
+        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["dropped"]=0,["busted"]=0};
+        foreach(int seed in new[]{3,17,29,41,53,67})
+        {
+            var s=new FestivalSimulation(seed);var p=s.AddPlayer("p0","P0");p.X=0;p.Z=19;Act(s,"p0","Ready");s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);Act(s,"p0","MapReady");
+            Check(s.State.Phase=="Playing","setup: seed "+seed+"'s Day 1 is under way");s.State.DurationSeconds=1e6; // no sundown mid-fuzz
+            var random=new Random(seed);
+            for(int sale=0;sale<150&&s.State.Phase=="Playing";sale++)
+            {
+                // Back on your feet with a clean slate (buyers take any number of sales here): one unit or two of a kind, in hand or
+                // not, and a merch bag.
+                p.Life="Alive";p.Health=100;p.InteractionId="";foreach(var n in s.State.Npcs){n.Sales=0;n.Evidence.RemoveAll(e=>e.PlayerId==p.Id);foreach(var o in n.Observers)o.Suspicion=random.Next(50);}
+                string item=random.Next(2)==0?"stock_lsd":"stock_mushrooms";p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId=item,Count=1+random.Next(2)});p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});
+                p.EquippedItemId=random.Next(3)==0?"merch_bag":item;
+                // Half the offers go to a buyer, the rest to anyone: a regular turns it down, a narc busts you.
+                var npcs=s.State.Npcs.FindAll(n=>n.Kind=="Wook"&&(random.Next(2)==0||n.Role=="Buyer"));var npc=npcs[random.Next(npcs.Count)];p.X=npc.X;p.Z=npc.Z-1;
+                int cash=p.Cash,sales=s.State.LevelSales,units=p.Inventory.Find(x=>x.ItemId==item).Count,drops=s.State.Drops.FindAll(d=>d.ItemId==item).Count;string held=p.EquippedItemId;
+                var started=s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="StartSale",TargetId=npc.Id,ItemId=item,Amount=random.Next(3)});
+                if(!started.Accepted)continue;
+                var i=s.Interaction(p.InteractionId);
+                if(i==null){Check(p.Life=="Detained"&&!p.Inventory.Exists(x=>x.ItemId==item),"seed "+seed+": a sale that ends at the offer is a narc's bust");endings["busted"]++;continue;}
+                for(int guard=0;i.Status=="Active"&&guard<400;guard++)
+                {
+                    int roll=random.Next(24);
+                    if(FestivalSimulation.TrustDancing(i)){if(i.Inputs.Count==0&&roll<16)foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});}
+                    else if(roll==0)Act(s,"p0","Cancel");
+                    else if(roll==1){foreach(var gear in new[]{"map","confetti","stage_pass"})if(p.Inventory.FindAll(x=>x.ItemId!="little_spoon").Count<3&&!p.Inventory.Exists(x=>x.ItemId==gear))p.Inventory.Add(new ItemStack{ItemId=gear,Count=1});}
+                    else if(i.Turns.Count>0&&i.Turns[i.Turns.Count-1].Pick<0&&roll<18)s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=random.Next(3),Direction=i.Turns.Count-1});
+                    if(i.Status=="Active")s.Tick(.1+random.Next(5)*.2);
+                }
+                Check(i.Status!="Active"&&p.InteractionId!=i.Id,"seed "+seed+" sale "+sale+": the sale ends ("+i.Status+")");
+                var outcome=p.ConversationOutcomes?.Find(o=>o.InteractionId==i.Id);string notice=outcome?.Notice??"";
+                int left=p.Inventory.Find(x=>x.ItemId==item)?.Count??0;bool dropped=s.State.Drops.FindAll(d=>d.ItemId==item).Count>drops;
+                string where="seed "+seed+" sale "+sale+" ("+i.Status+", \""+notice+"\")";
+                if(p.Life=="Detained"){Check(left==0&&!dropped&&outcome?.Result=="BUSTED"&&notice.StartsWith("BUSTED"),where+": a bust takes the stock and says BUSTED");endings["busted"]++;}
+                else if(p.Cash>cash)
+                {
+                    Check(p.Cash-cash==s.State.LevelSales-sales&&left==units-1&&!dropped,where+": a paid sale counts its pay and takes one unit");
+                    Check(outcome?.Result=="SOLD +$"+(p.Cash-cash)&&notice.StartsWith("SOLD ")&&notice.Contains("+$"+(p.Cash-cash)),where+": a paid sale says SOLD and its pay, +$"+(p.Cash-cash));endings["paid"]++;
+                }
+                else if(dropped){Check(left==units-1&&s.State.LevelSales==sales&&notice.EndsWith("dropped at your feet")&&outcome.Result=="NO SALE",where+": a unit with no room is at your feet, and it says so");endings["dropped"]++;}
+                else
+                {
+                    Check(left==units&&p.Cash==cash&&s.State.LevelSales==sales&&notice.EndsWith("back in your hand")&&outcome.Result=="NO SALE",where+": otherwise the unit is back, and it says so");
+                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings["back"]++;
+                }
+            }
+        }
+        foreach(var ending in endings)Check(ending.Value>0,"the fuzz reaches every ending, but none was "+ending.Key+": "+string.Join(", ",endings));
     }
 
     static void ExtractWaitsForTheQuota()

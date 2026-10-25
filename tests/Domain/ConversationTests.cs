@@ -28,7 +28,7 @@ public static class ConversationTests
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
-            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot})
+            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -710,6 +710,53 @@ public static class ConversationTests
             string failure="nothing thrown";try{new FestivalSimulation().Restore(Saved(o=>o["Ask"]=bad));}catch(ArgumentException error){failure=error.Message;}
             Check(failure=="Incomplete snapshot","a saved ask of "+bad+" is refused, got "+failure);
         }
+    }
+
+    // Offering your last unit from your hand puts your next gear in your hand for the talk. A talk that fails, or that you walk
+    // away from, gives the unit back to the hand it left, equipped again. A unit offered from the pocket goes back there.
+    static void AHandedBackUnitGoesBackInYourHand()
+    {
+        foreach(bool walk in new[]{false,true})foreach(bool held in new[]{true,false})
+        {
+            var s=Pair("Sale");var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});p.EquippedItemId=held?"stock_lsd":"merch_bag";
+            var i=Sale(s,FestivalSimulation.FairAsk);
+            Check(p.EquippedItemId=="merch_bag"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"setup: the last unit is on offer and the merch bag is in your hand");
+            if(walk)Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away from the sale");else Talk(s,i,Every(Awkward));
+            Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd"&&x.Count==1),"the unit comes back");
+            Check(p.EquippedItemId==(held?"stock_lsd":"merch_bag"),(walk?"walking away":"a failed talk")+(held?" puts the unit back in your hand":" leaves the pocketed unit in your pocket")+", holding "+p.EquippedItemId);
+        }
+    }
+
+    // Every sale says how it ended, with the amount, in its outcome (the chat window's last line and the HUD's message): SOLD with
+    // what it paid, NO SALE with where the unit went, and a walk-off too. Result is the short stamp the HUD shows. A pushed ask
+    // talked down says so.
+    static void ASaleSaysHowItEnded()
+    {
+        ConversationOutcome Ended(FestivalSimulation s,InteractionState i)=>s.Player("p0").ConversationOutcomes.Find(o=>o.InteractionId==i.Id);
+        var s=Pair("Sale");var i=Talk(s,Sale(s,FestivalSimulation.FairAsk),Every(Smooth));var o=Ended(s,i);
+        Check(o.Notice=="SOLD Tongue Stamps  •  +$10"&&o.Result=="SOLD +$10","a paid sale says SOLD and what it paid: \""+o.Notice+"\" / \""+o.Result+"\"");
+        s=Pair("Sale");i=Talk(s,Sale(s,FestivalSimulation.HighAsk),Every(SoSo));o=Ended(s,i);
+        Check(o.Notice=="SOLD Tongue Stamps  •  +$10  •  talked down from $15"&&o.Result=="SOLD +$10","a High ask talked down says so: \""+o.Notice+"\"");
+        s=Pair("Sale");i=Talk(s,Sale(s,FestivalSimulation.FairAsk),Every(Awkward));o=Ended(s,i);
+        Check(o.Notice=="NO SALE  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a refused sale says the unit is back in your hand: \""+o.Notice+"\"");
+        // Hands that filled meanwhile (a friend's handoff, say) leave no room for it.
+        s=Pair("Sale");var p=s.Player("p0");i=Sale(s,FestivalSimulation.FairAsk);foreach(var gear in new[]{"merch_bag","map","confetti"})p.Inventory.Add(new ItemStack{ItemId=gear,Count=1});
+        Talk(s,i,Every(Awkward));o=Ended(s,i);
+        Check(o.Notice=="NO SALE  •  Tongue Stamps dropped at your feet"&&o.Result=="NO SALE"&&s.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),"with full hands it says the unit dropped at your feet: \""+o.Notice+"\"");
+        s=Pair("Sale");i=Sale(s,FestivalSimulation.FairAsk);Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away");o=Ended(s,i);
+        Check(o!=null&&o.Notice=="You walked off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE"&&o.Reaction==""&&s.Player("p0").NpcSpeaker=="","walking away says so, with no reaction of theirs: \""+o?.Notice+"\"");
+        // A sale cut short for any other reason (here the seller drops out of the game) is off.
+        s=Pair("Sale");i=Sale(s,FestivalSimulation.FairAsk);s.Disconnect("p0");o=Ended(s,i);
+        Check(o!=null&&o.Notice=="SALE OFF  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a sale cut off says SALE OFF: \""+o?.Notice+"\"");
+        // A cop who saw the deal busts you mid-sale, and the stock on offer goes with the rest.
+        s=Pair("Sale");p=s.Player("p0");i=Sale(s,FestivalSimulation.FairAsk);
+        s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",X=p.X+1,Z=p.Z,Evidence=new List<EvidenceState>{new EvidenceState{PlayerId="p0",Kind="WitnessedDeal",DetainAt=s.State.SimulationSeconds}}});s.Tick(.1);o=Ended(s,i);
+        Check(p.Life=="Detained"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd")&&o!=null&&o.Notice=="BUSTED  •  security took your stock"&&o.Result=="BUSTED"&&o.Reaction=="","a bust mid-sale says BUSTED: \""+o?.Notice+"\"");
+        // A wary buyer you lose in the dance first walks off, and it says so.
+        s=Pair("Sale");Partner(s).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});i=Sale(s,FestivalSimulation.FairAsk);Check(i.TrustDance,"setup: they ask for a dance first");
+        for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);o=Ended(s,i);
+        Check(o.Notice=="They walk off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a lost trust dance says they walk off, and where the unit went: \""+o.Notice+"\"");
+        Check(FestivalSimulation.MoneyNotice("LOST PROPERTY RETURNED",5)=="LOST PROPERTY RETURNED  •  +$5"&&FestivalSimulation.MoneyNotice("SECURITY FINE",-10)=="SECURITY FINE  •  −$10","the money notice every change of cash uses");
     }
 
     // A talk in a snapshot from before conversations (no turns, no trust dance) restores, and carries on as a conversation.

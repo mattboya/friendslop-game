@@ -139,6 +139,9 @@ namespace Festival.Network
         // ECON-10: StartSale's Amount is the sale's ask (FairAsk 0, HighAsk 1 or GreedyAsk 2; any other is refused), kept on
         // InteractionState.Ask beside the host-only ObserverState.RefusesSales, Fair and false in older snapshots; a version-9
         // client always asks Fair.
+        // ECON-11: a sale's ConversationOutcome carries Result ("SOLD +$N", "NO SALE" or "BUSTED"; "" for other talks and in older
+        // snapshots) and a Notice for every ending, a cancelled sale now delivers one with no reaction, and a handed-back unit is
+        // equipped again when InteractionState.ReservedEquipped says it left the hand (false in older snapshots).
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

@@ -13,6 +13,9 @@ namespace Festival.Core
         static readonly int[] AskFull={PerfectSalePay,PerfectSalePay*3/2,PerfectSalePay*2},AskDown={PerfectSalePay/2,PerfectSalePay,PerfectSalePay},AskSuspicion={0,15,30};
         static readonly double[] AskNeed={.75,.75,.875},AskFloor={.4,.5,.6};
         const string RefusedAfterAsk="Not after that ask. They won't buy from you again.";
+        /// <summary>How a change of cash reads: what happened, then the signed amount in dollars for FestivalHudText.MoneyText,
+        /// "SOLD Tongue Stamps  •  +$10" or "SECURITY FINE  •  −$10".</summary>
+        public static string MoneyNotice(string what,int amount)=>what+"  •  "+(amount<0?"−$":"+$")+Math.Abs(amount);
         /// <summary>The score a sale at this ask needs for its full price.</summary>
         public static double SaleNeeds(int ask)=>AskNeed[ask];
         /// <summary>What a sale at this ask pays at this score, before SalePayout's multipliers.</summary>

@@ -33,7 +33,7 @@ namespace Festival.Core
             bool wary=Wary(npc,p);if(wary)GiveDanceRoom(p,npc);
             var i=NewInteraction(p,kind,npc.Id,0);p.ConversationThreadId=i.Id;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);
-            if(kind=="Sale"){Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
+            if(kind=="Sale"){i.ReservedEquipped=p.EquippedItemId==c.ItemId;Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
             if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;PublishSpeech(p,npc.Id,"FESTIVALGOER",TrustAsk,i.StartSeconds+i.DurationSeconds-State.SimulationSeconds,i.Id);}else AddTurn(i,p);
@@ -140,13 +140,15 @@ namespace Festival.Core
             ChatDiagnostic?.Invoke("HistoryAcknowledged","Talk",State.RoundId,State.SimulationSeconds);
 #endif
         }
-        void DeliverConversationOutcome(InteractionState i,PlayerState p)
+        // A notice given replaces the authored one. A cut talk (Cancel) has no last line of theirs, so it leaves the speech alone.
+        void DeliverConversationOutcome(InteractionState i,PlayerState p,string notice="",string result="",bool cut=false)
         {
             if(p.ConversationThreadId=="")p.ConversationThreadId=i.Id;
             if(p.ConversationOutcomes==null)p.ConversationOutcomes=new System.Collections.Generic.List<ConversationOutcome>();
             if(p.ConversationOutcomes.Exists(o=>o.RoundId==State.RoundId&&o.InteractionId==i.Id))return;
-            var outcome=new ConversationOutcome{RoundId=State.RoundId,InteractionId=i.Id,DeliveryId=State.RoundId+":"+i.Id,Kind=i.Kind,TargetId=i.TargetId,Speaker=i.Kind=="Police"?"SECURITY":"FESTIVALGOER",Hunch=i.Hunch,Sequence=++p.ConversationOutcomeSequence};
-            if(i.TrustDance&&i.Turns.Count==0){outcome.Reaction="Nah. Not feeling it.";outcome.Notice="They walk off.";}
+            var outcome=new ConversationOutcome{RoundId=State.RoundId,InteractionId=i.Id,DeliveryId=State.RoundId+":"+i.Id,Kind=i.Kind,TargetId=i.TargetId,Speaker=i.Kind=="Police"?"SECURITY":"FESTIVALGOER",Hunch=i.Hunch,Result=result,Sequence=++p.ConversationOutcomeSequence};
+            if(cut){}
+            else if(i.TrustDance&&i.Turns.Count==0){outcome.Reaction="Nah. Not feeling it.";outcome.Notice="They walk off.";}
             else
             {
                 var npc=State.Npcs.Find(n=>n.Id==i.TargetId);string persona=i.Kind=="Police"?ConversationLines.Security:DialogueGrammar.PersonaFor(i.TargetId,npc?.Twist??"");
@@ -154,8 +156,9 @@ namespace Festival.Core
                 outcome.Reaction=ConversationLines.Reaction(persona,Graded(i.Turns[i.Turns.Count-1]),State.FestivalIndex,new ContentRandom(unchecked(TurnSeed(i,ConversationTurns)^0x4f757463)),history,out var key);outcome.GrammarKeys.Add(key);
                 if(i.Status=="Police bust")outcome.Notice=NarcBust;
             }
+            if(notice!="")outcome.Notice=notice;
             p.ConversationOutcomes.Add(outcome);while(p.ConversationOutcomes.Count>8)p.ConversationOutcomes.RemoveAt(0);
-            if(i.Kind!="Police"&&!(i.TrustDance&&i.Turns.Count==0)){p.SpeechDeliveryId="";p.SpeechById="";p.SpeechSequence=0;p.SpeechAtWorldSeconds=p.SpeechUntilWorldSeconds=-1;p.NpcSpeaker=outcome.Speaker;p.NpcSpeech=outcome.Notice==NarcBust?NarcBust:outcome.Reaction;p.NpcSpeechUntil=State.SimulationSeconds+7;}
+            if(!cut&&i.Kind!="Police"&&!(i.TrustDance&&i.Turns.Count==0)){p.SpeechDeliveryId="";p.SpeechById="";p.SpeechSequence=0;p.SpeechAtWorldSeconds=p.SpeechUntilWorldSeconds=-1;p.NpcSpeaker=outcome.Speaker;p.NpcSpeech=outcome.Notice==NarcBust?NarcBust:outcome.Reaction;p.NpcSpeechUntil=State.SimulationSeconds+7;}
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ChatDiagnostic?.Invoke("OutcomeDelivered",i.Kind,State.RoundId,State.SimulationSeconds);
 #endif
@@ -164,10 +167,28 @@ namespace Festival.Core
         // costs suspicion; a buy (StockBuys.cs); and security at .75 waves off its stop, or gives the warning it held back (HeardOut).
         void SettleTalk(InteractionState i,PlayerState p)
         {
-            if(i.Kind=="Sale"){var npc=State.Npcs.Find(n=>n.Id==i.TargetId);int pay=SalePay(i.Ask,i.Score);if(pay>0){int payout=SalePayout(npc,pay*VipPayout(State,p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;}else{PushedAskFailed(i,p);if(i.ReservedItemId!=""){if(CanAdd(p,i.ReservedItemId,1))Add(p,i.ReservedItemId,1);else State.Drops.Add(new DropState{Id=Id("drop"),ItemId=i.ReservedItemId,Count=1,X=p.X,Z=p.Z});}}i.ReservedItemId="";}
+            string notice="",result="";
+            if(i.Kind=="Sale")
+            {
+                var npc=State.Npcs.Find(n=>n.Id==i.TargetId);int pay=SalePay(i.Ask,i.Score);
+                if(pay>0)
+                {
+                    int payout=SalePayout(npc,pay*VipPayout(State,p,npc)),full=SalePayout(npc,SalePay(i.Ask,1)*VipPayout(State,p,npc));p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;if(npc!=null)npc.Sales++;
+                    notice=MoneyNotice("SOLD "+(Catalog.FindItem(i.ReservedItemId)?.Name??"stock"),payout)+(pay<SalePay(i.Ask,1)?"  •  talked down from $"+full:"");result="SOLD +$"+payout;i.ReservedItemId="";
+                }
+                else{PushedAskFailed(i,p);if(i.ReservedItemId!=""){notice=HandBack(i,p,i.TrustDance&&i.Turns.Count==0?"They walk off":"NO SALE");result="NO SALE";}}
+            }
             if(i.Kind=="Buy")SettleBuy(i,p);
             if(i.Kind=="Police"){if(i.Score>=.75)WaveOn(i.TargetId,p);else HeardOut(i.TargetId,p);}
-            DeliverConversationOutcome(i,p);
+            DeliverConversationOutcome(i,p,notice,result);
+        }
+        // A sale's unit back from a failed or cut talk: in the seller's gear, in their hand again if it left it, or at their feet
+        // when their hands filled meanwhile. Returns head and where the unit went.
+        string HandBack(InteractionState i,PlayerState p,string head)
+        {
+            string item=i.ReservedItemId,name=Catalog.FindItem(item)?.Name??item;i.ReservedItemId="";
+            if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});return head+"  •  "+name+" dropped at your feet";}
+            Add(p,item,1);if(i.ReservedEquipped)p.EquippedItemId=item;return head+"  •  "+name+" back in your hand";
         }
     }
 }
