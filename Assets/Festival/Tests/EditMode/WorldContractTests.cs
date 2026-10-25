@@ -308,6 +308,7 @@ namespace Festival.Tests
             Assert.That(crowd.WalkerCount,Is.EqualTo(12));
             int count=0;foreach(Transform child in generated)if(child.name.StartsWith("ambient_")){count++;Assert.That(child.GetComponentsInChildren<Collider>(true),Is.Empty);}
             Assert.That(count,Is.EqualTo(crowd.MemberCount));
+            Assert.That(DevelopmentSmoke.CrowdPopulated(crowd),Is.True,"the paired native smoke accepts this crowd of "+crowd.MemberCount);
         }
         [Test]public void InteractionLandmarksHaveStandingRoom()
         {

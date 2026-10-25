@@ -354,7 +354,7 @@ namespace Festival.Presentation
             if(failed!=null||session.State.Phase!="Playing"||session.State.Players.Count!=2){Debug.LogError("FESTIVAL SMOKE FAILED: "+(failed??"two-player loading barrier"));Application.Quit(3);yield break;}
             Debug.Log("FESTIVAL SMOKE TRANSPORT PASSED: two peers ready and playing; host="+session.IsHost);
             var crowd=FindFirstObjectByType<FestivalAmbientCrowd>();
-            if(crowd==null||crowd.MemberCount!=62||crowd.WalkerCount!=12){Fail("festival crowd population");yield break;}
+            if(!CrowdPopulated(crowd)){Fail("festival crowd population");yield break;}
             var walkerStart=crowd.FirstWalkerPosition;
             yield return new WaitForSeconds(.35f);
             if(Vector3.Distance(walkerStart,crowd.FirstWalkerPosition)<.15f){Fail("festival crowd walking");yield break;}
@@ -1446,6 +1446,7 @@ namespace Festival.Presentation
         public static NpcState Seller(FestivalSimulation sim,string kind,NpcState besides=null)=>sim.State.Npcs.Find(n=>n!=besides&&n.Role=="Regular"&&n.Twist!=FestivalSimulation.VipGuard&&FestivalSimulation.SellerStock(n.Id)==kind);
         // Where the client stands to buy a medical voucher at the night market: just in front of its shelf, wherever the seed put it.
         public static WorldPoint MarketSpot(RoundState s){var shelf=Catalog.ShopPoint(false,s.VendorOffers.IndexOf("medical_voucher"));return new WorldPoint(shelf.X,shelf.Z-.85f);}
+        public static bool CrowdPopulated(FestivalAmbientCrowd crowd)=>crowd!=null&&crowd.WalkerCount==12&&crowd.MemberCount==FestivalAmbientCrowd.FixedSpots.Count+crowd.WalkerCount;
         // The spinner picks the tripper; the smoke makes the client the dose-1 tripper so the host stays the sober helper and
         // the day always takes the same sales.
         static void MakeClientTheTripper(FestivalSimulation sim)
