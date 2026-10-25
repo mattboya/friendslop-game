@@ -128,7 +128,9 @@ namespace Festival.Network
         // Cancel that names nothing keeps its meaning, so a version-8 client's late E would still stop a deck set F just began.
         // SET-5: Core text names rebindable keys by action and each HUD reads in its own bound keys: poi replies carry {Spin} and
         // {SpinSides}, the camp vote hint {Slot1}-{Slot3}. A version-8 client would show a host's poi reply tokens raw.
-        public const int ProtocolVersion=9;
+        // 10: wave 2026-10-24 starts a new semantic boundary; published version-9 peers are rejected.
+        // Subsequent units append only the version-10 changes they actually land.
+        public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
