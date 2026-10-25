@@ -34,7 +34,7 @@ namespace Festival.Tests
             Assert.That(FestivalInput.Roots(own.Kind),Is.True,"it holds the drummer still");
             Assert.That(FestivalHudText.StopsByHold(view,view.Players.Find(p=>p.Id=="p0")),Is.True,"E runs nothing mid-part, and holding G withdraws");
             Assert.That(FestivalHudText.HoldToStopFor(own.Kind),Is.EqualTo("HOLD G TO STOP DRUMMING"),"the stop line names the drumming");
-            foreach(var kind in new[]{"Dance","ConfirmDance","Poi","Dj"})Assert.That(FestivalHudText.HoldToStopFor(kind),Is.EqualTo(FestivalHudText.HoldToStop),kind+" keeps its line");
+            foreach(var kind in new[]{"Dance","ConfirmDance","Poi"})Assert.That(FestivalHudText.HoldToStopFor(kind),Is.EqualTo(FestivalHudText.HoldToStop),kind+" keeps its line");
             Assert.That(FestivalHudText.ShowsDancer(own,false),Is.False,"nobody dances in the circle: no live dancer beside the lanes");
             Assert.That(FestivalHudText.RhythmTitle(own.Kind),Is.EqualTo("DRUM CIRCLE  /  YOUR PART"));
             foreach(string viewer in new[]{"p0","p1","ghost"})

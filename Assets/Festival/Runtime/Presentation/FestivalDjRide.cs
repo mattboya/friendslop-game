@@ -12,8 +12,8 @@ namespace Festival.Presentation
         /// <summary>How far down the stage view looks from behind and above the DJ, out over the crowd.</summary>
         public const float ViewPitch=16;
         // The road in the rect's own 0-1 space: the horizon's height, the half-width at the near edge, the marker's height, and how
-        // many times nearer the marker is than the horizon (the perspective).
-        const float Horizon=.94f,NearHalf=.42f,MarkerY=.1f,Depth=6;
+        // many times nearer the marker is than the horizon (the perspective). The strip under the marker holds the HUD's steer and stop line.
+        const float Horizon=.94f,NearHalf=.42f,MarkerY=.17f,Depth=6;
         static readonly Color Road=new Color(.06f,.08f,.14f,.82f),Edge=new Color(1,1,1,.3f),GreyBlock=new Color(.58f,.58f,.62f,1),Marker=new Color(1,.93f,.68f,1);
         static readonly Color[] LaneColors={new Color(.19f,1f,.76f,1),new Color(1f,.75f,.25f,1),new Color(1f,.3f,.58f,1)};
         RhythmChart chart;

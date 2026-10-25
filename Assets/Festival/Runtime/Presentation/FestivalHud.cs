@@ -35,6 +35,8 @@ namespace Festival.Presentation
         private const double MissOvershootSeconds=.18;
         // DANCE-12: the lane's bottom line, "ARROWS OR WASD" left of StopHoldLeft and "HOLD G TO STOP DANCING" from there to StopHoldRight.
         private const float StopHoldLeft=.52f,StopHoldRight=.94f;
+        // The DJ ride's stop line, in the ride's own width: it ends left of the gear bar, which starts at x .714 of the screen.
+        private const float RideStopLeft=.44f,RideStopRight=.84f;
         private FestivalSession session;
         private Canvas canvas;
         private Font font;
@@ -45,7 +47,7 @@ namespace Festival.Presentation
         private float textScale=>session?.Profile?.Data.TextScale??1;
         private GameObject ridePanel;
         private FestivalDjRide ride;
-        private Text rideCombo,rideControls;
+        private Text rideCombo,rideControls,rideStopHold;
         private RhythmChart rideChart;
         private string rideId="";
         private int rideLane=DjRide.StartLane,ridePhrase=-1;
@@ -90,7 +92,7 @@ namespace Festival.Presentation
         private readonly Dictionary<InputAction,(string Path,int Layout,string Label)> keyLabels=new Dictionary<InputAction,(string Path,int Layout,string Label)>();
         private readonly float[] rhythmFlashUntil=new float[4];
         private bool[] rhythmConsumed=Array.Empty<bool>(),rhythmHeld=Array.Empty<bool>(),rhythmDropped=Array.Empty<bool>();
-        private Image rhythmProgressFill,stopHoldFill,walkHoldFill;
+        private Image rhythmProgressFill,stopHoldFill,walkHoldFill,rideStopFill;
         // When G went down mid-dance (Time.unscaledTime), or -1 while it isn't held.
         private float stopHeldSince=-1;
         private float gearHeldSince=-1;
@@ -608,7 +610,9 @@ namespace Festival.Presentation
             rideTitle.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);
             rideCombo=Label(ridePanel.transform,"Combo",48,TextAnchor.MiddleCenter);rideCombo.font=displayFont;rideCombo.fontStyle=FontStyle.Normal;Place(rideCombo.rectTransform,.25f,.5f,.75f,.7f);
             rideCombo.gameObject.AddComponent<Outline>().effectColor=new Color(0,.015f,.02f,.95f);
-            rideControls=Label(ridePanel.transform,"Controls",17,TextAnchor.MiddleCenter);rideControls.color=MutedPaper;Place(rideControls.rectTransform,.05f,-.08f,.95f,.0f);
+            rideControls=Label(ridePanel.transform,"Controls",17,TextAnchor.MiddleCenter);rideControls.color=MutedPaper;Place(rideControls.rectTransform,.06f,0,RideStopLeft-.02f,.09f);
+            rideStopFill=Panel(ridePanel.transform,"Stop hold fill",new Color(Orange.r,Orange.g,Orange.b,.5f),new Vector2(RideStopLeft,.01f),new Vector2(RideStopLeft,.08f)).GetComponent<Image>();rideStopFill.raycastTarget=false;rideStopFill.gameObject.SetActive(false);
+            rideStopHold=Label(ridePanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);rideStopHold.text=FestivalHudText.HoldToStopFor("Dj");Place(rideStopHold.rectTransform,RideStopLeft,0,RideStopRight,.09f);
             ridePanel.SetActive(false);
             dialoguePanel=Card(root.transform,"Interaction dialogue",new Vector2(.70f,.52f),new Vector2(.96f,.69f),false);
             Accent(dialoguePanel.transform,Orange);
@@ -1743,7 +1747,7 @@ namespace Festival.Presentation
             if(rideChart==null||rideId!=interaction.Id||ridePhrase!=interaction.Phrase)
             {
                 rideId=interaction.Id;ridePhrase=interaction.Phrase;rideLane=DjRide.StartLane;rideChart=RhythmChart.For(interaction);
-                rideControls.text=FestivalHudText.RideControls(session.Controls.NoteKey(0),session.Controls.NoteKey(3))+"   •   "+FestivalHudText.HoldToStopFor(interaction.Kind,Bound(session?.Controls?.Drop,"G"));
+                rideControls.text=FestivalHudText.RideControls(session.Controls.NoteKey(0),session.Controls.NoteKey(3));rideStopHold.text=FestivalHudText.HoldToStopFor(interaction.Kind,Bound(session?.Controls?.Drop,"G"));
             }
             double now=session.EstimatedSimulationSeconds-interaction.StartSeconds;
             bool keys=now>=0&&rhythmFocused&&!session.MenuOpen&&!session.Controls.Rebinding&&!session.Controls.Objectives.IsPressed();
@@ -1858,12 +1862,17 @@ namespace Festival.Presentation
             noteViews.Add(note);note.gameObject.SetActive(false);
         }
 
-        // DANCE-12: the fill under "HOLD G TO STOP DANCING", `held` of the way to the stop; none at 0.
+        // The fill under the stop line, on the arrow lanes and on the DJ ride, `held` of the way to the stop; none at 0.
         // The legacy prompt fill shares this API, but chat input never starts a hold.
         public void ShowStopHold(float held)
         {
-            stopHoldFill.gameObject.SetActive(held>0);walkHoldFill.gameObject.SetActive(held>0);
-            if(held>0){Place(stopHoldFill.rectTransform,StopHoldLeft,.008f,StopHoldLeft+(StopHoldRight-StopHoldLeft)*Mathf.Min(held,1),.046f);Place(walkHoldFill.rectTransform,0,0,Mathf.Min(held,1),1);}
+            stopHoldFill.gameObject.SetActive(held>0);rideStopFill.gameObject.SetActive(held>0);walkHoldFill.gameObject.SetActive(held>0);
+            if(held>0)
+            {
+                held=Mathf.Min(held,1);
+                Place(stopHoldFill.rectTransform,StopHoldLeft,.008f,StopHoldLeft+(StopHoldRight-StopHoldLeft)*held,.046f);Place(rideStopFill.rectTransform,RideStopLeft,.01f,RideStopLeft+(RideStopRight-RideStopLeft)*held,.08f);
+                Place(walkHoldFill.rectTransform,0,0,held,1);
+            }
         }
         // Labels each receptor well with its lane's WASD key as bound now, so a rebound key shows its new name. Read once per challenge.
         public void ShowRhythmKeys(FestivalInput controls)

@@ -136,8 +136,8 @@ namespace Festival.Presentation
         public static bool StopsByHold(RoundState s,PlayerState p){if(p.InteractionId!="")foreach(var i in s.Interactions)if(i.Id==p.InteractionId)return i.Status=="Active"&&FestivalInput.IsRhythm(i);return false;}
         public static readonly string HoldToStop=HoldToStopFor("");
         /// <summary>The line under the lanes: holding G withdraws a Drum Circle part, ends a deck set by hopping off the art car (PLAYA-5),
-        /// and stops every dance.</summary>
-        public static string HoldToStopFor(string kind,string drop="G")=>"HOLD "+drop+(kind==FestivalSimulation.DrumPartKind?" TO STOP DRUMMING":kind==FestivalSimulation.DeckSetKind?" TO HOP OFF":" TO STOP DANCING");
+        /// ends the stage DJ set, and stops every dance.</summary>
+        public static string HoldToStopFor(string kind,string drop="G")=>"HOLD "+drop+(kind==FestivalSimulation.DrumPartKind?" TO STOP DRUMMING":kind==FestivalSimulation.DeckSetKind?" TO HOP OFF":kind=="Dj"?" TO END THE SET":" TO STOP DANCING");
         public const float HoldToStopSeconds=1;
         /// <summary>K2 (batch call 9: "you can walk away (E-hold, or moving off)"): whether p is mid talk, replying on 1-3 (its trust
         /// dance is on the lanes: StopsByHold). A talk holds you still and walking out of it (Cancel) puts every watcher on edge, so a
