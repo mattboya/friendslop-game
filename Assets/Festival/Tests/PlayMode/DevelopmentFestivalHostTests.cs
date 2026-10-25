@@ -147,6 +147,91 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // The test-build host's pause menu turns TEST MODE on. Then the HUD wears its tag, the clock reads NO LIMIT past the
+        // level's length, a detained player is offered Free me (test) and only then, and CLEAR LEVEL (TEST) ends the level.
+        [UnityTest] public IEnumerator TheHostsPauseMenuTurnsTestModeOnAndTheHudShowsIt()
+        {
+            var world=new GameObject("DEV-2 world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("DEV-2 HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in root.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            Button Find(string label){foreach(var b in root.GetComponentsInChildren<Button>(false)){var text=b.GetComponentInChildren<Text>();if(text!=null&&text.text==label)return b;}return null;}
+            string Listed(){var labels=new System.Collections.Generic.List<string>();foreach(var b in root.GetComponentsInChildren<Button>(false))if(b.name.StartsWith("Action:"))labels.Add(b.GetComponentInChildren<Text>().text);return string.Join(" | ",labels);}
+            try
+            {
+                yield return Host(session);var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);yield return new WaitForSeconds(.2f);
+                Assert.That(Read("Test mode"),Is.EqualTo("(hidden)"),"no tag while test mode is off");
+                Assert.That(Read("Time"),Does.Match(@"^\d+:\d\d$"),"the clock counts down");
+                session.MenuOpen=true;yield return null;
+                Assert.That(Find("CLEAR LEVEL (TEST)"),Is.Null,"no clear while test mode is off");
+                var toggle=Find("TEST MODE: OFF");Assert.That(toggle,Is.Not.Null,"the test-build host's pass offers TEST MODE");
+                var crew=(RectTransform)Find("CREW + NEARBY").transform;
+                Assert.That(crew.anchorMax.x,Is.LessThanOrEqualTo(((RectTransform)toggle.transform).anchorMin.x),"CREW + NEARBY makes room for the switch");
+                toggle.onClick.Invoke();yield return new WaitForSeconds(.2f);
+                Assert.That(sim.State.TestMode,Is.True,"the switch turns test mode on: "+session.Message);
+                Assert.That(Find("TEST MODE: ON"),Is.Not.Null,"the switch reads ON");
+                session.MenuOpen=false;sim.State.ElapsedSeconds=sim.State.DurationSeconds+30;yield return new WaitForSeconds(.2f);
+                Assert.That(sim.State.Phase,Is.EqualTo("Playing"),"past the level's length the level plays on");
+                Assert.That(Read("Test mode"),Is.EqualTo("TEST MODE"),"the HUD wears the tag");
+                Assert.That(Read("Time"),Is.EqualTo("NO LIMIT"),"the clock reads NO LIMIT");
+                // Your actions are on the pass's crew list.
+                session.MenuOpen=true;yield return null;
+                foreach(var b in root.GetComponentsInChildren<Button>(false))if(b.name=="CREW + NEARBY")b.onClick.Invoke();
+                yield return new WaitForSeconds(.3f);
+                Assert.That(Listed(),Does.Contain("Lie down"),"setup: your actions are listed: "+Listed());
+                Assert.That(Listed(),Does.Not.Contain("Free me (test)"),"a free player has nothing to be freed from");
+                player.Life="Detained";player.X=Festivals.SecurityBuilding.CentreX;player.Z=Festivals.SecurityBuilding.CentreZ;yield return new WaitForSeconds(.3f);
+                Assert.That(Listed(),Does.Contain("Free me (test)"),"detained, you are offered Free me: "+Listed());
+                foreach(var b in root.GetComponentsInChildren<Button>(false))if(b.GetComponentInChildren<Text>().text=="Free me (test)")b.onClick.Invoke();
+                yield return new WaitForSeconds(.2f);
+                Assert.That(player.Life=="Alive"&&player.X==24&&player.Z==2,Is.True,"Free me lets you out at 24,2: "+player.Life+" at "+player.X+", "+player.Z);
+                session.MenuOpen=true;yield return null;
+                var clear=Find("CLEAR LEVEL (TEST)");Assert.That(clear,Is.Not.Null,"in test mode the host's pass offers CLEAR LEVEL");
+                clear.onClick.Invoke();yield return new WaitForSeconds(.2f);
+                Assert.That(sim.State.Phase=="Results"&&sim.State.Result=="Success",Is.True,"CLEAR LEVEL ends the level as a success: "+sim.State.Result);
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        // A joined friend's HUD reads the host's test mode from the view: the tag and NO LIMIT come and go with it, and the
+        // friend's pass has no switch or clear of its own.
+        [UnityTest] public IEnumerator AJoinedFriendsHudShowsTheHostsTestMode()
+        {
+            var world=new GameObject("Test mode world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Test mode host");var host=hostObject.AddComponent<FestivalSession>();hostObject.AddComponent<FestivalHud>();
+            var friendObject=new GameObject("Test mode friend");var friend=friendObject.AddComponent<FestivalSession>();friendObject.AddComponent<FestivalHud>();yield return null;
+            string Read(GameObject root,string name){foreach(var text in root.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            bool Offers(GameObject root,string prefix){foreach(var b in root.GetComponentsInChildren<Button>(false)){var text=b.GetComponentInChildren<Text>();if(text!=null&&text.text.StartsWith(prefix))return true;}return false;}
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=0;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");yield return StartLevel(host,friend.LocalPlayerId);
+                yield return new WaitForSeconds(.3f);
+                Assert.That(Read(friendObject,"Test mode"),Is.EqualTo("(hidden)"),"no tag on the friend's HUD while test mode is off");
+                host.Command(FestivalSimulation.TestModeKind);yield return new WaitForSeconds(.5f);
+                Assert.That(sim.State.TestMode,Is.True,"setup: the host turns test mode on: "+host.Message);
+                Assert.That(Read(friendObject,"Test mode"),Is.EqualTo("TEST MODE"),"the friend's HUD wears the tag");
+                Assert.That(Read(friendObject,"Time"),Is.EqualTo("NO LIMIT"),"the friend's clock reads NO LIMIT");
+                friend.MenuOpen=true;host.MenuOpen=true;yield return null;
+                Assert.That(Offers(hostObject,"TEST MODE: ON"),Is.True,"setup: the host's pass has the switch");
+                Assert.That(Offers(friendObject,"TEST MODE")||Offers(friendObject,"CLEAR LEVEL"),Is.False,"the friend's pass has no switch and no clear");
+                friend.MenuOpen=false;host.MenuOpen=false;
+                host.Command(FestivalSimulation.TestModeKind);yield return new WaitForSeconds(.5f);
+                Assert.That(Read(friendObject,"Test mode"),Is.EqualTo("(hidden)"),"test mode off, the friend's tag goes");
+                Assert.That(Read(friendObject,"Time"),Does.Match(@"^\d+:\d\d$"),"test mode off, the friend's clock counts down again");
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+        }
+
         static IEnumerator Host(FestivalSession session)
         {
             session.Host("Picker",HostPort);

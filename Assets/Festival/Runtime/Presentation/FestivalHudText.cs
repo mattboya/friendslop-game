@@ -23,11 +23,15 @@ namespace Festival.Presentation
             return s.ReviewResult!=""&&s.ReviewResult!="Success"?"BACK TO DAY 1"+Dot+festival+encore:"UP NEXT"+Dot+banner;
         }
 
+        public const string NoLimit="NO LIMIT",TestModeTag="TEST MODE",FreeMeAction="Free me (test)",ClearLevelButton="CLEAR LEVEL (TEST)";
         /// <summary>Time left while playing, in whole seconds rounded up so 0:00 means the level is over; one word in every other phase.
+        /// NO LIMIT while test mode is on.
         /// MINI-1: a minigame stops it, so while one runs it stands at the time left.</summary>
         public static string Clock(RoundState s)
         {
             if(s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)return s.Phase=="Shopping"?"CAMP":s.Phase=="CampReview"?"REVIEW":s.Phase=="Results"?"DONE":"WAIT";
+            // Test mode's level never ends on time, though its clock runs on past the level's length.
+            if(s.TestMode)return NoLimit;
             int left=(int)Math.Ceiling(Math.Max(0,s.DurationSeconds-s.ElapsedSeconds));
             return left/60+":"+(left%60).ToString("00");
         }
@@ -52,7 +56,7 @@ namespace Festival.Presentation
         /// festival). The HUD pops each stage's warning once.</summary>
         public static int SundownStage(RoundState s)
         {
-            if((s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)||Festivals.For(s).Night||FestivalSimulation.DayQuotaMet(s))return 0;
+            if((s.Phase!="Playing"&&s.Phase!=FestivalSimulation.MinigamePhase)||Festivals.For(s).Night||FestivalSimulation.DayQuotaMet(s)||s.TestMode)return 0;
             double left=s.DurationSeconds-s.ElapsedSeconds;
             return left<=15?2:left<=60?1:0;
         }

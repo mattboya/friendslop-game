@@ -337,5 +337,26 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.Clock(s),Is.EqualTo("6:25"),"the clock stands at the time left");
             s.DurationSeconds+=45;Assert.That(FestivalHudText.Clock(s),Is.EqualTo("7:10"),"a gain shows on it at once");
         }
+
+        // In test mode the level clock runs past the level's length. The clock reads NO LIMIT while the level plays or a game
+        // runs, and no sundown warning shows, however far past the length it runs; the other phases read as ever.
+        [Test]public void TestModesClockReadsNoLimitAndNeverWarnsOfSundown()
+        {
+            var s=Level(out var you,out _);s.TestMode=true;
+            foreach(double past in new[]{-50.0,0,30,600})
+            {
+                s.ElapsedSeconds=s.DurationSeconds+past;
+                foreach(var phase in new[]{"Playing",FestivalSimulation.MinigamePhase})
+                {
+                    s.Phase=phase;
+                    Assert.That(FestivalHudText.Clock(s),Is.EqualTo("NO LIMIT"),phase+", "+past+" s past the length");
+                    Assert.That(FestivalHudText.SundownStage(s),Is.Zero,phase+", "+past+" s past the length: no sundown warning");
+                    Assert.That(FestivalHudText.SundownLine(s,you),Is.Empty);
+                }
+            }
+            s.Phase="Results";Assert.That(FestivalHudText.Clock(s),Is.EqualTo("DONE"),"the results read DONE as ever");
+            s.Phase="Playing";s.TestMode=false;s.ElapsedSeconds=s.DurationSeconds-50;
+            Assert.That(FestivalHudText.Clock(s)=="0:50"&&FestivalHudText.SundownStage(s)==1,Is.True,"test mode off, the clock and the warning are back");
+        }
     }
 }

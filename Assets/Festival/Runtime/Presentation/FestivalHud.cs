@@ -52,6 +52,8 @@ namespace Festival.Presentation
         private GameObject titlePanel, menuPanel, menuShade, actionsPanel, rhythmPanel, rhythmShade, dancePanel, dialoguePanel, mapPanel, mapShade, noticePanel, promptPanel, trippingPanel, rosterPanel, inventoryPanel, reticle,settingsPanel,menuHome,checkoutPanel,heldDetailPanel,reviewPanel;
         private FestivalDancePreview dancePreview;
         private GameObject objectivePanel, timerPanel, vitalPanel;
+        private GameObject testModeTag, testModeButton, clearLevelButton;
+        private RectTransform crewButton;
         private RectTransform threatFill;
         private Image threatFillImage;
         private Text threatWord;
@@ -395,7 +397,10 @@ namespace Festival.Presentation
             // LOOP-5: a day's last minute adds "or the weekend restarts" to the quota's line and its next step, so it may shrink.
             ShrinkToFit(objective,14);
             timerPanel=Card(root.transform,"Round clock",new Vector2(.452f,.914f),new Vector2(.548f,.974f),true);
-            timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);
+            timerText=Label(timerPanel.transform,"Time",31,TextAnchor.MiddleCenter);timerText.fontStyle=FontStyle.Normal;Fill(timerText.rectTransform,4);ShrinkToFit(timerText,18);
+            testModeTag=Card(root.transform,"Test mode tag",new Vector2(.556f,.934f),new Vector2(.648f,.974f),true);Accent(testModeTag.transform,Orange);
+            var testModeText=Label(testModeTag.transform,"Test mode",16,TextAnchor.MiddleCenter);testModeText.fontStyle=FontStyle.Normal;testModeText.color=Orange;testModeText.text=FestivalHudText.TestModeTag;Fill(testModeText.rectTransform,3);ShrinkToFit(testModeText,11);
+            testModeTag.SetActive(false);
             // Who trips this level and on how many doses, under the clock for the whole crew (UpdateTrippingLayout sizes it).
             trippingPanel=Card(root.transform,"Tripper card",new Vector2(.36f,.864f),new Vector2(.64f,.906f),true);
             Accent(trippingPanel.transform,Orange);
@@ -708,7 +713,10 @@ namespace Festival.Presentation
             nextButton=Button(menuHome.transform,"NEXT CAMP",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>session.Command("Reset"));
             cancelButton=Button(menuHome.transform,"CANCEL ACTION",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>FinishCurrentAction(session?.LocalPlayer?.InteractionId));
             resumeButton=Button(menuHome.transform,"RESUME FESTIVAL",new Vector2(.045f,.385f),new Vector2(.955f,.50f),()=>{session.MenuOpen=false;settingsOpen=false;});
-            Button(menuHome.transform,"CREW + NEARBY",new Vector2(.045f,.26f),new Vector2(.955f,.375f),()=>{crewOpen=!crewOpen;});
+            crewButton=(RectTransform)Button(menuHome.transform,"CREW + NEARBY",new Vector2(.045f,.26f),new Vector2(.955f,.375f),()=>{crewOpen=!crewOpen;}).transform;
+            testModeButton=Button(menuHome.transform,"TEST MODE: OFF",new Vector2(.505f,.26f),new Vector2(.725f,.375f),()=>session.Command(FestivalSimulation.TestModeKind));
+            clearLevelButton=Button(menuHome.transform,FestivalHudText.ClearLevelButton,new Vector2(.735f,.26f),new Vector2(.955f,.375f),()=>session.Command(FestivalSimulation.TestClearLevelKind));
+            foreach(var button in new[]{testModeButton,clearLevelButton}){ShrinkToFit(button.GetComponentInChildren<Text>(),12);button.SetActive(false);}
             Button(menuHome.transform,"SETTINGS",new Vector2(.045f,.135f),new Vector2(.495f,.25f),()=>{settingsOpen=true;});
             Button(menuHome.transform,"HOW TO PLAY",new Vector2(.505f,.135f),new Vector2(.955f,.25f),OpenHowToPlay);
             Button(menuHome.transform,"LEAVE SESSION",new Vector2(.045f,.01f),new Vector2(.955f,.125f),()=>{session.Leave();titleScreen.Open(FestivalTitleScreen.Page.Home);});
@@ -936,7 +944,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){lifeUntil=0;lifePanel.SetActive(false);spiritTag.SetActive(false);saleStampPanel.SetActive(false);ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){lifeUntil=0;lifePanel.SetActive(false);spiritTag.SetActive(false);saleStampPanel.SetActive(false);ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);testModeTag.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -952,6 +960,12 @@ namespace Festival.Presentation
             cancelButton.SetActive(state.Phase=="Playing"&&FestivalHudText.CanCancel(state,player));
             cancelButton.GetComponentInChildren<Text>().text=ActiveConfirmation(state,player)!=null?"FINISH CHAT CHECK":"CANCEL ACTION";
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
+            // Only a test build's host may send these. Everyone else, a joined friend too, still sees the tag.
+            bool tester=session.IsHost&&session.DevelopmentFestivalSelection;
+            testModeButton.SetActive(tester);clearLevelButton.SetActive(tester&&state.TestMode&&state.Phase=="Playing");
+            testModeButton.GetComponentInChildren<Text>().text=state.TestMode?"TEST MODE: ON":"TEST MODE: OFF";
+            crewButton.anchorMax=new Vector2(tester?.495f:.955f,crewButton.anchorMax.y);
+            testModeTag.SetActive(state.TestMode);
             UpdateText(state,player);
             trippingPanel.SetActive(!showMenu&&tripping.text!="");
             UpdateGearLayout(handGear.Count>0);
@@ -2104,6 +2118,7 @@ namespace Festival.Presentation
                 if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
             }
             if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
+            if(state.Phase=="Playing"&&state.TestMode&&player.Life=="Detained")AddAction(FestivalHudText.FreeMeAction,()=>session.Command(FestivalSimulation.TestFreeKind),ref y);
             if(!lying&&FestivalHudText.CanCancel(state,player))
             {
                 // PLAYA-5: a plain art car ride lists its deck set beside the way off. Both read the view again when chosen, so a list
