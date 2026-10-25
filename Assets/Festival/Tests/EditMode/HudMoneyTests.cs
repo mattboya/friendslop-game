@@ -184,10 +184,12 @@ namespace Festival.Tests
             news.Watch(Friend,13f);news.Watch(Sold,12.9f+FestivalHudText.MoneyNewsSeconds+.1f);
             Assert.That(news.Take(16)?.Text,Is.EqualTo(Stash),"a line that had its slot does not show again");
             news.Watch("",16.5f);news.Watch(Sold,16.6f);
-            Assert.That(news.Take(19),Is.Null,"a clear is not another line");
-            Log(Friend);Assert.That(news.Take(20)?.Text,Is.EqualTo(Friend),"setup: the line is up");
-            game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();news.Follow(game.State,ash,1);news.Watch(Sold,20.4f);
-            Assert.That(news.Take(23),Is.Null,"a new level forgets the last level's line");
+            Assert.That(news.Take(19)?.Text,Is.EqualTo(Stash),"a line cleared by your last reply's key and then cut by your sale shows again");
+            news.Watch("",19.5f);news.Watch(Sold,19+FestivalHudText.MoneyNewsSeconds+.1f);
+            Assert.That(news.Take(23),Is.Null,"a clear with no other line inside the slot is not another line");
+            Log(Friend);Assert.That(news.Take(24)?.Text,Is.EqualTo(Friend),"setup: the line is up");
+            game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();news.Follow(game.State,ash,1);news.Watch(Sold,24.4f);
+            Assert.That(news.Take(27),Is.Null,"a new level forgets the last level's line");
         }
         // A change to your cash or the level's SALES lights the card's money as a paid sale does; the stash and items have no flash.
         [Test] public void OnlyCashAndSalesNewsFlashTheCard()

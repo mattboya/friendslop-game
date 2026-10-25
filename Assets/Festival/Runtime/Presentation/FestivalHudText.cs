@@ -499,11 +499,12 @@ namespace Festival.Presentation
                 line=due[0];due.RemoveAt(0);lineUntil=now+MoneyNewsSeconds;return line;
             }
             /// <summary>Reads the notice line each frame. When another line replaces the notice Take gave before its MoneyNewsSeconds
-            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) gives nothing back.</summary>
+            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) alone gives nothing back.</summary>
             public void Watch(string message,float now)
             {
-                if(line==null||message==line.Text)return;
-                if(!string.IsNullOrEmpty(message)&&now<lineUntil)due.Insert(0,line);
+                // A clear keeps the watch: a 1-3 reply key, or a client's result, clears the line a frame before the sale's notice.
+                if(line==null||message==line.Text||string.IsNullOrEmpty(message))return;
+                if(now<lineUntil)due.Insert(0,line);
                 line=null;
             }
         }

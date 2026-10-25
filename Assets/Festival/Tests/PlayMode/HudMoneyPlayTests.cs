@@ -8,6 +8,8 @@ using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 using TMPro;
@@ -329,9 +331,11 @@ namespace Festival.Tests
         }
 
         // A crewmate's sale line that your own sale's notice replaces .4 s later shows again once your sale's notice has had its
-        // MoneyNewsSeconds, so both sales read in full.
+        // MoneyNewsSeconds, so both sales read in full. Your last reply goes in by its 1-3 key, so its accepted clear lands inside the
+        // HUD's frame, before the sale's notice.
         [UnityTest]public IEnumerator AFriendsSaleLineComesBackAfterYourOwnSale()
         {
+            UseAVirtualKeyboard("Two sales keyboard");
             var world=new GameObject("Two sales world");world.AddComponent<FestivalWorld>();yield return null;
             var hud=new GameObject("Two sales HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
             string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
@@ -356,18 +360,25 @@ namespace Festival.Tests
                 }
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="two_sales_mine",Kind="StartSale",TargetId=mine.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: your sale");
                 for(int t=1;t<FestivalSimulation.ConversationTurns;t++)Assert.That(Reply(player),Is.True,"setup: your reply "+t);
-                yield return new WaitForSeconds(.6f);
+                var mySale=sim.Interaction(player.InteractionId);var lastTurn=mySale.Turns[mySale.Turns.Count-1];
+                int smooth=System.Array.IndexOf(lastTurn.Grades,ConversationLines.Smooth);
+                var chat=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                for(float end=Time.realtimeSinceStartup+8;!(chat.Open&&chat.CanReply(smooth))&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(chat.Open&&chat.CanReply(smooth),Is.True,"setup: the chat window offers your last reply");
+                session.SetMessage("");yield return null;
                 Assert.That(sim.Execute(mate.Id,new GameCommand{Id="two_sales_theirs",Kind="StartSale",TargetId=theirs.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: their sale");
                 for(var talk=sim.Interaction(mate.InteractionId);talk.Status=="Active";)Assert.That(Reply(mate),Is.True,"setup: their reply");
-                bool mineDone=false;string last=null;
+                int pressed=-1;string last=null;
                 for(float start=Time.realtimeSinceStartup,end=start+8;Time.realtimeSinceStartup<end;)
                 {
-                    if(!mineDone&&Time.realtimeSinceStartup-start>.4f){Assert.That(Reply(player),Is.True,"setup: your last reply");mineDone=true;}
+                    if(pressed<0&&Time.realtimeSinceStartup-start>.4f){pressed=0;InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState((Key)((int)Key.Digit1+smooth)));}
+                    else if(pressed>=0&&++pressed==3)InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());
                     string shown=Read("Notice");
                     if(shown.StartsWith("SALES"))friendFor+=Time.unscaledDeltaTime;else if(shown.StartsWith("SOLD"))mineFor+=Time.unscaledDeltaTime;
                     if(shown!=last){log.Add((Time.realtimeSinceStartup-start).ToString("0.00")+"s "+shown);last=shown;}
                     yield return null;
                 }
+                Assert.That(lastTurn.Pick,Is.EqualTo(smooth),"setup: your last reply went in by its key");
             }
             finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
             yield return null;
