@@ -1398,13 +1398,16 @@ namespace Festival.Presentation
         }
         // TWISTVIS-1: the evening haze and Ember Playa's dust storms are fog, which the editor always draws but a player only draws
         // when its build kept the fog shaders (ProjectBootstrap). Closes a magenta fog in a metre out and checks the screen turns
-        // magenta, then puts the fog back.
+        // magenta, then puts the fog back. It counts the capture camera's own render at its capture pose, so the overlays drawn over the
+        // screen (Pony Dust's and Couch Lock's sleepy eyes, the HUD) never count against the fog.
         IEnumerator CheckFogDraws()
         {
             bool fog=RenderSettings.fog;var mode=RenderSettings.fogMode;var color=RenderSettings.fogColor;float start=RenderSettings.fogStartDistance,end=RenderSettings.fogEndDistance;
             RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=Color.magenta;RenderSettings.fogStartDistance=0;RenderSettings.fogEndDistance=1;
-            yield return new WaitForEndOfFrame();
-            var shot=ScreenCapture.CaptureScreenshotAsTexture();
+            var view=captureCamera;view.transform.SetPositionAndRotation(capturePosition,captureRotation);
+            var target=RenderTexture.GetTemporary(Screen.width,Screen.height,24);var shot=new Texture2D(target.width,target.height,TextureFormat.RGBA32,false);var was=RenderTexture.active;
+            var aimed=view.targetTexture;view.targetTexture=target;view.Render();view.targetTexture=aimed;
+            RenderTexture.active=target;shot.ReadPixels(new Rect(0,0,target.width,target.height),0,0);RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);
             RenderSettings.fog=fog;RenderSettings.fogMode=mode;RenderSettings.fogColor=color;RenderSettings.fogStartDistance=start;RenderSettings.fogEndDistance=end;
             var pixels=shot.GetPixels32();Destroy(shot);
             int fogged=0;foreach(var p in pixels)if(p.r>p.g+64&&p.b>p.g+64)fogged++;
