@@ -12,7 +12,8 @@ public static class DjSetTests
         var failures=new List<string>();
         foreach(var test in new Action[]{TheSetPutsYouOnTheRiserAndItsEndPutsYouBack,TheRideRidesTheStageSongsBeatInThreeLanes,
             GreysComeFromNightOneAndLaterPhrasesGetBusier,CatchingEveryBlockAndDodgingEveryGreyScoresOne,StayingInOneLaneScoresAboutAThird,
-            AGreyHitCostsATenthAndOnlyLaneChangesCount,AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage})
+            AGreyHitCostsATenthAndOnlyLaneChangesCount,ALaneChangeThatCatchesNothingCostsATenth,BlindMashingNeverEarnsTheCrowd,
+            AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" DJ set test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -162,12 +163,52 @@ public static class DjSetTests
         List<RhythmInput> In(params (int lane,double t,bool release)[] changes){var list=new List<RhythmInput>();foreach(var c in changes)list.Add(new RhythmInput{Direction=c.lane,TimeSeconds=c.t,Release=c.release});return list;}
         Check(DjRide.Replay(chart,In(),.15).Score==.25,"no inputs: the middle lane catches the last block only");
         Check(DjRide.Replay(chart,In((0,2,false),(2,3,false),(1,3.5,false)),.15).Score==1,"every block caught on time, no grey hit");
-        Check(Math.Abs(DjRide.Replay(chart,In((0,1.9,false),(2,2.1,false),(0,2.4,false),(2,3,false),(1,3.6,false)),.15).Score-(1-.1))<1e-9,"sitting in the grey's lane as it arrives costs a tenth; a block caught within the window still counts");
+        Check(Math.Abs(DjRide.Replay(chart,In((0,1.9,false),(2,2.1,false),(0,2.4,false),(2,3,false),(1,3.6,false)),.15).Score-(1-.2))<1e-9,"sitting in the grey's lane as it arrives costs a tenth, and so does the move there that catches nothing; a block caught within the window still counts");
         Check(DjRide.Replay(chart,In((0,2.16,false),(2,3,false),(1,3.5,false)),.15).Score==.75,"a lane change too late for its block misses it");
         Check(DjRide.Replay(chart,In((3,1,false),(0,2,true),(0,2,false),(2,3,false),(1,3.5,false)),.15).Score==1,"a lane outside 0-2 and a release change nothing");
         Check(DjRide.Replay(chart,In((2,3,false),(0,2,false),(1,3.5,false)),.15).Score==1,"inputs replay in time order, whatever order they arrived in");
         var live=DjRide.Replay(chart,In((0,2,false)),.15,2.7);
         Check(live.Blocks==2&&live.Caught==2&&live.Combo==2&&live.GreysHit==0,"a live replay counts only the notes due so far, with the combo");
+    }
+
+    static List<RhythmInput> Changes(params (int lane,double t)[] changes){var list=new List<RhythmInput>();foreach(var c in changes)list.Add(new RhythmInput{Direction=c.lane,TimeSeconds=c.t});return list;}
+    static void ALaneChangeThatCatchesNothingCostsATenth()
+    {
+        // Blocks on beats 0-3 in lanes 0, 0, 2, 1, on a .5 s grid.
+        var chart=new RhythmChart{DurationSeconds=4};
+        void Note(RhythmChart c,double t,int lane,bool grey=false)=>c.Notes.Add(new RhythmNote{Id=c.Notes.Count,Direction=lane,TimeSeconds=t,Grey=grey});
+        Note(chart,2,0);Note(chart,2.5,0);Note(chart,3,2);Note(chart,3.5,1);
+        Check(DjRide.Replay(chart,Changes((0,2),(2,3),(1,3.5)),.15).Score==1,"setup: a clean ride scores 1");
+        var wasted=Changes((0,2),(1,2.6),(0,2.7),(2,3),(1,3.5));
+        Check(Math.Abs(DjRide.Replay(chart,wasted,.15).Score-.8)<1e-9,"an out-and-back that catches nothing costs a tenth a move, as an extra press does on the arrow lanes");
+        Check(DjRide.Replay(chart,Changes((0,2),(1,2.9),(2,3),(1,3.5)),.15).Score==1,"a step through the middle lane on the way across is free");
+        Check(DjRide.Replay(chart,wasted,.15,2.9).Score==1&&Math.Abs(DjRide.Replay(chart,wasted,.15,3.35).Score-.8)<1e-9,"a live replay charges a move only once no block can still be caught by it");
+        // A grey in the middle lane between a middle block and a left one.
+        var dodge=new RhythmChart{DurationSeconds=3.5};Note(dodge,2,1);Note(dodge,2.5,1,true);Note(dodge,3,0);
+        Check(Math.Abs(DjRide.Replay(dodge,Changes((0,2.9)),.15).Score-.9)<1e-9,"staying in a grey's lane as it arrives costs a tenth");
+        Check(DjRide.Replay(dodge,Changes((2,2.4),(1,2.8),(0,2.9)),.15).Score==1,"a move that dodges a grey is free, even the long way round");
+    }
+
+    // A blind masher: the lane steps through a fixed pattern a press at a time, from chart time .05 to the phrase's end, never
+    // looking at the chart. The arrow set it replaced scored 0 for this.
+    static void BlindMashingNeverEarnsTheCrowd()
+    {
+        foreach(var (pattern,rate) in new[]{(new[]{0,1,2,1},6.0),(new[]{0,1,2,1},8.0),(new[]{0,1},6.0)})foreach(int level in new[]{0,1})
+        {
+            double total=0;int good=0;const int Seeds=40;
+            for(int seed=0;seed<Seeds;seed++)
+            {
+                var game=Floor(seed%2,level,seed);var i=Start(game);
+                for(int phrase=0;phrase<5;phrase++)
+                {
+                    int k=0;for(double t=.05;t<i.DurationSeconds;t+=1/rate)Lane(game,i,pattern[k++%pattern.Length],t);
+                    Verdict(game,i);total+=i.Score;if(i.Score>=.75)good++;
+                }
+            }
+            string what="mashing "+string.Join("-",pattern)+" at "+rate+" presses a second on level "+level;
+            Check(total/(Seeds*5)<.3,what+" scores under .3 on average, got "+total/(Seeds*5));
+            Check(good<=2,what+" distracts the crowd at most twice in 200 phrases, got "+good);
+        }
     }
 
     static void AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered()
