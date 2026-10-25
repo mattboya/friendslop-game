@@ -11,11 +11,12 @@ namespace Festival.Core
 
     // DIALOG-3: what's said in a talk, built by a LineGrammar (DIALOG-4) that holds FestivalLines' parts as well as these.
     // - Topics: a chat (Conversation) is "talk", a sale "sale", a buy "buy" and a talk with security "security".
+    // - A talk's turns are its Rounds, each with its own replies (ReplyKind) and its own line for them (Body).
     // - Their first line is their persona's opener (FestivalLines' "opener.<persona>"), so it hints at who they are; security
     //   opens on one of its lines ("police"). Each later turn opens on their reaction to your reply, in their persona's voice
-    //   (a silence gets its own), then the topic's line: a festivalgoer's small talk (a regular's chat-check answer), a buyer's
-    //   or a seller's line ("sale", "buy"), or security's. In a chat or a buy, a reply that lands draws out a clear line with
-    //   the person's tell (Body), and the first one shown sets the Hunch.
+    //   (a silence gets its own), then their line for the round: a festivalgoer's small talk (a regular's chat-check answer), a
+    //   buyer's or a seller's line ("sale", "buy") at the ask, security's, or the round's own ("line.<topic>.<round>"). In a chat
+    //   or a buy, a reply that lands draws out a clear line with the person's tell (Body), and the first one shown sets the Hunch.
     // - Your replies come in five Styles. Each persona likes one (the smooth reply) and can't stand one (the awkward reply); the
     //   so-so reply is one of the other three. Security likes it plain and can't stand the cosmic.
     // - Only fictional goods are named, only a narc's lines carry a narc's cop-speak (DialogueGrammar.NarcTells), and every line
@@ -35,8 +36,9 @@ namespace Festival.Core
             ["Wook"]=(0,1),["Influencer"]=(1,2),["Burner"]=(2,1),["Raver"]=(3,4),["DraggedAlongDad"]=(4,3),[Security]=(4,0)};
         public static string Topic(string kind)=>kind=="Sale"?"sale":kind=="Buy"?"buy":kind=="Police"?"security":"talk";
 
-        // A turn of a talk on `topic` with `persona` on `festival`: turn 0 opens it; a later one follows a reply of grade `heard`
-        // (Silence for none), and is `clear` when the reply drew their `role`'s tell out. `garbled` of the replies come out jumbled. Drawn from `random` in order (their reaction, their
+        // A turn of a talk on `topic` with `persona` on `festival`, in the round of the same number: turn 0 opens it; a later one
+        // follows a reply of grade `heard` (Silence for none), and is `clear` when the reply drew their `role`'s tell out.
+        // `garbled` of the replies come out jumbled. Drawn from `random` in order (their reaction, their
         // line, the so-so style, the replies' order, the replies, the garbling), and given `history` each line heard lately is
         // drawn again and each line drawn is remembered (DialogueHistory.Fresh), as DialogueGrammar's chats are.
         // What a chat or a buy leaves you feeling (Conversations.cs): a hunch, never a verdict.
@@ -46,11 +48,12 @@ namespace Festival.Core
             if(Array.IndexOf(Topics,topic)<0||!Tastes.TryGetValue(persona,out var taste)) throw new ArgumentException("Unknown talk topic or persona: "+topic+", "+persona);
             var said=new ConversationTurn();
             if(turn>0) said.Reaction=Say(heard==Silence?"react.silence":"react."+persona+"."+heard,festival,random,history,said.GrammarKeys);
-            said.Line=Say(turn>0?Body(topic,role,clear):persona==Security?"police":"opener."+persona,festival,random,history,said.GrammarKeys);
+            int round=Math.Min(turn,Rounds.Length-1);
+            said.Line=Say(turn>0?Body(topic,role,clear,Rounds[round]):persona==Security?"police":"opener."+persona,festival,random,history,said.GrammarKeys);
             int skip=random.Next(3),soso=-1;
             for(int style=0;soso<0;style++) if(style!=taste.liked&&style!=taste.hated&&skip--==0) soso=style;
             var styles=new[]{taste.liked,soso,taste.hated};var grades=new[]{Smooth,SoSo,Awkward};Shuffle(grades,random);
-            for(int r=0;r<3;r++) { said.Grades[r]=grades[r]; said.Replies[r]=Say("reply."+topic+"."+Styles[styles[grades[r]]],festival,random,history,said.GrammarKeys); }
+            for(int r=0;r<3;r++) { said.Grades[r]=grades[r]; said.Replies[r]=Say(ReplyKind(topic,round,Styles[styles[grades[r]]]),festival,random,history,said.GrammarKeys); }
             if(garbled>0)
             {
                 var spots=new[]{0,1,2};Shuffle(spots,random);
@@ -58,16 +61,18 @@ namespace Festival.Core
             }
             return said;
         }
-        // What a festivalgoer or security says after the first turn: small talk, a buyer's or a seller's line, or security's. A
-        // clear line in a chat or a buy carries the person's tell, as the chat check's answers do: a narc's cop-speak (their small
-        // talk, or a seller's line round a slip), a buyer's wish to buy, a clue holder's landmark; anyone else's is plain.
-        private static string Body(string topic,string role,bool clear)
+        // What a festivalgoer or security says after the first turn, in `round`: small talk, then the ask (a buyer's or a seller's
+        // line, or a chat's real question), then the close; security questions you until it wraps up. A clear line in a chat or a
+        // buy carries the person's tell in any round, as the chat check's answers do: a narc's cop-speak (their small talk, or a
+        // seller's line round a slip), a buyer's wish to buy, a clue holder's landmark; anyone else's is plain.
+        private static string Body(string topic,string role,bool clear,string round)
         {
-            if(topic=="sale") return "sale";
-            if(topic=="security") return "police";
+            if(topic=="sale") return round=="ask"?"sale":"line.sale."+round;
+            if(topic=="security") return round=="close"?"line.security.close":"police";
             if(clear&&role=="ClueHolder") return "talk.clue";
-            if(topic=="buy") return clear&&role=="Narc"?"buy.narc":"buy";
-            return clear&&(role=="Narc"||role=="Buyer")?"answer."+role+".0":"answer.Regular.0";
+            if(topic=="buy") return clear&&role=="Narc"?"buy.narc":round=="ask"?"buy":"line.buy."+round;
+            if(clear&&(role=="Narc"||role=="Buyer")) return "answer."+role+".0";
+            return round=="small"?"answer.Regular.0":"line.talk."+round;
         }
         // The hunch a chat or a buy leaves, from its first clear line (`told`, null if none came through): their role's tell, or
         // nothing to go on.
@@ -378,18 +383,13 @@ namespace Festival.Core
         };
         // FestivalLines' parts and these, each reply: its round's body in its style, bare or dressed with the style's hello or tail
         // ("reply.<topic>.<round>.<style>", ReplyKind), and each reaction: its lead, then its comment ("react.<persona>.<grade>",
-        // "react.silence"). Until each turn draws its own round, "reply.<topic>.<style>" stays the round each talk's replies
-        // came from before: a chat's small talk, a sale's pitch, a buy's ask and your story for security.
+        // "react.silence").
         private static Dictionary<string,string[]> Tables()
         {
             var all=new Dictionary<string,string[]>(FestivalLines.Parts);
             foreach(var part in Parts) all.Add(part.Key,part.Value);
             string[] Dressed(string body,string style)=>new[]{"{"+body+"}","{~"+style+"_hi} {"+body+"}","{"+body+"} {~"+style+"_tail}"};
-            foreach(var topic in Topics) foreach(var style in Styles)
-            {
-                all.Add("reply."+topic+"."+style,Dressed(topic+"."+(topic=="talk"?"small":"ask")+"."+style,style));
-                for(int round=0;round<Rounds.Length;round++) all.Add(ReplyKind(topic,round,style),Dressed(topic+"."+Rounds[round]+"."+style,style));
-            }
+            foreach(var topic in Topics) foreach(var style in Styles) for(int round=0;round<Rounds.Length;round++) all.Add(ReplyKind(topic,round,style),Dressed(topic+"."+Rounds[round]+"."+style,style));
             foreach(var persona in Tastes.Keys) for(int grade=Smooth;grade<=Awkward;grade++) all.Add("react."+persona+"."+grade,new[]{"{react_lead."+persona+"."+grade+"} {react_more."+persona+"."+grade+"}"});
             all.Add("react.silence",new[]{"{react_lead.silence} {react_more.silence}"});
             return all;

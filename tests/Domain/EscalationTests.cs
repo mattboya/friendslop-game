@@ -274,7 +274,7 @@ public static class EscalationTests
     static void TalkingYourWayOut()
     {
         bool open=true;var s=Stopped(out var cop,out var a,()=>open);s.Tick(1);
-        var talk=Talk(s,a,cop,Smooth,Smooth,SoSo);Finish(s,talk);
+        var talk=Talk(s,a,cop,Smooth,Smooth,SoSo,SoSo);Finish(s,talk);
         Check(talk.Status=="Complete"&&talk.Score>=.75&&talk.Score<.85,"setup: the talk scores .75 or a little more (got "+talk.Score+")");
         for(int tick=0;tick<20;tick++){InFront(cop,a,3);s.Tick(.1);}
         Check(cop.Mode=="Patrol"&&cop.TargetId==""&&!cop.Evidence.Exists(e=>e.Kind=="VisibleStock"),"a talk scoring .75 clears the stop: 2 s on, stock right in front of the guard, it lets them be (mode "+cop.Mode+")");
@@ -282,16 +282,19 @@ public static class EscalationTests
         Check(cop.Mode=="Stop","once the guard has lost sight of them, stock in view starts a fresh stop (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);double began=s.State.SimulationSeconds;s.Tick(1);
-        talk=Talk(s,a,cop,Smooth,SoSo,Awkward);Finish(s,talk);
+        talk=Talk(s,a,cop,Smooth,SoSo,Awkward,SoSo);Finish(s,talk);
         Check(talk.Status=="Complete"&&talk.Score>=.5&&talk.Score<.75,"setup: the talk scores .5 or a little more, under .75 (got "+talk.Score+")");
         s.Tick(.1);Check(cop.Mode=="Stop","a talk scoring .5 keeps the stop (mode "+cop.Mode+")");
         s.Tick(19.85-(s.State.SimulationSeconds-began));Check(cop.Mode=="Stop","its clock runs on: a stop until 20 s (mode "+cop.Mode+")");
         s.Tick(.3);Check(cop.Mode=="ArrestWarning","and an arrest warning at 20 s (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);began=s.State.SimulationSeconds;s.Tick(17);
-        talk=Talk(s,a,cop,Silence);bool warned=false;
-        for(int guard=0;talk.Status=="Active"&&guard<300;guard++){s.Tick(.1);warned|=cop.Mode=="ArrestWarning";}
+        talk=Talk(s,a,cop,Silence);bool warned=false,free=true;
+        for(int guard=0;talk.Status=="Active"&&guard<300;guard++){s.Tick(.1);warned|=cop.Mode=="ArrestWarning";free&=a.Life=="Alive";}
         Check(s.State.SimulationSeconds-began>20.5&&!warned,"a talk running past 20 s holds the arrest warning (talk over at "+(s.State.SimulationSeconds-began)+" s, warned "+warned+")");
+        // Four timed turns of silence run the talk from 17 s to 33 s, past the 20 s warning and the 4 s after it, and still
+        // nobody is detained mid-talk.
+        Check(free&&talk.Turns.Count==FestivalSimulation.ConversationTurns&&s.State.SimulationSeconds-began>=17+FestivalSimulation.ConversationTurns*FestivalSimulation.ReplySeconds-.2,"four silent turns run the talk to "+(s.State.SimulationSeconds-began)+" s with no arrest mid-talk ("+a.Life+", "+talk.Turns.Count+" turns)");
         s.Tick(.1);Check(cop.Mode=="ArrestWarning","then the poor talk is over and it comes (mode "+cop.Mode+")");
     }
 
@@ -305,12 +308,12 @@ public static class EscalationTests
         var s=Stopped(out var cop,out var a);double began=s.State.SimulationSeconds;double Held()=>s.State.SimulationSeconds-began;
         s.Tick(8);var talk=Talk(s,a,cop);s.Tick(2);Reply(s,a,talk,Smooth);s.Tick(2.5);
         Check(Held()>12.4&&talk.Status=="Active"&&!Says(a,LastChance),"mid-talk at "+Held()+" s the guard doesn't warn (\""+a.NpcSpeech+"\")");
-        Reply(s,a,talk,Smooth);Reply(s,a,talk,Smooth);s.Tick(.1);
+        Reply(s,a,talk,Smooth);Reply(s,a,talk,Smooth);Reply(s,a,talk,Smooth);s.Tick(.1);
         Check(talk.Score>=.75&&cop.Evidence.Exists(e=>e.Kind=="WavedOn"),"setup: the talk waves them on (score "+talk.Score+")");
         Check(a.NpcSpeech=="","waved on, nothing the guard said stands (\""+a.NpcSpeaker+": "+a.NpcSpeech+"\")");
 
         s=Stopped(out cop,out a);began=s.State.SimulationSeconds;
-        s.Tick(8);talk=Talk(s,a,cop);s.Tick(2);Reply(s,a,talk,Smooth);s.Tick(2.5);Reply(s,a,talk,Awkward);Reply(s,a,talk,Awkward);
+        s.Tick(8);talk=Talk(s,a,cop);s.Tick(2);Reply(s,a,talk,Smooth);s.Tick(2.5);Reply(s,a,talk,Awkward);Reply(s,a,talk,Awkward);Reply(s,a,talk,Awkward);
         Check(talk.Status=="Complete"&&talk.Score<.75,"setup: a poor talk (score "+talk.Score+")");
         Check(Says(a,LastChance)&&a.NpcSpeechUntil>s.State.SimulationSeconds,"a poor talk over at "+Held()+" s, past 12 s: the guard warns them as it ends (\""+a.NpcSpeech+"\")");
         s.Tick(.1);Check(cop.Mode=="Stop","and the stop holds (mode "+cop.Mode+")");

@@ -68,7 +68,7 @@ namespace Festival.Tests
         [Test] public void RetainedOutcomeCarriesItsSourceNpcOnlyInTheOwnerSnapshot()
         {
             var game=Day(out var you,out var them);var talk=Talk(game,you,them);
-            for(int t=0;t<3;t++)Assert.That(game.Execute(you.Id,new GameCommand{Id="target_reply_"+t,Kind="Reply",Amount=Smooth(talk.Turns[t]),Direction=t}).Accepted,Is.True);
+            for(int t=0;t<FestivalSimulation.ConversationTurns;t++)Assert.That(game.Execute(you.Id,new GameCommand{Id="target_reply_"+t,Kind="Reply",Amount=Smooth(talk.Turns[t]),Direction=t}).Accepted,Is.True);
             var outcome=you.ConversationOutcomes[0];
             Assert.That(JsonUtility.ToJson(outcome),Does.Contain("\"TargetId\":\""+them.Id+"\""),"a retained outcome needs source identity after the active interaction is gone");
             string owner=JsonUtility.ToJson(View(game,you.Id)),other=JsonUtility.ToJson(View(game,"friend"));
@@ -182,7 +182,7 @@ namespace Festival.Tests
                 Assert.That(window.Pick(Smooth(turn)),Is.True,"reply "+(t+1)+" picked");
                 Assert.That(Thread(window),Has.None.StartsWith("= "),"no hunch while the talk is on");
             }
-            Assert.That(talk.Status,Is.EqualTo("Complete"),"setup: the third reply ends the chat");
+            Assert.That(talk.Status,Is.EqualTo("Complete"),"setup: the last reply ends the chat");
             Assert.That(talk.Hunch,Does.StartWith("You get the feeling"),"setup: a chat leaves a hunch");
             float over=FestivalSimulation.ConversationTurns;
             Assert.That(Follow(window,game,you.Id,over),Is.False,"the chat is over");
@@ -358,7 +358,7 @@ namespace Festival.Tests
             Assert.That(label,Is.Not.Null,"setup: reply 1 has its label");
             var replies=new HashSet<string>();
             foreach(var topic in ConversationLines.Topics)foreach(var persona in new List<string>(DialogueGrammar.Personas){ConversationLines.Security})for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<40;seed++)
-                foreach(var reply in ConversationLines.Turn(topic,persona,"Regular",festival,seed%3,seed%4==3?ConversationLines.Silence:seed%3,false,seed%3,new ContentRandom(seed)).Replies)replies.Add(reply);
+                foreach(var reply in ConversationLines.Turn(topic,persona,"Regular",festival,seed%FestivalSimulation.ConversationTurns,seed%4==3?ConversationLines.Silence:seed%3,false,seed%3,new ContentRandom(seed)).Replies)replies.Add(reply);
             var settings=label.GetGenerationSettings(label.rectTransform.rect.size);var measure=new TextGenerator();var cut=new List<string>();
             foreach(var reply in replies){measure.Populate(reply,settings);if(measure.characterCountVisible<reply.Length)cut.Add(reply);}
             Assert.That(replies.Count,Is.GreaterThan(500),"setup: the talks' replies");

@@ -65,13 +65,13 @@ namespace Festival.Tests
                     }
                     else
                     {
-                        for(int turn=0;turn<3;turn++)
+                        for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
                         {
                             Assert.That(talk.Turns.Count,Is.EqualTo(turn+1));int choice=System.Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth);Assert.That(choice,Is.InRange(0,2));
                             Key[] replies={Key.Digit1,Key.Digit2,Key.Digit3};yield return Tap(replies[choice],.2f);yield return new WaitForSeconds(.3f);
                             Assert.That(talk.Turns[turn].Pick,Is.EqualTo(choice),"the actual reply key reaches this exact owned turn");
                         }
-                        Assert.That(talk.Status,Is.EqualTo("Complete"),"only the third explicit answer completes the talk");Assert.That(player.InteractionId,Is.Empty);
+                        Assert.That(talk.Status,Is.EqualTo("Complete"),"only the last explicit answer completes the talk");Assert.That(player.InteractionId,Is.Empty);
                         if(kind=="Sale")Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_mushrooms"),Is.False,"finished sale consumes its reserved last unit");
                         if(kind=="Buy")Assert.That(player.Cash,Is.EqualTo(45));
                         yield return Tap(Key.Escape,.25f);yield return new WaitForSeconds(.3f);Assert.That(owner.MenuOpen||window.Open,Is.False,"the first effective Menu dismisses the completed outcome");
@@ -287,12 +287,12 @@ namespace Festival.Tests
                 yield return Tap(Key.Escape);Assert.That(session.MenuOpen,Is.False);
                 npc.Observers.Clear();session.Command("Conversation",npc.Id);yield return null;yield return null;
                 talk=sim.Interaction(player.InteractionId);
-                for(int t=0;t<3;t++){var turn=talk.Turns[t];window.Pick(System.Array.IndexOf(turn.Grades,ConversationLines.Smooth));yield return null;yield return null;}
+                for(int t=0;t<FestivalSimulation.ConversationTurns;t++){var turn=talk.Turns[t];window.Pick(System.Array.IndexOf(turn.Grades,ConversationLines.Smooth));yield return null;yield return null;}
                 yield return new WaitForSeconds(.8f);
                 var outcome=player.ConversationOutcomes.Last();
                 Assert.That(window.Lingering,Is.True);
-                Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.Shown(i)==outcome.Reaction),Is.True,"the retained authoritative third-reply reaction is shown without a fourth reply");
-                Assert.That(window.Replies,Is.EqualTo(0));Assert.That(talk.Turns.Count,Is.EqualTo(3));
+                Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.Shown(i)==outcome.Reaction),Is.True,"the retained authoritative last-reply reaction is shown without a fifth reply");
+                Assert.That(window.Replies,Is.EqualTo(0));Assert.That(talk.Turns.Count,Is.EqualTo(FestivalSimulation.ConversationTurns));
                 Assert.That(player.Dialogue.Seen,Is.Not.Empty,"actually displayed turns/outcome acknowledge private grammar");
                 yield return Tap(Key.G);Assert.That(window.Open,Is.True,"G no longer owns chat dismissal");
                 yield return Tap(Key.Escape);Assert.That(window.Open||session.MenuOpen,Is.False);
@@ -329,7 +329,7 @@ namespace Festival.Tests
                     session.Command(kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,item:kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");yield return null;
                     var talk=sim.Interaction(player.InteractionId);Assert.That(talk,Is.Not.Null,scenario+": "+session.Message);
                     if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;talk.Status=="Active"&&n<400;n++)sim.Tick(.1);}
-                    else for(int t=0;t<3;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
+                    else for(int t=0;t<FestivalSimulation.ConversationTurns;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
                     Assert.That(player.InteractionId,Is.Empty);var outcome=player.ConversationOutcomes.Last();
                     if(trust){Assert.That(outcome.Notice,Is.EqualTo("They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
                     if(scenario=="narc")Assert.That(player.Life,Is.EqualTo("Detained"));

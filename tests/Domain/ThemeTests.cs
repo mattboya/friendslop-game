@@ -54,7 +54,7 @@ public static class ThemeTests
         foreach(var field in typeof(ConversationLines).GetFields(BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)) Collect(field.GetValue(null),texts);
         Check(texts.Count-before>=250,"every ConversationLines part is read, got "+(texts.Count-before)+" strings");
         foreach(var topic in ConversationLines.Topics) foreach(var person in new List<string>(DialogueGrammar.Personas){ConversationLines.Security}) for(int festival=0;festival<Festivals.Count;festival++) for(int seed=0;seed<400;seed++)
-        { var turn=ConversationLines.Turn(topic,person,DialogueGrammar.Roles[seed%4],festival,seed%3,seed%4,seed%2==0,0,new ContentRandom(seed)); texts.Add(turn.Reaction); texts.Add(turn.Line); texts.AddRange(turn.Replies); }
+        { var turn=ConversationLines.Turn(topic,person,DialogueGrammar.Roles[seed%4],festival,seed%FestivalSimulation.ConversationTurns,seed%4,seed%2==0,0,new ContentRandom(seed)); texts.Add(turn.Reaction); texts.Add(turn.Line); texts.AddRange(turn.Replies); }
         foreach(var text in texts) Check(Offence(text)==null,"real-drug or retired word '"+Offence(text)+"' in: "+text);
         // LIGHT-3: no player reads a cloud picture's name, but they see the picture, so none is drug-themed: no "mushroom cloud".
         var pictures=new List<string>(); foreach(var shape in CloudShapes.Shapes) pictures.Add(shape.Name); foreach(var landmark in CloudShapes.Landmarks) pictures.Add(landmark.Name);

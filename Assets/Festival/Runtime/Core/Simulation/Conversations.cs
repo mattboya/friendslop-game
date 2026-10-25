@@ -2,8 +2,9 @@ using System;
 namespace Festival.Core
 {
     /// <summary>DIALOG-3: selling (Sale), buying (Buy, ECON-2), chatting (Conversation) and talking to security (Police) are talks,
-    /// not dances. A talk is ConversationTurns turns: they say a line (their reaction to your last reply first), and you pick one
-    /// of three replies with the Reply command (Amount the reply 0-2, Direction the turn). DIALOG-9 waits for each pick;
+    /// not dances. A talk is ConversationTurns turns, one for each of its rounds (ConversationLines.Rounds: the greeting, small
+    /// talk, the ask and the close, each with its own replies): they say a line (their reaction to your last reply first), and you
+    /// pick one of three replies with the Reply command (Amount the reply 0-2, Direction the turn 0-3). DIALOG-9 waits for each pick;
     /// only Police turns count silence after ReplySeconds. One reply is smooth, one so-so and one awkward by the person's taste
     /// (ConversationLines),
     /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
@@ -16,7 +17,7 @@ namespace Festival.Core
     /// lines; finishing the buy busts you (StockBuys.cs).</summary>
     public sealed partial class FestivalSimulation
     {
-        public const int ConversationTurns=3;
+        public const int ConversationTurns=4;
         public const double ReplySeconds=4,TrustDanceSuspicion=40,TrustScore=.6;
         public const string TrustAsk="Dance with me first, then we talk.";
         public static bool Talks(string kind)=>kind=="Sale"||kind=="Buy"||kind=="Conversation"||kind=="Police";

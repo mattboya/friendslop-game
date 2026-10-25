@@ -5,8 +5,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Festival.Core;
 
-// DIALOG-3: selling, buying, chatting and talking to security are conversations, not dances. Each is three turns: they say a
-// line and you pick one of three replies (1-3). Only Police replies time out after ReplySeconds. One reply is smooth, one so-so and one
+// DIALOG-3: selling, buying, chatting and talking to security are conversations, not dances. Each is four turns (the greeting,
+// small talk, the ask and the close, each with replies of its own): they say a line and you pick one of three replies (1-3).
+// Only Police replies time out after ReplySeconds. One reply is smooth, one so-so and one
 // awkward, by the taste of the person you're talking to, which their opener hints at; a dose garbles some. The average of
 // the turns is the talk's score, and settles it as the dance did. A wary festivalgoer asks for a dance first.
 public static class ConversationTests
@@ -20,13 +21,13 @@ public static class ConversationTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{EachTalkIsThreeTurnsOfThreeReplies,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
+        foreach(var test in new Action[]{EachTalkIsFourRoundsOfThreeReplies,TheirLineFollowsTheRound,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
             ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
             ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
-            ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheThirdReplyHasAClosingReaction})
+            ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -36,14 +37,14 @@ public static class ConversationTests
         var game=Pair("Conversation");Start(game,"Conversation");
         Check(game.Player("p0").Dialogue.Seen.Count==0,"drawing a turn must not acknowledge unread choices");
     }
-    static void TheThirdReplyHasAClosingReaction()
+    static void TheLastReplyHasAClosingReaction()
     {
         foreach(int grade in new[]{Smooth,SoSo,Awkward})
         {
             var game=Pair("Conversation");var talk=Start(game,"Conversation");
-            for(int turn=0;turn<3;turn++)Check(Say(game,talk,grade).Accepted,"the reply is accepted");
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)Check(Say(game,talk,grade).Accepted,"the reply is accepted");
             var player=game.Player("p0");
-            Check(talk.Turns.Count==3&&talk.Status=="Complete","the final reaction creates no fourth turn");
+            Check(talk.Turns.Count==FestivalSimulation.ConversationTurns&&talk.Status=="Complete","the final reaction creates no fifth turn");
             Check(player.NpcSpeech!="","the final reply of grade "+grade+" gets its authored closing reaction");
             Check(player.ConversationOutcomes[0].GrammarKeys.Single().StartsWith("react.Wook."+grade+"_",StringComparison.Ordinal),"the actual closing reaction uses the chosen reply grade's authored grammar family");
             var wire=JsonSerializer.Serialize(player,new JsonSerializerOptions{IncludeFields=true});
@@ -59,8 +60,8 @@ public static class ConversationTests
             var s=Pair("Conversation");var npc=Partner(s);npc.Yaw=yaw;
             npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});
             var i=Start(s,"Conversation");
-            for(int turn=0;turn<3;turn++)Check(Say(s,i,Smooth).Accepted,"each smooth reply is accepted");
-            Check(i.Status=="Complete"&&i.Score==1,"three smooth replies complete the talk");
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)Check(Say(s,i,Smooth).Accepted,"each smooth reply is accepted");
+            Check(i.Status=="Complete"&&i.Score==1,"four smooth replies complete the talk");
             Check(npc.Observers[0].Suspicion==15,"the partner calms exactly once regardless of facing: yaw "+yaw+", suspicion "+npc.Observers[0].Suspicion);
         }
     }
@@ -129,26 +130,60 @@ public static class ConversationTests
         for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
         Check(i.Status=="Complete"||i.Status=="Police bust","setup: the "+i.Kind+" settles ("+i.Status+")");return i;
     }
+    static int[] Every(int grade)=>Enumerable.Repeat(grade,FestivalSimulation.ConversationTurns).ToArray();
     static string Text(ConversationTurn t)=>t.Reaction+"|"+t.Line+"|"+string.Join("|",t.Replies)+"|"+string.Join(",",t.Grades)+"|"+string.Join(",",t.Garbled);
 
     // Every talk opens on their line and your three replies, one of each grade, timed only for Police. Each reply brings the next
-    // turn, their reaction then their line; the third ends the talk. A talk takes no notes.
-    static void EachTalkIsThreeTurnsOfThreeReplies()
+    // turn, their reaction then their line; the fourth ends the talk. Each turn is a round of its own (the greeting,
+    // small talk, the ask and the close), and draws its replies from that round's pools, so no reply pool serves two rounds. A talk
+    // takes no notes.
+    static void EachTalkIsFourRoundsOfThreeReplies()
     {
-        Check(FestivalSimulation.ConversationTurns==3&&FestivalSimulation.ReplySeconds==4,"a talk is 3 turns; Police replies keep 4 s");
+        Check(FestivalSimulation.ConversationTurns==4&&ConversationLines.Rounds.Length==FestivalSimulation.ConversationTurns&&FestivalSimulation.ReplySeconds==4,"a talk is 4 turns, one a round; Police replies keep 4 s");
         foreach(var kind in Kinds)
         {
-            var s=Pair(kind);var i=Start(s,kind);
+            var s=Pair(kind);var i=Start(s,kind);string topic=ConversationLines.Topic(kind);
             Check(FestivalSimulation.Talks(kind)&&!i.TrustDance&&i.Turns.Count==1,"a "+kind+" opens on a turn, not a dance");
             var first=Live(i);
             Check(first.Line!=""&&first.Reaction==""&&first.Replies.Length==3&&first.Replies.All(r=>!string.IsNullOrWhiteSpace(r))&&first.Pick==-1,"a "+kind+"'s first turn: their line and three replies, nothing picked ("+Text(first)+")");
             Check(string.Join(",",first.Grades.OrderBy(g=>g))=="0,1,2"&&first.Garbled.All(g=>!g),"one smooth, one so-so and one awkward reply, none garbled sober ("+Text(first)+")");
             Check(kind=="Police"?Math.Abs(i.StartSeconds+i.DurationSeconds-(s.State.SimulationSeconds+FestivalSimulation.ReplySeconds))<1e-9:i.DurationSeconds==0,"only Police replies are due in ReplySeconds; other talks have finite zero duration");
             Check(!Act(s,"p0","Rhythm",direction:0,amount:0).Accepted,"a "+kind+" takes no notes");
-            Check(Say(s,i,SoSo).Accepted&&i.Turns.Count==2&&first.Pick>=0&&first.Grades[first.Pick]==SoSo,"a reply is kept and brings the second turn");
-            Check(Live(i).Reaction!=""&&Live(i).Line!="","the second turn opens on their reaction and a line ("+Text(Live(i))+")");
-            Check(Say(s,i,Smooth).Accepted&&i.Turns.Count==3,"the second reply brings the third turn");
-            Check(Say(s,i,Smooth).Accepted&&i.Status=="Complete"&&i.Turns.Count==3&&s.Player("p0").InteractionId=="","the third reply ends the "+kind+" ("+i.Status+")");
+            var pools=new List<string>();
+            int[] picks={SoSo,Smooth,Smooth,Smooth};
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
+            {
+                var live=Live(i);var replies=live.GrammarKeys.Where(k=>k.StartsWith("reply.",StringComparison.Ordinal)).ToList();
+                Check(replies.Count==3&&replies.All(k=>k.StartsWith("reply."+topic+"."+ConversationLines.Rounds[turn]+".",StringComparison.Ordinal)),"a "+kind+"'s turn "+(turn+1)+" draws its replies from the "+ConversationLines.Rounds[turn]+" round's pools ("+string.Join(", ",replies)+")");
+                foreach(var key in replies)pools.Add(key.Substring(0,key.LastIndexOf('_')));
+                if(turn>0)Check(live.Reaction!=""&&live.Line!="","turn "+(turn+1)+" opens on their reaction and a line ("+Text(live)+")");
+                Check(Say(s,i,picks[turn]).Accepted,"reply "+(turn+1)+" is accepted");
+                if(turn==0)Check(first.Pick>=0&&first.Grades[first.Pick]==SoSo,"a reply is kept");
+                bool last=turn==FestivalSimulation.ConversationTurns-1;
+                Check(last?i.Status=="Complete"&&i.Turns.Count==FestivalSimulation.ConversationTurns&&s.Player("p0").InteractionId=="":i.Status=="Active"&&i.Turns.Count==turn+2,last?"the fourth reply ends the "+kind+" ("+i.Status+")":"reply "+(turn+1)+" brings turn "+(turn+2));
+            }
+            Check(pools.GroupBy(pool=>pool).All(g=>g.Select(pool=>pool.Split('.')[2]).Distinct().Count()==1),"no reply pool is used in two rounds: "+string.Join(", ",pools));
+        }
+    }
+
+    // Their line follows the round too: their opener (security's line), then small talk, the ask and the close, each from
+    // its own pool, while a line that lands still carries their tell. Each turn's line is the first key it draws after its reaction.
+    static void TheirLineFollowsTheRound()
+    {
+        var expected=new Dictionary<string,string[]>{
+            ["Conversation"]=new[]{"opener.Wook","answer.Regular.0","line.talk.ask","line.talk.close"},
+            ["Sale"]=new[]{"opener.Wook","line.sale.small","sale","line.sale.close"},
+            ["Buy"]=new[]{"opener.Wook","line.buy.small","buy","line.buy.close"},
+            ["Police"]=new[]{"police","police","police","line.security.close"}};
+        foreach(var kind in Kinds)
+        {
+            var s=Pair(kind);var i=Start(s,kind);
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
+            {
+                var live=Live(i);string line=live.GrammarKeys[turn==0?0:1];
+                Check(line.StartsWith(expected[kind][turn]+"_",StringComparison.Ordinal),"a "+kind+"'s turn "+(turn+1)+" ("+ConversationLines.Rounds[turn]+") has them say a line of "+expected[kind][turn]+", got "+line);
+                Check(Say(s,i,Smooth).Accepted,"setup: a smooth reply");
+            }
         }
     }
 
@@ -170,7 +205,7 @@ public static class ConversationTests
     }
 
     // K2: their reaction to your reply is built from parts too (DIALOG-4), and drawn past what you heard lately, so it rarely comes
-    // back. 30 talks in a row with one kind of person, the same grade of reply every turn (or none), say at least 55 different
+    // back. 20 talks in a row with one kind of person, the same grade of reply every turn (or none), say at least 55 different
     // reactions in their 60, and none comes back within five. Before, each persona's reaction to a grade was one of five lines.
     static void TheirReactionsRarelyRepeat()
     {
@@ -178,16 +213,16 @@ public static class ConversationTests
         foreach(var persona in DialogueGrammar.Personas.Concat(new[]{ConversationLines.Security}))foreach(int grade in new[]{Smooth,SoSo,Awkward,Silence})
         {
             if(grade==Silence&&persona!=ConversationLines.Security)continue;
-            var heard=Reactions(persona,grade,30);int soonest=int.MaxValue;
+            var heard=Reactions(persona,grade,60);int soonest=int.MaxValue;
             for(int k=1;k<heard.Count;k++){int last=heard.LastIndexOf(heard[k],k-1);if(last>=0)soonest=Math.Min(soonest,k-last);}
             int distinct=heard.Distinct().Count();
             if(distinct<55||soonest<5)samey.Add(persona+" after a "+(grade==Silence?"silence":"grade "+grade+" reply")+": "+distinct+" different in "+heard.Count+", one back "+(soonest==int.MaxValue?"never":"after "+soonest)+" (e.g. \""+heard.GroupBy(r=>r).OrderByDescending(g=>g.Count()).First().Key+"\")");
         }
         Check(samey.Count==0,"their reactions repeat:\n  "+string.Join("\n  ",samey));
     }
-    // One player's `talks` chats (security: talks) with someone of `persona`, fresh and at ease each time, a reply of `grade`
-    // every turn (Silence: none): their two reactions each time, in order.
-    static List<string> Reactions(string persona,int grade,int talks)
+    // One player's chats (security: talks) with someone of `persona`, fresh and at ease each time, a reply of `grade` every turn
+    // (Silence: none): their reactions each time, in order, until there are `count`.
+    static List<string> Reactions(string persona,int grade,int count)
     {
         bool security=persona==ConversationLines.Security;string kind=security?"Police":"Conversation";
         // Only POLO-1's influencer twist talks like an influencer.
@@ -195,15 +230,15 @@ public static class ConversationTests
         var s=Pair(kind,11);var heard=new List<string>();int n=0;
         string Next(){for(;;n++)if(DialogueGrammar.PersonaFor("goer_"+n,twist)==persona)return "goer_"+n++;}
         string id=security?Partner(s).Id:Next();
-        while(heard.Count<2*talks)
+        while(heard.Count<count)
         {
             s.State.Npcs[0]=new NpcState{Id=id,Kind=security?"Cop":"Wook",Twist=twist,Role="Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true};
             var i=Start(s,kind);
             // Some ravers and burners always want a dance first: talk with another.
             if(i.TrustDance){Act(s,"p0","Cancel");id=Next();continue;}
-            Talk(s,i,grade,grade,grade);heard.Add(i.Turns[1].Reaction);heard.Add(i.Turns[2].Reaction);
+            Talk(s,i,Every(grade));foreach(var turn in i.Turns.Skip(1))heard.Add(turn.Reaction);
         }
-        return heard;
+        return heard.Take(count).ToList();
     }
 
     // The same seed and the same picks give the same talk, line for line and in the same order; another seed another talk.
@@ -229,9 +264,9 @@ public static class ConversationTests
             foreach(var person in people)
             {
                 opens[person]=new HashSet<string>();smooth[person]=new HashSet<string>();soso[person]=new HashSet<string>();awkward[person]=new HashSet<string>();
-                for(int seed=0;seed<300;seed++)
+                for(int seed=0;seed<300;seed++)for(int round=0;round<ConversationLines.Rounds.Length;round++)
                 {
-                    var t=ConversationLines.Turn(topic,person,"Regular",festival,0,-1,false,0,new ContentRandom(seed));opens[person].Add(t.Line);
+                    var t=ConversationLines.Turn(topic,person,"Regular",festival,round,round==0?-1:SoSo,false,0,new ContentRandom(seed));if(round==0)opens[person].Add(t.Line);
                     for(int r=0;r<3;r++)(t.Grades[r]==Smooth?smooth:t.Grades[r]==SoSo?soso:awkward)[person].Add(t.Replies[r]);
                 }
             }
@@ -247,18 +282,18 @@ public static class ConversationTests
         }
     }
 
-    // Smooth scores 1, so-so .5 and awkward or silence 0, averaged over the three turns. Only Police silence lets each turn run its 4 s.
+    // Smooth scores 1, so-so .5 and awkward or silence 0, averaged over the four turns. Only Police silence lets each turn run its 4 s.
     static void ATalkScoresTheAverageOfItsReplies()
     {
         foreach(var kind in Kinds)
         {
-            var s=Pair(kind);var all=Talk(s,Start(s,kind),Smooth,Smooth,Smooth);Check(all.Score==1,"an all-smooth "+kind+" scores 1, got "+all.Score);
-            s=Pair(kind);var i=Start(s,kind);double began=s.State.SimulationSeconds;Talk(s,i,Awkward,Awkward,Awkward);
+            var s=Pair(kind);var all=Talk(s,Start(s,kind),Every(Smooth));Check(all.Score==1,"an all-smooth "+kind+" scores 1, got "+all.Score);
+            s=Pair(kind);var i=Start(s,kind);double began=s.State.SimulationSeconds;Talk(s,i,Every(Awkward));
             Check(i.Score==0,"an all-awkward "+kind+" scores 0, got "+i.Score);
-            if(kind=="Police"){s=Pair(kind);i=Start(s,kind);began=s.State.SimulationSeconds;Talk(s,i,Silence,Silence,Silence);Check(i.Score==0&&i.Turns.All(t=>t.Pick==-1)&&Math.Abs(s.State.SimulationSeconds-began-3*FestivalSimulation.ReplySeconds)<.11,"Police alone scores three silent turns after 12 seconds");}
-            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward);Check(Math.Abs(mixed.Score-.5)<1e-9,"smooth, so-so and awkward average .5, got "+mixed.Score);
-            s=Pair(kind);var good=Talk(s,Start(s,kind),Smooth,Awkward,SoSo);Check(Math.Abs(good.Score-.5)<1e-9,"smooth, awkward and so-so average .5, got "+good.Score);
-            s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-5/6.0)<1e-9,"two smooth and a so-so average 5/6, got "+sure.Score);
+            if(kind=="Police"){s=Pair(kind);i=Start(s,kind);began=s.State.SimulationSeconds;Talk(s,i,Every(Silence));Check(i.Score==0&&i.Turns.Count==4&&i.Turns.All(t=>t.Pick==-1)&&Math.Abs(s.State.SimulationSeconds-began-4*FestivalSimulation.ReplySeconds)<.11,"Police alone scores four silent turns after 16 seconds");}
+            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward,Smooth);Check(Math.Abs(mixed.Score-.625)<1e-9,"smooth, so-so, awkward and smooth average .625, got "+mixed.Score);
+            s=Pair(kind);var good=Talk(s,Start(s,kind),Smooth,Awkward,SoSo,SoSo);Check(Math.Abs(good.Score-.5)<1e-9,"smooth, awkward and two so-so average .5, got "+good.Score);
+            s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-.875)<1e-9,"three smooth and a so-so average .875, got "+sure.Score);
             Check(s.Player("p0").LastRhythmScore==sure.Score,"the talk's score is the player's last result");
         }
     }
@@ -288,21 +323,21 @@ public static class ConversationTests
     static void TheScoreSettlesTheTalkAsTheDanceDid()
     {
         int Sold(params int[] grades){var s=Pair("Sale");var p=s.Player("p0");int cash=p.Cash;var i=Talk(s,Start(s,"Sale"),grades);Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(i.Score<.4),"a sale scoring "+i.Score+" keeps the stock only below .4");return p.Cash-cash;}
-        Check(Sold(Smooth,Smooth,SoSo)==FestivalSimulation.PerfectSalePay,"a sale at 5/6 pays in full");
-        Check(Sold(Smooth,SoSo,Awkward)==5,"a sale at .5 pays half");
-        Check(Sold(Smooth,Awkward,Awkward)==0,"a sale at 1/3 pays nothing and returns the stock");
-        foreach(var (grades,bought) in new[]{(new[]{Smooth,SoSo,Awkward},true),(new[]{SoSo,Awkward,Awkward},false)})
+        Check(Sold(Smooth,Smooth,Smooth,SoSo)==FestivalSimulation.PerfectSalePay,"a sale at .875 pays in full");
+        Check(Sold(Smooth,SoSo,Awkward,SoSo)==5,"a sale at .5 pays half");
+        Check(Sold(Smooth,Awkward,Awkward,SoSo)==0,"a sale at .375 pays nothing and returns the stock");
+        foreach(var (grades,bought) in new[]{(new[]{Smooth,SoSo,Awkward,SoSo},true),(new[]{SoSo,Awkward,Awkward,Awkward},false)})
         {
             var s=Pair("Buy");var p=s.Player("p0");string kind=FestivalSimulation.SellerStock(Partner(s).Id);var i=Talk(s,Start(s,"Buy"),grades);
             Check(p.Inventory.Exists(x=>x.ItemId==kind)==bought&&p.Cash==(bought?15:20),"a buy scoring "+i.Score+(bought?" hands over a unit for $5":" refunds the $5")+" ($"+p.Cash+")");
         }
-        foreach(var (grades,waved) in new[]{(new[]{Smooth,Smooth,SoSo},true),(new[]{Smooth,SoSo,SoSo},false)})
+        foreach(var (grades,waved) in new[]{(new[]{Smooth,Smooth,Smooth,SoSo},true),(new[]{Smooth,SoSo,SoSo,SoSo},false)})
         {
             var s=Pair("Police");var cop=Partner(s);s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});s.Player("p0").EquippedItemId="stock_lsd";cop.Evidence.Add(new EvidenceState{PlayerId="p0",Kind="VisibleStock",StartSeconds=0,SeenSeconds=0});
             var i=Talk(s,Start(s,"Police"),grades);
             Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+i.Score+(waved?" waves the stop off":" keeps the stop"));
         }
-        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward},3)})
+        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward,SoSo},3)})
         {
             var s=Pair("Conversation");var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
             var i=Talk(s,Start(s,"Conversation"),grades);
@@ -320,7 +355,7 @@ public static class ConversationTests
             if(dose>0)dosed.Player("p0").Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=dose,RemainingSeconds=600});
             if(dose>0)repeat.Player("p0").Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=dose,RemainingSeconds=600});
             var plain=Start(sober,kind);var jumbled=Start(dosed,kind);var replay=Start(repeat,kind);
-            for(int turn=0;turn<3;turn++)
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
             {
                 var a=Live(plain);var b=Live(jumbled);int want=dose>=3?2:dose>=1?1:0;
                 Check(b.Garbled.Count(g=>g)==want,"dose "+dose+": "+want+" garbled a turn, got "+b.Garbled.Count(g=>g));
@@ -342,7 +377,7 @@ public static class ConversationTests
     static void ATalkSettlesItsPartnerAndWitnessesOnce()
     {
         foreach(var kind in Kinds)foreach(float yaw in new[]{0f,180f})
-            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward},3)})
+            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward,SoSo},3)})
             {
                 var s=Pair(kind);var partner=Partner(s);partner.Yaw=yaw;
                 partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});
@@ -385,7 +420,7 @@ public static class ConversationTests
             Check(i.Status=="Active"&&i.Turns.Count==0,kind+": the .75 s verdict window has not ended");
             s.Tick(.1);Check(i.Status=="Active"&&i.Turns.Count==1&&i.DurationSeconds==0,kind+": a perfect trust dance opens an untimed reply");
             s.Tick(30);Check(i.Turns.Count==1&&Live(i).Pick==-1,kind+": the countdown never becomes a chat deadline");
-            Talk(s,i,Smooth,Smooth,Smooth);Check(i.Score==1,kind+": the following talk scores only its replies");
+            Talk(s,i,Every(Smooth));Check(i.Score==1,kind+": the following talk scores only its replies");
         }
         foreach(var kind in Kinds)
         {
@@ -419,7 +454,7 @@ public static class ConversationTests
             Check(i.Status=="Active"&&i.Turns.Count==1&&i.DialogueText==""&&!FestivalSimulation.Dancing(i),"danced well, the "+kind+" follows ("+i.Status+")");
             Check(Partner(s).Observers[0].Suspicion==25,"they trust you: 40 drops by RhythmDelta(1) to 25, got "+Partner(s).Observers[0].Suspicion);
             Check(i.DurationSeconds==0,"the first reply waits after the timed trust dance");
-            Talk(s,i,Smooth,Smooth,Smooth);Check(i.Score==1,"the talk after the dance scores itself, got "+i.Score);
+            Talk(s,i,Every(Smooth));Check(i.Score==1,"the talk after the dance scores itself, got "+i.Score);
         }
         // They trust you by the dance even when they can't see you dance, as no watcher does.
         var blind=Pair("Conversation");blind.HasLineOfSight=(ax,az,bx,bz)=>false;Partner(blind).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40,LastSeenSeconds=100});
@@ -469,7 +504,7 @@ public static class ConversationTests
     static void EveryLineIsCleanAndShort()
     {
         foreach(var topic in ConversationLines.Topics)foreach(var person in DialogueGrammar.Personas.Concat(new[]{ConversationLines.Security}))
-            for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<300;seed++)for(int turn=0;turn<3;turn++)
+            for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<300;seed++)for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
             {
                 var t=ConversationLines.Turn(topic,person,DialogueGrammar.Roles[seed%4],festival,turn,turn==0?-1:seed%4,seed%2==0,seed%3,new ContentRandom(seed*7+turn));
                 foreach(var reply in t.Replies)Check(!DialogueGrammar.HasNarcTell(reply),"a player's reply carries a narc tell: "+reply);
@@ -483,7 +518,7 @@ public static class ConversationTests
     {
         var s=Pair(kind,seed);Partner(s).Role=role;Partner(s).Twist=twist;Partner(s).StockSold=stockSold;
         s.State.LevelIndex=level<0?(role=="ClueHolder"?1:0):level;s.State.FestivalIndex=festival;
-        var i=Talk(s,Start(s,kind),grade,grade,grade);var lines=string.Join(" / ",i.Turns.Select(t=>t.Line));
+        var i=Talk(s,Start(s,kind),Every(grade));var lines=string.Join(" / ",i.Turns.Select(t=>t.Line));
         return (i.Hunch,i.Turns.Exists(t=>DialogueGrammar.HasNarcTell(t.Line)),lines);
     }
     static double Share(string role,int grade,Func<(string hunch,bool copSpeak,string lines),bool> what){int hits=0;for(int seed=1;seed<=200;seed++)if(what(Read(role,seed,grade)))hits++;return hits/200.0;}
@@ -565,7 +600,7 @@ public static class ConversationTests
     {
         foreach(var kind in Kinds)
         {
-            var s=Pair(kind);var i=Start(s,kind);Say(s,i,Smooth);
+            var s=Pair(kind);var i=Start(s,kind);for(int turn=0;turn<FestivalSimulation.ConversationTurns-2;turn++)Say(s,i,Smooth);
             Check(i.Hunch=="","no hunch before the last turn ("+i.Hunch+")");
             Say(s,i,Smooth);bool reads=kind=="Conversation"||kind=="Buy";
             Check((i.Hunch!="")==reads,"a "+kind+(reads?" leaves a hunch as its last turn begins":" leaves no hunch")+" ("+i.Hunch+")");
@@ -579,7 +614,7 @@ public static class ConversationTests
         int told=0;
         for(int seed=1;seed<=100;seed++){var read=Read("Narc",seed,Smooth,"Buy");if(read.copSpeak)told++;Check(read.hunch==ConversationLines.HunchCop==read.copSpeak,"a narc seller's hunch follows their cop-speak: "+read.hunch+" / "+read.lines);}
         Check(told>=70,"a smoothly talked narc seller slips into cop-speak at least 70 times in 100, got "+told);
-        foreach(var grades in new[]{new[]{Smooth,Smooth,Smooth},new[]{Awkward,Awkward,Awkward}})
+        foreach(var grades in new[]{Every(Smooth),Every(Awkward)})
         {
             var s=Pair("Buy");Partner(s).Role="Narc";var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
             var i=Start(s,"Buy");Check(p.Life=="Alive"&&p.Cash==15&&i.Turns.Count==1,"asking a narc to sell starts a talk, the $5 held, no bust yet");
@@ -610,6 +645,6 @@ public static class ConversationTests
         Check(restored.Player("p0").ConversationOutcomes!=null&&restored.Player("p0").ConversationOutcomes.Count==0&&restored.Player("p0").ConversationDismissedSequence==0,"older owner outcome fields keep safe defaults");
         Check(old.Turns!=null&&old.Turns.Count==1&&!old.TrustDance,"an old talk restores at its first turn ("+old.Turns?.Count+")");
         restored.Tick(60);Check(old.Status=="Active"&&old.Turns.Count==1&&Live(old).Pick==-1,"a restored legacy talk waits for its first reply");
-        Talk(restored,old,Awkward,Awkward,Awkward);Check(old.Status=="Complete"&&old.Turns.Count==3&&old.Score==0,"three accepted awkward replies settle the restored talk");
+        Talk(restored,old,Every(Awkward));Check(old.Status=="Complete"&&old.Turns.Count==FestivalSimulation.ConversationTurns&&old.Score==0,"four accepted awkward replies settle the restored talk");
     }
 }
