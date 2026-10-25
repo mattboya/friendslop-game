@@ -834,7 +834,9 @@ namespace Festival.Presentation
             MapPath(festivalMap.transform,.50f,.86f,.72f,.50f);
             MapPath(festivalMap.transform,.72f,.50f,.83f,.28f);
             MapPath(festivalMap.transform,.72f,.50f,.87f,.61f);
-            MapPin(festivalMap.transform,"STAGE",.50f,.86f,Orange);
+            MapPin(festivalMap.transform,"MAIN STAGE",.50f,.86f,Orange);
+            // Its name reads to the left, clear of BACK TO CAMP.
+            MapPin(festivalMap.transform,"SMALL STAGE",.40f,.17f,Orange,true);
             MapPin(festivalMap.transform,"SUN",.72f,.50f,Orange);
             MapPin(festivalMap.transform,"MOON",.28f,.62f,Mint);
             MapPin(festivalMap.transform,"MARKET",.27f,.25f,Paper);
@@ -853,7 +855,7 @@ namespace Festival.Presentation
             MapPin(campMap.transform,"TENTS",.76f,.30f,Paper);
             MapPin(campMap.transform,"TOILET",.82f,.52f,Paper);
             mapPlayerMarker=Rect(Panel(diagram.transform,"You marker",Orange,new Vector2(.48f,.46f),new Vector2(.52f,.52f)));mapPlayerMarker.GetComponent<Image>().sprite=discSprite;
-            mapText=Label(mapPanel.transform,"Map text",21,TextAnchor.UpperLeft);mapText.color=Ink;Place(mapText.rectTransform,.70f,.08f,.96f,.84f);
+            mapText=Label(mapPanel.transform,"Map text",21,TextAnchor.UpperLeft);mapText.color=Ink;Place(mapText.rectTransform,.70f,.08f,.96f,.84f);ShrinkToFit(mapText,18);
         }
 
         // Nine rows fit between the save message and the status line: CONTROLS' section buttons over its eight dance keys.
@@ -882,11 +884,12 @@ namespace Festival.Presentation
             return (row,parts.ToArray(),value,Array.ConvertAll(buttons,b=>b.GetComponent<Button>()));
         }
 
-        private void MapPin(Transform parent,string name,float x,float y,Color color)
+        private void MapPin(Transform parent,string name,float x,float y,Color color,bool labelLeft=false)
         {
             Disc(parent,name+" dot",new Vector2(x-.008f,y-.013f),new Vector2(x+.008f,y+.013f),color);
-            var label=Label(parent,name,17,x>.7f?TextAnchor.MiddleRight:TextAnchor.MiddleLeft);label.text=name;label.fontStyle=FontStyle.Normal;label.color=color;
-            Place(label.rectTransform,x>.7f?x-.22f:x+.018f,y-.026f,x>.7f?x-.018f:x+.23f,y+.026f);
+            bool left=labelLeft||x>.7f;
+            var label=Label(parent,name,17,left?TextAnchor.MiddleRight:TextAnchor.MiddleLeft);label.text=name;label.fontStyle=FontStyle.Normal;label.color=color;
+            Place(label.rectTransform,left?x-.22f:x+.018f,y-.026f,left?x-.018f:x+.23f,y+.026f);
         }
         private void MapPath(Transform parent,float x1,float y1,float x2,float y2)
         {
@@ -1946,9 +1949,7 @@ namespace Festival.Presentation
                 mapText.text="CAMP\n\nGEAR\nPick up one item. Pay the seller before you enter.\n\nTRAILHEAD\nPress "+Bound(session?.Controls?.Interact,"E")+" to ready. Your crew enters together.\n\nYOU ARE THE ORANGE DOT.";
                 return;
             }
-            string team="";foreach(var p in state.Players)team+=(p.Id==player.Id?"YOU":p.Name)+"  /  "+p.Life.ToUpperInvariant()+"\n";
-            string mission=!Festivals.For(state).Night?FestivalHudText.Quota(state,player)+"\n"+FestivalHudText.QuotaHint(state,player):state.FriendFound?"FRIEND FOUND\nEscort them back to camp.":"FRIEND MISSING\nSearch the grounds. Their exact location is unknown.";
-            mapText.text=mission+"\n\nCREW\n"+team+"\nYOU ARE THE ORANGE DOT.\n\nMEDIC  /  HOLDING\nHelp a downed or detained friend.";
+            mapText.text=FestivalHudText.MapText(state,player);
         }
 
         private void ApplyEffects(PlayerState player)

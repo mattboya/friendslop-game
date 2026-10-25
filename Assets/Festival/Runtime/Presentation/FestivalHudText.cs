@@ -36,6 +36,16 @@ namespace Festival.Presentation
             return left/60+":"+(left%60).ToString("00");
         }
 
+        /// <summary>The festival map's side text: the mission, the crew, where help is, and each stage's song.</summary>
+        public static string MapText(RoundState state,PlayerState player)
+        {
+            string team="";foreach(var p in state.Players)team+=(p.Id==player.Id?"YOU":p.Name)+"  /  "+p.Life.ToUpperInvariant()+"\n";
+            string mission=!Festivals.For(state).Night?Quota(state,player)+"\n"+QuotaHint(state,player):state.FriendFound?"FRIEND FOUND\nEscort them back to camp.":"FRIEND MISSING\nSearch the grounds. Their exact location is unknown.";
+            return mission+"\n\nCREW\n"+team+"\nYOU ARE THE ORANGE DOT.\n\nMEDIC  /  HOLDING\nHelp a downed or detained friend.\n\n"+StageSongs(state);
+        }
+        /// <summary>Each stage's song this level, named as the camp DJ names them.</summary>
+        public static string StageSongs(RoundState s)=>"MAIN STAGE  /  "+CampFeatures.Tracks[StageMusic.Track(s,StageMusic.Main)]+"\nSMALL STAGE  /  "+CampFeatures.Tracks[StageMusic.Track(s,StageMusic.Small)];
+
         /// <summary>Day levels: the level's sales against the whole crew's quota in the viewer's money, until it is met. Nights have no quota.</summary>
         public static string Quota(RoundState s,PlayerState viewer)
         {
