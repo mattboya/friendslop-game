@@ -2184,7 +2184,7 @@ namespace Festival.Presentation
                 if(npc!=null)
                 {
                     if(npc.Kind=="Cop"){if(npc!=stopper)AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);}
-                    else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id),Bound(session?.Controls?.Chat,"F")))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);
+                    else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id),Bound(session?.Controls?.Chat,"F")))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId,command.Amount),ref y);
                 }
                 // Offering your gear to a friend in reach follows the errands above, the checks and the festivalgoer beside you: the sober
                 // crew sticks by the tripper, so a friend is often in reach, and E must not hand them your gear (your stock, ECON-3)

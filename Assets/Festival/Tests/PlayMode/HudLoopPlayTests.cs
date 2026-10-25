@@ -1262,6 +1262,22 @@ namespace Festival.Tests
                     yield return Tap(Key.Escape);
                     if(session.MenuOpen||hud.GetComponentInChildren<FestivalChatWindow>(true).Open)failures.Add("Esc after cancelling the sale: terminal chat or menu remains open");
                 }
+                // A pushed ask clicked from the list goes out as that ask, not as the fair one.
+                session.MenuOpen=false;yield return null;
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                Button greedy=null;foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="Action:"+Ask(FestivalSimulation.GreedyAsk))greedy=b;
+                if(greedy==null)failures.Add("Esc: the menu's list doesn't show \""+Ask(FestivalSimulation.GreedyAsk)+"\" (listed: \""+Listed()+"\")");
+                else
+                {
+                    greedy.onClick.Invoke();yield return null;
+                    var sale=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                    if(sale?.Kind!="Sale"||sale.Ask!=FestivalSimulation.GreedyAsk)failures.Add("Esc, then the greedy ask: it starts "+(sale?.Kind??"nothing")+" at ask "+(sale?.Ask.ToString()??"none")+" ("+session.Message+")");
+                    session.Command("Cancel");yield return null;yield return null;
+                    yield return Tap(Key.Escape);
+                    if(session.MenuOpen||hud.GetComponentInChildren<FestivalChatWindow>(true).Open)failures.Add("Esc after cancelling the greedy ask: terminal chat or menu remains open");
+                    // Walking off a greedy ask costs suspicion and the buyer. The rest of this test needs a calm buyer.
+                    buyer.Observers.Clear();
+                }
                 // K1: a dance chosen there takes your arrow keys. By day it is the list's only way to the dance How to Play asks for;
                 // left open, the menu dropped every press and the pass offered only CANCEL ACTION, which costs suspicion.
                 session.MenuOpen=false;yield return null;
