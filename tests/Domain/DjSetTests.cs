@@ -13,7 +13,8 @@ public static class DjSetTests
         foreach(var test in new Action[]{TheSetPutsYouOnTheRiserAndItsEndPutsYouBack,TheRideRidesTheStageSongsBeatInThreeLanes,
             GreysComeFromNightOneAndLaterPhrasesGetBusier,CatchingEveryBlockAndDodgingEveryGreyScoresOne,StayingInOneLaneScoresAboutAThird,
             AGreyHitCostsATenthAndOnlyLaneChangesCount,ALaneChangeThatCatchesNothingCostsATenth,BlindMashingNeverEarnsTheCrowd,
-            AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage,TheCrowdAndTheCopsSeeTheDjOnTheRiser})
+            AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage,TheCrowdAndTheCopsSeeTheDjOnTheRiser,
+            ASwarmStrikesTheDjFromTheStageFront})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" DJ set test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -266,5 +267,19 @@ public static class DjSetTests
         Check(cop.Evidence.Exists(e=>e.PlayerId=="p0"&&e.Kind=="VisibleStock"),"a cop facing the riser sees the stock in the DJ's hand");
         game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=24,Yaw=0};game.State.Npcs.Add(cam);
         Start(game);Check(game.IsOnCamera(cam,p),"an influencer filming the riser has the DJ in frame");
+    }
+
+    // The riser is out of the crowd's reach: a swarm strikes the DJ from the stage front, as it did when the set was played there,
+    // on open ground and on the host, whose navigation stops the crowd at the stage lip and whose sight line never reaches the riser.
+    static void ASwarmStrikesTheDjFromTheStageFront()
+    {
+        foreach(bool hosted in new[]{false,true})
+        {
+            var game=Floor();var p=game.Player("p0");
+            if(hosted){game.HasLineOfSight=(ax,az,bx,bz)=>false;game.Navigate=(x,z,tx,tz,step)=>{double d=Math.Sqrt((tx-x)*(tx-x)+(tz-z)*(tz-z)),t=d<=step?1:step/d;return new WorldPoint(x+(float)((tx-x)*t),Math.Min(27.3f,z+(float)((tz-z)*t)));};}
+            for(int k=0;k<4;k++){var n=new NpcState{Id="swarm"+k,Kind="Wook",X=-1.5f+k,Z=21,Yaw=0};n.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,AccusationSeconds=0,LastSeenSeconds=10});game.State.Npcs.Add(n);}
+            Start(game);for(int t=0;t<300&&p.Health==100;t++)game.Tick(.05);
+            Check(p.Health<100&&p.InteractionId!="",(hosted?"stopped at the stage lip":"on open ground")+", a swarm strikes the DJ mid-set, got health "+p.Health+", wooks at "+string.Join(" ",game.State.Npcs.ConvertAll(n=>n.X.ToString("0.0")+","+n.Z.ToString("0.0"))));
+        }
     }
 }

@@ -164,6 +164,21 @@ namespace Festival.Tests
             Assert.That(p.InteractionId,Is.Empty,"setup: the whole set played");
             Assert.That(seen.Suspicion,Is.EqualTo(40).Within(.001),"the set leaves the watcher's suspicion where it was");
         }
+        // The host's navigation stops a swarm at the stage lip, short of the riser: it strikes the DJ from the stage front, as it did
+        // when the set was played there, so a stage pass never shelters a swarmed player.
+        [Test]public void ASwarmAtTheStageFrontStrikesTheDjOnTheRiser()
+        {
+            root=new GameObject("DJ riser swarm");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");Physics.SyncTransforms();
+            Assert.That(world.NavigationReady,Is.True,"setup: the host's navigation is ready");
+            var game=new FestivalSimulation(9);var p=game.AddPlayer("p0","P0");game.State.Phase="Playing";game.State.SimulationSeconds=10;game.State.Npcs.Clear();
+            game.HasLineOfSight=FestivalSession.LineOfSight;game.Navigate=FestivalSession.Navigate;
+            p.X=Catalog.StageTakeoverX;p.Z=Catalog.StageTakeoverZ;p.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+            for(int k=0;k<4;k++){var n=new NpcState{Id="swarm"+k,Kind="Wook",X=-1.5f+k,Z=21,Yaw=0};n.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,AccusationSeconds=0,LastSeenSeconds=10});game.State.Npcs.Add(n);}
+            Assert.That(game.Execute("p0",new GameCommand{Id="dj",Kind="Dj"}).Accepted,Is.True,"setup: the set starts");
+            for(int step=0;step<300&&p.Health==100;step++)game.Tick(.05);
+            Assert.That(p.Health,Is.LessThan(100),"a swarm strikes the DJ within 15 s; wooks at "+string.Join(" ",game.State.Npcs.ConvertAll(n=>n.X.ToString("0.0")+","+n.Z.ToString("0.0"))));
+            Assert.That(p.InteractionId,Is.Not.Empty,"the strike lands mid-set");
+        }
         private static Renderer[] Drawn(Transform prop)=>System.Array.FindAll(prop.GetComponentsInChildren<Renderer>(),r=>r.enabled);
         private static Bounds Bounds(Renderer[] renderers){var b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);return b;}
         [TearDown]public void Cleanup(){if(root!=null)Object.DestroyImmediate(root);}
