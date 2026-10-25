@@ -199,6 +199,7 @@ namespace Festival.Network
         private double nextCampDiscoverySave;
         private string historyEpoch="",historyError="",outcomeRound="",acknowledgedOutcome="";
         private long historyRevision=-1,dismissedOutcomeSequence;
+        private readonly HashSet<string> quietCommands=new HashSet<string>();
         private DialogueHistoryPacket pendingHistory;
         private double nextHistorySave;
         private readonly Dictionary<string,long> publishedHistory=new Dictionary<string,long>();
@@ -530,10 +531,14 @@ namespace Festival.Network
         public void Command(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)
             =>SendCommand(kind,target,item,amount,direction,time);
         /// <summary>The exact issued identity lets local callers match a rejection even when another reply arrives immediately afterward.</summary>
-        public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)
+        public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)=>Send(kind,target,item,amount,direction,time);
+        // A quiet command is a talk acknowledgement, which goes out on its own as lines show: accepted, it leaves the message, so a
+        // sale's or a buy's result stays up.
+        string Send(string kind,string target="",string item="",int amount=0,int direction=0,double time=0,bool quiet=false)
         {
             if(!Connected||LocalPlayer==null)return "";
             var command=new GameCommand{Id=Guid.NewGuid().ToString("N"),Kind=kind,TargetId=target??"",ItemId=item??"",Amount=amount,Direction=direction,TimeSeconds=time};
+            if(quiet)quietCommands.Add(command.Id);
             if(IsHost)
             {
                 var result=simulation.Execute(LocalPlayerId,command);FollowLocalCommandRound(simulation.State.RoundId);ReceiveLocalCommandResult(CorrelatedResult(result,command.Id));
@@ -557,7 +562,8 @@ namespace Festival.Network
         }
         void ReceiveLocalCommandResult(CommandResult result)
         {
-            Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+            bool quiet=result.Id!=null&&quietCommands.Remove(result.Id);
+            if(!quiet||!result.Accepted)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
             lastLocalCommandResult=CopyResult(result);
             var listeners=LocalCommandResultReceived;
             if(listeners!=null)foreach(Action<CommandResult> listener in listeners.GetInvocationList())listener(CopyResult(result));
@@ -784,7 +790,7 @@ namespace Festival.Network
             if(interaction==null||interaction.PlayerId!=LocalPlayerId||interaction.Turns.Count==0)return;
             string delivery=interaction.Id+":"+(interaction.Turns.Count-1);
             if(acknowledgedDialogue==delivery)return;acknowledgedDialogue=delivery;
-            Command("TalkAck",interaction.Id,direction:interaction.Turns.Count-1);
+            Send("TalkAck",interaction.Id,direction:interaction.Turns.Count-1,quiet:true);
         }
         // Screen owners consume this delivery after the chart/thread closes, then dismiss it explicitly on Escape.
         public ConversationOutcome PendingConversationOutcome
@@ -806,13 +812,13 @@ namespace Festival.Network
         {
             if(outcome==null||outcome.RoundId!=State?.RoundId||LocalPlayer?.ConversationOutcomes?.Exists(o=>o.DeliveryId==outcome.DeliveryId)!=true)return;
             if(acknowledgedOutcome==outcome.DeliveryId)return;acknowledgedOutcome=outcome.DeliveryId;
-            Command("TalkAck",outcome.InteractionId,direction:FestivalSimulation.ConversationTurns);
+            Send("TalkAck",outcome.InteractionId,direction:FestivalSimulation.ConversationTurns,quiet:true);
         }
         public void DismissConversationOutcome(string deliveryId)
         {
             var outcome=LocalPlayer?.ConversationOutcomes?.Find(o=>o.DeliveryId==deliveryId&&o.RoundId==State.RoundId);
             if(outcome==null)return;outcomeRound=State.RoundId;dismissedOutcomeSequence=Math.Max(dismissedOutcomeSequence,outcome.Sequence);
-            Command("TalkAck",outcome.InteractionId,amount:1,direction:FestivalSimulation.ConversationTurns);
+            Send("TalkAck",outcome.InteractionId,amount:1,direction:FestivalSimulation.ConversationTurns,quiet:true);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             simulation?.ChatDiagnostic?.Invoke("OutcomeDismissed","Talk",State.RoundId,State.SimulationSeconds);
 #endif
@@ -1283,7 +1289,7 @@ namespace Festival.Network
             }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
             FollowCampEggs(null);FollowPlayerEvents(null,"");
-            nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";
+            nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";quietCommands.Clear();
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
             ReleaseShowView();Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;

@@ -181,6 +181,8 @@ namespace Festival.Tests
                         Fits("sold","Notice","Sale result");NoDollars("sold");
                         yield return new WaitForSeconds(FestivalHudText.SaleStampSeconds);
                         if(Find("Sale result")!=null)failures.Add("sold: the stamp stays up past its "+FestivalHudText.SaleStampSeconds+" s");
+                        // By now the window has acknowledged the talk in the background, which must leave the notice up.
+                        Expect("after the stamp","Notice","SOLD Tongue Stamps  •  +"+amount);
                     }
                 }
             }
