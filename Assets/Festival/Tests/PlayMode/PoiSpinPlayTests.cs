@@ -276,7 +276,7 @@ namespace Festival.Tests
 
         [UnityTest]public IEnumerator PayingForAStarterKeepsItsPocketToast()
         {
-            return Purchase("stock_lsd","TONGUE STAMPS","Oh, hey, thanks!  •  POCKET UPDATED",false);
+            return Purchase("stock_lsd","TONGUE STAMPS","Oh, hey, thanks!  •  −$5  •  POCKET UPDATED",false);
         }
 
         private IEnumerator Purchase(string item,string title,string receipt,bool spin)

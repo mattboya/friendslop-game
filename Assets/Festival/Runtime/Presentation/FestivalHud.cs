@@ -139,6 +139,8 @@ namespace Festival.Presentation
         // Played on shopAudio, so the effects volume applies to it as to the chime.
         private AudioClip ohYeah;
         private readonly FestivalHudText.GiggleTankNews giggleTankNews=new FestivalHudText.GiggleTankNews();
+        private readonly FestivalHudText.MoneyNewsFollower moneyNews=new FestivalHudText.MoneyNewsFollower();
+        private float moneyNoticeAt;
         public int OhYeahPlays{get;private set;}
         private Texture2D discTexture;
         private Sprite discSprite;
@@ -244,8 +246,7 @@ namespace Festival.Presentation
         private const float LifeBannerSeconds=6;
         private GameObject saleStampPanel;
         private Text saleStamp;
-        private float saleStampAt=-100;
-        private bool saleFlash;
+        private float saleStampAt=-100,moneyFlashAt=-100;
         private readonly FestivalHudText.SaleNews saleNews=new FestivalHudText.SaleNews();
         private string tipId="",tipRound="";
         private float tipShown;
@@ -1022,6 +1023,14 @@ namespace Festival.Presentation
             }
             if(uncovered){string tank=giggleTankNews.Take();if(tank!=""){session.SetMessage(tank);lastNotice="";}}
             UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
+            // One money notice per MoneyNewsSeconds, so a queue of them each holds the line. The death reel's gear notice writes the
+            // notice text itself for its 5 s, so a queued line waits for it rather than being hidden under it.
+            moneyNews.Follow(state,player,session.ConnectionGeneration);
+            if(uncovered&&gearLossNotice==""&&Time.unscaledTime>=moneyNoticeAt)
+            {
+                var news=moneyNews.Take();
+                if(news!=null){session.SetMessage(news.Text);lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;if(FestivalHudText.FlashesMoney(news))moneyFlashAt=Time.unscaledTime;}
+            }
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf&&!lightShowPanel.activeSelf);
             ApplyEffects(player);
             var gear=new List<string>();
@@ -1166,7 +1175,7 @@ namespace Festival.Presentation
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             TrackSale(state,player);
-            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),saleFlash&&FestivalHudText.MoneyFlashOn(Time.unscaledTime-saleStampAt));
+            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),FestivalHudText.MoneyFlashOn(Time.unscaledTime-moneyFlashAt));
             var threat=FestivalHudText.Threat(state,player);
             threatShown=FestivalHudText.EaseThreat(threatShown,threat.Fill,Time.unscaledDeltaTime,session?.Profile?.Data.ReducedMotion??true);
             threatFill.anchorMax=new Vector2(threatShown,1);threatFillImage.color=threatWord.color=ThreatColors[threat.Band];threatWord.text=FestivalHudText.ThreatBands[threat.Band];
@@ -2388,7 +2397,7 @@ namespace Festival.Presentation
             {
                 shopAudio.PlayOneShot(shopChime);
                 // POI-4: the purchase reply teaches players how to spin their poi; the chime must leave that reply visible.
-                if(!FestivalSimulation.IsPoi(player.VisualReceivedItem))session.SetMessage("Oh, hey, thanks!  •  POCKET UPDATED");
+                if(!FestivalSimulation.IsPoi(player.VisualReceivedItem))session.SetMessage(FestivalHudText.PocketUpdated(previousCash-player.Cash));
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Debug.Log("[Festival.Hud] Purchase notice: "+session.Message);
 #endif
@@ -2412,11 +2421,12 @@ namespace Festival.Presentation
         }
         // Built over the pass, the map and a dance's dimmer, the stamp hides under them as the panels built before them do.
         private void ShowSaleStamp(RoundState state,bool uncovered)=>saleStampPanel.SetActive(uncovered&&state.Phase=="Playing"&&Time.unscaledTime-saleStampAt<FestivalHudText.SaleStampSeconds);
-        // Clearing lastNotice shows a second sale's notice even when it reads as the first's did.
+        // Clearing lastNotice shows a second sale's notice even when it reads as the first's did. Queued money news waits its turn behind it.
         private void TrackSale(RoundState state,PlayerState player)
         {
             var sale=saleNews.Follow(state,player,session?.ConnectionGeneration??0);if(sale==null)return;
-            session?.SetMessage(sale.Notice);lastNotice="";saleStampAt=Time.unscaledTime;saleFlash=sale.Result.StartsWith("SOLD",StringComparison.Ordinal);
+            session?.SetMessage(sale.Notice);lastNotice="";saleStampAt=Time.unscaledTime;moneyNoticeAt=saleStampAt+FestivalHudText.MoneyNewsSeconds;
+            if(sale.Result.StartsWith("SOLD",StringComparison.Ordinal))moneyFlashAt=saleStampAt;
             saleStamp.text=FestivalHudText.MoneyText(state,player,sale.Result).ToUpperInvariant();
         }
         // ECON-8: a random find is announced only once the host gives it to you, so whoever lost the race to it hears nothing.

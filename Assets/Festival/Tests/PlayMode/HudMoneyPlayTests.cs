@@ -200,6 +200,62 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"Ember Playa's money on screen:\n"+string.Join("\n",failures));
         }
 
+        // Lost property handed in through a real hosted session pays $5: the notice names the amount, and the card's cash flashes.
+        // Only the task's wait is skipped.
+        [UnityTest]public IEnumerator ReturningLostPropertySaysWhatItPaid()
+        {
+            var world=new GameObject("Lost property world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Lost property HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);sim.State.Npcs.Clear();player.X=-28;player.Z=16;int cash=player.Cash;
+                yield return null;
+                session.Command("LostProperty");yield return null;
+                var task=sim.Interaction(player.InteractionId);
+                Assert.That(task?.Kind,Is.EqualTo("LostProperty"),"setup: the task starts ("+session.Message+")");
+                task.StartSeconds=sim.State.SimulationSeconds-task.DurationSeconds;
+                for(float end=Time.realtimeSinceStartup+5;player.Cash==cash&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(player.Cash,Is.EqualTo(cash+5),"setup: the task pays ("+session.Message+")");
+                const string Paid="LOST PROPERTY RETURNED  •  +$5";bool lit=false;
+                for(float end=Time.realtimeSinceStartup+1;Time.realtimeSinceStartup<end;){lit|=Read("Vitals").Contains("<color=");yield return null;}
+                Assert.That(Read("Notice"),Is.EqualTo(Paid));
+                Assert.That(lit,Is.True,"the card's cash flashes");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+        }
+
+        // Dying with gear and a Giggle Tank loses the tank in the step that drops the gear. The gear notice writes the line itself
+        // for its 5 s, so the tank's line must wait and show after it, not under it.
+        [UnityTest]public IEnumerator ATankLostAsYouDieShowsAfterTheGearNotice()
+        {
+            var world=new GameObject("Tank death world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Tank death HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                sim.State.Npcs.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.Cash=0;
+                player.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});player.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.GiggleTankItem,Count=1});
+                yield return new WaitForSeconds(.3f);
+                player.Life="Downed";player.DownedRemaining=.01;yield return new WaitForSeconds(.3f);
+                Assert.That(player.Life,Is.EqualTo("Spirit"),"setup: the player dies");
+                Assert.That(player.MoneyNewsLog.Exists(n=>n.Text=="GIGGLE TANK LOST"),Is.True,"setup: the death loses the tank");
+                Assert.That(Read("Notice"),Is.EqualTo(FestivalSimulation.DeathGearLossNotice));
+                yield return new WaitForSeconds(5.2f);
+                Assert.That(Read("Notice"),Is.EqualTo("GIGGLE TANK LOST"),"the tank's line shows once the gear notice ends");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+        }
+
         // LOOP-4: a real joined friend dies with $40 and the roll drops it. The host and the dead friend both see the corner reel name
         // them. The host keeps walking and works the menu while it turns; the menu offers no pickup until the reel lands, then offers
         // the pile, read in dollars over the voucher model, and taking it adds the $40 to the host's cash.

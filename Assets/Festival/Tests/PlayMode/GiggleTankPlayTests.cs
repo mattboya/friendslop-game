@@ -10,8 +10,8 @@ using UnityEngine.TestTools;
 namespace Festival.Tests
 {
     // A hosted crew of two out on Day 1. The friend grabs a Giggle Tank: the host hears the oh-yeah and is told who grabbed
-    // it, and the friend carrying it inside the camp gate raises the stash. The host grabbing the next one hears it again and reads
-    // their own reply, then carries it home and is told so.
+    // it, and the friend carrying it inside the camp gate raises the stash, which the host is told with the amount. The host
+    // grabbing the next one hears it again and reads their own reply, then carries it home and is told so.
     public sealed class GiggleTankPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator TheCrewHearsEachGrabAndTheGatePaysTheCarrier()
@@ -46,8 +46,9 @@ namespace Festival.Tests
                 mate.X=Festivals.CampGateX;mate.Z=Festivals.CampGateZ;
                 yield return Until(()=>session.State.StashCash==stash+Festivals.GiggleTankCash);
                 if(session.State.StashCash!=stash+Festivals.GiggleTankCash)failures.Add("the friend home at the gate leaves the host's stash at "+session.State.StashCash+", not "+(stash+Festivals.GiggleTankCash));
-                yield return new WaitForSeconds(.3f);
-                if(session.Message!=Crew)failures.Add("the friend's payout tells the host \""+session.Message+"\"");
+                const string Paid="STASH  •  +$25  •  Sam brought the Giggle Tank home";
+                yield return Until(()=>session.Message==Paid);
+                if(session.Message!=Paid)failures.Add("the friend's payout tells the host \""+session.Message+"\"");
 
                 // A level has one tank, so the host's view first sees nobody holding one.
                 sim.State.GiggleTankGrabberId=sim.State.GiggleTankGrabberName="";yield return new WaitForSeconds(.3f);

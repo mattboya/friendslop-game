@@ -468,6 +468,31 @@ namespace Festival.Presentation
             /// <summary>The notice still to show, once; "" for none.</summary>
             public string Take(){string taken=notice;notice="";return taken;}
         }
+        /// <summary>How long each money notice holds the notice line before the next one queued behind it.</summary>
+        public const float MoneyNewsSeconds=2.5f;
+        /// <summary>The camp shelf's thank-you, with what the buy cost, in dollars for MoneyText.</summary>
+        public static string PocketUpdated(int spent)=>"Oh, hey, thanks!  •  −$"+spent+"  •  POCKET UPDATED";
+        /// <summary>Whether a notice lights the card's cash and SALES, as a paid sale does (MoneyFlashOn). The stash and items have no flash.</summary>
+        public static bool FlashesMoney(MoneyNews n)=>n.Kind=="Cash"||n.Kind=="Sales";
+        /// <summary>Follows the viewer's own money news (PlayerState.MoneyNewsLog, owner-only in views). The first view of a
+        /// connection only takes note, so a join or a rejoin never replays old news; a new round's news all shows, since a level's
+        /// start can itself lose a Giggle Tank. Take gives each new notice once, oldest first.</summary>
+        public sealed class MoneyNewsFollower
+        {
+            string round;
+            int connection=-1;
+            long seen;
+            readonly Queue<MoneyNews> due=new Queue<MoneyNews>();
+            public void Follow(RoundState s,PlayerState viewer,int connectionGeneration)
+            {
+                if(connection!=connectionGeneration){connection=connectionGeneration;round=s.RoundId;seen=viewer.MoneyNewsSequence;due.Clear();return;}
+                if(round!=s.RoundId){round=s.RoundId;seen=0;due.Clear();}
+                if(viewer.MoneyNewsLog==null)return;
+                foreach(var n in viewer.MoneyNewsLog)if(n.Sequence>seen){due.Enqueue(n);seen=n.Sequence;}
+            }
+            /// <summary>The oldest notice still to show, once; null for none.</summary>
+            public MoneyNews Take()=>due.Count>0?due.Dequeue():null;
+        }
         /// <summary>The life banner's headings: as you become a spirit, and as a revival brings you back.</summary>
         public const string DeathTitle="YOU DIED",BackTitle="YOU'RE BACK";
         /// <summary>Under YOU DIED, what being a spirit means and how many revivals p has left this level.</summary>

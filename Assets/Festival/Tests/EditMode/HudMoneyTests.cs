@@ -100,6 +100,62 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.FoundCashNotice(4)),Is.EqualTo("Found 4 ramen packets on the ground!"));
         }
 
+        // The host's real rules make each change; the HUD's follower hands each notice over once, oldest first, in each reader's money.
+        static FestivalSimulation Hosted(int festival)
+        {
+            var game=new FestivalSimulation(12);game.DealSecret=()=>98765;game.State.UnlockedFestivalCount=Festivals.Count;game.State.FestivalIndex=festival;
+            foreach(var id in new[]{"ash","sam"}){var p=game.AddPlayer(id,id=="ash"?"Ash":"Sam");p.X=0;p.Z=19;Assert.That(game.Execute(id,new GameCommand{Id="ready-"+id,Kind="Ready"}).Accepted,Is.True);}
+            game.Tick(5.2+FestivalSimulation.SpinSeconds+.1);
+            foreach(var p in game.State.Players)Assert.That(game.Execute(p.Id,new GameCommand{Id="map-"+p.Id,Kind="MapReady"}).Accepted,Is.True);
+            game.State.Npcs.Clear();return game;
+        }
+        static System.Collections.Generic.List<string> Shown(FestivalSimulation game,FestivalHudText.MoneyNewsFollower news,string viewer)
+        {
+            var shown=new System.Collections.Generic.List<string>();var p=game.Player(viewer);news.Follow(game.State,p,1);
+            for(var n=news.Take();n!=null;n=news.Take())shown.Add(FestivalHudText.MoneyText(game.State,p,n.Text));
+            return shown;
+        }
+        [TestCase(0,"LOST PROPERTY RETURNED  •  +$5","INTO THE STASH  •  −$5","STASH  •  +$5  •  Ash","SECURITY FINE  •  −$10  •  SECURITY TOOK 1 Tongue Stamps")]
+        [TestCase(1,"LOST PROPERTY RETURNED  •  +5 buttons","INTO THE STASH  •  −5 buttons","STASH  •  +5 ramen packets  •  Ash","SECURITY FINE  •  −10 buttons  •  SECURITY TOOK 1 Tongue Stamps")]
+        public void EveryChangeShowsItsAmountOnce(int festival,string lostProperty,string deposit,string crewDeposit,string detained)
+        {
+            var game=Hosted(festival);var ash=game.Player("ash");ash.Cash=40;
+            var mine=new FestivalHudText.MoneyNewsFollower();var theirs=new FestivalHudText.MoneyNewsFollower();
+            Assert.That(Shown(game,mine,"ash"),Is.Empty,"setup: the first view only takes note");Assert.That(Shown(game,theirs,"sam"),Is.Empty);
+            ash.X=-28;ash.Z=16;Assert.That(game.Execute("ash",new GameCommand{Id="lost",Kind="LostProperty"}).Accepted,Is.True);game.Tick(5.1);
+            game.State.Stashes.Add(new StashState{Id="box",X=ash.X,Z=ash.Z});
+            Assert.That(game.Execute("ash",new GameCommand{Id="deposit",Kind="Deposit",TargetId="box",Amount=5}).Accepted,Is.True);
+            Assert.That(Shown(game,mine,"ash"),Is.EqualTo(new[]{lostProperty,deposit}),"your own changes, oldest first");
+            Assert.That(Shown(game,theirs,"sam"),Is.EqualTo(new[]{crewDeposit}),"the crew sees the stash move, in their own money");
+            Assert.That(Shown(game,mine,"ash"),Is.Empty,"each notice shows once");
+            ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            typeof(FestivalSimulation).GetMethod("Detain",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(game,new object[]{ash});
+            Assert.That(Shown(game,mine,"ash"),Is.EqualTo(new[]{detained}));
+        }
+        [Test] public void ANewConnectionNeverReplaysOldNewsButANewRoundShowsAllOfIts()
+        {
+            var game=Hosted(0);var ash=game.Player("ash");var news=new FestivalHudText.MoneyNewsFollower();
+            ash.MoneyNewsLog.Add(new MoneyNews{Sequence=1,Kind="Cash",Text="LOST PROPERTY RETURNED  •  +$5"});ash.MoneyNewsSequence=1;
+            news.Follow(game.State,ash,1);Assert.That(news.Take(),Is.Null,"a join takes note of what was already there");
+            ash.MoneyNewsLog.Add(new MoneyNews{Sequence=2,Kind="Items",Text="GIGGLE TANK LOST"});ash.MoneyNewsSequence=2;
+            news.Follow(game.State,ash,1);Assert.That(news.Take()?.Text,Is.EqualTo("GIGGLE TANK LOST"));
+            news.Follow(game.State,ash,2);Assert.That(news.Take(),Is.Null,"a rejoin replays nothing");
+            game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();ash.MoneyNewsLog.Add(new MoneyNews{Sequence=1,Kind="Items",Text="GIGGLE TANK LOST"});ash.MoneyNewsSequence=1;
+            news.Follow(game.State,ash,2);Assert.That(news.Take()?.Text,Is.EqualTo("GIGGLE TANK LOST"),"a new level's news is all new, the loss its start made included");
+        }
+        // A change to your cash or the level's SALES lights the card's money as a paid sale does; the stash and items have no flash.
+        [Test] public void OnlyCashAndSalesNewsFlashTheCard()
+        {
+            foreach(var (kind,flashes) in new[]{("Cash",true),("Sales",true),("Stash",false),("Items",false)})
+                Assert.That(FestivalHudText.FlashesMoney(new MoneyNews{Kind=kind}),Is.EqualTo(flashes),kind);
+        }
+        [Test] public void TheShelfsThankYouNamesThePrice()
+        {
+            var palm=Day(0);var you=Crew(palm,"you",0);var playa=Day(1);var sam=Crew(playa,"sam",1);
+            Assert.That(FestivalHudText.MoneyText(palm,you,FestivalHudText.PocketUpdated(5)),Is.EqualTo("Oh, hey, thanks!  •  −$5  •  POCKET UPDATED"));
+            Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.PocketUpdated(5)),Is.EqualTo("Oh, hey, thanks!  •  −5 ramen packets  •  POCKET UPDATED"));
+        }
+
         // A sale's outcome reads in your money wherever it shows, from what the host wrote in dollars: its notice in the HUD's message
         // and the chat window, its result on the stamp. A paid sale flashes your cash and SALES on the player card, lit every other
         // quarter-second for the stamp's 1.5 s.
