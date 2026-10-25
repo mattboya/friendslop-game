@@ -49,6 +49,14 @@ function changedStockFiles()
 
 function run(label,args,expectedMarker='')
 {
+  // A file that already differs would fail the check after Unity and blame this run.
+  const dirty=changedStockFiles();
+  if(dirty)
+  {
+    const paths=dirty.split('\n');
+    console.error(`Committed stock files differ from HEAD before Unity ran:\n${dirty}\nUnity did not start. Restore them with: git checkout -- ${paths.map(p=>JSON.stringify(p)).join(' ')}`);
+    process.exit(3);
+  }
   const log=path.join(artifacts,`unity-${label}.log`);
   if(existsSync(log))unlinkSync(log);
   const command=['-batchmode','-accept-apiupdate','-projectPath',root,'-logFile',log,...args];
@@ -72,7 +80,7 @@ function run(label,args,expectedMarker='')
   const changed=changedStockFiles();
   if(changed)
   {
-    console.error(`Unity changed committed stock files:\n${changed}`);
+    console.error(`Unity changed committed stock files (they differ from HEAD after this run):\n${changed}`);
     process.exit(3);
   }
 }
