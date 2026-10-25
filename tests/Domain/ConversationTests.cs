@@ -672,21 +672,22 @@ public static class ConversationTests
 
     // A High or Greedy ask that ends in no sale, or that you walk away from, adds 15 or 30 suspicion of you to the buyer and to
     // every watcher, on top of what the talk or the walk-off adds, and that buyer won't buy from you again this level. A failed
-    // Fair sale moves them by RhythmDelta only, and the buyer still hears your next offer.
+    // Fair sale moves them by RhythmDelta only, and the buyer still hears your next offer. A talk holds you still, so a buyer who
+    // walks out of reach costs you nothing.
     static void APushedAskThatFailsRaisesSuspicion()
     {
         foreach(string end in new[]{"fail","end","leave"})
-            foreach(var (ask,extra) in new[]{(FestivalSimulation.FairAsk,0),(FestivalSimulation.HighAsk,15),(FestivalSimulation.GreedyAsk,30)})
+            foreach(var (ask,pushed) in new[]{(FestivalSimulation.FairAsk,0),(FestivalSimulation.HighAsk,15),(FestivalSimulation.GreedyAsk,30)})
             {
                 var s=Pair("Sale");var buyer=Partner(s);var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
                 var i=Sale(s,ask);Check(i.WitnessIds.Contains("watcher")&&i.WitnessIds.Contains(buyer.Id),"setup: the watcher and the buyer see the sale");
                 double Of(NpcState n)=>n.Observers.Find(o=>o.PlayerId=="p0")?.Suspicion??0;
                 if(end=="end"){Say(s,i,Awkward);Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away from the sale");}
-                else if(end=="leave"){Say(s,i,Awkward);s.Player("p0").X=6;s.Tick(.1);Check(i.Status=="Moved away or target changed","setup: you move out of reach of the sale ("+i.Status+")");}
+                else if(end=="leave"){Say(s,i,Awkward);buyer.X=6;s.Tick(.1);Check(i.Status=="Moved away or target changed","setup: the buyer walks out of reach of the sale ("+i.Status+")");buyer.X=0;}
                 else Talk(s,i,Every(Awkward));
                 // Ending the talk moves its watchers, the buyer facing you among them, 20 (Cancel); a talk that ends at 0 moves them by
-                // RhythmDelta(0), 20 too. Moving out of reach moves them by nothing but the ask.
-                double moved=end=="leave"?0:20,watched=20+moved+extra,bought=moved+extra;
+                // RhythmDelta(0), 20 too. A buyer who walks off moves them by nothing.
+                int extra=end=="leave"?0:pushed;double moved=end=="leave"?0:20,watched=20+moved+extra,bought=moved+extra;
                 Check(Of(watcher)==watched&&Of(buyer)==bought,end+" at ask "+ask+" leaves the watcher at "+watched+" and the buyer at "+bought+", got "+Of(watcher)+" and "+Of(buyer));
                 var p=s.Player("p0");p.X=0;var again=Act(s,"p0","StartSale",buyer.Id,"stock_lsd");
                 Check(again.Accepted==(extra==0)&&(extra==0||again.Reason=="Not after that ask. They won't buy from you again."),end+" at ask "+ask+": the buyer "+(extra==0?"hears your next offer":"won't buy from you again")+": "+again.Reason);
@@ -745,6 +746,9 @@ public static class ConversationTests
         Check(o.Notice=="NO SALE  •  Tongue Stamps dropped at your feet"&&o.Result=="NO SALE"&&s.State.Drops.Exists(d=>d.ItemId=="stock_lsd"),"with full hands it says the unit dropped at your feet: \""+o.Notice+"\"");
         s=Pair("Sale");i=Sale(s,FestivalSimulation.FairAsk);Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away");o=Ended(s,i);
         Check(o!=null&&o.Notice=="You walked off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE"&&o.Reaction==""&&s.Player("p0").NpcSpeaker=="","walking away says so, with no reaction of theirs: \""+o?.Notice+"\"");
+        // A buyer who walks out of reach mid-talk walks off.
+        s=Pair("Sale");i=Sale(s,FestivalSimulation.GreedyAsk);Partner(s).X=6;s.Tick(.1);o=Ended(s,i);
+        Check(o!=null&&o.Notice=="They walk off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a buyer who leaves walks off, and it says so: \""+o?.Notice+"\"");
         // A sale cut short for any other reason (here the seller drops out of the game) is off.
         s=Pair("Sale");i=Sale(s,FestivalSimulation.FairAsk);s.Disconnect("p0");o=Ended(s,i);
         Check(o!=null&&o.Notice=="SALE OFF  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a sale cut off says SALE OFF: \""+o?.Notice+"\"");
