@@ -57,6 +57,7 @@ public static class DjSetTests
         var game=Floor();var p=game.Player("p0");var i=Start(game);
         Check(p.X==Catalog.StageDjX&&p.Z==Catalog.StageDjZ,"the set puts you at the main mixer, got "+p.X+","+p.Z);
         Check(p.Yaw==180,"facing the crowd, got "+p.Yaw);
+        Check(game.TryMove("p0",p.X,p.Z,37,.1)&&p.Yaw==180,"looking round with the camera keeps the DJ facing the crowd, got "+p.Yaw);
         Check(Catalog.StageDjZ>30&&Catalog.StageDjZ<31.5f,"the mixer spot is up on the riser, behind the stage lip");
         Check(!p.Inventory.Exists(x=>x.ItemId=="stage_pass"),"the pass is spent");
         for(int phrase=0;phrase<5;phrase++){Check(i.Phrase==phrase&&p.InteractionId==i.Id,"phrase "+phrase+" plays");Check(p.X==Catalog.StageDjX&&p.Z==Catalog.StageDjZ,"you stay on stage through phrase "+phrase);Verdict(game,i);}
