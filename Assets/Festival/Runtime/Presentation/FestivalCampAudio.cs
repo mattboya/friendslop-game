@@ -8,27 +8,23 @@ namespace Festival.Presentation
     /// <summary>The camp's sound: the DJ's track, chosen in the host snapshot, and the original synthesized gag sounds (the camp
     /// secrets' horn and squeak play from their props, FestivalCampEggView). MUSIC-2: the
     /// tracks are Matt's recordings (FestivalMusic). Each loops between beats measured from the recording, not over the file's silent
-    /// start and faded end. Two decks take turns on the audio clock so the join lands to the sample: the first plays the track from
-    /// its start to the loop's end, then the other plays the loop from its first beat, and so on.</summary>
+    /// start and faded end. The stage's two-deck transport plays them on the audio clock (FestivalMusic.Transport.Play):
+    /// the first pass from the track's start to the loop's end, then the decks take turns on the loop, joining to the sample.</summary>
     public sealed class FestivalCampAudio : MonoBehaviour
     {
         const int Rate=24000;
-        // How far ahead a track is scheduled, so its stream is open by the time it starts.
-        const double Lead=.2;
         readonly AudioClip[] antics=new AudioClip[3];
         readonly AudioSource[] decks=new AudioSource[2];
         AudioSource foley;
         FestivalSession session;
-        FestivalMusic.Track track;
-        int playing=-1,live;
-        // When the deck not live takes over, on the audio clock.
-        double turnAt;
+        FestivalMusic.Transport transport;
+        int playing=-1;
         int lastAntics;
         float? beat;
         int beatFrame=-1;
 
         /// <summary>The deck sounding now (FestivalMusic.BeatPhase reads its beat), or null in silence.</summary>
-        public AudioSource Music=>track==null?null:decks[AudioSettings.dspTime<turnAt?live:1-live];
+        public AudioSource Music=>transport?.Current(AudioSettings.dspTime);
         /// <summary>GAS-5: the camp music's beat phase this frame (FestivalMusic.BeatPhase of Music), or null in silence. It is read
         /// once a frame, so the HUD's zoom and FestivalTrip's overlay and sound pulse on the same moment.</summary>
         public float? Beat{get{if(beatFrame!=Time.frameCount){beatFrame=Time.frameCount;beat=FestivalMusic.BeatPhase(Music);}return beat;}}
@@ -37,6 +33,7 @@ namespace Festival.Presentation
         {
             session=GetComponent<FestivalSession>();
             for(int deck=0;deck<decks.Length;deck++){decks[deck]=gameObject.AddComponent<AudioSource>();decks[deck].playOnAwake=false;decks[deck].spatialBlend=0;}
+            transport=new FestivalMusic.Transport(decks);
             foley=gameObject.AddComponent<AudioSource>();foley.playOnAwake=false;foley.spatialBlend=0;
             for(int kind=0;kind<antics.Length;kind++)antics[kind]=CreateAntic(kind);
         }
@@ -96,19 +93,6 @@ namespace Festival.Presentation
             for(int n=0;n<samples.Length;n++)samples[n]=(float)(samples[n]*loudness/peak);
             var clip=AudioClip.Create(name,samples.Length,1,Rate,false);clip.SetData(samples,0);return clip;
         }
-        // Plays the DJ's choice (CampFeatures.Tracks' index; SILENCE stops), its first pass starting at sample from.
-        void Play(int selected,int from)
-        {
-            playing=selected;track=FestivalMusic.For(selected);
-            foreach(var deck in decks){deck.Stop();deck.clip=track?.Audio;}
-            if(track==null)return;
-            double start=AudioSettings.dspTime+Lead;
-            live=0;turnAt=start+(track.LoopEnd-from)/(double)FestivalMusic.Rate;
-            decks[0].timeSamples=from;decks[0].PlayScheduled(start);decks[0].SetScheduledEndTime(turnAt);
-            Queue(decks[1]);
-        }
-        // A deck waits to take over at turnAt and plays the loop once.
-        void Queue(AudioSource deck){deck.Stop();deck.timeSamples=track.FirstBeat;deck.PlayScheduled(turnAt);deck.SetScheduledEndTime(turnAt+track.LoopSeconds);}
         void Update()
         {
             var state=session.State;
@@ -117,13 +101,13 @@ namespace Festival.Presentation
                 :state!=null&&(state.Phase=="Shopping"||state.Phase=="Spinning"||state.Phase=="CampReview")?state.CampMusicTrack:0;
             if(selected!=playing)
             {
-                Play(selected,0);
+                // The DJ's choice (CampFeatures.Tracks' index; SILENCE stops), from the track's start.
+                playing=selected;var track=FestivalMusic.For(selected);transport.Play(track,0,AudioSettings.dspTime);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 DevelopmentDiagnostics.GraphicsEvent("InteractionVisuals","camp_music","track="+selected+" clip="+(track?.Clip??"silence")+" loop="+(track==null?"none":track.FirstBeat+".."+track.LoopEnd));
 #endif
             }
-            // The other deck has taken over: it is live now, and the one that just finished waits for the next turn.
-            if(track!=null&&AudioSettings.dspTime>=turnAt){live=1-live;turnAt+=track.LoopSeconds;Queue(decks[1-live]);}
+            transport.Turn(AudioSettings.dspTime);
             float volume=FestivalSettings.MusicGain(session.Profile?.Data,.6f);
             foreach(var deck in decks)deck.volume=volume;
             FestivalSettings.ApplyEffects(foley,session.Profile?.Data);
