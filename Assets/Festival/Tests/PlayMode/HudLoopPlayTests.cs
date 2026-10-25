@@ -775,9 +775,9 @@ namespace Festival.Tests
                 session.Command("Cancel");yield return new WaitForSeconds(.3f);
                 var window=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud.GetComponent<FestivalHud>());
                 if(window.Open){yield return Tap(Key.Escape,.3f);Assert.That(window.Open,Is.False,"Escape closes the displayed cancelled thread");}
-                Assert.That(session.MenuOpen,Is.False);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"the completed reservation/refund leaves the other stock equipped");
-                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.Empty,"the already-held numeric slot now stows");
-                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"a second press equips the selected stock before the wheel changes kind");
+                Assert.That(session.MenuOpen,Is.False);Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"),"a cancelled sale puts the offered unit back in your hand");
+                yield return Tap(Key.Digit2,.3f);Assert.That(p.EquippedItemId,Is.Empty,"the already-held numeric slot now stows");
+                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"another numeric slot equips its stock before the wheel changes kind");
                 InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});yield return null;yield return new WaitForSeconds(.3f);
                 Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"));Assert.That(Read("Prompt"),Does.StartWith("Offer Fun Guys"));
                 // Remove the other kind: selling the actual last unit retains truthful guidance until refund or completion.
