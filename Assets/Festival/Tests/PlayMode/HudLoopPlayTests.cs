@@ -63,7 +63,9 @@ namespace Festival.Tests
                 mates[0].Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="lsd",RemainingSeconds=600});
                 game.State.TripperId=mates[0].Id;yield return new WaitForSeconds(.5f);session.Profile.ShowTipsAgain();yield return null;yield return null;
                 var strip=Card("Nearby actions");var tip=Card("First-time tip card");Assert.That(strip.gameObject.activeInHierarchy&&tip.gameObject.activeInHierarchy,Is.True,"real nearby actions and a first-time friend tip are visible together: strip="+strip.gameObject.activeInHierarchy+", tip="+tip.gameObject.activeInHierarchy+", phase="+session.State.Phase+", elapsed="+session.State.ElapsedSeconds+", life="+player.Life+", prompt="+DropText(root,"Prompt")?.text+", seen="+string.Join(",",session.Profile.Data.SeenTips));
-                var nearby=DropText(root,"Nearby");Assert.That(nearby.text.Split('\n').Length,Is.EqualTo(5));Assert.That(nearby.text,Does.EndWith("ESC  +7 more"));
+                // The menu holds the buyer's actions, seven handoffs and lying down. The strip lists four after the prompt and counts the rest.
+                int listed=FestivalHudText.FestivalgoerActions(game.State,player,buyer).Count+mates.Count+1;
+                var nearby=DropText(root,"Nearby");Assert.That(nearby.text.Split('\n').Length,Is.EqualTo(5));Assert.That(nearby.text,Does.EndWith("ESC  +"+(listed-5)+" more"));
                 Canvas.ForceUpdateCanvases();
                 if(strip.anchorMin.y<tip.anchorMax.y+.008f)failures.Add("nearby strip bottom="+strip.anchorMin.y+" overlaps first-time tip top="+tip.anchorMax.y);
                 Fits("Nearby");if(nearby.cachedTextGenerator.lineCount>5)failures.Add("five extras wrapped onto "+nearby.cachedTextGenerator.lineCount+" rendered rows");Fits("Objective title");Fits("Objective detail");Fits("Vitals");Fits("First-time tip");float crowdedHeight=strip.rect.height;
@@ -75,7 +77,7 @@ namespace Festival.Tests
                 foreach(var mate in mates){mate.X=1;mate.Z=0;}yield return new WaitForSeconds(.3f);
                 yield return Tap(Key.Escape,.3f);Assert.That(session.MenuOpen,Is.True);
                 var actions=new List<Button>();foreach(var button in root.GetComponentsInChildren<Button>(false))if(button.name.StartsWith("Action:"))actions.Add(button);
-                Assert.That(actions.Count,Is.EqualTo(12),"the full list retains the primary, all three other NPC actions, seven handoffs and lying down");
+                Assert.That(actions.Count,Is.EqualTo(listed),"the full list retains every buyer action, seven handoffs and lying down");
                 foreach(var mate in mates)Assert.That(actions.Exists(b=>b.name=="Action:Offer Tongue Stamps to "+mate.Name),Is.True,"every registered friend remains in the menu");
                 Fits("Crew status");foreach(var button in actions){var text=button.transform.Find("Text").GetComponent<Text>();var measured=new TextGenerator();measured.Populate(text.text,text.GetGenerationSettings(text.rectTransform.rect.size));int visible=Mathf.Max(0,measured.characterCountVisible);if(visible<text.text.Length&&text.text.Substring(visible).Trim().Length>0)failures.Add("menu action clipped: "+text.text);}
                 var scroll=actions[0].GetComponentInParent<ScrollRect>();Assert.That(scroll,Is.Not.Null);scroll.verticalNormalizedPosition=0;Canvas.ForceUpdateCanvases();
