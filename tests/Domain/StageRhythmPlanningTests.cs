@@ -145,7 +145,7 @@ public static class StageRhythmPlanningTests
     {
         var game=Floor();var p=game.Player("p0");p.X=Catalog.StageTakeoverX;p.Z=Catalog.StageTakeoverZ;p.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
         var i=Start(game,"Dj");double previousEnd=i.StartSeconds+i.DurationSeconds+.75;
-        Check((int)Field(i,"StageTrack")==0,"takeover keeps its own fixed timing");
+        Check((int)Field(i,"StageTrack")==RhythmChart.StageTrackFor(0,0),"takeover rides the stage song");
         game.State.SimulationSeconds=previousEnd;game.Tick(.01);
         Check(i.Phrase==1&&i.StartSeconds>=previousEnd-1e-9,"next DJ phrase begins after the full preceding chart and late verdict");
         Check(i.DurationSeconds==RhythmChart.For(i).DurationSeconds,"next DJ phrase has real chart duration");

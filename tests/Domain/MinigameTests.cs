@@ -327,6 +327,7 @@ public static class MinigameTests
         {"CampEggState.SeatedUntil","camp-only chair deadline: ownership/deadline are cleared when leaving camp, before any festival minigame"},
         {"PlayerState.LastCampEggAt","historical camp-only last-gag time: retains its age through festival minigames, like the prop event"},
         {"RoundState.NextCashFindAt","Playing elapsed deadline: never a simulation timestamp"},
+        {"RoundState.StageCheerScore","a score"},{"RoundState.StageCheerUntilWorldSeconds","the crowd's cheer expiry on the pause-safe world clock"},
         {"ObserverState.Suspicion","suspicion"},{"NpcState.Suspicion","suspicion"},
         {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"InteractionState.BeatSeconds","a length"},
         {"InteractionState.StageFirstHeadWorldSeconds","authored stage world clock: the pause leaves music at the same position"},

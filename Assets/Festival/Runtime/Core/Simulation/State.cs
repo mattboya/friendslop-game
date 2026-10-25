@@ -154,6 +154,9 @@ namespace Festival.Core
         // The night's clue trail is complete (Visions.cs): the lost friend can be found.
         public bool GateOpened;
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
+        // The crowd's cheer for the stage DJ's last phrase: its score, until StageCheerUntilWorldSeconds on the world clock.
+        // -1 before any set and in older snapshots.
+        public double StageCheerScore=-1,StageCheerUntilWorldSeconds=-1;
         // CAMP-3: persistent public prop state and host-picked points for this camp visit; additive in schema 2.
         public List<CampEggState> CampEggs=new List<CampEggState>();
         // Sale cash paid out this level, after any payout multiplier; a day's quota counts it (DayQuota.cs).

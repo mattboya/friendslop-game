@@ -29,7 +29,6 @@ public static class RhythmReleaseTests
     {
         var player=game.Player("p0");string command=kind,item="";
         if(kind=="Poi"){item="poi_practice";player.Inventory.Add(new ItemStack{ItemId=item,Count=1});}
-        if(kind=="Dj"){player.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});player.X=Catalog.StageTakeoverX;player.Z=Catalog.StageTakeoverZ;}
         var result=game.Execute("p0",new GameCommand{Id="release-start"+(sequence++),Kind=command,TargetId="partner",ItemId=item});
         Check(result.Accepted,"setup starts "+kind+": "+result.Reason);return game.Interaction(game.Player("p0").InteractionId);
     }
@@ -89,7 +88,8 @@ public static class RhythmReleaseTests
     }
     static void EveryFinishedRhythmScoresReleasesThroughTheHoldJudge()
     {
-        foreach(string kind in new[]{"Dance","Poi","Dj"})foreach(double error in new[]{0,.1})foreach(string release in new[]{"early","timely","none"})
+        // The DJ set is a ride with no holds (DjSetTests).
+        foreach(string kind in new[]{"Dance","Poi"})foreach(double error in new[]{0,.1})foreach(string release in new[]{"early","timely","none"})
         {
             var game=Floor();var interaction=Start(game,kind);var chart=HoldChart(interaction);var hold=chart.Notes.Find(note=>note.HoldSeconds>0);
             var inputs=Heads(chart);int at=inputs.FindIndex(input=>input.lane==hold.Direction&&input.time==hold.TimeSeconds);
@@ -99,7 +99,7 @@ public static class RhythmReleaseTests
             double expected=(chart.Notes.Count-1+(release=="early"?0:error==0?1:.6))/chart.Notes.Count;
             Check(Math.Abs(interaction.Score-expected)<1e-9,kind+" "+release+" release with head error "+error+" scores "+expected+", got "+interaction.Score);
             Check(Math.Abs(game.Player("p0").LastRhythmScore-expected)<1e-9,"the player's stored score uses the same verdict");
-            Check(kind=="Dj"?interaction.Phrase==1:interaction.Status=="Complete","the verdict settles this challenge or advances the DJ phrase");
+            Check(interaction.Status=="Complete","the verdict settles this challenge");
         }
     }
     static void TrustDancesLoseTrustOnlyForAnEarlyDrop()

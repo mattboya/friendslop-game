@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 namespace Festival.Core
 {
-    [Serializable] public sealed class RhythmNote { public int Id,Direction; public double TimeSeconds,HoldSeconds; }
+    // Grey marks a block to dodge on the DJ ride (DjRide); arrow charts never set it.
+    [Serializable] public sealed class RhythmNote { public int Id,Direction; public double TimeSeconds,HoldSeconds; public bool Grey; }
     [Serializable] public sealed class RhythmChart
     {
         public List<RhythmNote> Notes = new List<RhythmNote>();
@@ -13,9 +14,10 @@ namespace Festival.Core
         public static RhythmChart For(InteractionState i)
         {
             int difficulty=i.Kind=="ConfirmDance"?QuarterNotes:i.ChartDifficulty;
-            if(i.StageTrack==0)return Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty);
+            RhythmChart Logical()=>i.Kind=="Dj"?DjRide.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,DjRide.Step(i),DjRide.Greys(i)):Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty);
+            if(i.StageTrack==0)return Logical();
             if(!ValidStageAnchor(i))throw new ArgumentException("Invalid stage chart anchor.",nameof(i));
-            var track=StageBeats.For(i.StageTrack);var chart=CreateOnStage(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty,track,StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds),i.StageBeatStride);
+            var track=StageBeats.For(i.StageTrack);var chart=OnStage(Logical(),i.NoteCount,i.BeatSeconds,track,StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds),i.StageBeatStride);
             double shift=i.StageFirstHeadDelaySeconds-2;
             foreach(var note in chart.Notes)note.TimeSeconds+=shift;
             chart.DurationSeconds+=shift;return chart;
@@ -77,7 +79,11 @@ namespace Festival.Core
         {
             if(track==null)throw new ArgumentNullException(nameof(track));
             if(!Finite(firstBeat)||stride!=.5&&stride!=1&&stride!=2)throw new ArgumentOutOfRangeException(nameof(firstBeat));
-            var chart=Create(seed,count,beatSeconds,difficulty);double origin=StageWorldAtBeat(track,firstBeat);
+            return OnStage(Create(seed,count,beatSeconds,difficulty),count,beatSeconds,track,firstBeat,stride);
+        }
+        static RhythmChart OnStage(RhythmChart chart,int count,double beatSeconds,StageBeats.Track track,double firstBeat,double stride)
+        {
+            double origin=StageWorldAtBeat(track,firstBeat);
             foreach(var note in chart.Notes)
             {
                 double headBeat=firstBeat+(note.TimeSeconds-2)/beatSeconds*stride,tailBeat=headBeat+note.HoldSeconds/beatSeconds*stride;

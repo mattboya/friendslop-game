@@ -130,6 +130,9 @@ namespace Festival.Network
         // {SpinSides}, the camp vote hint {Slot1}-{Slot3}. A version-8 client would show a host's poi reply tokens raw.
         // 10: wave 2026-10-24 starts a new semantic boundary; published version-9 peers are rejected.
         // Subsequent units append only the version-10 changes they actually land.
+        // DANCE-13: a Dj chart is the DJ ride (DjRide), blocks and greys (RhythmNote.Grey) in lanes 0-2 on the stage song's beat; the
+        // host judges each Rhythm input's Direction as the new lane, the DJ stands at the riser's mixer (Catalog.StageDjX/Z), and
+        // RoundState.StageCheerScore/StageCheerUntilWorldSeconds carry the crowd's cheer to every view (-1 in older rounds).
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -931,6 +934,8 @@ namespace Festival.Network
             int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
+                // Public: every view shows the crowd's cheer for the stage DJ.
+                StageCheerScore=source.StageCheerScore,StageCheerUntilWorldSeconds=source.StageCheerUntilWorldSeconds,
                 CampEggs=source.CampEggs.ConvertAll(e=>e.Copy()),
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
