@@ -73,11 +73,11 @@ namespace Festival.Presentation
                 case "ecstasy": // Rolly Pollies: warm, bright, saturated colours, and a soft glow around other people.
                     look.Tint=new Color(1,.6f,.35f,.05f*s);look.Saturation=30*s;look.Brightness=.15f*s;look.Glow=s;break;
                 case "ketamine": // Pony Dust: tunnel vision through sleepy eyes, a camera that lags behind the mouse, and muffled sound.
-                    look.Tint=new Color(.55f,.65f,.8f,.03f*s);look.Vignette=.75f*s;look.Eye=EyeRest(dose);look.Lag=.25f*s*motion;look.Muffle=s;
+                    look.Tint=new Color(.55f,.65f,.8f,.03f*s);look.Vignette=.5f*s;look.Eye=EyeRest(substance,dose);look.Lag=.25f*s*motion;look.Muffle=s;
                     // TRIP-16: a slow sway, by the dose. TRIP-17: while the walk stalls, a faster wobble, alike at every dose.
                     look.Roll=(PonySway(time)*s+StallWobble(time)*stall)*motion;break;
                 case "weed": // Couch Lock: a soft haze with a green cast, through sleepy eyes.
-                    look.Tint=new Color(.35f,.8f,.35f,.05f*s);look.Haze=.12f*s;look.Eye=EyeRest(dose);break;
+                    look.Tint=new Color(.35f,.8f,.35f,.05f*s);look.Haze=.12f*s;look.Eye=EyeRest(substance,dose);break;
             }
             return look;
         }
@@ -155,22 +155,32 @@ namespace Festival.Presentation
             return default;
         }
 
-        // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes. EyeSoft is the lids' soft edge, as a share of the opening.
-        private const float EyeSoft=.35f,BlinkClose=.4f,BlinkShut=.1f;
+        // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes. EyeSoft is the lids' soft edge, as a share of the opening;
+        // Couch Lock's lighter lids have a narrower one, so more of its view is clear.
+        private const float EyeSoft=.35f,CouchEyeSoft=.15f,BlinkClose=.4f,BlinkShut=.1f;
         /// <summary>A blink, close to reopen: .4 s easing shut, .1 s shut and .5 s easing open.</summary>
         public const float BlinkSeconds=1;
 
         /// <summary>TRIP-16: how dark the view is at (x, y), each -1 to 1 from the screen's centre to its edges, looking out through
         /// lids open to aperture (1 wide, 0 shut): each lid curves from a tapered corner at the screen's side to aperture's height at
-        /// its middle, with a soft edge. Past the lids (|y| over aperture) it is shut, so plain bars can fill above and below.</summary>
-        public static float EyeShade(float x,float y,float aperture)
+        /// its middle, with a soft edge soft (a share of the opening, EyeSoftness). Past the lids (|y| over aperture) it is shut, so
+        /// plain bars can fill above and below. The outline is 1 - |x|³, so the middle stays open further out.</summary>
+        public static float EyeShade(float x,float y,float aperture,float soft=EyeSoft)
         {
             if(aperture<=0||Mathf.Abs(y)>=aperture)return 1;
-            return Mathf.SmoothStep(0,1,(Mathf.Abs(y)/aperture-(1-x*x)+EyeSoft)/EyeSoft);
+            float side=Mathf.Abs(x);
+            return Mathf.SmoothStep(0,1,(Mathf.Abs(y)/aperture-(1-side*side*side)+soft)/soft);
         }
+        /// <summary>The soft edge of a substance's lids (EyeShade): Couch Lock's is narrower than Pony Dust's.</summary>
+        public static float EyeSoftness(string substance)=>substance=="weed"?CouchEyeSoft:EyeSoft;
 
-        /// <summary>TRIP-16: how far a dose's eyes rest closed (0 open), more with each dose; 1 minus it is the resting aperture.</summary>
-        public static float EyeRest(int dose){float s=(float)EffectPresentation.Strength(dose);return s<=0?0:.1f+.3f*s;}
+        /// <summary>TRIP-16: how far a dose of substance rests the eyes closed (0 open), more with each dose; 1 minus it is the resting
+        /// aperture. Pony Dust's lids rest lower than Couch Lock's, which has no tunnel; every other substance keeps the eyes open.</summary>
+        public static float EyeRest(string substance,int dose)
+        {
+            float s=(float)EffectPresentation.Strength(dose);
+            return s<=0?0:substance=="ketamine"?.08f+.2f*s:substance=="weed"?.05f+.15f*s:0;
+        }
 
         /// <summary>TRIP-16: how shut a blink is t seconds in (1 shut), easing at both ends of each move; 0 outside it.</summary>
         public static float Blink(float t)
@@ -271,7 +281,7 @@ namespace Festival.Presentation
         private GameObject overlay;
         private Image tint,haze,top,bottom;
         private RawImage vignette,eye;
-        private Texture2D vignetteTexture,blobTexture,eyeTexture;
+        private Texture2D vignetteTexture,blobTexture,eyeTexture,couchEyeTexture;
         // TRIP-16: this screen's blinks, for the substance they began on (a new one starts afresh), and the HUD's chat card, if any.
         private Blinker blinker;
         private string blinkingOn="";
@@ -347,6 +357,7 @@ namespace Festival.Presentation
                 {
                     blinker=BlinkWaits!=null?new Blinker(BlinkWaits):Blinker.Seeded(Environment.TickCount^localPlayerId.GetHashCode());blinkingOn=substance;
                     if(chat==null)chat=GetComponentInChildren<FestivalChatWindow>(true);
+                    eye.texture=substance=="weed"?couchEyeTexture:eyeTexture;
                 }
                 held=Held(state,player);closure=blinker.Advance(deltaTime,held);aperture=Aperture(rest,closure,reducedMotion);
                 float half=aperture/2;
@@ -471,9 +482,10 @@ namespace Festival.Presentation
             vignette=Layer<RawImage>("Trip vignette",Vector2.zero,Vector2.one);vignette.texture=vignetteTexture;
             haze=Layer<Image>("Trip haze",Vector2.zero,Vector2.one);
             tint=Layer<Image>("Trip tint",Vector2.zero,Vector2.one);
-            // TRIP-16: one almond at its widest, scaled to each frame's opening, which draws exactly EyeShade's lids at that aperture.
-            // Over the tint and haze, so the lids are the same black as the bars they meet.
+            // TRIP-16: one almond at its widest, scaled to each frame's opening, which draws exactly EyeShade's lids at that aperture,
+            // one for each soft edge. Over the tint and haze, so the lids are the same black as the bars they meet.
             eyeTexture=Mask(128,64,(x,y)=>EyeShade(x,y,1),"Festival trip eye");
+            couchEyeTexture=Mask(128,64,(x,y)=>EyeShade(x,y,1,CouchEyeSoft),"Festival trip couch eye");
             eye=Layer<RawImage>("Trip eye",new Vector2(0,.5f),new Vector2(1,.5f));eye.texture=eyeTexture;eye.enabled=false;
             top=Layer<Image>("Trip letterbox top",new Vector2(0,1),Vector2.one);
             bottom=Layer<Image>("Trip letterbox bottom",Vector2.zero,new Vector2(1,0));
@@ -508,7 +520,7 @@ namespace Festival.Presentation
             if(lowPass!=null)Dispose(lowPass);
             if(reverb!=null)Dispose(reverb);
             surfaces?.Dispose();
-            foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,eyeTexture,sprites})if(thing!=null)Dispose(thing);
+            foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,eyeTexture,couchEyeTexture,sprites})if(thing!=null)Dispose(thing);
         }
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
     }

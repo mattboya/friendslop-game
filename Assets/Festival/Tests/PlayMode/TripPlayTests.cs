@@ -461,17 +461,17 @@ namespace Festival.Tests
                 {
                     dose.Substance=substance;dose.Intensity=doses;yield return null;yield return null;
                     string at=Catalog.FindEffect(substance).Name+" at dose "+doses;var eye=EyeOf(host).rectTransform;
-                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(doses)).Within(1e-4f),at+": the live screen looks through eyes resting the dose's way");
+                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(substance,doses)).Within(1e-4f),at+": the live screen looks through eyes resting the dose's way");
                     Assert.That(top.anchorMin.y,Is.EqualTo(eye.anchorMax.y).Within(1e-6f),at+": black flush above the eye");
                     Assert.That(bottom.anchorMax.y,Is.EqualTo(eye.anchorMin.y).Within(1e-6f),at+": and below it");
                 }
 
                 // The real per-frame trip: a fresh blink wait on each new substance, then a whole blink shuts the eyes and opens them
                 // again to the same rest.
-                float open=1-FestivalTrip.EyeRest(4);
+                float open=0;
                 foreach(var substance in new[]{"ketamine","weed"})
                 {
-                    wait=.25f;dose.Substance=substance;dose.Intensity=4;yield return null;yield return null;
+                    wait=.25f;dose.Substance=substance;dose.Intensity=4;yield return null;yield return null;open=1-FestivalTrip.EyeRest(substance,4);
                     float least=1;bool reopened=false;
                     for(float deadline=Time.realtimeSinceStartup+4;Time.realtimeSinceStartup<deadline&&!reopened;)
                     {
@@ -488,7 +488,7 @@ namespace Festival.Tests
                 session.Profile.Data.ReducedMotion=false;
 
                 // On the test's clock: a fresh two-second wait on Pony Dust, then one blink, measured frame by frame.
-                wait=2;dose.Substance="ketamine";yield return null;yield return null;
+                wait=2;dose.Substance="ketamine";yield return null;yield return null;open=1-FestivalTrip.EyeRest("ketamine",4);
                 float started=-1,shut=-1,ended=-1,clock=0;
                 for(int frame=0;frame<200&&ended<0;frame++)
                 {
@@ -505,7 +505,7 @@ namespace Festival.Tests
                 Assert.That(traced,Is.Empty,"the eye stays silent until diagnostics are opted in");
                 DevelopmentDiagnostics.Visible=true;Step(session,50);
                 Assert.That(traced.Count,Is.EqualTo(1),"opted in, the eye is traced once as it stands, not every frame:\n"+string.Join("\n",traced));
-                Assert.That(traced[0],Does.Contain("shown=True substance=ketamine rest=0.40 reduced=False blinking=False held=False"));
+                Assert.That(traced[0],Does.Contain("shown=True substance=ketamine rest=0.28 reduced=False blinking=False held=False"));
                 session.MenuOpen=true;Step(session,30);session.MenuOpen=false;Step(session,1);
                 Assert.That(traced.Count,Is.EqualTo(3),"a held moment is traced as it begins and as it ends:\n"+string.Join("\n",traced));
                 Assert.That(traced[1],Does.Contain("held=True"));Assert.That(traced[2],Does.Contain("held=False").And.Contain("next_blink=60.0"));
@@ -546,7 +546,7 @@ namespace Festival.Tests
                 yield return null;yield return null;
                 Assert.That(session.MenuOpen,Is.False,"setup: the menu is closed");
                 var chat=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
-                float open=1-FestivalTrip.EyeRest(4);
+                float open=1-FestivalTrip.EyeRest("ketamine",4);
                 // The host's view of its own simulation right now, as its next frame would show it.
                 void Refresh()=>typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(sim,me));
                 bool Busy()=>session.State.Interactions.Exists(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");
@@ -641,14 +641,13 @@ namespace Festival.Tests
                 PlayerState Me()=>Simulation(session).Player(session.LocalPlayerId);
                 ActiveEffect Dose()=>Me().Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
                 session.Profile.Data.ReducedMotion=false;yield return null;yield return null;
-                float open=1-FestivalTrip.EyeRest(4);
                 // On the test's clock: on into the .1 s the lids stay shut.
                 void Shut(string name){float now=Step(session,1);for(int frame=0;frame<200&&now>0;frame++)now=Step(session,1);Assert.That(now,Is.Zero,"setup: shut mid-blink before "+name);}
                 IEnumerator Gone(string name){yield return null;yield return null;Assert.That(Opening(host),Is.EqualTo(-1),name+": the eye goes at once");}
                 IEnumerator Back(string name,int drawn)
                 {
                     yield return null;yield return null;
-                    Assert.That(Opening(host),Is.EqualTo(open).Within(1e-5f),name+": back on a dose, the eyes open at their rest, not shut");
+                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(Dose().Substance,4)).Within(1e-5f),name+": back on a dose, the eyes open at their rest, not shut");
                     Assert.That(draws,Is.GreaterThan(drawn),name+": with a freshly drawn wait");
                 }
 
@@ -716,7 +715,7 @@ namespace Festival.Tests
 
                 int sober=friendDraws;mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,Substance="weed",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds});
                 for(deadline=Time.realtimeSinceStartup+5;Opening(friendObject)<0&&Time.realtimeSinceStartup<deadline;)yield return null;
-                float rest=1-FestivalTrip.EyeRest(2);
+                float rest=1-FestivalTrip.EyeRest("weed",2);
                 Assert.That(Opening(friendObject),Is.EqualTo(rest).Within(1e-4f),"a joined friend's own dose rests their own eyes its way");
                 Assert.That(friendDraws,Is.EqualTo(sober+1),"with a wait their own screen draws");
 

@@ -79,7 +79,7 @@ namespace Festival.Tests
                 Assert.That(couch.Haze>0&&couch.Eye>0,"Couch Lock is a soft haze seen through sleepy eyes: "+Describe(couch)+at);
                 Assert.That(couch.Tint.g>couch.Tint.r&&couch.Tint.g>couch.Tint.b,"with a green cast"+at);
                 // TRIP-16: Pony Dust and Couch Lock look out through eyes resting as far closed as the dose; the rest keep them open.
-                foreach(var id in new[]{"ketamine","weed"})Assert.That(Of(id).Eye,Is.EqualTo(FestivalTrip.EyeRest(dose)).And.GreaterThan(0),Name(id)+" rests the eyes the dose's way"+at);
+                foreach(var id in new[]{"ketamine","weed"})Assert.That(Of(id).Eye,Is.EqualTo(FestivalTrip.EyeRest(id,dose)).And.GreaterThan(0),Name(id)+" rests the eyes the dose's way"+at);
                 foreach(var id in new[]{"lsd","mushrooms","ecstasy"})Assert.That(Of(id).Eye,Is.Zero,Name(id)+" keeps the eyes open"+at);
                 foreach(var id in new[]{"ecstasy","weed"})Assert.That(Of(id).Roll,Is.Zero,Name(id)+" never tilts the view"+at);
             }
@@ -404,13 +404,57 @@ namespace Festival.Tests
         private static RawImage Lids(FestivalTrip trip){var eye=trip.GetComponentsInChildren<RawImage>(true).FirstOrDefault(c=>c.name=="Trip eye");Assert.That(eye,Is.Not.Null,"the trip draws an eye");return eye;}
         private static float Opening(FestivalTrip trip){var eye=Lids(trip).rectTransform;return eye.anchorMax.y-eye.anchorMin.y;}
 
+        // Pony Dust and Couch Lock stay sleepy but leave more of a 16:9 screen clear, by day and at night: Pony Dust about 40% at three
+        // doses and 35% at four; Couch Lock, with no tunnel, about 55% and 50%.
+        [Test]public void SleepyEyesLeaveMoreOfTheScreenClearAndTightenWithEveryDose()
+        {
+            var floors=new Dictionary<string,(float Three,float Four)>{{"ketamine",(.40f,.35f)},{"weed",(.55f,.50f)}};
+            foreach(int level in new[]{0,1})
+            {
+                var shares=new Dictionary<string,float[]>();string when=Festivals.Night(level)?" at night":" by day";
+                foreach(var substance in floors.Keys)
+                {
+                    var trip=Trip();var view=View();trip.BlinkWaits=()=>60;var share=shares[substance]=new float[5];
+                    for(int dose=1;dose<=4;dose++)
+                    {
+                        var state=Round("Playing",dose,substance);state.LevelIndex=level;
+                        trip.Apply(state,"me",view,NoActors,false,Moment,.02f);share[dose]=Clear(trip);
+                    }
+                    string all=Name(substance)+when+", clear at 1-4 doses: "+string.Join(", ",share.Skip(1).Select(c=>c.ToString("P1")));
+                    TestContext.WriteLine(all);
+                    Assert.That(share[3],Is.GreaterThanOrEqualTo(floors[substance].Three),all);
+                    Assert.That(share[4],Is.GreaterThanOrEqualTo(floors[substance].Four),all);
+                    for(int dose=2;dose<=4;dose++)Assert.That(share[dose],Is.LessThan(share[dose-1]-.01f),"each dose a little tighter than the last: "+all);
+                    Assert.That(share[1],Is.LessThan(.7f),"one dose still clearly sleepy: "+all);
+                }
+                for(int dose=1;dose<=4;dose++)Assert.That(shares["weed"][dose],Is.GreaterThan(shares["ketamine"][dose]),"Couch Lock, with no tunnel, is the lighter of the two at dose "+dose+when);
+            }
+        }
+        // The share of a 16:9 screen the overlay leaves clear, read from its own textures where its rects lay them: clear where the black
+        // layers together (the vignette, the lids and the bars past them) shade it less than half. The pale tint and haze do not hide it.
+        private static float Clear(FestivalTrip trip)
+        {
+            const int width=160,height=90;
+            var eye=Lids(trip);var lids=(Texture2D)eye.texture;var rect=eye.rectTransform;float low=rect.anchorMin.y,high=rect.anchorMax.y;
+            var vignette=Part<RawImage>(trip,"Trip vignette");var ramp=(Texture2D)vignette.texture;
+            int clear=0;
+            for(int j=0;j<height;j++)for(int i=0;i<width;i++)
+            {
+                float u=(i+.5f)/width,v=(j+.5f)/height;
+                float lid=!eye.enabled?0:v<=low||v>=high?1:lids.GetPixelBilinear(u,(v-low)/(high-low)).a;
+                float tunnel=vignette.color.a*ramp.GetPixelBilinear(u,v).a;
+                if(1-(1-lid)*(1-tunnel)<.5f)clear++;
+            }
+            return clear/(float)(width*height);
+        }
+
         // TRIP-16, through the trip's own Apply on a controlled clock: the lids are one cached almond texture. A blink shuts them in
         // the middle and brings them back to the same resting opening one second after it began, smoothly; reduced motion moves them a
         // quarter of the way. A frame makes no garbage, resting or blinking.
         [Test]public void TheEyeBlinksShutAndBackInOneSecondFromOneCachedTextureWithoutGarbage()
         {
             var trip=Trip();var view=View();var pony=Round("Playing",4,"ketamine");int draws=0;trip.BlinkWaits=()=>{draws++;return 2;};
-            float open=1-FestivalTrip.EyeRest(4),time=0;bool reduced=false;
+            float open=1-FestivalTrip.EyeRest("ketamine",4),time=0;bool reduced=false;
             void Frame(){time+=.02f;trip.Apply(pony,"me",view,NoActors,reduced,time,.02f);}
             Frame();
             var eye=Lids(trip);var texture=(Texture2D)eye.texture;
@@ -467,7 +511,7 @@ namespace Festival.Tests
             foreach(var (name,set) in moments)foreach(var substance in new[]{"ketamine","weed"})
             {
                 var trip=Trip();var view=View();var state=Round("Playing",3,substance);int draws=0;trip.BlinkWaits=()=>{draws++;return 1;};
-                float open=1-FestivalTrip.EyeRest(3),time=0;string at=name+", "+Name(substance);
+                float open=1-FestivalTrip.EyeRest(substance,3),time=0;string at=name+", "+Name(substance);
                 float Frame(){time+=.02f;trip.Apply(state,"me",view,NoActors,false,time,.02f);return Opening(trip);}
                 for(int frame=0;frame<61;frame++)Frame();
                 float previous=Opening(trip);
@@ -508,8 +552,10 @@ namespace Festival.Tests
             foreach(var (name,brk,mend) in ways)
             {
                 var trip=Trip();var view=View();var state=Round("Playing",4,"ketamine");int draws=0;trip.BlinkWaits=()=>{draws++;return 1;};
-                float open=1-FestivalTrip.EyeRest(4),time=0;
+                float time=0;
                 void Frame(){time+=.02f;trip.Apply(state,"me",view,NoActors,false,time,.02f);}
+                // A new substance rests the eyes its own way.
+                float Open()=>1-FestivalTrip.EyeRest(state.Players[0].Effects[0].Substance,4);
                 for(int frame=0;frame<73;frame++)Frame();
                 var eye=Lids(trip);
                 Assert.That(Opening(trip),Is.Zero,"setup: shut mid-blink before "+name);
@@ -521,9 +567,9 @@ namespace Festival.Tests
                     mend(state);Frame();
                 }
                 Assert.That(eye.enabled,name+": back on a dose, the eye shows");
-                Assert.That(Opening(trip),Is.EqualTo(open).Within(1e-5f),name+": at its resting opening, not shut");
+                Assert.That(Opening(trip),Is.EqualTo(Open()).Within(1e-5f),name+": at its resting opening, not shut");
                 Assert.That(draws,Is.EqualTo(2),name+": with a freshly drawn wait");
-                float back=-1;for(int frame=0;frame<100&&back<0;frame++){Frame();if(Opening(trip)<open-1e-4f)back=(frame+1)*.02f;}
+                float back=-1;for(int frame=0;frame<100&&back<0;frame++){Frame();if(Opening(trip)<Open()-1e-4f)back=(frame+1)*.02f;}
                 Assert.That(back,Is.EqualTo(1).Within(.05f),name+": so the next blink comes that whole wait later");
             }
         }
