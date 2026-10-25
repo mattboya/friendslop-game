@@ -723,12 +723,20 @@ namespace Festival.Tests
                 }
 
                 // VISION-3: Sam dances with that festivalgoer, so the host would refuse your check: the HUD says they're busy, and
-                // neither E nor F starts one.
-                session.Command("Cancel");mate.X=npc.X-.6f;mate.Z=npc.Z;
+                // neither E nor F starts one. You and Sam stand beside them and they stay still: the typed answer above waits on real
+                // time, and a festivalgoer who walked off in it left you out of reach.
+                session.Command("Cancel");npc.Mode="Blending";npc.Suspicion=0;npc.Observers.Clear();player.X=npc.X+.6f;player.Z=npc.Z;mate.X=npc.X-.6f;mate.Z=npc.Z;
                 var mateDance=sim.Execute(mate.Id,new GameCommand{Id="hud_mate_dance",Kind="Dance",TargetId=npc.Id});
                 if(!mateDance.Accepted)failures.Add("setup: Sam dances with the festivalgoer: "+mateDance.Reason);
                 yield return new WaitForSeconds(.6f);
                 Expect("tripper beside a busy vision","Prompt","They're busy right now");
+                if(Read("Prompt")!="They're busy right now")
+                {
+                    var aim=FestivalHudText.CheckTarget(session.State,session.LocalPlayer);
+                    failures.Add("tripper beside a busy vision: the check aims at "+(aim?.Id??"nobody")+"; you stand "+Vector2.Distance(new Vector2(player.X,player.Z),new Vector2(npc.X,npc.Z)).ToString("0.00")
+                        +" m from the festivalgoer ("+npc.Mode+", unchecked vision "+sim.State.Visions.Exists(v=>v.NpcId==npc.Id&&!v.Confirmed)+") and "
+                        +Vector2.Distance(new Vector2(player.X,player.Z),new Vector2(mate.X,mate.Z)).ToString("0.00")+" m from Sam");
+                }
                 PressE();PressF();yield return null;
                 if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("tripper beside a busy vision: E or F starts a check ("+session.Message+")");
                 sim.Execute(mate.Id,new GameCommand{Id="hud_mate_stop",Kind="Cancel"});mate.X=30;mate.Z=0;
