@@ -1953,11 +1953,11 @@ namespace Festival.Presentation
 
         private static InteractionState ActiveConfirmation(RoundState state,PlayerState player)=>player==null?null:state?.Interactions.Find(i=>i.Id==player.InteractionId&&i.PlayerId==player.Id&&i.Status=="Active"&&i.Kind=="ConfirmChat");
         // `seen` is the interaction the player acted on. The host refuses the Cancel once that one has ended, so a joined view
-        // that lags can't stop what replaced it.
+        // that lags can't stop what replaced it. A chat check ends only when it is the one acted on, so a stale stop can't end it.
         private void FinishCurrentAction(string seen)
         {
             var check=ActiveConfirmation(session.State,session.LocalPlayer);
-            if(check!=null)session.Command("EndChat",check.Id);else session.Command("Cancel",seen);
+            if(check!=null&&check.Id==seen)session.Command("EndChat",check.Id);else session.Command("Cancel",seen);
         }
         private void UpdateActions(RoundState state,PlayerState player)
         {
