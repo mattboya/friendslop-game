@@ -33,11 +33,13 @@ namespace Festival.Tests
         [TearDown]public void ReleaseOnlyThisTestsData()
         {
             foreach(var holder in holders)if(holder!=null)Destroy(holder.GetComponent<FestivalSession>());holders.Clear();
-            // Sessions torn down oldest-first leave the quality level the newer one found, and the editor saves it into ProjectSettings.
-            QualitySettings.SetQualityLevel(qualityLevel,false);
+            // Sessions torn down in either order leave the quality level the first one found, and the editor saves it into
+            // ProjectSettings: put it back for the next test, then fail this one.
+            int left=QualitySettings.GetQualityLevel();QualitySettings.SetQualityLevel(qualityLevel,false);
             LocalProfile.Folder=previousFolder;FestivalInput.PreferencesScope=previousScope;
             PlayerPrefs.DeleteKey(callerKey);PlayerPrefs.Save();
             if(Directory.Exists(caller))Directory.Delete(caller,true);
+            Assert.That(QualitySettings.names[left],Is.EqualTo(QualitySettings.names[qualityLevel]),"the sessions leave the editor quality level they found");
         }
         FestivalSession Session(string flag,string profile=Profile)
         {

@@ -1099,6 +1099,32 @@ namespace Festival.Tests
             }
         }
 
+        [Test]public void OverlappingSettingsKeepTheLiveGraphicsAndTheLastRestoresTheFirstCapture()
+        {
+            int initialLevel=QualitySettings.GetQualityLevel(),initialCap=Application.targetFrameRate,start=Array.IndexOf(QualitySettings.names,"Very High"),high=Array.IndexOf(QualitySettings.names,"High");
+            var before=Enumerable.Range(0,QualitySettings.names.Length).Select(QualitySettings.GetRenderPipelineAssetAt).ToArray();
+            var older=new FestivalSettings(new LocalProfile("overlapping-older"),new Display());var newer=new FestivalSettings(new LocalProfile("overlapping-newer"),new Display());
+            try
+            {
+                QualitySettings.SetQualityLevel(start,false);int startVsync=QualitySettings.vSyncCount;Application.targetFrameRate=37;
+                older.ApplyGraphics();newer.ApplyGraphics();var live=QualitySettings.renderPipeline;
+                Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(high),"setup: both apply the saved High preset");
+                older.Dispose();
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("High"),"the older teardown leaves the live session's level");
+                Assert.That(QualitySettings.renderPipeline,Is.SameAs(live),"and its pipeline");Assert.That(live!=null,Is.True,"a pipeline that still exists");
+                newer.Dispose();
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("Very High"),"the last teardown restores the level that the first one found");
+                Assert.That(QualitySettings.vSyncCount,Is.EqualTo(startVsync),"and its vsync");Assert.That(Application.targetFrameRate,Is.EqualTo(37),"and its frame cap");
+                for(int i=0;i<before.Length;i++)Assert.That(QualitySettings.GetRenderPipelineAssetAt(i),Is.SameAs(before[i]),QualitySettings.names[i]+" gets its own pipeline back");
+            }
+            finally
+            {
+                older.Dispose();newer.Dispose();
+                for(int i=0;i<before.Length;i++){QualitySettings.SetQualityLevel(i,false);QualitySettings.renderPipeline=before[i];}
+                QualitySettings.SetQualityLevel(initialLevel,false);Application.targetFrameRate=initialCap;
+            }
+        }
+
         [Test]public void SessionAppliesSavedBrightnessAtTheTitleBeforeConnecting()
         {
             var worldObject=new GameObject("impl:U34 title brightness");var world=worldObject.AddComponent<FestivalWorld>();world.Build();
@@ -1324,6 +1350,16 @@ namespace Festival.Tests
     }
     public sealed class GraphicsPreferencesIsolationTests
     {
+        [Test]public void ARunStartErasesAStaleProjectSettingsRecord()
+        {
+            bool recorded=UnityEditor.SessionState.GetBool(ProjectSettingsGuard.Recorded,false);
+            try
+            {
+                UnityEditor.SessionState.SetBool(ProjectSettingsGuard.Recorded,true);new ProjectSettingsGuard().RunStarted(null);
+                Assert.That(UnityEditor.SessionState.GetBool(ProjectSettingsGuard.Recorded,false),Is.False,"the run start erases the old record");
+            }
+            finally{UnityEditor.SessionState.SetBool(ProjectSettingsGuard.Recorded,recorded);}
+        }
         [Test]public void GraphicsFixturePreservesCallerPreferencesAndRestoresItsScope()
         {
             string previousScope=FestivalInput.PreferencesScope,previousFolder=LocalProfile.Folder;
