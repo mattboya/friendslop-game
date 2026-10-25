@@ -153,14 +153,13 @@ namespace Festival.Tests
                 var shown=GameObject.Find("mission_friend");
                 if(shown!=null)failures.Add("on the wheel at night: the lost friend is drawn at "+shown.transform.position+", far out of sight, giving their spot away");
                 // The tripper whose trail is done already knows the friend's spot, but the wheel still draws no friend far out of sight.
-                // You are sober here, so KeepTripper re-spins: the bag holds only you, or it hands the role back to Sam half the time.
-                sim.State.TripperBag.Clear();sim.State.TripperBag.Add(player.Id);
-                string tripper=sim.State.TripperId;sim.State.TripperId=player.Id;sim.State.GateOpened=true;
+                // You take a dose for this turn, so KeepTripper keeps you the tripper; then Sam trips again and you are sober.
+                string tripper=sim.State.TripperId;sim.State.TripperId=player.Id;sim.State.GateOpened=true;player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.6f);
                 Assert.That(FestivalSimulation.OnWheel(sim.State,player.Id)&&(session.State.FriendPosition.X!=0||session.State.FriendPosition.Z!=0),Is.True,"setup: the tripper with the trail done rides the wheel and knows the friend's spot");
                 shown=GameObject.Find("mission_friend");
                 if(shown!=null)failures.Add("on the wheel at night as the tripper with the trail done: the lost friend is drawn at "+shown.transform.position+", far out of sight");
-                sim.State.TripperId=tripper;sim.State.GateOpened=false;
+                sim.State.TripperId=tripper;sim.State.GateOpened=false;player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
                 // By day nobody is lost: the rider spots security only, over the quota line.
                 sim.State.LevelIndex=0;
                 yield return new WaitForSeconds(.6f);

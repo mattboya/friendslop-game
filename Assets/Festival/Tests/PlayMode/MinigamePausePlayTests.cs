@@ -178,7 +178,7 @@ namespace Festival.Tests
             for(float end=Time.realtimeSinceStartup+10;!owner.Ready&&Time.realtimeSinceStartup<end;)yield return null;
             Assert.That(owner.Ready,Is.True);yield return StartLevel(host,peer.LocalPlayerId);Simulation(host).State.Booth.Kind=FestivalSimulation.MysteryCupsGame;yield return null;
             foreach(var actor in world.GetComponentsInChildren<FestivalCharacter>(true))actor.enabled=false;
-            sim.State.ElapsedSeconds=193;sim.State.SimulationSeconds=193;sim.State.TripperId=owner.Id;sim.State.CloudClueStart=150;sim.State.CloudClueReadAt=190;sim.State.CloudClueLandmark=2;
+            sim.State.ElapsedSeconds=193;sim.State.SimulationSeconds=193;sim.State.TripperId=owner.Id;owner.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);owner.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});sim.State.CloudClueStart=150;sim.State.CloudClueReadAt=190;sim.State.CloudClueLandmark=2;
             var at=FestivalSimulation.BoothAt(sim.State);foreach(var player in sim.State.Players){player.X=at.X+1;player.Z=at.Z;}
             for(float end=Time.realtimeSinceStartup+6;peer.State.Phase!=FestivalSimulation.MinigamePhase&&Time.realtimeSinceStartup<end;)yield return null;
             Assert.That(peer.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase));yield return null;

@@ -720,7 +720,7 @@ namespace Festival.Tests
                 session.Host("Stock tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
                 var mate=game.AddPlayer("held-stock-mate","Sam");mate.Ready=true;yield return StartLevel(session);
-                game.State.TripperId=mate.Id;game.State.Npcs.Clear();game.State.Visions.Clear();game.State.Doses.Clear();p.Effects.Clear();
+                game.State.TripperId=mate.Id;game.State.Npcs.Clear();game.State.Visions.Clear();game.State.Doses.Clear();p.Effects.Clear();mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 string buyerId="";
                 for(int candidate=0;candidate<64&&buyerId=="";candidate++)
                 {
@@ -815,7 +815,7 @@ namespace Festival.Tests
                 sim.State.StashCash=4;yield return new WaitForSeconds(.3f);
                 Expect("day, low cash without affordable stash","Objective detail","Sell $18 more before sundown. You have nothing to sell: return lost property at the lost-property desk for $5, then buy from festivalgoers; some are narcs.");
                 Fits("day, low cash without affordable stash","Objective detail");player.Cash=20;sim.State.StashCash=0;
-                string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.6f);
                 Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer.");
                 Fits("day, holding stock","Objective detail");
@@ -926,7 +926,7 @@ namespace Festival.Tests
                 var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("sale_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
-                sim.State.TripperId=mate.Id;sim.State.Npcs.Clear();
+                sim.State.TripperId=mate.Id;sim.State.Npcs.Clear();mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 var buyer=new NpcState{Id="sale_buyer_2",Role="Buyer",CanTalk=true};sim.State.Npcs.Add(buyer);
                 player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
                 // E runs the primary action; what it started, with whom, is cancelled again.
@@ -951,11 +951,11 @@ namespace Festival.Tests
                 Expect("by day, holding stock, Sam in reach","Offer Tongue Stamps  •  F CHAT");
                 yield return PressE("by day, holding stock, Sam in reach","Sale");
                 // The tripper beside someone they have an unchecked vision about still checks first.
-                sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="sale_vision",Kind="Buyer",NpcId=buyer.Id});
+                sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="sale_vision",Kind="Buyer",NpcId=buyer.Id});player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return Stand();
                 Expect("the tripper beside a vision, holding stock",FestivalHudText.CheckDanceAction);
                 yield return PressE("the tripper beside a vision, holding stock","ConfirmDance");
-                sim.State.TripperId=mate.Id;sim.State.Visions.Clear();
+                sim.State.TripperId=mate.Id;sim.State.Visions.Clear();mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 // K1: once someone has sold to you, E beside them buys again. A seller never buys, so E offering the unit back was a
                 // sure refusal and +10 suspicion. The buy is talked through with the smooth reply every turn, after a perfect dance
                 // (over by the next tick) if they ask for one first.
@@ -1054,9 +1054,10 @@ namespace Festival.Tests
                 // The objective card's longest last-minute line still draws whole: on Ember Playa, in friendship bracelets, holding stock
                 // while a friend with the longest name (24 letters) trips.
                 string tripper=sim.State.TripperId,mateName=mate.Name;int ordinal=player.Ordinal;
-                sim.State.FestivalIndex=1;player.Ordinal=3;sim.State.TripperId=mate.Id;mate.Name="Bartholomew Fizzlewidget";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                sim.State.FestivalIndex=1;player.Ordinal=3;sim.State.TripperId=mate.Id;mate.Name="Bartholomew Fizzlewidget";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 Fits("the last minute's longest line","Objective detail");
+                if(!Read("Objective detail").Contains("Stick with Bartholomew Fizzlewidget"))failures.Add("the last minute's longest line: Objective detail reads \""+Read("Objective detail")+"\", not the line for a friend who trips");
                 sim.State.FestivalIndex=0;player.Ordinal=ordinal;sim.State.TripperId=tripper;mate.Name=mateName;player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");
 
                 // A reply to a later command lands in the session notice, beside the warning, not over it.
@@ -1784,12 +1785,12 @@ namespace Festival.Tests
                 var mate=sim.AddPlayer("briefing_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
                 // Day 1 opens, and you trip: your job carries the one hint.
-                sim.State.TripperId=player.Id;sim.State.ElapsedSeconds=1;
+                sim.State.TripperId=player.Id;sim.State.ElapsedSeconds=1;player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 Briefs("day 1, you trip");
                 if(!Read("Briefing job").Contains("Trust, but verify"))failures.Add("day 1, you trip: your job has no \"Trust, but verify\"");
                 // Sam trips: your job is to stick with them.
-                sim.State.TripperId=mate.Id;
+                sim.State.TripperId=mate.Id;mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 Briefs("day 1, Sam trips");
                 // Ten seconds of level clock in, it is gone.
@@ -1850,7 +1851,7 @@ namespace Festival.Tests
                 yield return StartLevel(session);
                 // A first time on this machine: no tip seen yet.
                 var seen=session.Profile.Data.SeenTips;seen.Clear();
-                sim.State.Npcs.Clear();sim.State.TripperId=mate.Id;sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds;
+                sim.State.Npcs.Clear();sim.State.TripperId=mate.Id;sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds;mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 const string Friend="Only Sam can see the visions.\nStick close and ask what they see.";
                 Expect("Sam trips","First-time tip",Friend);
