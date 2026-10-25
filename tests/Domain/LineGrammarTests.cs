@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Festival.Core;
 
 // DIALOG-4: the engine festivalgoer lines are built with. A kind's table holds whole-line templates; each {slot} in one fills from
@@ -17,7 +18,7 @@ public static class LineGrammarTests
         foreach(var test in new Action[]{EverySlotFillsFromItsOwnTable,AKindDrawsEachOfItsTemplatesAndParts,TheSameSeedGivesTheSameLine,
             EachFestivalUsesOnlyItsOwnTaggedParts,AOrAnFollowsTheSoundOfTheNextWord,VerbsAndNounsAgreeWithThePartBeforeThem,
             EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly,
-            EveryTalkRoundHasItsOwnRepliesInEveryStyle})
+            EveryTalkRoundHasItsOwnRepliesInEveryStyle,NoDealLineNamesAPrice})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" line grammar test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -183,6 +184,28 @@ public static class LineGrammarTests
         }
         foreach(var kind in TheirRoundLines)for(int festival=0;festival<Festivals.Count;festival++)Draw(kind,festival);
         Check(faults.Count==0,faults.Count+" fault(s) in the talk rounds' lines:\n  "+string.Join("\n  ",faults.Take(20)));
+    }
+
+    // A sale's price depends on its ask and the multipliers, and Ember Playa's money is not dollars, so no line of a sale or a buy,
+    // yours or theirs, names an amount.
+    static void NoDealLineNamesAPrice()
+    {
+        foreach(var topic in new[]{"sale","buy"})foreach(var round in ConversationLines.Rounds)foreach(var style in ConversationLines.Styles)
+            Check(ConversationLines.Parts.ContainsKey(topic+"."+round+"."+style),"the "+topic+" replies of round "+round+" in style "+style+" are checked");
+        var faults=new List<string>();int pools=0;
+        foreach(var pool in ConversationLines.Parts)
+        {
+            if(!new[]{"sale.","buy.","line.sale.","line.buy.","narc_"}.Any(start=>pool.Key.StartsWith(start,StringComparison.Ordinal)))continue;
+            pools++;
+            foreach(var entry in pool.Value)
+            {
+                // Neither the festival tag nor a slot's name is said.
+                string line=Regex.Replace(entry.Length>1&&char.IsDigit(entry[0])&&entry[1]==':'?entry.Substring(2):entry,@"\{[^}]*\}","");
+                if(line.IndexOf("five",StringComparison.OrdinalIgnoreCase)>=0||line.IndexOf('$')>=0||line.Any(char.IsDigit))faults.Add(pool.Key+": \""+entry+"\"");
+            }
+        }
+        Check(pools>=47,"every sale and buy pool is checked, got "+pools);
+        Check(faults.Count==0,faults.Count+" deal line(s) name an amount:\n  "+string.Join("\n  ",faults));
     }
 
     static void AuthoringMistakesFailLoudly()

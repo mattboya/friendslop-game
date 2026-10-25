@@ -110,7 +110,7 @@ namespace Festival.Core
         }
         private static void Shuffle<T>(T[] items,ContentRandom random) { for(int k=items.Length-1;k>0;k--) { int j=random.Next(k+1); var swap=items[k]; items[k]=items[j]; items[j]=swap; } }
 
-        private static readonly Dictionary<string,string[]> Parts=new Dictionary<string,string[]>{
+        internal static readonly Dictionary<string,string[]> Parts=new Dictionary<string,string[]>{
             // Their reaction to your reply ("react.<persona>.<grade>", Tables): a lead and a comment, both what the line is about, so
             // each persona's reaction to a grade comes in a hundred-odd bodies; some leads name you as that persona would ("pal.").
             // A silence gets one of its own, the same from anyone.
@@ -162,10 +162,10 @@ namespace Festival.Core
             // A narc selling: a seller's line round a slip of cop-speak, or a line with cop-speak in it.
             ["buy.narc"]=new[]{"{narc_buy} {~narc_slip}","{~narc_slip} {narc_buy}","{narc_sell}","{~narc_lead} {narc_sell}"},
             ["narc_buy"]=new[]{"One {unit}, one {exchange2}, nobody {nobody}.","Keep the {money} low and the eye contact {friendly}.",
-                "Quick and {quiet}. Nobody looks twice.","Just the one? Hold it like a {souvenir}.","Pay me in fives. {count} of them."},
+                "Quick and {quiet}. Nobody looks twice.","Just the one? Hold it like a {souvenir}.","Pay me quietly. Fold it nice and small."},
             ["narc_sell"]=new[]{"I can provide a controlled substance. Hypothetically.","Ten-four. I mean, sure. For my records, how many?","Let's conclude this proceeding on foot to {landmark}.",
                 "Copy that. One unit, cash only. Nothing illicit.","As the kids call it, a little treat? I carry several.","What street value would you put on one of these?",
-                "Fellow festival-goer, it's five. Hypothetically speaking.","Is anyone in the vicinity? Good. Hand me the cash."},
+                "Fellow festival-goer, the usual rate. Hypothetically speaking.","Is anyone in the vicinity? Good. Hand me the cash."},
             // A clue holder at night, drawn out: someone lost, and a landmark.
             ["talk.clue"]=new[]{"{clue_line}","{~clue_lead} {clue_line}","{clue_line} {~clue_tail}"},
             ["clue_line"]=new[]{"Someone lost asked the way to {landmark}.","A lost-looking person was near {landmark}. Yours?","Someone was calling a name by {landmark}.",
@@ -205,11 +205,11 @@ namespace Festival.Core
                 "This one found me at {landmark}. Now it's yours.","It's not a sale. It's an energy exchange.","Feel the price instead of thinking it."},
             ["sale.ask.hype"]=new[]{"Limited drop. Only {count} in the whole festival.","Trust me, this is about to be everywhere.","Collab price, just for you. Don't tell my followers.",
                 "Unboxing this by {landmark} would go viral.","It's giving premium. You're giving buyer.","Get it before {stranger} posts about it."},
-            ["sale.ask.earnest"]=new[]{"I'll be honest: it's five, and it's good.","No pressure. If it's not right for you, that's okay.","Fair price, fair trade, and a hug if you want one.",
-                "I'd rather you trust me than buy from me.","Small and kind, that's how I like to trade.","Straight answer: one unit, five, no games."},
+            ["sale.ask.earnest"]=new[]{"I'll be honest: it's good, and it's worth it.","No pressure. If it's not right for you, that's okay.","Fair price, fair trade, and a hug if you want one.",
+                "I'd rather you trust me than buy from me.","Small and kind, that's how I like to trade.","Straight answer: one unit, no games."},
             ["sale.ask.plur"]=new[]{"For you, fam? Friend price, always!","Pass it like kandi. Peace, love, unity!","We're family now, so it's basically a gift!",
                 "Swap it on the drop. Nobody sees a thing!","One for you, and a hug for free!","My bestie from {landmark} loved these!"},
-            ["sale.ask.plain"]=new[]{"It's five. Cash is fine.","One unit, as discussed. Nothing fancy.","Quick and simple, then we both get on with our day.",
+            ["sale.ask.plain"]=new[]{"Usual rate. Cash is fine.","One unit, as discussed. Nothing fancy.","Quick and simple, then we both get on with our day.",
                 "Here you go. Keep it in your pocket.","Fair price. I'm not here to haggle.","Same as last time, if there was a last time."},
             // Buying from a seller: the ask, a buy's third round.
             ["buy.ask.cosmic"]=new[]{"The moon told me to come find you.","Whatever you carry, I'm open to receiving it.","My aura's been asking for a little treat all day.",
@@ -220,7 +220,7 @@ namespace Festival.Core
                 "Just one, just for me, just for tonight.","Folks at {landmark} said you're kind.","I can offer cash and genuine gratitude."},
             ["buy.ask.plur"]=new[]{"Fam! Can I get one? I'll throw in kandi!","One for me and one hug for you!","You're the best! Seriously, PLUR price?",
                 "I'll pay and give you a hug. Win-win!","My crew said you're family. Hook me up!","Let's do it before the drop! Hurry!"},
-            ["buy.ask.plain"]=new[]{"I'd like one, please. Cash is ready.","What's the price? Five? Fine.","Just the one, thanks. Then I'll be on my way.",
+            ["buy.ask.plain"]=new[]{"I'd like one, please. Cash is ready.","What's the price? Fine, I'll take it.","Just the one, thanks. Then I'll be on my way.",
                 "No need to make a show of it. Quick swap.","Exact change, folded. Saves us both time.","I'll take one if you've got one."},
             // Answering to security: your story, the third round.
             ["security.ask.cosmic"]=new[]{"Have you ever really looked at the sky?","I'm not holding anything but good vibes, man.","We're all just energy, you and me both.",
@@ -332,7 +332,7 @@ namespace Festival.Core
                 "Hope the crowd's treating you alright.","Long lines everywhere, aren't there?","The weather's holding up, at least."},
             ["buy.close.cosmic"]=new[]{"Thank you. I'll treat it like a little star.","The exchange is complete. Blessings.","I'll carry it gently. Peace, friend.",
                 "May your pockets never run dry. Thank you.","Done. The universe smiles on us both.","Thank you for the magic. Float on."},
-            ["buy.close.hype"]=new[]{"Amazing. You're going in my favorites.","Done! Best purchase of the weekend.","Thank you! I'll leave a five-star review.",
+            ["buy.close.hype"]=new[]{"Amazing. You're going in my favorites.","Done! Best purchase of the weekend.","Thank you! I'll leave a glowing review.",
                 "Okay, iconic. Pleasure doing business.","Got it! I'll say you're the best around.","Perfect. You're officially my go-to."},
             ["buy.close.earnest"]=new[]{"Thank you. That means a lot.","Fair and kind. Thank you, truly.","Thanks for trusting me. I'll be careful.",
                 "I appreciate you. Take care of yourself.","That's all I needed. Thank you.","Thank you, neighbor. Be well."},
