@@ -1034,11 +1034,12 @@ namespace Festival.Presentation
             // that: a reply from the same step (a narc's bust, a buy's price) must stay readable. The death reel's gear notice writes the
             // notice text itself for its 5 s, so a queued line waits for it rather than being hidden under it.
             moneyNews.Follow(state,player,session.ConnectionGeneration);
+            moneyNews.Watch(session.Message,Time.unscaledTime);
             if(session.Message!=moneyLineSeen){moneyLineSeen=session.Message;moneyLineSeenAt=Time.unscaledTime;}
             bool freshLine=!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<moneyLineSeenAt+FestivalHudText.MoneyNewsSeconds;
             if(uncovered&&gearLossNotice==""&&!freshLine&&Time.unscaledTime>=moneyNoticeAt)
             {
-                var news=moneyNews.Take();
+                var news=moneyNews.Take(Time.unscaledTime);
                 if(news!=null){session.SetMessage(news.Text);moneyLineSeen=news.Text;lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;if(FestivalHudText.FlashesMoney(news))moneyFlashAt=Time.unscaledTime;}
             }
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf&&!lightShowPanel.activeSelf);

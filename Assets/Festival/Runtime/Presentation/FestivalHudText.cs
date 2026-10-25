@@ -476,22 +476,36 @@ namespace Festival.Presentation
         public static bool FlashesMoney(MoneyNews n)=>n.Kind=="Cash"||n.Kind=="Sales";
         /// <summary>Follows the viewer's own money news (PlayerState.MoneyNewsLog, owner-only in views). The first view of a
         /// connection only takes note, so a join or a rejoin never replays old news; a new round's news all shows, since a level's
-        /// start can itself lose a Giggle Tank. Take gives each new notice once, oldest first.</summary>
+        /// start can itself lose a Giggle Tank. Take gives each new notice once, oldest first, and Watch gives back one cut short.</summary>
         public sealed class MoneyNewsFollower
         {
             string round;
             int connection=-1;
             long seen;
-            readonly Queue<MoneyNews> due=new Queue<MoneyNews>();
+            readonly List<MoneyNews> due=new List<MoneyNews>();
+            MoneyNews line;
+            float lineUntil;
             public void Follow(RoundState s,PlayerState viewer,int connectionGeneration)
             {
-                if(connection!=connectionGeneration){connection=connectionGeneration;round=s.RoundId;seen=viewer.MoneyNewsSequence;due.Clear();return;}
-                if(round!=s.RoundId){round=s.RoundId;seen=0;due.Clear();}
+                if(connection!=connectionGeneration){connection=connectionGeneration;round=s.RoundId;seen=viewer.MoneyNewsSequence;due.Clear();line=null;return;}
+                if(round!=s.RoundId){round=s.RoundId;seen=0;due.Clear();line=null;}
                 if(viewer.MoneyNewsLog==null)return;
-                foreach(var n in viewer.MoneyNewsLog)if(n.Sequence>seen){due.Enqueue(n);seen=n.Sequence;}
+                foreach(var n in viewer.MoneyNewsLog)if(n.Sequence>seen){due.Add(n);seen=n.Sequence;}
             }
-            /// <summary>The oldest notice still to show, once; null for none.</summary>
-            public MoneyNews Take()=>due.Count>0?due.Dequeue():null;
+            /// <summary>The oldest notice still to show, once; null for none. It holds the notice line for MoneyNewsSeconds from now.</summary>
+            public MoneyNews Take(float now)
+            {
+                if(due.Count==0)return null;
+                line=due[0];due.RemoveAt(0);lineUntil=now+MoneyNewsSeconds;return line;
+            }
+            /// <summary>Reads the notice line each frame. When another line replaces the notice Take gave before its MoneyNewsSeconds
+            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) gives nothing back.</summary>
+            public void Watch(string message,float now)
+            {
+                if(line==null||message==line.Text)return;
+                if(!string.IsNullOrEmpty(message)&&now<lineUntil)due.Insert(0,line);
+                line=null;
+            }
         }
         /// <summary>The life banner's headings: as you become a spirit, and as a revival brings you back.</summary>
         public const string DeathTitle="YOU DIED",BackTitle="YOU'RE BACK";

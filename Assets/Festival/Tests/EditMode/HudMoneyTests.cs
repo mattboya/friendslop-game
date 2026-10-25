@@ -112,7 +112,7 @@ namespace Festival.Tests
         static System.Collections.Generic.List<string> Shown(FestivalSimulation game,FestivalHudText.MoneyNewsFollower news,string viewer)
         {
             var shown=new System.Collections.Generic.List<string>();var p=game.Player(viewer);news.Follow(game.State,p,1);
-            for(var n=news.Take();n!=null;n=news.Take())shown.Add(FestivalHudText.MoneyText(game.State,p,n.Text));
+            for(var n=news.Take(0);n!=null;n=news.Take(0))shown.Add(FestivalHudText.MoneyText(game.State,p,n.Text));
             return shown;
         }
         [TestCase(0,"LOST PROPERTY RETURNED  •  +$5","INTO THE STASH  •  −$5","STASH  •  +$5  •  Ash","SECURITY FINE  •  −$10  •  SECURITY TOOK 1 Tongue Stamps")]
@@ -136,12 +136,31 @@ namespace Festival.Tests
         {
             var game=Hosted(0);var ash=game.Player("ash");var news=new FestivalHudText.MoneyNewsFollower();
             ash.MoneyNewsLog.Add(new MoneyNews{Sequence=1,Kind="Cash",Text="LOST PROPERTY RETURNED  •  +$5"});ash.MoneyNewsSequence=1;
-            news.Follow(game.State,ash,1);Assert.That(news.Take(),Is.Null,"a join takes note of what was already there");
+            news.Follow(game.State,ash,1);Assert.That(news.Take(0),Is.Null,"a join takes note of what was already there");
             ash.MoneyNewsLog.Add(new MoneyNews{Sequence=2,Kind="Items",Text="GIGGLE TANK LOST"});ash.MoneyNewsSequence=2;
-            news.Follow(game.State,ash,1);Assert.That(news.Take()?.Text,Is.EqualTo("GIGGLE TANK LOST"));
-            news.Follow(game.State,ash,2);Assert.That(news.Take(),Is.Null,"a rejoin replays nothing");
+            news.Follow(game.State,ash,1);Assert.That(news.Take(0)?.Text,Is.EqualTo("GIGGLE TANK LOST"));
+            news.Follow(game.State,ash,2);Assert.That(news.Take(0),Is.Null,"a rejoin replays nothing");
             game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();ash.MoneyNewsLog.Add(new MoneyNews{Sequence=1,Kind="Items",Text="GIGGLE TANK LOST"});ash.MoneyNewsSequence=1;
-            news.Follow(game.State,ash,2);Assert.That(news.Take()?.Text,Is.EqualTo("GIGGLE TANK LOST"),"a new level's news is all new, the loss its start made included");
+            news.Follow(game.State,ash,2);Assert.That(news.Take(0)?.Text,Is.EqualTo("GIGGLE TANK LOST"),"a new level's news is all new, the loss its start made included");
+        }
+        // A money line that another line replaces inside its MoneyNewsSeconds comes back before the rest of the queue. A line that had
+        // its slot, or that a clear wiped, does not, and a new level forgets it.
+        [Test] public void AMoneyLineCutShortComesBackFirst()
+        {
+            var game=Hosted(0);var ash=game.Player("ash");var news=new FestivalHudText.MoneyNewsFollower();news.Follow(game.State,ash,1);
+            const string Friend="SALES  •  +$15  •  Sam sold Tongue Stamps",Stash="STASH  •  +$5  •  Sam",Sold="SOLD Tongue Stamps  •  +$15";
+            void Log(params string[] texts){foreach(var text in texts)ash.MoneyNewsLog.Add(new MoneyNews{Sequence=++ash.MoneyNewsSequence,Kind="Sales",Text=text});news.Follow(game.State,ash,1);}
+            Log(Friend,Stash);
+            Assert.That(news.Take(10)?.Text,Is.EqualTo(Friend));
+            news.Watch(Friend,10.2f);news.Watch(Sold,10.4f);
+            Assert.That(news.Take(12.9f)?.Text,Is.EqualTo(Friend),"the friend's line cut at .4 s shows again, before the stash line");
+            news.Watch(Friend,13f);news.Watch(Sold,12.9f+FestivalHudText.MoneyNewsSeconds+.1f);
+            Assert.That(news.Take(16)?.Text,Is.EqualTo(Stash),"a line that had its slot does not show again");
+            news.Watch("",16.5f);news.Watch(Sold,16.6f);
+            Assert.That(news.Take(19),Is.Null,"a clear is not another line");
+            Log(Friend);Assert.That(news.Take(20)?.Text,Is.EqualTo(Friend),"setup: the line is up");
+            game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();news.Follow(game.State,ash,1);news.Watch(Sold,20.4f);
+            Assert.That(news.Take(23),Is.Null,"a new level forgets the last level's line");
         }
         // A change to your cash or the level's SALES lights the card's money as a paid sale does; the stash and items have no flash.
         [Test] public void OnlyCashAndSalesNewsFlashTheCard()

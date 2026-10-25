@@ -328,6 +328,54 @@ namespace Festival.Tests
             Assert.That(failures,Is.Empty,"A money line and the line that just appeared:\n"+string.Join("\n",failures));
         }
 
+        // A crewmate's sale line that your own sale's notice replaces .4 s later shows again once your sale's notice has had its
+        // MoneyNewsSeconds, so both sales read in full.
+        [UnityTest]public IEnumerator AFriendsSaleLineComesBackAfterYourOwnSale()
+        {
+            var world=new GameObject("Two sales world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Two sales HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            var log=new List<string>();float friendFor=0,mineFor=0;
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("two_sales_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                sim.State.Npcs.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.X=0;player.Z=0;mate.X=20;mate.Z=0;
+                foreach(var who in new[]{player,mate}){who.Inventory.Clear();who.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});who.EquippedItemId="stock_lsd";}
+                string Buyer(string stem){string id=stem+"0";for(int k=1;DialogueGrammar.PersonaFor(id,"")=="Raver"||DialogueGrammar.PersonaFor(id,"")=="Burner";k++)id=stem+k;return id;}
+                var mine=new NpcState{Id=Buyer("two_sales_mine_"),Role="Buyer",X=0,Z=1.5f,Yaw=180};var theirs=new NpcState{Id=Buyer("two_sales_theirs_"),Role="Buyer",X=20,Z=1.5f,Yaw=180};
+                sim.State.Npcs.Add(mine);sim.State.Npcs.Add(theirs);
+                int sequence=0;
+                bool Reply(PlayerState who)
+                {
+                    var talk=sim.Interaction(who.InteractionId);var turn=talk.Turns[talk.Turns.Count-1];
+                    return sim.Execute(who.Id,new GameCommand{Id="two_sales_"+(sequence++),Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=talk.Turns.Count-1}).Accepted;
+                }
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="two_sales_mine",Kind="StartSale",TargetId=mine.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: your sale");
+                for(int t=1;t<FestivalSimulation.ConversationTurns;t++)Assert.That(Reply(player),Is.True,"setup: your reply "+t);
+                yield return new WaitForSeconds(.6f);
+                Assert.That(sim.Execute(mate.Id,new GameCommand{Id="two_sales_theirs",Kind="StartSale",TargetId=theirs.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: their sale");
+                for(var talk=sim.Interaction(mate.InteractionId);talk.Status=="Active";)Assert.That(Reply(mate),Is.True,"setup: their reply");
+                bool mineDone=false;string last=null;
+                for(float start=Time.realtimeSinceStartup,end=start+8;Time.realtimeSinceStartup<end;)
+                {
+                    if(!mineDone&&Time.realtimeSinceStartup-start>.4f){Assert.That(Reply(player),Is.True,"setup: your last reply");mineDone=true;}
+                    string shown=Read("Notice");
+                    if(shown.StartsWith("SALES"))friendFor+=Time.unscaledDeltaTime;else if(shown.StartsWith("SOLD"))mineFor+=Time.unscaledDeltaTime;
+                    if(shown!=last){log.Add((Time.realtimeSinceStartup-start).ToString("0.00")+"s "+shown);last=shown;}
+                    yield return null;
+                }
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+            yield return null;
+            string timeline=string.Join(" -> ",log);
+            Assert.That(friendFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds),"the friend's sale line shows "+friendFor.ToString("0.00")+" s in all: "+timeline);
+            Assert.That(mineFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"your sale's notice shows "+mineFor.ToString("0.00")+" s: "+timeline);
+        }
+
         // LOOP-4: a real joined friend dies with $40 and the roll drops it. The host and the dead friend both see the corner reel name
         // them. The host keeps walking and works the menu while it turns; the menu offers no pickup until the reel lands, then offers
         // the pile, read in dollars over the voucher model, and taking it adds the $40 to the host's cash.
