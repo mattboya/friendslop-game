@@ -182,6 +182,61 @@ namespace Festival.Tests
         private static Renderer[] Drawn(Transform prop)=>System.Array.FindAll(prop.GetComponentsInChildren<Renderer>(),r=>r.enabled);
         private static Bounds Bounds(Renderer[] renderers){var b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);return b;}
         [TearDown]public void Cleanup(){if(root!=null)Object.DestroyImmediate(root);}
+
+        // The resident DJ works the main mixer where a stage-pass DJ will stand (Catalog.StageDjX/Z, on the riser). While a
+        // player DJs, the resident steps aside onto the deck, clear of the mixer and the crew, and hypes the crowd; then goes back.
+        [Test]public void TheResidentStepsAsideWhileAPlayerDjsAndGoesBackAfter()
+        {
+            root=new GameObject("Resident aside test");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");
+            var festival=root.transform.Find(FestivalWorld.RootName);var dj=festival.Find("resident_stage_dj");var resident=dj.GetComponent<FestivalCharacter>();
+            var mixerSpot=new Vector3(Catalog.StageDjX,FestivalWorld.StageDjHeight,Catalog.StageDjZ);
+            Assert.That(world.StageDjConsole,Is.SameAs(festival.Find("FestivalDJDeck")),"the main mixer");
+            Assert.That(Vector3.Distance(dj.position,mixerSpot),Is.LessThan(.01f),"the resident stands where a stage-pass DJ will");
+            world.SetStageTakeover(true);
+            Assert.That(resident.Pose,Is.EqualTo(FestivalCharacter.McPose),"the resident hypes the crowd");Assert.That(resident.DjConsole,Is.Null,"off the decks");
+            var flat=new Vector2(dj.position.x,dj.position.z);
+            Assert.That(Vector2.Distance(flat,new Vector2(Catalog.StageDjX,Catalog.StageDjZ)),Is.GreaterThan(1.5f),"clear of the mixer, at "+dj.position);
+            foreach(Transform child in festival)if(child.name.StartsWith(FestivalStageCrew.Prefix,System.StringComparison.Ordinal))
+                Assert.That(Vector2.Distance(flat,new Vector2(child.position.x,child.position.z)),Is.GreaterThan(.7f),"clear of "+child.name);
+            var deck=festival.Find("Stage").GetComponent<Collider>().bounds;
+            Assert.That(dj.position.x>deck.min.x+.5f&&dj.position.x<deck.max.x-.5f&&dj.position.z>deck.min.z+.5f&&dj.position.z<deck.max.z-.5f,Is.True,"still up on the stage");
+            Assert.That(dj.position.y,Is.EqualTo(deck.max.y).Within(.02f),"standing on its deck");
+            // The mixer, its riser, cables and ramp, and Palm Mirage's stage dressing are measured by their meshes, as for the crew.
+            foreach(var name in new[]{"FestivalDJDeck","FestivalDJRiser",FestivalPoloDressing.RootName+"/FestivalStageMirage",FestivalPoloDressing.RootName+"/FestivalPetalCanopy"})
+                foreach(var mesh in festival.Find(name).GetComponentsInChildren<MeshFilter>(true))mesh.gameObject.AddComponent<MeshCollider>();
+            foreach(int index in new[]{Festivals.PoloFestival,Festivals.PlayaFestival})
+            {
+                world.SetTwists(new RoundState{Phase="Playing",FestivalIndex=index});Physics.SyncTransforms();
+                foreach(var c in Physics.OverlapCapsule(dj.position+Vector3.up*.1f,dj.position+Vector3.up*2,.7f,~0,QueryTriggerInteraction.Collide))
+                    Assert.That(c.name,Is.EqualTo("Stage"),"the resident stands within .7 m of "+c.name+" on "+Festivals.Name(index));
+            }
+            world.SetStageTakeover(true);Assert.That(resident.Pose,Is.EqualTo(FestivalCharacter.McPose),"a repeat changes nothing");
+            world.SetStageTakeover(false);
+            Assert.That(resident.Pose,Is.EqualTo("Dj"));Assert.That(resident.DjConsole,Is.SameAs(world.StageDjConsole),"back at the mixer");
+            Assert.That(Vector3.Distance(dj.position,mixerSpot),Is.LessThan(.01f),"where they started");
+        }
+
+        // After each phrase of a DJ set, festivalgoers within 20 m of the stage front react to its score while the cheer
+        // lasts: from 0.75 all cheer, from 0.4 about half sway, under 0.4 they stand and watch. Security, anyone after a player and
+        // anyone further off keep their pose.
+        [Test]public void TheCrowdNearTheStageReactsToThePhrasesScore()
+        {
+            var s=new RoundState{Phase="Playing",SimulationSeconds=40,StageCheerScore=-1,StageCheerUntilWorldSeconds=-1};
+            var fans=new List<NpcState>();for(int k=0;k<20;k++)fans.Add(new NpcState{Id="wook_"+k,Kind="Wook",X=-9+k,Z=14,IdlePose="Watching"});
+            var far=new NpcState{Id="far",Kind="Wook",X=0,Z=-10,IdlePose="Idle"};var cop=new NpcState{Id="cop",Kind="Cop",X=0,Z=20,Mode="Patrol"};
+            var after=new NpcState{Id="after",Kind="Wook",X=1,Z=20,Mode="Accusing"};
+            string Pose(NpcState n)=>Festival.Network.FestivalSession.StageCrowdPose(s,n);
+            foreach(var n in fans)Assert.That(Pose(n),Is.EqualTo("Watching"),"no set, no reaction");
+            s.StageCheerUntilWorldSeconds=46;
+            s.StageCheerScore=.8;foreach(var n in fans)Assert.That(Pose(n),Is.EqualTo("Cheer"),"from .75 everyone near the stage cheers");
+            fans[0].Mode="Distracted";Assert.That(Pose(fans[0]),Is.EqualTo("Cheer"),"a distracted fan cheers too");fans[0].Mode="Blending";
+            Assert.That(Pose(far),Is.EqualTo("Idle"),"one far off keeps their pose");Assert.That(Pose(cop),Is.EqualTo("Patrol"),"security keeps theirs");
+            Assert.That(Pose(after),Is.EqualTo("Accusing"),"one after a player keeps after them");
+            s.StageCheerScore=.5;int swaying=fans.FindAll(n=>Pose(n)=="Dance").Count;
+            Assert.That(swaying,Is.InRange(5,15),"from .4 about half sway, got "+swaying);Assert.That(fans.TrueForAll(n=>Pose(n)=="Dance"||Pose(n)=="Watching"),Is.True,"and the rest keep their pose");
+            s.StageCheerScore=.2;foreach(var n in fans)Assert.That(Pose(n),Is.EqualTo("Idle"),"under .4 they just stand and watch");
+            s.SimulationSeconds=46;s.StageCheerScore=1;foreach(var n in fans)Assert.That(Pose(n),Is.EqualTo("Watching"),"and once the cheer is over, the crowd is back to itself");
+        }
         [Test]public void BuildPreservesManualChildrenAndDoesNotDuplicateGeometry()
         {
             root=new GameObject("Test world");var manual=new GameObject("Manual decoration");manual.transform.SetParent(root.transform);

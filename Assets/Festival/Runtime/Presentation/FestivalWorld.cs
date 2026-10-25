@@ -60,6 +60,11 @@ namespace Festival.Presentation
         public Transform PlayerDjConsole { get; private set; }
         /// <summary>The riser's top, where the stage DJ stands at the main mixer (Catalog.StageDjX/Z).</summary>
         public const float StageDjHeight=1.48f;
+        /// <summary>The main mixer, worked by the resident or by a player with a stage pass.</summary>
+        public Transform StageDjConsole { get; private set; }
+        // While a player DJs, the resident hypes the crowd from the riser's west edge, opposite the crew's MC.
+        static readonly Vector3 ResidentAside=new Vector3(-2.8f,1.4f,31.2f);
+        FestivalCharacter resident;
         /// <summary>CAMP-1: Marigold, the camp seller in front of the supplies table. The HUD turns her to face whoever talks to her
         /// (CampSellerTalk.Face).</summary>
         public FestivalCharacter CampSeller { get; private set; }
@@ -137,12 +142,12 @@ namespace Festival.Presentation
             var djConsole=Visual("FestivalDJDeck",new Vector3(0,1.62f,30.15f));
             var stageDj=FestivalCharacter.Create(owned,"resident_stage_dj",Color.white,"Attendee");
             stageDj.Pose="Dj";
-            stageDj.DjConsole=djConsole==null?null:djConsole.transform;
-            stageDj.transform.localPosition=new Vector3(0,1.48f,30.84f);
+            StageDjConsole=djConsole==null?null:djConsole.transform;
+            stageDj.DjConsole=StageDjConsole;
+            stageDj.transform.localPosition=new Vector3(Catalog.StageDjX,StageDjHeight,Catalog.StageDjZ);resident=stageDj;
             stageDj.transform.localRotation=Quaternion.Euler(0,180,0);
             stageDj.transform.localScale=Vector3.Scale(Vector3.one,stageDj.ShapeScale);
-            // A reachable satellite deck belongs to the stage-front takeover
-            // anchor. The resident stays at the main mixer behind the stage lip.
+            // The stage-front flight case and its deck serve only the smoke's contact capture: a set is played at the main mixer.
             Box("Takeover deck flight case",new Vector3(Catalog.StageTakeoverX,.48f,Catalog.StageTakeoverZ+.65f),
                 new Vector3(2.45f,.96f,.55f),dark);
             Box("Takeover case rim",new Vector3(Catalog.StageTakeoverX,.98f,Catalog.StageTakeoverZ+.65f),
@@ -749,6 +754,14 @@ namespace Festival.Presentation
             SetPhase("Shopping");lightingState=campLighting;lightingPlayer="";if(lighting!=null)lighting.Apply(campLighting,"",userBrightness);
             // Only the HUD's talk turns her, and the title never runs it: a game that ends mid-talk would leave her facing nobody.
             if(CampSeller!=null){CampSeller.Pose="Idle";CampSeller.transform.localRotation=Quaternion.Euler(0,CampSellerTalk.RestYaw,0);}
+        }
+        /// <summary>A player has taken the main mixer, so the resident steps aside and hypes the crowd; or the set is over and they go
+        /// back to the decks. Each session calls it every frame, so only a change moves them.</summary>
+        public void SetStageTakeover(bool taken)
+        {
+            if(resident==null||(resident.Pose!="Dj")==taken)return;
+            resident.Pose=taken?FestivalCharacter.McPose:"Dj";resident.DjConsole=taken?null:StageDjConsole;
+            resident.transform.localPosition=taken?ResidentAside:new Vector3(Catalog.StageDjX,StageDjHeight,Catalog.StageDjZ);
         }
         // MINI-1: a minigame holds the festival on screen as a freeze-frame.
         public static bool ShowsFestival(string phase)=>phase=="Playing"||phase==FestivalSimulation.MinigamePhase||phase=="Results";

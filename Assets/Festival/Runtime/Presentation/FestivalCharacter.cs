@@ -848,7 +848,7 @@ namespace Festival.Presentation
                 case "Downed":return speed>.35f?("BeingDragged",true,true,Mathf.Clamp(speed/1.2f,.4f,2f)):("CrawlDowned",true,true,.45f);
                 case "Drag":return ("DragOther",true,false,1);
                 case "Detained":return ("DetainedEscort",true,false,1);
-                case "Extract":return ("Cheer",true,false,1);
+                case "Extract":case "Cheer":return ("Cheer",true,false,1);
                 case "Watching":return ("WookStare",false,false,1);
                 // DIALOG-3: a player in a sale, a buy, a chat or a talk with security (FestivalSimulation.Talks) talks, as a
                 // questioning festivalgoer does.

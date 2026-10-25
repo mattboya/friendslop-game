@@ -1033,6 +1033,17 @@ namespace Festival.Network
         }
         /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
+        /// <summary>A festivalgoer near the stage reacts to the DJ's last phrase while its cheer lasts. The Id's hash picks a fixed half
+        /// to sway at a middling score, so every view shows the same fans moving.</summary>
+        public static string StageCrowdPose(RoundState s,NpcState n)
+        {
+            string pose=NpcPose(n);
+            if(s==null||n.Kind!="Wook"||(n.Mode!="Blending"&&n.Mode!="Distracted")||s.StageCheerScore<0||FestivalSimulation.WorldSeconds(s)>=s.StageCheerUntilWorldSeconds)return pose;
+            if(Vector2.Distance(new Vector2(n.X,n.Z),new Vector2(Catalog.StageTakeoverX,Catalog.StageTakeoverZ))>Catalog.StageCheerRange)return pose;
+            if(s.StageCheerScore>=.75)return "Cheer";
+            int hash=17;foreach(char c in n.Id)hash=unchecked(hash*31+c);
+            return s.StageCheerScore>=.4?((hash&1)==0?"Dance":pose):"Idle";
+        }
         // Local click prediction yields to the captured host state throughout the game and banner. Internal: the HUD sets the
         // first-person hands during a pending gear swap after this session does, so it must pass the same spins.
         internal bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
@@ -1051,10 +1062,12 @@ namespace Festival.Network
                 bool wheel=p.VisualWheelSince>=0&&world!=null;
                 var at=togetherInside?new Vector3(p.CampInteriorX,0,p.CampInteriorZ):wheel?world.WheelSeat(State,p,15):new Vector3(p.X,0,p.Z);
                 // A debrief winner wears their awards over their head until the next level's results (HUD-3).
-                Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,p.VisualPose=="Dj"?0:wheel?180:p.Yaw,
+                // The rules keep the DJ in 2-D at the mixer spot, so the view lifts them onto the riser.
+                bool djing=p.VisualPose=="Dj"&&p.Life=="Alive";
+                Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,djing?180:wheel?180:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
-                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:at.y);
+                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:djing?FestivalWorld.StageDjHeight:at.y);
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)
                 {
@@ -1082,10 +1095,11 @@ namespace Festival.Network
                 if(p.VisualPose=="Dance"&&p.VisualDanceStepSequence>previousStep&&actors[p.Id].TryGetComponent<FestivalCharacter>(out var dancer))dancer.PulseDanceStep(p.VisualDanceStepDirection);
                 displayedDanceSteps[p.Id]=p.VisualDanceStepSequence;
             }
+            world?.SetStageTakeover(State.Players.Exists(p=>p.VisualPose=="Dj"&&p.Life=="Alive"));
             // Festivalgoers, lost friends, drops and bodies while the festival shows: MINI-1's freeze-frame too, each where they stood.
             if(!spirit && FestivalWorld.ShowsFestival(State.Phase))
             {
-                foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,NpcPose(n),n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false,
+                foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,StageCrowdPose(State,n),n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false,
                     filming:n.Twist==FestivalSimulation.Influencer,recording:local.VisualFilmedBy.Contains(n.Id));seen.Add(n.Id);}
                 // A lost friend (a big crew's two, CROWD-2) shows once found, or once the view knows their spot and they are within 12 m.
                 // The Ferris wheel draws nobody (POLO-3): its rider reads only a rough area on the objective card.
@@ -1123,7 +1137,7 @@ namespace Festival.Network
                 names[id]=text;
                 foreach(var child in textObject.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
             }
-            var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.PlayerDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);character.SetFilming(filming,recording);}
+            var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.StageDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);character.SetFilming(filming,recording);}
             tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:y,z);
             tr.position=Vector3.Distance(tr.position,target)>5?target:Vector3.Lerp(tr.position,target,1-Mathf.Exp(-15*Time.unscaledDeltaTime));tr.rotation=Quaternion.Euler(0,angle,0);
             var nameTag=names[id];nameTag.text=label;nameTag.transform.parent.rotation=ViewCamera.transform.rotation;

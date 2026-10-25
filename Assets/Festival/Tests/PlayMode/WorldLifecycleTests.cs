@@ -372,6 +372,73 @@ namespace Festival.Tests
             }
             finally{Object.Destroy(root);}
         }
+        static Dictionary<string,Transform> Actors(FestivalSession s)=>(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).GetValue(s);
+        // A stage-pass set is played up on the riser at the main mixer: the host's view and a joined friend's both show the
+        // DJ there, facing the crowd in the Dj pose, hands on the mixer, with the resident stepped aside. After a perfect phrase the
+        // festivalgoers near the stage cheer in both views; after a flop none do.
+        [UnityTest]public IEnumerator TheStageDjPlaysAtTheMainMixerInEveryViewAndTheCrowdCheersAGoodPhrase()
+        {
+            var world=new GameObject("Stage DJ world");var built=world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Stage DJ host");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("Stage DJ friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=0;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");yield return StartLevel(host,friend.LocalPlayerId);
+                var dj=sim.Player(host.LocalPlayerId);mate.X=0;mate.Z=20;sim.State.Npcs.RemoveAll(n=>n.Kind=="Cop");
+                dj.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});dj.X=Catalog.StageTakeoverX;dj.Z=Catalog.StageTakeoverZ;
+                Assert.That(sim.Execute(dj.Id,new GameCommand{Id="stage_dj",Kind="Dj"}).Accepted,Is.True,"setup: the set starts");
+                var set=sim.Interaction(dj.InteractionId);
+                yield return new WaitForSeconds(.6f);
+                var mixer=built.StageDjConsole;Assert.That(mixer,Is.Not.Null,"setup: the main mixer");
+                foreach(var view in new[]{host,friend})
+                {
+                    string who=view==host?"the host's view":"the friend's view";var actor=Actors(view)[dj.Id];var body=actor.GetComponent<FestivalCharacter>();
+                    Assert.That(Vector3.Distance(actor.position,new Vector3(Catalog.StageDjX,FestivalWorld.StageDjHeight,Catalog.StageDjZ)),Is.LessThan(.05f),who+": the DJ stands on the riser at the mixer, at "+actor.position);
+                    Assert.That(Mathf.Abs(Mathf.DeltaAngle(actor.eulerAngles.y,180)),Is.LessThan(1),who+": facing the crowd");
+                    Assert.That(body.Pose,Is.EqualTo("Dj"),who+": in the Dj pose");Assert.That(body.DjConsole,Is.SameAs(mixer),who+": at the main mixer");
+                    var handL=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="HandL");var handR=System.Array.Find(actor.GetComponentsInChildren<Transform>(),t=>t.name=="HandR");
+                    Assert.That(Vector3.Distance(handL.position,mixer.TransformPoint(new Vector3(-.46f,.81f,.36f))),Is.LessThan(.17f),who+": the left hand works the mixer");
+                    Assert.That(Vector3.Distance(handR.position,mixer.TransformPoint(new Vector3(.38f,.81f,.33f))),Is.LessThan(.17f),who+": the right hand too");
+                }
+                var song=friend.GetComponent<FestivalStageAudio>().Music;
+                Assert.That(song!=null&&song.isPlaying,Is.True,"the friend hears the stage song through the set");
+                Assert.That(song.volume,Is.EqualTo(FestivalSettings.MusicGain(friend.Profile.Data,.6f)).Within(1e-4f).And.GreaterThan(0),"at its full music volume");
+                var resident=world.transform.Find(FestivalWorld.RootName+"/resident_stage_dj").GetComponent<FestivalCharacter>();
+                Assert.That(resident.Pose,Is.Not.EqualTo("Dj"),"the resident has stepped aside");
+                var near=new NpcState{Id="stage_fan",Kind="Wook",X=4,Z=18,Yaw=0};var far=new NpcState{Id="far_fan",Kind="Wook",X=-25,Z=-25,Yaw=0};sim.State.Npcs.Add(near);sim.State.Npcs.Add(far);
+                var chart=RhythmChart.For(set);int lane=DjRide.StartLane;
+                for(int n=0;n<chart.Notes.Count;n++)
+                {
+                    var note=chart.Notes[n];int to=lane;double at=note.TimeSeconds;
+                    if(!note.Grey)to=note.Direction;else if(lane==note.Direction){to=chart.Notes.Find(x=>x.Id>note.Id&&!x.Grey).Direction;at-=.05;}
+                    if(to==lane)continue;lane=to;sim.State.SimulationSeconds=System.Math.Max(sim.State.SimulationSeconds,set.StartSeconds+at);
+                    Assert.That(sim.Execute(dj.Id,new GameCommand{Id="fan_ride_"+n,Kind="Rhythm",Direction=lane,TimeSeconds=at}).Accepted,Is.True,"setup: a lane change is taken");
+                }
+                sim.State.SimulationSeconds=System.Math.Max(sim.State.SimulationSeconds,set.StartSeconds+set.DurationSeconds+.75);
+                yield return new WaitForSeconds(.6f);
+                Assert.That(sim.State.StageCheerScore,Is.EqualTo(1),"setup: a perfect phrase");
+                foreach(var view in new[]{host,friend})
+                {
+                    string who=view==host?"the host's view":"the friend's view";
+                    Assert.That(Actors(view)[near.Id].GetComponent<FestivalCharacter>().Pose,Is.EqualTo("Cheer"),who+": a festivalgoer near the stage cheers");
+                    Assert.That(Actors(view)[far.Id].GetComponent<FestivalCharacter>().Pose,Is.Not.EqualTo("Cheer"),who+": one far off does not");
+                }
+                sim.State.StageCheerScore=.2;
+                yield return new WaitForSeconds(.6f);
+                foreach(var view in new[]{host,friend})
+                    Assert.That(Actors(view)[near.Id].GetComponent<FestivalCharacter>().Pose,Is.Not.EqualTo("Cheer"),(view==host?"the host's view":"the friend's view")+": nobody cheers a flop");
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+        }
         [UnityTest]public IEnumerator ResidentDjHandsStayOnTheConsole()
         {
             var root=new GameObject("DJ contact test");
