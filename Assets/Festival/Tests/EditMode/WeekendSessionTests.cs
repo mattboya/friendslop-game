@@ -249,6 +249,35 @@ namespace Festival.Tests
             finally{if(File.Exists(file))File.Delete(file);}
         }
 
+        // The Editor's own host bootstrap, so the capability comes from where a test build's host gets it. A spirit's view is
+        // filtered apart from a living player's, so both must carry the flag.
+        [Test] public void TestModeReachesEveryViewAndClearingNightTwoEarnsNothing()
+        {
+            string id="dev_test_mode_"+Guid.NewGuid().ToString("N").Substring(0,12);
+            string file=Path.Combine(LocalProfile.Folder,id+".json");
+            try
+            {
+                var profile=new LocalProfile(id);
+                var game=new FestivalSimulation(7);profile.ApplyUnlocks(game.State);FestivalHostBootstrap.Configure(game);
+                var host=game.AddPlayer("host","Host");var friend=game.AddPlayer("friend","Friend");
+                Assert.That(game.DevelopmentFestivalSelection,Is.True,"setup: the Editor's bootstrap is a test build's");
+                Assert.That(FestivalSession.ViewFor(game,friend.Id).TestMode,Is.False,"test mode starts off");
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-test-mode",Kind=FestivalSimulation.TestModeKind}).Accepted,Is.True,"the host turns it on");
+                foreach(var life in new[]{"Alive","Spirit"}){friend.Life=life;Assert.That(FestivalSession.ViewFor(game,friend.Id).TestMode,Is.True,"a "+life+" friend's view carries it");}
+                friend.Life="Alive";game.State.LevelIndex=Festivals.LevelCount-1;game.State.Phase="Playing";
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-clear",Kind=FestivalSimulation.TestClearLevelKind}).Accepted,Is.True,"the host clears Night 2");
+                Assert.That(game.State.Result,Is.EqualTo("Success"));
+                profile.RememberUnlocks(game.State);
+                Assert.That(game.State.UnlockedFestivalCount,Is.EqualTo(1),"clearing Night 2 in test mode unlocks nothing");
+                Assert.That(new LocalProfile(id).Data.UnlockedFestivalCount,Is.EqualTo(1),"the saved profile still says 1 unlocked");
+                Assert.That(game.State.Players.Exists(p=>p.HasCosmetic),Is.False,"and nobody earns the first-rescue cosmetic");
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-next",Kind="Reset"}).Accepted,Is.True);
+                Assert.That(game.State.FestivalIndex==1&&game.State.LevelIndex==0,Is.True,"the crew moves on to the next festival's Day 1, at "+game.State.FestivalIndex+" level "+game.State.LevelIndex);
+                Assert.That(FestivalSession.ViewFor(game,friend.Id).TestMode,Is.True,"still in test mode");
+            }
+            finally{if(File.Exists(file))File.Delete(file);}
+        }
+
         [Test] public void HostProfileRemembersUnlockedFestivals()
         {
             string id="weekend_test_"+Guid.NewGuid().ToString("N").Substring(0,12);

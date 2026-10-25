@@ -7,13 +7,32 @@ namespace Festival.Core
     {
         // DEV-1: session-only capability; Unity enables it only in Editor/development hosted games.
         public bool DevelopmentFestivalSelection;
+        // TEST MODE, for the host's own playthroughs, needs that capability too, so a release host refuses all three commands.
+        public const string TestModeKind="TestMode",TestFreeKind="TestFree",TestClearLevelKind="TestClearLevel";
+        bool TestModeOn=>DevelopmentFestivalSelection&&State.TestMode;
+        CommandResult TestCommand(PlayerState p,GameCommand c)
+        {
+            if(!DevelopmentFestivalSelection)return Reject("Test mode is only in test builds");
+            if(c.Kind==TestFreeKind)
+            {
+                if(!State.TestMode)return Reject("Test mode is off");
+                if(State.Phase!="Playing"||p.Life!="Detained")return Reject("Free me is for a detained player");
+                Free(p);return Ok("Freed (test)");
+            }
+            if(p.Id!=State.HostPlayerId)return Reject("Only the host runs test mode");
+            if(c.Kind==TestModeKind){State.TestMode=!State.TestMode;return Ok(State.TestMode?"TEST MODE on":"TEST MODE off");}
+            if(!State.TestMode)return Reject("Test mode is off");
+            if(State.Phase!="Playing")return Reject("Clear a level while it plays");
+            End("Success");return Ok("Level cleared (test)");
+        }
 
         // Per-level outcome, checked at the start and end of every Playing step: a Result string ends the level, "" keeps
         // playing. Days settle on the sales quota (DayQuota.cs), nights are the rescue, and a wiped crew loses any level.
         // Night 2 also brings everyone home: CanExtractNow waits for the whole crew (Bodies.cs).
         string LevelEndCheck()
         {
-            if(State.ElapsedSeconds>=State.DurationSeconds)return DayLevel?SundownResult():"Time expired";
+            // TEST MODE lifts only the time limit: the clock runs on, so the schedules that read ElapsedSeconds keep their times.
+            if(!TestModeOn&&State.ElapsedSeconds>=State.DurationSeconds)return DayLevel?SundownResult():"Time expired";
             var connected=State.Players.FindAll(p=>p.Connected);
             bool soloCanRecover=connected.Count==1&&(connected[0].Life=="Downed"||connected[0].Life=="Spirit"&&connected[0].RevivalCount<2);
             if(!connected.Exists(p=>p.Life=="Alive"||p.Life=="Detained")&&!soloCanRecover)return WipedOut;

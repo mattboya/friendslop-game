@@ -160,6 +160,8 @@ namespace Festival.Core
         // The night's clue trail is complete (Visions.cs): the lost friend can be found.
         public bool GateOpened;
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
+        // TEST MODE (Weekend.cs), which only a test build's host turns on; every view carries it for the HUD. Off in older rounds.
+        public bool TestMode;
         // The crowd's cheer for the stage DJ's last phrase: its score, until StageCheerUntilWorldSeconds on the world clock.
         // -1 before any set and in older snapshots.
         public double StageCheerScore=-1,StageCheerUntilWorldSeconds=-1;

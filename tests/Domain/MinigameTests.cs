@@ -400,6 +400,11 @@ public static class MinigameTests
         Check(Same(Left(s),15)&&Same(s.State.Booth.ClockChange,-25),"-30 s with 40 s left leaves 15 s, got "+Left(s)+" (change "+s.State.Booth.ClockChange+")");
         var t=Started(92,2);t.State.ElapsedSeconds=t.State.DurationSeconds-10;t.ScoreMinigame(-30);
         Check(Same(Left(t),10)&&t.State.Booth.ClockChange==0,"-30 s with 10 s left takes nothing, got "+Left(t));
+        // TEST MODE runs the clock past the level's length: a loss there takes nothing, and a win still adds its time.
+        var late=Started(94,2);late.State.ElapsedSeconds=late.State.DurationSeconds+100;late.ScoreMinigame(-30);
+        Check(Same(Left(late),-100)&&late.State.Booth.ClockChange==0,"-30 s with the clock 100 s past the end takes nothing, got "+Left(late));
+        var won=Started(95,2);won.State.ElapsedSeconds=won.State.DurationSeconds+100;won.ScoreMinigame(30);
+        Check(Same(Left(won),-70)&&won.State.Booth.ClockChange==30,"+30 s with the clock 100 s past the end adds 30 s, got "+Left(won));
         var u=Started(93,2);u.State.ElapsedSeconds=u.State.DurationSeconds-100;u.ScoreMinigame(-30);
         Check(Same(Left(u),70)&&u.State.Booth.ClockChange==-30,"-30 s with 100 s left takes it all, got "+Left(u));
         var v=Started(94,2);double left=Left(v);var dose=v.Player(v.State.TripperId).Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);double lasts=dose.RemainingSeconds;

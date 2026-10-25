@@ -55,6 +55,8 @@ public static class DayQuotaTests
         APerfectCrewCanMeetEveryQuota();
         EveryDayAsksTheTablesQuota();
         EncoreLapsPayLikeTheirQuota();
+        TestModeLiftsTheLimitsInATestBuild();
+        TestModeIsTheTestBuildHostsAlone();
     }
 
     static void QuotaScalesWithCrewAndTable()
@@ -306,5 +308,60 @@ public static class DayQuotaTests
     {
         for(int guard=0;challenges.Exists(x=>x.Status=="Active")&&guard<200;guard++){foreach(var x in challenges)Perfectly(s,x);s.Tick(.1);}
         Check(!challenges.Exists(x=>x.Status!="Complete"),"every perfect "+what+" settles");
+    }
+
+    // Read through the JSON a snapshot is, so TEST MODE must be a public field that a view and a save both carry.
+    static bool TestMode(FestivalSimulation s)=>JsonNode.Parse(JsonSerializer.Serialize(s.State,Json))["TestMode"]?.GetValue<bool>()==true;
+    // DevelopmentFestivalSelection is the test build's capability: only FestivalHostBootstrap turns it on, in Editor and development builds.
+    static void TestModeLiftsTheLimitsInATestBuild()
+    {
+        var s=Crew(2);s.DevelopmentFestivalSelection=true;Check(s.State.HostPlayerId=="p0","setup: p0 hosts");
+        Check(!TestMode(s),"a test build's game starts with test mode off");
+        Check(Act(s,"p0","TestMode").Accepted&&TestMode(s),"the host turns test mode on");
+        double length=s.State.DurationSeconds;s.State.ElapsedSeconds=length-.05;s.Tick(.1);s.Tick(30);
+        Check(s.State.Phase=="Playing"&&s.State.ElapsedSeconds>length+29,"30 s past the level's length the clock still runs and the level plays on ("+s.State.Phase+", "+s.State.Result+")");
+        var held=s.Player("p1");held.Life="Detained";held.X=Festivals.SecurityBuilding.CentreX;held.Z=Festivals.SecurityBuilding.CentreZ;held.EscapeProgress=2;
+        s.State.Npcs.Add(new NpcState{Id="cop_test",Kind="Cop",Mode="Patrol",X=-30,Z=-30});s.State.Npcs[s.State.Npcs.Count-1].Evidence.Add(new EvidenceState{PlayerId="p1",Kind="WitnessedDeal"});
+        Check(Act(s,"p1","TestFree").Accepted,"a detained friend frees themselves, not only the host");
+        Check(held.Life=="Alive"&&held.X==24&&held.Z==2&&held.EscapeProgress==0&&held.RecoveryUntil>s.State.SimulationSeconds,"freed as a release frees: alive at 24,2 with a short recovery ("+held.Life+" at "+held.X+", "+held.Z+")");
+        Check(!s.State.Npcs.Exists(n=>n.Evidence.Exists(e=>e.PlayerId=="p1")),"and the evidence against them is cleared");
+        Check(!Act(s,"p1","TestFree").Accepted,"a free player has nothing to be freed from");
+        held.Life="Downed";Check(!Act(s,"p1","TestFree").Accepted&&held.Life=="Downed","a downed player is not freed");held.Life="Alive";
+        Check(s.State.LevelSales==0&&s.State.LevelIndex==0,"setup: Day 1 with no sales");
+        Check(Act(s,"p0","TestClearLevel").Accepted&&s.State.Phase=="Results"&&s.State.Result=="Success","the host clears the day as a success, quota or not ("+s.State.Result+")");
+        Check(!s.State.Players.Exists(p=>p.HasCosmetic),"a level cleared in test mode earns no cosmetic");
+        Check(!Act(s,"p0","TestClearLevel").Accepted,"a cleared level is not cleared again");
+        Check(Act(s,"p0","Reset").Accepted&&s.State.LevelIndex==1,"the crew moves on to the next level, Night 1 (level "+s.State.LevelIndex+")");
+        Check(TestMode(s),"test mode carries on into the next level");
+        Check(!Act(s,"p0","TestClearLevel").Accepted&&s.State.Phase=="CampReview","the host cannot clear a level from camp ("+s.State.Phase+")");
+        s.Player("p1").Life="Detained";Check(!Act(s,"p1","TestFree").Accepted,"nobody is freed at camp");
+        var off=Crew(2);off.DevelopmentFestivalSelection=true;Act(off,"p0","TestMode");off.State.ElapsedSeconds=off.State.DurationSeconds+20;off.Tick(.1);
+        Check(off.State.Phase=="Playing","setup: past the limit in test mode, still playing");
+        Check(Act(off,"p0","TestMode").Accepted&&!TestMode(off),"the host turns test mode off");
+        off.Tick(.1);Check(off.State.Phase=="Results"&&off.State.Result=="Missed the quota","then the time limit is back: the day ends, short of its quota ("+off.State.Result+")");
+    }
+    // The commands are the host's security boundary: a release build's host refuses all three, a client may only free themselves,
+    // and a snapshot with test mode on restores only in a test build.
+    static void TestModeIsTheTestBuildHostsAlone()
+    {
+        var release=Crew(2);release.Player("p1").Life="Detained";
+        foreach(var (player,kind) in new[]{("p0","TestMode"),("p1","TestFree"),("p0","TestClearLevel")})
+            Check(!Act(release,player,kind).Accepted,"a release build refuses "+player+"'s "+kind);
+        Check(!TestMode(release)&&release.Player("p1").Life=="Detained"&&release.State.Phase=="Playing","nothing changed in the release build");
+        Sundown(release);Check(release.State.Phase=="Results","and its clock still ends the level");
+        var test=Crew(2);test.DevelopmentFestivalSelection=true;
+        Check(!Act(test,"p1","TestMode").Accepted&&!TestMode(test),"a client cannot turn test mode on");
+        Check(!Act(test,"p0","TestClearLevel").Accepted&&test.State.Phase=="Playing","with test mode off the host cannot clear the level");
+        test.Player("p1").Life="Detained";Check(!Act(test,"p1","TestFree").Accepted,"with test mode off nobody frees themselves");
+        Act(test,"p0","TestMode");Check(TestMode(test),"setup: the host turns it on");
+        Check(!Act(test,"p1","TestMode").Accepted&&TestMode(test),"a client cannot turn it off");
+        Check(!Act(test,"p1","TestClearLevel").Accepted&&test.State.Phase=="Playing","a client cannot clear the level");
+        var saved=JsonNode.Parse(JsonSerializer.Serialize(test.State,Json)).AsObject();
+        var dev=new FestivalSimulation{DevelopmentFestivalSelection=true};dev.Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));
+        Check(TestMode(dev),"a test build restores a snapshot in test mode");
+        bool refused=false;try{new FestivalSimulation().Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));}catch(ArgumentException){refused=true;}
+        Check(refused,"a release build refuses a snapshot in test mode");
+        saved.Remove("TestMode");var older=new FestivalSimulation();older.Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));
+        Check(!TestMode(older),"a snapshot from before test mode restores in a release build, with it off");
     }
 }

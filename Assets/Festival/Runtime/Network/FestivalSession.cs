@@ -144,6 +144,8 @@ namespace Festival.Network
         // equipped again when InteractionState.ReservedEquipped says it left the hand (false in older snapshots).
         // ESC-4: a bust holds the player inside Festivals.SecurityBuilding, and the host refuses a detained step outside it
         // (Festivals.InHolding), so a version-9 peer would show the old shack and the old spot by the pay desk.
+        // DEV-2: RoundState.TestMode reaches every view (off in older rounds), and the host takes TestMode, TestFree and
+        // TestClearLevel only from a test build's host (TestFree from any detained player).
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -956,7 +958,7 @@ namespace Festival.Network
                 // POLO-3: a Ferris wheel rider at night makes out only the square each lost friend is in, never their spot.
                 WheelFriendAreas=FestivalSimulation.WheelFriendAreas(source,viewer),
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
-                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
+                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,TestMode=source.TestMode,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
                 // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
