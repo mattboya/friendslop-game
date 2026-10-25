@@ -139,8 +139,8 @@ namespace Festival.Tests
             }
             finally
             {
-                var stage=host.GetComponent<FestivalStageAudio>();var decks=(AudioSource[])typeof(FestivalStageAudio).GetField("decks",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);
-                if(decks!=null)UnityEngine.Object.DestroyImmediate(decks[0].gameObject);
+                var stage=host.GetComponent<FestivalStageAudio>();
+                foreach(var field in new[]{"decks","smallDecks"}){var decks=(AudioSource[])typeof(FestivalStageAudio).GetField(field,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);if(decks!=null)UnityEngine.Object.DestroyImmediate(decks[0].gameObject);}
                 var drums=host.GetComponent<FestivalDrumAudio>();var own=(AudioSource[])typeof(FestivalDrumAudio).GetField("decks",BindingFlags.Instance|BindingFlags.NonPublic)?.GetValue(drums);
                 if(own!=null)UnityEngine.Object.DestroyImmediate(own[0].gameObject);
                 UnityEngine.Object.DestroyImmediate(host);

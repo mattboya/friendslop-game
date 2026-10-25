@@ -104,7 +104,8 @@ namespace Festival.Tests
 
                 data.MusicVolume=1;data.EffectsVolume=.6f;
                 yield return StartLevel(session);
-                var stage=host.GetComponent<FestivalStageAudio>();yield return new WaitForSeconds(.4f);
+                // At the main stage's front the cross-fade gives it the whole authored gain.
+                var stage=host.GetComponent<FestivalStageAudio>();player.X=StageMusic.MainX;player.Z=StageMusic.MainZ;yield return new WaitForSeconds(.4f);
                 Assert.That(stage.Music.volume,Is.EqualTo(.6f).Within(1e-5f),"the stage uses authored gain and music, without another master");
                 Assert.That(camp.Music,Is.Null,"the camp stays silent in the festival");
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float x=npc.X,z=npc.Z;player.X=x+.8f;player.Z=z;

@@ -7,9 +7,9 @@ using UnityEngine;
 
 namespace Festival.Tests
 {
-    // The recorded stage follows shared world time and exact sample joins. Dances and the DJ set keep its full gain; booth
-    // games/results hold its position. The tick follows the authored grid without changing calibrated input time. After each
-    // phrase of a set the crowd roars with its score.
+    // The recorded stages follow shared world time and exact sample joins, and cross-fade by the listener's place. Dances and
+    // the DJ set never duck them; booth games/results hold their position. The tick follows the authored grid without
+    // changing calibrated input time. After each phrase of a set the crowd roars with its score.
     public sealed class StageAudioTests
     {
         private static string Clip(FestivalMusic.Track track)=>track==null?"nothing":track.Clip;
@@ -139,13 +139,72 @@ namespace Festival.Tests
             if(Decks(stage)==null)typeof(FestivalStageAudio).GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(stage,null);
             return stage;
         }
+        static AudioSource[] SmallDecks(FestivalStageAudio stage)=>(AudioSource[])typeof(FestivalStageAudio).GetField("smallDecks",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);
         static void RemoveStage(GameObject host)
         {
             var stage=host.GetComponent<FestivalStageAudio>();if(stage!=null&&Decks(stage)!=null)UnityEngine.Object.DestroyImmediate(Decks(stage)[0].gameObject);
+            if(stage!=null&&SmallDecks(stage)!=null)UnityEngine.Object.DestroyImmediate(SmallDecks(stage)[0].gameObject);
             // EditMode skips OnDestroy, so the crowd roar's source and clip go here too.
             var roar=stage==null?null:typeof(FestivalStageAudio).GetField("roar",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage) as AudioSource;
             if(roar!=null){UnityEngine.Object.DestroyImmediate(roar.clip);UnityEngine.Object.DestroyImmediate(roar.gameObject);}
             UnityEngine.Object.DestroyImmediate(host);
+        }
+        [Test]public void TwoSpeakerSetsPlayTheTwoPickedSongs()
+        {
+            var host=new GameObject("Two stages");
+            try
+            {
+                var stage=Stage(host);
+                foreach(int spin in new[]{1,2,3,12345})
+                {
+                    var state=Clock(42.5);state.RoundId="two-stages-"+spin;state.SpinSeed=spin;stage.Follow(state,state.SimulationSeconds,AudioSettings.dspTime);
+                    var main=FestivalStageAudio.For(state);var small=FestivalStageAudio.For(state,StageMusic.Small);
+                    Assert.That(main,Is.Not.SameAs(small),"spin "+spin+": the two stages play different songs");
+                    Assert.That(stage.Music.clip,Is.SameAs(main.Audio),"spin "+spin+": the main stage's speakers play its pick");
+                    Assert.That(stage.SmallMusic,Is.Not.Null,"spin "+spin+": the small stage plays");
+                    Assert.That(stage.SmallMusic.clip,Is.SameAs(small.Audio),"spin "+spin+": the small stage's speakers play its pick");
+                    Assert.That(stage.SmallTrack,Is.SameAs(small),"spin "+spin+": and name it");
+                    Assert.That(stage.SmallMusic.timeSamples,Is.EqualTo(Expected(small,42.5+.2)).Within(1),"spin "+spin+": on the shared world clock, through the stream lead");
+                }
+                var smallSpeakers=SmallDecks(stage)[0].transform.position;
+                Assert.That(Vector2.Distance(new Vector2(smallSpeakers.x,smallSpeakers.z),new Vector2(StageMusic.SmallX,StageMusic.SmallZ)),Is.LessThan(.01f),"at the small stage's front");
+                Assert.That(SmallDecks(stage)[0].gameObject.name,Is.EqualTo("Small stage speakers"));
+                Assert.That(SmallDecks(stage).Length,Is.EqualTo(2),"two decks take turns here too");
+                foreach(var deck in SmallDecks(stage))
+                {
+                    Assert.That(deck.spatialBlend,Is.EqualTo(1),"heard from the small stage, in 3-D");
+                    Assert.That(deck.rolloffMode,Is.EqualTo(AudioRolloffMode.Logarithmic));Assert.That(deck.dopplerLevel,Is.Zero);Assert.That(deck.playOnAwake,Is.False);
+                }
+                stage.Follow(new RoundState{Phase="Shopping"},0,AudioSettings.dspTime);
+                Assert.That(stage.Music,Is.Null,"camp silences the main stage");Assert.That(stage.SmallMusic,Is.Null,"and the small one");
+            }
+            finally{RemoveStage(host);}
+        }
+        // The cross-fade times Unity's inverse rolloff past minDistance 12, the loudness each stage's crowd hears.
+        [Test]public void AListenerAtEachStageHearsMostlyItsOwnSong()
+        {
+            float Heard(float x,float z,int stage)
+            {
+                float fx=stage==StageMusic.Small?StageMusic.SmallX:StageMusic.MainX,fz=stage==StageMusic.Small?StageMusic.SmallZ:StageMusic.MainZ;
+                float d=Mathf.Sqrt((x-fx)*(x-fx)+(z-fz)*(z-fz));return FestivalStageAudio.Mix(x,z,stage)*Mathf.Min(1,12/Mathf.Max(d,.01f));
+            }
+            var fronts=new[]{("the main stage's crowd",StageMusic.MainX,StageMusic.MainZ-6,StageMusic.Main),("the small stage's crowd",StageMusic.SmallX,StageMusic.SmallZ+3,StageMusic.Small)};
+            foreach(var (who,x,z,own) in fronts)
+            {
+                int other=1-own;
+                Assert.That(FestivalStageAudio.Mix(x,z,own),Is.GreaterThan(.95f),who+" gets nearly all of its own stage");
+                Assert.That(Heard(x,z,own),Is.GreaterThan(20*Heard(x,z,other)),who+" hears its own song over 20 times louder than the other");
+            }
+            float lastMain=2,lastSmall=-1;
+            for(int k=0;k<=20;k++)
+            {
+                float t=k/20f,x=Mathf.Lerp(StageMusic.MainX,StageMusic.SmallX,t),z=Mathf.Lerp(StageMusic.MainZ,StageMusic.SmallZ,t);
+                float main=FestivalStageAudio.Mix(x,z,StageMusic.Main),small=FestivalStageAudio.Mix(x,z,StageMusic.Small);
+                Assert.That(main*main+small*small,Is.EqualTo(1).Within(1e-4f),"equal power at step "+k);
+                Assert.That(main,Is.LessThan(lastMain));Assert.That(small,Is.GreaterThan(lastSmall),"the songs trade places step by step, "+k);lastMain=main;lastSmall=small;
+            }
+            Assert.That(FestivalStageAudio.Mix(StageMusic.MainX,StageMusic.MainZ,StageMusic.Main),Is.EqualTo(1).Within(1e-4f));
+            Assert.That(FestivalStageAudio.Mix(StageMusic.SmallX,StageMusic.SmallZ,StageMusic.Main),Is.EqualTo(0).Within(1e-4f));
         }
         static RoundState Clock(double world,string phase="Playing")=>new RoundState{Phase=phase,RoundId="same-song",SimulationSeconds=world,FestivalIndex=0,LevelIndex=1};
         static int Expected(FestivalMusic.Track track,double world)=>(int)Math.Floor(RhythmChart.StageSampleAtWorld(track.Beats,world));

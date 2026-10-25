@@ -410,7 +410,7 @@ namespace Festival.Tests
                 }
                 var song=friend.GetComponent<FestivalStageAudio>().Music;
                 Assert.That(song!=null&&song.isPlaying,Is.True,"the friend hears the stage song through the set");
-                Assert.That(song.volume,Is.EqualTo(FestivalSettings.MusicGain(friend.Profile.Data,.6f)).Within(1e-4f).And.GreaterThan(0),"at its full music volume");
+                Assert.That(song.volume,Is.EqualTo(FestivalSettings.MusicGain(friend.Profile.Data,.6f*FestivalStageAudio.Mix(mate.X,mate.Z,StageMusic.Main))).Within(1e-4f).And.GreaterThan(0),"at the main stage's full share where the friend stands");
                 var resident=world.transform.Find(FestivalWorld.RootName+"/resident_stage_dj").GetComponent<FestivalCharacter>();
                 Assert.That(resident.Pose,Is.Not.EqualTo("Dj"),"the resident has stepped aside");
                 var near=new NpcState{Id="stage_fan",Kind="Wook",X=4,Z=18,Yaw=0};var far=new NpcState{Id="far_fan",Kind="Wook",X=-25,Z=-25,Yaw=0};sim.State.Npcs.Add(near);sim.State.Npcs.Add(far);

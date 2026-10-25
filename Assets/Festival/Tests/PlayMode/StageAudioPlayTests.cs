@@ -52,11 +52,13 @@ namespace Festival.Tests
             try
             {
                 yield return Open(session);var stage=host.GetComponent<FestivalStageAudio>();var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
-                float full=stage.Music.volume;Assert.That(full,Is.GreaterThan(0));
-                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");player.X=npc.X+.8f;player.Z=npc.Z;
+                // The main stage's share where the player stands now: a dance or the set moves the player.
+                float Full()=>FestivalSettings.MusicGain(session.Profile.Data,.6f*FestivalStageAudio.Mix(player.X,player.Z,StageMusic.Main));
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");player.X=npc.X+.8f;player.Z=npc.Z;yield return Wait(.5);
+                Assert.That(Full(),Is.GreaterThan(0));Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f),"setup: the main stage's share where the player stands");
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="song_dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True);
                 yield return Wait(.5);
-                Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f),"the stage song leads the dance at full volume");
+                Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f),"the stage song leads the dance at full volume");
                 var pulse=host.GetComponent<FestivalRhythmAudio>();var sources=pulse.GetComponents<AudioSource>();
                 Assert.That(Array.Exists(sources,s=>s.clip!=null&&s.clip.name=="Authored festival tick"),Is.True,"the real rhythm consumer schedules the quiet authored tick");
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="song_cancel",Kind="Cancel"}).Accepted,Is.True);
@@ -68,7 +70,7 @@ namespace Festival.Tests
                 {
                     yield return Wait(1.3);
                     Assert.That(stage.Music!=null&&stage.Music.isPlaying,Is.True,"phrase "+phrase+": the stage song plays on");
-                    Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f),"phrase "+phrase+": at full volume for the DJ");
+                    Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f),"phrase "+phrase+": at full volume for the DJ");
                     Assert.That(Array.Exists(sources,s=>s.isPlaying),Is.False,"phrase "+phrase+": no synthetic pulse or tick plays over the set");
                     MatchesWorld(session,stage,"phrase "+phrase+": the song keeps world time through the set");
                     if(phrase==0)RidePerfectly(sim,player,set);
@@ -83,7 +85,34 @@ namespace Festival.Tests
                 }
                 yield return Wait(1.3);
                 Assert.That(set.Status,Is.EqualTo("Complete"),"the set ends after five phrases");
-                Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f));MatchesWorld(session,stage,"the set's end does not restart the song");
+                Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f));MatchesWorld(session,stage,"the set's end does not restart the song");
+            }
+            finally{Close(session,host,world);}yield return null;
+        }
+        [UnityTest]public IEnumerator WalkingFromOneStageToTheOtherCrossFadesTheSongs()
+        {
+            var world=new GameObject("Two stage world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Two stage session");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                yield return Open(session);var stage=host.GetComponent<FestivalStageAudio>();var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                Assert.That(stage.Music.clip,Is.SameAs(FestivalStageAudio.For(session.State).Audio),"the main stage plays its pick");
+                Assert.That(stage.SmallMusic.clip,Is.SameAs(FestivalStageAudio.For(session.State,StageMusic.Small).Audio),"the small stage plays its own");
+                Assert.That(stage.SmallMusic.clip,Is.Not.SameAs(stage.Music.clip),"two different songs");
+                float lastMain=float.MaxValue,lastSmall=-1,full=FestivalSettings.MusicGain(session.Profile.Data,.6f);
+                for(int k=0;k<=6;k++)
+                {
+                    float t=k/6f;player.X=Mathf.Lerp(StageMusic.MainX,StageMusic.SmallX,t);player.Z=Mathf.Lerp(StageMusic.MainZ-4,StageMusic.SmallZ+3,t);
+                    yield return Wait(.35);
+                    float main=stage.Music.volume,small=stage.SmallMusic.volume;string at="step "+k+" at "+player.X.ToString("F1")+", "+player.Z.ToString("F1");
+                    Assert.That(stage.Music.isPlaying&&stage.SmallMusic.isPlaying,Is.True,at+": both songs keep playing");
+                    Assert.That(main,Is.LessThan(lastMain),at+": the main stage's song fades down");Assert.That(small,Is.GreaterThan(lastSmall),at+": the small stage's song comes up");
+                    lastMain=main;lastSmall=small;
+                    if(k==0){Assert.That(main,Is.GreaterThan(.95f*full),at+": the main crowd hears its song full");Assert.That(small,Is.LessThan(.2f*full),at+": and little of the small stage");}
+                    if(k==6){Assert.That(small,Is.GreaterThan(.95f*full),at+": the small crowd hears its song full");Assert.That(main,Is.LessThan(.2f*full),at+": and little of the main stage");}
+                }
+                stage.enabled=false;stage.Follow(session.State,session.EstimatedSimulationSeconds,AudioSettings.dspTime,"nobody here");
+                Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f),"with no listener both stages play full");Assert.That(stage.SmallMusic.volume,Is.EqualTo(full).Within(1e-4f));
             }
             finally{Close(session,host,world);}yield return null;
         }
