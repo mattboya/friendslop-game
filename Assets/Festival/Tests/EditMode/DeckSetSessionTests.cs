@@ -34,7 +34,7 @@ namespace Festival.Tests
         [Test]public void TheOwnerGetsTheGridAndFriendsKeepTheLiteralDeckPose()
         {
             var game=Deck(out var deck,1);var mine=Wire(game,"p0");var theirs=Wire(game,"p1");
-            Assert.That(mine.Interactions.Count,Is.EqualTo(1));Assert.That(mine.Interactions[0].StageTrack,Is.EqualTo(4),"the owner's actual serialized deck uses Ember's night grid");
+            Assert.That(mine.Interactions.Count,Is.EqualTo(1));var rider=game.Player("p0");Assert.That(mine.Interactions[0].StageTrack,Is.EqualTo(StageMusic.TrackAt(game.State,rider.X,rider.Z)),"the owner's actual serialized deck uses the song of the stage nearer where it started");
             Assert.That(JsonUtility.ToJson(mine.Interactions[0]),Is.EqualTo(JsonUtility.ToJson(deck)),"all heads, tails, chart anchors and inputs travel through the actual owner whitelist");
             Assert.That(theirs.Interactions,Is.Empty,"private chart/input logs never travel to a friend");Assert.That(theirs.Players.Find(p=>p.Id=="p0").VisualPose,Is.EqualTo("DeckSet"));
             Assert.That(FestivalSimulation.ArtCarOf(mine,"p0"),Is.EqualTo(0));Assert.That(FestivalSimulation.Dancing(deck),Is.False);

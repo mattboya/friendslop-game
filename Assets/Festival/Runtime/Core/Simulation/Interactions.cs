@@ -41,7 +41,7 @@ public sealed partial class FestivalSimulation {
     else if(IsRhythm(i)){i.Score=Judge(i);p.LastRhythmScore=i.Score;p.Performances++;int delta=RhythmDelta(i.Score);if(i.Kind=="Poi"&&i.ReservedItemId=="poi_led"&&delta<0)delta=(int)Math.Round(delta*1.25);if(i.Kind=="Dance")JudgeGroupDance(i,p);else foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id))Adjust(n,p,delta);
         if(i.Kind=="Poi"){Distraction(p,8,i.Score>=.75?4:1,false);var paired=State.Interactions.Find(x=>x.PlayerId==i.PartnerId&&x.PartnerId==p.Id&&x.Kind=="Poi"&&Math.Abs(x.StartSeconds-i.StartSeconds)<.01&&x.Status=="Complete");var partner=Player(i.PartnerId);if(i.Score>=.75&&paired!=null&&paired.Score>=.75&&partner!=null&&partner.Connected&&partner.Life=="Alive"&&Near(p,partner.X,partner.Z,4))Distraction(p,8,5,true);}
         if(i.Kind=="Dj"){if(i.Score>=.75)Distraction(p,120,5,true);StageCheer(i.Score);}
-        if(i.Kind=="Dj"&&++i.Phrase<5){i.ChartSeed++;i.Inputs.Clear();i.StartSeconds+=i.DurationSeconds+.75;RhythmChart.InitializeStage(i,RhythmChart.StageTrackFor(State.FestivalIndex,State.LevelIndex),WorldSeconds(State,i.StartSeconds));return;}
+        if(i.Kind=="Dj"&&++i.Phrase<5){i.ChartSeed++;i.Inputs.Clear();i.StartSeconds+=i.DurationSeconds+.75;RhythmChart.InitializeStage(i,StageMusic.Track(State,StageMusic.Main),WorldSeconds(State,i.StartSeconds));return;}
     }else switch(i.Kind){
         case "FindFriend":Recruited(i,p);break;
         case "Extract":if(CanExtractNow(p))End("Success");break;

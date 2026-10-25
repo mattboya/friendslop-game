@@ -21,9 +21,7 @@ namespace Festival.Presentation
         FestivalMusic.Transport transport;
         float roarLevel;
 
-        /// <summary>Palm Mirage's disco/tech house day/night and Ember Playa's dub/drum and bass stay on the original catalog.</summary>
-        public static FestivalMusic.Track TrackFor(int festival,int level)=>FestivalMusic.For(RhythmChart.StageTrackFor(festival,level));
-        public static FestivalMusic.Track For(RoundState state)=>state!=null&&(state.Phase=="Playing"||state.Phase==FestivalSimulation.MinigamePhase||state.Phase=="Results")?TrackFor(state.FestivalIndex,state.LevelIndex):null;
+        public static FestivalMusic.Track For(RoundState state)=>state!=null&&(state.Phase=="Playing"||state.Phase==FestivalSimulation.MinigamePhase||state.Phase=="Results")?FestivalMusic.For(StageMusic.Track(state,StageMusic.Main)):null;
         /// <summary>0-1 while the host's cheer for the DJ's last phrase lasts: nothing for a flop, a murmur at 0.4, the full roar
         /// for a perfect phrase. A booth game freezes the cheer's clock, so the roar waits with the held song.</summary>
         public static float RoarLevel(RoundState state)=>state==null||state.Phase!="Playing"||state.StageCheerScore<0||FestivalSimulation.WorldSeconds(state)>=state.StageCheerUntilWorldSeconds?0:Mathf.Clamp01(((float)state.StageCheerScore-.25f)/.75f);

@@ -248,7 +248,7 @@ public static class PlayaTwistTests
         foreach(int level in new[]{0,1,2,3})
         {
             var s=DeckFloor(level);double started=s.State.SimulationSeconds,world=FestivalSimulation.WorldSeconds(s.State);var i=Deck(s);
-            Check(i.StageTrack==RhythmChart.StageTrackFor(1,level),"deck uses the serialized one-based current stage track");
+            var rider=s.Player(i.PlayerId);Check(i.StageTrack==StageMusic.TrackAt(s.State,rider.X,rider.Z),"deck uses the serialized one-based song of the stage nearer where it starts");
             Check(i.StartSeconds==started,"deck preparation belongs only to its chart, without a duplicate external countdown");
             var expected=new InteractionState{Kind="DeckSet",ChartSeed=i.ChartSeed,ChartDifficulty=level,NoteCount=16,BeatSeconds=.4};RhythmChart.InitializeStage(expected,i.StageTrack,world,2.4);
             Check(i.StageFirstHeadWorldSeconds>=world+2.4&&i.StageFirstHeadWorldSeconds<world+3.4,"one window admits the longest2.4s arrow look-ahead and the next authored beat");

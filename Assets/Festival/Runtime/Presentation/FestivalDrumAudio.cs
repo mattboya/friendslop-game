@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Festival.Presentation
 {
     /// <summary>MINI-2: the Drum Circle's own song. While the game runs the stage holds its world sample (FestivalStageAudio) and the
-    /// world stands still; the circle plays the stage's recording on from that held sample by the game's own clock, the clock its
+    /// world stands still; the circle plays the song of the stage nearer its booth on from that held sample by the game's own clock, the clock its
     /// parts' authored grid was laid on, so the drummers play to the music. Heard in the circle rather than from the stage. It
     /// stops as the game is scored, and as the session ends.</summary>
     public sealed class FestivalDrumAudio : MonoBehaviour
@@ -34,7 +34,7 @@ namespace Festival.Presentation
         public void Follow(RoundState state,double minigameSeconds,double dspSeconds)
         {
             var song=SongSeconds(state,minigameSeconds);
-            transport.Follow(song==null?null:FestivalStageAudio.For(state),state?.RoundId??"",song??0,false,dspSeconds);
+            transport.Follow(song==null?null:FestivalMusic.For(FestivalSimulation.DrumCircleTrack(state)),state?.RoundId??"",song??0,false,dspSeconds);
             float volume=FestivalSettings.MusicGain(session?.Profile?.Data,.6f);
             foreach(var deck in decks)deck.volume=volume;
         }

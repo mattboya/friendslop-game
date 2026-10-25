@@ -23,17 +23,26 @@ namespace Festival.Tests
             Assert.DoesNotThrow(transport.Stop);
         }
 
-        [Test]public void EachFestivalsStagePlaysItsOwnDayAndNightTrack()
+        // A spirit's view is filtered too, and still carries the spin seed the pick reads.
+        [Test]public void EveryViewPlaysTheLevelsShuffledPick()
         {
-            string[] palmMirage={"disco-house-loop","tech-house-loop","disco-house-loop","tech-house-loop"};
-            string[] emberPlaya={"dub-reggae-loop","drum-and-bass-loop","dub-reggae-loop","drum-and-bass-loop"};
-            for(int level=0;level<Festivals.LevelCount;level++)
+            var game=new FestivalSimulation(3);foreach(var id in new[]{"host","friend","ghost"})game.AddPlayer(id,id);
+            game.State.Phase="Playing";game.Player("ghost").Life="Spirit";
+            var clips=new System.Collections.Generic.HashSet<string>();
+            for(int spin=0;spin<60;spin++)
             {
-                Assert.That(Clip(FestivalStageAudio.TrackFor(0,level)),Is.EqualTo(palmMirage[level]),"Palm Mirage, level "+level);
-                Assert.That(Clip(FestivalStageAudio.TrackFor(1,level)),Is.EqualTo(emberPlaya[level]),"Ember Playa, level "+level);
-                Assert.That(FestivalStageAudio.TrackFor(0,level),Is.Not.SameAs(FestivalStageAudio.TrackFor(1,level)),"the two festivals sound different, level "+level);
+                game.State.SpinSeed=spin*7919+1;var main=FestivalStageAudio.For(game.State);
+                Assert.That(main,Is.SameAs(FestivalMusic.For(StageMusic.Track(game.State,StageMusic.Main))),"spin "+spin+": the main stage plays the main pick");
+                Assert.That(StageMusic.Track(game.State,StageMusic.Main),Is.Not.EqualTo(StageMusic.Track(game.State,StageMusic.Small)),"spin "+spin+": the two stages differ");
+                foreach(var viewer in new[]{"host","friend","ghost"})
+                {
+                    var view=JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(Festival.Network.FestivalSession.ViewFor(game,viewer)));
+                    Assert.That(FestivalStageAudio.For(view),Is.SameAs(main),"spin "+spin+": "+viewer+"'s view plays the same main stage song");
+                    Assert.That(StageMusic.Track(view,StageMusic.Small),Is.EqualTo(StageMusic.Track(game.State,StageMusic.Small)),"spin "+spin+": "+viewer+"'s view plays the same small stage song");
+                }
+                clips.Add(main.Clip);
             }
-            Assert.That(Festivals.Count,Is.EqualTo(2),"setup: every festival has its stage tracks");
+            Assert.That(clips.Count,Is.EqualTo(FestivalMusic.Tracks.Length),"every loop comes up on the main stage: "+string.Join(", ",clips));
         }
 
         [Test]public void TheStagePlaysWhileTheFestivalIsOnScreenAndStopsAtCamp()
@@ -41,8 +50,8 @@ namespace Festival.Tests
             // Held phases retain the selected recording and exact position, ready to resume without a sample-zero restart.
             foreach(var phase in new[]{"Playing",FestivalSimulation.MinigamePhase,"Results"})
             {
-                var night=new RoundState{Phase=phase,FestivalIndex=1,LevelIndex=3};
-                Assert.That(Clip(FestivalStageAudio.For(night)),Is.EqualTo("drum-and-bass-loop"),phase+": Ember Playa's Night 2 track, from the shared level");
+                var night=new RoundState{Phase=phase,FestivalIndex=1,LevelIndex=3,SpinSeed=4242};
+                Assert.That(FestivalStageAudio.For(night),Is.Not.Null.And.SameAs(FestivalMusic.For(StageMusic.Track(4242,StageMusic.Main))),phase+": the level's main stage pick, from the shared spin seed");
             }
             foreach(var phase in new[]{"Lobby","Shopping","Spinning","Loading","CampReview"})
                 Assert.That(FestivalStageAudio.For(new RoundState{Phase=phase}),Is.Null,phase+": the stage is silent, and the camp DJ has the music");
@@ -145,7 +154,7 @@ namespace Festival.Tests
             var a=new GameObject("First shared stage");var b=new GameObject("Second shared stage");
             try
             {
-                var one=Stage(a);var two=Stage(b);var track=FestivalStageAudio.TrackFor(0,1);
+                var one=Stage(a);var two=Stage(b);var track=FestivalStageAudio.For(Clock(0));
                 foreach(double world in new[]{87.123,track.LoopSeconds-.1,track.LoopSeconds*3+37.45})
                 {
                     var state=Clock(world);state.RoundId=world.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -179,7 +188,7 @@ namespace Festival.Tests
         }
         [Test]public void TheEffectsTickUsesAuthoredWholeBeatsThroughDriftAndWrap()
         {
-            foreach(int choice in new[]{1,2,4,5})
+            for(int choice=1;choice<=StageBeats.Tracks.Length;choice++)
             {
                 var grid=StageBeats.For(choice);var interaction=new InteractionState{Kind="Dance",ChartSeed=12,NoteCount=16,BeatSeconds=.5};
                 RhythmChart.InitializeStage(interaction,choice,grid.LoopSeconds-4.1);

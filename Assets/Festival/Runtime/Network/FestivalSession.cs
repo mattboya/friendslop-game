@@ -149,6 +149,11 @@ namespace Festival.Network
         // MINI-10: Mystery Cups' first turn clock starts CupsIntroSeconds (3 s) after the pour, so Booth.TurnAt can lie ahead of
         // Booth.Seconds, and the tripper's Booth.Hint marks the spiked cup at HunchReliability: one reliability step lower when one
         // player is at the table.
+        // MUSIC-7: each level's spin seed shuffles two different loops of all seven onto the main and the small stage
+        // (StageMusic.Track), and every view works the pick out from the public SpinSeed. Dances, check and trust dances, poi,
+        // Drum Circle parts (by their booth) and deck sets (where they start) chart to the nearer stage's song, and the DJ set to
+        // the main stage's, so StageTrack 3, 6 and 7 now reach charts and snapshots. A version-9 client would play the old fixed
+        // song and refuse those snapshots.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

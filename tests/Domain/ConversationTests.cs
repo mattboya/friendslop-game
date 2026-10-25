@@ -404,7 +404,7 @@ public static class ConversationTests
             Partner(s).Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});
             double pressed=s.State.SimulationSeconds;var i=Start(s,kind);var chart=RhythmChart.For(i);
             Check(i.StartSeconds-pressed==2,kind+": a trust dance gives the lane its shared 2 s countdown");
-            Check(i.NoteCount==8&&chart.Notes.Count==RhythmChart.Create(i.ChartSeed,8,i.BeatSeconds,i.ChartDifficulty).Notes.Count&&chart.Notes[0].TimeSeconds>=2&&i.StageTrack==2&&chart.DurationSeconds==i.DurationSeconds,kind+": the eight logical beats and patterns map to the day stage with their actual duration");
+            Check(i.NoteCount==8&&chart.Notes.Count==RhythmChart.Create(i.ChartSeed,8,i.BeatSeconds,i.ChartDifficulty).Notes.Count&&chart.Notes[0].TimeSeconds>=2&&i.StageTrack==StageMusic.TrackAt(s.State,p.X,p.Z)&&chart.DurationSeconds==i.DurationSeconds,kind+": the eight logical beats and patterns map to the nearer stage's song with their actual duration");
             Check(i.StartSeconds+chart.Notes[0].TimeSeconds-pressed>=Catalog.FindEffect("ketamine").LeadSeconds,kind+": the first Pony Dust arrow can enter at the bottom");
             Check(!Act(s,p.Id,"Rhythm",direction:chart.Notes[0].Direction).Accepted,kind+": the countdown does not admit an early press");
             int next=0;

@@ -75,9 +75,12 @@ namespace Festival.Tests
         {
             var incoming=JsonUtility.FromJson<InteractionState>("{\"Kind\":\"Dance\",\"ChartSeed\":17,\"NoteCount\":16,\"ChartDifficulty\":3,\"BeatSeconds\":0.5,\"StageTrack\":1,\"StageFirstHeadWorldSeconds\":10,\"StageFirstHeadDelaySeconds\":2.23,\"StageBeatStride\":1}");
             var chart=RhythmChart.For(incoming);Assert.That(chart.Notes[0].TimeSeconds,Is.EqualTo(2.23).Within(.000001),"JSON drives the production For entry point");
-            var game=Pair();game.State.Players.Add(new PlayerState{Id="p1",Name="Friend"});var interaction=Start(game,"ConfirmDance");
+            // Spin seed 1 puts DISCO HOUSE (2) on the main stage, the song this owner-view decode was first checked on. JsonUtility
+            // writes a few doubles one unit in the last place off, so another song's anchor can decode a hair from the host's.
+            var game=Pair();game.State.SpinSeed=1;game.State.Players.Add(new PlayerState{Id="p1",Name="Friend"});var interaction=Start(game,"ConfirmDance");
             var owner=JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,"p0")));
-            Assert.That(JsonUtility.ToJson(owner.Interactions[0]),Does.Contain("\"StageTrack\":2"));
+            var p0=game.Player("p0");Assert.That(interaction.StageTrack,Is.EqualTo(StageMusic.TrackAt(game.State,p0.X,p0.Z)),"the check rides the nearer stage's song");
+            Assert.That(JsonUtility.ToJson(owner.Interactions[0]),Does.Contain("\"StageTrack\":"+interaction.StageTrack));
             Assert.That(JsonUtility.ToJson(RhythmChart.For(owner.Interactions[0])),Is.EqualTo(JsonUtility.ToJson(RhythmChart.For(interaction))),"host and owner decode the same chart");
             Assert.That(FestivalSession.ViewFor(game,"p1").Interactions,Is.Empty,"private check charts remain owner-only");
             var restored=new FestivalSimulation();restored.Restore(JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(game.State)));
@@ -96,7 +99,7 @@ namespace Festival.Tests
                 var session=host.AddComponent<FestivalSession>();session.enabled=false;session.Host("Stage test",8610);
                 Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
                 var game=Pair();game.State.LevelIndex=3;var interaction=Start(game,"Conversation");
-                Assert.That(JsonUtility.ToJson(interaction),Does.Contain("\"StageTrack\":1"),"real trust command selected the night stage");
+                var p0=game.Player("p0");Assert.That(JsonUtility.ToJson(interaction),Does.Contain("\"StageTrack\":"+StageMusic.TrackAt(game.State,p0.X,p0.Z)),"real trust command selected the nearer stage's song");
                 interaction.NoteCount=16;interaction.ChartSeed=0;interaction.DurationSeconds=RhythmChart.For(interaction).DurationSeconds;
                 var chart=RhythmChart.For(interaction);var hold=chart.Notes.Find(n=>n.HoldSeconds>0);Assert.That(hold,Is.Not.Null,"production-verified seed 0 contains a hold at ID 2");Assert.That(hold.Id,Is.EqualTo(2));
                 typeof(FestivalSession).GetField("simulation",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,game);

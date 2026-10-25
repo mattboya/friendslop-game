@@ -47,13 +47,16 @@ namespace Festival.Core
         // The chart starts with the game at the held stage position. Existing simulation timestamps advance by exactly the game clock;
         // chart/music consumers use this public game-local adapter, never the held world transport.
         public static double DrumChartSeconds(RoundState s,InteractionState i)=>s.Booth.Seconds-(i.StartSeconds-(s.SimulationSeconds-s.Booth.Seconds));
+        /// <summary>The song of the stage nearer the booth, so every part and the circle's own speakers (FestivalDrumAudio) share
+        /// one song.</summary>
+        public static int DrumCircleTrack(RoundState s){int spot=s.Booth.Spot;var at=spot>=0&&spot<Festivals.BoothSpots.Length?Festivals.BoothSpots[spot]:new WorldPoint(StageMusic.MainX,StageMusic.MainZ);return StageMusic.TrackAt(s,at.X,at.Z);}
         void StartDrumCircle()
         {
             var b=State.Booth;b.DrumAccuracies.Clear();b.DrumWorstScore=-1;
             for(int k=0;k<b.PlayerIds.Count;k++)
             {
                 var p=Player(b.PlayerIds[k]);var i=NewInteraction(p,DrumPartKind,MinigameKind,0);i.ChartSeed=DrumCircle.PartSeed(unchecked(State.SpinSeed*67)^State.DealSeed,k);i.ChartDifficulty=RhythmChart.QuarterNotes;i.NoteCount=24;i.BeatSeconds=.5;
-                RhythmChart.InitializeStage(i,RhythmChart.StageTrackFor(State.FestivalIndex,State.LevelIndex),WorldSeconds(State));
+                RhythmChart.InitializeStage(i,DrumCircleTrack(State),WorldSeconds(State));
                 b.DrumAccuracies.Add(new DrumAccuracy{PlayerId=p.Id});
             }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD

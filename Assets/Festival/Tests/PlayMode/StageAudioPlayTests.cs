@@ -103,7 +103,7 @@ namespace Festival.Tests
                 sim.State.RoundId="same-track-new-round";sim.State.SimulationSeconds=3.25;yield return Wait(.65);
                 MatchesWorld(session,stage,"a new round resets even when it reuses the same recording");
                 // Use the actual production scheduler near a click-free join without waiting an entire song.
-                stage.enabled=false;var clock=new RoundState{Phase="Playing",RoundId="join-proof",LevelIndex=0,SimulationSeconds=track.LoopSeconds-.7};
+                stage.enabled=false;var clock=new RoundState{Phase="Playing",RoundId="join-proof",LevelIndex=0,SpinSeed=session.State.SpinSeed,SimulationSeconds=track.LoopSeconds-.7};
                 double start=AudioSettings.dspTime;stage.Follow(clock,clock.SimulationSeconds,start);yield return Wait(.35);var before=stage.Music;
                 yield return Wait(.5);stage.Follow(clock,clock.SimulationSeconds+AudioSettings.dspTime-start,AudioSettings.dspTime);
                 Assert.That(stage.Music,Is.Not.SameAs(before),"the already scheduled other deck takes over at the authored sample join");

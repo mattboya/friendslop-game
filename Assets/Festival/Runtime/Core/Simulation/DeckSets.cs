@@ -23,7 +23,7 @@ namespace Festival.Core
             deck.NoteCount=Festivals.DeckSetNotes;deck.BeatSeconds=Festivals.DeckBeatSeconds;
             // One chart preparation window admits the longest authored lane; do not add the checks' external countdown too.
             double lead=2;foreach(var effect in Catalog.Effects)lead=Math.Max(lead,effect.LeadSeconds);
-            RhythmChart.InitializeStage(deck,RhythmChart.StageTrackFor(State.FestivalIndex,State.LevelIndex),WorldSeconds(State),lead);
+            RhythmChart.InitializeStage(deck,StageMusic.TrackAt(State,p.X,p.Z),WorldSeconds(State),lead);
             RideArtCar(p,Car(deck));CollectDeckWitnesses(deck,p);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             RhythmDiagnostic?.Invoke("[Festival.DeckSet] start car="+deck.TargetId+" witnesses="+deck.WitnessIds.Count);

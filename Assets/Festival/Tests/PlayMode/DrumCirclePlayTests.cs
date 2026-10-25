@@ -29,7 +29,7 @@ namespace Festival.Tests
         // How far the circle's song is from the held world position on by the game's own clock, in seconds.
         static double SongMiss(FestivalSession session,FestivalDrumAudio drums)
         {
-            var track=FestivalStageAudio.For(session.State);double expected=RhythmChart.StageSampleAtWorld(track.Beats,FestivalSimulation.WorldSeconds(session.State)+session.EstimatedMinigameSeconds);
+            var track=FestivalMusic.For(FestivalSimulation.DrumCircleTrack(session.State));double expected=RhythmChart.StageSampleAtWorld(track.Beats,FestivalSimulation.WorldSeconds(session.State)+session.EstimatedMinigameSeconds);
             double miss=Math.Abs(drums.Music.timeSamples-expected);return Math.Min(miss,Math.Abs(track.LoopEnd-track.FirstBeat-miss))/FestivalMusic.Rate;
         }
 
@@ -81,7 +81,7 @@ namespace Festival.Tests
                 var drums=ownerRoot.GetComponent<FestivalDrumAudio>();var stage=ownerRoot.GetComponent<FestivalStageAudio>();
                 Assert.That(drums,Is.Not.Null,"the drum circle's own audio rides on the session");
                 Assert.That(drums.Music!=null&&drums.Music.isPlaying,Is.True,"the circle's song plays");
-                Assert.That(drums.Music.clip,Is.SameAs(stage.Track.Audio),"the stage's own recording");
+                Assert.That(drums.Music.clip,Is.SameAs(FestivalMusic.For(FestivalSimulation.DrumCircleTrack(owner.State)).Audio),"the song of the stage nearer the booth");
                 Assert.That(stage.Music.isPlaying,Is.False,"the stage holds its sample");
                 double held=owner.EstimatedWorldSeconds,song=drums.WorldSeconds;yield return Wait(.8);
                 Assert.That(owner.EstimatedWorldSeconds,Is.EqualTo(held).Within(1e-9),"the world clock stands still");

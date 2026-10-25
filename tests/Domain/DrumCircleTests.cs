@@ -10,7 +10,7 @@ public static class DrumCircleTests
     static int sequence;
     public static void Run()
     {
-        var failures=new List<string>();foreach(var test in new Action[]{PrototypeRules,TheCommonStartGivesOnlyTheFrozenLivingRosterDistinctParts,AllBandsUseTheWorstFinalScoreAndRawNearbySuspicion,SilentDisconnectedAndWithdrawnPartsRemainInTheScore,GameTimeAdvancesWhileTheWorldAndDoseHold,ScoringClosesPartsBeforeResumeAndTheCapStillScores,HostSnapshotsContinueAndOldSnapshotsDefaultQuietly})
+        var failures=new List<string>();foreach(var test in new Action[]{PrototypeRules,TheCommonStartGivesOnlyTheFrozenLivingRosterDistinctParts,ACircleDrumsToTheStageNearerItsBooth,AllBandsUseTheWorstFinalScoreAndRawNearbySuspicion,SilentDisconnectedAndWithdrawnPartsRemainInTheScore,GameTimeAdvancesWhileTheWorldAndDoseHold,ScoringClosesPartsBeforeResumeAndTheCapStillScores,HostSnapshotsContinueAndOldSnapshotsDefaultQuietly})
             try{test();}catch(Exception e){failures.Add(test.Method.Name+" -> "+e.Message);}
         Check(failures.Count==0,string.Join("\n",failures));
     }
@@ -37,11 +37,11 @@ public static class DrumCircleTests
         Check(silent.Score==0&&(int)payout.Invoke(null,new object[]{new[]{1.0,silent.Score}})==-30,"a silent part sinks a perfect crew");
     }
 
-    static FestivalSimulation Started(int count=2,bool watchers=false,int festival=0)
+    static FestivalSimulation Started(int count=2,bool watchers=false,int festival=0,int spot=1)
     {
         var s=new FestivalSimulation(123);for(int k=0;k<count;k++)s.AddPlayer("p"+k,"P"+k);
         if(watchers){s.AddPlayer("ghost","Watcher").Life="Spirit";s.AddPlayer("detained","Detained").Life="Detained";s.AddPlayer("gone","Gone").Connected=false;}
-        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.Phase="Playing";s.State.Npcs.Clear();s.State.Booth=new MinigameState{Kind="DrumCircle",Spot=1};
+        s.State.UnlockedFestivalCount=Festivals.Count;s.State.FestivalIndex=festival;s.State.Phase="Playing";s.State.Npcs.Clear();s.State.Booth=new MinigameState{Kind="DrumCircle",Spot=spot};
         var at=FestivalSimulation.BoothAt(s.State);foreach(var p in s.State.Players){p.X=at.X;p.Z=at.Z;}
         for(int k=0;k<35&&s.State.Phase!="Minigame";k++)s.Tick(.1);
         Check(s.State.Phase=="Minigame","actual ring starts the drum game");return s;
@@ -81,11 +81,20 @@ public static class DrumCircleTests
                 Check(i.ChartDifficulty==RhythmChart.QuarterNotes&&chart.Notes.Count==24&&chart.Notes.All(n=>n.HoldSeconds==0),"every actual part is 24 quarter-note taps");
                 Check(keys.Add(string.Join(",",chart.Notes.Select(n=>n.Direction))),"actual roster parts are distinct");
                 Check(!FestivalSimulation.Dancing(i)&&!FestivalSimulation.DancesVisibly(i.Kind),"drum parts never become a dance");
-                Check(i.StageTrack==RhythmChart.StageTrackFor(festival,0)&&i.StageBeatStride==RhythmChart.NearestStageStride(StageBeats.For(i.StageTrack),RhythmChart.StageBeatAtWorld(StageBeats.For(i.StageTrack),i.StageFirstHeadWorldSeconds),.5),"parts use the frozen stage grid nearest half a second");
+                Check(i.StageTrack==FestivalSimulation.DrumCircleTrack(s.State)&&i.StageBeatStride==RhythmChart.NearestStageStride(StageBeats.For(i.StageTrack),RhythmChart.StageBeatAtWorld(StageBeats.For(i.StageTrack),i.StageFirstHeadWorldSeconds),.5),"parts use the frozen stage grid nearest half a second");
             }
             if(count==2)Check(Part(s,"ghost")==null&&Part(s,"detained")==null&&Part(s,"gone")==null,"spirits, detained and disconnected players watch");
         }
         Check(FestivalSimulation.MinigameKinds.Contains("DrumCircle"),"the bag deals the drum circle now its real consumers have landed");
+    }
+    static void ACircleDrumsToTheStageNearerItsBooth()
+    {
+        foreach(var (spot,stage) in new[]{(0,StageMusic.Small),(1,StageMusic.Main),(2,StageMusic.Small)})
+        {
+            var s=Started(spot:spot);var at=Festivals.BoothSpots[spot];int expected=StageMusic.Track(s.State,stage);
+            Check(StageMusic.Nearer(at.X,at.Z)==stage,"setup: booth "+spot+" is nearer the "+(stage==StageMusic.Small?"small":"main")+" stage");
+            foreach(string id in s.State.Booth.PlayerIds){int got=RequiredPart(s,id).StageTrack;Check(got==expected,"booth "+spot+": "+id+"'s part drums to the nearer stage's song "+expected+", got "+got);}
+        }
     }
     static void AllBandsUseTheWorstFinalScoreAndRawNearbySuspicion()
     {

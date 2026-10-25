@@ -7,7 +7,7 @@ namespace Festival.Core
         void ScheduleStageRhythm(InteractionState i)
         {
             ScheduleChallengeLeadIn(i);
-            RhythmChart.InitializeStage(i,RhythmChart.StageTrackFor(State.FestivalIndex,State.LevelIndex),WorldSeconds(State)+ChallengeLeadIn);
+            var p=Player(i.PlayerId);RhythmChart.InitializeStage(i,StageMusic.TrackAt(State,p.X,p.Z),WorldSeconds(State)+ChallengeLeadIn);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             RhythmDiagnostic?.Invoke("[Festival.StageChart] track="+i.StageTrack+" anchor="+i.StageFirstHeadWorldSeconds.ToString("F6",System.Globalization.CultureInfo.InvariantCulture)+" stride="+i.StageBeatStride.ToString("F1",System.Globalization.CultureInfo.InvariantCulture));
 #endif

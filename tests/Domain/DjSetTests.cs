@@ -76,13 +76,13 @@ public static class DjSetTests
     {
         foreach(int festival in new[]{0,1})for(int level=0;level<Festivals.LevelCount;level++)
         {
-            var game=Floor(festival,level);double world=FestivalSimulation.WorldSeconds(game.State);var i=Start(game);
-            int choice=RhythmChart.StageTrackFor(festival,level);
-            Check(i.StageTrack==choice,"the set rides the stage's song, track "+choice+", got "+i.StageTrack);
+            var game=Floor(festival,level);game.State.SpinSeed=festival*Festivals.LevelCount+level;double world=FestivalSimulation.WorldSeconds(game.State);var i=Start(game);
+            int choice=StageMusic.Track(game.State,StageMusic.Main);
             Check(Math.Abs(i.StartSeconds-(game.State.SimulationSeconds+2))<1e-9,"a 2 s countdown, as before");
             var track=StageBeats.For(i.StageTrack);
             for(int phrase=0;phrase<5;phrase++)
             {
+                Check(i.StageTrack==choice,"phrase "+phrase+" rides the main stage's song, track "+choice+", got "+i.StageTrack);
                 var chart=RhythmChart.For(i);double origin=i.StageFirstHeadWorldSeconds-i.StageFirstHeadDelaySeconds;
                 Check(i.DurationSeconds==chart.DurationSeconds,"the phrase lasts its chart");
                 Check(origin>=world-1e-9,"phrase "+phrase+" starts after the one before");

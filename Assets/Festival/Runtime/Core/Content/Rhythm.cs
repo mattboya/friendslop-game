@@ -28,9 +28,8 @@ namespace Festival.Core
         const int Eighths=1,Jump=2,Sixteenths=3,Hold=4;
         // The difficulty that puts one quarter note on every beat, as charts were before DANCE-5 (the same seed, the same chart).
         public const int QuarterNotes=-1;
-        // Catalog choices (one-based): existing day/night sets stay unchanged; 0 is reserved for fixed legacy timing.
-        public static int StageTrackFor(int festival,int level)=>festival==0?(Festivals.Night(level)?1:2):(Festivals.Night(level)?4:5);
-        public static bool ValidStageAnchor(InteractionState i)=>i.StageTrack==0||(i.StageTrack==1||i.StageTrack==2||i.StageTrack==4||i.StageTrack==5)&&Finite(i.StageFirstHeadWorldSeconds)&&i.StageFirstHeadWorldSeconds>=0&&Finite(i.StageFirstHeadDelaySeconds)&&i.StageFirstHeadDelaySeconds>=0&&i.StageFirstHeadDelaySeconds<=60&&(i.StageBeatStride==.5||i.StageBeatStride==1||i.StageBeatStride==2);
+        // Catalog choices (one-based); 0 is reserved for fixed legacy timing.
+        public static bool ValidStageAnchor(InteractionState i)=>i.StageTrack==0||StageBeats.For(i.StageTrack)!=null&&Finite(i.StageFirstHeadWorldSeconds)&&i.StageFirstHeadWorldSeconds>=0&&Finite(i.StageFirstHeadDelaySeconds)&&i.StageFirstHeadDelaySeconds>=0&&i.StageFirstHeadDelaySeconds<=60&&(i.StageBeatStride==.5||i.StageBeatStride==1||i.StageBeatStride==2);
         static bool Finite(double value)=>!double.IsNaN(value)&&!double.IsInfinity(value);
         static double LoopBeatSpan(StageBeats.Track track)=>track.Beat(track.LoopEnd)-track.Beat(track.FirstBeat);
         // Preserve the click-free sample joins exactly. Their offsets from phrase anchors are not whole beat counts.
@@ -65,7 +64,7 @@ namespace Festival.Core
         public static void InitializeStage(InteractionState i,int stageTrack,double startWorldSeconds,double firstHeadLeadSeconds=2)
         {
             var track=StageBeats.For(stageTrack);
-            if(track==null||stageTrack==3||stageTrack>5||!Finite(startWorldSeconds)||startWorldSeconds<0||!Finite(firstHeadLeadSeconds)||firstHeadLeadSeconds<0||firstHeadLeadSeconds>59)throw new ArgumentOutOfRangeException(nameof(stageTrack));
+            if(track==null||!Finite(startWorldSeconds)||startWorldSeconds<0||!Finite(firstHeadLeadSeconds)||firstHeadLeadSeconds<0||firstHeadLeadSeconds>59)throw new ArgumentOutOfRangeException(nameof(stageTrack));
             double earliest=startWorldSeconds+firstHeadLeadSeconds,cycle=Math.Floor(earliest/track.LoopSeconds);
             double beat=Math.Ceiling(track.Beat(StageSampleAtWorld(track,earliest))-1e-10),sample=track.Sample(beat);
             if(sample>=track.LoopEnd){cycle++;sample=track.Sample(Math.Ceiling(track.Beat(track.FirstBeat)-1e-10));}

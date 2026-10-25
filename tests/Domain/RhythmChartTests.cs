@@ -19,7 +19,8 @@ public static class RhythmChartTests
             IdsCountUpInTimeOrder,EveryBeatIsOneOfTheFivePatterns,JumpsUseTwoDifferentLanes,NeighbouringSixteenthsNeverShareALane,
             TheFirstTwoBeatsAreQuarters,DayOneHasNoSixteenthRunsAndNightOneCan,LaterLevelsMixInMoreOfAllThree,
             AJumpScoresPerfectWhenBothKeysArePressedOnTime,AFastRunScoresEveryNotePressedInTurn,AChallengePlaysTheMixOfTheLevelItBeganOn,
-            TheHostScoresTheChartThePlayerSees,TheCheckDanceStaysFourQuarterNotes,ALateGoodOnTheLastSixteenthStillCounts})
+            TheHostScoresTheChartThePlayerSees,TheCheckDanceStaysFourQuarterNotes,ALateGoodOnTheLastSixteenthStillCounts,
+            EveryLoopInThePoolIsAStageGrid,ADanceByTheSmallStageRidesItsSong})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" rhythm chart test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -223,6 +224,27 @@ public static class RhythmChartTests
             Check(LogicalShape(i)==Shape(RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,level)),kind+" plays level "+level+"'s mix from its seed");
             Check(i.DurationSeconds==RhythmChart.For(i).DurationSeconds,kind+" lasts its actual mapped lead-in, heads and holds");
         }
+    }
+
+    static void EveryLoopInThePoolIsAStageGrid()
+    {
+        for(int track=1;track<=StageBeats.Tracks.Length;track++)foreach(double at in new[]{0.0,123.4,StageBeats.For(track).LoopSeconds-1})
+        {
+            var i=new InteractionState{Kind="Dance",ChartSeed=9,NoteCount=16,BeatSeconds=.5,ChartDifficulty=3};
+            RhythmChart.InitializeStage(i,track,at);
+            Check(i.StageTrack==track&&RhythmChart.ValidStageAnchor(i),StageBeats.For(track).Clip+" from "+at+" s is a valid stage anchor");
+            Check(LogicalShape(i)==Shape(RhythmChart.Create(9,16,.5,3)),StageBeats.For(track).Clip+" from "+at+" s keeps every logical note on its beats");
+        }
+        Check(!RhythmChart.ValidStageAnchor(new InteractionState{StageTrack=StageBeats.Tracks.Length+1,StageBeatStride=1}),"a track past the pool is no stage");
+    }
+
+    static void ADanceByTheSmallStageRidesItsSong()
+    {
+        var s=Floor(1);var p=s.Player("p0");p.X=StageMusic.SmallX;p.Z=StageMusic.SmallZ+3;s.State.Npcs[0].X=p.X;s.State.Npcs[0].Z=p.Z+1.4f;
+        var i=Start(s,"Dance");int small=StageMusic.Track(s.State,StageMusic.Small);
+        Check(small!=StageMusic.Track(s.State,StageMusic.Main),"setup: the two stages play different songs");
+        Check(i.StageTrack==small,"a dance by the small stage charts to its song "+small+", got "+i.StageTrack);
+        Check(LogicalShape(i)==Shape(RhythmChart.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,1)),"its notes sit on the small stage song's beats");
     }
 
     static void TheHostScoresTheChartThePlayerSees()
