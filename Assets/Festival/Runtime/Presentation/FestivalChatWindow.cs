@@ -15,7 +15,8 @@ namespace Festival.Presentation
     /// TypingSeconds, then types out at LettersPerSecond, DIALOG-2's pace (reduced motion shows it whole). The thread keeps the last
     /// MaxBubbles bubbles and fades older ones out. It lives here on the client, so it outlasts the interaction that fed it: a view
     /// carries only Active ones. Once the conversation ends the window stays up, read-only, until explicit dismissal (Linger).
-    /// Time is handed in (Begin, Advance), so tests read the thread at exact moments.
+    /// Time is handed in (Begin, Advance), so tests read the thread at exact moments. A talk shows a meter under the
+    /// title line, how it is going (Going), and their reaction bubbles take its colour.
     /// </summary>
     public sealed class FestivalChatWindow : MonoBehaviour
     {
@@ -41,7 +42,19 @@ namespace Festival.Presentation
         // Bubble geometry in canvas pixels: the mark beside each bubble, the text's padding, and the gap between bubbles.
         const float MarkWidth=36,MarkHeight=26,MarkGap=8,PadX=12,PadY=7,Spacing=7;
         // The thread's foot sits above the replies when there are some, else near the card's foot.
-        const float ThreadTop=.87f,ThreadOverReplies=.295f,ThreadAlone=.03f;
+        const float ThreadTop=.87f,ThreadUnderMeter=.822f,ThreadOverReplies=.295f,ThreadAlone=.03f;
+        // The meter's words, by how it is going: COLD where a buy fails and a sale pays nothing (under .4), IFFY and WARM
+        // where a sale pays half (under .75), VIBING where it pays in full and security waves you on.
+        public const string Cold="COLD",Iffy="IFFY",Warm="WARM",Vibing="VIBING";
+        public static string Word(float going)=>going<FestivalSimulation.BuyScore?Cold:going<.6f?Iffy:going<.75f?Warm:Vibing;
+        // Red at 0, amber in the middle, green at 1. The word is always beside it, so colour is never the only cue.
+        static readonly Color ColdColor=new Color(.86f,.24f,.2f,1),IffyColor=new Color(.96f,.66f,.18f,1),VibingColor=new Color(.16f,.64f,.38f,1);
+        public static Color Colour(float going)=>going<.5f?Color.Lerp(ColdColor,IffyColor,going/.5f):Color.Lerp(IffyColor,VibingColor,(going-.5f)/.5f);
+        /// <summary>Their reaction bubble's colour: the meter's, half way from their sage, so the ink still reads on it.</summary>
+        public static Color ReactionColour(float going)=>Color.Lerp(TheirBubble,Colour(going),.5f);
+        /// <summary>The score a talk needs, which the meter marks: a buy's FestivalSimulation.BuyScore, a sale's full price at its ask
+        /// (FestivalSimulation.SaleNeeds); -1 for none.</summary>
+        public static float NeedFor(InteractionState talk)=>talk?.Kind=="Buy"?(float)FestivalSimulation.BuyScore:talk?.Kind=="Sale"?(float)FestivalSimulation.SaleNeeds(talk.Ask):-1;
         // Their typed line's hidden rest keeps its place, so the bubble doesn't grow as the letters come.
         const string Hidden="<color=#00000000>";
 
@@ -51,7 +64,7 @@ namespace Festival.Presentation
         readonly Button[] replies=new Button[MaxReplies];
         readonly Text[] replyTexts=new Text[MaxReplies],replyKeys=new Text[MaxReplies];
         readonly TextGenerator measure=new TextGenerator();
-        Font font;Sprite rounded;Text header,slur;RectTransform bar,track,viewport,content;CanvasGroup group;
+        Font font;Sprite rounded;Text header,slur,meterWord;RectTransform bar,track,viewport,content,meter,meterFill,meterMark;Image meterFillImage;CanvasGroup group;
         Action<int> onPick;int offered;
         // DIALOG-6: the followed chat's festivalgoer; whether the conversation may still linger once over, and whether it is over.
         string threadId="",mark="",target="",followedRound="",outcomeDelivery="",dismissedRound="",dismissedId="";double followedStart=-1,dismissedStart=-1;
@@ -61,6 +74,8 @@ namespace Festival.Presentation
         float clock,laidWidth=-1;bool dirty,reduced,lingers,over;
         // DIALOG-3: in a talk, the turns shown so far and those your reply has been said for; the hunch it will end on (Linger).
         int turnsShown,turnsSaid;string hunch="";
+        // The grade heard on each turn of the talk followed (Silence for a turn left unanswered), -1 for none yet.
+        readonly int[] graded=new int[FestivalSimulation.ConversationTurns];
 
         /// <summary>Builds the window, hidden, on the HUD's canvas where the chat card was: right of centre, between the crew card
         /// and the gear bar (FestivalHud moves it beside the pass while the menu is open).</summary>
@@ -75,6 +90,11 @@ namespace Festival.Presentation
             window.track=Panel(root,"Time left track",Hairline,null);Place(window.track,.05f,.875f,.95f,.883f);
             window.slur=window.Label(root,"Slurred replies",13,TextAnchor.MiddleLeft,Ink);Place(window.slur.rectTransform,.05f,.883f,.95f,.91f);window.slur.gameObject.SetActive(false);
             window.bar=Panel(window.track,"Time left",Orange,null);Place(window.bar,0,0,1,1);
+            window.meter=Panel(root,"Talk meter",Color.clear,null);Place(window.meter,.05f,.832f,.95f,.866f);
+            window.meterWord=window.Label(window.meter,"How it's going",15,TextAnchor.MiddleLeft,Ink);Place(window.meterWord.rectTransform,0,0,.2f,1);
+            var gauge=Panel(window.meter,"Meter track",Hairline,null);Place(gauge,.22f,.3f,1,.7f);
+            window.meterFill=Panel(gauge,"Meter fill",IffyColor,null);Place(window.meterFill,0,0,.5f,1);window.meterFillImage=window.meterFill.GetComponent<Image>();
+            window.meterMark=Panel(gauge,"Needs",Ink,null);window.meter.gameObject.SetActive(false);
             window.viewport=Panel(root,"Thread",Color.clear,null);Place(window.viewport,.04f,ThreadAlone,.96f,ThreadTop);
             window.viewport.gameObject.AddComponent<RectMask2D>();
             window.content=Panel(window.viewport,"Bubbles",Color.clear,null);Place(window.content,0,0,1,1);
@@ -118,9 +138,14 @@ namespace Festival.Presentation
         public static bool TakesReplies(RoundState s,PlayerState p){var chat=LiveChat(s,p);return chat!=null&&(chat.Kind!="ConfirmChat"||chat.Chat.Questions.Length>0);}
         /// <summary>Who you're talking to: "FESTIVALGOER  •  WOOK" by their persona (DialogueGrammar.PersonaFor), "VIP GUARD" for
         /// Palm Mirage's guard, and "VIP GUARD  •  TALKING YOUR WAY IN" for the rope chat, which checks nothing (POLO-4). DIALOG-3: a
-        /// talk says what it is for instead, and never names their persona, which is theirs to give away in how they talk.</summary>
-        public static string HeaderFor(RoundState s,InteractionState chat)
+        /// talk says what it is for instead, and never names their persona, which is theirs to give away in how they talk. A sale
+        /// names its ask at its price in the viewer's money and the score it needs for that price, "SELL  •  GREEDY $20  •  NEEDS 88%";
+        /// with no viewer it says only what it is for.</summary>
+        public static string HeaderFor(RoundState s,InteractionState chat,PlayerState viewer=null)
         {
+            if(chat.Kind=="Sale"&&viewer!=null)
+                return ("SELL  •  "+FestivalHudText.AskNames[chat.Ask]+" "+FestivalHudText.Money(s,viewer,FestivalSimulation.SalePrice(s,viewer,s.Npcs.Find(n=>n.Id==chat.TargetId),chat.Ask))
+                    +"  •  NEEDS "+Math.Round(FestivalSimulation.SaleNeeds(chat.Ask)*100,MidpointRounding.AwayFromZero)+"%").ToUpperInvariant();
             switch(chat.Kind){case "Conversation":return TalkHeader;case "Sale":return SellHeader;case "Buy":return BuyHeader;case "Police":return SecurityHeader;}
             string who=Speaker(s,chat);return who!="VIP GUARD"?"FESTIVALGOER  •  "+who:chat.Chat.Questions.Length==0?who+"  •  TALKING YOUR WAY IN":who;
         }
@@ -145,6 +170,17 @@ namespace Festival.Presentation
         /// <summary>What bubble i shows now: their "…", their line typing (its rest hidden), or the whole line.</summary>
         public string Shown(int i)=>thread[i].Line.text;
         public int Replies=>offered;
+        /// <summary>Whether the talk meter shows (a talk, never a chat check or the camp seller's talk).</summary>
+        public bool MeterShown=>meter.gameObject.activeSelf;
+        /// <summary>How the talk is going, 0-1: the score it lands on if every turn not yet answered goes so-so. It starts at .5, a
+        /// smooth reply lifts it and an awkward one or a silence drops it, so after the last reply it is the talk's own Score. It reads
+        /// only replies already given, never the grades of those not picked, which the talker's own view also carries.</summary>
+        public float Going=>GoingThrough(graded.Length);
+        public string GoingWord=>meterWord.text;
+        public Color GoingColor=>meterFillImage.color;
+        /// <summary>Where the meter marks the score the talk needs (NeedFor), 0-1; -1 with no mark.</summary>
+        public float Need=>meterMark.gameObject.activeSelf?meterMark.anchorMin.x:-1;
+        public Color BubbleColor(int i)=>thread[i].BackImage.color;
         public string ReplyKey(int i)=>replyKeys[i].text;
         public void SetReplyKeys(string first,string second,string third){replyKeys[0].text=first;replyKeys[1].text=second;replyKeys[2].text=third;}
         public string ReplyLabel(int i)=>replyTexts[i].text;
@@ -159,6 +195,7 @@ namespace Festival.Presentation
             clock=now;gameObject.SetActive(true);this.header.text=header;group.alpha=1;
             if(threadId==this.threadId)return;
             this.threadId=threadId;this.mark=mark;lingers=true;over=false;turnsShown=turnsSaid=0;hunch="";outcomeDelivery="";track.gameObject.SetActive(false);slur.gameObject.SetActive(false);
+            meter.gameObject.SetActive(false);for(int t=0;t<graded.Length;t++)graded[t]=-1;
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();
             Offer(null,null);dirty=true;
         }
@@ -182,7 +219,7 @@ namespace Festival.Presentation
                 replies[i].gameObject.SetActive(i<offered);replies[i].interactable=true;
                 replyTexts[i].text=i<offered?lines[i]:"";replyTexts[i].color=Ink;replyKeys[i].color=Ink;
             }
-            Place(viewport,.04f,offered>0?ThreadOverReplies:ThreadAlone,.96f,ThreadTop);dirty=true;
+            Place(viewport,.04f,offered>0?ThreadOverReplies:ThreadAlone,.96f,MeterShown?ThreadUnderMeter:ThreadTop);dirty=true;
         }
         /// <summary>Picks reply `index` (a 1-3 key or a click). It dims and can't be picked again. False, doing nothing, for a reply
         /// that isn't offered or was already picked.</summary>
@@ -232,8 +269,9 @@ namespace Festival.Presentation
             Dismiss();threadId=target=followedRound=outcomeDelivery=dismissedRound=dismissedId="";followedStart=dismissedStart=-1;over=false;
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();Offer(null,null);
         }
-        /// <summary>Owner-only final delivery, independent of the removed active interaction. No extra reply turn is invented.</summary>
-        public bool FollowOutcome(ConversationOutcome outcome,float now,bool reducedMotion,bool leave)
+        /// <summary>Owner-only final delivery, independent of the removed active interaction. No extra reply turn is invented.
+        /// notice, when given, is the outcome's Notice as the viewer reads it (FestivalHudText.MoneyText).</summary>
+        public bool FollowOutcome(ConversationOutcome outcome,float now,bool reducedMotion,bool leave,string notice=null)
         {
             if(outcome==null)return false;
             if(outcomeDelivery!=outcome.DeliveryId)
@@ -245,8 +283,12 @@ namespace Festival.Presentation
                 }
                 if(!lingers)return false;
                 outcomeDelivery=outcome.DeliveryId;target=outcome.TargetId??"";clock=now;hunch="";
-                if(outcome.Reaction!="")TheySay(outcome.Reaction,true);
-                if(outcome.Notice!="")Note(outcome.Notice);
+                // The talk is settled, so a turn shown and never answered was a silence, and the closing reaction takes the
+                // colour the talk landed on.
+                for(int t=0;t<turnsShown&&t<graded.Length;t++)if(graded[t]<0)graded[t]=ConversationLines.Silence;
+                if(MeterShown)Meter();
+                if(outcome.Reaction!=""){TheySay(outcome.Reaction,true);Tint(graded.Length);}
+                notice??=outcome.Notice;if(notice!="")Note(notice);
                 if(outcome.Hunch!="")Note(outcome.Hunch);
                 Offer(null,null);
             }
@@ -279,7 +321,7 @@ namespace Festival.Presentation
             {
                 var chat=live.Chat;followedRound=s.RoundId;followedStart=live.StartSeconds;threadId="";target=live.TargetId;
                 // A talk's mark is who they are, F for a festivalgoer or S for security, never their persona.
-                Begin(live.Id,HeaderFor(s,live),talk?(live.Kind=="Police"?"S":"F"):Speaker(s,live).Substring(0,1),now);
+                Begin(live.Id,HeaderFor(s,live,p),talk?(live.Kind=="Police"?"S":"F"):Speaker(s,live).Substring(0,1),now);
                 if(!talk)
                 {
                     TheySay(chat.Opener,false);
@@ -299,21 +341,39 @@ namespace Festival.Presentation
         // (a turn that ran out says nothing), then their reaction and their line, whole at once (the time to answer already runs on
         // the host), and the turn's three replies. Picking one dims all three (one reply a turn), says it, and Sends it as that
         // turn's Reply. The hunch the talk will end on is kept for Linger: the view stops carrying the talk as it ends.
+        // The meter shows from the first turn, with the mark for the score the talk needs; it counts each reply the host
+        // recorded, a turn gone by unanswered as a silence, and a reply picked here at once. Each reaction takes the meter's colour
+        // as it stood after the reply it answers.
         void FollowTalk(InteractionState talk)
         {
+            if(!MeterShown){meter.gameObject.SetActive(true);Mark(NeedFor(talk));Place(viewport,.04f,offered>0?ThreadOverReplies:ThreadAlone,.96f,ThreadUnderMeter);dirty=true;}
+            for(int t=0;t<talk.Turns.Count&&t<graded.Length;t++){var heard=talk.Turns[t];if(heard.Pick>=0)graded[t]=heard.Grades[heard.Pick];else if(t<talk.Turns.Count-1)graded[t]=ConversationLines.Silence;}
+            Meter();
             for(;turnsShown<talk.Turns.Count;turnsShown++)
             {
                 if(turnsSaid<turnsShown){var heard=talk.Turns[turnsShown-1];if(heard.Pick>=0)YouSay(heard.Replies[heard.Pick]);turnsSaid=turnsShown;}
                 var turn=talk.Turns[turnsShown];int at=turnsShown;
-                if(turn.Reaction!="")TheySay(turn.Reaction,false);
+                if(turn.Reaction!=""){TheySay(turn.Reaction,false);Tint(at);}
                 TheySay(turn.Line,false);
-                Offer(turn.Replies,i=>{for(int r=0;r<offered;r++)Dim(r);YouSay(turn.Replies[i]);turnsSaid=at+1;Send?.Invoke(new GameCommand{Kind="Reply",Amount=i,Direction=at});});
+                Offer(turn.Replies,i=>{for(int r=0;r<offered;r++)Dim(r);YouSay(turn.Replies[i]);turnsSaid=at+1;if(at<graded.Length){graded[at]=turn.Grades[i];Meter();}Send?.Invoke(new GameCommand{Kind="Reply",Amount=i,Direction=at});});
             }
             hunch=talk.Hunch;
             bool garbled=talk.Turns.Count>0&&Array.Exists(talk.Turns[talk.Turns.Count-1].Garbled,g=>g);
             slur.text="TRIPPING • SOME REPLIES SLUR";slur.gameObject.SetActive(garbled);
         }
 
+        // How the talk is going once the first `heard` turns are counted: each later turn, and each with nothing heard yet, as so-so.
+        float GoingThrough(int heard)
+        {
+            float sum=0;
+            for(int t=0;t<graded.Length;t++){int g=t<heard?graded[t]:-1;sum+=g<0||g==ConversationLines.SoSo?.5f:g==ConversationLines.Smooth?1:0;}
+            return sum/graded.Length;
+        }
+        void Meter(){float going=Going;meterFill.anchorMax=new Vector2(going,1);meterFillImage.color=Colour(going);meterWord.text=Word(going);}
+        // A thin ink line across the track at `need`, or none.
+        void Mark(float need){meterMark.gameObject.SetActive(need>=0);if(need>=0)Pixels(meterMark,new Vector2(need,-.6f),new Vector2(need,1.6f),new Vector2(-1.5f,0),new Vector2(1.5f,0));}
+        // The newest bubble, their reaction, in the meter's colour once the first `heard` turns are counted.
+        void Tint(int heard){if(MeterShown)thread[thread.Count-1].BackImage.color=ReactionColour(GoingThrough(heard));}
         // Whether p is within LeaveReach of the followed chat's festivalgoer.
         bool Beside(RoundState s,PlayerState p){foreach(var n in s.Npcs)if(n.Id==target){float x=n.X-p.X,z=n.Z-p.Z;return x*x+z*z<=LeaveReach*LeaveReach;}return false;}
         // When their typed line b shows whole: after the "…", typed out at LettersPerSecond, or at once with reduced motion.

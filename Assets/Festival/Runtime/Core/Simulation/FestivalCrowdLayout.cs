@@ -21,7 +21,7 @@ namespace Festival.Core
             new Start(-15.1f,12.6f,100,"Watching"),new Start(-11.0f,10.2f,-70,"Watching"),
             new Start(15.1f,12.9f,-95,"Watching"),new Start(10.9f,10.7f,70,"Watching"),
             new Start(-24.1f,13.1f,55,"Watching"),new Start(-26.0f,9.5f,-30,"Idle"),
-            new Start(22.1f,15.0f,-42,"Watching"),new Start(25.0f,11.2f,28,"Idle"),
+            new Start(22.1f,15.0f,-42,"Watching"),new Start(22.4f,12.2f,20,"Idle"),
             new Start(-18.8f,-15.2f,180,"Idle"),new Start(-10.8f,-12.5f,90,"Watching"),
             new Start(8.5f,-11.5f,-65,"Idle"),new Start(17.5f,-7.7f,45,"Watching"),
             new Start(-6.2f,-5.8f,95,"Idle"),new Start(6.5f,4.5f,-80,"Idle")

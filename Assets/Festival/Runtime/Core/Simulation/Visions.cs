@@ -131,7 +131,7 @@ namespace Festival.Core
         }
         int SalePayout(NpcState buyer,int pay)=>(int)Math.Round(pay*PayoutMultiplier(State)*(buyer!=null&&State.Visions.Exists(v=>v.Kind=="DoubleBuyer"&&v.NpcId==buyer.Id)?2:1),MidpointRounding.AwayFromZero);
         // Whoever reaches a secret stash first banks it for the crew, and the tripper sees it confirmed.
-        void FindStashes(){foreach(var v in State.Visions)if(v.Kind=="Stash"&&!v.Confirmed){var finder=State.Players.Find(p=>p.Connected&&p.Life=="Alive"&&Near(p,v.X,v.Z));if(finder!=null){v.Confirmed=true;State.StashCash+=SecretStashCash;State.VisionStashFinderId=finder.Id;}}}
+        void FindStashes(){foreach(var v in State.Visions)if(v.Kind=="Stash"&&!v.Confirmed){var finder=State.Players.Find(p=>p.Connected&&p.Life=="Alive"&&Near(p,v.X,v.Z));if(finder!=null){v.Confirmed=true;State.StashCash+=SecretStashCash;State.VisionStashFinderId=finder.Id;CrewNews(finder,"Stash",MoneyNotice("STASH",SecretStashCash)+"  •  "+finder.Name+" found a hidden stash");}}}
         // VISION-3: a found clue goes once it has said TRUE for its few seconds (FollowTrail).
         void DropFoundClues()=>State.Visions.RemoveAll(v=>v.ShowUntil>0&&State.SimulationSeconds>=v.ShowUntil);
 

@@ -24,6 +24,7 @@ public static class DeathCashTests
         CashPilesRejectInvalidAmountsWithoutSpendingThePile();
         RefundsAndReturnedGearSettleBeforeDeath();
         ZeroCashAndRealRevivalLimits();
+        TheDownedCardCountsDownAndAloneNamesTheTent();
     }
     static void EveryDeathEmitsItsFrozenPublicRecord()
     {
@@ -267,6 +268,24 @@ public static class DeathCashTests
         foreach(var id in new[]{"confetti","map","merch_bag"})friend.Inventory.Add(new ItemStack{ItemId=id,Count=1});
         Die(recipient,owner);
         Check(owner.GearLossSequence==0&&recipient.State.Drops.Exists(d=>d.ItemId=="poi_practice"),"an incoming offer returned to a full sender never claims the recipient lost gear");
+    }
+    // Alone, nobody can help a downed player up, so the hint says the time runs out into a spirit who comes back at the medical tent.
+    static void TheDownedCardCountsDownAndAloneNamesTheTent()
+    {
+        var s=Crew(4);var owner=s.Player("owner");var friend=s.Player("friend");
+        owner.Life="Downed";owner.DownedRemaining=27.2;
+        Check(FestivalGuidance.Headline(s.State,owner)=="DOWNED • 28 s","the card counts the downed seconds up: \""+FestivalGuidance.Headline(s.State,owner)+"\"");
+        Check(FestivalGuidance.Hint(s.State,owner)=="Press E to distract attackers; a teammate can rescue or drag you.","with a friend the hint is as before");
+        s.Disconnect(friend.Id);
+        Check(FestivalGuidance.Hint(s.State,owner)=="Nobody can help you up alone. When the time runs out, you become a spirit and can come back at the medical tent.","alone, the hint names the way back: \""+FestivalGuidance.Hint(s.State,owner)+"\"");
+        s.Tick(.1);Check(FestivalGuidance.Headline(s.State,owner)=="DOWNED • 28 s","a tenth of a second on, still 28 s");
+        owner.DownedRemaining=.05;s.Tick(.1);
+        Check(owner.Life=="Spirit"&&s.State.Phase=="Playing","setup: alone, the time runs out into a spirit and the level goes on");
+        Check(FestivalGuidance.Headline(s.State,owner)=="SPIRIT • REACH THE MEDICAL TENT"&&FestivalGuidance.RevivalsLeft(owner)==2,"a first death leaves both revivals");
+        owner.RevivalCount=1;Check(FestivalGuidance.RevivalsLeft(owner)==1,"one used, one left");
+        owner.RevivalCount=2;
+        Check(FestivalGuidance.RevivalsLeft(owner)==0&&FestivalGuidance.Headline(s.State,owner)=="SPIRIT • NO REVIVALS LEFT","both used: \""+FestivalGuidance.Headline(s.State,owner)+"\"");
+        Check(FestivalGuidance.Hint(s.State,owner)=="No revivals left this level: you stay a spirit until it ends.","and nobody is sent to the tent for nothing");
     }
     static void ZeroCashAndRealRevivalLimits()
     {

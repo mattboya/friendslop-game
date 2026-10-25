@@ -52,7 +52,7 @@ namespace Festival.Tests
                 sim.State.Drops.Add(new DropState{Id="theme_drop",ItemId="stock_lsd",Count=1,X=player.X,Z=player.Z});
                 sim.State.Npcs.Add(new NpcState{Id="theme_goer",Kind="Wook",X=player.X,Z=player.Z+1,Yaw=180,CanTalk=true});
                 yield return new WaitForSeconds(.8f);
-                Check(hud,failures,"festival","Pick up Tongue Stamps","TONGUE STAMPS","Pick up Tongue Stamps","Offer Tongue Stamps  •  F CHAT");
+                Check(hud,failures,"festival","Pick up Tongue Stamps","TONGUE STAMPS","Pick up Tongue Stamps",FestivalHudText.OfferAction(sim.State,player,sim.State.Npcs.Find(n=>n.Id=="theme_goer"),"stock_lsd",FestivalSimulation.FairAsk)+"  •  F CHAT");
 
                 // Then a shared stash holding Fun Guys, and the friend beside you offering Fun Guys again.
                 sim.State.Stashes.Add(new StashState{Id="theme_stash",X=player.X,Z=player.Z,Items=new List<ItemStack>{new ItemStack{ItemId="stock_mushrooms",Count=1}}});

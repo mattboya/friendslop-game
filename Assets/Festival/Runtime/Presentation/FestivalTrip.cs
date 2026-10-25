@@ -15,7 +15,7 @@ namespace Festival.Presentation
     /// reach the screen through the single writers: FestivalHud.ApplyEffects adds Fov to the view's field of view,
     /// FestivalSession.UpdateCamera tilts the view by Roll and trails the mouse by Lag (Follow), and FestivalNightLighting adds
     /// Saturation and Brightness to the colour grade. This component draws the rest: its own overlay canvas under the HUD (tint,
-    /// haze, vignette, letterbox, and TRIP-16's sleepy eyes that now and then blink), pooled colour trails and glows around other
+    /// haze, vignette, and sleepy eyes that now and then blink, black above and below), pooled colour trails and glows around other
     /// people, TRIP-11's pattern on the scenery (FestivalTripSurfaces) in the view's camera alone, and a low-pass on the view's listener.
     /// GAS-1: a Giggle Balloon's gas at camp (Gas) goes the same way, and adds a tremolo and (GAS-5) a reverb: FestivalTrip is the
     /// one writer of AudioListener.volume and of the listener's filters.</summary>
@@ -27,8 +27,8 @@ namespace Festival.Presentation
             // Over the whole view, alpha included, and a milky veil's alpha.
             public Color Tint;
             public float Haze;
-            // How dark the edges close in (0-1), and each letterbox bar's share of the screen's height.
-            public float Vignette,Letterbox;
+            // How dark the edges close in (0-1).
+            public float Vignette;
             // Degrees added to the field of view and to the view's roll right now, and the seconds the camera trails the mouse by.
             public float Fov,Roll,Lag;
             // Added to the colour grade's saturation and post exposure.
@@ -73,11 +73,11 @@ namespace Festival.Presentation
                 case "ecstasy": // Rolly Pollies: warm, bright, saturated colours, and a soft glow around other people.
                     look.Tint=new Color(1,.6f,.35f,.05f*s);look.Saturation=30*s;look.Brightness=.15f*s;look.Glow=s;break;
                 case "ketamine": // Pony Dust: tunnel vision through sleepy eyes, a camera that lags behind the mouse, and muffled sound.
-                    look.Tint=new Color(.55f,.65f,.8f,.03f*s);look.Vignette=.75f*s;look.Eye=EyeRest(dose);look.Lag=.25f*s*motion;look.Muffle=s;
+                    look.Tint=new Color(.55f,.65f,.8f,.03f*s);look.Vignette=.5f*s;look.Eye=EyeRest(substance,dose);look.Lag=.25f*s*motion;look.Muffle=s;
                     // TRIP-16: a slow sway, by the dose. TRIP-17: while the walk stalls, a faster wobble, alike at every dose.
                     look.Roll=(PonySway(time)*s+StallWobble(time)*stall)*motion;break;
                 case "weed": // Couch Lock: a soft haze with a green cast, through sleepy eyes.
-                    look.Tint=new Color(.35f,.8f,.35f,.05f*s);look.Haze=.12f*s;look.Eye=EyeRest(dose);break;
+                    look.Tint=new Color(.35f,.8f,.35f,.05f*s);look.Haze=.12f*s;look.Eye=EyeRest(substance,dose);break;
             }
             return look;
         }
@@ -129,7 +129,13 @@ namespace Festival.Presentation
         // A hit's value times strength up to 1, then on to strong at 2.
         private static float Stacked(float strength,float hit,float strong)=>strength<=1?hit*strength:Mathf.Lerp(hit,strong,strength-1);
 
-        /// <summary>The local player's trip in state, never for a spirit. A dose shows only while the festival is shown (Playing or
+        /// <summary>What a spirit sees instead of any trip: the world drained of colour under a cool cast, with soft dark edges. It
+        /// holds still and is no dose (no surface pattern, eyes, trails, glow, tilt, lag or muffle). At night its cast stays at NightTint.</summary>
+        public static Perception Spirit(bool night)=>new Perception{Tint=new Color(.55f,.72f,1,night?Mathf.Min(SpiritTint,NightTint):SpiritTint),Vignette=SpiritVignette,Saturation=-SpiritDrain};
+        // Starting points for the playtest. URP's grade saturation runs -100 to 100.
+        private const float SpiritTint=.08f,SpiritVignette=.3f,SpiritDrain=60;
+
+        /// <summary>The local player's trip in state; a spirit sees only the Spirit look. A dose shows only while the festival is shown (Playing or
         /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
         /// Giggle Gas shows by the summed strength of the player's hits (GAS-4: up to two); it lives only at camp (the host clears it
         /// as the crew leaves), so never with a dose. It pulses on beat, the camp music's phase (FestivalCampAudio.Beat); with no music
@@ -141,7 +147,7 @@ namespace Festival.Presentation
             foreach(var p in state.Players)
             {
                 if(p.Id!=localPlayerId)continue;
-                if(p.Life=="Spirit")return default;
+                if(p.Life=="Spirit")return Spirit(FestivalNightLighting.IsNight(state));
                 foreach(var e in p.Effects)
                 {
                     if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(p,state.SimulationSeconds),reducedMotion,beat??Mathf.Repeat(time*2,1));
@@ -155,22 +161,32 @@ namespace Festival.Presentation
             return default;
         }
 
-        // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes. EyeSoft is the lids' soft edge, as a share of the opening.
-        private const float EyeSoft=.35f,BlinkClose=.4f,BlinkShut=.1f;
+        // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes. EyeSoft is the lids' soft edge, as a share of the opening;
+        // Couch Lock's lighter lids have a narrower one, so more of its view is clear.
+        private const float EyeSoft=.35f,CouchEyeSoft=.15f,BlinkClose=.4f,BlinkShut=.1f;
         /// <summary>A blink, close to reopen: .4 s easing shut, .1 s shut and .5 s easing open.</summary>
         public const float BlinkSeconds=1;
 
         /// <summary>TRIP-16: how dark the view is at (x, y), each -1 to 1 from the screen's centre to its edges, looking out through
         /// lids open to aperture (1 wide, 0 shut): each lid curves from a tapered corner at the screen's side to aperture's height at
-        /// its middle, with a soft edge. Past the lids (|y| over aperture) it is shut, so plain bars can fill above and below.</summary>
-        public static float EyeShade(float x,float y,float aperture)
+        /// its middle, with a soft edge soft (a share of the opening, EyeSoftness). Past the lids (|y| over aperture) it is shut, so
+        /// plain bars can fill above and below. The outline is 1 - |x|³, so the middle stays open further out.</summary>
+        public static float EyeShade(float x,float y,float aperture,float soft=EyeSoft)
         {
             if(aperture<=0||Mathf.Abs(y)>=aperture)return 1;
-            return Mathf.SmoothStep(0,1,(Mathf.Abs(y)/aperture-(1-x*x)+EyeSoft)/EyeSoft);
+            float side=Mathf.Abs(x);
+            return Mathf.SmoothStep(0,1,(Mathf.Abs(y)/aperture-(1-side*side*side)+soft)/soft);
         }
+        /// <summary>The soft edge of a substance's lids (EyeShade): Couch Lock's is narrower than Pony Dust's.</summary>
+        public static float EyeSoftness(string substance)=>substance=="weed"?CouchEyeSoft:EyeSoft;
 
-        /// <summary>TRIP-16: how far a dose's eyes rest closed (0 open), more with each dose; 1 minus it is the resting aperture.</summary>
-        public static float EyeRest(int dose){float s=(float)EffectPresentation.Strength(dose);return s<=0?0:.1f+.3f*s;}
+        /// <summary>TRIP-16: how far a dose of substance rests the eyes closed (0 open), more with each dose; 1 minus it is the resting
+        /// aperture. Pony Dust's lids rest lower than Couch Lock's, which has no tunnel; every other substance keeps the eyes open.</summary>
+        public static float EyeRest(string substance,int dose)
+        {
+            float s=(float)EffectPresentation.Strength(dose);
+            return s<=0?0:substance=="ketamine"?.08f+.2f*s:substance=="weed"?.05f+.15f*s:0;
+        }
 
         /// <summary>TRIP-16: how shut a blink is t seconds in (1 shut), easing at both ends of each move; 0 outside it.</summary>
         public static float Blink(float t)
@@ -271,7 +287,7 @@ namespace Festival.Presentation
         private GameObject overlay;
         private Image tint,haze,top,bottom;
         private RawImage vignette,eye;
-        private Texture2D vignetteTexture,blobTexture,eyeTexture;
+        private Texture2D vignetteTexture,blobTexture,eyeTexture,couchEyeTexture;
         // TRIP-16: this screen's blinks, for the substance they began on (a new one starts afresh), and the HUD's chat card, if any.
         private Blinker blinker;
         private string blinkingOn="";
@@ -287,7 +303,7 @@ namespace Festival.Presentation
         private readonly Dictionary<string,Vector3> lastDrop=new Dictionary<string,Vector3>();
         private int nextTrail;
         private float sinceDrop;
-        private ProfileData audio;
+        private ProfileData soundSettings;
         private bool focused=true;
         private Perception listening;
 
@@ -319,7 +335,7 @@ namespace Festival.Presentation
 
         private void Show(Perception look,RoundState state,string localPlayerId,Transform view,Func<string,Transform> actorFor,bool reducedMotion,float deltaTime)
         {
-            bool shown=look.Tint.a>0||look.Haze>0||look.Vignette>0||look.Letterbox>0||look.Eye>0;
+            bool shown=look.Tint.a>0||look.Haze>0||look.Vignette>0||look.Eye>0;
             if(overlay.activeSelf!=shown)overlay.SetActive(shown);
             tint.color=look.Tint;haze.color=new Color(HazeColor.r,HazeColor.g,HazeColor.b,look.Haze);vignette.color=new Color(0,0,0,look.Vignette);
             Lids(look,state,localPlayerId,reducedMotion,deltaTime);
@@ -330,7 +346,7 @@ namespace Festival.Presentation
         }
 
         // TRIP-16: the eye's opening across the middle of the screen, as tall as the lids are open (Aperture), with the black bars flush
-        // above and below it. With no eye, the blink goes, so a shut eye never outlives its dose, and the bars are the letterbox.
+        // above and below it. With no eye, the blink goes, so a shut eye never outlives its dose, and the bars fold away.
         private void Lids(Perception look,RoundState state,string localPlayerId,bool reducedMotion,float deltaTime)
         {
             float rest=look.Eye,closure=0,aperture=1;bool drawn=rest>0,held=false;
@@ -338,7 +354,7 @@ namespace Festival.Presentation
             if(!drawn)
             {
                 blinker=null;blinkingOn="";
-                top.rectTransform.anchorMin=new Vector2(0,1-look.Letterbox);bottom.rectTransform.anchorMax=new Vector2(1,look.Letterbox);
+                top.rectTransform.anchorMin=new Vector2(0,1);bottom.rectTransform.anchorMax=new Vector2(1,0);
             }
             else
             {
@@ -347,6 +363,7 @@ namespace Festival.Presentation
                 {
                     blinker=BlinkWaits!=null?new Blinker(BlinkWaits):Blinker.Seeded(Environment.TickCount^localPlayerId.GetHashCode());blinkingOn=substance;
                     if(chat==null)chat=GetComponentInChildren<FestivalChatWindow>(true);
+                    eye.texture=substance=="weed"?couchEyeTexture:eyeTexture;
                 }
                 held=Held(state,player);closure=blinker.Advance(deltaTime,held);aperture=Aperture(rest,closure,reducedMotion);
                 float half=aperture/2;
@@ -384,8 +401,8 @@ namespace Festival.Presentation
         private void Listen(Transform view,Perception look)
         {
             if(session==null)TryGetComponent(out session);
-            if(session?.Profile!=null)audio=session.Profile.Data;
-            var settings=audio;
+            if(session?.Profile!=null)soundSettings=session.Profile.Data;
+            var settings=soundSettings;
             if(session!=null)FestivalSettings.ConfigureVoice(session.Voice,settings);
             listening=look;
             // ponytail: a frame-rate tremolo on the global listener volume; an OnAudioFilterRead tremolo if it ever sounds stepped.
@@ -471,9 +488,10 @@ namespace Festival.Presentation
             vignette=Layer<RawImage>("Trip vignette",Vector2.zero,Vector2.one);vignette.texture=vignetteTexture;
             haze=Layer<Image>("Trip haze",Vector2.zero,Vector2.one);
             tint=Layer<Image>("Trip tint",Vector2.zero,Vector2.one);
-            // TRIP-16: one almond at its widest, scaled to each frame's opening, which draws exactly EyeShade's lids at that aperture.
-            // Over the tint and haze, so the lids are the same black as the bars they meet.
+            // TRIP-16: one almond at its widest, scaled to each frame's opening, which draws exactly EyeShade's lids at that aperture,
+            // one for each soft edge. Over the tint and haze, so the lids are the same black as the bars they meet.
             eyeTexture=Mask(128,64,(x,y)=>EyeShade(x,y,1),"Festival trip eye");
+            couchEyeTexture=Mask(128,64,(x,y)=>EyeShade(x,y,1,CouchEyeSoft),"Festival trip couch eye");
             eye=Layer<RawImage>("Trip eye",new Vector2(0,.5f),new Vector2(1,.5f));eye.texture=eyeTexture;eye.enabled=false;
             top=Layer<Image>("Trip letterbox top",new Vector2(0,1),Vector2.one);
             bottom=Layer<Image>("Trip letterbox bottom",Vector2.zero,new Vector2(1,0));
@@ -508,7 +526,7 @@ namespace Festival.Presentation
             if(lowPass!=null)Dispose(lowPass);
             if(reverb!=null)Dispose(reverb);
             surfaces?.Dispose();
-            foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,eyeTexture,sprites})if(thing!=null)Dispose(thing);
+            foreach(var thing in new Object[]{blob,blobTexture,vignetteTexture,eyeTexture,couchEyeTexture,sprites})if(thing!=null)Dispose(thing);
         }
         private static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
     }

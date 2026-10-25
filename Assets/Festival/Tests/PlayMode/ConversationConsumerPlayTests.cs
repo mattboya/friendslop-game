@@ -36,7 +36,7 @@ namespace Festival.Tests
                 host.MenuOpen=client.MenuOpen=false;client.Command("StartBuy",target:id,item:FestivalSimulation.SellerStock(id));deadline=Time.realtimeSinceStartup+10;
                 while(owner.InteractionId==""&&Time.realtimeSinceStartup<deadline)yield return null;
                 var talk=game.Interaction(owner.InteractionId);Assert.That(talk,Is.Not.Null,client.Message);
-                for(int turn=0;turn<3;turn++)
+                for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
                 {
                     InteractionState visible=null;
                     while(Time.realtimeSinceStartup<deadline)
@@ -51,7 +51,7 @@ namespace Festival.Tests
                 Assert.That(owner.Life,Is.EqualTo("Detained"));game.State.Interactions.Clear();
                 while((client.PendingConversationOutcome==null||client.Profile.Data.SeenDialogue.Count==0)&&Time.realtimeSinceStartup<deadline)yield return null;
                 var outcome=client.PendingConversationOutcome;Assert.That(outcome,Is.Not.Null,"the skipped terminal interaction still reaches its owner's real session consumer");
-                Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));Assert.That(client.LocalPlayer.X,Is.EqualTo(27));Assert.That(client.LocalPlayer.Z,Is.EqualTo(5));
+                Assert.That(outcome.Notice,Is.EqualTo("Busted! That was an undercover narc."));Assert.That(Festivals.InHolding(client.LocalPlayer.X,client.LocalPlayer.Z),Is.True,"the joined owner sees themself held inside the security building, at "+client.LocalPlayer.X+", "+client.LocalPlayer.Z);
                 Assert.That(new LocalProfile(clientProfile).Data.SeenDialogue,Is.Not.Empty,"joined owner's reliable history reaches the isolated real profile");
                 Assert.That(host.Profile.Data.SeenDialogue,Is.Empty,"host player receives no remote-owner grammar payload");
                 Assert.That(JsonUtility.ToJson(host.State),Does.Not.Contain(outcome.Notice));
@@ -97,7 +97,7 @@ namespace Festival.Tests
                 ((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);
                 var window=FestivalChatWindow.Build(canvas.transform,Resources.Load<Font>("FestivalDisplay"),null);
                 window.Send=command=>session.Command(command.Kind,target:command.TargetId,item:command.ItemId,amount:command.Amount,direction:command.Direction);
-                for(int turn=0;turn<3;turn++)
+                for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
                 {
                     InteractionState visible=null;
                     for(float deadline=Time.realtimeSinceStartup+5;Time.realtimeSinceStartup<deadline;)
@@ -107,7 +107,7 @@ namespace Festival.Tests
                         yield return null;
                     }
                     Assert.That(visible,Is.Not.Null);Assert.That(visible.Turns.Count,Is.EqualTo(turn+1));
-                    if(turn==2)Assert.That(visible.Hunch,Is.EqualTo(hunch));
+                    if(turn==FestivalSimulation.ConversationTurns-1)Assert.That(visible.Hunch,Is.EqualTo(hunch));
                     Assert.That(window.Follow(session.State,session.LocalPlayer,session.State.SimulationSeconds,turn,false),Is.True);
                     Assert.That(window.Pick(Array.IndexOf(visible.Turns[turn].Grades,ConversationLines.Smooth)),Is.True);
                 }
@@ -148,7 +148,7 @@ namespace Festival.Tests
                 ((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);
                 var window=FestivalChatWindow.Build(canvas.transform,Resources.Load<Font>("FestivalDisplay"),null);
                 window.Send=command=>session.Command(command.Kind,target:command.TargetId,item:command.ItemId,amount:command.Amount,direction:command.Direction);
-                for(int turn=0;turn<3;turn++)
+                for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
                 {
                     InteractionState visible=null;
                     for(float deadline=Time.realtimeSinceStartup+5;Time.realtimeSinceStartup<deadline;)

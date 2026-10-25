@@ -62,7 +62,8 @@ namespace Festival.Presentation
         }
 
         /// <summary>Two recorded decks follow an advancing caller-owned clock. The main stage uses shared world time; a booth
-        /// can use its own advancing time without advancing the held world. Owns scheduling and seeks, never gain or beat tables.</summary>
+        /// can use its own advancing time without advancing the held world; the camp plays on the audio clock alone (Play, Turn).
+        /// Owns scheduling and seeks, never gain or beat tables.</summary>
         public sealed class Transport
         {
             const double Lead=.2,CheckSeconds=.5,MaterialDriftSeconds=.06;
@@ -89,6 +90,18 @@ namespace Festival.Presentation
                 foreach(var deck in decks)if(deck!=null){deck.Stop();deck.clip=null;}
                 track=null;epoch="";handoff=false;
             }
+            /// <summary>Plays a track on the audio clock alone, with no world clock behind it: its first pass from file sample
+            /// `from` (0 keeps the introduction) to the loop's end, then the two decks take turns on the loop (Turn, each frame). A
+            /// null track stops. The camp DJ plays this way.</summary>
+            public void Play(Track next,int from,double dspSeconds)
+            {
+                Stop();if(next==null)return;
+                track=next;held=false;foreach(var deck in decks){deck.clip=track.Audio;deck.loop=false;deck.pitch=1;}
+                live=0;startAt=dspSeconds+Lead;turnAt=startAt+(track.LoopEnd-from)/(double)Rate;
+                decks[0].timeSamples=from;decks[0].PlayScheduled(startAt);decks[0].SetScheduledEndTime(turnAt);Queue(decks[1]);
+            }
+            /// <summary>At the turn the other deck, already playing the loop from its first beat, is live, and this one waits for the next.</summary>
+            public void Turn(double dspSeconds){if(track!=null&&!held&&dspSeconds>=turnAt){live=1-live;turnAt+=track.LoopSeconds;Queue(decks[1-live]);}}
             /// <summary>Call once per frame. Epoch/hold changes cue immediately; steady playback checks material drift twice
             /// per second. The stream opens before the projected clock position is heard, rather than adding latency to it.</summary>
             public void Follow(Track next,string nextEpoch,double worldSeconds,bool hold,double dspSeconds)
@@ -107,7 +120,7 @@ namespace Festival.Presentation
                 if(handoff&&dspSeconds>=startAt){handoff=false;Queue(decks[1-live]);}
                 // A suspended app can miss both queued decks. Recover once, rather than enqueueing expired audio in a loop.
                 if(dspSeconds>=turnAt+track.LoopSeconds){Schedule(worldSeconds,dspSeconds,false);return;}
-                if(dspSeconds>=turnAt){live=1-live;turnAt+=track.LoopSeconds;Queue(decks[1-live]);}
+                Turn(dspSeconds);
                 if(dspSeconds<nextCheck||dspSeconds<startAt||handoff)return;
                 nextCheck=dspSeconds+CheckSeconds;
                 var source=Current(dspSeconds);double expected=RhythmChart.StageSampleAtWorld(track.Beats,worldSeconds);

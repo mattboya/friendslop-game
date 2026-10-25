@@ -49,7 +49,7 @@ namespace Festival.Presentation
         /// </summary>
         public static (string Title,string Text)[] HowToPlay(FestivalInput input,RoundState state=null,PlayerState viewer=null)
         {
-            string act=input.Label(input.Interact),chat=input.Label(input.Chat),drop=input.Label(input.Drop),reply=input.Label(input.Slot1)+"-"+input.Label(input.Slot3);
+            string act=input.Label(input.Interact),chat=input.Label(input.Chat),drop=input.Label(input.Drop),reply=SlotKeys(input.Label(input.Slot1),input.Label(input.Slot2),input.Label(input.Slot3)," or ");
             var keys=new List<string>();
             foreach(var action in input.Map.actions)keys.Add(input.Label(action)+"  "+KeyUse(action.name));
             return new[]

@@ -163,7 +163,7 @@ namespace Festival.Tests
         }
 
         // The lever drops as the reels start and springs back. The bulbs chase round the ring while the reels spin, light in order
-        // round it as each of the first two reels stops, and the whole ring blinks fast from the last stop until the take.
+        // round it as each of the first two reels stops, and the whole ring blinks from the last stop until the take.
         [Test] public void TheCabinetPullsItsLeverAndChasesItsBulbs()
         {
             var state=Spin(4242,4,2,3);var crew=FestivalSpinner.Crew(state);double start=Start(state);
@@ -193,19 +193,43 @@ namespace Festival.Tests
                     Assert.That(Lit(stop+.29),Is.GreaterThan(Ring/2),mode+"and runs on round the ring");
                 }
                 Assert.That(Lit(FestivalSpinner.ReelStops(1)-.3),Is.EqualTo(Ring/3),mode+"the chase picks up again between stops");
-                double last=FestivalSpinner.LastReelStops,take=FestivalSpinner.TakeStarts;int flashes=0;bool on=false,dark=false;
+                double last=FestivalSpinner.LastReelStops,take=FestivalSpinner.TakeStarts;bool dark=false;
                 for(double t=last+.0005;t<take;t+=.001)
                 {
                     int lit=Lit(t);Assert.That(lit==0||lit==Ring,mode+"the whole ring blinks together after the last stop, at "+t.ToString("F3")+" s");
-                    if(lit==Ring&&!on)flashes++;on=lit==Ring;dark|=lit==0;
+                    dark|=lit==0;
                 }
                 Assert.That(Lit(last+.01),Is.EqualTo(Ring),mode+"the ring lights as the last reel lands");
                 Assert.That(dark,mode+"and blinks until the take");
-                if(reduced)Assert.That(flashes/(take-last),Is.LessThan(3),"reduced motion blinks the ring under 3 times a second");
-                else Assert.That(flashes/(take-last),Is.GreaterThanOrEqualTo(6),"the ring blinks fast after the last stop");
             }
             int Steps(bool reduced){int steps=0;for(double t=.5;t<2;t+=.001)for(int b=0;b<Ring;b++)if(FestivalSpinner.BulbLit((float)t,b,reduced)!=FestivalSpinner.BulbLit((float)(t+.001),b,reduced)){steps++;break;}return steps;}
             Assert.That(Steps(true)*3,Is.InRange(Steps(false)-3,Steps(false)+3),"reduced motion chases at a third of the speed");
+        }
+
+        // The whole ring blinks under 3 times a second for every player, the photosensitivity line (WCAG 2.3.1), and
+        // slower still with reduced motion. Sampled every millisecond from a second before the last stop to a second after the
+        // take, no second holds 3 changes from a dark ring to a lit one.
+        [Test] public void TheRingBlinksUnderThreeTimesASecondForEveryPlayer()
+        {
+            const int Ring=FestivalSpinner.Bulbs;double last=FestivalSpinner.LastReelStops,take=FestivalSpinner.TakeStarts;
+            int Lit(double t,bool reduced){int lit=0;for(int b=0;b<Ring;b++)if(FestivalSpinner.BulbLit((float)t,b,reduced))lit++;return lit;}
+            double FirstDark(bool reduced){double t=last;while(Lit(t,reduced)!=0&&t<take)t+=.001;double from=t;while(Lit(t,reduced)==0&&t<take)t+=.001;return t-from;}
+            foreach(bool reduced in new[]{false,true})
+            {
+                string mode=reduced?"reduced motion: ":"";var rises=new List<double>();int before=Lit(last-1,reduced);
+                for(int ms=1;ms<=(take-last+2)*1000;ms++)
+                {
+                    double t=last-1+ms/1000.0;int lit=Lit(t,reduced);
+                    if(before==0&&lit==Ring)rises.Add(t);before=lit;
+                }
+                Assert.That(rises.Count,Is.GreaterThan(0),mode+"setup: the ring blinks after the last stop");
+                foreach(double from in rises)
+                {
+                    int inSecond=rises.Count(r=>r>=from&&r<from+1);
+                    Assert.That(inSecond,Is.LessThan(3),mode+"the ring lights again "+inSecond+" times in the second from "+from.ToString("F3")+" s");
+                }
+            }
+            Assert.That(FirstDark(true),Is.GreaterThan(FirstDark(false)),"reduced motion blinks slower: each dark beat lasts longer");
         }
 
         // The bulbs ring the reels on all four sides, in order round the ring (the chase runs round it, every third bulb lit,

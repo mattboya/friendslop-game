@@ -7,6 +7,9 @@ using System.Text.Json;
 public static class StageRhythmPlanningTests
 {
     static void Check(bool pass,string message){if(!pass)throw new Exception("StageRhythmPlanning: "+message);}
+    static readonly int[] Pool={1,2,3,4,5,6,7};
+    // Beat b of the loop's first phrase: industrial techno loops from beat 160, after its sparse intro; the rest loop from phrase 0.
+    static double InLoop(StageBeats.Track t,double b)=>b+Math.Round(t.Beat(t.FirstBeat)/StageBeats.PhraseBeats)*StageBeats.PhraseBeats;
     public static void Run()
     {
         var failures=new List<string>();
@@ -17,9 +20,9 @@ public static class StageRhythmPlanningTests
     static void PrototypeMapping()
     {
         int holds=0;
-        foreach(int choice in new[]{1,2,4,5})foreach(double stride in new[]{.5,1.0,2.0})for(int seed=0;seed<30;seed++)
+        foreach(int choice in Pool)foreach(double stride in new[]{.5,1.0,2.0})for(int seed=0;seed<30;seed++)
         {
-            var track=StageBeats.For(choice);const double firstBeat=31,tuned=.5;
+            var track=StageBeats.For(choice);double firstBeat=InLoop(track,31);const double tuned=.5;
             var logical=RhythmChart.Create(seed,16,tuned,3);
             var mapped=RhythmChart.CreateOnStage(seed,16,tuned,3,track,firstBeat,stride);
             Check(mapped.Notes.Count==logical.Notes.Count,"mapping retains the tuned draw count");
@@ -50,15 +53,15 @@ public static class StageRhythmPlanningTests
     static InteractionState Anchored(int track,double anchor,double delay,double stride,int seed=17,int count=16,int difficulty=3)=>JsonSerializer.Deserialize<InteractionState>("{\"Kind\":\"Dance\",\"ChartSeed\":"+seed+",\"NoteCount\":"+count+",\"ChartDifficulty\":"+difficulty+",\"BeatSeconds\":0.5,\"StageTrack\":"+track+",\"StageFirstHeadWorldSeconds\":"+Number(anchor)+",\"StageFirstHeadDelaySeconds\":"+Number(delay)+",\"StageBeatStride\":"+Number(stride)+"}",Json);
     static void ProductionForUsesSerializedAnchor()
     {
-        foreach(int choice in new[]{1,2,4,5})foreach(double stride in new[]{.5,1.0,2.0})
+        foreach(int choice in Pool)foreach(double stride in new[]{.5,1.0,2.0})
         {
-            var track=StageBeats.For(choice);double anchor=(track.Sample(31)-track.FirstBeat)/StageBeats.Rate;
+            var track=StageBeats.For(choice);double first=InLoop(track,31),anchor=(track.Sample(first)-track.FirstBeat)/StageBeats.Rate;
             var i=Anchored(choice,anchor,2.23,stride);var mapped=RhythmChart.For(i);var logical=RhythmChart.Create(i.ChartSeed,16,.5,3);
             Check(mapped.Notes.Count==logical.Notes.Count,"For retains all generated patterns");
             for(int n=0;n<logical.Notes.Count;n++)
             {
-                var old=logical.Notes[n];var note=mapped.Notes[n];double beat=31+(old.TimeSeconds-2)/.5*stride;
-                double expected=2.23+(track.Sample(beat)-track.Sample(31))/StageBeats.Rate;
+                var old=logical.Notes[n];var note=mapped.Notes[n];double beat=first+(old.TimeSeconds-2)/.5*stride;
+                double expected=2.23+(track.Sample(beat)-track.Sample(first))/StageBeats.Rate;
                 Check(Math.Abs(note.TimeSeconds-expected)<.001,"For maps "+track.Clip+" head "+n+" through the serialized first head");
                 Check(note.Id==old.Id&&note.Direction==old.Direction,"For preserves logical lanes and IDs");
                 Check(Math.Abs(note.HoldSeconds-(track.Sample(beat+old.HoldSeconds/.5*stride)-track.Sample(beat))/StageBeats.Rate)<.001,"For maps hold endpoints");
@@ -84,9 +87,9 @@ public static class StageRhythmPlanningTests
     {
         foreach(int festival in new[]{0,1})foreach(int level in new[]{0,1,2,3})foreach(string kind in new[]{"Dance","Poi","ConfirmDance","Conversation"})
         {
-            var game=Floor(festival,level);var partner=game.State.Npcs[0];if(kind=="Conversation")partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});
-            double press=game.State.SimulationSeconds;var i=Start(game,kind);int choice=festival==0?(Festivals.Night(level)?1:2):(Festivals.Night(level)?4:5);
-            Check((int)Field(i,"StageTrack")==choice,kind+" uses the stage's stable catalog choice");
+            var game=Floor(festival,level);game.State.SpinSeed=festival*Festivals.LevelCount+level;var partner=game.State.Npcs[0];if(kind=="Conversation")partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});
+            double press=game.State.SimulationSeconds;var i=Start(game,kind);var at=game.Player("p0");int choice=StageMusic.TrackAt(game.State,at.X,at.Z);
+            Check((int)Field(i,"StageTrack")==choice,kind+" uses the nearer stage's song");
             Check(i.StartSeconds==press+2,kind+" preserves its simulation countdown");
             double anchor=(double)Field(i,"StageFirstHeadWorldSeconds"),delay=(double)Field(i,"StageFirstHeadDelaySeconds");
             var chart=RhythmChart.For(i);Check(anchor>=FestivalSimulation.WorldSeconds(game.State)+4-1e-9,"first head follows preparation");
@@ -104,7 +107,7 @@ public static class StageRhythmPlanningTests
     }
     static void RealLoopJoinsAndStrideTies()
     {
-        foreach(int choice in new[]{1,2,4,5})
+        foreach(int choice in Pool)
         {
             var t=StageBeats.For(choice);double endBeat=t.Beat(t.LoopEnd),firstBeat=t.Beat(t.FirstBeat),span=endBeat-firstBeat;
             double headBeat=Math.Floor(endBeat)-3,anchor=(t.Sample(headBeat)-t.FirstBeat)/StageBeats.Rate;
@@ -136,16 +139,17 @@ public static class StageRhythmPlanningTests
             var game=Floor();var i=Anchored(1,4,2,1);i.Id="bad";game.State.Interactions.Add(i);typeof(InteractionState).GetField(field)?.SetValue(i,invalid);
             bool refused=false;try{new FestivalSimulation().Restore(game.State);}catch(ArgumentException){refused=true;}Check(refused,"restore refuses malformed "+field);
         }
-        foreach(int choice in new[]{-1,3,6,99})
+        foreach(int choice in new[]{-1,8,99})
         {
             var game=Floor();game.State.Interactions.Add(Anchored(choice,4,2,1));bool refused=false;try{new FestivalSimulation().Restore(game.State);}catch(ArgumentException){refused=true;}Check(refused,"restore refuses non-stage track "+choice);
         }
+        foreach(int choice in Pool){var game=Floor();var i=Anchored(choice,4,2,1);i.Id="pool"+choice;game.State.Interactions.Add(i);new FestivalSimulation().Restore(game.State);}
     }
     static void DjPhrasesDoNotOverlapTheirVerdicts()
     {
         var game=Floor();var p=game.Player("p0");p.X=Catalog.StageTakeoverX;p.Z=Catalog.StageTakeoverZ;p.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
         var i=Start(game,"Dj");double previousEnd=i.StartSeconds+i.DurationSeconds+.75;
-        Check((int)Field(i,"StageTrack")==0,"takeover keeps its own fixed timing");
+        Check((int)Field(i,"StageTrack")==StageMusic.Track(game.State,StageMusic.Main),"takeover rides the main stage's song");
         game.State.SimulationSeconds=previousEnd;game.Tick(.01);
         Check(i.Phrase==1&&i.StartSeconds>=previousEnd-1e-9,"next DJ phrase begins after the full preceding chart and late verdict");
         Check(i.DurationSeconds==RhythmChart.For(i).DurationSeconds,"next DJ phrase has real chart duration");
@@ -169,7 +173,7 @@ public static class StageRhythmPlanningTests
     }
     static void MeasuredPacingKeepsAllLogicalPatterns()
     {
-        foreach(int choice in new[]{1,2,4,5})foreach(var kind in new[]{"Dance","Poi","ConfirmDance","Conversation"})
+        foreach(int choice in Pool)foreach(var kind in new[]{"Dance","Poi","ConfirmDance","Conversation"})
         {
             double tuned=kind=="Poi"?.4:.5;int count=kind=="ConfirmDance"?4:kind=="Poi"?12:8;
             double min=double.MaxValue,max=double.MinValue,total=0;int measured=0;

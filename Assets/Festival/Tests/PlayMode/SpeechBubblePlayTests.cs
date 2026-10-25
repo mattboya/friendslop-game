@@ -62,6 +62,134 @@ namespace Festival.Tests
             }
             yield return null;
         }
+        // Looking straight at a festivalgoer from eye height, their bubble sits whole on screen, under the top cards and over the bottom
+        // HUD, its letters near the HUD's own size (18-20 px cap height at 1080p) near or far, a second bubble too.
+        [UnityTest]public IEnumerator ABubbleStaysInViewUnderTheTopCardsAtAReadableSize()
+        {
+            var root=new GameObject("Framed speech");var presenter=root.AddComponent<FestivalSpeechBubbles>();
+            var body=new GameObject("Framed speaker");var head=new GameObject("Head");head.transform.SetParent(body.transform,false);head.transform.localPosition=Vector3.up*1.8f;
+            var eye=new GameObject("Framed eye");var camera=eye.AddComponent<Camera>();camera.fieldOfView=75;camera.nearClipPlane=.05f;camera.aspect=16f/9;
+            var state=new RoundState{RoundId="framed",Phase="Playing",SimulationSeconds=1};
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="framed:speech:1",Sequence=1,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Have you seen the cups? Someone said the night market has them.",ExpiresAtWorldSeconds=9});
+            var failures=new List<string>();
+            // The cap height of a bubble's first letter (an H) on a 1080-pixel-high screen, from the glyph TextMeshPro laid out.
+            float Cap(TextMeshPro text)
+            {
+                text.ForceMeshUpdate();var letter=text.textInfo.characterInfo[0];
+                float tall=text.font.characterLookupTable[letter.character].glyph.metrics.height*letter.scale;
+                var foot=camera.WorldToViewportPoint(text.transform.TransformPoint(new Vector3(letter.bottomLeft.x,letter.baseLine,0)));
+                var top=camera.WorldToViewportPoint(text.transform.TransformPoint(new Vector3(letter.bottomLeft.x,letter.baseLine+tall,0)));
+                return (top.y-foot.y)*1080;
+            }
+            void Framed(string where)
+            {
+                foreach(var text in SpeechTexts(root))
+                {
+                    var backing=text.transform.parent.Find("Bubble backing");float low=1,high=0,left=1,right=0,near=float.MaxValue;
+                    foreach(var corner in new[]{new Vector3(-.5f,-.5f),new Vector3(.5f,-.5f),new Vector3(-.5f,.5f),new Vector3(.5f,.5f)})
+                    {var at=camera.WorldToViewportPoint(backing.TransformPoint(corner));low=Mathf.Min(low,at.y);high=Mathf.Max(high,at.y);left=Mathf.Min(left,at.x);right=Mathf.Max(right,at.x);near=Mathf.Min(near,at.z);}
+                    string box=" (x "+left.ToString("F3")+"-"+right.ToString("F3")+", y "+low.ToString("F3")+"-"+high.ToString("F3")+")";
+                    if(high>FestivalHud.TopCardsBottom)failures.Add(where+": \""+text.text+"\" runs up under the top cards"+box);
+                    // The equipment bar's top reaches .185 at the largest text scale.
+                    if(low<.185f)failures.Add(where+": \""+text.text+"\" runs down into the bottom HUD"+box);
+                    if(left<0||right>1)failures.Add(where+": \""+text.text+"\" runs off the side of the screen"+box);
+                    if(near<=camera.nearClipPlane)failures.Add(where+": \""+text.text+"\" sits in front of the near plane");
+                }
+            }
+            void Look(float distance){eye.transform.SetPositionAndRotation(new Vector3(0,1.65f,-distance),Quaternion.identity);presenter.Apply(state,id=>body.transform,eye.transform,eye.transform.position,"you",true);}
+            try
+            {
+                Look(1.5f);var text=SpeechTexts(root);Assert.That(text,Has.Length.EqualTo(1),"setup: one bubble");
+                float near=Cap(text[0]);Framed("1.5 m");
+                if(near<17.5f||near>20.5f)failures.Add("1.5 m: the cap height is "+near.ToString("F1")+" px at 1080p, not about 18-20");
+                Look(10);float far=Cap(SpeechTexts(root)[0]);Framed("10 m");
+                if(Mathf.Abs(far-near)>near*.2f)failures.Add("10 m: the cap height is "+far.ToString("F1")+" px against "+near.ToString("F1")+" px at 1.5 m");
+                Look(1);Framed("1 m");
+                state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="framed:speech:2",Sequence=2,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Or was it the art car? Ask the guy in the hat.",ExpiresAtWorldSeconds=9});
+                foreach(float distance in new[]{1f,1.5f,10f})
+                {
+                    Look(distance);Assert.That(SpeechTexts(root),Has.Length.EqualTo(2),"setup: two bubbles at "+distance+" m");Framed("two bubbles at "+distance+" m");
+                    var stacked=SpeechTexts(root);if(stacked[1].transform.parent.position.y<=stacked[0].transform.parent.position.y)failures.Add(distance+" m: the newer bubble does not stack over the first");
+                }
+            }
+            finally{presenter.Clear();UnityEngine.Object.Destroy(root);UnityEngine.Object.Destroy(body);UnityEngine.Object.Destroy(eye);}
+            yield return null;
+            Assert.That(failures,Is.Empty,"Speech bubbles in a first-person view:\n"+string.Join("\n",failures));
+        }
+        // On Night 2 at 130% text, a crew of four on their doses grows the dose card down the screen's centre, pushing a notice under
+        // it, and the checklist grows the crew card on the right. Two bubbles face to face, or off to the right, keep under them all.
+        [UnityTest]public IEnumerator BubblesKeepUnderTheCardsThatHangIntoTheBand()
+        {
+            var world=new GameObject("Band world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Band HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            var root=new GameObject("Band speech");var presenter=root.AddComponent<FestivalSpeechBubbles>();
+            var body=new GameObject("Band speaker");var head=new GameObject("Head");head.transform.SetParent(body.transform,false);head.transform.localPosition=Vector3.up*1.8f;
+            var eye=new GameObject("Band eye");var camera=eye.AddComponent<Camera>();camera.fieldOfView=75;camera.nearClipPlane=.05f;camera.aspect=16f/9;camera.enabled=false;
+            var talk=new RoundState{RoundId="band",Phase="Playing",SimulationSeconds=1};
+            talk.PublicSpeech.Add(new PublicSpeechState{DeliveryId="band:speech:1",Sequence=1,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Have you seen the cups? Someone said the night market has them.",ExpiresAtWorldSeconds=9});
+            talk.PublicSpeech.Add(new PublicSpeechState{DeliveryId="band:speech:2",Sequence=2,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Or was it the art car? Ask the guy in the hat.",ExpiresAtWorldSeconds=9});
+            var failures=new List<string>();float textScale=session.Profile.Data.TextScale;
+            var cards=new[]{"Objective card","Round clock","Test mode tag","Tripper card","Player card","Crew card","Session notice","Sundown warning"};
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;
+                var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                var mates=new List<PlayerState>();foreach(var name in new[]{"Sam","Kim","Jo"}){var mate=sim.AddPlayer("band_"+name.ToLowerInvariant(),name);mate.Ready=true;mates.Add(mate);}
+                yield return StartLevel(session);
+                session.Profile.Data.TextScale=1.3f;sim.State.LevelIndex=Festivals.LevelCount-1;sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
+                foreach(var crew in sim.State.Players){crew.X=-30;crew.Z=-30;}player.X=0;player.Z=0;
+                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=2,Substance="lsd"});
+                for(int i=0;i<mates.Count;i++)sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=i+1,Substance="ecstasy"});
+                session.SetMessage("Sold a Tongue Stamp for $30");
+                yield return new WaitForSeconds(.5f);yield return null;
+                Canvas.ForceUpdateCanvases();
+                Rect Share(string name)
+                {
+                    foreach(var part in hud.GetComponentsInChildren<RectTransform>(false))
+                    {
+                        if(part.name!=name)continue;
+                        var corners=new Vector3[4];part.GetWorldCorners(corners);var low=canvasRect.InverseTransformPoint(corners[0]);var high=canvasRect.InverseTransformPoint(corners[2]);
+                        var size=canvasRect.rect.size;return Rect.MinMaxRect(low.x/size.x+canvasRect.pivot.x,low.y/size.y+canvasRect.pivot.y,high.x/size.x+canvasRect.pivot.x,high.y/size.y+canvasRect.pivot.y);
+                    }
+                    return Rect.zero;
+                }
+                Assert.That(Share("Session notice").yMax,Is.LessThan(FestivalSpeechBubbles.BandTop),"setup: the notice hangs into the band under the dose card");
+                Assert.That(Share("Crew card").yMin,Is.LessThan(.8f),"setup: Night 2's checklist grows the crew card");
+                presenter.Ceiling=session.SpeechBubbles.Ceiling;
+                void Look(string where,float distance,float side)
+                {
+                    eye.transform.SetPositionAndRotation(new Vector3(side,1.65f,-distance),Quaternion.identity);
+                    presenter.Apply(talk,id=>body.transform,eye.transform,eye.transform.position,"you",true,0,false,null,session.Profile.Data);
+                    var texts=SpeechTexts(root);if(texts.Length!=2)failures.Add(where+": "+texts.Length+" bubbles, not 2");
+                    foreach(var text in texts)
+                    {
+                        var backing=text.transform.parent.Find("Bubble backing");float low=1,high=0,left=1,right=0;
+                        foreach(var corner in new[]{new Vector3(-.5f,-.5f),new Vector3(.5f,-.5f),new Vector3(-.5f,.5f),new Vector3(.5f,.5f)})
+                        {var at=camera.WorldToViewportPoint(backing.TransformPoint(corner));low=Mathf.Min(low,at.y);high=Mathf.Max(high,at.y);left=Mathf.Min(left,at.x);right=Mathf.Max(right,at.x);}
+                        var bubble=Rect.MinMaxRect(left,low,right,high);
+                        foreach(var name in cards)
+                        {
+                            var card=Share(name);
+                            if(card.width>0&&card.Overlaps(bubble))failures.Add(where+": the "+name+" (y "+card.yMin.ToString("F3")+"-"+card.yMax.ToString("F3")+") covers \""+text.text+"\" (x "+left.ToString("F3")+"-"+right.ToString("F3")+", y "+low.ToString("F3")+"-"+high.ToString("F3")+")");
+                        }
+                        if(low<.185f)failures.Add(where+": \""+text.text+"\" runs down into the bottom HUD (y "+low.ToString("F3")+")");
+                    }
+                }
+                Look("face to face at 1.5 m",1.5f,0);Look("face to face at 1 m",1,0);Look("1.5 m away, to the right",1.5f,-.9f);
+            }
+            finally
+            {
+                session.Profile.Data.TextScale=textScale;presenter.Clear();session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)UnityEngine.Object.Destroy(leftover);}
+                UnityEngine.Object.Destroy(root);UnityEngine.Object.Destroy(body);UnityEngine.Object.Destroy(eye);UnityEngine.Object.Destroy(hud);UnityEngine.Object.Destroy(world);
+            }
+            yield return null;
+            Assert.That(failures,Is.Empty,"Speech bubbles under the top cards:\n"+string.Join("\n",failures));
+        }
         [UnityTest]public IEnumerator EarlyHostRejectionsKeepTheIssuedIdentityAndAuthorityRules()
         {
             var host=new GameObject("Early rejection host").AddComponent<FestivalSession>();yield return null;

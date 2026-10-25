@@ -66,6 +66,9 @@ namespace Festival.Core
         public long DialogueRevision,ConversationOutcomeSequence,ConversationDismissedSequence;
         public string ConversationThreadId="",ConversationDismissedId="";
         public List<ConversationOutcome> ConversationOutcomes=new List<ConversationOutcome>();
+        // Owner-only news of each change to this player's cash or carried items and to the crew's stash or sales, newest last, at
+        // most FestivalSimulation.MoneyNewsCap. Empty in older snapshots.
+        public long MoneyNewsSequence; public List<MoneyNews> MoneyNewsLog=new List<MoneyNews>();
     }
     [Serializable] public sealed class PublicSpeechState {
         public string DeliveryId="",SpeakerId="",Speaker="",Text="";
@@ -73,11 +76,17 @@ namespace Festival.Core
         // Host routing only. ViewFor copies the public delivery fields explicitly.
         public string OwnerId="",InteractionId="";
     }
+    // Result: the short stamp a sale ends on ("SOLD +$10", "NO SALE", "BUSTED"), in dollars; "" for other talks and in older snapshots.
     [Serializable] public sealed class ConversationOutcome {
-        public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="";
+        public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="",Result="";
         public long Sequence; public List<string> GrammarKeys=new List<string>();
     }
-    [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; }
+    // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind is what the HUD flashes: Cash, Stash,
+    // Sales or Items.
+    [Serializable] public sealed class MoneyNews { public long Sequence; public string Kind="",Text=""; }
+    // RefusesSales: PlayerId's High or Greedy ask failed with this festivalgoer, who buys nothing more from them this level.
+    // Host-only, as ViewFor copies only Suspicion; false in older snapshots.
+    [Serializable] public sealed class ObserverState { public string PlayerId="",BystanderDanceId=""; public double Suspicion, LastSeenSeconds, AccusationSeconds=-1; public bool RefusesSales; }
     // A cop's case on a player (Danger.cs, SecurityStops.cs): Kind VisibleStock is a security stop, WavedOn one talked down,
     // and WitnessedDeal or IgnoredStop an arrest warning, detaining at DetainAt. ESC-2: a stop runs from StartSeconds, and the
     // cop last saw them at SeenSeconds; -1 in older snapshots, whose stops are timed from the load.
@@ -119,6 +128,9 @@ namespace Festival.Core
         // festivalgoer asked for a dance first, on this interaction's chart; Hunch, what a chat or a buy left the player feeling,
         // set as its last turn begins. Empty and false in older snapshots.
         public List<ConversationTurn> Turns=new List<ConversationTurn>(); public bool TrustDance; public string Hunch="";
+        // A sale's ask (FestivalSimulation.FairAsk, HighAsk or GreedyAsk), from StartSale's Amount; Fair in older snapshots.
+        // ReservedEquipped: the unit on offer left the seller's hand, so a handed-back one is equipped again; false in older snapshots.
+        public int Ask; public bool ReservedEquipped;
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).
@@ -154,6 +166,11 @@ namespace Festival.Core
         // The night's clue trail is complete (Visions.cs): the lost friend can be found.
         public bool GateOpened;
         public int GrossSales,StashCash,LostPropertyTask=1,CampMusicTrack=1; public bool FriendFound,RewardCommitted;
+        // TEST MODE (Weekend.cs), which only a test build's host turns on; every view carries it for the HUD. Off in older rounds.
+        public bool TestMode;
+        // The crowd's cheer for the stage DJ's last phrase: its score, until StageCheerUntilWorldSeconds on the world clock.
+        // -1 before any set and in older snapshots.
+        public double StageCheerScore=-1,StageCheerUntilWorldSeconds=-1;
         // CAMP-3: persistent public prop state and host-picked points for this camp visit; additive in schema 2.
         public List<CampEggState> CampEggs=new List<CampEggState>();
         // Sale cash paid out this level, after any payout multiplier; a day's quota counts it (DayQuota.cs).

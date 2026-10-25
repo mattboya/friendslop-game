@@ -7,45 +7,59 @@ using UnityEngine;
 namespace Festival.Tests
 {
     // TRIP-16: Pony Dust and Couch Lock look out through sleepy eyes that now and then blink: the lids' shape, how far they rest
-    // closed by dose, the one-second blink and the local scheduler that times it, all pure.
+    // closed by substance and dose, the one-second blink and the local scheduler that times it, all pure.
     public sealed class TripEyeMaskTests
     {
-        // Where the shade first reaches half along a column x: the lid's edge.
-        private static float Edge(float x,float aperture){float y=0;while(y<1&&FestivalTrip.EyeShade(x,y,aperture)<.5f)y+=.001f;return y;}
+        // Where the shade first reaches half along a column x, for lids as soft as soft: the lid's edge. Found by halving, to float
+        // precision, so the flatter middle of the rounder lids still shows its curve.
+        private static float Edge(float x,float aperture,float soft)
+        {
+            float clear=0,shut=1;
+            for(int step=0;step<40;step++){float y=(clear+shut)/2;if(FestivalTrip.EyeShade(x,y,aperture,soft)<.5f)clear=y;else shut=y;}
+            return shut;
+        }
 
         [Test]public void TheOpeningIsACurvedAlmondWithTaperedCorners()
         {
-            foreach(float aperture in new[]{.55f,.7f,.85f})
+            foreach(var substance in new[]{"ketamine","weed"})foreach(float aperture in new[]{.55f,.7f,.85f})
             {
-                string at=" at aperture "+aperture;
-                Assert.That(FestivalTrip.EyeShade(0,0,aperture),Is.Zero,"the centre is clear"+at);
-                Assert.That(FestivalTrip.EyeShade(0,.98f,aperture),Is.EqualTo(1),"the top is shut"+at);
-                Assert.That(FestivalTrip.EyeShade(0,-.98f,aperture),Is.EqualTo(1),"and the bottom"+at);
-                foreach(float side in new[]{-1f,1f})Assert.That(FestivalTrip.EyeShade(side,0,aperture),Is.EqualTo(1),"the lids meet in a corner at each side"+at);
-                Assert.That(FestivalTrip.EyeShade(.9f,0,aperture),Is.GreaterThan(FestivalTrip.EyeShade(.3f,0,aperture)),"the corners close in more than the middle"+at);
-                float previous=Edge(0,aperture);
+                float soft=FestivalTrip.EyeSoftness(substance);string at=" at aperture "+aperture+" for "+substance;
+                Assert.That(FestivalTrip.EyeShade(0,0,aperture,soft),Is.Zero,"the centre is clear"+at);
+                Assert.That(FestivalTrip.EyeShade(0,.98f,aperture,soft),Is.EqualTo(1),"the top is shut"+at);
+                Assert.That(FestivalTrip.EyeShade(0,-.98f,aperture,soft),Is.EqualTo(1),"and the bottom"+at);
+                foreach(float side in new[]{-1f,1f})Assert.That(FestivalTrip.EyeShade(side,0,aperture,soft),Is.EqualTo(1),"the lids meet in a corner at each side"+at);
+                // Couch Lock's narrower soft edge reaches the middle row only nearer the corner.
+                float corner=substance=="weed"?.95f:.9f;
+                Assert.That(FestivalTrip.EyeShade(corner,0,aperture,soft),Is.GreaterThan(FestivalTrip.EyeShade(.3f,0,aperture,soft)),"the corners close in more than the middle"+at);
+                float previous=Edge(0,aperture,soft);
                 Assert.That(previous,Is.GreaterThan(.4f*aperture),"the opening stands tall in the middle"+at);
-                for(float x=.1f;x<.95f;x+=.1f){float edge=Edge(x,aperture);Assert.That(edge,Is.LessThan(previous),"the lids curve in towards the corners at x="+x+at);previous=edge;}
-                Assert.That(Edge(0,aperture)-Edge(.6f,aperture),Is.GreaterThan(.2f*aperture),"a curve, never a straight bar"+at);
+                for(float x=.1f;x<.95f;x+=.1f){float edge=Edge(x,aperture,soft);Assert.That(edge,Is.LessThan(previous),"the lids curve in towards the corners at x="+x+at);previous=edge;}
+                Assert.That(Edge(0,aperture,soft)-Edge(.6f,aperture,soft),Is.GreaterThan(.2f*aperture),"a curve, never a straight bar"+at);
                 for(float x=-.9f;x<=.9f;x+=.3f)for(float y=0;y<=1;y+=.05f)
                 {
-                    float shade=FestivalTrip.EyeShade(x,y,aperture);
+                    float shade=FestivalTrip.EyeShade(x,y,aperture,soft);
                     Assert.That(shade,Is.InRange(0f,1f));
-                    Assert.That(FestivalTrip.EyeShade(-x,-y,aperture),Is.EqualTo(shade).Within(1e-6f),"mirrored left to right and top to bottom");
-                    Assert.That(FestivalTrip.EyeShade(x,y+.05f,aperture),Is.GreaterThanOrEqualTo(shade),"darker further from the middle");
+                    Assert.That(FestivalTrip.EyeShade(-x,-y,aperture,soft),Is.EqualTo(shade).Within(1e-6f),"mirrored left to right and top to bottom");
+                    Assert.That(FestivalTrip.EyeShade(x,y+.05f,aperture,soft),Is.GreaterThanOrEqualTo(shade),"darker further from the middle");
                 }
             }
-            Assert.That(Edge(0,.85f),Is.GreaterThan(Edge(0,.55f)),"a wider aperture opens the eye further");
+            Assert.That(Edge(0,.85f,FestivalTrip.EyeSoftness("ketamine")),Is.GreaterThan(Edge(0,.55f,FestivalTrip.EyeSoftness("ketamine"))),"a wider aperture opens the eye further");
+            Assert.That(FestivalTrip.EyeSoftness("weed"),Is.LessThan(FestivalTrip.EyeSoftness("ketamine")).And.GreaterThan(0),"Couch Lock's lids have the narrower soft edge");
             Assert.That(FestivalTrip.EyeShade(0,0,0),Is.EqualTo(1),"shut eyes see nothing");
         }
 
         [Test]public void TheEyesRestMoreClosedWithEveryDose()
         {
-            Assert.That(FestivalTrip.EyeRest(0),Is.Zero,"sober eyes are open");
-            Assert.That(FestivalTrip.EyeRest(-1),Is.Zero);
-            Assert.That(FestivalTrip.EyeRest(1),Is.GreaterThan(.1f),"one dose is clearly sleepy");
-            for(int dose=2;dose<=4;dose++)Assert.That(FestivalTrip.EyeRest(dose),Is.GreaterThan(FestivalTrip.EyeRest(dose-1)),"dose "+dose+" rests more closed than "+(dose-1));
-            Assert.That(1-FestivalTrip.EyeRest(4),Is.GreaterThanOrEqualTo(.5f),"four doses still leave the middle of the view open");
+            foreach(var substance in new[]{"ketamine","weed"})
+            {
+                Assert.That(FestivalTrip.EyeRest(substance,0),Is.Zero,"sober eyes are open");
+                Assert.That(FestivalTrip.EyeRest(substance,-1),Is.Zero);
+                Assert.That(FestivalTrip.EyeRest(substance,1),Is.GreaterThan(.1f),"one dose of "+substance+" is clearly sleepy");
+                for(int dose=2;dose<=4;dose++)Assert.That(FestivalTrip.EyeRest(substance,dose),Is.GreaterThan(FestivalTrip.EyeRest(substance,dose-1)),substance+" dose "+dose+" rests more closed than "+(dose-1));
+                Assert.That(1-FestivalTrip.EyeRest(substance,4),Is.GreaterThanOrEqualTo(.5f),"four doses still leave the middle of the view open");
+            }
+            for(int dose=1;dose<=4;dose++)Assert.That(FestivalTrip.EyeRest("weed",dose),Is.LessThan(FestivalTrip.EyeRest("ketamine",dose)),"Couch Lock rests lighter at dose "+dose);
+            foreach(var substance in new[]{"lsd","mushrooms","ecstasy",""})Assert.That(FestivalTrip.EyeRest(substance,4),Is.Zero,"'"+substance+"' keeps the eyes open");
         }
 
         [Test]public void ABlinkClosesHoldsAndReopensInExactlyOneSecond()
@@ -73,9 +87,9 @@ namespace Festival.Tests
 
         [Test]public void ABlinkStartsAndEndsAtTheRestingOpeningAndReducedMotionNeverShutsIt()
         {
-            for(int dose=1;dose<=4;dose++)
+            foreach(var substance in new[]{"ketamine","weed"})for(int dose=1;dose<=4;dose++)
             {
-                float rest=FestivalTrip.EyeRest(dose),open=1-rest;
+                float rest=FestivalTrip.EyeRest(substance,dose),open=1-rest;
                 Assert.That(FestivalTrip.Aperture(rest,FestivalTrip.Blink(0),false),Is.EqualTo(open),"dose "+dose+" starts from its resting opening");
                 Assert.That(FestivalTrip.Aperture(rest,FestivalTrip.Blink(1),false),Is.EqualTo(open),"and comes back to it");
                 Assert.That(FestivalTrip.Aperture(rest,1,false),Is.Zero,"a full blink shuts the eyes");

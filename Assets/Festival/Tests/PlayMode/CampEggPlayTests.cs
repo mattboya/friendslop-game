@@ -243,9 +243,16 @@ namespace Festival.Tests
             var actor=actors[player.Id].GetComponent<FestivalCharacter>();
             Assert.That(actor,Is.Not.Null,"the real actor presenter creates the local attendee");
             Assert.That(actor.Pose,Is.EqualTo(FestivalSimulation.CampChairPose),"the live actor consumes the snapshot pose");
-            yield return new WaitForSeconds(4.3f);
+            // Your own view sits down with your body, the eye just over the seated Head bone; it stands back up when the seat ends.
+            yield return new WaitForSeconds(.5f);
+            Transform head=null;foreach(var bone in actor.GetComponentsInChildren<Transform>())if(bone.name=="Head")head=bone;
+            Assert.That(session.EyePosition.y,Is.LessThan(1.65f-.3f),"seated, the eye drops well under standing height");
+            Assert.That(session.EyePosition.y,Is.GreaterThan(head.position.y).And.LessThan(head.position.y+.4f),"seated, the eye is at the seated head, its Head bone at "+head.position.y.ToString("0.00")+" m");
+            yield return new WaitForSeconds(3.8f);
             Assert.That(game.State.CampEggs[2].SeatedPlayerId,Is.Empty,"the host's real Update ticks expire the owner");
             Assert.That(session.LocalPlayer.VisualPose,Is.EqualTo("Idle"));Assert.That(actor.Pose,Is.EqualTo("Idle"));
+            yield return Until(()=>session.EyePosition.y>1.64f,1);
+            Assert.That(session.EyePosition.y,Is.EqualTo(1.65f).Within(.01f),"standing again, the eye is back at standing height");
             session.Leave();Object.Destroy(host);Object.Destroy(world);yield return null;
         }
 
@@ -351,8 +358,12 @@ namespace Festival.Tests
             var host=new GameObject("impl:U66 diagnostics");var session=host.AddComponent<FestivalSession>();yield return null;
             try
             {
+                // The view names each new round once, when it arms its first snapshot silently.
+                LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=round round=[0-9a-f]{32} baseline=silent$"));
                 yield return Hosted(session);
                 yield return Frames(2);
+                string round=Simulation(session).State.RoundId;
+                Assert.That(lines.FindAll(l=>l.Contains(" action=round ")),Is.EqualTo(new[]{"[Festival.CampEggs] action=round round="+round+" baseline=silent"}),"one round line, for the hosted round");
                 LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=persistent egg=flamingo deflated=True$"));
                 LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=effect egg=flamingo line=own sound=squeak confetti=no$"));
                 yield return Poke(session,"flamingo");yield return Frames(2);
@@ -363,6 +374,7 @@ namespace Festival.Tests
                 LogAssert.Expect(LogType.Log,new Regex(@"^\[Festival\.CampEggs\] action=attach session=off$"));
                 session.Leave();Object.Destroy(host);yield return Frames(2);
                 Assert.That(session.Profile.Data.FoundCampEggIds.Count,Is.EqualTo(3),"setup: three discoveries saved");
+                Assert.That(lines.FindAll(l=>l.Contains(" action=round ")).Count,Is.EqualTo(1),"frames and pokes later, still one round line");
                 foreach(string line in lines)Assert.That(line,Does.Not.Contain("EASTER").And.Not.Contain("Found").And.Not.Contain("mask").And.Not.Contain("Tester"),"no collection, profile or name in "+line);
             }
             finally{Application.logMessageReceived-=log;if(host!=null){session.Leave();Object.Destroy(host);}Object.Destroy(world.gameObject);}
@@ -476,7 +488,8 @@ namespace Festival.Tests
         }
 
         // Every body shape the game draws sits on the headliner's low camp chair: the seat of its trousers on the canvas, feet on the
-        // grass, nothing through the seat. Measured on the real chair prop and the real skinned bodies.
+        // grass, nothing through the seat. Each wears the backpack, the deepest accessory: nothing shows through the chair's back or the
+        // board above it, and the backpack is back on when they stand. Measured on the real chair prop and the real skinned bodies.
         [UnityTest] public IEnumerator EveryBodyShapeSitsOnTheHeadlinersChairWithItsFeetOnTheGrass()
         {
             var world=new GameObject("impl:U66 chair world").AddComponent<FestivalWorld>();yield return null;
@@ -485,21 +498,24 @@ namespace Festival.Tests
             {
                 var chair=world.CampEggs.Prop("chair");var seat=chair.Find("Chair seat").GetComponent<Renderer>().bounds;
                 Assert.That(seat.size.y,Is.LessThan(.06f),"setup: the seat is a thin canvas");
-                for(int i=0;i<200&&shapes.Count<6;i++)
+                for(int i=0;i<2000&&shapes.Count<6;i++)
                 {
-                    var look=FestivalAppearance.For("player_"+i);if(!shapes.Add(look.Gender+" "+look.Shape))continue;
+                    var look=FestivalAppearance.For("player_"+i);if(look.Accessory!=0||!shapes.Add(look.Gender+" "+look.Shape))continue;
                     var body=FestivalCharacter.Create(bodies.transform,"player_"+i,Color.white);
                     body.transform.position=new Vector3(seated.Count*3,0,40);body.transform.rotation=Quaternion.Euler(0,180,0);
                     body.transform.localScale=Vector3.Scale(Vector3.one*.82f,body.ShapeScale);body.Pose=FestivalSimulation.CampChairPose;seated.Add(body);
                 }
-                Assert.That(seated.Count,Is.EqualTo(6),"setup: every body shape");
+                Assert.That(seated.Count,Is.EqualTo(6),"setup: every body shape, in a backpack");
                 yield return new WaitForSeconds(1.5f);
                 var mesh=new Mesh();var failures=new List<string>();
                 // The seat's footprint about the chair's point, the way the host turns its headliner (yaw 180, facing -z).
                 var footprint=new Rect(seat.min.x-chair.position.x,seat.min.z-chair.position.z,seat.size.x,seat.size.z);
+                // The back and the RESERVED board over it, about the chair's point: a body reaches through them past their front face.
+                var backs=new List<Bounds>();
+                foreach(var name in new[]{"Chair back","Reserved board"}){var b=chair.Find(name).GetComponent<Renderer>().bounds;b.center-=chair.position;backs.Add(b);}
                 foreach(var body in seated)
                 {
-                    var at=body.transform.position;float lowest=float.MaxValue,onSeat=float.MaxValue;
+                    var at=body.transform.position;float lowest=float.MaxValue,onSeat=float.MaxValue,through=float.MinValue;string reaching="";
                     foreach(var skin in body.GetComponentsInChildren<SkinnedMeshRenderer>())
                     {
                         if(!skin.enabled)continue;skin.BakeMesh(mesh,true);var toWorld=skin.transform.localToWorldMatrix;
@@ -508,14 +524,21 @@ namespace Festival.Tests
                             var p=toWorld.MultiplyPoint3x4(vertex)-at;lowest=Mathf.Min(lowest,p.y);
                             // Under the hips, behind the knees: the seat of the trousers.
                             if(Mathf.Abs(p.x)<.18f&&p.z>-.05f&&footprint.Contains(new Vector2(p.x,p.z)))onSeat=Mathf.Min(onSeat,p.y);
+                            foreach(var back in backs)
+                                if(Mathf.Abs(p.x-back.center.x)<back.extents.x&&Mathf.Abs(p.y-back.center.y)<back.extents.y&&p.z-back.min.z>through){through=p.z-back.min.z;reaching=skin.name;}
                         }
                     }
                     string who=body.name+" ("+body.Appearance.Gender+" "+body.Appearance.Shape+")";
                     if(Mathf.Abs(onSeat-(seat.max.y-chair.position.y))>.03f)failures.Add(who+" sits at "+onSeat.ToString("0.000")+" m, the seat is at "+seat.max.y.ToString("0.000")+" m");
                     if(lowest<-.02f||lowest>.03f)failures.Add(who+"'s feet are at "+lowest.ToString("0.000")+" m, not on the grass");
+                    if(through>0)failures.Add(who+"'s "+reaching+" reaches "+through.ToString("0.000")+" m into the chair's back");
                 }
                 Object.Destroy(mesh);
                 Assert.That(failures,Is.Empty,"Seated on the headliner's chair:\n"+string.Join("\n",failures));
+                foreach(var body in seated)body.Pose="Idle";
+                yield return null;
+                foreach(var body in seated)
+                    Assert.That(Array.Find(body.GetComponentsInChildren<SkinnedMeshRenderer>(true),skin=>skin.name=="Accessory_0").enabled,Is.True,body.name+" stands up in their backpack");
             }
             finally{Object.Destroy(bodies);Object.Destroy(world.gameObject);}
             yield return null;

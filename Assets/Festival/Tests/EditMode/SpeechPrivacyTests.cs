@@ -26,7 +26,7 @@ namespace Festival.Tests
         static List<string> Finish(FestivalSimulation game,PlayerState player,NpcState npc)
         {
             Act(game,player,"start","Conversation",npc.Id);var talk=game.Interaction(player.InteractionId);var spoken=new List<string>();
-            for(int turn=0;turn<3;turn++){spoken.Add(talk.Turns[turn].Line);spoken.Add(talk.Turns[turn].Replies[0]);Act(game,player,"reply_"+turn,"Reply",amount:0,direction:turn);}
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++){spoken.Add(talk.Turns[turn].Line);spoken.Add(talk.Turns[turn].Replies[0]);Act(game,player,"reply_"+turn,"Reply",amount:0,direction:turn);}
             return spoken;
         }
         [Test] public void AFriendReceivesEveryRapidUtteranceWithStableIdsAndAPublicLatestProjection()
@@ -34,9 +34,9 @@ namespace Festival.Tests
             var game=Pair(out var player,out var npc);var spoken=Finish(game,player,npc);
             player.Cash=123;player.Inventory.Add(new ItemStack{ItemId="private_inventory",Count=1});player.Effects.Add(new ActiveEffect{Id="private_effect"});player.Dialogue.Seen.Add("private_history");
             var friend=View(game,"friend");Assert.That(friend.PublicSpeech.Select(d=>d.Text),Is.EqualTo(spoken));
-            Assert.That(friend.PublicSpeech.Select(d=>d.Sequence),Is.EqualTo(new long[]{1,2,3,4,5,6}));
-            Assert.That(friend.PublicSpeech.Select(d=>d.DeliveryId).Distinct().Count(),Is.EqualTo(6));
-            Assert.That(friend.PublicSpeech.Select(d=>d.SpeakerId),Is.EqualTo(new[]{npc.Id,player.Id,npc.Id,player.Id,npc.Id,player.Id}));
+            int said=2*FestivalSimulation.ConversationTurns;Assert.That(friend.PublicSpeech.Select(d=>d.Sequence),Is.EqualTo(Enumerable.Range(1,said).Select(k=>(long)k)));
+            Assert.That(friend.PublicSpeech.Select(d=>d.DeliveryId).Distinct().Count(),Is.EqualTo(said));
+            Assert.That(friend.PublicSpeech.Select(d=>d.SpeakerId),Is.EqualTo(Enumerable.Range(0,said).Select(k=>k%2==0?npc.Id:player.Id)));
             Assert.That(friend.PublicSpeech.All(d=>d.OwnerId==""&&d.InteractionId==""),Is.True,"host routing is absent from every public DTO");
             var copy=friend.Players.Find(p=>p.Id==player.Id);Assert.That(copy.NpcSpeech,Is.EqualTo(spoken.Last()));Assert.That(copy.SpeechById,Is.EqualTo(player.Id));
             Assert.That(copy.SpeechDeliveryId,Is.EqualTo(friend.PublicSpeech.Last().DeliveryId));Assert.That(copy.ConversationOutcomes,Is.Empty);

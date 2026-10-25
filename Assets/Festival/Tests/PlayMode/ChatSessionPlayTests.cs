@@ -26,7 +26,7 @@ namespace Festival.Tests
                 var sim=Simulation(host);var player=sim.Player(client.LocalPlayerId);player.X=0;player.Z=19;client.Command("Ready");
                 while(!player.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(player.Ready,Is.True,"client's Ready reached the authority");yield return StartLevel(host,client.LocalPlayerId);
-                sim.State.TripperId=player.Id;sim.State.Npcs.Clear();sim.State.Visions.Clear();
+                sim.State.TripperId=player.Id;sim.State.Npcs.Clear();sim.State.Visions.Clear();player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 player.X=0;player.Z=0;sim.State.Npcs.Add(new NpcState{Id="check_target",Role="Regular",CanTalk=true,Z=1,Yaw=180});
                 sim.State.Visions.Add(new VisionState{Id="private_vision",NpcId="check_target",Kind="Buyer",IsTrue=false});
                 client.MenuOpen=false;host.MenuOpen=false;

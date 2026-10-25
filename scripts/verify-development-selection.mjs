@@ -5,8 +5,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 // Runs the production host bootstrap from built managed assemblies, first Development then Release, on one disposable
-// profile with one earned festival. Development must offer locked Ember Playa; Release keeps the same functional code but must
-// refuse it. Neither may change the earned count. Usage: node scripts/verify-development-selection.mjs [devManaged releaseManaged]
+// profile with one earned festival. Development must offer locked Ember Playa and TEST MODE; Release keeps the same functional
+// code but must refuse both. Neither may change the earned count. Usage: node scripts/verify-development-selection.mjs [devManaged releaseManaged]
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const managed=app=>path.join(app,'Contents/Resources/Data/Managed');
 const [developmentArg,releaseArg]=process.argv.slice(2);
@@ -61,9 +61,12 @@ public static class Program
         Check(game.DevelopmentFestivalSelection==development,variant+" bootstrap left the test-build pick "+(game.DevelopmentFestivalSelection?"on":"off"));
         var pick=game.Execute(host.Id,new GameCommand{Id="verify-pick",Kind="ChooseFestival",Amount=1});
         Check(pick.Accepted==development&&game.State.FestivalIndex==(development?1:0),variant+" locked Ember Playa pick was "+(pick.Accepted?"accepted":"refused: "+pick.Reason));
+        // TEST MODE rides the same capability, so a release host must refuse it.
+        var test=game.Execute(host.Id,new GameCommand{Id="verify-test-mode",Kind=FestivalSimulation.TestModeKind});
+        Check(test.Accepted==development&&game.State.TestMode==development,variant+" TEST MODE was "+(test.Accepted?"accepted":"refused: "+test.Reason));
         profile.RememberUnlocks(game.State);
         Check(profile.Data.UnlockedFestivalCount==1&&game.State.UnlockedFestivalCount==1,variant+" changed the earned count");
-        Console.WriteLine(variant+": capability="+game.DevelopmentFestivalSelection+", locked pick "+(pick.Accepted?"accepted":"refused ("+pick.Reason+")")+", earned count 1");
+        Console.WriteLine(variant+": capability="+game.DevelopmentFestivalSelection+", locked pick "+(pick.Accepted?"accepted":"refused ("+pick.Reason+")")+", test mode "+(test.Accepted?"accepted":"refused")+", earned count 1");
     }
     // The real Host, not a test path, must call the bootstrap, after the profile's unlocks so they can never come from it.
     static void HostRunsTheBootstrapAfterUnlocks(string variant)
@@ -115,7 +118,7 @@ try
     if(run.status!==0)throw new Error(`${variant} check failed (exit ${run.status}).`);
   }
   if(!readFileSync(profile).equals(saved))throw new Error('The profile changed on disk.');
-  console.log('DEVELOPMENT SELECTION VERIFIED: Development offers locked festivals, Release refuses them, the earned count holds');
+  console.log('DEVELOPMENT SELECTION VERIFIED: Development offers locked festivals and TEST MODE, Release refuses both, the earned count holds');
 }
 catch(error){console.error(error.message);failed=true;}
 finally{rmSync(work,{recursive:true,force:true});}

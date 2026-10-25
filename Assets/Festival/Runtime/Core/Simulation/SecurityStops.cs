@@ -67,7 +67,7 @@ namespace Festival.Core
             var d=State.Drops.Find(x=>x.ClaimedBy==cop.Id);if(d==null)return false;
             cop.Mode="Patrol";cop.TargetId="";double dist=Distance(cop.X,cop.Z,d.X,d.Z);if(dist>.1)cop.Yaw=Bearing(cop.X,cop.Z,d.X,d.Z);
             if(State.SimulationSeconds<d.ClaimAt)return true;
-            if(dist<=2.5){State.Drops.Remove(d);return true;}
+            if(dist<=2.5){State.Drops.Remove(d);CrewNews(null,"Items","SECURITY TOOK the ditched "+Catalog.FindItem(d.ItemId)?.Name);return true;}
             var point=Move(cop.X,cop.Z,d.X,d.Z,3*dt);cop.X=point.X;cop.Z=point.Z;return true;
         }
     }

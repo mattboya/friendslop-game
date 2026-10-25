@@ -4,18 +4,19 @@ using System.Collections.Generic;
 namespace Festival.Core
 {
     /// <summary>MINI-4 (docs/MINIGAMES_2026-09-30.md, Mystery Cups): a shady bartender sets out CupsFor(crew) cups, one of them spiked,
-    /// and the crew pushes its luck on a shared pot. Turns go round the players in a seeded order, CupTurnSeconds each: drink a cup
+    /// and the crew pushes its luck on a shared pot. The first turn's clock starts CupsIntroSeconds after the pour, while the card reads
+    /// the rules. Turns go round the players in a seeded order, CupTurnSeconds each: drink a cup
     /// (DrinkCup) or call it (CallCups), and a turn that runs out calls it. The nth safe cup adds CupStep × n to the pot. The spiked cup
     /// loses the pot and doses its drinker for the rest of the level, or one stronger up to the dose wheel's top; it never touches the
     /// spin's State.Doses, so the tripper's visions stay as they were rolled. Calling it pays the pot as sales: by day split across the
     /// players' cash, toward the quota; by night into the stash. Once only the spiked cup is left the game calls it. The tripper alone
-    /// is shown a cup as spiked (VisibleBooth), right at their vision reliability, else a safe one. The clock is unchanged (+0 s): the
+    /// is shown a hunch cup (VisibleBooth), the spiked one at HunchReliability, else a safe one. The clock is unchanged (+0 s): the
     /// pot is the stake.</summary>
     public sealed partial class FestivalSimulation
     {
         public const string MysteryCupsGame="MysteryCups",DrinkCup="Drink",CallCups="Call";
         public const int CupStep=5,MinCups=4;
-        public const double CupTurnSeconds=10;
+        public const double CupTurnSeconds=10,CupsIntroSeconds=3;
 
         /// <summary>How many cups a crew of `crew` plays: two more than it has, at least MinCups.</summary>
         public static int CupsFor(int crew)=>Math.Max(MinCups,crew+2);
@@ -23,6 +24,10 @@ namespace Festival.Core
         public static string CupsTurn(RoundState s){var b=s.Booth;return s.Phase==MinigamePhase&&b.Kind==MysteryCupsGame&&b.ScoredAt<0&&b.Turns.Count>0?b.Turns[b.Turn%b.Turns.Count]:"";}
         /// <summary>What the next safe cup adds to the pot: the nth adds CupStep × n.</summary>
         public static int NextCupPays(MinigameState b)=>CupStep*(b.Drunk.Count+1);
+        /// <summary>How often the tripper's hunch marks the spiked cup: their vision reliability for the spun dose (75 / 50 / 25 / 10%),
+        /// one step less sure in a game they play alone (50 / 25 / 10 / 10%), so a lone player cannot skip the marked cup for a free pot.
+        /// Every view carries the doses and the players, so the card can name these odds.</summary>
+        public static double HunchReliability(RoundState s)=>Reliability[Math.Min(Reliability.Length-1,TripperDose(s)-1+(s.Booth.PlayerIds.Count==1?1:0))];
         /// <summary>The booth as viewer's view carries it (FestivalSession.ViewFor): never which cup is spiked, and the tripper's hint
         /// to the tripper alone. The rest of the game is public.</summary>
         public static MinigameState VisibleBooth(RoundState s,string viewer){var b=s.Booth.Copy();b.Spiked=-1;if(viewer==""||viewer!=s.TripperId)b.Hint=-1;return b;}
@@ -33,8 +38,8 @@ namespace Festival.Core
         {
             var b=State.Booth;var random=new ContentRandom(unchecked((State.SpinSeed*67+37)^State.DealSeed));random.Next(100);
             b.Cups=CupsFor(b.PlayerIds.Count);b.Spiked=random.Next(b.Cups);
-            b.Hint=random.Next(100)<Math.Round(VisionReliability(State)*100)?b.Spiked:(b.Spiked+1+random.Next(b.Cups-1))%b.Cups;
-            b.Turns=Shuffled(new List<string>(b.PlayerIds),random);b.Turn=0;b.TurnAt=b.Seconds;b.Pot=0;b.Drunk.Clear();b.SpikedBy="";
+            b.Hint=random.Next(100)<Math.Round(HunchReliability(State)*100)?b.Spiked:(b.Spiked+1+random.Next(b.Cups-1))%b.Cups;
+            b.Turns=Shuffled(new List<string>(b.PlayerIds),random);b.Turn=0;b.TurnAt=b.Seconds+CupsIntroSeconds;b.Pot=0;b.Drunk.Clear();b.SpikedBy="";
         }
         // A move by a player in the game: only the one who is up drinks a cup still on the table or calls it.
         CommandResult PlayCups(PlayerState p,GameCommand c)

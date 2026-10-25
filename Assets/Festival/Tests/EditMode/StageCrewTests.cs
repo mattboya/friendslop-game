@@ -34,14 +34,14 @@ namespace Festival.Tests
         [Test]public void EveryStageSongGetsADancersPaceOnItsBeat()
         {
             var seen=new HashSet<string>();
-            for(int festival=0;festival<Festivals.Count;festival++)for(int level=0;level<Festivals.LevelCount;level++)
+            foreach(var track in FestivalMusic.Tracks)
             {
-                var track=FestivalStageAudio.TrackFor(festival,level);if(!seen.Add(track.Clip))continue;
+                if(!seen.Add(track.Clip))continue;
                 double bpm=track.Beats.Bpm;int steps=FestivalStageCrew.StepsPerBeat(bpm);
                 Assert.That(steps,Is.EqualTo(1).Or.EqualTo(2),track.Clip+" takes a whole number of steps a beat, so feet land on it");
                 Assert.That(steps*bpm/60,Is.InRange(2.0,3.0),track.Clip+" at "+bpm+" BPM keeps a dancer's pace");
             }
-            Assert.That(seen.Count,Is.EqualTo(4),"setup: both festivals' day and night songs");
+            Assert.That(seen.Count,Is.EqualTo(7),"setup: every loop the stages shuffle");
             Assert.That(FestivalStageCrew.StepsPerBeat(83.47),Is.EqualTo(2),"Ember Playa's one-drop dub gets a step on its skank too");
         }
 

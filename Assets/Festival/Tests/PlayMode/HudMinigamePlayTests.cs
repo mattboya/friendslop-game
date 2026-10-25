@@ -42,9 +42,13 @@ namespace Festival.Tests
                 Assert.That(session.State.Phase,Is.EqualTo(FestivalSimulation.MinigamePhase),"setup: the game starts: "+session.Message);
                 for(float until=Time.realtimeSinceStartup+.3f;Time.realtimeSinceStartup<until;)yield return null;
 
+                Assert.That(Find("Minigame title")?.text,Is.EqualTo("MYSTERY CUPS"),"the card names the game");
+                Assert.That(Find("Minigame detail")?.text,Does.StartWith("One of these 4 cups is spiked."),"and reads its rules");
+                for(float until=Time.realtimeSinceStartup+(float)FestivalSimulation.CupsIntroSeconds+2;sim.State.Booth.Seconds<sim.State.Booth.TurnAt&&Time.realtimeSinceStartup<until;)yield return null;
+                yield return null;yield return null;
                 // While it runs: the cups' card, the stopped clock and your turn's keys.
                 Assert.That(Find("Minigame title")?.text,Is.EqualTo("MYSTERY CUPS  •  POT $0"),"the card shows the game and its pot");
-                Assert.That(Find("Minigame detail")?.text,Does.StartWith("Your turn: ").And.Contains("Drink a cup for $5, or call it."),"and that you are up");
+                Assert.That(Find("Minigame detail")?.text,Does.StartWith("Your turn: ").And.Contains("Drink a cup for $5, or call it and bank $0."),"and that you are up");
                 string clock=Find("Time")?.text;
                 Assert.That(clock,Is.EqualTo(FestivalHudText.Clock(session.State)).And.Not.EqualTo("WAIT"),"the clock shows the time left, stopped");
                 for(float until=Time.realtimeSinceStartup+1.2f;Time.realtimeSinceStartup<until;)yield return null;

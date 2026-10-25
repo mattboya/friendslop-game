@@ -51,9 +51,12 @@ namespace Festival.Presentation
             }
         }
         private UniversalRenderPipelineAsset runtimePipeline;
-        private readonly Dictionary<int,RenderPipelineAsset> originalPipelines=new Dictionary<int,RenderPipelineAsset>();
-        private readonly Dictionary<int,int> originalVsync=new Dictionary<int,int>();
-        private int originalQuality,initialVsync,initialFrameCap;
+        // Live instances (each holds a runtime pipeline) share the first capture, and the last Dispose restores it: a session torn
+        // down first leaves a newer one's graphics alone. An instance that is never disposed blocks every later restore.
+        private static int live;
+        private static readonly Dictionary<int,RenderPipelineAsset> originalPipelines=new Dictionary<int,RenderPipelineAsset>();
+        private static readonly Dictionary<int,int> originalVsync=new Dictionary<int,int>();
+        private static int originalQuality,initialVsync,initialFrameCap;
         private string appliedPreset,appliedMode;
         private int initialWidth,initialHeight,appliedWidth,appliedHeight,appliedVsync,appliedCap;
         private FullScreenMode initialMode,requestedMode;
@@ -91,12 +94,12 @@ namespace Festival.Presentation
             Validate(Data);
             if(runtimePipeline==null)
             {
-                originalQuality=QualitySettings.GetQualityLevel();initialVsync=QualitySettings.vSyncCount;initialFrameCap=Application.targetFrameRate;
+                if(live==0){originalQuality=QualitySettings.GetQualityLevel();initialVsync=QualitySettings.vSyncCount;initialFrameCap=Application.targetFrameRate;}
                 initialWidth=display.Width;initialHeight=display.Height;initialMode=display.Mode;
                 var source=(QualitySettings.renderPipeline??GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
                 if(source==null)return;
                 runtimePipeline=UnityEngine.Object.Instantiate(source);runtimePipeline.name="Festival settings runtime pipeline";
-                runtimePipeline.hideFlags=HideFlags.HideAndDontSave;
+                runtimePipeline.hideFlags=HideFlags.HideAndDontSave;live++;
             }
             bool changed=appliedPreset!=Data.QualityPreset;
             if(changed)
@@ -146,14 +149,18 @@ namespace Festival.Presentation
         {
             calibration?.Dispose();calibration=null;
             if(runtimePipeline==null)return;
-            foreach(var entry in originalPipelines)
+            if(--live==0)
             {
-                QualitySettings.SetQualityLevel(entry.Key,false);QualitySettings.renderPipeline=entry.Value;QualitySettings.vSyncCount=originalVsync[entry.Key];
+                foreach(var entry in originalPipelines)
+                {
+                    QualitySettings.SetQualityLevel(entry.Key,false);QualitySettings.renderPipeline=entry.Value;QualitySettings.vSyncCount=originalVsync[entry.Key];
+                }
+                QualitySettings.SetQualityLevel(originalQuality,false);QualitySettings.vSyncCount=initialVsync;Application.targetFrameRate=initialFrameCap;
+                originalPipelines.Clear();originalVsync.Clear();
             }
-            QualitySettings.SetQualityLevel(originalQuality,false);QualitySettings.vSyncCount=initialVsync;Application.targetFrameRate=initialFrameCap;
             if(displayApplied&&(requestedMode!=initialMode||requestedWidth!=initialWidth||requestedHeight!=initialHeight))display.SetResolution(initialWidth,initialHeight,initialMode);
             if(Application.isPlaying)UnityEngine.Object.Destroy(runtimePipeline);else UnityEngine.Object.DestroyImmediate(runtimePipeline);
-            runtimePipeline=null;originalPipelines.Clear();originalVsync.Clear();appliedPreset=null;displayApplied=false;
+            runtimePipeline=null;appliedPreset=null;displayApplied=false;
         }
         // SET-1: sources apply authored gain and their bus. FestivalTrip alone applies master/focus/trip gain.
         public static float MusicGain(ProfileData data,float authoredGain=1)=>data==null?0:Mathf.Clamp01(data.MusicVolume*authoredGain);

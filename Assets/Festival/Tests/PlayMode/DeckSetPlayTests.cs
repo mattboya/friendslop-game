@@ -15,8 +15,8 @@ namespace Festival.Tests
 {
     // PLAYA-5 through the real keys, HUD and host: aboard an Ember Playa art car, E hops off and F plays a four-lane set on its deck.
     // Mid-set E, F and a tap of G do nothing, a lane key and a held arrow reach the set, and only holding G stops it, which hops off
-    // the car too. A list built just before the set began can't stop it. A friend sees the rider dance the set on the car, and only
-    // the rider is told what the crowd tipped.
+    // the car too. A list built just before the set began can't stop it, and neither can a joined rider's E while their view still
+    // shows the plain ride. A friend sees the rider dance the set on the car, and only the rider is told what the crowd tipped.
     public sealed class DeckSetPlayTests:FestivalPlayModeTest
     {
         static readonly Key[] ArrowKeys={Key.LeftArrow,Key.DownArrow,Key.UpArrow,Key.RightArrow};
@@ -132,6 +132,91 @@ namespace Festival.Tests
                 Assert.That(FestivalSimulation.ArtCarOf(sim.State,player.Id),Is.EqualTo(-1));
             }
             finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        // A joined view lags the host. F turns the plain ride into a set on the host while the rider's view still shows the ride,
+        // so E there still offers the way off. That Cancel names the ride, and the host refuses it: the set plays on, at no cost.
+        // The menu's CANCEL ACTION, a held G and Get up also name what the view shows.
+        [UnityTest]public IEnumerator AJoinedRidersLateECannotStopASetTheirViewHasNotShownYet()
+        {
+            UseAVirtualKeyboard("PLAYA-8 late keyboard");
+            world=new GameObject("PLAYA-8 late world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("PLAYA-8 late host");var host=hostRoot.AddComponent<FestivalSession>();hostRoot.AddComponent<FestivalHud>();yield return null;
+            root=new GameObject("PLAYA-8 late rider");var rider=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            var sends=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);yield return null;Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);host.Controls.Map.Disable();
+                sim=Simulation(host);sim.State.FestivalIndex=Festivals.PlayaFestival;sim.State.UnlockedFestivalCount=2;
+                rider.Join("Rider","127.0.0.1",port);
+                yield return Until(()=>rider.LocalPlayer!=null,30);Assert.That(rider.LocalPlayer,Is.Not.Null,rider.Message);
+                player=sim.Player(rider.LocalPlayerId);player.X=0;player.Z=19;rider.Command("Ready");
+                yield return Until(()=>player.Ready,5);Assert.That(player.Ready,Is.True,rider.Message);
+                yield return StartLevel(host,rider.LocalPlayerId);
+                sim.State.Npcs.Clear();player.Effects.Clear();player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
+                var at=Festivals.ArtCarAt(0,sim.State.ElapsedSeconds);player.X=at.X;player.Z=at.Z;
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-board",Kind=FestivalSimulation.RideCarKind}).Accepted,Is.True,"setup: the rider climbs aboard");
+                var ride=Doing;
+                yield return Until(()=>rider.LocalPlayer?.InteractionId==ride.Id,3);yield return new WaitForSeconds(.4f);
+                Assert.That(Text(root,"Action prompt/Prompt"),Is.EqualTo(HopOffOrDeck),"setup: aboard, the rider's E hops off and F plays the deck");
+
+                // The rider's view stops here: the host sends no snapshot while F and then E go out.
+                sends.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                yield return Tap(Key.F);
+                yield return Until(()=>Doing?.Kind==FestivalSimulation.DeckSetKind,3);var deck=Doing;
+                Assert.That(deck?.Kind,Is.EqualTo(FestivalSimulation.DeckSetKind),"setup: the rider's F plays the set on the host: "+rider.Message);
+                Assert.That(rider.LocalPlayer.InteractionId,Is.EqualTo(ride.Id),"setup: the rider's view still shows the plain ride");
+                // Setup: a fan who has watched the set from the start, a little suspicious, and far enough off to see nothing new.
+                var fan=new NpcState{Id="playa8_fan",X=player.X+40,Z=player.Z};fan.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=40});
+                sim.State.Npcs.Add(fan);deck.WitnessIds.Add(fan.Id);
+
+                yield return Tap(Key.E,.1f);
+                yield return Until(()=>deck.Status!="Active"||rider.Message=="That action already ended",3);
+                Assert.That(deck.Status,Is.EqualTo("Active"),"the late E leaves the set playing: "+rider.Message);
+                Assert.That(player.InteractionId,Is.EqualTo(deck.Id));Assert.That(FestivalSimulation.ArtCarOf(sim.State,player.Id),Is.EqualTo(0),"still aboard art car 0");
+                Assert.That(rider.Message,Is.EqualTo("That action already ended"),"the host refused a Cancel that named the ride");
+                bool Refused(int after)=>sim.State.Commands.Skip(after).Any(c=>c.PlayerId==player.Id&&c.Result.Reason=="That action already ended");
+                int sent=sim.State.Commands.Count;
+                root.GetComponentsInChildren<Button>(true).First(b=>b.name=="CANCEL ACTION").onClick.Invoke();
+                yield return Until(()=>deck.Status!="Active"||Refused(sent),3);
+                Assert.That(deck.Status,Is.EqualTo("Active"),"nor does the menu's CANCEL ACTION, which reads the same view: "+rider.Message);
+                Assert.That(Refused(sent),Is.True,"the host refused the menu's Cancel");
+                Assert.That(fan.Observers.Find(o=>o.PlayerId==player.Id)?.Suspicion??0,Is.LessThan(41),"and the set's witness grows no more suspicious");
+
+                // Once the view catches up, the rider sees the set.
+                sends.SetValue(host,0d);
+                yield return Until(()=>rider.LocalPlayer?.InteractionId==deck.Id,3);
+                Assert.That(rider.LocalPlayer?.InteractionId,Is.EqualTo(deck.Id),"the rider's view catches up to the set");
+
+                // Behind a view that shows the set, the set ends on the host and the rider boards again: a held G names the set.
+                sends.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-off",Kind="Cancel"}).Accepted,Is.True,"setup: the set ends on the host");
+                at=Festivals.ArtCarAt(0,sim.State.ElapsedSeconds);player.X=at.X;player.Z=at.Z;
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-reboard",Kind=FestivalSimulation.RideCarKind}).Accepted,Is.True,"setup: the rider boards again");
+                var again=Doing;sent=sim.State.Commands.Count;
+                yield return HoldG();
+                yield return Until(()=>again.Status!="Active"||Refused(sent),3);
+                Assert.That(again.Status,Is.EqualTo("Active"),"a held G for the set the view still shows leaves the new ride alone: "+rider.Message);
+                Assert.That(Refused(sent),Is.True,"the host refused the held G's Cancel");
+                Assert.That(FestivalSimulation.ArtCarOf(sim.State,player.Id),Is.EqualTo(0),"still aboard art car 0");
+
+                // On the grass, the view shows one lie-down while the host has swapped it for another: E's Get up names the first.
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-hop",Kind="Cancel"}).Accepted,Is.True,"setup: the rider hops off");
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-lie",Kind=FestivalSimulation.LieDownKind}).Accepted,Is.True,"setup: the rider lies down");
+                var lie=Doing;sends.SetValue(host,0d);
+                yield return Until(()=>rider.LocalPlayer?.InteractionId==lie.Id,3);yield return new WaitForSeconds(.4f);
+                Assert.That(Text(root,"Action prompt/Prompt"),Is.EqualTo(FestivalHudText.GetUpAction),"setup: lying down, the rider's E gets up");
+                sends.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-up",Kind="Cancel"}).Accepted,Is.True,"setup: the rider gets up on the host");
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="playa8-lie-again",Kind=FestivalSimulation.LieDownKind}).Accepted,Is.True,"setup: and lies down again");
+                var relie=Doing;sent=sim.State.Commands.Count;
+                yield return Tap(Key.E,.1f);
+                yield return Until(()=>relie.Status!="Active"||Refused(sent),3);
+                Assert.That(relie.Status,Is.EqualTo("Active"),"E gets up only from the lie-down the view shows: "+rider.Message);
+                Assert.That(Refused(sent),Is.True,"the host refused the Get up");
+            }
+            finally{sends.SetValue(host,0d);rider.Leave();host.Leave();Object.Destroy(root);Object.Destroy(hostRoot);Object.Destroy(world);}
             yield return null;
         }
 

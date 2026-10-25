@@ -125,6 +125,8 @@ namespace Festival.Presentation
         Texture2D ownedPalette,garmentPalette,skinPalette;
         Renderer eyeRenderer;
         Renderer spoonRenderer;
+        // The worn backpack (Accessory_0), slipped off in the headliner's chair: it reaches about .2 m through the chair's back.
+        Renderer backpackRenderer;
         SkinnedMeshRenderer faceRenderer;
         int blinkIndex=-1;
         int intoxicatedEyesIndex=-1;
@@ -132,7 +134,7 @@ namespace Festival.Presentation
         /// <summary>GAS-1: on Giggle Gas, so they giggle (FestivalSession sets it from the view's VisualGiggling).</summary>
         public bool Giggling;
         /// <summary>POI-1: spinning the poi in hand, held on either click (FestivalSession sets it from the view's VisualPoiSpin, and
-        /// from the click itself for your own body). Only for show: it shows while carrying poi standing or walking.</summary>
+        /// from the click itself for your own body). It shows while carrying poi standing or walking.</summary>
         public bool SpinningPoi;
         /// <summary>POI-7: with SpinningPoi, the spin is right click's, each poi wheeling beside its hand instead of the butterfly.</summary>
         public bool SpinningPoiSides;
@@ -220,6 +222,7 @@ namespace Festival.Presentation
                     else renderer.sharedMaterial=actor.SurfaceFor(renderer.name);
                     renderer.enabled=actor.KeepMesh(renderer.name);
                     if(renderer.name=="Equipment_LittleSpoon")actor.spoonRenderer=renderer;
+                    if(renderer.name=="Accessory_0"&&renderer.enabled)actor.backpackRenderer=renderer;
                 }
                 if(renderer is SkinnedMeshRenderer skin && !renderer.name.StartsWith("Body_"))
                 {
@@ -428,6 +431,7 @@ namespace Festival.Presentation
             // the ground it rolls over. PLAYA-5: a deck set dances up there the same way. POLO-5: a Ferris wheel rider sits in their
             // gondola as it carries them round.
             bool seated=Pose==FestivalSimulation.RideWheelKind,chair=Pose==FestivalSimulation.CampChairPose,decking=Pose==FestivalSimulation.DeckSetKind,riding=seated||chair||decking||Pose==FestivalSimulation.RideCarKind;
+            if(backpackRenderer!=null)backpackRenderer.enabled=!chair;
             float measuredSpeed=hasPrevious&&delta.magnitude<2&&!riding?Mathf.Min(6,delta.magnitude/animationDelta):0;
             float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
@@ -844,7 +848,7 @@ namespace Festival.Presentation
                 case "Downed":return speed>.35f?("BeingDragged",true,true,Mathf.Clamp(speed/1.2f,.4f,2f)):("CrawlDowned",true,true,.45f);
                 case "Drag":return ("DragOther",true,false,1);
                 case "Detained":return ("DetainedEscort",true,false,1);
-                case "Extract":return ("Cheer",true,false,1);
+                case "Extract":case "Cheer":return ("Cheer",true,false,1);
                 case "Watching":return ("WookStare",false,false,1);
                 // DIALOG-3: a player in a sale, a buy, a chat or a talk with security (FestivalSimulation.Talks) talks, as a
                 // questioning festivalgoer does.

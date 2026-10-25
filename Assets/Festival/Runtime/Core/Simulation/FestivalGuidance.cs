@@ -14,9 +14,9 @@ namespace Festival.Core
             if(state.Phase=="Spinning")return "SPINNING FOR THE TRIPPER";
             if(state.Phase=="Loading")return "HEADING TO THE FESTIVAL";
             if(state.Phase=="Results")return state.Result=="Success"?"FRIEND RESCUED • BACK TO CAMP":"ROUND OVER • BACK TO CAMP";
-            if(player.Life=="Downed")return "DOWNED • CALL FOR HELP";
+            if(player.Life=="Downed")return "DOWNED • "+(int)Math.Ceiling(Math.Max(0,player.DownedRemaining))+" s";
             if(player.Life=="Detained")return "DETAINED • ESCAPE OR GET RELEASED";
-            if(player.Life=="Spirit")return "SPIRIT • REACH THE MEDICAL TENT";
+            if(player.Life=="Spirit")return RevivalsLeft(player)>0?"SPIRIT • REACH THE MEDICAL TENT":"SPIRIT • NO REVIVALS LEFT";
             // CROWD-2: a big crew's night counts both lost friends.
             var second=state.SecondFriend;
             if(second.Active){int found=(state.FriendFound?1:0)+(second.Found?1:0);return found==2?"ESCORT BOTH FRIENDS BACK TO CAMP":"TWO FRIENDS LOST • "+found+" / 2 FOUND";}
@@ -36,18 +36,18 @@ namespace Festival.Core
         public static string Hint(RoundState state, PlayerState player)
         {
             if(state==null||player==null)return "";
-            // Camp shows its own card (FestivalHudText.ObjectiveDetail), never this hint.
-            if(state.Phase=="Shopping")return "";
+            // Camp and results show their own cards (FestivalHudText.ObjectiveDetail), never this hint.
+            if(state.Phase=="Shopping"||state.Phase=="Results")return "";
             if(state.Phase=="Spinning")return "The slot machine picks who trips this level, how many doses they take and what they took.";
             if(state.Phase=="Loading")return "Waiting for the crew to enter the festival.";
             // HUD-3: once every vote is in (or solo practice drew none) the ballot is gone and the verdict plays; only the host acts.
-            if(state.Phase=="CampReview")return !FestivalSimulation.ReviewRevealed(state)?"Click a friend for each award, or press 1, 2 or 3. Then the host opens the camp shop."
+            // The slot keys by action: the HUD reads in the bound keys (FestivalHudText.PressKeys).
+            if(state.Phase=="CampReview")return !FestivalSimulation.ReviewRevealed(state)?"Click a friend for each award, or press {Slot1}, {Slot2} or {Slot3}. Then the host opens the camp shop."
                 :player.Id==state.HostPlayerId?"Once the verdict has played, press E to open the camp shop.":"Waiting for the host to open the camp shop.";
-            if(state.Phase=="Results")return player.Id==state.HostPlayerId
-                ?"Open Escape menu and choose NEXT ROUND to return to camp."
-                :"Waiting for the host to start the next camp round.";
-            if(player.Life=="Downed")return "Press E to distract attackers; a teammate can rescue or drag you.";
+            if(player.Life=="Downed")return CrewCount(state)==1?"Nobody can help you up alone. When the time runs out, you become a spirit and can come back at the medical tent."
+                :"Press E to distract attackers; a teammate can rescue or drag you.";
             if(player.Life=="Detained")return "Press E to work on escape, or ask a teammate for release.";
+            if(player.Life=="Spirit"&&RevivalsLeft(player)==0)return "No revivals left this level: you stay a spirit until it ends.";
             if(player.Life=="Spirit")return "Medical tent "+Route(player,24,-20)+(CrewCount(state)==1?". Press E there for a 15-second self-revival task.":". Ask a teammate with your wristband to revive you.");
             if(FestivalSimulation.OnWheel(state,player.Id))return Lookout(state,player);
             var second=state.SecondFriend;
@@ -120,6 +120,10 @@ namespace Festival.Core
         }
 
         private static PlayerState Escort(RoundState state,string id) => state.Players.Find(p=>p.Id==id&&p.Connected&&p.Life=="Alive");
+
+        /// <summary>Revivals each player gets in a level. Danger.Revive, the Revival interaction and Weekend still check a literal 2.</summary>
+        public const int RevivalsPerLevel=2;
+        public static int RevivalsLeft(PlayerState player)=>Math.Max(0,RevivalsPerLevel-player.RevivalCount);
 
         private static int CrewCount(RoundState state) => state.ConnectedCrewCount>0?state.ConnectedCrewCount:state.Players.FindAll(p=>p.Connected).Count;
 

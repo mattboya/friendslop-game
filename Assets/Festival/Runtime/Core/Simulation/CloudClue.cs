@@ -54,7 +54,7 @@ namespace Festival.Core
             if(lying!=null&&Math.Min(State.SimulationSeconds-lying.StartSeconds,State.ElapsedSeconds-State.CloudClueStart)>=ClueReadSeconds)State.CloudClueReadAt=State.SimulationSeconds;
             var stash=CloudStashAt(State);
             var finder=stash==null?null:State.Players.Find(p=>p.Connected&&p.Life=="Alive"&&Near(p,stash.X,stash.Z));
-            if(finder!=null){State.CloudStashFound=true;State.CloudStashFinderId=finder.Id;State.StashCash+=SecretStashCash;}
+            if(finder!=null){State.CloudStashFound=true;State.CloudStashFinderId=finder.Id;State.StashCash+=SecretStashCash;CrewNews(finder,"Stash",MoneyNotice("STASH",SecretStashCash)+"  •  "+finder.Name+" found the cloud's stash");}
         }
     }
 }

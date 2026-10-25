@@ -170,7 +170,7 @@ public static class ConfirmTests
         double firstAfterPress=dance.StartSeconds+notes[0].TimeSeconds-pressed;
         Check(firstAfterPress>=Catalog.FindEffect("ketamine").LeadSeconds,"Pony Dust's first arrow needs 2.4 s to enter at the bottom, but its beat is only "+firstAfterPress+" s after the press");
         Check(Math.Abs(dance.StartSeconds-pressed-2)<1e-9,"a check uses the same 2 s lead-in as a Dance");
-        Check(notes.Count==4&&notes[0].TimeSeconds>=2&&dance.StageTrack==RhythmChart.StageTrackFor(s.State.FestivalIndex,s.State.LevelIndex),"the four logical check steps follow the shared authored music after arrow preparation");
+        Check(notes.Count==4&&notes[0].TimeSeconds>=2&&dance.StageTrack==StageMusic.TrackAt(s.State,tripper.X,tripper.Z),"the four logical check steps follow the nearer stage's authored music after arrow preparation");
         int next=0;
         for(int guard=0;dance.Status=="Active"&&guard<100;guard++)
         {

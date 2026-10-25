@@ -38,9 +38,10 @@ namespace Festival.Core
         public InteractionState Interaction(string id) {return State.Interactions.Find(i=>i.Id==id);}
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion<1||state.SchemaVersion>RoundState.CurrentSchemaVersion||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
-            var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.StarterStockBought<0||p.StarterStockBought>1||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
-            if(state.Npcs==null||state.Interactions==null||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.Booth==null||state.Booth.PlayerIds==null||state.Booth.Drunk==null||state.Booth.Turns==null||state.MinigameBag==null||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
+            var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.StarterStockBought<0||p.StarterStockBought>1||p.VisualGiggleTakeSequence<0||p.VisualConfettiBurstSequence<0||p.GiggleTankBankSequence<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
+            if(state.Npcs==null||state.Interactions==null||state.Interactions.Exists(i=>i!=null&&(i.Ask<FairAsk||i.Ask>GreedyAsk))||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.Booth==null||state.Booth.PlayerIds==null||state.Booth.Drunk==null||state.Booth.Turns==null||state.MinigameBag==null||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount<1||state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=(DevelopmentFestivalSelection?Festivals.Count:state.UnlockedFestivalCount)||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
+            if(state.TestMode&&!DevelopmentFestivalSelection)throw new ArgumentException("Test mode is only in test builds");
             // A round saved before weekends restores at Day 1 of the first festival. One that had left camp was a rescue: it resumes
             // as Night 1, the night it was, with the way to its friend open, as it holds no tripper's clue trail. Either way it is
             // a current round from here on, so saving it again does not re-read a weekend Day 1 as an old rescue.
@@ -69,6 +70,9 @@ namespace Festival.Core
         /// action as "Round is not interactive", and the HUD offers none then (the wheels spinning, the festival loading).</summary>
         public static bool Interactive(string phase)=>phase=="Playing"||phase=="Shopping";
         CommandResult Apply(PlayerState p,GameCommand c) {
+            // PLAYA-8: a joined view lags the host, so a Cancel can name an interaction that has already ended or been replaced
+            // (F turns a plain ride into a deck set). Refuse it at no cost. A Cancel that names nothing keeps its old meaning.
+            if(c.Kind=="Cancel"&&c.TargetId!=""&&c.TargetId!=p.InteractionId)return Reject("That action already ended");
             if(State.Phase==MinigamePhase)return Paused(p,c);
             if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");ReleaseCampSeat(p.Id);p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
             if(c.Kind=="Start") {
@@ -93,6 +97,7 @@ namespace Festival.Core
             if(c.Kind=="EndChat")return EndChat(p,c);
             if(c.Kind=="Chime") {if(p.Life!="Spirit"||!Near(p,24,-20)||State.SimulationSeconds<p.ChimeUntil)return Reject("Chime requires medical memorial and cooldown");p.ChimeUntil=State.SimulationSeconds+10;return Ok("Memorial chime");}
             if(c.Kind=="HelpSelf")return HelpSelf(p);
+            if(c.Kind==TestModeKind||c.Kind==TestFreeKind||c.Kind==TestClearLevelKind)return TestCommand(p,c);
             if(c.Kind=="BeginRevival"&&p.Life=="Spirit")return Revive(p,c);
             if(p.Life!="Alive")return Reject("Requires a living, free player");
             if(!Interactive(State.Phase))return Reject("Round is not interactive");
@@ -166,12 +171,16 @@ namespace Festival.Core
             double speed=MoveSpeed(p,true);
             double distance=Distance(p.X,p.Z,x,z);if(distance>speed*deltaSeconds+.03)return false;
             Crush(p,ref x,ref z);
-            if(p.Life=="Detained"&&Distance(x,z,27,5)>3)return false;
+            // ApplyMovement slides the host's player and every client's through here, so this one rule holds them all.
+            if(p.Life=="Detained"&&!Festivals.InHolding(x,z))return false;
             if(!MayStep(p,x,z))return false;
             if(!CarryTo(p,x,z))return false;
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
             if(Distance(p.X,p.Z,x,z)>.001)ReleaseCampSeat(p.Id);
-            p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);if(target!=null&&target.Life=="Downed"){target.X=x-1;target.Z=z;}return true;
+            p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);
+            // A dragged body skips the walls, and only Free lets anyone out of the closed security building, so the body waits outside.
+            // ponytail: it can jump round a corner when it follows again; route the body if that reads badly.
+            if(target!=null&&target.Life=="Downed"&&!Festivals.SecurityBuilding.Contains(x-1,z,.4f)){target.X=x-1;target.Z=z;}return true;
         }
         /// <summary>How fast p may move now, in metres a second. FestivalSession.ApplyMovement moves at it and TryMove refuses faster
         /// steps, so the host's two movement paths share one rule. A poi spin ignores Sprint, so it can't be held all game for free.</summary>
@@ -204,7 +213,7 @@ namespace Festival.Core
             next.ReviewResult=old.Result;next.ReviewSales=old.GrossSales;next.ReviewFestivalIndex=old.FestivalIndex;
             next.ReviewSurvivors=old.Survivors;
             foreach(var player in old.Players)next.ReviewAntics+=player.CampAntics;
-            next.CampMusicTrack=old.CampMusicTrack;
+            next.CampMusicTrack=old.CampMusicTrack;next.TestMode=old.TestMode;
             State=next;
             foreach(var player in old.Players)
             {

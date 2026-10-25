@@ -12,9 +12,9 @@ namespace Festival.Presentation
     /// (FestivalTwistVisuals) and FestivalNightLighting drains a little colour. So whatever a game draws while it runs (MINI-2..4)
     /// runs on unscaled time, as the HUD does. ponytail: a people rig and primitives, as no booth model exists and the art is frozen.
     /// MINI-4: a Mystery Cups booth sets its cups out in a numbered row on a table in front of the stranger (ShowCups); the cup under
-    /// the aim dot is the one its player drinks (AimedCup), and in the tripper's view the cup their hunch marks glows. MINI-2: the
-    /// Drum Circle's song comes with the booth (FestivalDrumAudio). MINI-3: the Light Show comes with it too, its stranger the glover
-    /// (FestivalLightShowView).</summary>
+    /// the aim dot is the one its player drinks (AimedCup), and in the tripper's view the cup their hunch marks shimmers amber.
+    /// MINI-2: the Drum Circle's song comes with the booth (FestivalDrumAudio). MINI-3: the Light Show comes with it too, its stranger
+    /// the glover (FestivalLightShowView).</summary>
     [RequireComponent(typeof(FestivalDrumAudio),typeof(FestivalLightShowView))]
     public sealed class FestivalMinigameView : MonoBehaviour
     {
@@ -27,7 +27,9 @@ namespace Festival.Presentation
         // MINI-4: the cups, CupGap m apart in a row on a TableTop m high table TableAhead m in front of the stranger, each CupWidth
         // across and CupHeight tall, its number NumberAbove m over its middle. The cup the player up looks at lifts AimLift m; the
         // aim picks the cup nearest its line within AimDegrees. Built for a full crew of eight's cups; ShowCups shows those played.
-        public const string CupsName="Mystery cups",CupLook="Cream",HunchLook="StageGlowRed";
+        // A shimmer, not a steady glow, so the hunch reads as a guess. About 1.4 Hz keeps it under the 3 Hz flash limit.
+        public const string CupsName="Mystery cups",CupLook="Cream",HunchLook="StageGlowGold",HunchDimLook="Gold";
+        public const float HunchBeat=.35f;
         private const float CupGap=.3f,TableTop=.82f,TableAhead=.95f,CupWidth=.16f,CupHeight=.2f,NumberAbove=.24f,AimLift=.08f,AimDegrees=6;
         private static readonly int MaxCups=FestivalSimulation.CupsFor(8);
         private FestivalSession session;
@@ -45,7 +47,8 @@ namespace Festival.Presentation
             var state=session.State;Show(booth,state);
             if(state!=null&&state.Booth.Kind!=signKind){signKind=state.Booth.Kind;NameGame(booth,signKind);}
             var view=FestivalCharacter.ViewTransform;
-            ShowCups(booth,state,state!=null&&FestivalSimulation.CupsTurn(state)==session.LocalPlayerId?AimedCup(state,view):-1,view);
+            var data=session.Profile?.Data;
+            ShowCups(booth,state,state!=null&&FestivalSimulation.CupsTurn(state)==session.LocalPlayerId?AimedCup(state,view):-1,view,Time.unscaledTime,data!=null&&data.ReducedMotion);
             bool freeze=state!=null&&state.Phase==FestivalSimulation.MinigamePhase;
             if(freeze!=frozen){frozen=freeze;Time.timeScale=freeze?0:1;}
         }
@@ -108,9 +111,9 @@ namespace Festival.Presentation
 
         /// <summary>MINI-4, every frame: a Mystery Cups booth's cups, as many as the crew will play before its game (FestivalSimulation.
         /// CupsFor the living crew) and as were poured once it runs, every drunk one gone. The cup the hint marks, which only the
-        /// tripper's view carries, glows; `aimed`, the cup the player up looks at, lifts; numbers turn to face the view. Another game's
-        /// booth hides them. It allocates nothing.</summary>
-        public static void ShowCups(Transform booth,RoundState state,int aimed,Transform view)
+        /// tripper's view carries, shimmers amber at `time` (HunchLookAt); `aimed`, the cup the player up looks at, lifts; numbers turn
+        /// to face the view. Another game's booth hides them. It allocates nothing.</summary>
+        public static void ShowCups(Transform booth,RoundState state,int aimed,Transform view,float time=0,bool reducedMotion=false)
         {
             if(!booth.gameObject.activeSelf)return;
             var cups=booth.Find(CupsName);var b=state.Booth;
@@ -125,10 +128,13 @@ namespace Festival.Presentation
                 if(cup.gameObject.activeSelf!=on)cup.gameObject.SetActive(on);
                 if(!on)continue;
                 cup.localPosition=CupLocal(i,count)+(i==aimed?Vector3.up*AimLift:Vector3.zero);
-                cup.GetChild(0).GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor(i==b.Hint?HunchLook:CupLook);
+                cup.GetChild(0).GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor(i==b.Hint?HunchLookAt(time,reducedMotion):CupLook);
                 if(view!=null){var number=cup.GetChild(1);number.rotation=Quaternion.LookRotation(number.position-view.position);}
             }
         }
+        /// <summary>The hunch cup's look at `time` (unscaled seconds): lit, then dim, each HunchBeat s; always lit with reduced
+        /// motion.</summary>
+        public static string HunchLookAt(float time,bool reducedMotion)=>reducedMotion||Mathf.Repeat(time,2*HunchBeat)<HunchBeat?HunchLook:HunchDimLook;
         /// <summary>MINI-4: where the middle of cup i of `cups` stands, on the table of the booth at `at`, which the aim is taken to.</summary>
         public static Vector3 CupAt(WorldPoint at,int i,int cups)=>new Vector3(at.X,0,at.Z)+Facing(at)*CupLocal(i,cups);
         /// <summary>MINI-4: the cup on the table that view looks most nearly at, within AimDegrees of its line, for the Mystery Cups game

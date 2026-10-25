@@ -9,6 +9,8 @@ namespace Festival.Core
     {
         bool Sells(NpcState n)=>SellerCategory(n)||n.Role=="Narc"&&n.Twist!=VipGuard;
         const string NarcBust="Busted! That was an undercover narc.";
+        /// <summary>The talk score a buy needs before they sell to you; the chat window's meter marks it.</summary>
+        public const double BuyScore=.4;
         /// <summary>The one kind a festivalgoer sells, by the number their id ends in: even Tongue Stamps, odd Fun Guys. It reads
         /// nothing but the id, so the HUD can name it on every festivalgoer without the label giving a role away.</summary>
         public static string SellerStock(string npcId)=>!string.IsNullOrEmpty(npcId)&&char.IsDigit(npcId[npcId.Length-1])&&(npcId[npcId.Length-1]-'0')%2==1?"stock_mushrooms":"stock_lsd";
@@ -25,16 +27,16 @@ namespace Festival.Core
         }
         // The price is held while they talk; Cancel gives it back (a cancel, walking off, a disconnect or a bust).
         static void HoldPrice(PlayerState p,InteractionState i){int price=Catalog.FindItem(SellerStock(i.TargetId)).Price;p.Cash-=price;i.ReservedCash=price;}
-        // Settled on the talk's score alone: .4 or more spends the held price on one unit, equipped as a shop purchase is (at the
+        // Settled on the talk's score alone: BuyScore or more spends the held price on one unit, equipped as a shop purchase is (at the
         // buyer's feet if their hands filled meanwhile); below that it comes back. A buy talked through with a narc, however it
         // went, is a bust (Detain gives the price back first); one whose trust dance failed never got that far.
         void SettleBuy(InteractionState i,PlayerState p)
         {
             var seller=State.Npcs.Find(n=>n.Id==i.TargetId);
             if(seller?.Role=="Narc"&&i.Turns.Count>0){Detain(p);return;}
-            if(i.Score<.4){p.Cash+=i.ReservedCash;return;}
+            if(i.Score<BuyScore){Refund(p,i);return;}
             string item=SellerStock(i.TargetId);if(seller!=null)seller.StockSold++;
-            if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});return;}
+            if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});News(p,"Items","HANDS FULL  •  "+Catalog.FindItem(item).Name+" dropped at your feet");return;}
             Add(p,item,1);p.EquippedItemId=item;p.VisualReceivedItem=item;p.VisualReceiptSequence++;p.VisualReceiptAt=State.SimulationSeconds;
         }
     }

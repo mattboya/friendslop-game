@@ -39,6 +39,10 @@ namespace Festival.Presentation
         public static string PreferencesScope {get;set;}
 #endif
         public bool Rebinding => rebind != null;
+        /// <summary>How many times a keyboard's layout has changed. A new layout renames keys on the same binding paths (the Q key
+        /// reads A on AZERTY), so a cached key name is read again when this moves.</summary>
+        public int LayoutChanges {get;private set;}
+        private void CountLayoutChange(InputDevice device,InputDeviceChange change){if(change==InputDeviceChange.ConfigurationChanged&&device is Keyboard)LayoutChanges++;}
         // Cancellation survives a disable/re-enable between HUD frames. The physical latch prevents a held key becoming a new press.
         public int DropCancellationSequence {get;private set;}
         public bool DropPhysicallyPressed
@@ -105,6 +109,7 @@ namespace Festival.Presentation
             if(string.IsNullOrEmpty(this.profile.Data.BindingOverridesJson))ImportLegacy();
             SynchronizeBindings();
             Map.Enable();
+            InputSystem.onDeviceChange+=CountLayoutChange;
         }
         private static string Identity(string name)
         {
@@ -219,6 +224,6 @@ namespace Festival.Presentation
             for(int lane=0;lane<4;lane++)if(noteHeld[lane]){noteReleased[lane]=true;noteHeld[lane]=false;}
         }
         public void CancelRebind(){rebind?.Cancel();}
-        public void Dispose(){rebind?.Dispose();rebind=null;Map.Dispose();}
+        public void Dispose(){InputSystem.onDeviceChange-=CountLayoutChange;rebind?.Dispose();rebind=null;Map.Dispose();}
     }
 }

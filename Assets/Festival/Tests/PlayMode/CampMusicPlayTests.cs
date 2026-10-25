@@ -13,7 +13,8 @@ namespace Festival.Tests
 {
     // MUSIC-2 at camp, in a hosted session: the camp plays TECH HOUSE to start, the DJ table's E steps through the seven recorded
     // tracks and SILENCE, and SILENCE stops the music. The loop joins on the audio clock: two decks take turns, and at the loop's end
-    // the other deck is already playing from the first beat.
+    // the other deck is already playing from the first beat. The camp plays through the stage's FestivalMusic.Transport and
+    // keeps no loop of its own.
     public sealed class CampMusicPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator TheDjTableStepsThroughTheRecordedTracksAndSilenceStopsThem()
@@ -28,6 +29,10 @@ namespace Festival.Tests
                 while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
                 var camp=host.GetComponent<FestivalCampAudio>();var player=Simulation(session).Player(session.LocalPlayerId);
+                const BindingFlags Private=BindingFlags.NonPublic|BindingFlags.Instance;
+                Assert.That(typeof(FestivalCampAudio).GetField("turnAt",Private),Is.Null,"the camp keeps no loop of its own");
+                var transport=(FestivalMusic.Transport)typeof(FestivalCampAudio).GetField("transport",Private)?.GetValue(camp);
+                Assert.That(transport,Is.Not.Null,"the camp plays through the shared transport");
                 Text Find(string name){foreach(var text in host.GetComponentsInChildren<Text>(false))if(text.name==name)return text;return null;}
                 var primary=typeof(FestivalHud).GetField("primaryAction",BindingFlags.NonPublic|BindingFlags.Instance);
                 string Playing()=>camp.Music==null?"nothing":camp.Music.clip==null?"no clip":camp.Music.clip.name+(camp.Music.isPlaying?"":" (stopped)");
@@ -69,9 +74,9 @@ namespace Festival.Tests
                     var track=FestivalMusic.For(choice);
                     Assert.That(Playing(),Is.EqualTo(track.Clip),"the chosen recording plays from its introduction");
                     Assert.That(camp.Music.timeSamples,Is.LessThan(FestivalMusic.Rate),"first pass starts at file sample zero, retaining the intro");
-                    typeof(FestivalCampAudio).GetMethod("Play",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(camp,new object[]{choice,track.LoopEnd-FestivalMusic.Rate/2});
-                    var turn=typeof(FestivalCampAudio).GetField("turnAt",BindingFlags.NonPublic|BindingFlags.Instance);
-                    double turnAt=(double)turn.GetValue(camp);
+                    transport.Play(track,track.LoopEnd-FestivalMusic.Rate/2,AudioSettings.dspTime);
+                    var turn=typeof(FestivalMusic.Transport).GetField("turnAt",Private);
+                    double turnAt=(double)turn.GetValue(transport);
                     yield return new WaitForSeconds(.3f);
                     var cued=camp.Music;
                     Assert.That(AudioSettings.dspTime,Is.LessThan(turnAt),"setup: before the loop's end");
@@ -83,7 +88,7 @@ namespace Festival.Tests
                     Assert.That(Playing(),Is.EqualTo(track.Clip),"still the selected recording");
                     Assert.That((looped.timeSamples-track.FirstBeat)/(double)FestivalMusic.Rate,Is.EqualTo(since).Within(.05),"from the first beat, on the audio clock");
                     Assert.That(FestivalMusic.BeatPhase(looped),Is.EqualTo(track.BeatPhase(looped.timeSamples)).Within(.02f),"the beat API follows the deck that is playing");
-                    Assert.That((double)turn.GetValue(camp),Is.EqualTo(turnAt+track.LoopSeconds).Within(1e-6),"and the next turn is one loop later");
+                    Assert.That((double)turn.GetValue(transport),Is.EqualTo(turnAt+track.LoopSeconds).Within(1e-6),"and the next turn is one loop later");
                 }
             }
             finally

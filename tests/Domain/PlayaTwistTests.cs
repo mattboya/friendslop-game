@@ -22,7 +22,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,APlainRiderStartsAnExclusiveDeckSet,DeckOwnershipIsRequired,DeckChartsUseTheSharedGridAndHolds,DeckWitnessesAccumulateByRangeAndLos,StormsLimitDeckWitnesses,DeckTipsSettleExactlyOnce,AnotherRiderCannotCollectOldTips,TheFullTipThresholdIsInclusive,TheMinimumTipThresholdIsInclusive,HalfAndFailedDecksKeepTheirRules,CancellingADeckNeverPays,PoliceAndLifecycleInterruptionsNeverPay,InvalidRestoredDecksAreRetired,OldAndTippedSnapshotsRestore,DecksStayOutsideGroupJudging,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
+            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,APlainRiderStartsAnExclusiveDeckSet,DeckOwnershipIsRequired,DeckChartsUseTheSharedGridAndHolds,DeckWitnessesAccumulateByRangeAndLos,StormsLimitDeckWitnesses,DeckTipsSettleExactlyOnce,AnotherRiderCannotCollectOldTips,TheFullTipThresholdIsInclusive,TheMinimumTipThresholdIsInclusive,HalfAndFailedDecksKeepTheirRules,CancellingADeckNeverPays,AStaleCancelLeavesANewDeckSetAlone,PoliceAndLifecycleInterruptionsNeverPay,InvalidRestoredDecksAreRetired,OldAndTippedSnapshotsRestore,DecksStayOutsideGroupJudging,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
             TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,BurnWalkersKeepGapAcrossAnotherWalker,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -248,7 +248,7 @@ public static class PlayaTwistTests
         foreach(int level in new[]{0,1,2,3})
         {
             var s=DeckFloor(level);double started=s.State.SimulationSeconds,world=FestivalSimulation.WorldSeconds(s.State);var i=Deck(s);
-            Check(i.StageTrack==RhythmChart.StageTrackFor(1,level),"deck uses the serialized one-based current stage track");
+            var rider=s.Player(i.PlayerId);Check(i.StageTrack==StageMusic.TrackAt(s.State,rider.X,rider.Z),"deck uses the serialized one-based song of the stage nearer where it starts");
             Check(i.StartSeconds==started,"deck preparation belongs only to its chart, without a duplicate external countdown");
             var expected=new InteractionState{Kind="DeckSet",ChartSeed=i.ChartSeed,ChartDifficulty=level,NoteCount=16,BeatSeconds=.4};RhythmChart.InitializeStage(expected,i.StageTrack,world,2.4);
             Check(i.StageFirstHeadWorldSeconds>=world+2.4&&i.StageFirstHeadWorldSeconds<world+3.4,"one window admits the longest2.4s arrow look-ahead and the next authored beat");
@@ -312,6 +312,16 @@ public static class PlayaTwistTests
         var s=DeckFloor();var i=Deck(s);Play(s,i);Check(Act(s,"p0","Cancel").Accepted,"explicit stop accepted");
         Check(i.Status=="Cancelled"&&s.Player("p0").InteractionId==""&&FestivalSimulation.ArtCarOf(s.State,"p0")==-1,"cancel ends both deck and ride");
         Check(Heat(s,"fan0","p0")==60&&Heat(s,"fan1","p0")==60,"cancel adds20 to accumulated witnesses");FinishDeck(s,i);Check(s.State.LevelSales==0&&!s.State.Npcs.Exists(Tipped),"cancel never later pays or marks fans");
+    }
+    // A joined view lags the host: a rider's E, sent for the plain ride it saw, lands after F has replaced that ride with a set.
+    static void AStaleCancelLeavesANewDeckSetAlone()
+    {
+        var s=DeckFloor();string ride=s.Player("p0").InteractionId;var i=Deck(s);
+        var stale=Act(s,"p0","Cancel",ride);
+        Check(!stale.Accepted&&stale.Reason=="That action already ended","the host refuses a Cancel for the ride the set replaced: "+stale.Reason);
+        Check(i.Status=="Active"&&s.Player("p0").InteractionId==i.Id&&FestivalSimulation.ArtCarOf(s.State,"p0")==0,"the set plays on, still aboard car 0");
+        Check(Heat(s,"fan0","p0")==40&&Heat(s,"fan1","p0")==40,"no witness grows suspicious");
+        Check(Act(s,"p0","Cancel",i.Id).Accepted&&i.Status=="Cancelled"&&Heat(s,"fan0","p0")==60,"a Cancel naming the set stops it, with the usual cost");
     }
     static void PoliceAndLifecycleInterruptionsNeverPay()
     {

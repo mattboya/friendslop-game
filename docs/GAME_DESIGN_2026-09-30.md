@@ -63,7 +63,8 @@ The two hooks the design is built around:
   and Fun Guys also add their shop versions' walking sway, from the dose's
   own start time; Couch Lock adds a further 10% walking slowdown and Rolly
   Pollies walk 8% faster. Pony Dust eases the walk to a near stop (10% of
-  its speed) for one second every 10 s of the dose, over 0.3 s each way.
+  its speed) for one second every 10 s of the dose, over 0.3 s each way,
+  and wobbles the tripper's own view while it lasts.
   These walking twists require a positive dose, keep the 65% speed floor
   (the stall alone goes below it) and ±0.24 sway clamp, and never move a
   rooted dancer. Visions, payouts and every other rule still depend only on
@@ -136,6 +137,9 @@ gone, because checking replaces it.
   the Steam work.
 - **Group dancing:** the worst dancer among the crew near the watchers sets
   the crew's suspicion.
+- **Performance games:** each dance, poi spin, DJ set or drum part draws a
+  short game from a growing pool, while the character keeps performing. See
+  [PERFORMANCE_GAMES_2026-10-23.md](PERFORMANCE_GAMES_2026-10-23.md).
 - **Debrief at the campfire after each level:**
   1. Everyone votes on the players at once.
   2. The results are revealed together, in a funny way.

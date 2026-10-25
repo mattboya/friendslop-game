@@ -42,8 +42,9 @@ namespace Festival.Tests
             Assert.That(Mathf.DeltaAngle(euler.x,expected.x),Is.EqualTo(0).Within(.5f),what+": the same way up");
         }
 
-        // Nobody on a dose: the spin's dose (the tripper may be anyone) would sway or trail the view and add its own fakes.
-        static void Sober(FestivalSimulation game){foreach(var p in game.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);}
+        // Nobody on a dose: the spin's dose (the tripper may be anyone) would sway or trail the view and add its own fakes. With no
+        // tripper, Core's KeepTripper does not dose anyone again on the next tick.
+        static void Sober(FestivalSimulation game){foreach(var p in game.State.Players)p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);game.State.TripperId="";}
         // A level with a Light Show booth, the friend joined and sober; the host takes a dose of two before anyone opts in.
         IEnumerator Gather(FestivalSession host,FestivalSession owner)
         {
@@ -227,7 +228,12 @@ namespace Festival.Tests
             var root=new GameObject("impl:U64 light switch host");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
             try
             {
-                session.Host("Host",HostPort);yield return null;yield return StartLevel(session);var game=Simulation(session);game.State.Booth.Kind=FestivalSimulation.LightShowGame;Sober(game);
+                session.Host("Host",HostPort);yield return null;yield return StartLevel(session);var game=Simulation(session);game.State.Booth.Kind=FestivalSimulation.LightShowGame;
+                // The worst spin: Pony Dust's camera lag would trail the view sampled below if Sober let the host be dosed again.
+                // Two sim ticks give KeepTripper its turn, so this holds at any frame time.
+                foreach(var d in game.State.Doses)d.Substance="ketamine";Sober(game);
+                for(long tick=game.State.Tick+2;game.State.Tick<tick;)yield return null;
+                Assert.That(game.State.Players.Exists(p=>p.Effects.Exists(e=>e.Id==FestivalSimulation.DoseEffect)),Is.False,"setup: nobody is dosed again");
                 session.Profile.Data.ThirdPerson=true;Look(session,130,-25);yield return null;yield return null;var before=session.ViewCamera.transform.eulerAngles;
                 yield return Ring(session,null);
                 Assert.That(Offset(session),Is.EqualTo(0).Within(1),"setup: the show holds the view");Assert.That(session.ThirdPersonView,Is.False);

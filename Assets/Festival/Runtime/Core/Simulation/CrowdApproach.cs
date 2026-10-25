@@ -79,7 +79,8 @@ namespace Festival.Core
 #endif
             }
             double radius=slot<6?1.3:2.2+.9*(slot/6-1),angle=(slot%6)*Math.PI/3;
-            return new WorldPoint(target.X+(float)(radius*Math.Sin(angle)),target.Z+(float)(radius*Math.Cos(angle)));
+            var reach=CrowdReach(target);
+            return new WorldPoint(reach.X+(float)(radius*Math.Sin(angle)),reach.Z+(float)(radius*Math.Cos(angle)));
         }
     }
 }

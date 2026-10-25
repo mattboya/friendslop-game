@@ -11,7 +11,7 @@ namespace Festival.Tests
     // The player scripts as each build variant compiles them, put through the check the final gates run on built apps.
     public sealed class DevelopmentSelectionBuildTests
     {
-        [Test,Timeout(900000)] public void ReleasePlayerScriptsKeepTheHostBootstrapButRefuseLockedFestivals()
+        [Test,Timeout(900000)] public void ReleasePlayerScriptsKeepTheHostBootstrapButRefuseLockedFestivalsAndTestMode()
         {
             string folder=Path.Combine(Path.GetTempPath(),"festival-dev-selection-build-"+Guid.NewGuid().ToString("N"));
             try
@@ -30,7 +30,8 @@ namespace Festival.Tests
                 {
                     string output=verify.StandardOutput.ReadToEnd()+verify.StandardError.ReadToEnd();verify.WaitForExit();
                     Assert.That(verify.ExitCode,Is.Zero,output);
-                    Assert.That(output,Does.Contain("Development: capability=True, locked pick accepted").And.Contain("Release: capability=False, locked pick refused"));
+                    Assert.That(output,Does.Contain("Development: capability=True, locked pick accepted, test mode accepted").And.Contain("Release: capability=False, locked pick refused"));
+                    Assert.That(output,Does.Contain(", test mode refused, earned count 1"),"the release host refuses TEST MODE");
                 }
             }
             finally{if(Directory.Exists(folder))Directory.Delete(folder,true);}

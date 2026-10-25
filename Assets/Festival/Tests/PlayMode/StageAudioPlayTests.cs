@@ -31,29 +31,88 @@ namespace Festival.Tests
         {
             session.Leave();UnityEngine.Object.Destroy(host);UnityEngine.Object.Destroy(world);
         }
-        [UnityTest]public IEnumerator ARealDanceLeavesTheSongFullAndTheDjSetStillTakesOver()
+        // The inputs a perfect rider sends: into each block's lane as it arrives, out of each grey's lane just before it.
+        static void RidePerfectly(FestivalSimulation sim,PlayerState player,InteractionState set)
+        {
+            var chart=RhythmChart.For(set);int lane=DjRide.StartLane;
+            for(int n=0;n<chart.Notes.Count;n++)
+            {
+                var note=chart.Notes[n];int to=lane;double at=note.TimeSeconds;
+                if(!note.Grey)to=note.Direction;
+                else if(lane==note.Direction){to=chart.Notes.Find(x=>x.Id>note.Id&&!x.Grey).Direction;at-=.05;}
+                if(to==lane)continue;lane=to;
+                sim.State.SimulationSeconds=Math.Max(sim.State.SimulationSeconds,set.StartSeconds+at);
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="ride_"+set.Phrase+"_"+n,Kind="Rhythm",Direction=lane,TimeSeconds=at}).Accepted,Is.True,"setup: a lane change is taken");
+            }
+        }
+        [UnityTest]public IEnumerator ARealDanceAndAWholeDjSetLeaveTheSongFullAndThePerfectPhraseRoars()
         {
             var world=new GameObject("Stage dance world");world.AddComponent<FestivalWorld>();yield return null;
             var host=new GameObject("Stage dance session");var session=host.AddComponent<FestivalSession>();yield return null;
             try
             {
                 yield return Open(session);var stage=host.GetComponent<FestivalStageAudio>();var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
-                float full=stage.Music.volume;Assert.That(full,Is.GreaterThan(0));
-                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");player.X=npc.X+.8f;player.Z=npc.Z;
+                // The main stage's share where the player stands now: a dance or the set moves the player.
+                float Full()=>FestivalSettings.MusicGain(session.Profile.Data,.6f*FestivalStageAudio.Mix(player.X,player.Z,StageMusic.Main));
+                var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");player.X=npc.X+.8f;player.Z=npc.Z;yield return Wait(.5);
+                Assert.That(Full(),Is.GreaterThan(0));Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f),"setup: the main stage's share where the player stands");
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="song_dance",Kind="Dance",TargetId=npc.Id}).Accepted,Is.True);
                 yield return Wait(.5);
-                Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f),"the stage song leads the dance at full volume");
+                Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f),"the stage song leads the dance at full volume");
                 var pulse=host.GetComponent<FestivalRhythmAudio>();var sources=pulse.GetComponents<AudioSource>();
                 Assert.That(Array.Exists(sources,s=>s.clip!=null&&s.clip.name=="Authored festival tick"),Is.True,"the real rhythm consumer schedules the quiet authored tick");
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="song_cancel",Kind="Cancel"}).Accepted,Is.True);
                 player.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});player.X=Catalog.StageTakeoverX;player.Z=Catalog.StageTakeoverZ;
                 Assert.That(sim.Execute(player.Id,new GameCommand{Id="song_dj",Kind="Dj"}).Accepted,Is.True);
-                yield return Wait(.65);
-                Assert.That(stage.Music.volume,Is.Zero,"the DJ set still mutes the stage recording");
-                Assert.That(Array.Exists(sources,s=>s.clip!=null&&s.clip.name=="Original festival pulse"&&s.loop),Is.True,"DJ keeps the original synthesized set");
-                MatchesWorld(session,stage,"the silent recording continues on world time through the takeover");
-                Assert.That(sim.Execute(player.Id,new GameCommand{Id="song_dj_cancel",Kind="Cancel"}).Accepted,Is.True);
-                yield return Wait(1.15);Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f));MatchesWorld(session,stage,"takeover handoff does not restart the song");
+                var set=sim.Interaction(player.InteractionId);
+                // The whole set: five phrases, the song audible at the stage front at full volume through each, with no pulse over it.
+                for(int phrase=0;phrase<5;phrase++)
+                {
+                    yield return Wait(1.3);
+                    Assert.That(stage.Music!=null&&stage.Music.isPlaying,Is.True,"phrase "+phrase+": the stage song plays on");
+                    Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f),"phrase "+phrase+": at full volume for the DJ");
+                    Assert.That(Array.Exists(sources,s=>s.isPlaying),Is.False,"phrase "+phrase+": no synthetic pulse or tick plays over the set");
+                    MatchesWorld(session,stage,"phrase "+phrase+": the song keeps world time through the set");
+                    if(phrase==0)RidePerfectly(sim,player,set);
+                    sim.State.SimulationSeconds=Math.Max(sim.State.SimulationSeconds,set.StartSeconds+set.DurationSeconds+.75);
+                    if(phrase==0)
+                    {
+                        yield return Wait(.6);
+                        Assert.That(sim.State.StageCheerScore,Is.EqualTo(1),"setup: the first phrase was perfect");
+                        var roar=(AudioSource)typeof(FestivalStageAudio).GetField("roar",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)?.GetValue(stage);
+                        Assert.That(roar!=null&&roar.isPlaying&&roar.volume>0,Is.True,"the crowd roars after a perfect phrase");
+                    }
+                }
+                yield return Wait(1.3);
+                Assert.That(set.Status,Is.EqualTo("Complete"),"the set ends after five phrases");
+                Assert.That(stage.Music.volume,Is.EqualTo(Full()).Within(1e-4f));MatchesWorld(session,stage,"the set's end does not restart the song");
+            }
+            finally{Close(session,host,world);}yield return null;
+        }
+        [UnityTest]public IEnumerator WalkingFromOneStageToTheOtherCrossFadesTheSongs()
+        {
+            var world=new GameObject("Two stage world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Two stage session");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                yield return Open(session);var stage=host.GetComponent<FestivalStageAudio>();var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                Assert.That(stage.Music.clip,Is.SameAs(FestivalStageAudio.For(session.State).Audio),"the main stage plays its pick");
+                Assert.That(stage.SmallMusic.clip,Is.SameAs(FestivalStageAudio.For(session.State,StageMusic.Small).Audio),"the small stage plays its own");
+                Assert.That(stage.SmallMusic.clip,Is.Not.SameAs(stage.Music.clip),"two different songs");
+                float lastMain=float.MaxValue,lastSmall=-1,full=FestivalSettings.MusicGain(session.Profile.Data,.6f);
+                for(int k=0;k<=6;k++)
+                {
+                    float t=k/6f;player.X=Mathf.Lerp(StageMusic.MainX,StageMusic.SmallX,t);player.Z=Mathf.Lerp(StageMusic.MainZ-4,StageMusic.SmallZ+3,t);
+                    yield return Wait(.35);
+                    float main=stage.Music.volume,small=stage.SmallMusic.volume;string at="step "+k+" at "+player.X.ToString("F1")+", "+player.Z.ToString("F1");
+                    Assert.That(stage.Music.isPlaying&&stage.SmallMusic.isPlaying,Is.True,at+": both songs keep playing");
+                    Assert.That(main,Is.LessThan(lastMain),at+": the main stage's song fades down");Assert.That(small,Is.GreaterThan(lastSmall),at+": the small stage's song comes up");
+                    lastMain=main;lastSmall=small;
+                    if(k==0){Assert.That(main,Is.GreaterThan(.95f*full),at+": the main crowd hears its song full");Assert.That(small,Is.LessThan(.2f*full),at+": and little of the small stage");}
+                    if(k==6){Assert.That(small,Is.GreaterThan(.95f*full),at+": the small crowd hears its song full");Assert.That(main,Is.LessThan(.2f*full),at+": and little of the main stage");}
+                }
+                stage.enabled=false;stage.Follow(session.State,session.EstimatedSimulationSeconds,AudioSettings.dspTime,"nobody here");
+                Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f),"with no listener both stages play full");Assert.That(stage.SmallMusic.volume,Is.EqualTo(full).Within(1e-4f));
             }
             finally{Close(session,host,world);}yield return null;
         }
@@ -73,7 +132,7 @@ namespace Festival.Tests
                 sim.State.RoundId="same-track-new-round";sim.State.SimulationSeconds=3.25;yield return Wait(.65);
                 MatchesWorld(session,stage,"a new round resets even when it reuses the same recording");
                 // Use the actual production scheduler near a click-free join without waiting an entire song.
-                stage.enabled=false;var clock=new RoundState{Phase="Playing",RoundId="join-proof",LevelIndex=0,SimulationSeconds=track.LoopSeconds-.7};
+                stage.enabled=false;var clock=new RoundState{Phase="Playing",RoundId="join-proof",LevelIndex=0,SpinSeed=session.State.SpinSeed,SimulationSeconds=track.LoopSeconds-.7};
                 double start=AudioSettings.dspTime;stage.Follow(clock,clock.SimulationSeconds,start);yield return Wait(.35);var before=stage.Music;
                 yield return Wait(.5);stage.Follow(clock,clock.SimulationSeconds+AudioSettings.dspTime-start,AudioSettings.dspTime);
                 Assert.That(stage.Music,Is.Not.SameAs(before),"the already scheduled other deck takes over at the authored sample join");

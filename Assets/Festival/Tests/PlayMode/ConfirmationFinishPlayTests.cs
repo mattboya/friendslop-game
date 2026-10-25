@@ -93,6 +93,33 @@ namespace Festival.Tests
             finally{session.Leave();UnityEngine.Object.Destroy(holder);UnityEngine.Object.Destroy(world);}
         }
 
+        // A stop from a list drawn for an action that has since ended names that action, so the host refuses it as already ended
+        // and the chat check the list never showed stays on.
+        [UnityTest]public IEnumerator AStaleStopNeverEndsAChatCheckTheListDidNotShow()
+        {
+            var world=new GameObject("Stale stop world");world.AddComponent<FestivalWorld>();yield return null;
+            var holder=new GameObject("Stale stop HUD");var session=holder.AddComponent<FestivalSession>();var hud=holder.AddComponent<FestivalHud>();
+            yield return null;
+            try
+            {
+                session.Host("Journey checker",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var peer=Simulation(session).AddPlayer("cp01_peer","Peer");peer.Ready=true;yield return StartLevel(session);
+                var game=Simulation(session);var player=game.Player(session.LocalPlayerId);
+                Prepare(game,player,false,false);yield return new WaitForSeconds(.4f);
+                session.Command("ConfirmChat","cp01_target");yield return new WaitForSeconds(.4f);
+                var running=game.Interaction(player.InteractionId);Assert.That(running?.Kind,Is.EqualTo("ConfirmChat"),"setup: the check runs: "+session.Message);
+                var finish=typeof(FestivalHud).GetMethod("FinishCurrentAction",Private);int after=game.State.Commands.Count;
+                finish.Invoke(hud,new object[]{"playa9_ended_action"});yield return new WaitForSeconds(.3f);
+                Assert.That(running.Status,Is.EqualTo("Active"),"a stop the list drew for another action leaves the check on");
+                Assert.That(player.InteractionId,Is.EqualTo(running.Id),"and the player in it");
+                Assert.That(game.State.Commands.Skip(after).Any(c=>c.PlayerId==player.Id&&!c.Result.Accepted&&c.Result.Reason=="That action already ended"),Is.True,"the host refused the stale Cancel");
+                finish.Invoke(hud,new object[]{running.Id});yield return new WaitForSeconds(.3f);
+                Assert.That(running.Status,Is.Not.EqualTo("Active"),"a stop for the check the list showed still ends it");
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(holder);UnityEngine.Object.Destroy(world);}
+        }
+
         [UnityTest]public IEnumerator ActualSmokeDayCoroutineCompletesItsBuyerCheck()=>SmokeCheck(false);
         [UnityTest]public IEnumerator ActualSmokeNightCoroutineCompletesItsFirstClue()=>SmokeCheck(true);
         IEnumerator SmokeCheck(bool night)

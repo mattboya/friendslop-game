@@ -55,3 +55,47 @@ ECON-4 — ECON-2 leftovers from wave 2026-10-01 (2)
 DIALOG-7 — DIALOG-6 leftovers from wave 2026-10-01 (2)
 MINI-8 — Light Show answers work from the keyboard, and a switched-off session locks the pointer again
 DIALOG-12 — Unity runs rewrite the stock TextMeshPro fallback font asset
+CAMP-4 — In the headliner's chair the first-person view sits down, no backpack shows through the chair, and a test reads the round line
+DIALOG-13 — Each sign board covers its whole legend
+DOCS-1 — The status docs and the README say what the game is today
+GAS-7 — Snapshot restore refuses negative event counters, and two stale comments and a compiler warning go
+HUD-13 — Two PlayMode tests stop failing at random in long combined runs
+MINI-7 — Three minigame PlayMode tests stop failing at random
+NET-4 — A recorder prints the protocol recordings, and every stage track has a guard
+NET-5 — The host holds clients to separate command and move limits, one history per connection and one connection per token
+PLAYA-8 — A late E press on a joined client cannot stop a deck set that just started
+POI-8 — A held side spin continues through a gear swap, and the poi comment matches the rule
+SET-4 — A full EditMode run leaves the project settings unchanged
+SET-5 — Text on the screen names the bound key for awards and poi spins
+SPIN-6 — The slot machine's win blink stays below three flashes a second
+TEST-5 — The paired smoke waits for what the client saw, and the smoke docs and probe are correct
+TEST-6 — The Light Show switch-off test keeps the host sober
+TEST-7 — The dose-pattern test measures a still scene
+TRIP-19 — The design doc names the stall wobble, and the cups walk check works for every substance
+TRIP-20 — The dead letterbox code goes, and a debug line shows each Pony Dust stall
+WAVE-1 — Ferris wheel riders keep their gondola, and a rider's name tag is clear of the roof
+ESC-4 — A detained player is held inside a bigger security building with a barred front
+DEV-2 — A test mode in test builds frees you from detention, removes the time limit and clears the level
+DIALOG-14 — Speech bubbles keep a readable size and stay in view below the top cards
+HUD-15 — A threat bar shows how suspicious the crowd is of you
+DANCE-13 — The stage-pass DJ set is a three-lane ride on the song's beat, on stage, with the music on, and the crowd cheers
+DIALOG-15 — Talks run four rounds with their own replies, and a meter shows how the talk goes
+MINI-10 — Mystery Cups states its rules first and its hunch as a hunch with odds
+LOOP-8 — The downed state, death and the spirit state each show clearly on screen
+ECON-10 — A sale can ask Fair, High or Greedy, for more cash at more risk
+DANCE-14 — A design doc for a pool of performance games
+MUSIC-7 — A main stage and a small second stage each play their own shuffled song
+TRIP-22 — Pony Dust's and Couch Lock's sleepy eyes show more of the screen
+GAS-9 — A Giggle Balloon inhale lasts 3 seconds
+TEST-14 — The smokes' fog check counts only the open view
+ECON-11 — Every sale ends with a clear result, and a handed-back unit goes back in your hand
+HUD-16 — No change to cash, the stash, SALES or carried items is silent
+MUSIC-3 — The camp DJ plays through the stage's two-deck transport
+NET-8 — The protocol guard records which song each stage plays
+PLAYA-9 — A stale stop never ends a chat check it did not show, and the tripper HUD test reads the busy prompt every run
+SET-6 — Every Unity test command keeps ProjectSettings as committed
+SET-8 — Every text that names the slot keys names each bound key, and mouse side buttons read as buttons
+SET-7 — The slot keys and mouse side buttons read right (built with SET-8)
+TEST-12 — Hosted tests that name a tripper give that tripper the dose they mean
+TEST-13 — Test harness fixes: the light show worst case, one Unity slot for each label, and a dirty start stops Unity
+TEST-11 — The light show worst case fails whenever Sober breaks (built with TEST-13)

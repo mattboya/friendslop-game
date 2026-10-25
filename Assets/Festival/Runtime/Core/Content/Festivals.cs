@@ -40,6 +40,12 @@ namespace Festival.Core
         // Two VIP zones flank the main stage's aisle, roped off to anyone without a vip_wristband; a sale made inside one to a
         // buyer inside pays VipPayoutFactor times. The guard who talks people in stands at the west rope's aisle corner, facing
         // the path up from camp, and the night market sells wristbands at its east stall.
+        // The security building's outer wall faces. A bust holds a player in it, and the host refuses a step closer than HoldingInset
+        // to a wall: just past where a body meets the walls, so they slide it along first. The back stops at 12.2 to keep the Giggle
+        // Tank at 30,14 clear; the pay desk (27,5) and the release spot (24,2) stay outside.
+        public static readonly Area SecurityBuilding=new Area(24,5.5f,33,12.2f);
+        public const float HoldingInset=.55f;
+        public static bool InHolding(float x,float z)=>SecurityBuilding.Contains(x,z,-HoldingInset);
         public static readonly Area[] VipZones={new Area(-14,19.6f,-8,26),new Area(8,19.6f,14,26)};
         public const int VipPayoutFactor=2;
         public const float VipGuardPostX=-7.2f,VipGuardPostZ=19,VipGuardPostYaw=180;
@@ -92,7 +98,8 @@ namespace Festival.Core
         // GAS-2: GiggleTankPercent of levels hide a Giggle Tank at one of these spots, the same on every festival: behind the stage,
         // behind the medical tent, behind security, the north-west grove, west of lost property and the east lawn. Each is off
         // the paths, the VIP ropes, the art cars' loops and the Ferris wheel, clear of walls, and more than 2.5 m from anywhere
-        // players routinely stand. Any living, free player within GiggleTankReach grabs it for GiggleTankCash in the crew stash.
+        // players routinely stand. Any living, free player with a free hand slot within GiggleTankReach grabs it; carried home inside
+        // the camp gate before the level ends, it banks GiggleTankCash in the crew stash (GiggleTanks.cs).
         public static readonly WorldPoint[] GiggleTankSpots={new WorldPoint(11,37.5f),new WorldPoint(27,-12.5f),new WorldPoint(30,14),new WorldPoint(-31,31),new WorldPoint(-34,15),new WorldPoint(29,-1)};
         public const int GiggleTankPercent=20,GiggleTankCash=25;
         public const float GiggleTankReach=1.5f;
@@ -114,7 +121,10 @@ namespace Festival.Core
         {
             public readonly float MinX,MinZ,MaxX,MaxZ;
             public Area(float minX,float minZ,float maxX,float maxZ){MinX=minX;MinZ=minZ;MaxX=maxX;MaxZ=maxZ;}
-            public bool Contains(float x,float z)=>x>=MinX&&x<=MaxX&&z>=MinZ&&z<=MaxZ;
+            /// <summary>Whether x,z is on it, or within margin of it; a negative margin keeps that far inside its edges.</summary>
+            public bool Contains(float x,float z,float margin=0)=>x>=MinX-margin&&x<=MaxX+margin&&z>=MinZ-margin&&z<=MaxZ+margin;
+            public float CentreX=>(MinX+MaxX)/2;
+            public float CentreZ=>(MinZ+MaxZ)/2;
         }
         public static int Count=>Table.Length;
         public static string Name(int festival)=>Table[festival].Name;

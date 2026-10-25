@@ -65,17 +65,17 @@ public static class SpeechTests
             var game=ConversationPair(out var player,out var npc);if(kind=="Police")npc.Kind="Cop";if(kind=="StartSale"){npc.Role="Buyer";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});}
             var started=game.Execute(player.Id,new GameCommand{Id="public_start",Kind=kind,TargetId=npc.Id,ItemId=kind=="StartSale"?"stock_lsd":kind=="StartBuy"?FestivalSimulation.SellerStock(npc.Id):""});
             Check(started.Accepted,"public conversation starts: "+started.Reason);var talk=game.Interaction(player.InteractionId);var spoken=new List<string>();
-            for(int turn=0;turn<3;turn++)
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
             {
                 spoken.Add(talk.Turns[turn].Line);spoken.Add(talk.Turns[turn].Replies[0]);
                 var command=new GameCommand{Id="public_reply_"+turn,Kind="Reply",Direction=turn,Amount=0};Check(game.Execute(player.Id,command).Accepted,"accepted reply publishes");
                 string before=Deliveries(game.State).ToJsonString();Check(game.Execute(player.Id,command).Accepted&&Deliveries(game.State).ToJsonString()==before,"reply retransmission adds no public utterance");
             }
-            var delivered=Deliveries(game.State);Check(delivered.Count==6,"three replies and three NPC turns arrive together without an invented public grade reaction");
+            var delivered=Deliveries(game.State);Check(delivered.Count==2*FestivalSimulation.ConversationTurns,"four replies and four NPC turns arrive together without an invented public grade reaction");
             Check(delivered.Select(d=>d["Text"].GetValue<string>()).SequenceEqual(spoken),"only actually spoken lines and accepted choices are public");
-            Check(delivered.Select(d=>d["SpeakerId"].GetValue<string>()).SequenceEqual(new[]{npc.Id,player.Id,npc.Id,player.Id,npc.Id,player.Id}),"every line belongs to its actual speaker");
+            Check(delivered.Select(d=>d["SpeakerId"].GetValue<string>()).SequenceEqual(Enumerable.Range(0,2*FestivalSimulation.ConversationTurns).Select(k=>k%2==0?npc.Id:player.Id)),"every line belongs to its actual speaker");
             Check(delivered.Select(d=>d["StartedAtWorldSeconds"].GetValue<double>()).Distinct().Count()==1,"equal timestamps do not collapse accepted utterances");
-            Check(!game.Execute(player.Id,new GameCommand{Id="past_reply",Kind="Reply",Direction=2,Amount=0}).Accepted&&Deliveries(game.State).Count==6,"a refused late reply is never public");
+            Check(!game.Execute(player.Id,new GameCommand{Id="past_reply",Kind="Reply",Direction=FestivalSimulation.ConversationTurns-1,Amount=0}).Accepted&&Deliveries(game.State).Count==2*FestivalSimulation.ConversationTurns,"a refused late reply is never public");
             if(kind!="Police")Check(player.ConversationOutcomes.Count==1&&!delivered.Any(d=>d["Text"].GetValue<string>()==player.ConversationOutcomes[0].Reaction),"the authored final grade reaction remains owner-only");
         }
     }

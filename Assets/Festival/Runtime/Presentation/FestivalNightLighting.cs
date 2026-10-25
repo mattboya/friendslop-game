@@ -31,7 +31,7 @@ namespace Festival.Presentation
             ("stage frame left",new Vector3(-8.8f,4.4f,35.3f)),("stage frame right",new Vector3(8.8f,4.4f,35.3f)),
             ("stage frame crown",new Vector3(0,7.2f,35.3f)),("stage lip west",new Vector3(-6,1.7f,27.3f)),("stage lip east",new Vector3(6,1.7f,27.3f)),
             ("stall supplies",new Vector3(-24,2.6f,-19.2f)),("stall performance",new Vector3(-18,2.6f,-19.2f)),("stall stock",new Vector3(-12,2.6f,-19.2f)),
-            ("stall medical",new Vector3(24,3.3f,-20.3f)),("stall security",new Vector3(27,3.3f,4.7f)),("stall lost property",new Vector3(-28,2.6f,17.3f)),
+            ("stall medical",new Vector3(24,3.3f,-20.3f)),("stall security",new Vector3(Festivals.SecurityBuilding.CentreX,3.3f,Festivals.SecurityBuilding.MinZ-.8f)),("stall lost property",new Vector3(-28,2.6f,17.3f)),
             ("path west",new Vector3(-3.65f,.6f,-23)),("path east",new Vector3(3.65f,.6f,-9)),("path west",new Vector3(-3.65f,.6f,5)),("path east",new Vector3(3.65f,.6f,19))};
 
         private readonly List<Light> neon=new List<Light>();

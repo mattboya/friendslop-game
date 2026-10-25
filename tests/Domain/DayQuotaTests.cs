@@ -22,10 +22,10 @@ public static class DayQuotaTests
     static void AtGate(PlayerState p){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
     static void Sundown(FestivalSimulation s){s.State.ElapsedSeconds=s.State.DurationSeconds-.05;s.Tick(.1);}
     // Sell one stock to a buyer, played perfectly (perform false picks every awkward reply, a botched sale). Returns the cash it paid.
-    static int Sell(FestivalSimulation s,string id,string buyer,bool perform=true)
+    static int Sell(FestivalSimulation s,string id,string buyer,bool perform=true,int ask=FestivalSimulation.FairAsk)
     {
         var p=s.Player(id);var npc=s.State.Npcs.Find(n=>n.Id==buyer);p.X=npc.X;p.Z=npc.Z-1;p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
-        int before=p.Cash;Check(Act(s,id,"StartSale",buyer,"stock_lsd").Accepted,id+" starts a sale to "+buyer);
+        int before=p.Cash;Check(s.Execute(id,new GameCommand{Id="quota_"+(++sequence),Kind="StartSale",TargetId=buyer,ItemId="stock_lsd",Amount=ask}).Accepted,id+" starts a sale to "+buyer);
         var sale=s.Interaction(p.InteractionId);
         for(int guard=0;sale.Status=="Active"&&guard<200;guard++){if(perform)Perfectly(s,sale);else if(sale.Turns.Count>0){var turn=sale.Turns[sale.Turns.Count-1];Check(s.Execute(id,new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=Array.IndexOf(turn.Grades,ConversationLines.Awkward),Direction=sale.Turns.Count-1}).Accepted,"reply awkwardly to the buyer");}s.Tick(.1);}
         Check(sale.Status=="Complete","the sale to "+buyer+" settles");return p.Cash-before;
@@ -45,6 +45,8 @@ public static class DayQuotaTests
     {
         QuotaScalesWithCrewAndTable();
         SalesCountTowardTheQuota();
+        PushedAsksCountWhatTheyPaid();
+        EverySaleEndsOneClearWay();
         ExtractWaitsForTheQuota();
         SundownSettlesTheDay();
         NobodyIsLostByDay();
@@ -53,6 +55,8 @@ public static class DayQuotaTests
         APerfectCrewCanMeetEveryQuota();
         EveryDayAsksTheTablesQuota();
         EncoreLapsPayLikeTheirQuota();
+        TestModeLiftsTheLimitsInATestBuild();
+        TestModeIsTheTestBuildHostsAlone();
     }
 
     static void QuotaScalesWithCrewAndTable()
@@ -80,6 +84,71 @@ public static class DayQuotaTests
         Check(Sell(s,"p0","buyer_2",perform:false)==0&&s.State.LevelSales==paid&&a.Inventory.Exists(i=>i.ItemId=="stock_lsd"),"a botched sale pays nothing, counts nothing and hands the stock back");
         int cash=a.Cash;a.X=-28;a.Z=16;Check(Act(s,"p0","LostProperty").Accepted,"lost-property task starts");s.Tick(5.1);
         Check(a.Cash==cash+5&&s.State.LevelSales==paid,"lost-property cash is not a sale");
+    }
+
+    // A High or Greedy sale counts what it paid toward the quota: $15 and $20 at dose 1, played perfectly.
+    static void PushedAsksCountWhatTheyPaid()
+    {
+        var s=Crew(1);
+        int high=Sell(s,"p0","buyer_0",ask:FestivalSimulation.HighAsk);Check(high==15&&s.State.LevelSales==15,"a perfect High sale pays $15 and counts $15, got "+high+" and "+s.State.LevelSales);
+        int greedy=Sell(s,"p0","buyer_1",ask:FestivalSimulation.GreedyAsk);Check(greedy==20&&s.State.LevelSales==35,"a perfect Greedy sale pays $20 and counts it too, got "+greedy+" and "+s.State.LevelSales);
+        Check(FestivalSimulation.DayQuotaMet(s.State),"two pushed sales meet a solo Day 1's $15 quota twice over");
+    }
+
+    // Random sales on a real Palm Mirage Day 1, on fixed seeds: its cops, narcs and buyers, wary festivalgoers' trust dances
+    // danced perfectly or skipped, random asks and replies with time between them, walk-offs, and hands that fill mid-talk. Every sale ends
+    // one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says, the unit gone), handed back (the unit
+    // in your hand again, equipped if it was), dropped at your feet, or busted (detained, the stock gone).
+    static void EverySaleEndsOneClearWay()
+    {
+        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};
+        foreach(int seed in new[]{3,17,29,41,53,67})
+        {
+            var s=new FestivalSimulation(seed);var p=s.AddPlayer("p0","P0");p.X=0;p.Z=19;Act(s,"p0","Ready");s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);Act(s,"p0","MapReady");
+            Check(s.State.Phase=="Playing","setup: seed "+seed+"'s Day 1 is under way");s.State.DurationSeconds=1e6; // no sundown mid-fuzz
+            var random=new Random(seed);
+            for(int sale=0;sale<150&&s.State.Phase=="Playing";sale++)
+            {
+                // Back on your feet with a clean slate (buyers take any number of sales here): one unit or two of a kind, in hand or
+                // not, and a merch bag.
+                p.Life="Alive";p.Health=100;p.InteractionId="";foreach(var n in s.State.Npcs){n.Sales=0;n.Evidence.RemoveAll(e=>e.PlayerId==p.Id);foreach(var o in n.Observers)o.Suspicion=random.Next(50);}
+                string item=random.Next(2)==0?"stock_lsd":"stock_mushrooms";p.Inventory.Clear();p.Inventory.Add(new ItemStack{ItemId=item,Count=1+random.Next(2)});p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});
+                p.EquippedItemId=random.Next(3)==0?"merch_bag":item;
+                // Half the offers go to a buyer, the rest to anyone: a regular turns it down, a narc busts you.
+                var npcs=s.State.Npcs.FindAll(n=>n.Kind=="Wook"&&(random.Next(2)==0||n.Role=="Buyer"));var npc=npcs[random.Next(npcs.Count)];p.X=npc.X;p.Z=npc.Z-1;
+                int cash=p.Cash,sales=s.State.LevelSales,units=p.Inventory.Find(x=>x.ItemId==item).Count,drops=s.State.Drops.FindAll(d=>d.ItemId==item).Count;string held=p.EquippedItemId;
+                var started=s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="StartSale",TargetId=npc.Id,ItemId=item,Amount=random.Next(3)});
+                if(!started.Accepted)continue;
+                var i=s.Interaction(p.InteractionId);bool dance=random.Next(3)>0;
+                if(i==null){Check(p.Life=="Detained"&&!p.Inventory.Exists(x=>x.ItemId==item),"seed "+seed+": a sale that ends at the offer is a narc's bust");endings["busted"]++;continue;}
+                for(int guard=0;i.Status=="Active"&&guard<400;guard++)
+                {
+                    int roll=random.Next(24);
+                    if(FestivalSimulation.TrustDancing(i)){if(i.Inputs.Count==0&&dance)foreach(var note in RhythmChart.For(i).Notes)i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});}
+                    else if(roll==0)Act(s,"p0","Cancel");
+                    else if(roll==1){foreach(var gear in new[]{"map","confetti","stage_pass"})if(p.Inventory.FindAll(x=>x.ItemId!="little_spoon").Count<3&&!p.Inventory.Exists(x=>x.ItemId==gear))p.Inventory.Add(new ItemStack{ItemId=gear,Count=1});}
+                    else if(i.Turns.Count>0&&i.Turns[i.Turns.Count-1].Pick<0&&roll<18)s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="Reply",Amount=random.Next(3),Direction=i.Turns.Count-1});
+                    if(i.Status=="Active")s.Tick(.1+random.Next(5)*.2);
+                }
+                Check(i.Status!="Active"&&p.InteractionId!=i.Id,"seed "+seed+" sale "+sale+": the sale ends ("+i.Status+")");
+                var outcome=p.ConversationOutcomes?.Find(o=>o.InteractionId==i.Id);string notice=outcome?.Notice??"";
+                int left=p.Inventory.Find(x=>x.ItemId==item)?.Count??0;bool dropped=s.State.Drops.FindAll(d=>d.ItemId==item).Count>drops;
+                string where="seed "+seed+" sale "+sale+" ("+i.Status+", \""+notice+"\")";
+                if(p.Life=="Detained"){Check(left==0&&!dropped&&outcome?.Result=="BUSTED"&&notice.StartsWith("BUSTED"),where+": a bust takes the stock and says BUSTED");endings["busted"]++;}
+                else if(p.Cash>cash)
+                {
+                    Check(p.Cash-cash==s.State.LevelSales-sales&&left==units-1&&!dropped,where+": a paid sale counts its pay and takes one unit");
+                    Check(outcome?.Result=="SOLD +$"+(p.Cash-cash)&&notice.StartsWith("SOLD ")&&notice.Contains("+$"+(p.Cash-cash)),where+": a paid sale says SOLD and its pay, +$"+(p.Cash-cash));endings["paid"]++;
+                }
+                else if(dropped){Check(left==units-1&&s.State.LevelSales==sales&&notice.EndsWith("dropped at your feet")&&outcome.Result=="NO SALE",where+": a unit with no room is at your feet, and it says so");endings["dropped"]++;}
+                else
+                {
+                    Check(left==units&&p.Cash==cash&&s.State.LevelSales==sales&&notice.EndsWith("back in your hand")&&outcome.Result=="NO SALE",where+": otherwise the unit is back, and it says so");
+                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings[notice.StartsWith("They walk off")?"walked off":"back"]++;
+                }
+            }
+        }
+        foreach(var ending in endings)Check(ending.Value>0,"the fuzz reaches every ending, but none was "+ending.Key+": "+string.Join(", ",endings));
     }
 
     static void ExtractWaitsForTheQuota()
@@ -239,5 +308,60 @@ public static class DayQuotaTests
     {
         for(int guard=0;challenges.Exists(x=>x.Status=="Active")&&guard<200;guard++){foreach(var x in challenges)Perfectly(s,x);s.Tick(.1);}
         Check(!challenges.Exists(x=>x.Status!="Complete"),"every perfect "+what+" settles");
+    }
+
+    // Read through the JSON a snapshot is, so TEST MODE must be a public field that a view and a save both carry.
+    static bool TestMode(FestivalSimulation s)=>JsonNode.Parse(JsonSerializer.Serialize(s.State,Json))["TestMode"]?.GetValue<bool>()==true;
+    // DevelopmentFestivalSelection is the test build's capability: only FestivalHostBootstrap turns it on, in Editor and development builds.
+    static void TestModeLiftsTheLimitsInATestBuild()
+    {
+        var s=Crew(2);s.DevelopmentFestivalSelection=true;Check(s.State.HostPlayerId=="p0","setup: p0 hosts");
+        Check(!TestMode(s),"a test build's game starts with test mode off");
+        Check(Act(s,"p0","TestMode").Accepted&&TestMode(s),"the host turns test mode on");
+        double length=s.State.DurationSeconds;s.State.ElapsedSeconds=length-.05;s.Tick(.1);s.Tick(30);
+        Check(s.State.Phase=="Playing"&&s.State.ElapsedSeconds>length+29,"30 s past the level's length the clock still runs and the level plays on ("+s.State.Phase+", "+s.State.Result+")");
+        var held=s.Player("p1");held.Life="Detained";held.X=Festivals.SecurityBuilding.CentreX;held.Z=Festivals.SecurityBuilding.CentreZ;held.EscapeProgress=2;
+        s.State.Npcs.Add(new NpcState{Id="cop_test",Kind="Cop",Mode="Patrol",X=-30,Z=-30});s.State.Npcs[s.State.Npcs.Count-1].Evidence.Add(new EvidenceState{PlayerId="p1",Kind="WitnessedDeal"});
+        Check(Act(s,"p1","TestFree").Accepted,"a detained friend frees themselves, not only the host");
+        Check(held.Life=="Alive"&&held.X==24&&held.Z==2&&held.EscapeProgress==0&&held.RecoveryUntil>s.State.SimulationSeconds,"freed as a release frees: alive at 24,2 with a short recovery ("+held.Life+" at "+held.X+", "+held.Z+")");
+        Check(!s.State.Npcs.Exists(n=>n.Evidence.Exists(e=>e.PlayerId=="p1")),"and the evidence against them is cleared");
+        Check(!Act(s,"p1","TestFree").Accepted,"a free player has nothing to be freed from");
+        held.Life="Downed";Check(!Act(s,"p1","TestFree").Accepted&&held.Life=="Downed","a downed player is not freed");held.Life="Alive";
+        Check(s.State.LevelSales==0&&s.State.LevelIndex==0,"setup: Day 1 with no sales");
+        Check(Act(s,"p0","TestClearLevel").Accepted&&s.State.Phase=="Results"&&s.State.Result=="Success","the host clears the day as a success, quota or not ("+s.State.Result+")");
+        Check(!s.State.Players.Exists(p=>p.HasCosmetic),"a level cleared in test mode earns no cosmetic");
+        Check(!Act(s,"p0","TestClearLevel").Accepted,"a cleared level is not cleared again");
+        Check(Act(s,"p0","Reset").Accepted&&s.State.LevelIndex==1,"the crew moves on to the next level, Night 1 (level "+s.State.LevelIndex+")");
+        Check(TestMode(s),"test mode carries on into the next level");
+        Check(!Act(s,"p0","TestClearLevel").Accepted&&s.State.Phase=="CampReview","the host cannot clear a level from camp ("+s.State.Phase+")");
+        s.Player("p1").Life="Detained";Check(!Act(s,"p1","TestFree").Accepted,"nobody is freed at camp");
+        var off=Crew(2);off.DevelopmentFestivalSelection=true;Act(off,"p0","TestMode");off.State.ElapsedSeconds=off.State.DurationSeconds+20;off.Tick(.1);
+        Check(off.State.Phase=="Playing","setup: past the limit in test mode, still playing");
+        Check(Act(off,"p0","TestMode").Accepted&&!TestMode(off),"the host turns test mode off");
+        off.Tick(.1);Check(off.State.Phase=="Results"&&off.State.Result=="Missed the quota","then the time limit is back: the day ends, short of its quota ("+off.State.Result+")");
+    }
+    // The commands are the host's security boundary: a release build's host refuses all three, a client may only free themselves,
+    // and a snapshot with test mode on restores only in a test build.
+    static void TestModeIsTheTestBuildHostsAlone()
+    {
+        var release=Crew(2);release.Player("p1").Life="Detained";
+        foreach(var (player,kind) in new[]{("p0","TestMode"),("p1","TestFree"),("p0","TestClearLevel")})
+            Check(!Act(release,player,kind).Accepted,"a release build refuses "+player+"'s "+kind);
+        Check(!TestMode(release)&&release.Player("p1").Life=="Detained"&&release.State.Phase=="Playing","nothing changed in the release build");
+        Sundown(release);Check(release.State.Phase=="Results","and its clock still ends the level");
+        var test=Crew(2);test.DevelopmentFestivalSelection=true;
+        Check(!Act(test,"p1","TestMode").Accepted&&!TestMode(test),"a client cannot turn test mode on");
+        Check(!Act(test,"p0","TestClearLevel").Accepted&&test.State.Phase=="Playing","with test mode off the host cannot clear the level");
+        test.Player("p1").Life="Detained";Check(!Act(test,"p1","TestFree").Accepted,"with test mode off nobody frees themselves");
+        Act(test,"p0","TestMode");Check(TestMode(test),"setup: the host turns it on");
+        Check(!Act(test,"p1","TestMode").Accepted&&TestMode(test),"a client cannot turn it off");
+        Check(!Act(test,"p1","TestClearLevel").Accepted&&test.State.Phase=="Playing","a client cannot clear the level");
+        var saved=JsonNode.Parse(JsonSerializer.Serialize(test.State,Json)).AsObject();
+        var dev=new FestivalSimulation{DevelopmentFestivalSelection=true};dev.Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));
+        Check(TestMode(dev),"a test build restores a snapshot in test mode");
+        bool refused=false;try{new FestivalSimulation().Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));}catch(ArgumentException){refused=true;}
+        Check(refused,"a release build refuses a snapshot in test mode");
+        saved.Remove("TestMode");var older=new FestivalSimulation();older.Restore(JsonSerializer.Deserialize<RoundState>(saved.ToJsonString(),Json));
+        Check(!TestMode(older),"a snapshot from before test mode restores in a release build, with it off");
     }
 }

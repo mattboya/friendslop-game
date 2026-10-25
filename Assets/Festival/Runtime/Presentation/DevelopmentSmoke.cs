@@ -281,9 +281,9 @@ namespace Festival.Presentation
             yield return Until(session,"interior handoff acceptance",()=>session.State.Transfers.Count==0&&(session.IsHost?sim.State.Players[1].Inventory:session.LocalPlayer.Inventory).Exists(item=>item.ItemId=="merch_bag"),CampSeconds);
             if(failed!=null){Fail(failed);yield break;}
             Debug.Log("FESTIVAL SMOKE INTERIOR HANDOFF PASSED: "+transferPath);
+            // No pause before the exit: the client's acceptance check (no offer, the bag in hand) still holds after it.
             if(session.IsHost)
             {
-                yield return new WaitForSeconds(.8f);
                 foreach(var peer in sim.State.Players)
                     if(!sim.Execute(peer.Id,new GameCommand{Id="smoke-exit-"+peer.Id,Kind="ExitCamp"}).Accepted){Fail("interior handoff exit");yield break;}
                 sim.State.Players[0].X=-2;sim.State.Players[0].Z=-13;
@@ -354,7 +354,7 @@ namespace Festival.Presentation
             if(failed!=null||session.State.Phase!="Playing"||session.State.Players.Count!=2){Debug.LogError("FESTIVAL SMOKE FAILED: "+(failed??"two-player loading barrier"));Application.Quit(3);yield break;}
             Debug.Log("FESTIVAL SMOKE TRANSPORT PASSED: two peers ready and playing; host="+session.IsHost);
             var crowd=FindFirstObjectByType<FestivalAmbientCrowd>();
-            if(crowd==null||crowd.MemberCount!=62||crowd.WalkerCount!=12){Fail("festival crowd population");yield break;}
+            if(!CrowdPopulated(crowd)){Fail("festival crowd population");yield break;}
             var walkerStart=crowd.FirstWalkerPosition;
             yield return new WaitForSeconds(.35f);
             if(Vector3.Distance(walkerStart,crowd.FirstWalkerPosition)<.15f){Fail("festival crowd walking");yield break;}
@@ -383,9 +383,10 @@ namespace Festival.Presentation
             var market=MarketSpot(session.State);
             if(session.IsHost)
             {
-                // Give the client time to verify remote browsing at the normal entry
-                // before host-only test placement moves both peers to the stock buys and the market.
-                yield return new WaitForSeconds(1f);
+                // The client checks remote browsing at the normal entry before host-only test placement moves both peers to the stock
+                // buys and the market, so the host waits until its own command record holds the client's refused remote buy.
+                yield return Until(session,"client's remote market check",()=>ClientRefused(sim,RemoteMarketRefusal),LevelLeft(sim.State));
+                if(failed!=null){Fail(failed);yield break;}
                 // Day 1: two festivalgoers dealt as buyers stay, the first one in the tripper's visions, and two who sell Tongue
                 // Stamps; the rest of the crowd and security step away so nothing else interrupts the buys, the check and the sales.
                 buyers=DayBuyers(sim);
@@ -425,16 +426,24 @@ namespace Festival.Presentation
                 captureCamera=session.ViewCamera;
                 foreach(var location in new[]{
                     new {Name="medical",Camera=new Vector3(18,2.2f,-23),Target=new Vector3(24,1.7f,-17)},
-                    new {Name="security",Camera=new Vector3(21,2.2f,2),Target=new Vector3(27,1.7f,8)},
+                    new {Name="security",Camera=new Vector3(25.5f,1.9f,1.5f),Target=new Vector3(Festivals.SecurityBuilding.CentreX,1.3f,Festivals.SecurityBuilding.CentreZ)},
                     new {Name="shuttle",Camera=new Vector3(8,2.2f,-30),Target=new Vector3(0,1.6f,-36)} })
                 {
                     capturePosition=location.Camera;
                     captureRotation=Quaternion.LookRotation(location.Target-location.Camera);
+                    FestivalCharacter held=null;
+                    if(location.Name=="security")
+                    {
+                        held=FestivalCharacter.Create(transform,GalleryId(0,1,-1,-1),Color.white);held.Pose="Detained";
+                        held.transform.position=new Vector3(location.Target.x,0,location.Target.z);held.transform.rotation=Quaternion.Euler(0,200,0);
+                        held.transform.localScale=Vector3.Scale(Vector3.one*.84f,held.ShapeScale);
+                    }
                     yield return new WaitForSeconds(.25f);
                     var locationPath=Path.Combine(liveCrowdDir,"client-"+location.Name+".png");
                     if(File.Exists(locationPath))File.Delete(locationPath);
                     ScreenCapture.CaptureScreenshot(locationPath);
                     yield return new WaitForSeconds(.7f);
+                    if(held!=null)Destroy(held.gameObject);
                     if(!File.Exists(locationPath)){Fail(location.Name+" location render");yield break;}
                     Debug.Log("FESTIVAL SMOKE LOCATION "+location.Name.ToUpperInvariant()+" RENDER PASSED: "+locationPath);
                 }
@@ -592,23 +601,10 @@ namespace Festival.Presentation
                 yield return Interact(session,"Extract","","");
                 if(failed!=null){Fail(failed);yield break;}
             }
-            yield return Until(session,"day settlement",()=>session.State==null||session.State.Phase=="Results",LevelLeft(session.State));
+            yield return SettleTheDay(session);
             if(failed!=null){Fail(failed);yield break;}
-            if(session.State==null){Fail("day settlement: session closed, "+session.Message);yield break;}
-            if(session.State.Result!="Success"||session.State.LevelIndex!=0||!FestivalSimulation.DayQuotaMet(session.State)||session.State.Survivors!=2)
-            {Fail("day settlement: result="+session.State.Result+" level="+session.State.LevelIndex+" sales="+session.State.LevelSales+"/"+FestivalSimulation.DayQuota(session.State)+" survivors="+session.State.Survivors+" message="+session.Message);yield break;}
-            Debug.Log("FESTIVAL SMOKE DAY PASSED: buyer checked, $"+session.State.LevelSales+" sold of a $"+FestivalSimulation.DayQuota(session.State)+" quota, back to camp; host="+session.IsHost);
             // DEBRIEF-1: back at camp everyone votes the host for every award, so the worst awards' shots ride into Night 1 on the
             // sober helper and the tripper stays clear.
-            if(session.IsHost)
-            {
-                // A couple of snapshots of the day's results reach the client before the host brings everyone back to camp.
-                yield return new WaitForSeconds(2);
-                session.Command("Reset");
-            }
-            // Reset makes a new round: the day's waits are over, and each wait from here starts on its clock.
-            yield return Until(session,"camp review",()=>session.State.Phase=="CampReview",CampSeconds);
-            if(failed!=null){Fail(failed);yield break;}
             for(int award=0;award<session.State.ReviewAwards.Count;award++)session.Command("ReviewVote",session.State.HostPlayerId,amount:award);
             yield return Until(session,"debrief reveal",()=>FestivalSimulation.ReviewRevealed(session.State),CampSeconds);
             if(failed!=null){Fail(failed);yield break;}
@@ -1136,6 +1132,27 @@ namespace Festival.Presentation
             Debug.Log("FESTIVAL SOLO SMOKE PASSED: interiors, antics, DJ, poi, purchase, Day 1 quota, Night 1 clue trail and rescue, camp reviews, Day 2 shopping");
             Application.Quit(0);
         }
+        /// <summary>Day 1 ends: each peer waits for the day's results and checks them, then the host brings everyone back to camp
+        /// for the debrief. Sets failed when a step fails.</summary>
+        IEnumerator SettleTheDay(FestivalSession session)
+        {
+            yield return Until(session,"day settlement",()=>session.State==null||session.State.Phase=="Results",LevelLeft(session.State));
+            if(failed!=null)yield break;
+            if(session.State==null){failed="day settlement: session closed, "+session.Message;yield break;}
+            if(session.State.Result!="Success"||session.State.LevelIndex!=0||!FestivalSimulation.DayQuotaMet(session.State)||session.State.Survivors!=2)
+            {failed="day settlement: result="+session.State.Result+" level="+session.State.LevelIndex+" sales="+session.State.LevelSales+"/"+FestivalSimulation.DayQuota(session.State)+" survivors="+session.State.Survivors+" message="+session.Message;yield break;}
+            Debug.Log("FESTIVAL SMOKE DAY PASSED: buyer checked, $"+session.State.LevelSales+" sold of a $"+FestivalSimulation.DayQuota(session.State)+" quota, back to camp; host="+session.IsHost);
+            // The client asks for camp once it has seen the results. Only the host may Reset, so the host refuses that ask, and the
+            // refusal in the host's own command record tells it the client has seen them, with no new message on the wire.
+            if(session.IsHost)
+            {
+                yield return Until(session,"client saw the day's results",()=>ClientRefused(session.DevelopmentSimulation,BackToCampRefusal),CampSeconds);
+                if(failed!=null)yield break;
+            }
+            session.Command("Reset");
+            // Reset makes a new round: the day's waits are over, and each wait from here starts on its clock.
+            yield return Until(session,"camp review",()=>session.State.Phase=="CampReview",CampSeconds);
+        }
         // The solo player dies and revives themselves at medical: a 15 s task, timed from the host's acceptance.
         IEnumerator SoloRevival(FestivalSession session)
         {
@@ -1150,6 +1167,12 @@ namespace Festival.Presentation
             yield return Until(session,"solo medical revival",()=>player.Life=="Alive",UntilEnd(sim.State,revival));
             if(failed==null&&player.RevivalCount!=1)failed="solo medical revival";
         }
+        // Must match FestivalSimulation's refusal words: a client's Reset (Apply) and a buy away from the night-market shelf
+        // (Economy.Buy). A host waiting on words that changed runs out its wait and names it.
+        const string BackToCampRefusal="Host can bring the crew back after results",RemoteMarketRefusal="Buy at the night-market shelf";
+        /// <summary>Whether the host has refused a client a command for this reason. The host's simulation records every command
+        /// it refuses, so the host knows how far the client has got without a new message.</summary>
+        static bool ClientRefused(FestivalSimulation sim,string reason)=>sim.State.Commands.Exists(c=>c.PlayerId!=sim.State.HostPlayerId&&!c.Result.Accepted&&c.Result.Reason==reason);
         // A gameplay wait reads the host's own simulation, or a client's latest snapshot. Never the client's estimate, which runs
         // on between snapshots and would hide a host that has stopped.
         static RoundState Clock(FestivalSession session)=>session.IsHost?session.DevelopmentSimulation?.State:session.State;
@@ -1383,13 +1406,16 @@ namespace Festival.Presentation
         }
         // TWISTVIS-1: the evening haze and Ember Playa's dust storms are fog, which the editor always draws but a player only draws
         // when its build kept the fog shaders (ProjectBootstrap). Closes a magenta fog in a metre out and checks the screen turns
-        // magenta, then puts the fog back.
+        // magenta, then puts the fog back. It counts the capture camera's own render at its capture pose, so the overlays drawn over the
+        // screen (Pony Dust's and Couch Lock's sleepy eyes, the HUD) never count against the fog.
         IEnumerator CheckFogDraws()
         {
             bool fog=RenderSettings.fog;var mode=RenderSettings.fogMode;var color=RenderSettings.fogColor;float start=RenderSettings.fogStartDistance,end=RenderSettings.fogEndDistance;
             RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=Color.magenta;RenderSettings.fogStartDistance=0;RenderSettings.fogEndDistance=1;
-            yield return new WaitForEndOfFrame();
-            var shot=ScreenCapture.CaptureScreenshotAsTexture();
+            var view=captureCamera;view.transform.SetPositionAndRotation(capturePosition,captureRotation);
+            var target=RenderTexture.GetTemporary(Screen.width,Screen.height,24);var shot=new Texture2D(target.width,target.height,TextureFormat.RGBA32,false);var was=RenderTexture.active;
+            var aimed=view.targetTexture;view.targetTexture=target;view.Render();view.targetTexture=aimed;
+            RenderTexture.active=target;shot.ReadPixels(new Rect(0,0,target.width,target.height),0,0);RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);
             RenderSettings.fog=fog;RenderSettings.fogMode=mode;RenderSettings.fogColor=color;RenderSettings.fogStartDistance=start;RenderSettings.fogEndDistance=end;
             var pixels=shot.GetPixels32();Destroy(shot);
             int fogged=0;foreach(var p in pixels)if(p.r>p.g+64&&p.b>p.g+64)fogged++;
@@ -1420,6 +1446,7 @@ namespace Festival.Presentation
         public static NpcState Seller(FestivalSimulation sim,string kind,NpcState besides=null)=>sim.State.Npcs.Find(n=>n!=besides&&n.Role=="Regular"&&n.Twist!=FestivalSimulation.VipGuard&&FestivalSimulation.SellerStock(n.Id)==kind);
         // Where the client stands to buy a medical voucher at the night market: just in front of its shelf, wherever the seed put it.
         public static WorldPoint MarketSpot(RoundState s){var shelf=Catalog.ShopPoint(false,s.VendorOffers.IndexOf("medical_voucher"));return new WorldPoint(shelf.X,shelf.Z-.85f);}
+        public static bool CrowdPopulated(FestivalAmbientCrowd crowd)=>crowd!=null&&crowd.WalkerCount==12&&crowd.MemberCount==FestivalAmbientCrowd.FixedSpots.Count+crowd.WalkerCount;
         // The spinner picks the tripper; the smoke makes the client the dose-1 tripper so the host stays the sober helper and
         // the day always takes the same sales.
         static void MakeClientTheTripper(FestivalSimulation sim)

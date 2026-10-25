@@ -23,14 +23,17 @@ namespace Festival.Core
     {
         public const float StageTakeoverX=0f,StageTakeoverZ=26f;
         public const float StageTakeoverStartRange=1.25f;
+        // A set starts and ends on the lawn at the takeover spot, and is played at the resident's mixer up on the riser.
+        // StageCheerRange is measured from the takeover spot.
+        public const float StageDjX=0f,StageDjZ=30.84f,StageCheerRange=20f;
         public static readonly ItemDefinition[] Items = {
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
             // POLO-2, ECON-1: a clean sale pays $10 (FestivalSimulation.PerfectSalePay) at dose 1, and dose, VIP zones, double
             // buyers and encores raise it, so the text names no ceiling; a sloppy sale that lands pays less ($5 at dose 1), so the
             // floor is a clean sale's. "$N" stays a token Ember Playa's odd-object money converts. ECON-6 adds one camp starter;
             // festivalgoers remain the source of further stock (StockBuys.cs).
-            Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up, or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
-            Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up, or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
+            Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up; ask High or Greedy for more. Or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
+            Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up; ask High or Greedy for more. Or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
             Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
             Item("confetti", "Confetti cannon", "Turns calm festivalgoers within 8 m to the burst for 4 s; accusers and swarms ignore it. Free party trick at camp.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
             Item("merch_bag", "Official merch bag", "Hide stock from casual inspection; witnessed sales and searches still count.",5,1,"Equipment","Passive","Self",0,0,0,false),
@@ -53,7 +56,7 @@ namespace Festival.Core
             Effect("ecstasy","Rolly Pollies",1.6,false,"Shorter visibility lead; bounded brightness; unchanged hit times."),
             Effect("ketamine","Pony Dust",2.4,false,"Longer visibility lead; unchanged hit times."),
             Effect("alcohol","Shot",2,false,"Spinning notes converge at fixed receptors; optional camera roll off."),
-            Effect("weed","Couch Lock",2,false,"HUD-safe letterbox; host movement multiplier 0.8; same-BPM audio.",0.8),
+            Effect("weed","Couch Lock",2,false,"Green haze through sleepy eyes that blink, under the HUD; host movement multiplier 0.8; same-BPM audio.",0.8),
             // GAS-1: a Giggle Balloon's gas, taken at camp and gone before any level, so it never meets a rhythm lane.
             Effect("giggle_gas","Giggle Gas",2,false,"Camp only; the hitter's own view and sound pulse; no rule changes.")
         };

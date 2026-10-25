@@ -76,7 +76,7 @@ public static class PoloPolishTests
         foreach(var id in new[]{"stock_lsd","stock_mushrooms"})
         {
             string text=Catalog.FindItem(id).Description;
-            Check(text.StartsWith("Clean sales pay $"+FestivalSimulation.PerfectSalePay+" and up, or take: "),id+" names a clean sale's pay as the floor of clean sales: "+text);
+            Check(text.StartsWith("Clean sales pay $"+FestivalSimulation.PerfectSalePay+" and up; ask High or Greedy for more. Or take: "),id+" names a clean sale's pay as the floor of clean sales, and the asks: "+text);
             Check(!text.Contains("up to"),id+" names no ceiling: "+text);
         }
     }

@@ -68,7 +68,7 @@ namespace Festival.Tests
         [Test] public void RetainedOutcomeCarriesItsSourceNpcOnlyInTheOwnerSnapshot()
         {
             var game=Day(out var you,out var them);var talk=Talk(game,you,them);
-            for(int t=0;t<3;t++)Assert.That(game.Execute(you.Id,new GameCommand{Id="target_reply_"+t,Kind="Reply",Amount=Smooth(talk.Turns[t]),Direction=t}).Accepted,Is.True);
+            for(int t=0;t<FestivalSimulation.ConversationTurns;t++)Assert.That(game.Execute(you.Id,new GameCommand{Id="target_reply_"+t,Kind="Reply",Amount=Smooth(talk.Turns[t]),Direction=t}).Accepted,Is.True);
             var outcome=you.ConversationOutcomes[0];
             Assert.That(JsonUtility.ToJson(outcome),Does.Contain("\"TargetId\":\""+them.Id+"\""),"a retained outcome needs source identity after the active interaction is gone");
             string owner=JsonUtility.ToJson(View(game,you.Id)),other=JsonUtility.ToJson(View(game,"friend"));
@@ -182,7 +182,7 @@ namespace Festival.Tests
                 Assert.That(window.Pick(Smooth(turn)),Is.True,"reply "+(t+1)+" picked");
                 Assert.That(Thread(window),Has.None.StartsWith("= "),"no hunch while the talk is on");
             }
-            Assert.That(talk.Status,Is.EqualTo("Complete"),"setup: the third reply ends the chat");
+            Assert.That(talk.Status,Is.EqualTo("Complete"),"setup: the last reply ends the chat");
             Assert.That(talk.Hunch,Does.StartWith("You get the feeling"),"setup: a chat leaves a hunch");
             float over=FestivalSimulation.ConversationTurns;
             Assert.That(Follow(window,game,you.Id,over),Is.False,"the chat is over");
@@ -245,6 +245,39 @@ namespace Festival.Tests
             Assert.That(Header("ConfirmChat"),Is.EqualTo("FESTIVALGOER  •  WOOK"),"the tripper's chat check still names who they are");
         }
 
+        // A sale's title line says its ask, at its price in your money, and the score it needs for that price, which the meter marks.
+        [Test] public void ASaleSaysItsAskAndWhatItNeeds()
+        {
+            foreach(var (ask,header,need) in new[]{(FestivalSimulation.FairAsk,"SELL  •  FAIR $10  •  NEEDS 75%",.75f),(FestivalSimulation.HighAsk,"SELL  •  HIGH $15  •  NEEDS 75%",.75f),(FestivalSimulation.GreedyAsk,"SELL  •  GREEDY $20  •  NEEDS 88%",.875f)})
+            {
+                var game=Day(out var you,out var them,"Buyer");you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});foreach(var dose in game.State.Doses)dose.Dose=1;
+                var started=game.Execute(you.Id,new GameCommand{Id="sale_"+ask,Kind="StartSale",TargetId=them.Id,ItemId="stock_lsd",Amount=ask});
+                Assert.That(started.Accepted,Is.True,"setup: the sale starts: "+started.Reason);
+                var window=Window(game,you);Follow(window,game,you.Id,0);
+                Assert.That(window.Header,Is.EqualTo(header),"ask "+ask+" at dose 1");
+                Assert.That(window.Need,Is.EqualTo(need).Within(1e-6),"the meter marks what ask "+ask+" needs");
+                Object.DestroyImmediate(canvas);
+            }
+            var s=new RoundState{FestivalIndex=1};s.Npcs.Add(new NpcState{Id="npc_1"});var sam=new PlayerState{Id="sam",Ordinal=1};s.Players.Add(sam);
+            Assert.That(FestivalChatWindow.HeaderFor(s,new InteractionState{Id="talk",Kind="Sale",TargetId="npc_1",Ask=FestivalSimulation.HighAsk},sam),Is.EqualTo("SELL  •  HIGH 15 RAMEN PACKETS  •  NEEDS 75%"),"in Sam's ramen");
+        }
+
+        // A sale ends on how it ended, as a line of its own in the chat window, in your money (the HUD hands the window the notice
+        // it read with FestivalHudText.MoneyText).
+        [Test] public void ASaleEndsOnItsResultInYourMoney()
+        {
+            var game=Day(out var you,out var them,"Buyer");foreach(var dose in game.State.Doses)dose.Dose=1;you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="sale",Kind="StartSale",TargetId=them.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: the sale starts");
+            var talk=game.Interaction(you.InteractionId);var window=Window(game,you);
+            for(int t=0;talk.Status=="Active";t++){Follow(window,game,you.Id,t);Assert.That(window.Pick(Smooth(talk.Turns[t])),Is.True,"reply "+(t+1));}
+            var view=View(game,you.Id);var me=Me(view,you.Id);var outcome=me.ConversationOutcomes.Find(o=>o.InteractionId==talk.Id);
+            Assert.That(outcome?.Notice,Is.EqualTo("SOLD Tongue Stamps  •  +$10"),"setup: the host's notice, in dollars");
+            me.Ordinal=1;view.FestivalIndex=1;
+            window.FollowOutcome(outcome,10,false,false,FestivalHudText.MoneyText(view,me,outcome.Notice));
+            var thread=Thread(window);
+            Assert.That(thread[thread.Length-1],Is.EqualTo("= SOLD Tongue Stamps  •  +10 ramen packets"),"the last line, in your money: "+string.Join(" | ",thread));
+        }
+
         // DIALOG-3: a talk keeps you face to face, held still as a dance holds you (FestivalSession freezes the move on Roots), until it
         // ends or you walk out of it with Cancel; a chat check, a ride or a task leaves you free to move as before.
         [Test] public void ATalkHoldsYouStillAsADanceDoes()
@@ -279,6 +312,77 @@ namespace Festival.Tests
             Assert.That(Stops(you.Id),Is.True,"holding G stops the dance, as any dance");
         }
 
+        // A meter under the title line shows how the talk is going. It starts in the middle and moves the moment you pick,
+        // up for a smooth reply and down for an awkward one, with its word (COLD, IFFY, WARM or VIBING) and its colour, red to green,
+        // which their reaction bubble takes too. The last pick moves it as well, so it shows where the talk lands, the talk's own
+        // score, before it settles.
+        [Test] public void TheMeterShowsHowTheTalkIsGoingAfterEveryPick()
+        {
+            var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);
+            Follow(window,game,you.Id,0);
+            Assert.That(window.MeterShown,Is.True,"a talk shows the meter");
+            Assert.That(window.Going,Is.EqualTo(.5f),"it starts in the middle");
+            Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Iffy));
+            Assert.That(window.Need,Is.EqualTo(-1f),"a chat needs no score, so the meter has no mark");
+            // Smooth first and last, awkward between: WARM, IFFY, then COLD, and up again on the last pick.
+            string[] words={FestivalChatWindow.Warm,FestivalChatWindow.Iffy,FestivalChatWindow.Cold};int final=FestivalSimulation.ConversationTurns-1;
+            for(int t=0;t<=final;t++)
+            {
+                if(t>0)
+                {
+                    Follow(window,game,you.Id,t);int reaction=window.Bubbles-2;
+                    Assert.That(window.IsTheirs(reaction)&&window.Shown(reaction)==talk.Turns[t].Reaction,Is.True,"setup: turn "+(t+1)+" opens on their reaction");
+                    Assert.That(window.BubbleColor(reaction),Is.EqualTo(FestivalChatWindow.ReactionColour(window.Going)),"their reaction to reply "+t+" takes the meter's colour");
+                }
+                var turn=talk.Turns[t];bool smooth=t==0||t==final;float before=window.Going;
+                Assert.That(window.Pick(System.Array.IndexOf(turn.Grades,smooth?ConversationLines.Smooth:ConversationLines.Awkward)),Is.True,"reply "+(t+1)+" picked");
+                Assert.That(window.Going,smooth?Is.GreaterThan(before):Is.LessThan(before),"the meter moves the moment you pick: "+(smooth?"up for a smooth reply":"down for an awkward one")+" (turn "+(t+1)+")");
+                if(t<words.Length&&t<final)Assert.That(window.GoingWord,Is.EqualTo(words[t]),"turn "+(t+1)+"'s word");
+                Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Word(window.Going)));
+                Assert.That(window.GoingColor,Is.EqualTo(FestivalChatWindow.Colour(window.Going)),"the meter's colour follows how it's going");
+            }
+            Assert.That(talk.Status,Is.EqualTo("Complete"),"setup: the last reply ends the chat");
+            Assert.That(window.Going,Is.EqualTo((float)talk.Score).Within(1e-6),"after the last pick, before it settles, the meter shows where the talk lands");
+            Assert.That(Follow(window,game,you.Id,FestivalSimulation.ConversationTurns),Is.False,"setup: the chat is over");
+            var outcome=you.ConversationOutcomes[0];float settled=FestivalSimulation.ConversationTurns;
+            window.FollowOutcome(outcome,settled,false,false);window.FollowOutcome(outcome,settled+FestivalChatWindow.Typed(outcome.Reaction)+.1f,false,false);
+            int last=-1;for(int i=0;i<window.Bubbles;i++)if(window.IsTheirs(i)&&window.Shown(i)==outcome.Reaction)last=i;
+            Assert.That(last,Is.GreaterThanOrEqualTo(0),"setup: their closing reaction is shown");
+            Assert.That(window.BubbleColor(last),Is.EqualTo(FestivalChatWindow.ReactionColour((float)talk.Score)),"their closing reaction takes the colour the talk landed on");
+            Assert.That(window.MeterShown&&window.Going==(float)talk.Score,Is.True,"the meter stays where the talk landed while the window lingers");
+            Assert.That(FestivalChatWindow.Colour(1).g>FestivalChatWindow.Colour(1).r&&FestivalChatWindow.Colour(0).r>FestivalChatWindow.Colour(0).g,Is.True,"it runs from red to green");
+        }
+
+        // The talker's own view carries every reply's grade (FestivalSession.ViewFor sends their talk whole). The meter reads only the
+        // replies already picked, so it gives nothing away: change every grade of a reply not picked, and it reads the same.
+        [Test] public void TheMeterReadsOnlyTheRepliesYouPicked()
+        {
+            var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="meter_first",Kind="Reply",Amount=Smooth(talk.Turns[0]),Direction=0}).Accepted,Is.True,"setup: a smooth first reply");
+            Follow(window,game,you.Id,0);float going=window.Going;
+            Assert.That(going,Is.GreaterThan(.5f),"setup: the smooth reply the host recorded moves the meter up");
+            foreach(int grade in new[]{ConversationLines.Awkward,ConversationLines.Smooth})
+            {
+                var view=View(game,you.Id);var live=view.Interactions.Find(i=>i.Id==talk.Id);
+                foreach(var turn in live.Turns)for(int r=0;r<3;r++)if(r!=turn.Pick)turn.Grades[r]=grade;
+                Assert.That(window.Follow(view,Me(view,you.Id),view.SimulationSeconds,1,false),Is.True);
+                Assert.That(window.Going,Is.EqualTo(going),"replies not picked, all "+(grade==ConversationLines.Smooth?"smooth":"awkward")+", don't move the meter");
+            }
+        }
+
+        // A buy marks the score they need to sell to you (FestivalSimulation.BuyScore, .4) on the meter. A chat and security need none.
+        [Test] public void ABuyMarksTheScoreItNeeds()
+        {
+            var game=Day(out var you,out var them);var window=Window(game,you);
+            var started=game.Execute(you.Id,new GameCommand{Id="meter_buy",Kind="StartBuy",TargetId=them.Id,ItemId=FestivalSimulation.SellerStock(them.Id)});
+            Assert.That(started.Accepted,Is.True,"setup: the buy starts: "+started.Reason);
+            Assert.That(Follow(window,game,you.Id,0),Is.True,"setup: the window follows the buy");
+            Assert.That(FestivalSimulation.BuyScore,Is.EqualTo(.4),"a buy needs .4");
+            Assert.That(window.MeterShown,Is.True);
+            Assert.That(window.Need,Is.EqualTo((float)FestivalSimulation.BuyScore).Within(1e-6),"the meter marks the .4 they need to sell to you");
+            foreach(var kind in new[]{"Conversation","Police"})Assert.That(FestivalChatWindow.NeedFor(new InteractionState{Kind=kind}),Is.EqualTo(-1f),"a "+kind+" has no mark");
+        }
+
         // At 1920x1080 every reply a talk can deal fits its button uncut, garbled or not, on every festival.
         [Test] public void EveryReplyFitsItsButton()
         {
@@ -287,7 +391,7 @@ namespace Festival.Tests
             Assert.That(label,Is.Not.Null,"setup: reply 1 has its label");
             var replies=new HashSet<string>();
             foreach(var topic in ConversationLines.Topics)foreach(var persona in new List<string>(DialogueGrammar.Personas){ConversationLines.Security})for(int festival=0;festival<Festivals.Count;festival++)for(int seed=0;seed<40;seed++)
-                foreach(var reply in ConversationLines.Turn(topic,persona,"Regular",festival,seed%3,seed%4==3?ConversationLines.Silence:seed%3,false,seed%3,new ContentRandom(seed)).Replies)replies.Add(reply);
+                foreach(var reply in ConversationLines.Turn(topic,persona,"Regular",festival,seed%FestivalSimulation.ConversationTurns,seed%4==3?ConversationLines.Silence:seed%3,false,seed%3,new ContentRandom(seed)).Replies)replies.Add(reply);
             var settings=label.GetGenerationSettings(label.rectTransform.rect.size);var measure=new TextGenerator();var cut=new List<string>();
             foreach(var reply in replies){measure.Populate(reply,settings);if(measure.characterCountVisible<reply.Length)cut.Add(reply);}
             Assert.That(replies.Count,Is.GreaterThan(500),"setup: the talks' replies");

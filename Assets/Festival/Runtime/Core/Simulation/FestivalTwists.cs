@@ -74,7 +74,7 @@ namespace Festival.Core
             double d=Distance(cam.X,cam.Z,p.X,p.Z);if(p.Life!="Alive"||d>Festivals.FilmRange)return false;
             double yaw=cam.Yaw*Math.PI/180;
             if(d>.1&&(Math.Sin(yaw)*(p.X-cam.X)+Math.Cos(yaw)*(p.Z-cam.Z))/d<Math.Cos(Festivals.FilmConeDegrees*Math.PI/360))return false;
-            return HasLineOfSight==null||HasLineOfSight(cam.X,cam.Z,p.X,p.Z);
+            return ClearSight(cam.X,cam.Z,p);
         }
 
         bool InVip(float x,float z)=>Festivals.InVipZone(State.FestivalIndex,x,z);
@@ -88,7 +88,7 @@ namespace Festival.Core
             return State.Phase!="Playing"||p.Life=="Spirit"||!InVip(x,z)||InVip(p.X,p.Z)||Count(p,VipWristband)>0;
         }
         // A sale made inside a VIP zone, to a buyer inside, pays VipPayoutFactor times: one over the rope pays as usual.
-        int VipPayout(PlayerState seller,NpcState buyer)=>buyer!=null&&InVip(seller.X,seller.Z)&&InVip(buyer.X,buyer.Z)?Festivals.VipPayoutFactor:1;
+        static int VipPayout(RoundState s,PlayerState seller,NpcState buyer)=>buyer!=null&&Festivals.InVipZone(s.FestivalIndex,seller.X,seller.Z)&&Festivals.InVipZone(s.FestivalIndex,buyer.X,buyer.Z)?Festivals.VipPayoutFactor:1;
         // Wristbands are sold only at the festival's night-market VIP stall, never at camp. One takes a slot like any gear, but
         // unlike a shelf buy it is not put in your hand.
         CommandResult BuyVipWristband(PlayerState p)
@@ -106,7 +106,7 @@ namespace Festival.Core
         public static bool TalksPastTheRope(PlayerState p,NpcState n)=>n.Twist==VipGuard&&CanAdd(p,VipWristband,1);
         string RopeRefusal(PlayerState p)=>Count(p,VipWristband)>0?"You already have a VIP wristband":"Free a hand for the VIP wristband";
         // ponytail: hands filled during the chat (a handoff accepted mid-chat) get nothing; the guard can be asked again.
-        void PassTheRope(InteractionState i,NpcState n){var p=Player(i.PlayerId);if(i.Kind=="ConfirmChat"&&n.Twist==VipGuard&&p!=null&&CanAdd(p,VipWristband,1))Add(p,VipWristband,1);}
+        void PassTheRope(InteractionState i,NpcState n){var p=Player(i.PlayerId);if(i.Kind=="ConfirmChat"&&n.Twist==VipGuard&&p!=null&&CanAdd(p,VipWristband,1)){Add(p,VipWristband,1);News(p,"Items","VIP WRISTBAND  •  you're on the list");}}
 
         /// <summary>Whether playerId is riding the Ferris wheel. Reads a client's view too, since a view carries its own player's
         /// interactions, so the rider's client can mark every cop (every view carries every cop) while this holds.</summary>

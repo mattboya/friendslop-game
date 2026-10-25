@@ -42,6 +42,7 @@ public static class DebriefTests
         ALeavingHoldoutCompletesTheVote();
         SnapshotsKeepTheDebrief();
         TheDebriefReviewsTheFestivalJustPlayed();
+        TheVoteHintNamesTheSlotKeysByAction();
     }
 
     static void AwardPools()
@@ -211,5 +212,16 @@ public static class DebriefTests
         var json=new JsonSerializerOptions{IncludeFields=true};
         var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(Campfire(124,2).State,json),json));
         Check(restored.State.ReviewFestivalIndex==0,"the reviewed festival survives a snapshot");
+    }
+
+    // The hint names the slot keys by action, which the HUD reads as bound (FestivalHudText.PressKeys). Results show the
+    // outcome card (FestivalHudText.OutcomeDetail), never a hint.
+    static void TheVoteHintNamesTheSlotKeysByAction()
+    {
+        var s=Campfire(125,2);
+        string hint=FestivalGuidance.Hint(s.State,s.Player("b"));
+        Check(hint=="Click a friend for each award, or press {Slot1}, {Slot2} or {Slot3}. Then the host opens the camp shop.","the vote hint names Slot1-3 by action, got \""+hint+"\"");
+        var results=Level(126,2);results.State.Phase="Results";results.State.Result="Success";
+        Check(FestivalGuidance.Hint(results.State,results.Player("a"))==""&&FestivalGuidance.Hint(results.State,results.Player("b"))=="","results give no hint");
     }
 }

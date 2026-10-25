@@ -25,6 +25,11 @@ namespace Festival.Tests
             Assert.That(red,Is.InRange(4,6));
             Assert.That(both,Is.GreaterThan(0));
         }
+        [Test]public void EveryPersonDeformsOnTheGpuInBatches()
+        {
+            Assert.That(UnityEditor.PlayerSettings.meshDeformation,Is.EqualTo(UnityEditor.MeshDeformation.GPUBatched),
+                "skinning and blend shapes run in batched GPU dispatches (ProjectBootstrap.EnsureGeneratedContent sets this)");
+        }
         [Test]public void DistantMeshesPreserveBoneBindingsAndFacialShapeKeys()
         {
             var detailed=Resources.Load<GameObject>("FestivalCharacter");

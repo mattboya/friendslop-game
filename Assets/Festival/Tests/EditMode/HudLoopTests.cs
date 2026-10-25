@@ -170,7 +170,8 @@ namespace Festival.Tests
                 keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/7");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/8");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/9");
             },(session,hud,go)=>
             {
-                var day=Level(0,0);var you=Crew(day,"you","You",life:"Downed");
+                // Sam is there to help: alone, the downed hint names the medical tent and no key.
+                var day=Level(0,0);var you=Crew(day,"you","You",life:"Downed");Crew(day,"sam","Sam");
                 typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{day,you});
                 Assert.That(Shown(go,"Objective detail"),Does.StartWith("Press R to distract attackers"),"the host's hint names the bound Interact key");
                 typeof(FestivalHud).GetMethod("UpdateChat",Private).Invoke(hud,new object[]{day,you,false});
@@ -203,14 +204,45 @@ namespace Festival.Tests
             });
         }
 
+        // A keyboard layout change renames keys on the same binding paths (the Q key reads A on AZERTY). The Input System reports
+        // it as the keyboard's configuration change, and the HUD's key names and a vision's check line are read again. A test keyboard
+        // cannot rename its keys, so each cache first holds a stale name.
+        [Test] public void AKeyboardLayoutChangeReadsTheKeyNamesAgain()
+        {
+            var keyboard=InputSystem.AddDevice<Keyboard>("Layout change keyboard");
+            try
+            {
+                WithReboundHud(keys=>{},(session,hud,go)=>
+                {
+                    var bound=typeof(FestivalHud).GetMethod("Bound",Private);
+                    string Use()=>(string)bound.Invoke(hud,new object[]{session.Controls.Use,"Q"});
+                    Assert.That(Use(),Is.EqualTo("Q"),"setup: the HUD reads and keeps the Use key's name");
+                    var labels=(System.Collections.IDictionary)typeof(FestivalHud).GetField("keyLabels",Private).GetValue(hud);
+                    object entry=labels[session.Controls.Use];var fields=entry.GetType().GetFields();fields[fields.Length-1].SetValue(entry,"A");labels[session.Controls.Use]=entry;
+                    Assert.That(Use(),Is.EqualTo("A"),"setup: the HUD holds the old layout's name");
+                    var markers=go.GetComponent<FestivalVisionMarkers>();var line=typeof(FestivalVisionMarkers).GetField("checkLine",Private);
+                    void Late()=>typeof(FestivalVisionMarkers).GetMethod("LateUpdate",Private).Invoke(markers,null);
+                    typeof(FestivalSession).GetProperty("State").SetValue(session,Level(0,0));
+                    Late();line.SetValue(markers,"OLD");Late();
+                    Assert.That(line.GetValue(markers),Is.EqualTo("OLD"),"setup: the check line holds the old layout's names");
+
+                    InputSystem.QueueConfigChangeEvent(keyboard);InputSystem.Update();
+                    Assert.That(Use(),Is.EqualTo("Q"),"the HUD reads the Use key's name again");
+                    Late();
+                    Assert.That(line.GetValue(markers),Does.Contain("F CHAT • E DANCE TO CHECK"),"the check line reads the keys again");
+                });
+            }
+            finally{InputSystem.RemoveDevice(keyboard);}
+        }
+
         // Lines built from the keys they are given: the HUD passes the bound ones.
         [Test] public void StopEquipAndCheckLinesNameTheKeysTheyAreGiven()
         {
             Assert.That(FestivalHudText.PressKeys("Press E. press F, press G or Press Q. Express G, press Esc, press 1.","R","H","K","Z"),
                 Is.EqualTo("Press R. press H, press K or Press Z. Express G, press Esc, press 1."),"each pressed letter names its bound key");
             Assert.That(FestivalHudText.GearHeading(true),Is.EqualTo("GEAR   /   1–3 EQUIP     Q USE     G DROP"),"today's keys by default");
-            Assert.That(FestivalHudText.GearHeading(true,"Z","X","U","K"),Is.EqualTo("GEAR   /   Z–X EQUIP     U USE     K DROP"));
-            Assert.That(FestivalHudText.GearHeading(false,"Z","X","U","K"),Is.EqualTo("GEAR   /   U USE     K DROP"),"no equip while 1-3 reply");
+            Assert.That(FestivalHudText.GearHeading(true,"Z","X","C","U","K"),Is.EqualTo("GEAR   /   Z, X, C EQUIP     U USE     K DROP"),"each bound slot key");
+            Assert.That(FestivalHudText.GearHeading(false,"Z","X","C","U","K"),Is.EqualTo("GEAR   /   U USE     K DROP"),"no equip while 1-3 reply");
             Assert.That(FestivalHudText.HoldToStopFor("Dance","K"),Is.EqualTo("HOLD K TO STOP DANCING"));
             Assert.That(FestivalHudText.HoldToStopFor(FestivalSimulation.DrumPartKind,"K"),Is.EqualTo("HOLD K TO STOP DRUMMING"));
             Assert.That(FestivalHudText.HoldToStopFor(FestivalSimulation.DeckSetKind,"K"),Is.EqualTo("HOLD K TO HOP OFF"));
@@ -220,6 +252,71 @@ namespace Festival.Tests
             s.Interactions.Add(new InteractionState{Id="ride_1",PlayerId="you",Kind=FestivalSimulation.RideCarKind,TargetId="0",Status="Active"});
             Assert.That(FestivalHudText.CancelAction(s,you),Is.EqualTo("Cancel current action  •  F PLAY A DECK SET"),"setup: the deck is free");
             Assert.That(FestivalHudText.CancelAction(s,you,"H"),Is.EqualTo("Cancel current action  •  H PLAY A DECK SET"));
+        }
+
+        // Core names the other rebindable keys by action. Each token reads as the key it is given, a mouse button as a
+        // click, and with no key given as today's words.
+        [Test] public void CoreActionTokensReadAsTheKeysTheyAreGiven()
+        {
+            string words=FestivalSimulation.SpinWords,vote="Click a friend for each award, or press {Slot1}, {Slot2} or {Slot3}.";
+            Assert.That(FestivalHudText.PressKeys(words),Is.EqualTo("Hold left click to spin them in front of you, right click at your sides."),"today's words with no override");
+            Assert.That(FestivalHudText.PressKeys(words,spin:"K",sides:"L"),Is.EqualTo("Hold K to spin them in front of you, L at your sides."),"the bound Spin and SpinSides keys");
+            Assert.That(FestivalHudText.PressKeys(words,spin:"RMB",sides:"LMB"),Is.EqualTo("Hold right click to spin them in front of you, left click at your sides."),"swapped mouse buttons read as clicks");
+            Assert.That(FestivalHudText.PressKeys(words,spin:"BACK",sides:"FORWARD"),Is.EqualTo("Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
+                "the side buttons, which have no short name, read as mouse buttons, never a way to walk");
+            Assert.That(FestivalHudText.PressKeys(vote),Is.EqualTo("Click a friend for each award, or press 1, 2 or 3."),"today's slot keys with no override");
+            Assert.That(FestivalHudText.PressKeys(vote,slot1:"7",slot2:"8",slot3:"9"),Is.EqualTo("Click a friend for each award, or press 7, 8 or 9."),"the bound slot keys");
+            Assert.That(FestivalHudText.PressKeys("Press E, or press {Slot1}.","R",slot1:"E"),Is.EqualTo("Press R, or press E."),"a slot key on E is not read again as Interact");
+        }
+
+        // The host's words follow the profile's slot and spin keys too: the vote hint on the objective card, and a poi reply in
+        // the notice.
+        [Test] public void TheVoteHintAndThePoiReplyNameTheBoundSlotAndSpinKeys()
+        {
+            WithReboundHud(keys=>
+            {
+                keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/7");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/8");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/9");
+                keys.Spin.ApplyBindingOverride(0,"<Keyboard>/k");keys.SpinSides.ApplyBindingOverride(0,"<Keyboard>/l");
+            },(session,hud,go)=>
+            {
+                var review=Level(0,1,"CampReview");review.ReviewAwards.AddRange(new[]{"Worst Dancer","Got Lost","MVP Tripper"});var you=Crew(review,"you","You");
+                typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{review,you});
+                Assert.That(Shown(go,"Objective detail"),Is.EqualTo("Click a friend for each award, or press 7, 8 or 9. Then the host opens the camp shop."),"the vote hint names the bound slot keys");
+                session.SetMessage("Equipped Practice poi. "+FestivalSimulation.SpinWords);
+                typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
+                Assert.That(Shown(go,"Notice"),Is.EqualTo("Equipped Practice poi. Hold K to spin them in front of you, L at your sides."),"the poi reply names the bound spin keys");
+            });
+        }
+
+        // A range of rebound slot keys hides the middle one, so each line that names them must name all three.
+        [Test] public void EveryLineThatNamesTheSlotKeysNamesEachBoundKey()
+        {
+            WithReboundHud(keys=>{keys.Slot1.ApplyBindingOverride(0,"<Keyboard>/z");keys.Slot2.ApplyBindingOverride(0,"<Keyboard>/x");keys.Slot3.ApplyBindingOverride(0,"<Keyboard>/c");},(session,hud,go)=>
+            {
+                var review=Level(0,1,"CampReview");review.ReviewResult="Success";review.ReviewAwards.AddRange(new[]{"Worst Dancer","Got Lost","MVP Tripper"});
+                var you=Crew(review,"you","You");you.Connected=true;var sam=Crew(review,"sam","Sam");sam.Connected=true;
+                typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{review,you});
+                typeof(FestivalHud).GetMethod("UpdateReview",Private).Invoke(hud,new object[]{review,you});
+                Assert.That(Shown(go,"Objective detail"),Does.Contain("press Z, X or C"),"setup: the vote hint names each bound slot key");
+                Assert.That(Shown(go,"Review status"),Does.StartWith("CLICK A FRIEND FOR EACH AWARD, OR PRESS Z, X OR C\n"),"the review card's foot names them as the hint does");
+                var day=Level(0,0);you=Crew(day,"you","You");
+                typeof(FestivalHud).GetMethod("UpdateChat",Private).Invoke(hud,new object[]{day,you,false});
+                Assert.That(Shown(go,"Equipment heading"),Does.StartWith("GEAR   /   Z, X, C EQUIP     "),"the gear bar names each bound slot key");
+                string reply=null;foreach(var (title,text) in FestivalHudText.HowToPlay(session.Controls))if(title=="EVERYONE ELSE")reply=text;
+                Assert.That(reply,Does.Contain("answer with Z, X or C the way"),"How to Play names each bound reply key");
+            });
+        }
+
+        // The Input System names the mouse side buttons Back and Forward, which read like a way to walk.
+        [Test] public void TheMouseSideButtonsReadAsMouseButtons()
+        {
+            WithReboundHud(keys=>{keys.Spin.ApplyBindingOverride(0,"<Mouse>/backButton");keys.SpinSides.ApplyBindingOverride(0,"<Mouse>/forwardButton");},(session,hud,go)=>
+            {
+                session.SetMessage("Equipped Practice poi. "+FestivalSimulation.SpinWords);
+                typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
+                Assert.That(Shown(go,"Notice"),Is.EqualTo("Equipped Practice poi. Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
+                    "the poi reply names the side buttons as mouse buttons");
+            });
         }
 
         [Test] public void BannerNamesTheFestivalAndLevel()
@@ -269,9 +366,9 @@ namespace Festival.Tests
             you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+NoStock),"gear is not stock");
             you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});sam.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=2});
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+"Stick with Sam: they see the buyers. Walk up to one and press E to offer."));
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press E to offer."));
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam,false,"F","R"),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press R to offer."),"the bound Interact key");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+"Stick with Sam: they see the buyers. Walk up to one and press E to offer, or ask High or Greedy for more."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press E to offer, or ask High or Greedy for more."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam,false,"F","R"),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press R to offer, or ask High or Greedy for more."),"the bound Interact key");
             s.LevelSales=30;
             const string Met="Anyone can end the day at the way back to camp, or keep selling until sundown.";
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Met));
@@ -296,21 +393,40 @@ namespace Festival.Tests
             you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
             Assert.That(Listed(s),Does.StartWith(Buy+Chat),"gear is not stock");
             you.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
-            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys"+Chat+" | Dance with festivalgoer | "+Talk+" | "+Buy),"holding stock by day, E offers it; buying more stays listed");
+            const string Asks=" | Ask high  •  $15 | Ask greedy  •  $20",Offer="Offer Fun Guys  •  Fair $10";
+            Assert.That(Listed(s),Is.EqualTo(Offer+Chat+Asks+" | Dance with festivalgoer | "+Talk+" | "+Buy),"holding stock by day, E offers it at a fair price, the pushed asks next; buying more stays listed");
             var offer=FestivalHudText.FestivalgoerActions(s,you,goer)[0].Command;
             Assert.That(new[]{offer.Kind,offer.TargetId,offer.ItemId},Is.EqualTo(new[]{"StartSale","goer_2","stock_mushrooms"}),"E starts the sale of what you hold, with them");
             // K1: beside someone who has sold to you, a seller, who never buys: E buys again, and the offer, a sure refusal, goes last.
-            Assert.That(Listed(s,true),Is.EqualTo(Buy+Chat+" | Dance with festivalgoer | "+Talk+" | Offer Fun Guys"),"beside who sold to you, E buys again");
+            Assert.That(Listed(s,true),Is.EqualTo(Buy+Chat+" | Dance with festivalgoer | "+Talk+" | "+Offer+Asks),"beside who sold to you, E buys again");
             Assert.That(FestivalHudText.FestivalgoerActions(s,you,goer,true)[0].Command.Kind,Is.EqualTo("StartBuy"),"E asks them for more");
             goer.CanTalk=false;
-            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys | Dance with festivalgoer | "+Buy),"someone keeping to themselves has no chat");
+            Assert.That(Listed(s),Is.EqualTo(Offer+Asks+" | Dance with festivalgoer | "+Buy),"someone keeping to themselves has no chat");
             goer.CanTalk=true;s.TripperId="you";s.Visions.Add(new VisionState{Id="goer_vision",Kind="Buyer",NpcId=goer.Id});
-            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys | Dance with festivalgoer | "+Talk+" | "+Buy),"F checks the tripper's vision about them, so nothing says F chats");
+            Assert.That(Listed(s),Is.EqualTo(Offer+Asks+" | Dance with festivalgoer | "+Talk+" | "+Buy),"F checks the tripper's vision about them, so nothing says F chats");
             var night=Level(0,1);night.Players.AddRange(s.Players);night.Npcs.Add(goer);
-            Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | Offer Fun Guys | "+Buy),"at night E dances, stock or not");
+            Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | "+Offer+Asks+" | "+Buy),"at night E dances, stock or not");
             Assert.That(Listed(night,true),Is.EqualTo(Listed(night)),"at night E dances beside who sold to you too");
             you.Inventory.Clear();
             Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | "+Buy));
+        }
+
+        // Holding stock, the offer comes as three asks, each at what a full sale would pay you (FestivalSimulation.SalePrice:
+        // the dose and a VIP zone, never a double buyer's vision), in your money: E offers it at a fair price, and High or Greedy ask
+        // half as much again or double, each its own StartSale ask.
+        [Test] public void TheOfferNamesEachAskAtItsPrice()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You");Crew(s,"sam","Sam");s.TripperId="sam";s.Doses.Add(new PlayerDose{PlayerId="sam",Dose=2});
+            var goer=new NpcState{Id="goer_2"};s.Npcs.Add(goer);you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            var offers=FestivalHudText.FestivalgoerActions(s,you,goer).FindAll(a=>a.Command.Kind=="StartSale");
+            Assert.That(offers.ConvertAll(a=>a.Label),Is.EqualTo(new[]{"Offer Tongue Stamps  •  Fair $13","Ask high  •  $19","Ask greedy  •  $25"}),"each ask at dose 2's x1.25");
+            Assert.That(offers.ConvertAll(a=>a.Command.Amount),Is.EqualTo(new[]{FestivalSimulation.FairAsk,FestivalSimulation.HighAsk,FestivalSimulation.GreedyAsk}));
+            Assert.That(offers.TrueForAll(a=>a.Command.TargetId=="goer_2"&&a.Command.ItemId=="stock_lsd"),Is.True,"each offers what you hold, to them");
+            s.Visions.Add(new VisionState{Id="double",Kind="DoubleBuyer",NpcId="goer_2"});
+            Assert.That(FestivalHudText.FestivalgoerActions(s,you,goer)[0].Label,Does.StartWith("Offer Tongue Stamps  •  Fair $13"),"a double buyer's vision is the tripper's to check, so the price never shows it");
+            var playa=Level(1,0);var sam=Crew(playa,"sam","Sam");sam.Ordinal=1;sam.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});playa.Npcs.Add(goer);
+            Assert.That(FestivalHudText.FestivalgoerActions(playa,sam,goer).FindAll(a=>a.Command.Kind=="StartSale").ConvertAll(a=>a.Label),
+                Is.EqualTo(new[]{"Offer Tongue Stamps  •  Fair 10 ramen packets","Ask high  •  15 ramen packets","Ask greedy  •  20 ramen packets"}),"in Sam's ramen on Ember Playa");
         }
 
         // ECON-3: Q uses what you hold, and using stock is taking it yourself: the unit is gone and you trip for a minute. A new player
@@ -350,11 +466,39 @@ namespace Festival.Tests
             Assert.That(actions.Count,Is.EqualTo(9),"rendering the strip never removes menu actions");
         }
 
+        // Each banner shows once. The first view of a round or a connection only takes note, so nothing old replays.
+        [Test] public void DyingAndComingBackEachShowTheirBannerOnce()
+        {
+            var s=Level(0,0);s.RoundId="life";var you=Crew(s,"you","You",life:"Downed");var news=new FestivalHudText.LifeNews();
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("","")),"the first view only takes note");
+            you.Life="Spirit";
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("YOU DIED","You're a spirit: you float through anything, and only other spirits see you. Reach the medical tent to come back (2 revivals left).")),"the step to a spirit");
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("","")),"once");
+            you.Life="Alive";you.RevivalCount=1;
+            Assert.That(news.Follow(s,you,1),Is.EqualTo(("YOU'RE BACK","Back on your feet at the medical tent. Walls and the stage stop you again.")),"a revival");
+            you.Life="Spirit";Assert.That(news.Follow(s,you,1).Detail,Does.EndWith("(1 revival left)."),"a second death counts what is left");
+            you.Life="Alive";you.RevivalCount=2;news.Follow(s,you,1);you.Life="Spirit";
+            Assert.That(news.Follow(s,you,1).Detail,Does.EndWith("No revivals left this level."),"and never sends you to the tent for nothing");
+            Assert.That(new FestivalHudText.LifeNews().Follow(s,you,1),Is.EqualTo(("","")),"joining as a spirit stays quiet");
+            Assert.That(news.Follow(s,you,2),Is.EqualTo(("","")),"so does a reconnect");
+            s.RoundId="next";you.Life="Alive";Assert.That(news.Follow(s,you,2),Is.EqualTo(("","")),"and a new level's fresh start");
+        }
+
         [Test] public void ASpiritSeesTheWholeCrewsQuota()
         {
             // A spirit's view lists only spirits; the crew count the session sends keeps the target right.
             var s=Level(0,2);var spirit=Crew(s,"you","You",life:"Spirit");s.ConnectedCrewCount=3;s.LevelSales=20;
             Assert.That(FestivalHudText.Quota(s,spirit),Is.EqualTo("DAY QUOTA  $20 / $60"));
+        }
+
+        [Test] public void ADownedCardCountsTheSecondsAndAloneNamesTheMedicalTent()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You",life:"Downed");you.Connected=true;you.DownedRemaining=27.4;var sam=Crew(s,"sam","Sam");sam.Connected=true;
+            Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("DOWNED • 28 s"),"the seconds left, rounded up");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you,interact:"R"),Is.EqualTo("Press R to distract attackers; a teammate can rescue or drag you."),"with a friend, the bound key");
+            sam.Connected=false;
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Does.Contain("Nobody can help you up alone").And.Contain("spirit").And.Contain("medical tent"),"alone, the way back");
+            you.DownedRemaining=.3;Assert.That(FestivalHudText.ObjectiveTitle(s,you),Is.EqualTo("DOWNED • 1 s"),"never 0 s while still down");
         }
 
         [Test] public void TheWayBackToCampOffersTheExtractOnlyWithSomethingToFinish()

@@ -65,13 +65,13 @@ namespace Festival.Tests
                     }
                     else
                     {
-                        for(int turn=0;turn<3;turn++)
+                        for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
                         {
                             Assert.That(talk.Turns.Count,Is.EqualTo(turn+1));int choice=System.Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth);Assert.That(choice,Is.InRange(0,2));
                             Key[] replies={Key.Digit1,Key.Digit2,Key.Digit3};yield return Tap(replies[choice],.2f);yield return new WaitForSeconds(.3f);
                             Assert.That(talk.Turns[turn].Pick,Is.EqualTo(choice),"the actual reply key reaches this exact owned turn");
                         }
-                        Assert.That(talk.Status,Is.EqualTo("Complete"),"only the third explicit answer completes the talk");Assert.That(player.InteractionId,Is.Empty);
+                        Assert.That(talk.Status,Is.EqualTo("Complete"),"only the last explicit answer completes the talk");Assert.That(player.InteractionId,Is.Empty);
                         if(kind=="Sale")Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_mushrooms"),Is.False,"finished sale consumes its reserved last unit");
                         if(kind=="Buy")Assert.That(player.Cash,Is.EqualTo(45));
                         yield return Tap(Key.Escape,.25f);yield return new WaitForSeconds(.3f);Assert.That(owner.MenuOpen||window.Open,Is.False,"the first effective Menu dismisses the completed outcome");
@@ -287,12 +287,12 @@ namespace Festival.Tests
                 yield return Tap(Key.Escape);Assert.That(session.MenuOpen,Is.False);
                 npc.Observers.Clear();session.Command("Conversation",npc.Id);yield return null;yield return null;
                 talk=sim.Interaction(player.InteractionId);
-                for(int t=0;t<3;t++){var turn=talk.Turns[t];window.Pick(System.Array.IndexOf(turn.Grades,ConversationLines.Smooth));yield return null;yield return null;}
+                for(int t=0;t<FestivalSimulation.ConversationTurns;t++){var turn=talk.Turns[t];window.Pick(System.Array.IndexOf(turn.Grades,ConversationLines.Smooth));yield return null;yield return null;}
                 yield return new WaitForSeconds(.8f);
                 var outcome=player.ConversationOutcomes.Last();
                 Assert.That(window.Lingering,Is.True);
-                Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.Shown(i)==outcome.Reaction),Is.True,"the retained authoritative third-reply reaction is shown without a fourth reply");
-                Assert.That(window.Replies,Is.EqualTo(0));Assert.That(talk.Turns.Count,Is.EqualTo(3));
+                Assert.That(Enumerable.Range(0,window.Bubbles).Any(i=>window.Shown(i)==outcome.Reaction),Is.True,"the retained authoritative last-reply reaction is shown without a fifth reply");
+                Assert.That(window.Replies,Is.EqualTo(0));Assert.That(talk.Turns.Count,Is.EqualTo(FestivalSimulation.ConversationTurns));
                 Assert.That(player.Dialogue.Seen,Is.Not.Empty,"actually displayed turns/outcome acknowledge private grammar");
                 yield return Tap(Key.G);Assert.That(window.Open,Is.True,"G no longer owns chat dismissal");
                 yield return Tap(Key.Escape);Assert.That(window.Open||session.MenuOpen,Is.False);
@@ -329,9 +329,9 @@ namespace Festival.Tests
                     session.Command(kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,item:kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");yield return null;
                     var talk=sim.Interaction(player.InteractionId);Assert.That(talk,Is.Not.Null,scenario+": "+session.Message);
                     if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;talk.Status=="Active"&&n<400;n++)sim.Tick(.1);}
-                    else for(int t=0;t<3;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
+                    else for(int t=0;t<FestivalSimulation.ConversationTurns;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
                     Assert.That(player.InteractionId,Is.Empty);var outcome=player.ConversationOutcomes.Last();
-                    if(trust){Assert.That(outcome.Notice,Is.EqualTo("They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
+                    if(trust){Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"They walk off  •  Tongue Stamps back in your hand":"They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
                     if(scenario=="narc")Assert.That(player.Life,Is.EqualTo("Detained"));
                     view.enabled=true;yield return null;yield return new WaitForSeconds(.7f);
                     Assert.That(window.Open&&window.Lingering,Is.True,scenario+": a terminal delivery survives an entirely missed live view");
@@ -723,12 +723,20 @@ namespace Festival.Tests
                 }
 
                 // VISION-3: Sam dances with that festivalgoer, so the host would refuse your check: the HUD says they're busy, and
-                // neither E nor F starts one.
-                session.Command("Cancel");mate.X=npc.X-.6f;mate.Z=npc.Z;
+                // neither E nor F starts one. You and Sam stand beside them and they stay still: the typed answer above waits on real
+                // time, and a festivalgoer who walked off in it left you out of reach.
+                session.Command("Cancel");npc.Mode="Blending";npc.Suspicion=0;npc.Observers.Clear();player.X=npc.X+.6f;player.Z=npc.Z;mate.X=npc.X-.6f;mate.Z=npc.Z;
                 var mateDance=sim.Execute(mate.Id,new GameCommand{Id="hud_mate_dance",Kind="Dance",TargetId=npc.Id});
                 if(!mateDance.Accepted)failures.Add("setup: Sam dances with the festivalgoer: "+mateDance.Reason);
                 yield return new WaitForSeconds(.6f);
                 Expect("tripper beside a busy vision","Prompt","They're busy right now");
+                if(Read("Prompt")!="They're busy right now")
+                {
+                    var aim=FestivalHudText.CheckTarget(session.State,session.LocalPlayer);
+                    failures.Add("tripper beside a busy vision: the check aims at "+(aim?.Id??"nobody")+"; you stand "+Vector2.Distance(new Vector2(player.X,player.Z),new Vector2(npc.X,npc.Z)).ToString("0.00")
+                        +" m from the festivalgoer ("+npc.Mode+", unchecked vision "+sim.State.Visions.Exists(v=>v.NpcId==npc.Id&&!v.Confirmed)+") and "
+                        +Vector2.Distance(new Vector2(player.X,player.Z),new Vector2(mate.X,mate.Z)).ToString("0.00")+" m from Sam");
+                }
                 PressE();PressF();yield return null;
                 if(sim.State.Interactions.Exists(i=>i.PlayerId==player.Id&&i.Kind.StartsWith("Confirm")&&i.Status=="Active"))failures.Add("tripper beside a busy vision: E or F starts a check ("+session.Message+")");
                 sim.Execute(mate.Id,new GameCommand{Id="hud_mate_stop",Kind="Cancel"});mate.X=30;mate.Z=0;
@@ -780,7 +788,7 @@ namespace Festival.Tests
         }
 
         // Every challenge the live dancer can head: the four-lane kinds, and (DIALOG-3) a sale's, a buy's and a chat's trust dance.
-        private static readonly string[] DancerKinds={"Dance","ConfirmDance","Poi","Dj","Sale","Buy","Conversation"};
+        private static readonly string[] DancerKinds={"Dance","ConfirmDance","Poi","Sale","Buy","Conversation"};
 
         private const string VirtualKeyboard="HUD tripper keyboard";
         private void UseAVirtualKeyboard()=>base.UseAVirtualKeyboard(VirtualKeyboard);
@@ -1056,12 +1064,23 @@ namespace Festival.Tests
                     var mate=sim.AddPlayer("impl_u46_"+mates.Count,name);mate.Ready=true;mates.Add(mate);
                 }
                 yield return StartLevel(session);
+                // Everyone on the dose list carries that dose, and nobody else any, so Core's KeepTripper never
+                // hands the trip, and the card, to someone else mid-measure.
+                void Dosed()
+                {
+                    foreach(var p in sim.State.Players)
+                    {
+                        p.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);var d=sim.State.Doses.Find(x=>x.PlayerId==p.Id);
+                        if(d!=null)p.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=d.Dose,Substance=d.Substance,RemainingSeconds=600});
+                    }
+                }
                 // Night 2: the first friend trips on four Rolly Pollies, everyone else is on four Tongue Stamps or Rolly Pollies, away from home.
                 sim.State.LevelIndex=3;sim.State.DurationSeconds=600;sim.State.ElapsedSeconds=30;sim.State.Npcs.Clear();
                 sim.State.TripperId=mates[0].Id;sim.State.Doses.Clear();
                 sim.State.Doses.Add(new PlayerDose{PlayerId=mates[0].Id,Dose=4,Substance="ecstasy"});
                 sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="lsd"});
                 for(int i=1;i<mates.Count;i++)sim.State.Doses.Add(new PlayerDose{PlayerId=mates[i].Id,Dose=4,Substance=i%2==0?"lsd":"ecstasy"});
+                Dosed();
                 for(int i=0;i<mates.Count;i++){mates[i].X=-30+i*2;mates[i].Z=-30;}
 
                 var canvas=hud.GetComponentInChildren<Canvas>();var scaler=canvas.GetComponent<CanvasScaler>();canvas.renderMode=RenderMode.WorldSpace;
@@ -1129,7 +1148,7 @@ namespace Festival.Tests
                 foreach(var mate in mates.GetRange(3,4))mate.Connected=false;
                 yield return Settle();
                 if(Check("1920x1080, four friends gone")>=full)failures.Add("with four friends gone the card shrinks");
-                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="ecstasy"});
+                sim.State.TripperId=player.Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=player.Id,Dose=4,Substance="ecstasy"});Dosed();
                 foreach(float textScale in new[]{1f,1.3f})
                 {
                     session.Profile.Data.TextScale=textScale;yield return Settle();
@@ -1138,7 +1157,8 @@ namespace Festival.Tests
                 }
 
                 // Day 2's last minute, the longest friend tripping: the sundown warning comes up under the notice at either text size.
-                sim.State.LevelIndex=2;sim.State.TripperId=mates[1].Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=mates[1].Id,Dose=4,Substance="lsd"});
+                sim.State.LevelIndex=2;sim.State.TripperId=mates[1].Id;sim.State.Doses.Clear();sim.State.Doses.Add(new PlayerDose{PlayerId=mates[1].Id,Dose=4,Substance="lsd"});Dosed();
+                string card=FestivalHudText.Tripping(sim.State,player.Id);
                 sim.State.ElapsedSeconds=sim.State.DurationSeconds-50;
                 foreach(float textScale in new[]{1f,1.3f})
                 {
@@ -1152,6 +1172,9 @@ namespace Festival.Tests
                 if(layoutLogs!=1)failures.Add("opted in, one new layout and steady frames log the dose card "+layoutLogs+" times: "+layoutLog);
                 if(layoutLog.ToUpperInvariant().Contains("BARTHOLOMEW"))failures.Add("the layout trace names a player: "+layoutLog);
 #endif
+                for(long tick=sim.State.Tick;sim.State.Tick==tick;)yield return null;
+                yield return Settle();
+                if(tripping.text!=card)failures.Add("a sim tick later the dose card reads \""+tripping.text.Replace("\n"," | ")+"\", not the test's \""+card.Replace("\n"," | ")+"\"");
             }
             finally
             {

@@ -57,9 +57,15 @@ namespace Festival.Tests
                 var canvas=root.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;var canvasRect=(RectTransform)canvas.transform;canvasRect.sizeDelta=new Vector2(1920,1080);canvasRect.localScale=Vector3.one;
                 var buyer=new NpcState{Id="nearby_buyer_2",Kind="Wook",Role="Buyer",CanTalk=true,X=0,Z=1.5f,Yaw=180};game.State.Npcs.Add(buyer);
                 foreach(var mate in mates){mate.X=1;mate.Z=0;mate.Effects.Clear();}
+                // The friend tip names the tripper, the longest name. The bag pins KeepTripper's next pick to the host, so an
+                // undosed tripper would hand the trip to the host every time and the host's own view has no friend tip.
+                game.State.TripperBag.Clear();game.State.TripperBag.Add(player.Id);
+                mates[0].Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,Substance="lsd",RemainingSeconds=600});
                 game.State.TripperId=mates[0].Id;yield return new WaitForSeconds(.5f);session.Profile.ShowTipsAgain();yield return null;yield return null;
                 var strip=Card("Nearby actions");var tip=Card("First-time tip card");Assert.That(strip.gameObject.activeInHierarchy&&tip.gameObject.activeInHierarchy,Is.True,"real nearby actions and a first-time friend tip are visible together: strip="+strip.gameObject.activeInHierarchy+", tip="+tip.gameObject.activeInHierarchy+", phase="+session.State.Phase+", elapsed="+session.State.ElapsedSeconds+", life="+player.Life+", prompt="+DropText(root,"Prompt")?.text+", seen="+string.Join(",",session.Profile.Data.SeenTips));
-                var nearby=DropText(root,"Nearby");Assert.That(nearby.text.Split('\n').Length,Is.EqualTo(5));Assert.That(nearby.text,Does.EndWith("ESC  +7 more"));
+                // The menu holds the buyer's actions, seven handoffs and lying down. The strip lists four after the prompt and counts the rest.
+                int listed=FestivalHudText.FestivalgoerActions(game.State,player,buyer).Count+mates.Count+1;
+                var nearby=DropText(root,"Nearby");Assert.That(nearby.text.Split('\n').Length,Is.EqualTo(5));Assert.That(nearby.text,Does.EndWith("ESC  +"+(listed-5)+" more"));
                 Canvas.ForceUpdateCanvases();
                 if(strip.anchorMin.y<tip.anchorMax.y+.008f)failures.Add("nearby strip bottom="+strip.anchorMin.y+" overlaps first-time tip top="+tip.anchorMax.y);
                 Fits("Nearby");if(nearby.cachedTextGenerator.lineCount>5)failures.Add("five extras wrapped onto "+nearby.cachedTextGenerator.lineCount+" rendered rows");Fits("Objective title");Fits("Objective detail");Fits("Vitals");Fits("First-time tip");float crowdedHeight=strip.rect.height;
@@ -71,7 +77,7 @@ namespace Festival.Tests
                 foreach(var mate in mates){mate.X=1;mate.Z=0;}yield return new WaitForSeconds(.3f);
                 yield return Tap(Key.Escape,.3f);Assert.That(session.MenuOpen,Is.True);
                 var actions=new List<Button>();foreach(var button in root.GetComponentsInChildren<Button>(false))if(button.name.StartsWith("Action:"))actions.Add(button);
-                Assert.That(actions.Count,Is.EqualTo(12),"the full list retains the primary, all three other NPC actions, seven handoffs and lying down");
+                Assert.That(actions.Count,Is.EqualTo(listed),"the full list retains every buyer action, seven handoffs and lying down");
                 foreach(var mate in mates)Assert.That(actions.Exists(b=>b.name=="Action:Offer Tongue Stamps to "+mate.Name),Is.True,"every registered friend remains in the menu");
                 Fits("Crew status");foreach(var button in actions){var text=button.transform.Find("Text").GetComponent<Text>();var measured=new TextGenerator();measured.Populate(text.text,text.GetGenerationSettings(text.rectTransform.rect.size));int visible=Mathf.Max(0,measured.characterCountVisible);if(visible<text.text.Length&&text.text.Substring(visible).Trim().Length>0)failures.Add("menu action clipped: "+text.text);}
                 var scroll=actions[0].GetComponentInParent<ScrollRect>();Assert.That(scroll,Is.Not.Null);scroll.verticalNormalizedPosition=0;Canvas.ForceUpdateCanvases();
@@ -271,6 +277,45 @@ namespace Festival.Tests
                 player.Life="Alive";player.Health=100;GiveDropGear(player,"confetti",1);player.Life="Downed";player.DownedRemaining=.01;yield return new WaitForSeconds(.3f);
                 Assert.That(player.GearLossSequence,Is.EqualTo(2));Assert.That(DropText(root,"Notice")?.text,Is.EqualTo(player.GearLossNotice),"another real loss delivers another notice even with identical wording");
                 player.Life="Alive";player.Health=100;player.Life="Downed";player.DownedRemaining=.01;yield return new WaitForSeconds(.3f);Assert.That(player.GearLossSequence,Is.EqualTo(2),"empty pockets add no loss event");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        [UnityTest]public IEnumerator DyingShowsTheBannerAndTheSpiritLookAndARevivalClearsBoth()
+        {
+            var world=new GameObject("Life banner world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Life banner HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            GameObject Shown(string name){foreach(var rect in root.GetComponentsInChildren<RectTransform>(false))if(rect.name==name)return rect.gameObject;return null;}
+            Rect Area(GameObject go){var corners=new Vector3[4];((RectTransform)go.transform).GetWorldCorners(corners);return new Rect(corners[0].x,corners[0].y,corners[2].x-corners[0].x,corners[2].y-corners[0].y);}
+            try
+            {
+                session.Host("Ghost",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);yield return StartLevel(session);
+                var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);player.Cash=40;
+                // No tripper, so KeepTripper never doses the view while it is checked.
+                game.State.TripperId="";yield return new WaitForSeconds(.3f);yield return null;yield return null;
+                Assert.That(Shown("Life banner"),Is.Null,"setup: alive, no banner");Assert.That(Shown("Spirit tag"),Is.Null,"and no tag");
+                var trip=root.transform.Find("Festival trip");Assert.That(trip==null||!trip.gameObject.activeSelf,"setup: a sober view");
+                player.Life="Downed";player.DownedRemaining=.05;yield return new WaitForSeconds(.4f);yield return null;yield return null;
+                Assert.That(player.Life,Is.EqualTo("Spirit"),"setup: alone, the downed time runs out");
+                Assert.That(DropText(root,"Life title")?.text,Is.EqualTo("YOU DIED"),"dying is a moment");
+                Assert.That(DropText(root,"Life detail")?.text,Does.Contain("float through anything").And.Contain("(2 revivals left)"));
+                Assert.That(DropText(root,"Spirit tag text")?.text,Is.EqualTo("SPIRIT"),"the tag is up");
+                trip=root.transform.Find("Festival trip");Assert.That(trip!=null&&trip.gameObject.activeSelf,"the view turns ghostly");
+                var look=FestivalTrip.Spirit(FestivalNightLighting.IsNight(session.State));
+                foreach(var image in trip.GetComponentsInChildren<RawImage>(false))if(image.name=="Trip vignette")Assert.That(image.color.a,Is.EqualTo(look.Vignette),"with the spirit's soft edges");
+                foreach(var image in trip.GetComponentsInChildren<Image>(false))if(image.name=="Trip tint")Assert.That(image.color,Is.EqualTo(look.Tint),"and its cool cast");
+                GameObject reel=null;foreach(var rect in root.GetComponentsInChildren<RectTransform>(false))if(rect.name=="Death card 0")reel=rect.gameObject;
+                Assert.That(reel,Is.Not.Null,"setup: a death with $40 spins the death reel");
+                Assert.That(Area(Shown("Life banner")).Overlaps(Area(reel.transform.Find("Card").gameObject)),Is.False,"the banner leaves the death reel clear");
+                player.X=24;player.Z=-20;
+                var revive=game.Execute(player.Id,new GameCommand{Id="life_hud_revive",Kind="BeginRevival",TargetId=player.Id});Assert.That(revive.Accepted,Is.True,revive.Reason);
+                game.State.Interactions.Find(i=>i.Kind=="Revival"&&i.Status=="Active").StartSeconds-=15;yield return new WaitForSeconds(.4f);yield return null;yield return null;
+                Assert.That(player.Life,Is.EqualTo("Alive"),"setup: the self-revival finishes");
+                Assert.That(DropText(root,"Life title")?.text,Is.EqualTo("YOU'RE BACK"),"coming back is clear");
+                Assert.That(Shown("Spirit tag"),Is.Null,"the tag goes");
+                Assert.That(trip.gameObject.activeSelf,Is.False,"and so does the ghostly view");
             }
             finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
             yield return null;
@@ -545,7 +590,8 @@ namespace Festival.Tests
                 Assert.That(friend.LocalPlayer.EquippedItemId,Is.Empty);Hands("");
                 p.EquippedItemId="stock_lsd";for(float until=Time.realtimeSinceStartup+3;friend.LocalPlayer.EquippedItemId!="stock_lsd"&&Time.realtimeSinceStartup<until;)yield return null;
                 Assert.That(friend.LocalPlayer.EquippedItemId,Is.EqualTo("stock_lsd"));nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
-                var admit=typeof(FestivalSession).GetMethod("Admit",BindingFlags.NonPublic|BindingFlags.Instance);for(int i=0;i<61;i++)admit.Invoke(host,new object[]{friend.LocalPlayerId,60});
+                var peer=((IDictionary)typeof(FestivalSession).GetField("inputs",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(host))[friend.LocalPlayerId];
+                var admit=typeof(FestivalSession).GetMethod("Admit",BindingFlags.NonPublic|BindingFlags.Static);for(int i=0;i<61;i++)admit.Invoke(null,new object[]{peer,false,Time.realtimeSinceStartupAsDouble});
                 before=game.State.Commands.Count;yield return Tap(Key.Digit2,.15f);Hands("");
                 Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"));Assert.That(game.State.Commands.Count,Is.EqualTo(before),"the real host admission gate drops this command without dispatching a result");
                 yield return new WaitForSeconds(2.1f);Hands("stock_lsd");
@@ -715,7 +761,7 @@ namespace Festival.Tests
                 session.Host("Stock tester",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
                 Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);var p=game.Player(session.LocalPlayerId);
                 var mate=game.AddPlayer("held-stock-mate","Sam");mate.Ready=true;yield return StartLevel(session);
-                game.State.TripperId=mate.Id;game.State.Npcs.Clear();game.State.Visions.Clear();game.State.Doses.Clear();p.Effects.Clear();
+                game.State.TripperId=mate.Id;game.State.Npcs.Clear();game.State.Visions.Clear();game.State.Doses.Clear();p.Effects.Clear();mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 string buyerId="";
                 for(int candidate=0;candidate<64&&buyerId=="";candidate++)
                 {
@@ -731,9 +777,9 @@ namespace Festival.Tests
                 session.Command("Cancel");yield return new WaitForSeconds(.3f);
                 var window=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud.GetComponent<FestivalHud>());
                 if(window.Open){yield return Tap(Key.Escape,.3f);Assert.That(window.Open,Is.False,"Escape closes the displayed cancelled thread");}
-                Assert.That(session.MenuOpen,Is.False);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"the completed reservation/refund leaves the other stock equipped");
-                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.Empty,"the already-held numeric slot now stows");
-                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"a second press equips the selected stock before the wheel changes kind");
+                Assert.That(session.MenuOpen,Is.False);Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"),"a cancelled sale puts the offered unit back in your hand");
+                yield return Tap(Key.Digit2,.3f);Assert.That(p.EquippedItemId,Is.Empty,"the already-held numeric slot now stows");
+                yield return Tap(Key.Digit1,.3f);Assert.That(p.EquippedItemId,Is.EqualTo("stock_lsd"),"another numeric slot equips its stock before the wheel changes kind");
                 InputSystem.QueueStateEvent(TestMouse,new MouseState{scroll=new Vector2(0,-1)});yield return null;yield return new WaitForSeconds(.3f);
                 Assert.That(p.EquippedItemId,Is.EqualTo("stock_mushrooms"));Assert.That(Read("Prompt"),Does.StartWith("Offer Fun Guys"));
                 // Remove the other kind: selling the actual last unit retains truthful guidance until refund or completion.
@@ -810,9 +856,9 @@ namespace Festival.Tests
                 sim.State.StashCash=4;yield return new WaitForSeconds(.3f);
                 Expect("day, low cash without affordable stash","Objective detail","Sell $18 more before sundown. You have nothing to sell: return lost property at the lost-property desk for $5, then buy from festivalgoers; some are narcs.");
                 Fits("day, low cash without affordable stash","Objective detail");player.Cash=20;sim.State.StashCash=0;
-                string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.6f);
-                Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer.");
+                Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer, or ask High or Greedy for more.");
                 Fits("day, holding stock","Objective detail");
                 sim.State.TripperId=tripperId;player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");
                 if(!System.Text.RegularExpressions.Regex.IsMatch(Read("Time"),@"^[0-8]:[0-5]\d$"))failures.Add("day: Time reads \""+Read("Time")+"\", expected m:ss");
@@ -921,7 +967,7 @@ namespace Festival.Tests
                 var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
                 var mate=sim.AddPlayer("sale_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
-                sim.State.TripperId=mate.Id;sim.State.Npcs.Clear();
+                sim.State.TripperId=mate.Id;sim.State.Npcs.Clear();mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 var buyer=new NpcState{Id="sale_buyer_2",Role="Buyer",CanTalk=true};sim.State.Npcs.Add(buyer);
                 player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");player.EquippedItemId="";
                 // E runs the primary action; what it started, with whom, is cancelled again.
@@ -943,14 +989,14 @@ namespace Festival.Tests
                 // Holding stock, E offers it to the buyer, not to Sam beside you.
                 buyer.Role="Buyer";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
                 yield return Stand();
-                Expect("by day, holding stock, Sam in reach","Offer Tongue Stamps  •  F CHAT");
+                Expect("by day, holding stock, Sam in reach",FestivalHudText.OfferAction(sim.State,player,buyer,"stock_lsd",FestivalSimulation.FairAsk)+"  •  F CHAT");
                 yield return PressE("by day, holding stock, Sam in reach","Sale");
                 // The tripper beside someone they have an unchecked vision about still checks first.
-                sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="sale_vision",Kind="Buyer",NpcId=buyer.Id});
+                sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="sale_vision",Kind="Buyer",NpcId=buyer.Id});player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return Stand();
                 Expect("the tripper beside a vision, holding stock",FestivalHudText.CheckDanceAction);
                 yield return PressE("the tripper beside a vision, holding stock","ConfirmDance");
-                sim.State.TripperId=mate.Id;sim.State.Visions.Clear();
+                sim.State.TripperId=mate.Id;sim.State.Visions.Clear();mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 // K1: once someone has sold to you, E beside them buys again. A seller never buys, so E offering the unit back was a
                 // sure refusal and +10 suspicion. The buy is talked through with the smooth reply every turn, after a perfect dance
                 // (over by the next tick) if they ask for one first.
@@ -1049,9 +1095,10 @@ namespace Festival.Tests
                 // The objective card's longest last-minute line still draws whole: on Ember Playa, in friendship bracelets, holding stock
                 // while a friend with the longest name (24 letters) trips.
                 string tripper=sim.State.TripperId,mateName=mate.Name;int ordinal=player.Ordinal;
-                sim.State.FestivalIndex=1;player.Ordinal=3;sim.State.TripperId=mate.Id;mate.Name="Bartholomew Fizzlewidget";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+                sim.State.FestivalIndex=1;player.Ordinal=3;sim.State.TripperId=mate.Id;mate.Name="Bartholomew Fizzlewidget";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 Fits("the last minute's longest line","Objective detail");
+                if(!Read("Objective detail").Contains("Stick with Bartholomew Fizzlewidget"))failures.Add("the last minute's longest line: Objective detail reads \""+Read("Objective detail")+"\", not the line for a friend who trips");
                 sim.State.FestivalIndex=0;player.Ordinal=ordinal;sim.State.TripperId=tripper;mate.Name=mateName;player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");
 
                 // A reply to a later command lands in the session notice, beside the warning, not over it.
@@ -1192,10 +1239,11 @@ namespace Festival.Tests
                 player.X=0;player.Z=0;player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");
                 player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
                 yield return new WaitForSeconds(.6f);
-                const string Offer="Offer Tongue Stamps  •  F CHAT";
+                // E offers at a fair price. The strip lists the High and Greedy asks first, then the rest, two past its four lines.
+                string Ask(int ask)=>FestivalHudText.OfferAction(sim.State,player,buyer,"stock_lsd",ask);string Offer=Ask(FestivalSimulation.FairAsk)+"  •  F CHAT";
                 Expect("beside a buyer, holding stock","Prompt",Offer);
                 if(!Shows("E key","Action prompt"))failures.Add("beside a buyer, holding stock: the prompt shows no E key");
-                Expect("beside a buyer, holding stock","Nearby","ESC  Dance with festivalgoer\nESC  Talk with festivalgoer\nESC  "+FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"\nESC  "+FestivalHudText.LieDownAction);
+                Expect("beside a buyer, holding stock","Nearby","ESC  "+Ask(FestivalSimulation.HighAsk)+"\nESC  "+Ask(FestivalSimulation.GreedyAsk)+"\nESC  Dance with festivalgoer\nESC  Talk with festivalgoer\nESC  +2 more");
                 Fits("beside a buyer, holding stock","Nearby");
                 // In the last minute of a day the sundown card (LOOP-5) comes up beside it, never over it.
                 RectTransform Card(string name){foreach(var r in hud.GetComponentsInChildren<RectTransform>(true))if(r.name==name)return r;return null;}
@@ -1215,6 +1263,22 @@ namespace Festival.Tests
                     session.Command("Cancel");yield return null;yield return null;
                     yield return Tap(Key.Escape);
                     if(session.MenuOpen||hud.GetComponentInChildren<FestivalChatWindow>(true).Open)failures.Add("Esc after cancelling the sale: terminal chat or menu remains open");
+                }
+                // A pushed ask clicked from the list goes out as that ask, not as the fair one.
+                session.MenuOpen=false;yield return null;
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                Button greedy=null;foreach(var b in hud.GetComponentsInChildren<Button>(false))if(b.name=="Action:"+Ask(FestivalSimulation.GreedyAsk))greedy=b;
+                if(greedy==null)failures.Add("Esc: the menu's list doesn't show \""+Ask(FestivalSimulation.GreedyAsk)+"\" (listed: \""+Listed()+"\")");
+                else
+                {
+                    greedy.onClick.Invoke();yield return null;
+                    var sale=sim.State.Interactions.Find(i=>i.PlayerId==player.Id&&i.Status=="Active");
+                    if(sale?.Kind!="Sale"||sale.Ask!=FestivalSimulation.GreedyAsk)failures.Add("Esc, then the greedy ask: it starts "+(sale?.Kind??"nothing")+" at ask "+(sale?.Ask.ToString()??"none")+" ("+session.Message+")");
+                    session.Command("Cancel");yield return null;yield return null;
+                    yield return Tap(Key.Escape);
+                    if(session.MenuOpen||hud.GetComponentInChildren<FestivalChatWindow>(true).Open)failures.Add("Esc after cancelling the greedy ask: terminal chat or menu remains open");
+                    // Walking off a greedy ask costs suspicion and the buyer. The rest of this test needs a calm buyer.
+                    buyer.Observers.Clear();
                 }
                 // K1: a dance chosen there takes your arrow keys. By day it is the list's only way to the dance How to Play asks for;
                 // left open, the menu dropped every press and the pass offered only CANCEL ACTION, which costs suspicion.
@@ -1779,12 +1843,12 @@ namespace Festival.Tests
                 var mate=sim.AddPlayer("briefing_mate","Sam");mate.Ready=true;
                 yield return StartLevel(session);
                 // Day 1 opens, and you trip: your job carries the one hint.
-                sim.State.TripperId=player.Id;sim.State.ElapsedSeconds=1;
+                sim.State.TripperId=player.Id;sim.State.ElapsedSeconds=1;player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 Briefs("day 1, you trip");
                 if(!Read("Briefing job").Contains("Trust, but verify"))failures.Add("day 1, you trip: your job has no \"Trust, but verify\"");
                 // Sam trips: your job is to stick with them.
-                sim.State.TripperId=mate.Id;
+                sim.State.TripperId=mate.Id;mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 Briefs("day 1, Sam trips");
                 // Ten seconds of level clock in, it is gone.
@@ -1845,7 +1909,7 @@ namespace Festival.Tests
                 yield return StartLevel(session);
                 // A first time on this machine: no tip seen yet.
                 var seen=session.Profile.Data.SeenTips;seen.Clear();
-                sim.State.Npcs.Clear();sim.State.TripperId=mate.Id;sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds;
+                sim.State.Npcs.Clear();sim.State.TripperId=mate.Id;sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds;mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.4f);
                 const string Friend="Only Sam can see the visions.\nStick close and ask what they see.";
                 Expect("Sam trips","First-time tip",Friend);

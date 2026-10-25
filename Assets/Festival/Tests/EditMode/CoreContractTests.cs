@@ -85,7 +85,8 @@ namespace Festival.Tests
             Assert.That(giver.Inventory.Find(i=>i.ItemId=="stage_pass").Count,Is.EqualTo(1));
         }
 
-        [Test] public void DjTakeoverPlacesThePlayerAtTheStageFrontDeck()
+        // The stage-front spot starts the set, and the set is played up on the riser.
+        [Test] public void DjTakeoverPlacesThePlayerAtTheMainMixer()
         {
             var game=new FestivalSimulation(23);var player=game.AddPlayer("host","Host");
             game.State.Phase="Playing";
@@ -94,10 +95,27 @@ namespace Festival.Tests
             Assert.That(game.Execute(player.Id,new GameCommand{Id="dj-too-far",Kind="Dj"}).Accepted,Is.False);
             player.X=1.0f;player.Yaw=113;
             Assert.That(game.Execute(player.Id,new GameCommand{Id="dj-start",Kind="Dj"}).Accepted,Is.True);
-            Assert.That(player.X,Is.EqualTo(0));Assert.That(player.Z,Is.EqualTo(26));
-            Assert.That(player.Yaw,Is.EqualTo(0));
+            Assert.That(player.X,Is.EqualTo(Catalog.StageDjX));Assert.That(player.Z,Is.EqualTo(Catalog.StageDjZ));
+            Assert.That(player.Yaw,Is.EqualTo(180));
             Assert.That(game.Interaction(player.InteractionId).Kind,Is.EqualTo("Dj"));
             Assert.That(player.Inventory.Exists(item=>item.ItemId=="stage_pass"),Is.False);
+        }
+
+        [Test] public void EveryViewCarriesTheCrowdsCheerForTheStageDj()
+        {
+            var game=new FestivalSimulation(23);var dj=game.AddPlayer("host","Host");var friend=game.AddPlayer("friend","Friend");
+            game.State.Phase="Playing";game.State.Npcs.Clear();
+            dj.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});dj.X=Catalog.StageTakeoverX;dj.Z=Catalog.StageTakeoverZ;
+            Assert.That(game.Execute(dj.Id,new GameCommand{Id="dj-cheer",Kind="Dj"}).Accepted,Is.True);
+            Assert.That(Festival.Network.FestivalSession.ViewFor(game,friend.Id).StageCheerScore,Is.EqualTo(-1),"no cheer before a phrase ends");
+            var set=game.Interaction(dj.InteractionId);game.State.SimulationSeconds=set.StartSeconds+set.DurationSeconds+.75;game.Tick(.01);
+            Assert.That(set.Phrase,Is.EqualTo(1),"setup: the first phrase is judged");
+            foreach(var viewer in new[]{dj.Id,friend.Id})
+            {
+                var view=Festival.Network.FestivalSession.ViewFor(game,viewer);
+                Assert.That(view.StageCheerScore,Is.EqualTo(game.State.StageCheerScore),viewer+" sees the phrase's score");
+                Assert.That(view.StageCheerUntilWorldSeconds,Is.EqualTo(game.State.StageCheerUntilWorldSeconds).And.GreaterThan(FestivalSimulation.WorldSeconds(game.State)),viewer+" sees the cheer until it ends");
+            }
         }
 
         [Test] public void SeparateCampDoorsKeepPlayersInSeparateInteriors()

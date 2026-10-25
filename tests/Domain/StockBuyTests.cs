@@ -34,7 +34,7 @@ public static class StockBuyTests
         Check(!FestivalGuidance.NeedsStock(s.State,seller),"cancelled sale returned stock still counts");
         seller.Inventory.Clear();seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         Check(Act(s,seller.Id,"StartSale",buyer.Id,"stock_lsd").Accepted,"setup: returned last unit is offered again");
-        var finished=Talk(s,seller,Smooth,Smooth,Smooth);
+        var finished=Talk(s,seller,Smooth,Smooth,Smooth,Smooth);
         Check(finished.Status!="Active"&&seller.InteractionId==""&&Count(seller,"stock_lsd")==0,"setup: successful last-unit sale settled through real replies");
         Check(FestivalGuidance.NeedsStock(s.State,seller),"completed reservation cannot conceal missing stock");
         seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=0});
@@ -132,14 +132,14 @@ public static class StockBuyTests
             var buy=s.Interaction(p.InteractionId);
             Check(p.Yaw==(buy.TrustDance?0:90),who+": the buyer "+(buy.TrustDance?"dances facing the seller":"talks looking where they looked")+", got yaw "+p.Yaw);
             Check(p.Cash==15&&buy.ReservedCash==5,who+": the $5 is held while they talk, cash $"+p.Cash);
-            var perfect=Talk(s,p,Smooth,Smooth,Smooth);
+            var perfect=Talk(s,p,Smooth,Smooth,Smooth,Smooth);
             Check(perfect.Status=="Complete"&&perfect.Score>.99,"setup: "+who+": a perfect buy, score "+perfect.Score);
             // DIALOG-3: a seller's lines come from the buy pool; a clue holder's, drawn out, can name a landmark instead.
             Check(p.Dialogue.Seen.Exists(key=>key.StartsWith("buy_")||role=="ClueHolder"&&key.StartsWith("talk.clue_")),who+": the seller speaks lines from the buy pool");
             Check(Count(p,kind)==1&&p.Cash==15&&p.EquippedItemId==kind&&seller.StockSold==1,who+": a perfect buy hands over one unit, in hand, for $5 (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
             // A botched buy, a cancelled one and one walked away from all give the $5 back and no unit.
-            Check(Ask(s,p,seller).Accepted,who+": a second buy starts");var missed=Talk(s,p,Awkward,Awkward,Awkward);
+            Check(Ask(s,p,seller).Accepted,who+": a second buy starts");var missed=Talk(s,p,Awkward,Awkward,Awkward,Awkward);
             Check(missed.Score<.4&&Count(p,kind)==1&&p.Cash==15&&seller.StockSold==1,who+": a botched buy refunds the $5 (cash $"+p.Cash+")");
             Check(Ask(s,p,seller).Accepted&&p.Cash==10,who+": a third buy holds the $5");
             Check(Act(s,p.Id,"Cancel").Accepted&&p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": cancelling refunds it (cash $"+p.Cash+")");
@@ -148,14 +148,14 @@ public static class StockBuyTests
             Check(p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": walking off refunds it (cash $"+p.Cash+")");
 
             // A sloppy buy that lands still buys.
-            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,SoSo,Awkward);
-            Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": smooth, so-so and a silence is a sloppy buy, score "+sloppy.Score);
+            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,SoSo,Awkward,SoSo);
+            Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": smooth, so-so, awkward and so-so is a sloppy buy, score "+sloppy.Score);
             Check(Count(p,kind)==2&&p.Cash==10&&seller.StockSold==2,who+": a sloppy buy hands over a unit too (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
             // Hands filled mid-buy: the unit lands at the buyer's feet.
             var friend=s.Player("p2");Check(Ask(s,friend,seller).Accepted,who+": a friend starts a buy");
             foreach(var gear in new[]{"confetti","merch_bag","poi_practice"})friend.Inventory.Add(new ItemStack{ItemId=gear,Count=1});
-            Talk(s,friend,Smooth,Smooth,Smooth);
+            Talk(s,friend,Smooth,Smooth,Smooth,Smooth);
             Check(Count(friend,kind)==0&&friend.Cash==15&&s.State.Drops.Exists(d=>d.ItemId==kind&&d.Count==1&&d.X==friend.X&&d.Z==friend.Z),who+": with full hands the friend's unit drops at their feet (cash $"+friend.Cash+")");
 
             // That was the seller's last unit for a crew of three: they turn the next ask down.
@@ -226,7 +226,7 @@ public static class StockBuyTests
         p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
         var asked=Ask(s,p,narc);
         Check(asked.Accepted&&p.Life=="Alive"&&p.Cash==15&&p.InteractionId!="","the narc plays along: a talk starts, the $5 held ("+asked.Reason+")");
-        var buy=Talk(s,p,Smooth,Smooth,Smooth);
+        var buy=Talk(s,p,Smooth,Smooth,Smooth,Smooth);
         Check(buy.Status=="Police bust"&&p.Life=="Detained"&&!p.Inventory.Exists(i=>i.ItemId=="stock_lsd"||i.ItemId=="stock_mushrooms")&&p.Cash==10&&p.InteractionId==""&&s.State.LevelSales==0&&narc.StockSold==0,"finished, the buy is a bust: detained, stock confiscated and fined $10 ("+p.Life+", $"+p.Cash+", "+buy.Status+")");
     }
 

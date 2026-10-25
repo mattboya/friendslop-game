@@ -34,7 +34,7 @@ namespace Festival.Tests
             Assert.That(FestivalInput.Roots(own.Kind),Is.True,"it holds the drummer still");
             Assert.That(FestivalHudText.StopsByHold(view,view.Players.Find(p=>p.Id=="p0")),Is.True,"E runs nothing mid-part, and holding G withdraws");
             Assert.That(FestivalHudText.HoldToStopFor(own.Kind),Is.EqualTo("HOLD G TO STOP DRUMMING"),"the stop line names the drumming");
-            foreach(var kind in new[]{"Dance","ConfirmDance","Poi","Dj"})Assert.That(FestivalHudText.HoldToStopFor(kind),Is.EqualTo(FestivalHudText.HoldToStop),kind+" keeps its line");
+            foreach(var kind in new[]{"Dance","ConfirmDance","Poi"})Assert.That(FestivalHudText.HoldToStopFor(kind),Is.EqualTo(FestivalHudText.HoldToStop),kind+" keeps its line");
             Assert.That(FestivalHudText.ShowsDancer(own,false),Is.False,"nobody dances in the circle: no live dancer beside the lanes");
             Assert.That(FestivalHudText.RhythmTitle(own.Kind),Is.EqualTo("DRUM CIRCLE  /  YOUR PART"));
             foreach(string viewer in new[]{"p0","p1","ghost"})
@@ -117,6 +117,7 @@ namespace Festival.Tests
             try
             {
                 var drums=Awake<FestivalDrumAudio>(host);var stage=Awake<FestivalStageAudio>(host);var track=FestivalStageAudio.For(state);
+                Assert.That(FestivalMusic.For(FestivalSimulation.DrumCircleTrack(state)),Is.SameAs(track),"setup: the east crosspath booth is nearer the main stage");
                 drums.Follow(state,4.5,AudioSettings.dspTime);stage.Follow(state,999,AudioSettings.dspTime);
                 Assert.That(drums.Music,Is.Not.Null,"the circle plays its own song");
                 Assert.That(drums.Music.clip,Is.SameAs(track.Audio),"the stage's own recording");
@@ -132,11 +133,14 @@ namespace Festival.Tests
                     drums.Follow(other,4.5,AudioSettings.dspTime);Assert.That(drums.Music,Is.Null,why+": the song stops");
                 }
                 drums.Follow(state,4.5,AudioSettings.dspTime);drums.Follow(null,0,AudioSettings.dspTime);Assert.That(drums.Music,Is.Null,"leaving the session stops it");
+                state.Booth.Spot=0;var small=FestivalMusic.For(StageMusic.Track(state,StageMusic.Small));
+                Assert.That(FestivalSimulation.DrumCircleTrack(state),Is.EqualTo(StageMusic.Track(state,StageMusic.Small)),"setup: the west booth is nearer the small stage");
+                drums.Follow(state,4.5,AudioSettings.dspTime);Assert.That(drums.Music.clip,Is.SameAs(small.Audio),"the circle plays the small stage's song");
             }
             finally
             {
-                var stage=host.GetComponent<FestivalStageAudio>();var decks=(AudioSource[])typeof(FestivalStageAudio).GetField("decks",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);
-                if(decks!=null)UnityEngine.Object.DestroyImmediate(decks[0].gameObject);
+                var stage=host.GetComponent<FestivalStageAudio>();
+                foreach(var field in new[]{"decks","smallDecks"}){var decks=(AudioSource[])typeof(FestivalStageAudio).GetField(field,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);if(decks!=null)UnityEngine.Object.DestroyImmediate(decks[0].gameObject);}
                 var drums=host.GetComponent<FestivalDrumAudio>();var own=(AudioSource[])typeof(FestivalDrumAudio).GetField("decks",BindingFlags.Instance|BindingFlags.NonPublic)?.GetValue(drums);
                 if(own!=null)UnityEngine.Object.DestroyImmediate(own[0].gameObject);
                 UnityEngine.Object.DestroyImmediate(host);

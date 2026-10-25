@@ -68,6 +68,7 @@ namespace Festival.Presentation
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
         private float clock;
         private double carClock,wheelClock;
+        private readonly Dictionary<string,(double Since,int Gondola)> riding=new Dictionary<string,(double,int)>();
         /// <summary>POLO-5: the world's clock (FestivalSimulation.WorldSeconds: the rules' clock, stopped through a minigame, MINI-1)
         /// as this wheel is drawn at it, for Seat.</summary>
         public double WheelClock=>wheelClock;
@@ -151,24 +152,34 @@ namespace Festival.Presentation
             float angle=Angle(wheelClock);rotor.localRotation=Quaternion.Euler(angle,0,0);
             for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=Hung(k,angle);
         }
+        /// <summary>Seat, with every rider on this wheel kept in the gondola it gave them until their ride ends.</summary>
+        public Vector3 Seat(RoundState state,PlayerState rider,double now)=>Seat(state,rider,now,riding);
         /// <summary>POLO-5: where rider sits at now (on the rules' clock), in the world, on the floor of their gondola. A ride is
         /// exactly one turn, so it brings them back round to where they boarded. Everyone in state on the wheel is seated in the order
         /// they boarded (their VisualWheelSince, then id, so every client seats them alike), each in the gondola that hung nearest the
         /// platform then; once its Seats are taken, in the next one round to come down to it, the one that has just gone up, the one
         /// after next, and so on. Those sharing a gondola sit side by side across it. MINI-1: now is on the world's clock (WheelClock), and
-        /// so is the platform each boarded at.</summary>
-        public static Vector3 Seat(RoundState state,PlayerState rider,double now)
+        /// so is the platform each boarded at. kept holds the gondola each rider was given, by id, with when they boarded: they keep it
+        /// to the end of that ride, so nobody moves into a seat that a rider ahead of them frees. With no kept, all are seated afresh.</summary>
+        public static Vector3 Seat(RoundState state,PlayerState rider,double now,Dictionary<string,(double Since,int Gondola)> kept)
         {
+            kept??=new Dictionary<string,(double,int)>();
             var aboard=state.Players.FindAll(p=>p.Id!=rider.Id&&p.VisualWheelSince>=0);aboard.Add(rider);
             aboard.Sort((a,b)=>a.VisualWheelSince!=b.VisualWheelSince?a.VisualWheelSince.CompareTo(b.VisualWheelSince):string.CompareOrdinal(a.Id,b.Id));
-            var seated=new int[Gondolas];int gondola=0,place=0;
+            // The world's clock: as a minigame ends it moves VisualWheelSince on by the game's length but leaves this, to within rounding.
+            double Boarding(PlayerState p)=>FestivalSimulation.WorldSeconds(state,p.VisualWheelSince);
+            var left=new List<string>();foreach(var pair in kept)if(!aboard.Exists(p=>p.Id==pair.Key&&System.Math.Abs(Boarding(p)-pair.Value.Since)<1e-3))left.Add(pair.Key);
+            foreach(var id in left)kept.Remove(id);
+            var seated=new int[Gondolas];foreach(var pair in kept)seated[pair.Value.Gondola]++;
             foreach(var p in aboard)
             {
-                int boarded=Boarded(FestivalSimulation.WorldSeconds(state,p.VisualWheelSince)),k=boarded;
+                if(kept.ContainsKey(p.Id))continue;
+                double since=Boarding(p);int boarded=Boarded(since),k=boarded;
                 for(int j=1;seated[k]>=Seats&&j<Gondolas;j++)k=(boarded+(j%2==1?(j+1)/2:Gondolas-j/2))%Gondolas;
-                if(p.Id==rider.Id){gondola=k;place=seated[k];}
-                seated[k]++;
+                kept[p.Id]=(since,k);seated[k]++;
             }
+            int gondola=kept[rider.Id].Gondola,place=0;
+            foreach(var p in aboard){if(p.Id==rider.Id)break;if(kept[p.Id].Gondola==gondola)place++;}
             return new Vector3(Festivals.WheelX+((place+.5f)/seated[gondola]-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
         }
         private static int Boarded(double since)

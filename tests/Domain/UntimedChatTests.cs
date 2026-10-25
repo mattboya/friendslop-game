@@ -63,7 +63,8 @@ public static class UntimedChatTests
         Check(i.Status=="Active"&&i.Turns.Count==2&&i.Turns[0].Pick==-1,"Police advances an unanswered turn after four seconds");
         s.State.SimulationSeconds=i.StartSeconds+i.DurationSeconds;
         Check(!Act(s,"owner","Reply",amount:0,direction:1).Accepted,"Police rejects a reply exactly at its deadline");
-        s.Tick(4.1);Check(i.Status=="Complete"&&i.Score==0&&i.Turns.Count==3,"Police settles three silent turns on its clock");
+        s.Tick(4.1);Check(i.Status=="Active"&&i.Turns.Count==4,"Police brings its fourth turn on its clock");
+        s.Tick(4.1);Check(i.Status=="Complete"&&i.Score==0&&i.Turns.Count==4,"Police settles four silent turns on its clock");
         s=Pair("Conversation");s.State.Npcs[0].Observers.Add(new ObserverState{PlayerId="owner",Suspicion=40});i=Start(s,"Conversation");
         double deadline=i.DurationSeconds;var copy=new FestivalSimulation();copy.Restore(s.State);
         Check(i.DurationSeconds==deadline&&i.Turns.Count==0&&FestivalSimulation.TrustDancing(i),"restore preserves the active trust chart");
@@ -110,12 +111,12 @@ public static class UntimedChatTests
             var s=Pair(kind);var i=Start(s,kind);var first=i.Turns[0];s.Tick(60);
             Check(i.Status=="Active"&&i.Turns.Count==1&&first.Pick==-1,kind+" waits 60 seconds without inventing silence");
             Check(i.DurationSeconds==0&&!double.IsInfinity(i.DurationSeconds)&&!double.IsNaN(i.DurationSeconds),"untimed duration is finite zero");
-            for(int turn=0;turn<3;turn++)
+            for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
             {
                 Check(Act(s,"owner","Reply",amount:Array.IndexOf(i.Turns[turn].Grades,ConversationLines.Smooth),direction:turn).Accepted,"reply accepted after reading");
-                if(turn<2){s.Tick(60);Check(i.Status=="Active"&&i.Turns.Count==turn+2&&i.Turns[turn+1].Pick==-1,"each next turn waits too");}
+                if(turn<FestivalSimulation.ConversationTurns-1){s.Tick(60);Check(i.Status=="Active"&&i.Turns.Count==turn+2&&i.Turns[turn+1].Pick==-1,"each next turn waits too");}
             }
-            Check(i.Status=="Complete"&&i.Score==1&&s.Player("owner").Performances==1,"exactly three accepted replies settle once");
+            Check(i.Status=="Complete"&&i.Score==1&&s.Player("owner").Performances==1,"exactly four accepted replies settle once");
         }
     }
 }

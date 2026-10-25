@@ -23,7 +23,7 @@ namespace Festival.Core
             deck.NoteCount=Festivals.DeckSetNotes;deck.BeatSeconds=Festivals.DeckBeatSeconds;
             // One chart preparation window admits the longest authored lane; do not add the checks' external countdown too.
             double lead=2;foreach(var effect in Catalog.Effects)lead=Math.Max(lead,effect.LeadSeconds);
-            RhythmChart.InitializeStage(deck,RhythmChart.StageTrackFor(State.FestivalIndex,State.LevelIndex),WorldSeconds(State),lead);
+            RhythmChart.InitializeStage(deck,StageMusic.TrackAt(State,p.X,p.Z),WorldSeconds(State),lead);
             RideArtCar(p,Car(deck));CollectDeckWitnesses(deck,p);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             RhythmDiagnostic?.Invoke("[Festival.DeckSet] start car="+deck.TargetId+" witnesses="+deck.WitnessIds.Count);
@@ -59,7 +59,7 @@ namespace Festival.Core
             if(paid>0)
             {
                 foreach(var n in State.Npcs)if(n.Kind=="Wook"&&deck.WitnessIds.Contains(n.Id)&&!n.Tipped)n.Tipped=true;
-                p.Cash+=paid;State.LevelSales+=paid;State.GrossSales+=paid;
+                p.Cash+=paid;State.LevelSales+=paid;State.GrossSales+=paid;CrewNews(p,"Sales",MoneyNotice("SALES",paid)+"  •  "+p.Name+"'s deck set");
                 p.DeckTipAmount=paid;p.DeckTipDeliveryId=deck.Id+":tips";p.DeckTipAtWorldSeconds=WorldSeconds(State);p.DeckTipUntilWorldSeconds=p.DeckTipAtWorldSeconds+7;
             }
             deck.Status="Complete";NewInteraction(p,RideCarKind,deck.TargetId,State.DurationSeconds);RideArtCar(p,Car(deck));

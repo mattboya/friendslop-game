@@ -385,6 +385,58 @@ namespace Festival.Tests
             Assert.That(FestivalInput.IsRhythm(null)||FestivalHudText.ShowsDancer(null,false),Is.False,"doing nothing, no lanes and no dancer");
         }
 
+        // The DJ set is a ride, not arrows: the HUD shows the highway, with no arrow lanes and no dancer beside them (the
+        // stage view from behind the decks already shows you), and the left and right note keys steer between its three lanes.
+        [Test]public void TheDjSetShowsTheHighwayAndNoArrowLanes()
+        {
+            var hud=Hud();var dj=Doing("Dj");
+            Assert.That(FestivalInput.IsRhythm(dj)&&FestivalInput.Roots("Dj"),Is.True,"the set still holds you still");
+            Assert.That(FestivalHudText.ShowsRide(dj),Is.True,"the DJ set rides the highway");
+            Assert.That(FestivalHudText.ShowsDancer(dj,false),Is.False,"with no dancer panel beside it");
+            foreach(var kind in FourLaneKinds.Concat(TalkKinds))Assert.That(FestivalHudText.ShowsRide(Doing(kind,trust:true)),Is.False,"a "+kind+" keeps its arrow lanes");
+            Assert.That(FestivalHudText.ShowsRide(null),Is.False,"doing nothing, no ride");
+            var ride=hud.transform.Find("Festival HUD/DJ ride");
+            Assert.That(ride,Is.Not.Null,"the HUD builds the ride");Assert.That(ride.gameObject.activeSelf,Is.False,"hidden until a set");
+            Assert.That(ride.GetComponentInChildren<FestivalDjRide>(true),Is.Not.Null,"its highway is drawn from code");
+            Assert.That(LaneOf(hud).gameObject.activeSelf,Is.False,"setup: no arrow lanes either");
+            // The bottom line: the steer keys, and beside them the stop line with its own hold fill, whole on screen.
+            var screen=(RectTransform)hud.transform.Find("Festival HUD");var steer=(RectTransform)ride.Find("Controls");
+            var stop=ride.Find("Stop hold")?.GetComponent<Text>();var fill=(RectTransform)ride.Find("Stop hold fill");
+            bool OnScreen(RectTransform line){var box=Bounds(screen,line);return box.xMin>=screen.rect.xMin&&box.xMax<=screen.rect.xMax&&box.yMin>=screen.rect.yMin&&box.yMax<=screen.rect.yMax;}
+            var faults=new List<string>();
+            if(!OnScreen(steer))faults.Add("the steer keys sit at "+Bounds(screen,steer)+", not whole on the screen "+screen.rect);
+            if(stop?.text!="HOLD G TO END THE SET")faults.Add("the ride's stop line reads \""+(stop?.text??"(none)")+"\", not HOLD G TO END THE SET");
+            if(FestivalHudText.HoldToStopFor("Dj","K")!="HOLD K TO END THE SET")faults.Add("a set's stop line with G bound to K reads \""+FestivalHudText.HoldToStopFor("Dj","K")+"\"");
+            if(fill==null)faults.Add("the ride has no fill for the hold");
+            Assert.That(faults,Is.Empty,"the ride's bottom line");
+            Assert.That(OnScreen(stop.rectTransform),Is.True,"the stop line sits whole on screen, at "+Bounds(screen,stop.rectTransform));
+            Assert.That(Bounds(screen,steer).Overlaps(Bounds(screen,stop.rectTransform)),Is.False,"the stop line sits beside the steer keys, not over them");
+            var gear=(RectTransform)screen.Find("Equipment bar");
+            Assert.That(Bounds(screen,stop.rectTransform).Overlaps(Bounds(screen,gear)),Is.False,"the stop line and its fill stay clear of the gear bar");
+            Assert.That(fill.GetSiblingIndex(),Is.LessThan(stop.transform.GetSiblingIndex()),"the fill draws under the words");
+            ride.gameObject.SetActive(true);hud.ShowStopHold(.5f);
+            Assert.That(fill.gameObject.activeInHierarchy,Is.True,"holding G mid-set shows the ride's fill");
+            Assert.That(fill.rect.width,Is.EqualTo(.5f*stop.rectTransform.rect.width).Within(.01f*stop.rectTransform.rect.width),"half the hold fills half the stop line");
+            Assert.That(Bounds(screen,fill).xMin,Is.EqualTo(Bounds(screen,stop.rectTransform).xMin).Within(1),"from its left edge");
+            hud.ShowStopHold(0);ride.gameObject.SetActive(false);
+            Assert.That(fill.gameObject.activeSelf,Is.False,"let go, the fill empties");
+            var chart=new RhythmChart{DurationSeconds=6};
+            chart.Notes.Add(new RhythmNote{Id=0,Direction=0,TimeSeconds=3});chart.Notes.Add(new RhythmNote{Id=1,Direction=2,TimeSeconds=3.5,Grey=true});chart.Notes.Add(new RhythmNote{Id=2,Direction=1,TimeSeconds=9});
+            Assert.That(FestivalDjRide.OnRoad(chart,2,2).Select(n=>n.Id),Is.EqualTo(new[]{0,1}),"the notes within the look-ahead ride the road");
+            Assert.That(FestivalDjRide.OnRoad(chart,3.2,2).Select(n=>n.Id),Is.EqualTo(new[]{1}),"and leave it once they pass you");
+            Vector3 near=FestivalDjRide.Place(0,0,2),far=FestivalDjRide.Place(0,2,2);
+            Assert.That(near.y,Is.LessThan(far.y),"a block rides down the road toward you");Assert.That(near.z,Is.GreaterThan(far.z),"growing as it comes");
+            Assert.That(FestivalDjRide.Place(0,0,2).x,Is.LessThan(FestivalDjRide.Place(1,0,2).x),"lane 0 is on the left");
+            Assert.That(FestivalDjRide.Place(1,0,2).x,Is.LessThan(FestivalDjRide.Place(2,0,2).x),"lane 2 on the right");
+            Assert.That(FestivalDjRide.Place(1,1.3,2).x,Is.EqualTo(.5f).Within(1e-5f),"the middle lane runs up the middle");
+            Assert.That(FestivalDjRide.Steer(1,true,false),Is.EqualTo(0),"left steers left");Assert.That(FestivalDjRide.Steer(0,true,false),Is.EqualTo(0),"the road's edge stops you");
+            Assert.That(FestivalDjRide.Steer(1,false,true),Is.EqualTo(2),"right steers right");Assert.That(FestivalDjRide.Steer(2,false,true),Is.EqualTo(2),"on both sides");
+            Assert.That(FestivalDjRide.Steer(1,true,true),Is.EqualTo(1),"both at once cancel");
+            var controls=new FestivalInput("ride-keys");
+            try{Assert.That(controls.NoteKey(0)+" "+controls.NoteKey(3),Is.EqualTo(KeyName("<Keyboard>/a")+" "+KeyName("<Keyboard>/d")),"the left and right note keys steer, as bound");}
+            finally{controls.Dispose();}
+        }
+
         // A check dance reads as a dance. DIALOG-3: a talk is on the lanes only for the dance a wary festivalgoer asks for first, and
         // that says so, whatever the talk: the lane's title, and the "YOU  /  …" heading with two spaces round the slash.
         [Test]public void EachChallengeHasItsOwnHeadingAndCaption()
@@ -394,7 +446,6 @@ namespace Festival.Tests
                 {"Dance",("YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES")},
                 {"ConfirmDance",("YOU  /  ON THE FLOOR","YOUR LOOK • YOUR MOVES")},
                 {"Poi",("YOU  /  POI CIRCLE","YOUR POI • YOUR FLOW")},
-                {"Dj",("YOU  /  AT THE DECK","YOUR LOOK • YOUR MIX")},
                 {FestivalSimulation.DeckSetKind,("YOU  /  ON THE ART CAR","YOUR LOOK • YOUR SET")},
                 {"Sale",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
                 {"Buy",("YOU  /  DANCING FOR TRUST","YOUR LOOK • THEIR TRUST")},
@@ -421,7 +472,7 @@ namespace Festival.Tests
         // presses the keys in a hosted dance and buy.
         [Test]public void OnlyAFourLaneChallengeStopsByHoldingG()
         {
-            foreach(var kind in FourLaneKinds)
+            foreach(var kind in FourLaneKinds.Append("Dj"))
             {
                 Assert.That(StopsByHold(Doing(kind)),Is.True,"a "+kind+" stops only by holding G: E does nothing");
                 Assert.That(StopsByHold(Doing(kind,status:"Cancelled")),Is.False,"a "+kind+" already over holds nothing back");
@@ -449,7 +500,8 @@ namespace Festival.Tests
             return doing;
         }
 
-        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi","Dj",FestivalSimulation.DeckSetKind},TalkKinds={"Sale","Buy","Conversation","Police"};
+        // The stage DJ set rides the highway instead (TheDjSetShowsTheHighwayAndNoArrowLanes).
+        private static readonly string[] FourLaneKinds={"Dance","ConfirmDance","Poi",FestivalSimulation.DeckSetKind},TalkKinds={"Sale","Buy","Conversation","Police"};
 
         // DIALOG-3: a sale, a buy from a festivalgoer (ECON-2), a chat and a talk with security are talks again, not dances, so every
         // client, the talker's own view included, sees the player in that talk's pose, never dancing. Only the dance a wary

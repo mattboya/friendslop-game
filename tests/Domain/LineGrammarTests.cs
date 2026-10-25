@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Festival.Core;
 
 // DIALOG-4: the engine festivalgoer lines are built with. A kind's table holds whole-line templates; each {slot} in one fills from
@@ -16,7 +17,8 @@ public static class LineGrammarTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EverySlotFillsFromItsOwnTable,AKindDrawsEachOfItsTemplatesAndParts,TheSameSeedGivesTheSameLine,
             EachFestivalUsesOnlyItsOwnTaggedParts,AOrAnFollowsTheSoundOfTheNextWord,VerbsAndNounsAgreeWithThePartBeforeThem,
-            EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly})
+            EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly,
+            EveryTalkRoundHasItsOwnRepliesInEveryStyle,NoDealLineNamesAPrice})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" line grammar test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -149,6 +151,70 @@ public static class LineGrammarTests
         }
         Check(lines.Count>=8&&lines.Contains("Hey, Sam! My friend waved, again.")&&lines.Contains("Oi! My friend waved."),"the line says its dressing: "+string.Join(" / ",lines));
         Check(bodies.SetEquals(new[]{"My friend waved.","My friends waved."}),"the body is the line without its dressing, nor the dressing's own parts: "+string.Join(" / ",bodies));
+    }
+
+    // Speech bubbles hold 80 characters. A body shared between two rounds of one topic and style makes the rounds read alike.
+    static readonly string[] TheirRoundLines={"line.talk.ask","line.talk.close","line.sale.small","line.sale.close","line.buy.small","line.buy.close","line.security.close"};
+    static void EveryTalkRoundHasItsOwnRepliesInEveryStyle()
+    {
+        Check(ConversationLines.Rounds.Length==4,"a talk has four rounds, got "+ConversationLines.Rounds.Length);
+        var faults=new List<string>();
+        HashSet<string> Draw(string kind,int festival)
+        {
+            var bodies=new HashSet<string>();
+            for(int seed=0;seed<200;seed++)
+            {
+                string line=ConversationLines.Grammar.Line(kind,festival,new ContentRandom(seed),out var body);bodies.Add(body);
+                if(line.Length>80||line.IndexOfAny(new[]{'{','}'})>=0||!char.IsUpper(line[0])||".!?".IndexOf(line[line.Length-1])<0||DialogueGrammar.HasNarcTell(line))faults.Add(kind+" on festival "+festival+": \""+line+"\"");
+            }
+            if(bodies.Count<6)faults.Add(kind+" on festival "+festival+" says only "+bodies.Count+" different things");
+            return bodies;
+        }
+        foreach(var topic in ConversationLines.Topics)foreach(var style in ConversationLines.Styles)for(int festival=0;festival<Festivals.Count;festival++)
+        {
+            var earlier=new List<HashSet<string>>();
+            for(int round=0;round<ConversationLines.Rounds.Length;round++)
+            {
+                string kind=ConversationLines.ReplyKind(topic,round,style);
+                Check(kind=="reply."+topic+"."+ConversationLines.Rounds[round]+"."+style,"a round's reply pool is named for its topic, round and style, got "+kind);
+                var own=Draw(kind,festival);
+                if(earlier.Exists(e=>e.Overlaps(own)))faults.Add(kind+" on festival "+festival+" repeats a sentence of an earlier round");
+                earlier.Add(own);
+            }
+        }
+        foreach(var kind in TheirRoundLines)for(int festival=0;festival<Festivals.Count;festival++)Draw(kind,festival);
+        Check(faults.Count==0,faults.Count+" fault(s) in the talk rounds' lines:\n  "+string.Join("\n  ",faults.Take(20)));
+    }
+
+    // A sale's price depends on its ask and the multipliers, and Ember Playa's money is not dollars, so no line of a sale or a buy,
+    // yours or theirs, names an amount.
+    static void NoDealLineNamesAPrice()
+    {
+        foreach(var topic in new[]{"sale","buy"})foreach(var round in ConversationLines.Rounds)foreach(var style in ConversationLines.Styles)
+            Check(ConversationLines.Parts.ContainsKey(topic+"."+round+"."+style),"the "+topic+" replies of round "+round+" in style "+style+" are checked");
+        var faults=new List<string>();int pools=0;
+        foreach(var pool in ConversationLines.Parts)
+        {
+            if(!new[]{"sale.","buy.","line.sale.","line.buy.","narc_"}.Any(start=>pool.Key.StartsWith(start,StringComparison.Ordinal)))continue;
+            pools++;
+            foreach(var entry in pool.Value)
+            {
+                // Neither the festival tag nor a slot's name is said.
+                string line=Regex.Replace(entry.Length>1&&char.IsDigit(entry[0])&&entry[1]==':'?entry.Substring(2):entry,@"\{[^}]*\}","");
+                if(line.IndexOf("five",StringComparison.OrdinalIgnoreCase)>=0||line.IndexOf('$')>=0||line.Any(char.IsDigit))faults.Add(pool.Key+": \""+entry+"\"");
+            }
+        }
+        Check(pools>=47,"every sale and buy pool is checked, got "+pools);
+        Check(faults.Count==0,faults.Count+" deal line(s) name an amount:\n  "+string.Join("\n  ",faults));
+        // Their line at the ask is FestivalLines' "sale" or "buy". A {count} can say "five" (five songs, five of each), so only
+        // money words fail here.
+        var priced=new SortedSet<string>();
+        foreach(var kind in new[]{"sale","buy"})for(int festival=0;festival<2;festival++)for(int seed=0;seed<3000;seed++)
+        {
+            string line=ConversationLines.Grammar.Line(kind,festival,seed);
+            if(Regex.IsMatch(line,@"\b(fives|twenty|ten|dollars?|bucks?)\b|\$|\d",RegexOptions.IgnoreCase))priced.Add(kind+": "+line);
+        }
+        Check(priced.Count==0,priced.Count+" ask line(s) name an amount:\n  "+string.Join("\n  ",priced));
     }
 
     static void AuthoringMistakesFailLoudly()

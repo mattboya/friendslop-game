@@ -104,7 +104,8 @@ namespace Festival.Tests
 
                 data.MusicVolume=1;data.EffectsVolume=.6f;
                 yield return StartLevel(session);
-                var stage=host.GetComponent<FestivalStageAudio>();yield return new WaitForSeconds(.4f);
+                // At the main stage's front the cross-fade gives it the whole authored gain.
+                var stage=host.GetComponent<FestivalStageAudio>();player.X=StageMusic.MainX;player.Z=StageMusic.MainZ;yield return new WaitForSeconds(.4f);
                 Assert.That(stage.Music.volume,Is.EqualTo(.6f).Within(1e-5f),"the stage uses authored gain and music, without another master");
                 Assert.That(camp.Music,Is.Null,"the camp stays silent in the festival");
                 var npc=sim.State.Npcs.Find(n=>n.Kind=="Wook");float x=npc.X,z=npc.Z;player.X=x+.8f;player.Z=z;
@@ -230,7 +231,8 @@ namespace Festival.Tests
 
                 // Pony Dust in a live dance: the HUD's arrows rise into view 2.4 s ahead of their beat, not the plain 2 s. Each
                 // frame, how far ahead of its beat the farthest arrow on screen is; the partner is held in place so the dance runs on.
-                dose.Substance="ketamine";dose.Intensity=4;session.Profile.Data.ReducedMotion=true;
+                // The dose starts now, so its first Pony Dust stall, 8.4 s in, comes after the dance and the look traces once.
+                dose.Substance="ketamine";dose.Intensity=4;dose.StartSeconds=sim.State.SimulationSeconds;session.Profile.Data.ReducedMotion=true;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 Assert.That(laneDiagnosticCount,Is.Zero,"lane diagnostics stay silent until opted in");
                 Assert.That(lookDiagnosticCount,Is.Zero,"through every look so far the camera's trip trace stays silent until opted in");DevelopmentDiagnostics.Visible=true;
@@ -340,6 +342,10 @@ namespace Festival.Tests
             var world=new GameObject("Wobble world");world.AddComponent<FestivalWorld>();yield return null;
             var hostObject=new GameObject("Wobble host");var host=hostObject.AddComponent<FestivalSession>();
             var friendObject=new GameObject("Wobble friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            bool diagnostics=DevelopmentDiagnostics.Visible;var looks=new List<string>();
+            Application.LogCallback lookLog=(message,stack,type)=>{if(message.StartsWith("[Festival.Trip] action=look substance=ketamine "))looks.Add(message);};
+#endif
             try
             {
                 ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
@@ -389,7 +395,17 @@ namespace Festival.Tests
                 yield return Until(()=>Dosed(host)&&!Dosed(friend),"the host trips and the friend's screen is sober");
                 Assert.That(me.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms")||mate.Effects.Exists(e=>e.Id=="lsd"||e.Id=="mushrooms"),Is.False,"setup: no shop-bought effect rolls a view");
                 StallIn(hosted,.3);var hostFloor=new float[1];
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                // Opted in a frame ahead, so the look before the stall traces uncounted; then one line as the stall starts, one as it ends.
+                DevelopmentDiagnostics.Visible=true;yield return null;Application.logMessageReceived+=lookLog;
+#endif
                 yield return Through(host,friend,4,hostFloor);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=lookLog;DevelopmentDiagnostics.Visible=diagnostics;
+                Assert.That(looks.Count,Is.EqualTo(2),"opted in, one look line at the stall's start and one at its end: "+string.Join(" | ",looks));
+                Assert.That(looks[0],Does.Contain(" stall=True ").And.Contain(" roll="),"the first as the walk stalls, with the roll");
+                Assert.That(looks[1],Does.Contain(" stall=False ").And.Contain(" roll="),"the second as it walks again, with the roll");
+#endif
                 Assert.That(hostFloor[0],Is.GreaterThan(.8f),"at the stall's floor the host's camera wobbles by about a degree");
                 StallIn(hosted,-Intoxication.StallEase-.05);host.Profile.Data.CameraShake=false;yield return null;
                 Assert.That(Intoxication.Stall(host.LocalPlayer,host.EstimatedSimulationSeconds),Is.EqualTo(1),"setup: at the stall's floor");
@@ -410,7 +426,13 @@ namespace Festival.Tests
                 Assert.That(ahead,Is.GreaterThan(0),"setup: the friend's estimated clock ran ahead of a snapshot through the stall");
                 Assert.That(friendFloor[0],Is.GreaterThan(.8f),"at the stall's floor the friend's camera wobbles by about a degree too");
             }
-            finally{friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);}
+            finally
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Application.logMessageReceived-=lookLog;DevelopmentDiagnostics.Visible=diagnostics;
+#endif
+                friend.Leave();host.Leave();foreach(var go in new[]{friendObject,hostObject,world})Object.Destroy(go);
+            }
             yield return null;
         }
 
@@ -440,17 +462,17 @@ namespace Festival.Tests
                 {
                     dose.Substance=substance;dose.Intensity=doses;yield return null;yield return null;
                     string at=Catalog.FindEffect(substance).Name+" at dose "+doses;var eye=EyeOf(host).rectTransform;
-                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(doses)).Within(1e-4f),at+": the live screen looks through eyes resting the dose's way");
+                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(substance,doses)).Within(1e-4f),at+": the live screen looks through eyes resting the dose's way");
                     Assert.That(top.anchorMin.y,Is.EqualTo(eye.anchorMax.y).Within(1e-6f),at+": black flush above the eye");
                     Assert.That(bottom.anchorMax.y,Is.EqualTo(eye.anchorMin.y).Within(1e-6f),at+": and below it");
                 }
 
                 // The real per-frame trip: a fresh blink wait on each new substance, then a whole blink shuts the eyes and opens them
                 // again to the same rest.
-                float open=1-FestivalTrip.EyeRest(4);
+                float open=0;
                 foreach(var substance in new[]{"ketamine","weed"})
                 {
-                    wait=.25f;dose.Substance=substance;dose.Intensity=4;yield return null;yield return null;
+                    wait=.25f;dose.Substance=substance;dose.Intensity=4;yield return null;yield return null;open=1-FestivalTrip.EyeRest(substance,4);
                     float least=1;bool reopened=false;
                     for(float deadline=Time.realtimeSinceStartup+4;Time.realtimeSinceStartup<deadline&&!reopened;)
                     {
@@ -467,7 +489,7 @@ namespace Festival.Tests
                 session.Profile.Data.ReducedMotion=false;
 
                 // On the test's clock: a fresh two-second wait on Pony Dust, then one blink, measured frame by frame.
-                wait=2;dose.Substance="ketamine";yield return null;yield return null;
+                wait=2;dose.Substance="ketamine";yield return null;yield return null;open=1-FestivalTrip.EyeRest("ketamine",4);
                 float started=-1,shut=-1,ended=-1,clock=0;
                 for(int frame=0;frame<200&&ended<0;frame++)
                 {
@@ -484,7 +506,7 @@ namespace Festival.Tests
                 Assert.That(traced,Is.Empty,"the eye stays silent until diagnostics are opted in");
                 DevelopmentDiagnostics.Visible=true;Step(session,50);
                 Assert.That(traced.Count,Is.EqualTo(1),"opted in, the eye is traced once as it stands, not every frame:\n"+string.Join("\n",traced));
-                Assert.That(traced[0],Does.Contain("shown=True substance=ketamine rest=0.40 reduced=False blinking=False held=False"));
+                Assert.That(traced[0],Does.Contain("shown=True substance=ketamine rest=0.28 reduced=False blinking=False held=False"));
                 session.MenuOpen=true;Step(session,30);session.MenuOpen=false;Step(session,1);
                 Assert.That(traced.Count,Is.EqualTo(3),"a held moment is traced as it begins and as it ends:\n"+string.Join("\n",traced));
                 Assert.That(traced[1],Does.Contain("held=True"));Assert.That(traced[2],Does.Contain("held=False").And.Contain("next_blink=60.0"));
@@ -525,7 +547,7 @@ namespace Festival.Tests
                 yield return null;yield return null;
                 Assert.That(session.MenuOpen,Is.False,"setup: the menu is closed");
                 var chat=(FestivalChatWindow)typeof(FestivalHud).GetField("chatWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(hud);
-                float open=1-FestivalTrip.EyeRest(4);
+                float open=1-FestivalTrip.EyeRest("ketamine",4);
                 // The host's view of its own simulation right now, as its next frame would show it.
                 void Refresh()=>typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(sim,me));
                 bool Busy()=>session.State.Interactions.Exists(i=>i.Id==session.LocalPlayer.InteractionId&&i.Status=="Active");
@@ -620,14 +642,13 @@ namespace Festival.Tests
                 PlayerState Me()=>Simulation(session).Player(session.LocalPlayerId);
                 ActiveEffect Dose()=>Me().Effects.Find(e=>e.Id==FestivalSimulation.DoseEffect);
                 session.Profile.Data.ReducedMotion=false;yield return null;yield return null;
-                float open=1-FestivalTrip.EyeRest(4);
                 // On the test's clock: on into the .1 s the lids stay shut.
                 void Shut(string name){float now=Step(session,1);for(int frame=0;frame<200&&now>0;frame++)now=Step(session,1);Assert.That(now,Is.Zero,"setup: shut mid-blink before "+name);}
                 IEnumerator Gone(string name){yield return null;yield return null;Assert.That(Opening(host),Is.EqualTo(-1),name+": the eye goes at once");}
                 IEnumerator Back(string name,int drawn)
                 {
                     yield return null;yield return null;
-                    Assert.That(Opening(host),Is.EqualTo(open).Within(1e-5f),name+": back on a dose, the eyes open at their rest, not shut");
+                    Assert.That(Opening(host),Is.EqualTo(1-FestivalTrip.EyeRest(Dose().Substance,4)).Within(1e-5f),name+": back on a dose, the eyes open at their rest, not shut");
                     Assert.That(draws,Is.GreaterThan(drawn),name+": with a freshly drawn wait");
                 }
 
@@ -695,7 +716,7 @@ namespace Festival.Tests
 
                 int sober=friendDraws;mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=2,Substance="weed",RemainingSeconds=600,StartSeconds=sim.State.SimulationSeconds});
                 for(deadline=Time.realtimeSinceStartup+5;Opening(friendObject)<0&&Time.realtimeSinceStartup<deadline;)yield return null;
-                float rest=1-FestivalTrip.EyeRest(2);
+                float rest=1-FestivalTrip.EyeRest("weed",2);
                 Assert.That(Opening(friendObject),Is.EqualTo(rest).Within(1e-4f),"a joined friend's own dose rests their own eyes its way");
                 Assert.That(friendDraws,Is.EqualTo(sober+1),"with a wait their own screen draws");
 
@@ -788,23 +809,27 @@ namespace Festival.Tests
             return Opening(session.gameObject);
         }
         // TRIP-11: pixels of session's view (320x180) that change by more than 6 of 255 when its trip's surface pattern alone is switched
-        // off between two renders in one frame; the trip's next LateUpdate puts it back.
+        // off between two renders in one frame; the trip's next LateUpdate puts it back. Both renders hide every renderer the pattern
+        // never draws on, people above all, so walkers cannot cover or shadow the patterned scenery from one count to the next.
         private static int Patterned(FestivalSession session)
         {
             const int width=320,height=180;
             var eye=session.ViewCamera;
             var surfaces=(FestivalTripSurfaces)typeof(FestivalTrip).GetField("surfaces",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session.GetComponent<FestivalTrip>());
             var target=RenderTexture.GetTemporary(width,height,24);var picture=new Texture2D(width,height,TextureFormat.RGBA32,false);var was=RenderTexture.active;
+            var hidden=new List<Renderer>();
             Color32[] Shot(){eye.Render();RenderTexture.active=target;picture.ReadPixels(new Rect(0,0,width,height),0,0);RenderTexture.active=was;return picture.GetPixels32();}
             try
             {
+                foreach(var renderer in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                    if(renderer.enabled&&(renderer.renderingLayerMask&FestivalTripSurfaces.SurfaceLayer)==0){renderer.enabled=false;hidden.Add(renderer);}
                 eye.targetTexture=target;
                 var on=Shot();surfaces.Show(null,default);var off=Shot();
                 int changed=0;
                 for(int i=0;i<on.Length;i++)if(Mathf.Max(Mathf.Abs(on[i].r-off[i].r),Mathf.Max(Mathf.Abs(on[i].g-off[i].g),Mathf.Abs(on[i].b-off[i].b)))>6)changed++;
                 return changed;
             }
-            finally{eye.targetTexture=null;RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);Object.Destroy(picture);}
+            finally{foreach(var renderer in hidden)if(renderer!=null)renderer.enabled=true;eye.targetTexture=null;RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);Object.Destroy(picture);}
         }
     }
 }

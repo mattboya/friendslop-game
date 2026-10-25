@@ -194,6 +194,60 @@ namespace Festival.Tests
             finally{session.Leave();Object.Destroy(host);Object.Destroy(world);}
         }
 
+        // Until the host's view confirms a gear swap, the HUD sets the first-person hands itself (FestivalHud.ShowPendingEquipment).
+        // The host holds back its snapshots, so the swap stays pending for many frames.
+        [UnityTest]public IEnumerator AHeldSideSpinSurvivesAGearSwapOnAJoinedClient()
+        {
+            UseAVirtualMouse("Poi swap mouse");UseAVirtualKeyboard("Poi swap keyboard");
+            var world=new GameObject("Poi swap world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("Poi swap host");var host=hostRoot.AddComponent<FestivalSession>();var hostHud=hostRoot.AddComponent<FestivalHud>();yield return null;
+            var clientRoot=new GameObject("Poi swap client");var client=clientRoot.AddComponent<FestivalSession>();var hud=clientRoot.AddComponent<FestivalHud>();yield return null;
+            var nextSnapshot=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);
+            var pending=typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance);
+            void HoldRight(bool down)=>InputSystem.QueueStateEvent(TestMouse,new MouseState().WithButton(MouseButton.Right,down));
+            bool Sides(){var rigs=client.ViewCamera.GetComponentsInChildren<FestivalPoiRig>();return rigs.Length>=2&&rigs.All(r=>r.SideSpin&&!r.Spinning&&!r.Carrying);}
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);hostHud.enabled=false;host.Controls.Map.Disable();client.Join("Spinner","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;client.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(client.LocalPlayer,Is.Not.Null,client.Message);
+                var game=Simulation(host);var me=game.Player(client.LocalPlayerId);me.X=0;me.Z=19;client.Command("Ready");yield return new WaitForSeconds(.3f);
+                yield return StartLevel(host,client.LocalPlayerId);client.Profile.Data.ThirdPerson=false;
+                // The host trips, so the level never doses the spinner mid-test.
+                game.State.Npcs.Clear();game.State.TripperId=host.LocalPlayerId;me.Effects.Clear();
+                me.Inventory.Clear();me.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});me.Inventory.Add(new ItemStack{ItemId="poi_led",Count=1});me.EquippedItemId="poi_practice";
+                for(float until=Time.realtimeSinceStartup+3;client.LocalPlayer.EquippedItemId!="poi_practice"&&Time.realtimeSinceStartup<until;)yield return null;
+                HoldRight(true);for(float until=Time.realtimeSinceStartup+2;!Sides()&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(Sides(),Is.True,"setup: right click wheels the practice poi at your sides");
+
+                // Slot 2 holds the LED poi. The host takes the swap, but its view of it is held back.
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                yield return Tap(Key.Digit2,.15f);
+                Assert.That(me.EquippedItemId,Is.EqualTo("poi_led"),"setup: the host takes the swap");
+                Assert.That(pending.GetValue(hud),Is.True,"setup: the swap waits for the host's view");
+                int frames=0;
+                for(float until=Time.realtimeSinceStartup+1.5f;(bool)pending.GetValue(hud)&&Time.realtimeSinceStartup<until;frames++)
+                {
+                    Assert.That(Sides(),Is.True,"frame "+frames+" of the pending swap: your hands keep the side spin");
+                    yield return null;
+                }
+                Assert.That(frames,Is.GreaterThan(10),"setup: the swap stayed pending for a while");
+
+                // The host's view arrives: the LED poi, still at your sides, from the frame the HUD lets go of the swap.
+                nextSnapshot.SetValue(host,0d);
+                for(float until=Time.realtimeSinceStartup+3;client.LocalPlayer.EquippedItemId!="poi_led"&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(client.LocalPlayer.EquippedItemId,Is.EqualTo("poi_led"),"setup: the host's view confirms the swap");
+                Assert.That(pending.GetValue(hud),Is.False,"setup: the HUD lets go of the swap in the frame its view arrives");
+                Assert.That(Sides(),Is.True,"the frame the swap is confirmed: your hands keep the side spin");
+                yield return null;
+                Assert.That(Sides(),Is.True,"the confirmed LED poi wheel at your sides");
+                HoldRight(false);yield return null;
+            }
+            finally{client.Leave();host.Leave();Object.Destroy(clientRoot);Object.Destroy(hostRoot);Object.Destroy(world);}
+            yield return null;
+        }
+
         // The virtual devices and the input settings go back however the test ended (an error log skips its own finally).
         private Mouse mouse;
         private Keyboard keyboard;
@@ -213,14 +267,16 @@ namespace Festival.Tests
 {
     public sealed class PoiPurchaseHudPlayTests:FestivalPlayModeTest
     {
+        // The host's reply names the spins by action ({Spin}); the drawn HUD reads in the default buttons.
+        const string SpinWordsShown="Hold left click to spin them in front of you, right click at your sides.";
         [UnityTest]public IEnumerator PayingForPoiKeepsTheSpinHintInTheDrawnHud()
         {
-            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. "+FestivalSimulation.SpinWords,true);
+            return Purchase("poi_practice","PRACTICE POI","Practice poi bought for $5. "+SpinWordsShown,true);
         }
 
         [UnityTest]public IEnumerator PayingForAStarterKeepsItsPocketToast()
         {
-            return Purchase("stock_lsd","TONGUE STAMPS","Oh, hey, thanks!  •  POCKET UPDATED",false);
+            return Purchase("stock_lsd","TONGUE STAMPS","Oh, hey, thanks!  •  −$5  •  POCKET UPDATED",false);
         }
 
         private IEnumerator Purchase(string item,string title,string receipt,bool spin)
@@ -248,7 +304,7 @@ namespace Festival.Tests
                 Assert.That(Read("Prompt"),Does.StartWith("PICK UP "+title));
                 yield return Tap(Key.E,.25f);
                 Assert.That(player.HeldOfferId,Is.EqualTo(item));
-                if(spin)Assert.That(Read("Notice"),Does.EndWith(FestivalSimulation.SpinWords));
+                if(spin)Assert.That(Read("Notice"),Does.EndWith(SpinWordsShown));
                 player.X=0;player.Z=7;yield return new WaitForSeconds(.35f);
                 Assert.That(Read("Prompt"),Does.StartWith("SHOW "+title+" TO SELLER"));
                 yield return Tap(Key.E,.25f);Assert.That(Read("Prompt"),Does.StartWith("PAY $5"));

@@ -117,8 +117,9 @@ namespace Festival.Presentation
             if(along<2*x)return new Vector2(x-along,-y);along-=2*x;
             return new Vector2(-x,-y+along);
         }
-        // Reduced motion keeps whole-ring blinks under 3 a second, the usual photosensitivity line, and chases at a third the speed.
-        const float ChaseSteps=12,FlashSeconds=.4f,BlinkHertz=8,ReducedBlinkHertz=2;
+        // Whole-ring blinks stay under 3 a second for every player, the photosensitivity line (WCAG 2.3.1). Reduced motion
+        // blinks slower still and chases at a third the speed.
+        const float ChaseSteps=12,FlashSeconds=.4f,BlinkHertz=2.5f,ReducedBlinkHertz=2;
         public static bool BulbLit(float elapsed,int bulb,bool reducedMotion)
         {
             if(elapsed>=TakeStarts)return true;

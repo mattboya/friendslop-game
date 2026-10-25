@@ -20,10 +20,11 @@ namespace Festival.Tests
     public sealed class SettingsTests
     {
         private string previousFolder,ownedFolder,previousPreferencesScope;
+        private int qualityLevel;
         private readonly List<string> ownedBindingKeys=new List<string>();
         [SetUp]public void OwnATemporaryProfile()
         {
-            previousFolder=LocalProfile.Folder;
+            qualityLevel=QualitySettings.GetQualityLevel();previousFolder=LocalProfile.Folder;
             ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U04-settings-"+Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;
             previousPreferencesScope=FestivalInput.PreferencesScope;FestivalInput.PreferencesScope="impl-U35-"+Guid.NewGuid().ToString("N");
@@ -31,9 +32,12 @@ namespace Festival.Tests
         }
         [TearDown]public void RemoveOnlyThisTestsProfile()
         {
+            int left=QualitySettings.GetQualityLevel();QualitySettings.SetQualityLevel(qualityLevel,false);
             LocalProfile.Folder=previousFolder;FestivalInput.PreferencesScope=previousPreferencesScope;
             foreach(string key in ownedBindingKeys)PlayerPrefs.DeleteKey(key);ownedBindingKeys.Clear();
             if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
+            // The editor saves its quality level into ProjectSettings, so each test must leave the level it found.
+            Assert.That(QualitySettings.names[left],Is.EqualTo(QualitySettings.names[qualityLevel]),"the test leaves the editor quality level it found");
         }
         [UnityTearDown]public IEnumerator LeaveOwnedPlayMode()
         {
@@ -278,16 +282,16 @@ namespace Festival.Tests
         public void SavedInvertYChangesTheActualViewCamera(bool inverted,float expectedHeight)
         {
 
-            var host=new GameObject("impl-U35 inverted camera");
+            var host=new GameObject("impl-U35 inverted camera");var session=host.AddComponent<FestivalSession>();
             try
             {
-                var session=host.AddComponent<FestivalSession>();if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
+                if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
                 session.Profile.Data.InvertY=inverted;session.Profile.Data.MouseSensitivity=.1f;session.Profile.Data.ThirdPerson=false;
                 session.ApplyLook(new Vector2(0,100));
                 typeof(FestivalSession).GetMethod("UpdateCamera",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,new object[]{new PlayerState{Id="me"}});
                 Assert.That(session.ViewCamera.transform.forward.y,Is.EqualTo(expectedHeight).Within(.001));
             }
-            finally{UnityEngine.Object.DestroyImmediate(host);}
+            finally{GraphicsApplicationTests.Close(host,session);}
         }
 
         [UnityTest]public IEnumerator SavedPushToTalkUsesTAndStopsAtFocusMenuAndRebindBoundaries()
@@ -1020,14 +1024,17 @@ namespace Festival.Tests
             Assert.That(FestivalSettings.SupportsExclusiveDisplay(platform,graphics),Is.EqualTo(supported));
         }
         private string previousFolder,ownedFolder,previousPreferencesScope;
+        private int qualityLevel;
         [SetUp]public void OwnGraphicsProfile()
         {
-            previousPreferencesScope=FestivalInput.PreferencesScope;previousFolder=LocalProfile.Folder;ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U34-graphics-"+Guid.NewGuid().ToString("N"));
+            qualityLevel=QualitySettings.GetQualityLevel();previousPreferencesScope=FestivalInput.PreferencesScope;previousFolder=LocalProfile.Folder;ownedFolder=Path.Combine(Path.GetTempPath(),"impl-U34-graphics-"+Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(ownedFolder);LocalProfile.Folder=ownedFolder;FestivalInput.PreferencesScope=ownedFolder;
         }
         [TearDown]public void RestoreGraphicsProfile()
         {
+            int left=QualitySettings.GetQualityLevel();QualitySettings.SetQualityLevel(qualityLevel,false);
             FestivalInput.PreferencesScope=previousPreferencesScope;LocalProfile.Folder=previousFolder;if(Directory.Exists(ownedFolder))Directory.Delete(ownedFolder,true);
+            Assert.That(QualitySettings.names[left],Is.EqualTo(QualitySettings.names[qualityLevel]),"the test leaves the editor quality level it found");
         }
         private static void Update(FestivalSession session)=>typeof(FestivalSession).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
         private static FestivalSession Session(GameObject host)
@@ -1036,7 +1043,7 @@ namespace Festival.Tests
             if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
             return session;
         }
-        private static void Close(GameObject host,FestivalSession session)
+        internal static void Close(GameObject host,FestivalSession session)
         {
             // EditMode does not drive MonoBehaviour teardown after our explicit Awake.
             var settings=typeof(FestivalSession).GetProperty("Settings")?.GetValue(session) as System.IDisposable;
@@ -1089,6 +1096,32 @@ namespace Festival.Tests
                 settings.Dispose();
                 foreach(var entry in owned){QualitySettings.SetQualityLevel(entry.Key,false);QualitySettings.renderPipeline=before[entry.Key];UnityEngine.Object.DestroyImmediate(entry.Value);}
                 QualitySettings.SetQualityLevel(initialLevel,false);QualitySettings.vSyncCount=initialVsync;Application.targetFrameRate=initialCap;
+            }
+        }
+
+        [Test]public void OverlappingSettingsKeepTheLiveGraphicsAndTheLastRestoresTheFirstCapture()
+        {
+            int initialLevel=QualitySettings.GetQualityLevel(),initialCap=Application.targetFrameRate,start=Array.IndexOf(QualitySettings.names,"Very High"),high=Array.IndexOf(QualitySettings.names,"High");
+            var before=Enumerable.Range(0,QualitySettings.names.Length).Select(QualitySettings.GetRenderPipelineAssetAt).ToArray();
+            var older=new FestivalSettings(new LocalProfile("overlapping-older"),new Display());var newer=new FestivalSettings(new LocalProfile("overlapping-newer"),new Display());
+            try
+            {
+                QualitySettings.SetQualityLevel(start,false);int startVsync=QualitySettings.vSyncCount;Application.targetFrameRate=37;
+                older.ApplyGraphics();newer.ApplyGraphics();var live=QualitySettings.renderPipeline;
+                Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(high),"setup: both apply the saved High preset");
+                older.Dispose();
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("High"),"the older teardown leaves the live session's level");
+                Assert.That(QualitySettings.renderPipeline,Is.SameAs(live),"and its pipeline");Assert.That(live!=null,Is.True,"a pipeline that still exists");
+                newer.Dispose();
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("Very High"),"the last teardown restores the level that the first one found");
+                Assert.That(QualitySettings.vSyncCount,Is.EqualTo(startVsync),"and its vsync");Assert.That(Application.targetFrameRate,Is.EqualTo(37),"and its frame cap");
+                for(int i=0;i<before.Length;i++)Assert.That(QualitySettings.GetRenderPipelineAssetAt(i),Is.SameAs(before[i]),QualitySettings.names[i]+" gets its own pipeline back");
+            }
+            finally
+            {
+                older.Dispose();newer.Dispose();
+                for(int i=0;i<before.Length;i++){QualitySettings.SetQualityLevel(i,false);QualitySettings.renderPipeline=before[i];}
+                QualitySettings.SetQualityLevel(initialLevel,false);Application.targetFrameRate=initialCap;
             }
         }
 
@@ -1317,6 +1350,16 @@ namespace Festival.Tests
     }
     public sealed class GraphicsPreferencesIsolationTests
     {
+        [Test]public void ARunStartErasesAStaleProjectSettingsRecord()
+        {
+            bool recorded=UnityEditor.SessionState.GetBool(ProjectSettingsGuard.Recorded,false);
+            try
+            {
+                UnityEditor.SessionState.SetBool(ProjectSettingsGuard.Recorded,true);new ProjectSettingsGuard().RunStarted(null);
+                Assert.That(UnityEditor.SessionState.GetBool(ProjectSettingsGuard.Recorded,false),Is.False,"the run start erases the old record");
+            }
+            finally{UnityEditor.SessionState.SetBool(ProjectSettingsGuard.Recorded,recorded);}
+        }
         [Test]public void GraphicsFixturePreservesCallerPreferencesAndRestoresItsScope()
         {
             string previousScope=FestivalInput.PreferencesScope,previousFolder=LocalProfile.Folder;

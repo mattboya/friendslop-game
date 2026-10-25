@@ -31,6 +31,9 @@ namespace Festival.Tests
             var game=Simulation(session);game.State.Npcs.Clear();game.State.DurationSeconds=100000;
         }
         static string Failed(DevelopmentSmoke smoke)=>(string)typeof(DevelopmentSmoke).GetField("failed",Private).GetValue(smoke);
+        // A slow client. While held, the host sends the client no snapshot at all; let go, the next one is the newest.
+        static void HoldSnapshots(FestivalSession host,bool hold)=>typeof(FestivalSession).GetField("nextSnapshot",Private).SetValue(host,hold?double.PositiveInfinity:0d);
+        static IEnumerator Then(IEnumerator step,System.Action done){yield return step;done();}
 
         [UnityTest]public IEnumerator ASoloSelfRevivalOnLoadedFramesGetsItsFullFifteenSimulationSeconds()
         {
@@ -72,6 +75,57 @@ namespace Festival.Tests
                 Assert.That(finished,Is.Null);
             }
             finally{session.Leave();Object.Destroy(holder);Object.Destroy(world);}
+        }
+
+        [UnityTest]public IEnumerator AClientWhoseSnapshotsAreHeldBackStillSeesTheDaysResultsBeforeCamp()
+        {
+            var world=new GameObject("TEST-5 settle world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("TEST-5 settle host");var host=hostObject.AddComponent<FestivalSession>();
+            var friendObject=new GameObject("TEST-5 settle friend");var friend=friendObject.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while(friend.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                var sim=Simulation(host);var mate=sim.Player(friend.LocalPlayerId);mate.X=0;mate.Z=19;friend.Command("Ready");
+                while(!mate.Ready&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(mate.Ready,Is.True,"setup: the friend's Ready reached the host");
+                yield return StartLevel(host,friend.LocalPlayerId);
+                // Day 1 with its quota sold and both friends at the camp gate: the host's own extraction ends the day in success.
+                sim.State.Npcs.Clear();sim.State.LevelSales=FestivalSimulation.DayQuota(sim.State);
+                foreach(var p in sim.State.Players){p.X=Festivals.CampGateX;p.Z=Festivals.CampGateZ;}
+                host.MenuOpen=false;host.Command("Extract");
+                var extract=sim.Interaction(sim.Player(host.LocalPlayerId).InteractionId);
+                Assert.That(extract?.Kind,Is.EqualTo("Extract"),"setup: the host's extraction starts: "+host.Message);
+                for(deadline=Time.realtimeSinceStartup+15;sim.State.SimulationSeconds<extract.StartSeconds+extract.DurationSeconds-.5&&Time.realtimeSinceStartup<deadline;)yield return null;
+                // Half a second before the day ends the client's snapshots stop; both run the smoke's own Day 1 settlement.
+                HoldSnapshots(host,true);
+                Assert.That(friend.State.Phase,Is.EqualTo("Playing"),"setup: the client's last snapshot is still the day");
+                var hostSmoke=hostObject.AddComponent<DevelopmentSmoke>();hostSmoke.enabled=false;
+                var clientSmoke=friendObject.AddComponent<DevelopmentSmoke>();clientSmoke.enabled=false;
+                var settle=typeof(DevelopmentSmoke).GetMethod("SettleTheDay",Private);
+                bool hostDone=false,clientDone=false;
+                host.StartCoroutine(Then((IEnumerator)settle.Invoke(hostSmoke,new object[]{host}),()=>hostDone=true));
+                friend.StartCoroutine(Then((IEnumerator)settle.Invoke(clientSmoke,new object[]{friend}),()=>clientDone=true));
+                for(deadline=Time.realtimeSinceStartup+15;sim.State.Phase=="Playing"&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(sim.State.Phase,Is.EqualTo("Results"),"setup: the host's extraction ends the day: "+host.Message);
+                // The client hears nothing for at least 2.5 s after the day ends, longer than the host's old 2 s pause, and for up to 4 s
+                // while the host still shows the results.
+                for(float back=Time.realtimeSinceStartup+2.5f,cap=back+1.5f;Time.realtimeSinceStartup<back||sim.State.Phase=="Results"&&Time.realtimeSinceStartup<cap;)yield return null;
+                HoldSnapshots(host,false);
+                for(deadline=Time.realtimeSinceStartup+30;!(hostDone&&clientDone)&&Time.realtimeSinceStartup<deadline;)yield return null;
+                string hostFailed=Failed(hostSmoke),clientFailed=Failed(clientSmoke);
+                TestContext.WriteLine("TEST-5 SETTLE host="+(hostFailed??"passed")+" client="+(clientFailed??"passed")+" phase="+friend.State?.Phase);
+                Assert.That(hostDone&&clientDone,Is.True,"both settlements end");
+                Assert.That(clientFailed,Is.Null,"the client sees the day's results, however late its snapshots arrive");
+                Assert.That(hostFailed,Is.Null,"the host brings the crew back once the client has seen them");
+                Assert.That(friend.State.Phase,Is.EqualTo("CampReview"),"both are back at camp for the debrief");
+            }
+            finally{HoldSnapshots(host,false);friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
         }
 
         // A festivalgoer who talks without asking for a dance first, standing in front of the hosted player.
@@ -184,6 +238,51 @@ namespace Festival.Tests
                 Assert.That(DevelopmentSmoke.HoldTailsWrong(lane,chart),Is.EqualTo("a tail drawn on a chart without holds"));
             }
             finally{session.Leave();Object.Destroy(holder);Object.Destroy(world);}
+        }
+
+        // The smoke's fog check reads the view camera's own render. Under four doses of Pony Dust, whose sleepy eyes black out
+        // most of the screen, the probe's fog still fills the view where the camera draws, and the check passes at its 33% line; with
+        // nothing in front of the camera to fog, it still fails with its message. Either way it puts the level's fog back.
+        [UnityTest]public IEnumerator TheFogCheckCountsOnlyTheViewUnderPonyDustsSleepyEyes()
+        {
+            var world=new GameObject("TEST-14 fog world");world.AddComponent<FestivalWorld>();yield return null;
+            var holder=new GameObject("TEST-14 fog session");var session=holder.AddComponent<FestivalSession>();holder.AddComponent<FestivalHud>();yield return null;
+            var hidden=new System.Collections.Generic.List<Renderer>();string passed=null;
+            Application.LogCallback log=(message,stack,type)=>{if(message.StartsWith("FESTIVAL SMOKE FOG RENDER PASSED: "))passed=message;};
+            Application.logMessageReceived+=log;
+            try
+            {
+                yield return HostALevel(session);
+                holder.GetComponent<FestivalTrip>().BlinkWaits=()=>60;
+                var game=Simulation(session);var me=game.Player(session.LocalPlayerId);me.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);
+                me.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=4,Substance="ketamine",RemainingSeconds=600,StartSeconds=game.State.SimulationSeconds});
+                yield return null;yield return null;
+                var eye=holder.transform.Find("Festival trip/Trip eye")?.GetComponent<RawImage>();
+                Assert.That(eye!=null&&eye.isActiveAndEnabled,"setup: four doses of Pony Dust: the view looks out through sleepy eyes");
+                var smoke=holder.AddComponent<DevelopmentSmoke>();smoke.enabled=false;
+                typeof(DevelopmentSmoke).GetField("captureCamera",Private).SetValue(smoke,session.ViewCamera);
+                var fog=(RenderSettings.fog,RenderSettings.fogMode,RenderSettings.fogColor,RenderSettings.fogStartDistance,RenderSettings.fogEndDistance);
+                yield return FogCheck(smoke);
+                TestContext.WriteLine("TEST-14 FOG under Pony Dust x4: failed="+Failed(smoke)+" passed="+passed);
+                Assert.That(Failed(smoke),Is.Null,"the fog check passes under the lids");
+                Assert.That(passed,Does.Match("^FESTIVAL SMOKE FOG RENDER PASSED: [0-9]+% of the screen fogged$"),"and says so");
+                Assert.That((RenderSettings.fog,RenderSettings.fogMode,RenderSettings.fogColor,RenderSettings.fogStartDistance,RenderSettings.fogEndDistance),Is.EqualTo(fog),"then puts the level's fog back");
+                foreach(var renderer in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))if(renderer.enabled){renderer.enabled=false;hidden.Add(renderer);}
+                passed=null;yield return FogCheck(smoke);
+                TestContext.WriteLine("TEST-14 FOG with nothing to fog: failed="+Failed(smoke));
+                Assert.That(Failed(smoke),Does.Match("^fog render: only [0-9]+% of the screen took the probe's magenta fog$"),"with nothing in front of the camera to fog, it still fails");
+                Assert.That(passed,Is.Null);
+                Assert.That((RenderSettings.fog,RenderSettings.fogMode,RenderSettings.fogColor,RenderSettings.fogStartDistance,RenderSettings.fogEndDistance),Is.EqualTo(fog),"and puts the fog back");
+            }
+            finally{Application.logMessageReceived-=log;foreach(var renderer in hidden)if(renderer!=null)renderer.enabled=true;session.Leave();Object.Destroy(holder);Object.Destroy(world);}
+        }
+        // The smoke's own fog check, run on the smoke as the native smokes run it, within 5 s.
+        static IEnumerator FogCheck(DevelopmentSmoke smoke)
+        {
+            bool done=false;
+            smoke.StartCoroutine(Then((IEnumerator)typeof(DevelopmentSmoke).GetMethod("CheckFogDraws",Private).Invoke(smoke,null),()=>done=true));
+            for(float deadline=Time.realtimeSinceStartup+5;!done&&Time.realtimeSinceStartup<deadline;)yield return null;
+            Assert.That(done,"the fog check finishes");
         }
     }
 }

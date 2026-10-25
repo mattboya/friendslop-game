@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 namespace Festival.Core
 {
-    [Serializable] public sealed class RhythmNote { public int Id,Direction; public double TimeSeconds,HoldSeconds; }
+    // Grey marks a block to dodge on the DJ ride (DjRide); arrow charts never set it.
+    [Serializable] public sealed class RhythmNote { public int Id,Direction; public double TimeSeconds,HoldSeconds; public bool Grey; }
     [Serializable] public sealed class RhythmChart
     {
         public List<RhythmNote> Notes = new List<RhythmNote>();
@@ -13,9 +14,10 @@ namespace Festival.Core
         public static RhythmChart For(InteractionState i)
         {
             int difficulty=i.Kind=="ConfirmDance"?QuarterNotes:i.ChartDifficulty;
-            if(i.StageTrack==0)return Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty);
+            RhythmChart Logical()=>i.Kind=="Dj"?DjRide.Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,DjRide.Step(i),DjRide.Greys(i)):Create(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty);
+            if(i.StageTrack==0)return Logical();
             if(!ValidStageAnchor(i))throw new ArgumentException("Invalid stage chart anchor.",nameof(i));
-            var track=StageBeats.For(i.StageTrack);var chart=CreateOnStage(i.ChartSeed,i.NoteCount,i.BeatSeconds,difficulty,track,StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds),i.StageBeatStride);
+            var track=StageBeats.For(i.StageTrack);var chart=OnStage(Logical(),i.NoteCount,i.BeatSeconds,track,StageBeatAtWorld(track,i.StageFirstHeadWorldSeconds),i.StageBeatStride);
             double shift=i.StageFirstHeadDelaySeconds-2;
             foreach(var note in chart.Notes)note.TimeSeconds+=shift;
             chart.DurationSeconds+=shift;return chart;
@@ -26,9 +28,8 @@ namespace Festival.Core
         const int Eighths=1,Jump=2,Sixteenths=3,Hold=4;
         // The difficulty that puts one quarter note on every beat, as charts were before DANCE-5 (the same seed, the same chart).
         public const int QuarterNotes=-1;
-        // Catalog choices (one-based): existing day/night sets stay unchanged; 0 is reserved for fixed legacy timing.
-        public static int StageTrackFor(int festival,int level)=>festival==0?(Festivals.Night(level)?1:2):(Festivals.Night(level)?4:5);
-        public static bool ValidStageAnchor(InteractionState i)=>i.StageTrack==0||(i.StageTrack==1||i.StageTrack==2||i.StageTrack==4||i.StageTrack==5)&&Finite(i.StageFirstHeadWorldSeconds)&&i.StageFirstHeadWorldSeconds>=0&&Finite(i.StageFirstHeadDelaySeconds)&&i.StageFirstHeadDelaySeconds>=0&&i.StageFirstHeadDelaySeconds<=60&&(i.StageBeatStride==.5||i.StageBeatStride==1||i.StageBeatStride==2);
+        // Catalog choices (one-based); 0 is reserved for fixed legacy timing.
+        public static bool ValidStageAnchor(InteractionState i)=>i.StageTrack==0||StageBeats.For(i.StageTrack)!=null&&Finite(i.StageFirstHeadWorldSeconds)&&i.StageFirstHeadWorldSeconds>=0&&Finite(i.StageFirstHeadDelaySeconds)&&i.StageFirstHeadDelaySeconds>=0&&i.StageFirstHeadDelaySeconds<=60&&(i.StageBeatStride==.5||i.StageBeatStride==1||i.StageBeatStride==2);
         static bool Finite(double value)=>!double.IsNaN(value)&&!double.IsInfinity(value);
         static double LoopBeatSpan(StageBeats.Track track)=>track.Beat(track.LoopEnd)-track.Beat(track.FirstBeat);
         // Preserve the click-free sample joins exactly. Their offsets from phrase anchors are not whole beat counts.
@@ -63,7 +64,7 @@ namespace Festival.Core
         public static void InitializeStage(InteractionState i,int stageTrack,double startWorldSeconds,double firstHeadLeadSeconds=2)
         {
             var track=StageBeats.For(stageTrack);
-            if(track==null||stageTrack==3||stageTrack>5||!Finite(startWorldSeconds)||startWorldSeconds<0||!Finite(firstHeadLeadSeconds)||firstHeadLeadSeconds<0||firstHeadLeadSeconds>59)throw new ArgumentOutOfRangeException(nameof(stageTrack));
+            if(track==null||!Finite(startWorldSeconds)||startWorldSeconds<0||!Finite(firstHeadLeadSeconds)||firstHeadLeadSeconds<0||firstHeadLeadSeconds>59)throw new ArgumentOutOfRangeException(nameof(stageTrack));
             double earliest=startWorldSeconds+firstHeadLeadSeconds,cycle=Math.Floor(earliest/track.LoopSeconds);
             double beat=Math.Ceiling(track.Beat(StageSampleAtWorld(track,earliest))-1e-10),sample=track.Sample(beat);
             if(sample>=track.LoopEnd){cycle++;sample=track.Sample(Math.Ceiling(track.Beat(track.FirstBeat)-1e-10));}
@@ -77,7 +78,11 @@ namespace Festival.Core
         {
             if(track==null)throw new ArgumentNullException(nameof(track));
             if(!Finite(firstBeat)||stride!=.5&&stride!=1&&stride!=2)throw new ArgumentOutOfRangeException(nameof(firstBeat));
-            var chart=Create(seed,count,beatSeconds,difficulty);double origin=StageWorldAtBeat(track,firstBeat);
+            return OnStage(Create(seed,count,beatSeconds,difficulty),count,beatSeconds,track,firstBeat,stride);
+        }
+        static RhythmChart OnStage(RhythmChart chart,int count,double beatSeconds,StageBeats.Track track,double firstBeat,double stride)
+        {
+            double origin=StageWorldAtBeat(track,firstBeat);
             foreach(var note in chart.Notes)
             {
                 double headBeat=firstBeat+(note.TimeSeconds-2)/beatSeconds*stride,tailBeat=headBeat+note.HoldSeconds/beatSeconds*stride;

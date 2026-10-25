@@ -15,6 +15,9 @@ A short shared moment in the middle of a level. The whole crew plays together, a
 windfall, or a mess everyone blames each other for at the debrief. Minigames are optional, and each one costs
 something to start, so the pause is a gamble and never a free rest.
 
+Booth minigames pause the festival. Performance games run inside a performance and never pause it
+([PERFORMANCE_GAMES_2026-10-23.md](PERFORMANCE_GAMES_2026-10-23.md)).
+
 ## The rules every minigame shares (MINI-1)
 
 **Booths.** Each level has one booth: a stranger with a sign. It sits on a spot at the edge of a crowd, chosen by
@@ -129,9 +132,11 @@ A shady bartender sets out cups. One is spiked. It's push-your-luck with a share
 - **Calling it** pays the pot like sale cash: split evenly across the crew's cash and counted toward a day level's
   quota. On a night level it goes to the stash instead. When only the spiked cup is left, the game calls it
   automatically.
-- **The tripper's hint:** the tripper alone sees one cup glowing as "spiked". It's right with the tripper's vision
-  reliability (75 / 50 / 25 / 10% by dose); otherwise it marks a safe cup. They relay it over voice, and the crew
-  decides how much to trust it.
+- **The tripper's hunch:** the tripper alone sees one cup shimmer amber, with a line that says how far to trust it
+  ("Your trip says cup 3… trips like yours are right about 3 times in 4"). It marks the spiked cup at the tripper's
+  vision reliability (75 / 50 / 25 / 10% by dose); otherwise it marks a safe cup. They relay it over voice, and the
+  crew decides how much to trust it. Alone at the table nobody argues it over, so a solo hunch is one step less sure
+  (50 / 25 / 10 / 10%): it can't hand a lone player a free pot.
 
 As built (MINI-4): the cups, which one is spiked, the turn order and the hint come from one stream that mixes in the host's
 secret deal seed, so no client can work them out; the spiked cup never leaves the host, and the hint reaches only the
@@ -140,8 +145,17 @@ spiked dose raises only the drinker's dose effect, never the spin's result, so t
 stay as rolled; its substance comes from a stream of its own. The pot counts as sales by night too, banked to the stash; by
 day it is split across the players in the game, any odd dollars to the stash. A turn holder who has left the game simply
 runs out of time, which calls it. On screen the cups stand in a numbered row on a table in front of the booth's stranger;
-the player up drinks the cup under the aim dot with E and calls it with F; the tripper's hunch cup glows red in their view
-alone; the card shows the pot, whose turn it is and their seconds, then what became of the pot.
+the player up drinks the cup under the aim dot with E and calls it with F; the tripper's hunch cup shimmers amber in their
+view alone (lit throughout with reduced motion).
+
+As built (MINI-10): the first turn's clock starts 3 s after the pour (`CupsIntroSeconds`), and until then the card reads
+the rules in three lines: one cup is spiked and each safe cup grows the pot; call it any time to bank the pot; the spiked
+cup loses the pot and doses whoever drinks it. The player up may still drink or call it at once. During play the card shows
+the pot, whose turn it is and their seconds, what the next safe cup adds, what calling it banks, and "1 spiked among N
+left"; the tripper's card adds the hunch and its odds (`HunchReliability`), never "is spiked" flat. The end card says what
+became of the pot and, to the tripper, whether the hunch was right, as far as the table shows it: the spiked cup drunk, or
+the last cup left; a hunch cup drunk safely was wrong; one nobody drank before the call stays a guess, because the spiked
+cup never leaves the host.
 
 ## Rejected ideas
 

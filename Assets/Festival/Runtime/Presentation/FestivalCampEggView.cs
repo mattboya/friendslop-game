@@ -19,6 +19,9 @@ namespace Festival.Presentation
         public const float Reach=2.5f;
         /// <summary>How far a gag's line and sound carry, in metres, as far as speech, the inhale and the confetti pop.</summary>
         public const float Range=15;
+        /// <summary>The first-person eye height of whoever sits in the headliner's chair: just over the seated body's own eyes (Head
+        /// bone at about .97 m, its eyes about .24 m above), as the 1.65 m standing eye sits just over a standing body's.</summary>
+        public const float ChairEyeHeight=1.25f;
         /// <summary>A prop shows its gag's line on a child of LineName and sounds from a child of VoiceName.</summary>
         public const string LineName="Camp egg line",VoiceName="Camp egg voice";
         // A line stays up long enough to read; the flamingo sags flat over DeflateSeconds, or at once with reduced motion.

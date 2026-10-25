@@ -44,8 +44,10 @@ namespace Festival.Presentation
         private Material shade,glow;
         private FestivalSession session;
         private Func<string,Transform> actorFor;
-        // The check line for the keys as bound, rebuilt only when Chat's or Interact's key moves: a label allocates.
+        // The check line for the keys as bound, rebuilt only when Chat's or Interact's key moves or the keyboard layout changes: a
+        // label allocates.
         private string checkLine=CheckLineFor("F","E"),chatPath,interactPath;
+        private int layout;
 
         /// <summary>How many markers are drawn this frame.</summary>
         public int Shown {get;private set;}
@@ -56,9 +58,9 @@ namespace Festival.Presentation
         {
             if(session==null){session=GetComponent<FestivalSession>();if(session==null)return;actorFor=id=>{var body=session.WorldCharacter(id);return body!=null?body.transform:null;};}
             var keys=session.Controls;
-            if(keys!=null&&(keys.Chat.bindings[0].effectivePath!=chatPath||keys.Interact.bindings[0].effectivePath!=interactPath))
+            if(keys!=null&&(keys.Chat.bindings[0].effectivePath!=chatPath||keys.Interact.bindings[0].effectivePath!=interactPath||keys.LayoutChanges!=layout))
             {
-                chatPath=keys.Chat.bindings[0].effectivePath;interactPath=keys.Interact.bindings[0].effectivePath;
+                chatPath=keys.Chat.bindings[0].effectivePath;interactPath=keys.Interact.bindings[0].effectivePath;layout=keys.LayoutChanges;
                 checkLine=CheckLineFor(keys.Label(keys.Chat).ToUpperInvariant(),keys.Label(keys.Interact).ToUpperInvariant());
             }
             Apply(session.State,session.ViewCamera!=null?session.ViewCamera.transform:null,actorFor,Time.time,Time.unscaledDeltaTime,session.EyePosition);

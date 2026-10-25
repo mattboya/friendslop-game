@@ -19,7 +19,7 @@ namespace Festival.Network
     [Serializable] internal sealed class DialogueHistoryPacket { public List<string> Seen=new List<string>(); public string Epoch=""; public long Revision; }
     [Serializable] internal sealed class MoveIntent { public float X,Z,Yaw; public bool Sprint,SpinPoi,SpinSides; public int Sequence; }
     [Serializable] internal sealed class SnapshotPacket { public RoundState State; public double ServerSeconds; }
-    internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt; public int Commands; public double Window; }
+    internal sealed class PeerInput { public MoveIntent Intent=new MoveIntent(); public double ReceivedAt,Window,MoveWindow; public int Commands,Moves; public bool HistorySeeded; }
 
     /// <summary>Native Unity Transport session. Host owns all rules; clients submit input and render filtered state.</summary>
     public sealed class FestivalSession : MonoBehaviour
@@ -121,7 +121,43 @@ namespace Festival.Network
         // dose's StartSeconds, which only its owner's view carries), and a Rolly Pollies dose walks 8% faster.
         // TRIP-15: snapshots name who found the level's vision stash (RoundState.VisionStashFinderId), for their notice;
         // older rounds default empty.
-        public const int ProtocolVersion=8;
+        // 9: wave 2026-10-23 starts a new semantic boundary; published version-8 peers are rejected.
+        // Subsequent units append only the version-9 changes they actually land.
+        // PLAYA-8: Cancel can name the interaction its sender saw (GameCommand.TargetId). The host refuses one that names anything
+        // but the player's current interaction ("That action already ended"), with no suspicion, refund or camp seat change. A
+        // Cancel that names nothing keeps its meaning, so a version-8 client's late E would still stop a deck set F just began.
+        // SET-5: Core text names rebindable keys by action and each HUD reads in its own bound keys: poi replies carry {Spin} and
+        // {SpinSides}, the camp vote hint {Slot1}-{Slot3}. A version-8 client would show a host's poi reply tokens raw.
+        // 10: wave 2026-10-24 starts a new semantic boundary; published version-9 peers are rejected.
+        // Subsequent units append only the version-10 changes they actually land.
+        // DANCE-13: a Dj chart is the DJ ride (DjRide), blocks and greys (RhythmNote.Grey) in lanes 0-2 on the stage song's beat; the
+        // host judges each Rhythm input's Direction as the new lane, the DJ stands at the riser's mixer (Catalog.StageDjX/Z), and
+        // RoundState.StageCheerScore/StageCheerUntilWorldSeconds carry the crowd's cheer to every view (-1 in older rounds).
+        // DIALOG-15: a talk is four turns (ConversationTurns), the greeting, small talk, the ask and the close, each with its own
+        // replies ("reply.<topic>.<round>.<style>") and lines. Reply takes turns 0-3 and TalkAck names a retained outcome at
+        // Direction 4, not 3, so a version-9 client's outcome acknowledgment and dismissal would land on the fourth turn instead.
+        // ECON-10: StartSale's Amount is the sale's ask (FairAsk 0, HighAsk 1 or GreedyAsk 2; any other is refused), kept on
+        // InteractionState.Ask beside the host-only ObserverState.RefusesSales, Fair and false in older snapshots; a version-9
+        // client always asks Fair.
+        // ECON-11: a sale's ConversationOutcome carries Result ("SOLD +$N", "NO SALE" or "BUSTED"; "" for other talks and in older
+        // snapshots) and a Notice for every ending, a cancelled sale now delivers one with no reaction, and a handed-back unit is
+        // equipped again when InteractionState.ReservedEquipped says it left the hand (false in older snapshots).
+        // ESC-4: a bust holds the player inside Festivals.SecurityBuilding, and the host refuses a detained step outside it
+        // (Festivals.InHolding), so a version-9 peer would show the old shack and the old spot by the pay desk.
+        // DEV-2: RoundState.TestMode reaches every view (off in older rounds), and the host takes TestMode, TestFree and
+        // TestClearLevel only from a test build's host (TestFree from any detained player).
+        // MINI-10: Mystery Cups' first turn clock starts CupsIntroSeconds (3 s) after the pour, so Booth.TurnAt can lie ahead of
+        // Booth.Seconds, and the tripper's Booth.Hint marks the spiked cup at HunchReliability: one reliability step lower when one
+        // player is at the table.
+        // MUSIC-7: each level's spin seed shuffles two different loops of all seven onto the main and the small stage
+        // (StageMusic.Track), and every view works the pick out from the public SpinSeed. Dances, check and trust dances, poi,
+        // Drum Circle parts (by their booth) and deck sets (where they start) chart to the nearer stage's song, and the DJ set to
+        // the main stage's, so StageTrack 3, 6 and 7 now reach charts and snapshots. A version-9 client would play the old fixed
+        // song and refuse those snapshots.
+        // NET-8: ProtocolGuardTests records both stage fronts and the pick for fixed spin seeds.
+        // HUD-16: snapshots carry each player's own money news (PlayerState.MoneyNewsLog and MoneyNewsSequence, owner-only in
+        // views); a version-9 client ignores it.
+        public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
@@ -171,6 +207,7 @@ namespace Festival.Network
         private double nextCampDiscoverySave;
         private string historyEpoch="",historyError="",outcomeRound="",acknowledgedOutcome="";
         private long historyRevision=-1,dismissedOutcomeSequence;
+        private readonly HashSet<string> quietCommands=new HashSet<string>();
         private DialogueHistoryPacket pendingHistory;
         private double nextHistorySave;
         private readonly Dictionary<string,long> publishedHistory=new Dictionary<string,long>();
@@ -198,6 +235,7 @@ namespace Festival.Network
         /// <summary>CAM-1: whether the view is over your shoulder right now: your setting, except lying down, in a camp visit or on the
         /// Ferris wheel (FestivalThirdPerson.Applies). Your own body is on screen then.</summary>
         public bool ThirdPersonView {get;private set;}
+        bool djViewHeld;
         public double EstimatedSimulationSeconds => State==null?0:State.SimulationSeconds
             +(State.Phase=="Results"||manager==null?0:Math.Max(0,Math.Min(.4,manager.ServerTime.Time-serverClockAtSnapshot)));
         public double EstimatedWorldSeconds => State==null?0:FestivalSimulation.WorldSeconds(State)
@@ -227,7 +265,7 @@ namespace Festival.Network
         private float viewYaw,viewPitch;
         private string lastCampVisit="";
         // TRIP-4: lying on the grass the view drops to LyingEyeHeight and looks up at the sky; getting up looks where it did before.
-        private const float LyingEyeHeight=.3f,LyingPitch=-80;
+        private const float LyingEyeHeight=.3f,LyingPitch=-80,NameTagHeight=2.65f;
         private bool wasLying;private float preLiePitch;
         // MINI-3: a Light Show holds its players' view on the glover (FestivalLightShowView.FacesGlover), kept here and given back after.
         private bool showViewHeld;private float showHeldYaw,showHeldPitch;
@@ -389,7 +427,9 @@ namespace Festival.Network
                 var hello=ReadHello(Encoding.UTF8.GetString(request.Payload));
                 if(hello==null)throw new ArgumentException("Incompatible game version.");
                 bool reconnect=hello.Token!=""&&tokens.TryGetValue(hello.Token,out var unused);
-                if(reconnect && peers.ContainsValue(tokens[hello.Token]))throw new ArgumentException("This session identity is already connected.");
+                // A join still waiting to connect holds its token too, or two quick joins with one token would both drive one player.
+                // A join that never connects holds the token until the transport times it out and PeerDisconnected drops it.
+                if(reconnect && (peers.ContainsValue(tokens[hello.Token])||pending.Values.Any(waiting=>waiting.Token==hello.Token)))throw new ArgumentException("This session identity is already connected.");
                 if(!reconnect && simulation.State.Phase!="Shopping" && simulation.State.Phase!="Lobby")throw new ArgumentException("Round in progress. Join the next round.");
                 if(!reconnect && simulation.State.Players.Count+pending.Count>=8)throw new ArgumentException("Festival full: eight players including host.");
                 pending[request.ClientNetworkId]=hello;response.Approved=true;
@@ -442,7 +482,7 @@ namespace Festival.Network
                 State=packet.State;FollowLocalCommandRound(State.RoundId);snapshotReceivedAt=Time.realtimeSinceStartupAsDouble;serverClockAtSnapshot=packet.ServerSeconds;
             });
             messages.RegisterNamedMessageHandler("festival.command",(sender,reader)=>{
-                if(!IsHost||!peers.TryGetValue(sender,out var id)||!Admit(id,60))return;
+                if(!IsHost||!peers.TryGetValue(sender,out var id)||!inputs.TryGetValue(id,out var peer)||!Admit(peer,false,Time.realtimeSinceStartupAsDouble))return;
                 var command=ReadJson<GameCommand>(reader,2048);if(command==null)return;
                 var result=simulation.Execute(id,command);SendJson("festival.result",sender,CorrelatedResult(result,command.Id));
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -450,7 +490,7 @@ namespace Festival.Network
 #endif
             });
             messages.RegisterNamedMessageHandler("festival.move",(sender,reader)=>{
-                if(!IsHost||!peers.TryGetValue(sender,out var id)||!Admit(id,90))return;
+                if(!IsHost||!peers.TryGetValue(sender,out var id)||!inputs.TryGetValue(id,out var peer)||!Admit(peer,true,Time.realtimeSinceStartupAsDouble))return;
                 var input=ReadJson<MoveIntent>(reader,512);if(input==null)return;AcceptInput(id,input);
             });
             messages.RegisterNamedMessageHandler("festival.result",(sender,reader)=>{
@@ -458,18 +498,27 @@ namespace Festival.Network
                 var result=ReadJson<CommandResult>(reader,2048);if(result!=null)ReceiveLocalCommandResult(result);
             });
             messages.RegisterNamedMessageHandler("festival.history",(sender,reader)=>{
-                if(!IsHost||!peers.TryGetValue(sender,out var id))return;
-                var packet=ReadJson<DialogueHistoryPacket>(reader,96*1024);var player=simulation.Player(id);
-                if(packet==null||player==null)return;MergeHistorySeed(player,packet.Seen);
+                // Checked before the 96 KB read, so a repeated seed costs the host one lookup.
+                if(!IsHost||!peers.TryGetValue(sender,out var id)||!inputs.TryGetValue(id,out var peer)||peer.HistorySeeded)return;
+                SeedHistory(peer,simulation.Player(id),ReadJson<DialogueHistoryPacket>(reader,96*1024));
             });
             messages.RegisterNamedMessageHandler("festival.history-update",(sender,reader)=>{
                 ReceiveAcknowledgedHistory(sender,ReadJson<DialogueHistoryPacket>(reader,96*1024));
             });
         }
-        bool Admit(string id,int limit)
+        // Separate budgets, so a client's 20 moves a second cannot eat the 60 commands that rhythm presses and releases need.
+        // A refused message still counts.
+        internal static bool Admit(PeerInput peer,bool move,double now)
         {
-            if(!inputs.TryGetValue(id,out var peer))return false;double now=Time.realtimeSinceStartupAsDouble;
-            if(now-peer.Window>=1){peer.Window=now;peer.Commands=0;}return ++peer.Commands<=limit;
+            if(move){if(now-peer.MoveWindow>=1){peer.MoveWindow=now;peer.Moves=0;}return ++peer.Moves<=90;}
+            if(now-peer.Window>=1){peer.Window=now;peer.Commands=0;}return ++peer.Commands<=60;
+        }
+        // A connection seeds its dialogue history once, on connect. A repeat would bump DialogueRevision, and the host would then
+        // send the whole history back.
+        internal static bool SeedHistory(PeerInput peer,PlayerState player,DialogueHistoryPacket packet)
+        {
+            if(peer==null||peer.HistorySeeded)return false;peer.HistorySeeded=true;
+            return packet!=null&&player!=null&&MergeHistorySeed(player,packet.Seen);
         }
         private static T ReadJson<T>(FastBufferReader reader,int maxBytes) where T:class
         {
@@ -490,10 +539,14 @@ namespace Festival.Network
         public void Command(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)
             =>SendCommand(kind,target,item,amount,direction,time);
         /// <summary>The exact issued identity lets local callers match a rejection even when another reply arrives immediately afterward.</summary>
-        public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)
+        public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)=>Send(kind,target,item,amount,direction,time);
+        // A quiet command is a talk acknowledgement, which goes out on its own as lines show: accepted, it leaves the message, so a
+        // sale's or a buy's result stays up.
+        string Send(string kind,string target="",string item="",int amount=0,int direction=0,double time=0,bool quiet=false)
         {
             if(!Connected||LocalPlayer==null)return "";
             var command=new GameCommand{Id=Guid.NewGuid().ToString("N"),Kind=kind,TargetId=target??"",ItemId=item??"",Amount=amount,Direction=direction,TimeSeconds=time};
+            if(quiet)quietCommands.Add(command.Id);
             if(IsHost)
             {
                 var result=simulation.Execute(LocalPlayerId,command);FollowLocalCommandRound(simulation.State.RoundId);ReceiveLocalCommandResult(CorrelatedResult(result,command.Id));
@@ -517,7 +570,8 @@ namespace Festival.Network
         }
         void ReceiveLocalCommandResult(CommandResult result)
         {
-            Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+            bool quiet=result.Id!=null&&quietCommands.Remove(result.Id);
+            if(!quiet||!result.Accepted)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
             lastLocalCommandResult=CopyResult(result);
             var listeners=LocalCommandResultReceived;
             if(listeners!=null)foreach(Action<CommandResult> listener in listeners.GetInvocationList())listener(CopyResult(result));
@@ -744,7 +798,7 @@ namespace Festival.Network
             if(interaction==null||interaction.PlayerId!=LocalPlayerId||interaction.Turns.Count==0)return;
             string delivery=interaction.Id+":"+(interaction.Turns.Count-1);
             if(acknowledgedDialogue==delivery)return;acknowledgedDialogue=delivery;
-            Command("TalkAck",interaction.Id,direction:interaction.Turns.Count-1);
+            Send("TalkAck",interaction.Id,direction:interaction.Turns.Count-1,quiet:true);
         }
         // Screen owners consume this delivery after the chart/thread closes, then dismiss it explicitly on Escape.
         public ConversationOutcome PendingConversationOutcome
@@ -766,13 +820,13 @@ namespace Festival.Network
         {
             if(outcome==null||outcome.RoundId!=State?.RoundId||LocalPlayer?.ConversationOutcomes?.Exists(o=>o.DeliveryId==outcome.DeliveryId)!=true)return;
             if(acknowledgedOutcome==outcome.DeliveryId)return;acknowledgedOutcome=outcome.DeliveryId;
-            Command("TalkAck",outcome.InteractionId,direction:FestivalSimulation.ConversationTurns);
+            Send("TalkAck",outcome.InteractionId,direction:FestivalSimulation.ConversationTurns,quiet:true);
         }
         public void DismissConversationOutcome(string deliveryId)
         {
             var outcome=LocalPlayer?.ConversationOutcomes?.Find(o=>o.DeliveryId==deliveryId&&o.RoundId==State.RoundId);
             if(outcome==null)return;outcomeRound=State.RoundId;dismissedOutcomeSequence=Math.Max(dismissedOutcomeSequence,outcome.Sequence);
-            Command("TalkAck",outcome.InteractionId,amount:1,direction:FestivalSimulation.ConversationTurns);
+            Send("TalkAck",outcome.InteractionId,amount:1,direction:FestivalSimulation.ConversationTurns,quiet:true);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             simulation?.ChatDiagnostic?.Invoke("OutcomeDismissed","Talk",State.RoundId,State.SimulationSeconds);
 #endif
@@ -911,6 +965,8 @@ namespace Festival.Network
             int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
             var view=new RoundState{SchemaVersion=source.SchemaVersion,Seed=source.Seed,RoundId=source.RoundId,Phase=source.Phase,Result=source.Result,HostPlayerId=source.HostPlayerId,
                 SimulationSeconds=source.SimulationSeconds,ElapsedSeconds=source.ElapsedSeconds,DurationSeconds=source.DurationSeconds,LaunchAtSeconds=source.LaunchAtSeconds,Tick=source.Tick,TransactionSequence=source.TransactionSequence,GrossSales=source.GrossSales,LevelSales=source.LevelSales,StashCash=source.StashCash,CampMusicTrack=source.CampMusicTrack,
+                // Public: every view shows the crowd's cheer for the stage DJ.
+                StageCheerScore=source.StageCheerScore,StageCheerUntilWorldSeconds=source.StageCheerUntilWorldSeconds,
                 CampEggs=source.CampEggs.ConvertAll(e=>e.Copy()),
                 ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
@@ -919,7 +975,7 @@ namespace Festival.Network
                 // POLO-3: a Ferris wheel rider at night makes out only the square each lost friend is in, never their spot.
                 WheelFriendAreas=FestivalSimulation.WheelFriendAreas(source,viewer),
                 VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
-                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,
+                FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,TestMode=source.TestMode,
                 TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
                 // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
@@ -951,7 +1007,7 @@ namespace Festival.Network
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
-                if(p.Id!=viewer){copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
+                if(p.Id!=viewer){copy.MoneyNewsLog=new List<MoneyNews>();copy.MoneyNewsSequence=0;copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
             }
             if(!spirit)
             {
@@ -998,10 +1054,23 @@ namespace Festival.Network
         }
         /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
-        // Local click prediction yields to the captured host state throughout the game and banner.
-        private bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
+        /// <summary>A festivalgoer near the stage reacts to the DJ's last phrase while its cheer lasts. The Id's hash picks a fixed half
+        /// to sway at a middling score, so every view shows the same fans moving.</summary>
+        public static string StageCrowdPose(RoundState s,NpcState n)=>n.Kind=="Wook"&&(n.Mode=="Blending"||n.Mode=="Distracted")?StageCrowdPose(s,n.Id,n.X,n.Z,NpcPose(n)):NpcPose(n);
+        /// <summary>The same cheer for anyone at x,z who otherwise holds `pose`: the scenery pods in front of the stage too.</summary>
+        public static string StageCrowdPose(RoundState s,string id,float x,float z,string pose)
+        {
+            if(s==null||s.StageCheerScore<0||FestivalSimulation.WorldSeconds(s)>=s.StageCheerUntilWorldSeconds)return pose;
+            if(Vector2.Distance(new Vector2(x,z),new Vector2(Catalog.StageTakeoverX,Catalog.StageTakeoverZ))>Catalog.StageCheerRange)return pose;
+            if(s.StageCheerScore>=.75)return "Cheer";
+            int hash=17;foreach(char c in id)hash=unchecked(hash*31+c);
+            return s.StageCheerScore>=.4?((hash&1)==0?"Dance":pose):"Idle";
+        }
+        // Local click prediction yields to the captured host state throughout the game and banner. Internal: the HUD sets the
+        // first-person hands during a pending gear swap after this session does, so it must pass the same spins.
+        internal bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
         // POI-7: left click wins when both are held, as on the host (ApplyMovement).
-        private bool PresentedPoiSpinSides(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpinSides;
+        internal bool PresentedPoiSpinSides(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpinSides;
         private void UpdateActors()
         {
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();
@@ -1015,15 +1084,19 @@ namespace Festival.Network
                 bool wheel=p.VisualWheelSince>=0&&world!=null;
                 var at=togetherInside?new Vector3(p.CampInteriorX,0,p.CampInteriorZ):wheel?world.WheelSeat(State,p,15):new Vector3(p.X,0,p.Z);
                 // A debrief winner wears their awards over their head until the next level's results (HUD-3).
-                Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,p.VisualPose=="Dj"?0:wheel?180:p.Yaw,
+                // The rules keep the DJ in 2-D at the mixer spot, so the view lifts them onto the riser.
+                bool djing=p.VisualPose=="Dj"&&p.Life=="Alive";
+                Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,djing?180:wheel?180:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
                     p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
-                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:at.y);
+                    string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:djing?FestivalWorld.StageDjHeight:at.y);
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)
                 {
                     // Before anything here can remake a held item, so the body's scale and its RideScale always agree.
                     exchangeCharacter.Ride(wheel?FestivalTwistVisuals.RiderScale:1);
+                    // A rider's tag keeps its own size and height over the shrunk body, so it floats above the gondola's roof, not inside it.
+                    var tag=names[p.Id].transform.parent;tag.localPosition=Vector3.up*NameTagHeight/exchangeCharacter.RideScale;tag.localScale/=exchangeCharacter.RideScale;
                     var peer=string.IsNullOrEmpty(p.VisualOfferTarget)?State.Players.Find(other=>other.VisualOfferTarget==p.Id):State.Players.Find(other=>other.Id==p.VisualOfferTarget);
                     bool exchange=peer!=null&&peer.Connected&&p.Life=="Alive"&&peer.Life=="Alive"&&p.CampVisitId==peer.CampVisitId;
                     var contact=exchange?new Vector3(togetherInside?(p.CampInteriorX+peer.CampInteriorX)*.5f:(p.X+peer.X)*.5f,1.08f,togetherInside?(p.CampInteriorZ+peer.CampInteriorZ)*.5f:(p.Z+peer.Z)*.5f):Vector3.zero;
@@ -1044,10 +1117,11 @@ namespace Festival.Network
                 if(p.VisualPose=="Dance"&&p.VisualDanceStepSequence>previousStep&&actors[p.Id].TryGetComponent<FestivalCharacter>(out var dancer))dancer.PulseDanceStep(p.VisualDanceStepDirection);
                 displayedDanceSteps[p.Id]=p.VisualDanceStepSequence;
             }
+            world?.SetStageTakeover(State.Players.Exists(p=>p.VisualPose=="Dj"&&p.Life=="Alive"));world?.SetStageCheer(State);
             // Festivalgoers, lost friends, drops and bodies while the festival shows: MINI-1's freeze-frame too, each where they stood.
             if(!spirit && FestivalWorld.ShowsFestival(State.Phase))
             {
-                foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,NpcPose(n),n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false,
+                foreach(var n in State.Npcs){Actor(n.Id,n.Kind=="Cop"?"SECURITY":"Festivalgoer",n.X,n.Z,n.Yaw,n.Kind=="Cop"?new Color(.25f,.4f,.7f):new Color(.8f,.5f,.3f),.85f,StageCrowdPose(State,n),n.Kind=="Cop"?"Security":"Attendee",n.Kind=="Cop"?0:(float)n.Suspicion/100f,false,n.HighlyIntoxicated,n.RedEyes,"",false,
                     filming:n.Twist==FestivalSimulation.Influencer,recording:local.VisualFilmedBy.Contains(n.Id));seen.Add(n.Id);}
                 // A lost friend (a big crew's two, CROWD-2) shows once found, or once the view knows their spot and they are within 12 m.
                 // The Ferris wheel draws nobody (POLO-3): its rider reads only a rough area on the objective card.
@@ -1074,7 +1148,7 @@ namespace Festival.Network
                     if(go==null){go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.transform.SetParent(actorRoot);var c=go.GetComponent<Collider>();c.enabled=false;Destroy(c);}
                 }
                 tr=go.transform;tr.position=new Vector3(x,0,z);actors[id]=tr;
-                var textObject=new GameObject("Label");textObject.transform.SetParent(tr,false);textObject.transform.localPosition=new Vector3(0,2.65f,0);
+                var textObject=new GameObject("Label");textObject.transform.SetParent(tr,false);textObject.transform.localPosition=Vector3.up*NameTagHeight;
                 var bubble=GameObject.CreatePrimitive(PrimitiveType.Cube);bubble.name="Name bubble";bubble.transform.SetParent(textObject.transform,false);
                 bubble.transform.localPosition=new Vector3(0,0,.035f);bubble.transform.localScale=new Vector3(.9f,.29f,.05f);
                 bubble.GetComponent<Renderer>().sharedMaterial=FestivalArtView.MaterialFor("Dark");
@@ -1085,7 +1159,7 @@ namespace Festival.Network
                 names[id]=text;
                 foreach(var child in textObject.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
             }
-            var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.PlayerDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);character.SetFilming(filming,recording);}
+            var character=tr.GetComponent<FestivalCharacter>();if(character!=null){character.Pose=pose;character.DjConsole=pose=="Dj"?world?.StageDjConsole:null;character.Threat=threat;character.SetLittleSpoon(littleSpoon);character.SetHighlyIntoxicated(highlyIntoxicated);character.SetRedEyes(redEyes);character.SetEquippedItem(equippedItem);character.SetFilming(filming,recording);}
             tr.gameObject.SetActive(true);tr.localScale=height<=.25f?Vector3.one*(tr.name.StartsWith("Festival") ? .7f : .3f):Vector3.Scale(Vector3.one*.82f,character?.ShapeScale??Vector3.one);var target=new Vector3(x,height<=.25f?.2f:y,z);
             tr.position=Vector3.Distance(tr.position,target)>5?target:Vector3.Lerp(tr.position,target,1-Mathf.Exp(-15*Time.unscaledDeltaTime));tr.rotation=Quaternion.Euler(0,angle,0);
             var nameTag=names[id];nameTag.text=label;nameTag.transform.parent.rotation=ViewCamera.transform.rotation;
@@ -1138,15 +1212,19 @@ namespace Festival.Network
             }
             else if(!watching)ReleaseShowView();
             if(watching){yaw=glover+Mathf.Clamp(Mathf.DeltaAngle(glover,yaw),-FestivalLightShowView.LookDegrees,FestivalLightShowView.LookDegrees);pitch=0;}
-            ThirdPersonView=!watching&&FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0);
+            // The DJ must see themselves at the decks and the crowd, so the view is held whatever the camera setting, mouse look included.
+            bool djing=player.VisualPose=="Dj";
+            if(djing){djViewHeld=true;yaw=viewYaw=180;pitch=viewPitch=FestivalDjRide.ViewPitch;}
+            else if(djViewHeld){djViewHeld=false;pitch=viewPitch=0;}
+            ThirdPersonView=!watching&&(djing||FestivalThirdPerson.Applies(Profile.Data.ThirdPerson,lying,player.CampVisitId!="",player.VisualWheelSince>=0));
             if(firstPersonHands!=null){firstPersonHands.gameObject.SetActive(State!=null && (State.Phase=="Playing"||State.Phase=="Shopping") && player.VisualPose!="Dance" && !lying && !ThirdPersonView);firstPersonHands.ReducedMotion=Profile.Data.ReducedMotion;firstPersonHands.SetState(player,State.SimulationSeconds,State.Transfers.Exists(t=>t.ToId==player.Id),PresentedPoiSpin(player),FestivalSimulation.ArtCarOf(State,player.Id)>=0,PresentedPoiSpinSides(player));}
             var visit=CampFeatures.Find(player.CampVisitId);
             // POLO-5: on the Ferris wheel the eye rides seated in the rider's gondola, under its canopy, aimed ahead of the seat for
             // the eye's glide (rate 20) so it keeps it there as it turns, at any frame rate (POLO-7); the mouse still aims it, and the
-            // turn ends back by the base.
+            // turn ends back by the base. In the headliner's chair it sits down with the body, by the pose friends see.
             var target=visit!=null?new Vector3(player.CampInteriorX,1.65f,player.CampInteriorZ)
                 :player.VisualWheelSince>=0&&world!=null?world.WheelSeat(State,player,20)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight
-                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:1.65f,player.Z);
+                :new Vector3(player.X,player.Life=="Downed"?.55f:lying?LyingEyeHeight:player.VisualPose==FestivalSimulation.CampChairPose?FestivalCampEggView.ChairEyeHeight:djing?FestivalWorld.StageDjHeight+1.65f:1.65f,player.Z);
             EyePosition=Vector3.Distance(EyePosition,target)>5?target:Vector3.Lerp(EyePosition,target,1-Mathf.Exp(-20*Time.unscaledDeltaTime));
             float roll=0;bool shake=Profile.Data.CameraShake;
             if(!Profile.Data.ReducedMotion&&shake)foreach(var effect in player.Effects)roll+=FestivalTrip.Sway(effect.Id,(float)State.SimulationSeconds);
@@ -1181,16 +1259,17 @@ namespace Festival.Network
             return true;
         }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        private (string,int,bool,bool,bool) tracedLook=("",-1,false,false,false);
-        // Opt-in: the dose look the camera holds, each time its substance, dose, showing or a comfort setting changes.
+        private (string,int,bool,bool,bool,bool) tracedLook=("",-1,false,false,false,false);
+        // Opt-in: the dose look the camera holds, each time its substance, dose, showing or a comfort setting changes, and at each edge
+        // of a Pony Dust stall on the camera's own estimated clock, so the roll printed is the roll the camera used then.
         private void TraceTripLook(PlayerState player,FestivalTrip.Perception trip)
         {
             ActiveEffect dose=null;foreach(var effect in player.Effects)if(effect.Id==FestivalSimulation.DoseEffect){dose=effect;break;}
-            var look=(dose?.Substance??"",dose?.Intensity??0,Profile.Data.ReducedMotion,FestivalWorld.ShowsFestival(State.Phase)&&player.Life!="Spirit",Profile.Data.CameraShake);
+            var look=(dose?.Substance??"",dose?.Intensity??0,Profile.Data.ReducedMotion,FestivalWorld.ShowsFestival(State.Phase)&&player.Life!="Spirit",Profile.Data.CameraShake,Intoxication.Stall(player,EstimatedSimulationSeconds)>0);
             if(look==tracedLook)return;
             tracedLook=look;
             DevelopmentDiagnostics.GraphicsEvent("Trip","look","substance="+look.Item1+" dose="+look.Item2+" reduced="+look.Item3+" share="+(look.Item3?FestivalTrip.ReducedMotionShare:1).ToString("F2")
-                +" shown="+look.Item4+" camera_shake="+look.Item5+" roll="+trip.Roll.ToString("F2")+" saturation="+trip.Saturation.ToString("F1"));
+                +" shown="+look.Item4+" camera_shake="+look.Item5+" stall="+look.Item6+" roll="+trip.Roll.ToString("F2")+" saturation="+trip.Saturation.ToString("F1"));
         }
 #endif
         private void TransportFailed(){if(!closing)Fail("Network transport failed. Leave and try another port or host address.");}
@@ -1219,7 +1298,7 @@ namespace Festival.Network
             }
             State=null;simulation=null;LocalPlayerId="";peers.Clear();pending.Clear();inputs.Clear();loadedRound="";lastPhase="";lastCampVisit="";wasLying=false;MenuOpen=true;accumulator=0;
             FollowCampEggs(null);FollowPlayerEvents(null,"");
-            nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";
+            nextCampDiscoverySave=0;campDiscoveryError="";pendingHistory=null;publishedHistory.Clear();historyEpoch="";historyRevision=-1;historyError="";nextHistorySave=0;outcomeRound="";dismissedOutcomeSequence=0;acknowledgedDialogue="";acknowledgedOutcome="";quietCommands.Clear();
             // MENU-2: the title shows the opening line, not the game's last reply (Fail sets its reason after this), and the next game
             // looks straight ahead as the first did, not up from the grass or round a tent's inside (TRIP-8).
             ReleaseShowView();Message=OpeningMessage;yaw=pitch=viewYaw=viewPitch=0;
