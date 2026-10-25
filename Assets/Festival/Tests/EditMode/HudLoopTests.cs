@@ -333,9 +333,9 @@ namespace Festival.Tests
             you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+NoStock),"gear is not stock");
             you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});sam.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=2});
-            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+"Stick with Sam: they see the buyers. Walk up to one and press E to offer."));
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press E to offer."));
-            Assert.That(FestivalHudText.ObjectiveDetail(s,sam,false,"F","R"),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press R to offer."),"the bound Interact key");
+            Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Left+"Stick with Sam: they see the buyers. Walk up to one and press E to offer, or ask High or Greedy for more."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press E to offer, or ask High or Greedy for more."));
+            Assert.That(FestivalHudText.ObjectiveDetail(s,sam,false,"F","R"),Is.EqualTo(Left+"A green ball in a green ring is a real buyer: walk up and press R to offer, or ask High or Greedy for more."),"the bound Interact key");
             s.LevelSales=30;
             const string Met="Anyone can end the day at the way back to camp, or keep selling until sundown.";
             Assert.That(FestivalHudText.ObjectiveDetail(s,you),Is.EqualTo(Met));
@@ -360,21 +360,40 @@ namespace Festival.Tests
             you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});
             Assert.That(Listed(s),Does.StartWith(Buy+Chat),"gear is not stock");
             you.Inventory.Add(new ItemStack{ItemId="stock_mushrooms",Count=1});
-            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys"+Chat+" | Dance with festivalgoer | "+Talk+" | "+Buy),"holding stock by day, E offers it; buying more stays listed");
+            const string Asks=" | Ask high  •  $15 | Ask greedy  •  $20",Offer="Offer Fun Guys  •  Fair $10";
+            Assert.That(Listed(s),Is.EqualTo(Offer+Chat+Asks+" | Dance with festivalgoer | "+Talk+" | "+Buy),"holding stock by day, E offers it at a fair price, the pushed asks next; buying more stays listed");
             var offer=FestivalHudText.FestivalgoerActions(s,you,goer)[0].Command;
             Assert.That(new[]{offer.Kind,offer.TargetId,offer.ItemId},Is.EqualTo(new[]{"StartSale","goer_2","stock_mushrooms"}),"E starts the sale of what you hold, with them");
             // K1: beside someone who has sold to you, a seller, who never buys: E buys again, and the offer, a sure refusal, goes last.
-            Assert.That(Listed(s,true),Is.EqualTo(Buy+Chat+" | Dance with festivalgoer | "+Talk+" | Offer Fun Guys"),"beside who sold to you, E buys again");
+            Assert.That(Listed(s,true),Is.EqualTo(Buy+Chat+" | Dance with festivalgoer | "+Talk+" | "+Offer+Asks),"beside who sold to you, E buys again");
             Assert.That(FestivalHudText.FestivalgoerActions(s,you,goer,true)[0].Command.Kind,Is.EqualTo("StartBuy"),"E asks them for more");
             goer.CanTalk=false;
-            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys | Dance with festivalgoer | "+Buy),"someone keeping to themselves has no chat");
+            Assert.That(Listed(s),Is.EqualTo(Offer+Asks+" | Dance with festivalgoer | "+Buy),"someone keeping to themselves has no chat");
             goer.CanTalk=true;s.TripperId="you";s.Visions.Add(new VisionState{Id="goer_vision",Kind="Buyer",NpcId=goer.Id});
-            Assert.That(Listed(s),Is.EqualTo("Offer Fun Guys | Dance with festivalgoer | "+Talk+" | "+Buy),"F checks the tripper's vision about them, so nothing says F chats");
+            Assert.That(Listed(s),Is.EqualTo(Offer+Asks+" | Dance with festivalgoer | "+Talk+" | "+Buy),"F checks the tripper's vision about them, so nothing says F chats");
             var night=Level(0,1);night.Players.AddRange(s.Players);night.Npcs.Add(goer);
-            Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | Offer Fun Guys | "+Buy),"at night E dances, stock or not");
+            Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | "+Offer+Asks+" | "+Buy),"at night E dances, stock or not");
             Assert.That(Listed(night,true),Is.EqualTo(Listed(night)),"at night E dances beside who sold to you too");
             you.Inventory.Clear();
             Assert.That(Listed(night),Is.EqualTo("Dance with festivalgoer"+Chat+" | "+Talk+" | "+Buy));
+        }
+
+        // Holding stock, the offer comes as three asks, each at what a full sale would pay you (FestivalSimulation.SalePrice:
+        // the dose and a VIP zone, never a double buyer's vision), in your money: E offers it at a fair price, and High or Greedy ask
+        // half as much again or double, each its own StartSale ask.
+        [Test] public void TheOfferNamesEachAskAtItsPrice()
+        {
+            var s=Level(0,0);var you=Crew(s,"you","You");Crew(s,"sam","Sam");s.TripperId="sam";s.Doses.Add(new PlayerDose{PlayerId="sam",Dose=2});
+            var goer=new NpcState{Id="goer_2"};s.Npcs.Add(goer);you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            var offers=FestivalHudText.FestivalgoerActions(s,you,goer).FindAll(a=>a.Command.Kind=="StartSale");
+            Assert.That(offers.ConvertAll(a=>a.Label),Is.EqualTo(new[]{"Offer Tongue Stamps  •  Fair $13","Ask high  •  $19","Ask greedy  •  $25"}),"each ask at dose 2's x1.25");
+            Assert.That(offers.ConvertAll(a=>a.Command.Amount),Is.EqualTo(new[]{FestivalSimulation.FairAsk,FestivalSimulation.HighAsk,FestivalSimulation.GreedyAsk}));
+            Assert.That(offers.TrueForAll(a=>a.Command.TargetId=="goer_2"&&a.Command.ItemId=="stock_lsd"),Is.True,"each offers what you hold, to them");
+            s.Visions.Add(new VisionState{Id="double",Kind="DoubleBuyer",NpcId="goer_2"});
+            Assert.That(FestivalHudText.FestivalgoerActions(s,you,goer)[0].Label,Does.StartWith("Offer Tongue Stamps  •  Fair $13"),"a double buyer's vision is the tripper's to check, so the price never shows it");
+            var playa=Level(1,0);var sam=Crew(playa,"sam","Sam");sam.Ordinal=1;sam.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});playa.Npcs.Add(goer);
+            Assert.That(FestivalHudText.FestivalgoerActions(playa,sam,goer).FindAll(a=>a.Command.Kind=="StartSale").ConvertAll(a=>a.Label),
+                Is.EqualTo(new[]{"Offer Tongue Stamps  •  Fair 10 ramen packets","Ask high  •  15 ramen packets","Ask greedy  •  20 ramen packets"}),"in Sam's ramen on Ember Playa");
         }
 
         // ECON-3: Q uses what you hold, and using stock is taking it yourself: the unit is gone and you trip for a minute. A new player

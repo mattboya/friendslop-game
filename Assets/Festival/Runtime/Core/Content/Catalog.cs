@@ -32,8 +32,8 @@ namespace Festival.Core
             // buyers and encores raise it, so the text names no ceiling; a sloppy sale that lands pays less ($5 at dose 1), so the
             // floor is a clean sale's. "$N" stays a token Ember Playa's odd-object money converts. ECON-6 adds one camp starter;
             // festivalgoers remain the source of further stock (StockBuys.cs).
-            Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up, or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
-            Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up, or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
+            Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up; ask High or Greedy for more. Or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
+            Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up; ask High or Greedy for more. Or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
             Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
             Item("confetti", "Confetti cannon", "Turns calm festivalgoers within 8 m to the burst for 4 s; accusers and swarms ignore it. Free party trick at camp.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
             Item("merch_bag", "Official merch bag", "Hide stock from casual inspection; witnessed sales and searches still count.",5,1,"Equipment","Passive","Self",0,0,0,false),

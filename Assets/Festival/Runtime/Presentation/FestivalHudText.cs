@@ -92,6 +92,7 @@ namespace Festival.Presentation
         // ECON-3 (Matt: "i dont even know how to sell"): with no stock, where it comes from (ECON-2: festivalgoers, some of them narcs).
         // Holding some, the tripper is pointed at a buyer vision (a green ball) whose check came back true (a green ring, VISION-5): a
         // true narc vision is ringed green too, so the ring alone would send them to a narc. The crew stick with the tripper.
+        const string AskMore=", or ask High or Greedy for more.";
         static string NextStep(RoundState s,PlayerState p,string interact)
         {
             if(FestivalGuidance.HasReservedSale(s,p))return "Finish this deal: your offered unit is reserved until it ends.";
@@ -102,8 +103,8 @@ namespace Festival.Presentation
                     :"You have nothing to sell: return lost property at the lost-property desk for "+Money(s,p,5)+", then buy from festivalgoers; some are narcs.";
                 return "You have nothing to sell: buy from festivalgoers, and some are narcs.";
             }
-            if(p.Id==s.TripperId)return "A green ball in a green ring is a real buyer: walk up and press "+interact+" to offer.";
-            return "Stick with "+(s.Players.Find(x=>x.Id==s.TripperId)?.Name??"the tripper")+": they see the buyers. Walk up to one and press "+interact+" to offer.";
+            if(p.Id==s.TripperId)return "A green ball in a green ring is a real buyer: walk up and press "+interact+" to offer"+AskMore;
+            return "Stick with "+(s.Players.Find(x=>x.Id==s.TripperId)?.Name??"the tripper")+": they see the buyers. Walk up to one and press "+interact+" to offer"+AskMore;
         }
         // Downed, detained and spirit players keep the guidance about getting back on their feet. A minigame's pot counts toward
         // the quota, so the quota stays up while one runs.
@@ -569,12 +570,16 @@ namespace Festival.Presentation
             var stock=p.Inventory.Find(i=>i.ItemId==p.EquippedItemId&&i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock")
                 ??p.Inventory.Find(i=>i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock");
             bool day=!Festivals.For(s).Night;
-            if(stock!=null)actions.Insert(day&&!soldToYou?0:actions.Count,("Offer "+Catalog.FindItem(stock.ItemId).Name,new GameCommand{Kind="StartSale",TargetId=n.Id,ItemId=stock.ItemId}));
+            if(stock!=null){int at=day&&!soldToYou?0:actions.Count;for(int ask=FestivalSimulation.FairAsk;ask<=FestivalSimulation.GreedyAsk;ask++)actions.Insert(at+ask,(OfferAction(s,p,n,stock.ItemId,ask),new GameCommand{Kind="StartSale",TargetId=n.Id,ItemId=stock.ItemId,Amount=ask}));}
             actions.Insert(FestivalGuidance.NeedsStock(s,p)||day&&soldToYou?0:actions.Count,(BuyAction(s,p,n.Id),new GameCommand{Kind="StartBuy",TargetId=n.Id,ItemId=FestivalSimulation.SellerStock(n.Id)}));
             if(n.CanTalk&&CheckTarget(s,p)==null)actions[0]=(actions[0].Label+Dot+chat+" CHAT",actions[0].Command);
             return actions;
         }
 
+        /// <summary>A sale's three asks by name, as the offer and the talk's title line say them.</summary>
+        public static readonly string[] AskNames={"Fair","High","Greedy"};
+        /// <summary>"Offer Tongue Stamps  •  Fair $10", "Ask high  •  $15" or "Ask greedy  •  $20", in the viewer's money.</summary>
+        public static string OfferAction(RoundState s,PlayerState viewer,NpcState buyer,string item,int ask){string price=Money(s,viewer,FestivalSimulation.SalePrice(s,viewer,buyer,ask));return ask==FestivalSimulation.FairAsk?"Offer "+Catalog.FindItem(item).Name+Dot+AskNames[ask]+" "+price:"Ask "+AskNames[ask].ToLowerInvariant()+Dot+price;}
         /// <summary>ECON-2: beside any festivalgoer, "Buy Tongue Stamps  •  $5": the one kind they would sell, read off their id alone
         /// (FestivalSimulation.SellerStock) so the label gives no role away, at its price in the viewer's money.</summary>
         public static string BuyAction(RoundState s,PlayerState viewer,string npcId){var item=Catalog.FindItem(FestivalSimulation.SellerStock(npcId));return "Buy "+item.Name+Dot+Money(s,viewer,item.Price);}

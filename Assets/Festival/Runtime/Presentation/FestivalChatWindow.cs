@@ -52,8 +52,9 @@ namespace Festival.Presentation
         public static Color Colour(float going)=>going<.5f?Color.Lerp(ColdColor,IffyColor,going/.5f):Color.Lerp(IffyColor,VibingColor,(going-.5f)/.5f);
         /// <summary>Their reaction bubble's colour: the meter's, half way from their sage, so the ink still reads on it.</summary>
         public static Color ReactionColour(float going)=>Color.Lerp(TheirBubble,Colour(going),.5f);
-        /// <summary>The score a talk needs, which the meter marks: a buy's FestivalSimulation.BuyScore; -1 for none.</summary>
-        public static float NeedFor(InteractionState talk)=>talk!=null&&talk.Kind=="Buy"?(float)FestivalSimulation.BuyScore:-1;
+        /// <summary>The score a talk needs, which the meter marks: a buy's FestivalSimulation.BuyScore, a sale's full price at its ask
+        /// (FestivalSimulation.SaleNeeds); -1 for none.</summary>
+        public static float NeedFor(InteractionState talk)=>talk?.Kind=="Buy"?(float)FestivalSimulation.BuyScore:talk?.Kind=="Sale"?(float)FestivalSimulation.SaleNeeds(talk.Ask):-1;
         // Their typed line's hidden rest keeps its place, so the bubble doesn't grow as the letters come.
         const string Hidden="<color=#00000000>";
 
@@ -137,9 +138,14 @@ namespace Festival.Presentation
         public static bool TakesReplies(RoundState s,PlayerState p){var chat=LiveChat(s,p);return chat!=null&&(chat.Kind!="ConfirmChat"||chat.Chat.Questions.Length>0);}
         /// <summary>Who you're talking to: "FESTIVALGOER  •  WOOK" by their persona (DialogueGrammar.PersonaFor), "VIP GUARD" for
         /// Palm Mirage's guard, and "VIP GUARD  •  TALKING YOUR WAY IN" for the rope chat, which checks nothing (POLO-4). DIALOG-3: a
-        /// talk says what it is for instead, and never names their persona, which is theirs to give away in how they talk.</summary>
-        public static string HeaderFor(RoundState s,InteractionState chat)
+        /// talk says what it is for instead, and never names their persona, which is theirs to give away in how they talk. A sale
+        /// names its ask at its price in the viewer's money and the score it needs for that price, "SELL  •  GREEDY $20  •  NEEDS 88%";
+        /// with no viewer it says only what it is for.</summary>
+        public static string HeaderFor(RoundState s,InteractionState chat,PlayerState viewer=null)
         {
+            if(chat.Kind=="Sale"&&viewer!=null)
+                return ("SELL  •  "+FestivalHudText.AskNames[chat.Ask]+" "+FestivalHudText.Money(s,viewer,FestivalSimulation.SalePrice(s,viewer,s.Npcs.Find(n=>n.Id==chat.TargetId),chat.Ask))
+                    +"  •  NEEDS "+Math.Round(FestivalSimulation.SaleNeeds(chat.Ask)*100,MidpointRounding.AwayFromZero)+"%").ToUpperInvariant();
             switch(chat.Kind){case "Conversation":return TalkHeader;case "Sale":return SellHeader;case "Buy":return BuyHeader;case "Police":return SecurityHeader;}
             string who=Speaker(s,chat);return who!="VIP GUARD"?"FESTIVALGOER  •  "+who:chat.Chat.Questions.Length==0?who+"  •  TALKING YOUR WAY IN":who;
         }
@@ -314,7 +320,7 @@ namespace Festival.Presentation
             {
                 var chat=live.Chat;followedRound=s.RoundId;followedStart=live.StartSeconds;threadId="";target=live.TargetId;
                 // A talk's mark is who they are, F for a festivalgoer or S for security, never their persona.
-                Begin(live.Id,HeaderFor(s,live),talk?(live.Kind=="Police"?"S":"F"):Speaker(s,live).Substring(0,1),now);
+                Begin(live.Id,HeaderFor(s,live,p),talk?(live.Kind=="Police"?"S":"F"):Speaker(s,live).Substring(0,1),now);
                 if(!talk)
                 {
                     TheySay(chat.Opener,false);

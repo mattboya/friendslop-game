@@ -245,6 +245,23 @@ namespace Festival.Tests
             Assert.That(Header("ConfirmChat"),Is.EqualTo("FESTIVALGOER  •  WOOK"),"the tripper's chat check still names who they are");
         }
 
+        // A sale's title line says its ask, at its price in your money, and the score it needs for that price, which the meter marks.
+        [Test] public void ASaleSaysItsAskAndWhatItNeeds()
+        {
+            foreach(var (ask,header,need) in new[]{(FestivalSimulation.FairAsk,"SELL  •  FAIR $10  •  NEEDS 75%",.75f),(FestivalSimulation.HighAsk,"SELL  •  HIGH $15  •  NEEDS 75%",.75f),(FestivalSimulation.GreedyAsk,"SELL  •  GREEDY $20  •  NEEDS 88%",.875f)})
+            {
+                var game=Day(out var you,out var them,"Buyer");you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});foreach(var dose in game.State.Doses)dose.Dose=1;
+                var started=game.Execute(you.Id,new GameCommand{Id="sale_"+ask,Kind="StartSale",TargetId=them.Id,ItemId="stock_lsd",Amount=ask});
+                Assert.That(started.Accepted,Is.True,"setup: the sale starts: "+started.Reason);
+                var window=Window(game,you);Follow(window,game,you.Id,0);
+                Assert.That(window.Header,Is.EqualTo(header),"ask "+ask+" at dose 1");
+                Assert.That(window.Need,Is.EqualTo(need).Within(1e-6),"the meter marks what ask "+ask+" needs");
+                Object.DestroyImmediate(canvas);
+            }
+            var s=new RoundState{FestivalIndex=1};s.Npcs.Add(new NpcState{Id="npc_1"});var sam=new PlayerState{Id="sam",Ordinal=1};s.Players.Add(sam);
+            Assert.That(FestivalChatWindow.HeaderFor(s,new InteractionState{Id="talk",Kind="Sale",TargetId="npc_1",Ask=FestivalSimulation.HighAsk},sam),Is.EqualTo("SELL  •  HIGH 15 RAMEN PACKETS  •  NEEDS 75%"),"in Sam's ramen");
+        }
+
         // DIALOG-3: a talk keeps you face to face, held still as a dance holds you (FestivalSession freezes the move on Roots), until it
         // ends or you walk out of it with Cancel; a chat check, a ride or a task leaves you free to move as before.
         [Test] public void ATalkHoldsYouStillAsADanceDoes()
@@ -337,7 +354,7 @@ namespace Festival.Tests
             }
         }
 
-        // A buy marks the score they need to sell to you (FestivalSimulation.BuyScore, .4) on the meter; other talks need none yet.
+        // A buy marks the score they need to sell to you (FestivalSimulation.BuyScore, .4) on the meter. A chat and security need none.
         [Test] public void ABuyMarksTheScoreItNeeds()
         {
             var game=Day(out var you,out var them);var window=Window(game,you);
@@ -347,7 +364,7 @@ namespace Festival.Tests
             Assert.That(FestivalSimulation.BuyScore,Is.EqualTo(.4),"a buy needs .4");
             Assert.That(window.MeterShown,Is.True);
             Assert.That(window.Need,Is.EqualTo((float)FestivalSimulation.BuyScore).Within(1e-6),"the meter marks the .4 they need to sell to you");
-            foreach(var kind in new[]{"Conversation","Sale","Police"})Assert.That(FestivalChatWindow.NeedFor(new InteractionState{Kind=kind}),Is.EqualTo(-1f),"a "+kind+" has no mark");
+            foreach(var kind in new[]{"Conversation","Police"})Assert.That(FestivalChatWindow.NeedFor(new InteractionState{Kind=kind}),Is.EqualTo(-1f),"a "+kind+" has no mark");
         }
 
         // At 1920x1080 every reply a talk can deal fits its button uncut, garbled or not, on every festival.

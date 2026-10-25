@@ -856,7 +856,7 @@ namespace Festival.Tests
                 Fits("day, low cash without affordable stash","Objective detail");player.Cash=20;sim.State.StashCash=0;
                 string tripperId=sim.State.TripperId;sim.State.TripperId=mate.Id;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);mate.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 yield return new WaitForSeconds(.6f);
-                Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer.");
+                Expect("day, holding stock","Objective detail","Sell $18 more before sundown. Stick with Sam: they see the buyers. Walk up to one and press E to offer, or ask High or Greedy for more.");
                 Fits("day, holding stock","Objective detail");
                 sim.State.TripperId=tripperId;player.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");
                 if(!System.Text.RegularExpressions.Regex.IsMatch(Read("Time"),@"^[0-8]:[0-5]\d$"))failures.Add("day: Time reads \""+Read("Time")+"\", expected m:ss");
@@ -987,7 +987,7 @@ namespace Festival.Tests
                 // Holding stock, E offers it to the buyer, not to Sam beside you.
                 buyer.Role="Buyer";player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
                 yield return Stand();
-                Expect("by day, holding stock, Sam in reach","Offer Tongue Stamps  •  F CHAT");
+                Expect("by day, holding stock, Sam in reach",FestivalHudText.OfferAction(sim.State,player,buyer,"stock_lsd",FestivalSimulation.FairAsk)+"  •  F CHAT");
                 yield return PressE("by day, holding stock, Sam in reach","Sale");
                 // The tripper beside someone they have an unchecked vision about still checks first.
                 sim.State.TripperId=player.Id;sim.State.Visions.Add(new VisionState{Id="sale_vision",Kind="Buyer",NpcId=buyer.Id});player.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);player.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
@@ -1237,10 +1237,11 @@ namespace Festival.Tests
                 player.X=0;player.Z=0;player.Inventory.RemoveAll(i=>i.ItemId!="little_spoon");
                 player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";
                 yield return new WaitForSeconds(.6f);
-                const string Offer="Offer Tongue Stamps  •  F CHAT";
+                // E offers at a fair price. The strip lists the High and Greedy asks first, then the rest, two past its four lines.
+                string Ask(int ask)=>FestivalHudText.OfferAction(sim.State,player,buyer,"stock_lsd",ask);string Offer=Ask(FestivalSimulation.FairAsk)+"  •  F CHAT";
                 Expect("beside a buyer, holding stock","Prompt",Offer);
                 if(!Shows("E key","Action prompt"))failures.Add("beside a buyer, holding stock: the prompt shows no E key");
-                Expect("beside a buyer, holding stock","Nearby","ESC  Dance with festivalgoer\nESC  Talk with festivalgoer\nESC  "+FestivalHudText.BuyAction(sim.State,player,buyer.Id)+"\nESC  "+FestivalHudText.LieDownAction);
+                Expect("beside a buyer, holding stock","Nearby","ESC  "+Ask(FestivalSimulation.HighAsk)+"\nESC  "+Ask(FestivalSimulation.GreedyAsk)+"\nESC  Dance with festivalgoer\nESC  Talk with festivalgoer\nESC  +2 more");
                 Fits("beside a buyer, holding stock","Nearby");
                 // In the last minute of a day the sundown card (LOOP-5) comes up beside it, never over it.
                 RectTransform Card(string name){foreach(var r in hud.GetComponentsInChildren<RectTransform>(true))if(r.name==name)return r;return null;}
