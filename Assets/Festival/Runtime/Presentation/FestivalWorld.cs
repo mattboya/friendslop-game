@@ -15,6 +15,7 @@ namespace Festival.Presentation
     {
         public const string RootName = "Festival generated world";
         public const string CampRootName = "Festival campsite lobby";
+        public const string SmallStageName = "Small stage";
         private readonly List<Material> materials = new List<Material>();
         private readonly List<Mesh> generatedMeshes = new List<Mesh>();
         private readonly Dictionary<string,Material> artMaterials = new Dictionary<string,Material>();
@@ -167,6 +168,7 @@ namespace Festival.Presentation
             Box("Stage frame crown",new Vector3(0,7.2f,35.65f),new Vector3(17.7f,.14f,.12f),lampRose,false);
             ProxyBox("Speaker L",new Vector3(-10,2,31),new Vector3(2,4,2),dark);
             ProxyBox("Speaker R",new Vector3(10,2,31),new Vector3(2,4,2),dark);
+            BuildSmallStage(dark,lampRose,lampMint);
             Booth("Vendor",new Vector3(-18,0,-22),rose,wood,"NIGHT MARKET");
             // Display surfaces at y 1.18 and 2.07 hold shop items at their holder height + .12.
             Visual("FestivalMarketCounter",new Vector3(-18,0,-20.05f));
@@ -366,6 +368,30 @@ namespace Festival.Presentation
                 +" festival_shadow_request="+festivalSun.shadows+" camp_shadow_request="+campSun.shadows
                 +" world_volume_priority=20");
 #endif
+        }
+        // Its lip is StageMusic's small stage front, where FestivalStageAudio hangs the small stage's speakers.
+        // ponytail: an art placeholder from boxes and the main stage's riser and deck models, until the art pass.
+        private void BuildSmallStage(Material dark,Material lampRose,Material lampMint)
+        {
+            var grounds=owned;owned=new GameObject(SmallStageName).transform;owned.SetParent(grounds,false);
+            const float Width=6,Depth=3.5f,Top=.6f;float x=StageMusic.SmallX,front=StageMusic.SmallZ,middle=front-Depth/2;
+            Box("Small stage deck",new Vector3(x,Top/2,middle),new Vector3(Width,Top,Depth),dark);
+            Box("Small stage backdrop",new Vector3(x,Top+1.6f,front-Depth+.15f),new Vector3(Width,3.2f,.3f),dark);
+            Box("Small stage lip glow",new Vector3(x,Top+.04f,front+.02f),new Vector3(Width,.08f,.13f),lampRose,false);
+            Box("Small stage crown",new Vector3(x,Top+3.25f,front-Depth+.32f),new Vector3(Width-.3f,.14f,.12f),lampMint,false);
+            foreach(float side in new[]{-1f,1f})Box("Small stage speaker stack",new Vector3(x+side*(Width/2-.5f),Top+.8f,front-.75f),new Vector3(.9f,1.6f,.9f),dark);
+            // The main stage's riser kit at Kit scale, turned to face north: its cable ramp then reaches 2.9 m west, inside the deck.
+            // At full size the deck sits .22 m up the riser, and the DJ stands .08 m up and .69 m behind its origin, as on the main stage.
+            const float Kit=.6f,Riser=1.6f;
+            var riser=Visual("FestivalDJRiser",new Vector3(x,Top,front-Riser));
+            if(riser!=null){riser.name="Small stage DJ riser";riser.transform.localRotation=Quaternion.Euler(0,180,0);riser.transform.localScale=Vector3.one*Kit;}
+            var deck=Visual("FestivalDJDeck",new Vector3(x,Top+.22f*Kit,front-Riser));
+            if(deck!=null){deck.name="Small stage DJ deck";deck.transform.localRotation=Quaternion.Euler(0,180,0);deck.transform.localScale=Vector3.one*Kit;}
+            var dj=FestivalCharacter.Create(owned,"small_stage_dj",Color.white,"Attendee");
+            dj.Pose="Dj";dj.DjConsole=deck==null?null:deck.transform;
+            dj.transform.localPosition=new Vector3(x,Top+.08f*Kit,front-Riser-.69f*Kit);
+            dj.transform.localScale=Vector3.Scale(Vector3.one,dj.ShapeScale);
+            owned=grounds;
         }
         private void BuildCamp(Material earth,Material wood,Material mint,Material rose,Material gold,Material dark,Material path,Material lampGold,Material lampRose,Material lampMint)
         {

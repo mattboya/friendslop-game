@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Festival.Core;
 using UnityEngine;
 
 namespace Festival.Presentation
@@ -75,6 +76,9 @@ namespace Festival.Presentation
                 float yaw=point.x<0?90:-90;
                 spots.Add(new Spot("Picnic","Idle",point.x,point.y,yaw));
             }
+            // Last, so every older spot keeps its index and its actor's name.
+            foreach(var point in new[]{new Vector2(-13.6f,-27.2f),new Vector2(-11.9f,-26.6f),new Vector2(-10.3f,-27.4f),new Vector2(-12.9f,-25.4f),new Vector2(-11.0f,-25.0f)})
+                spots.Add(new Spot("SmallStage","Dance",point.x,point.y,180+(point.x-StageMusic.SmallX)*8));
             return spots.ToArray();
         }
 

@@ -447,7 +447,7 @@ namespace Festival.Tests
         [Test]public void ArtCarsClearAmbientWalkersAndEveryFixedSpotAtIndependentClockPhases()
         {
             var grounds=Grounds();var crowd=grounds.gameObject.AddComponent<FestivalAmbientCrowd>();crowd.Build();
-            Assert.That(crowd.MemberCount,Is.EqualTo(62));Assert.That(crowd.WalkerCount,Is.EqualTo(12));
+            Assert.That(crowd.MemberCount,Is.EqualTo(67),"62, and five at the small stage");Assert.That(crowd.WalkerCount,Is.EqualTo(12));
             var actors=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith("ambient_walk_"))actors.Add(child);
             Assert.That(actors.Count,Is.EqualTo(12),"sample the actual twelve walker actors");
             var people=new List<(Vector2 Feet,string Who,float Clock)>();
@@ -491,7 +491,7 @@ namespace Festival.Tests
             var world=Made("Clearance world").AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");world.SetTwists(Round(festival));
             var grounds=Part(world.transform,FestivalWorld.RootName);var crowd=grounds.GetComponent<FestivalAmbientCrowd>();
             var east=new List<Transform>();foreach(Transform child in grounds)if(child.name.StartsWith("ambient_walk_east_lane_"))east.Add(child);
-            Assert.That(east.Count,Is.EqualTo(2));Assert.That(crowd.MemberCount,Is.EqualTo(62));Assert.That(crowd.WalkerCount,Is.EqualTo(12));
+            Assert.That(east.Count,Is.EqualTo(2));Assert.That(crowd.MemberCount,Is.EqualTo(67),"62, and five at the small stage");Assert.That(crowd.WalkerCount,Is.EqualTo(12));
             UpdateCrowd(crowd,137.5f);
             typeof(FestivalAmbientCrowd).GetMethod("Update",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(crowd,null);
             var live=new List<Vector3>();foreach(var actor in east)live.Add(actor.position);

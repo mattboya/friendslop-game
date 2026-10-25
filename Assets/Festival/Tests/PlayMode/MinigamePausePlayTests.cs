@@ -214,7 +214,7 @@ namespace Festival.Tests
         static int StageShown(FestivalAmbientCrowd crowd)
         {
             int shown=0;foreach(var actor in crowd.GetComponentsInChildren<FestivalCharacter>(true))
-                if(actor.name.Contains("Stage")&&actor.gameObject.activeSelf)shown++;
+                if(actor.name.StartsWith("ambient_Stage_",System.StringComparison.Ordinal)&&actor.gameObject.activeSelf)shown++;
             return shown;
         }
     }

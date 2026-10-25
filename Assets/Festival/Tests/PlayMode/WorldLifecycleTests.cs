@@ -799,7 +799,7 @@ namespace Festival.Tests
                 Assert.That(path.corners.Length,Is.GreaterThan(2));
                 int count=generated.childCount;world.Build();Assert.That(generated.childCount,Is.EqualTo(count));
                 var crowd=generated.GetComponent<FestivalAmbientCrowd>();Assert.That(crowd,Is.Not.Null);
-                Assert.That(crowd.MemberCount,Is.EqualTo(62));
+                Assert.That(crowd.MemberCount,Is.EqualTo(67),"62, and five at the small stage");
                 var takeover=FestivalCharacter.Create(generated,"Test player DJ",Color.white);
                 takeover.Pose="Dj";takeover.DjConsole=world.PlayerDjConsole;
                 takeover.transform.position=new Vector3(0,0,26);
