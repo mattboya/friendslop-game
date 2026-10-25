@@ -10,7 +10,7 @@ public static class MoneyNewsTests
 {
     static int sequence;
     static void Check(bool condition,string message){if(!condition)throw new Exception("MoneyNews: "+message);}
-    static CommandResult Act(FestivalSimulation game,string player,string kind,string target="",int amount=0)=>game.Execute(player,new GameCommand{Id="news"+(sequence++),Kind=kind,TargetId=target,Amount=amount});
+    static CommandResult Act(FestivalSimulation game,string player,string kind,string target="",int amount=0,string item="")=>game.Execute(player,new GameCommand{Id="news"+(sequence++),Kind=kind,TargetId=target,Amount=amount,ItemId=item});
     static object Call(FestivalSimulation game,string method,params object[] args)=>typeof(FestivalSimulation).GetMethod(method,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(game,args);
     static FestivalSimulation Play()
     {
@@ -64,6 +64,17 @@ public static class MoneyNewsTests
         Check(sam.MoneyNewsLog.Count==0,"nothing taken, nothing to say: the detention itself shows, got '"+Last(sam)+"'");
         broke=Play();sam=broke.Player("friend");sam.Cash=0;sam.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});Call(broke,"Detain",sam);
         Heard(sam,"Items: SECURITY TOOK 1 Tongue Stamps","a broke detainee loses only the stock");
+        string goer="";for(int n=0;goer=="";n++)if(DialogueGrammar.PersonaFor("goer_"+n,"")=="Wook")goer="goer_"+n;
+        foreach(var (cash,stamps,expected) in new[]{(30,2,"Cash: SECURITY FINE  •  −$10  •  SECURITY TOOK 2 Tongue Stamps"),(0,1,"Items: SECURITY TOOK 1 Tongue Stamps")})
+        {
+            var selling=new FestivalSimulation(7);selling.AddPlayer("host","Ash");selling.State.Phase="Playing";ash=selling.Player("host");ash.X=0;ash.Z=0;ash.Cash=cash;
+            ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=stamps});
+            selling.State.Npcs.Clear();selling.State.Npcs.Add(new NpcState{Id=goer,Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true});
+            Check(Act(selling,"host","StartSale",goer,FestivalSimulation.FairAsk,"stock_lsd").Accepted,"setup: the sale holds a stamp");
+            Call(selling,"Detain",ash);
+            Check(!ash.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"setup: every stamp is gone");
+            Heard(ash,expected,"a bust mid-sale counts the stamp under the sale card, with $"+cash);
+        }
     }
     static void APaidReleaseSaysSoAndACancelGivesItBack()
     {
