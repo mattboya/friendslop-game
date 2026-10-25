@@ -62,6 +62,60 @@ namespace Festival.Tests
             }
             yield return null;
         }
+        // Looking straight at a festivalgoer from eye height, their bubble sits whole on screen, under the top cards and over the bottom
+        // HUD, its letters near the HUD's own size (18-20 px cap height at 1080p) near or far, a second bubble too.
+        [UnityTest]public IEnumerator ABubbleStaysInViewUnderTheTopCardsAtAReadableSize()
+        {
+            var root=new GameObject("Framed speech");var presenter=root.AddComponent<FestivalSpeechBubbles>();
+            var body=new GameObject("Framed speaker");var head=new GameObject("Head");head.transform.SetParent(body.transform,false);head.transform.localPosition=Vector3.up*1.8f;
+            var eye=new GameObject("Framed eye");var camera=eye.AddComponent<Camera>();camera.fieldOfView=75;camera.nearClipPlane=.05f;camera.aspect=16f/9;
+            var state=new RoundState{RoundId="framed",Phase="Playing",SimulationSeconds=1};
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="framed:speech:1",Sequence=1,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Have you seen the cups? Someone said the night market has them.",ExpiresAtWorldSeconds=9});
+            var failures=new List<string>();
+            // The cap height of a bubble's first letter (an H) on a 1080-pixel-high screen, from the glyph TextMeshPro laid out.
+            float Cap(TextMeshPro text)
+            {
+                text.ForceMeshUpdate();var letter=text.textInfo.characterInfo[0];
+                float tall=text.font.characterLookupTable[letter.character].glyph.metrics.height*letter.scale;
+                var foot=camera.WorldToViewportPoint(text.transform.TransformPoint(new Vector3(letter.bottomLeft.x,letter.baseLine,0)));
+                var top=camera.WorldToViewportPoint(text.transform.TransformPoint(new Vector3(letter.bottomLeft.x,letter.baseLine+tall,0)));
+                return (top.y-foot.y)*1080;
+            }
+            void Framed(string where)
+            {
+                foreach(var text in SpeechTexts(root))
+                {
+                    var backing=text.transform.parent.Find("Bubble backing");float low=1,high=0,left=1,right=0,near=float.MaxValue;
+                    foreach(var corner in new[]{new Vector3(-.5f,-.5f),new Vector3(.5f,-.5f),new Vector3(-.5f,.5f),new Vector3(.5f,.5f)})
+                    {var at=camera.WorldToViewportPoint(backing.TransformPoint(corner));low=Mathf.Min(low,at.y);high=Mathf.Max(high,at.y);left=Mathf.Min(left,at.x);right=Mathf.Max(right,at.x);near=Mathf.Min(near,at.z);}
+                    string box=" (x "+left.ToString("F3")+"-"+right.ToString("F3")+", y "+low.ToString("F3")+"-"+high.ToString("F3")+")";
+                    if(high>FestivalHud.TopCardsBottom)failures.Add(where+": \""+text.text+"\" runs up under the top cards"+box);
+                    // The equipment bar's top reaches .185 at the largest text scale.
+                    if(low<.185f)failures.Add(where+": \""+text.text+"\" runs down into the bottom HUD"+box);
+                    if(left<0||right>1)failures.Add(where+": \""+text.text+"\" runs off the side of the screen"+box);
+                    if(near<=camera.nearClipPlane)failures.Add(where+": \""+text.text+"\" sits in front of the near plane");
+                }
+            }
+            void Look(float distance){eye.transform.SetPositionAndRotation(new Vector3(0,1.65f,-distance),Quaternion.identity);presenter.Apply(state,id=>body.transform,eye.transform,eye.transform.position,"you",true);}
+            try
+            {
+                Look(1.5f);var text=SpeechTexts(root);Assert.That(text,Has.Length.EqualTo(1),"setup: one bubble");
+                float near=Cap(text[0]);Framed("1.5 m");
+                if(near<17.5f||near>20.5f)failures.Add("1.5 m: the cap height is "+near.ToString("F1")+" px at 1080p, not about 18-20");
+                Look(10);float far=Cap(SpeechTexts(root)[0]);Framed("10 m");
+                if(Mathf.Abs(far-near)>near*.2f)failures.Add("10 m: the cap height is "+far.ToString("F1")+" px against "+near.ToString("F1")+" px at 1.5 m");
+                Look(1);Framed("1 m");
+                state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="framed:speech:2",Sequence=2,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Or was it the art car? Ask the guy in the hat.",ExpiresAtWorldSeconds=9});
+                foreach(float distance in new[]{1f,1.5f,10f})
+                {
+                    Look(distance);Assert.That(SpeechTexts(root),Has.Length.EqualTo(2),"setup: two bubbles at "+distance+" m");Framed("two bubbles at "+distance+" m");
+                    var stacked=SpeechTexts(root);if(stacked[1].transform.parent.position.y<=stacked[0].transform.parent.position.y)failures.Add(distance+" m: the newer bubble does not stack over the first");
+                }
+            }
+            finally{presenter.Clear();UnityEngine.Object.Destroy(root);UnityEngine.Object.Destroy(body);UnityEngine.Object.Destroy(eye);}
+            yield return null;
+            Assert.That(failures,Is.Empty,"Speech bubbles in a first-person view:\n"+string.Join("\n",failures));
+        }
         [UnityTest]public IEnumerator EarlyHostRejectionsKeepTheIssuedIdentityAndAuthorityRules()
         {
             var host=new GameObject("Early rejection host").AddComponent<FestivalSession>();yield return null;

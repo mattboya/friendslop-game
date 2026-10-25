@@ -114,13 +114,22 @@ namespace Festival.Presentation
     public sealed class FestivalSpeechBubbles : MonoBehaviour
     {
         public const float LettersPerSecond=FestivalSpeechDeliveryTracker.LettersPerSecond,Range=15;
-        const float Width=2.6f,Padding=.16f;
+        /// <summary>Through a camera, a bubble's letters keep this cap height at any distance, as a share of the screen's
+        /// height: 19 px at 1080p, the HUD's body text (times the profile's text scale).</summary>
+        public const float CapHeight=19f/1080;
+        /// <summary>The band a bubble keeps inside, as shares of the screen's height: under the top cards and over the bottom
+        /// HUD (the equipment bar's top reaches .185 at the largest text scale).</summary>
+        public const float BandTop=FestivalHud.TopCardsBottom-.01f,BandBottom=.2f;
+        // Lead: how far a bubble sits in front of its speaker's head, toward the view, so one pulled down never cuts through the face.
+        const float Width=4f,Padding=.16f,FontSize=3,Gap=.1f,Lead=.35f;
         sealed class Bubble { public Transform Root; public TextMeshPro Text; public Transform Head,Body; public int LastVisible; public float Height; }
         readonly Dictionary<string,Bubble> bubbles=new Dictionary<string,Bubble>();
         readonly Stack<Bubble> pool=new Stack<Bubble>();
         readonly HashSet<string> shown=new HashSet<string>();
         readonly List<string> gone=new List<string>();
-        readonly Dictionary<string,float> stack=new Dictionary<string,float>();
+        readonly Dictionary<string,float> stack=new Dictionary<string,float>(),tall=new Dictionary<string,float>();
+        // This frame's shown bubbles, oldest first: where each would sit over its speaker's head (the foot of its stack), its pop.
+        readonly List<(Bubble Bubble,Vector3 Foot,string Speaker,float Pop)> placed=new List<(Bubble,Vector3,string,float)>();
         FestivalSession session;
         FestivalSpeechDeliveryTracker tracker;
         string privateCheck="";
@@ -142,6 +151,8 @@ namespace Festival.Presentation
             get{if(babble==null){babble=new FestivalBabble(transform);GlyphsRevealed+=babble.PlayRevealed;}return babble;}
         }
         TMP_FontAsset font;
+        // The font's cap height in world units on an unscaled bubble.
+        float capWorld;
         Material backing;
 
         void LateUpdate()
@@ -157,7 +168,7 @@ namespace Festival.Presentation
             if(cacheRound!=state.RoundId||cacheGeneration!=generation){ClearAssets();cacheRound=state.RoundId;cacheGeneration=generation;}
             Deliveries.Follow(state,generation,worldSeconds??FestivalSimulation.WorldSeconds(state));
             Babble.Follow(state,actorFor,eye,localPlayerId,hidden||view==null||!enabled,profile,Deliveries.Deliveries);
-            shown.Clear();stack.Clear();
+            shown.Clear();stack.Clear();tall.Clear();placed.Clear();
             if(!hidden&&view!=null&&enabled)foreach(var speech in Deliveries.Deliveries)
             {
                 var body=actorFor?.Invoke(speech.SpeakerId);
@@ -194,11 +205,30 @@ namespace Festival.Presentation
                     if(marker==null||!marker.gameObject.activeInHierarchy)continue;
                     foreach(var renderer in marker.GetComponentsInChildren<Renderer>(false))if(renderer.enabled)bottom=Mathf.Max(bottom,renderer.bounds.max.y+.15f);
                 }
-                stack.TryGetValue(speech.SpeakerId,out float offset);
-                bubble.Root.position=new Vector3(head.x,bottom+bubble.Height*.5f+offset,head.z);
+                placed.Add((bubble,new Vector3(head.x,bottom,head.z),speech.SpeakerId,reducedMotion?1:Mathf.Lerp(.94f,1,(float)speech.AgeSeconds/.16f)));
+            }
+            Place(view,profile?.TextScale??1);
+        }
+        // The whole stack is pulled down at once so it stays in the band even a metre away. It stays in the world, so walls still hide it.
+        // A view with no camera, or a speaker level with or behind it, keeps the world-sized bubble over the head.
+        void Place(Transform view,float textScale)
+        {
+            if(placed.Count==0)return;
+            var lens=view.GetComponent<Camera>();float unit=CapHeight*textScale/capWorld;
+            foreach(var (bubble,_,speaker,_) in placed){tall.TryGetValue(speaker,out float height);tall[speaker]=height+(height>0?Gap:0)+bubble.Height;}
+            foreach(var (bubble,foot,speaker,pop) in placed)
+            {
+                stack.TryGetValue(speaker,out float offset);stack[speaker]=offset+bubble.Height+Gap;
                 bubble.Root.rotation=view.rotation;
-                bubble.Root.localScale=Vector3.one*(reducedMotion?1:Mathf.Lerp(.94f,1,(float)speech.AgeSeconds/.16f));
-                stack[speech.SpeakerId]=offset+bubble.Height+.1f;
+                var at=lens!=null?lens.WorldToViewportPoint(foot):Vector3.zero;
+                if(lens==null||at.z<=lens.nearClipPlane+Lead)
+                {
+                    bubble.Root.position=foot+Vector3.up*(offset+bubble.Height*.5f);bubble.Root.localScale=Vector3.one*pop;continue;
+                }
+                float depth=at.z-Lead,frustum=lens.orthographic?2*lens.orthographicSize:2*depth*Mathf.Tan(lens.fieldOfView*.5f*Mathf.Deg2Rad);
+                float low=Mathf.Max(BandBottom,Mathf.Min(at.y,BandTop-tall[speaker]*unit));
+                bubble.Root.position=lens.ViewportToWorldPoint(new Vector3(at.x,low+(offset+bubble.Height*.5f)*unit,depth));
+                bubble.Root.localScale=Vector3.one*(unit*frustum*pop);
             }
         }
         /// <summary>Only the local active check can supply private world speech. It never touches the public snapshot.</summary>
@@ -251,6 +281,8 @@ namespace Festival.Presentation
                 font.material.shader=TMP_Settings.defaultFontAsset.material.shader;
                 font.material.SetFloat(ShaderUtilities.ShaderTag_ZTestMode,(float)CompareFunction.LessEqual);
                 font.fallbackFontAssetTable=new List<TMP_FontAsset>{TMP_Settings.defaultFontAsset};
+                // A world TextMeshPro sets a point size in tenths of a world unit (TMP_Text's 0.1 for non-UI text).
+                var metrics=font.faceInfo;capWorld=(metrics.capLine>0?metrics.capLine:.7f*metrics.pointSize)/metrics.pointSize*metrics.scale*FontSize*.1f;
                 backing=new Material(Resources.Load<Material>("FestivalLit")){name="Festival speech backing",color=new Color(.055f,.07f,.065f)};
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 DevelopmentDiagnostics.GraphicsEvent("Speech","cache_ready","shared_font=true depth_test=LessEqual");
@@ -262,7 +294,7 @@ namespace Festival.Presentation
             var collider=quad.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
             var renderer=quad.GetComponent<MeshRenderer>();renderer.sharedMaterial=backing;renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
             var face=new GameObject("Speech text");face.transform.SetParent(root,false);
-            var text=face.AddComponent<TextMeshPro>();text.font=font;text.fontSharedMaterial=font.material;text.fontSize=3;
+            var text=face.AddComponent<TextMeshPro>();text.font=font;text.fontSharedMaterial=font.material;text.fontSize=FontSize;
             text.color=new Color(.96f,.94f,.84f);text.alignment=TextAlignmentOptions.Center;text.richText=false;text.parseCtrlCharacters=false;
             text.textWrappingMode=TextWrappingModes.Normal;text.overflowMode=TextOverflowModes.Overflow;
             text.rectTransform.sizeDelta=new Vector2(Width,.6f);
