@@ -35,6 +35,32 @@ namespace Festival.Tests
             player.X=OriginX;player.Z=OriginZ;player.Effects.Clear();
         }
 
+        // Walking through things ends with the spirit: after a real revival the host's Slide stops the player at the stage again.
+        // The stage's front (FestivalWorld's Stage box) runs along z 27.5, 9 m either side of the middle.
+        [UnityTest]public IEnumerator ARevivedSpiritIsBlockedByTheStageAgain()
+        {
+            var world=new GameObject("Revived stage world");world.AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("Revived stage host");var session=host.AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                session.Host("Walker",HostPort);
+                for(float deadline=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);yield return StartLevel(session);session.enabled=false;
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);player.Effects.Clear();sim.State.TripperId="";
+                void Walk(){player.X=5;player.Z=26.6f;for(int step=0;step<10;step++)Step(session,0,1);}
+                Walk();Assert.That(player.Z,Is.LessThan(27.25f),"setup: the living stop at the stage's front, z "+player.Z);
+                player.Life="Downed";player.DownedRemaining=.01;sim.Tick(.1);Assert.That(player.Life,Is.EqualTo("Spirit"),"setup: alone, the downed time runs out");
+                Walk();Assert.That(player.Z,Is.GreaterThan(28.5f),"a spirit floats on into the stage, z "+player.Z);
+                player.X=24;player.Z=-20;
+                var revive=sim.Execute(player.Id,new GameCommand{Id="revive_at_tent",Kind="BeginRevival",TargetId=player.Id});
+                Assert.That(revive.Accepted,Is.True,"setup: a lone spirit starts its self-revival at the tent ("+revive.Reason+")");
+                sim.Tick(15.1);Assert.That(player.Life,Is.EqualTo("Alive"),"setup: the revival brings them back");
+                Walk();Assert.That(player.Z,Is.LessThan(27.25f),"revived, the stage stops them at its front again, z "+player.Z);
+            }
+            finally{session.Leave();UnityEngine.Object.Destroy(host);UnityEngine.Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator CouchLockShortensTheActualHostStepAndKeepsTheFloor()
         {
             var world=new GameObject("impl:U12 walk world");world.AddComponent<FestivalWorld>();yield return null;

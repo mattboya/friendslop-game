@@ -269,11 +269,35 @@ namespace Festival.Tests
             Assert.That(For(Round("Playing",2)),Is.Not.EqualTo(Nothing),"setup: a dosed player trips");
             Assert.That(For(Round("Results",2)),Is.Not.EqualTo(Nothing),"through the level's results");
             Assert.That(For(Round("Playing",0)),Is.EqualTo(Nothing),"a sober player sees none, though a friend is on four doses");
-            Assert.That(For(Round("Playing",2,life:"Spirit")),Is.EqualTo(Nothing),"a spirit sees none");
+            Assert.That(For(Round("Playing",2,life:"Spirit")),Is.EqualTo(Describe(FestivalTrip.Spirit(false))),"a spirit sees no dose, only the spirit look");
             foreach(var phase in new[]{"Shopping","Spinning","Loading","CampReview"})Assert.That(For(Round(phase,4)),Is.EqualTo(Nothing),"none at camp ("+phase+")");
             var shop=Round("Playing",0);shop.Players[0].Effects.Add(new ActiveEffect{Id="lsd",Intensity=1,RemainingSeconds=60});
             Assert.That(For(shop),Is.EqualTo(Nothing),"keyed on the dose alone, not on a Tongue Stamp bought at the shop");
             Assert.That(For(null),Is.EqualTo(Nothing),"a client that left sees none");
+        }
+
+        // A spirit's own view looks like a spirit's, so walking through walls never reads as a bug. It holds still, so reduced
+        // motion and flashing have nothing to cut, and a dose left on a spirit shows none of itself.
+        [Test]public void ASpiritSeesAGhostlyViewThatIsNoDose()
+        {
+            var spirit=Round("Playing",4,"lsd",life:"Spirit");var look=FestivalTrip.For(spirit,"me",false,Moment);
+            Assert.That(look.Saturation,Is.LessThan(-30),"drained of colour");
+            Assert.That(look.Tint.a,Is.GreaterThan(0),"under a cast");Assert.That(look.Tint.b,Is.GreaterThan(look.Tint.r),"a cool one");
+            Assert.That(look.Vignette,Is.GreaterThan(0).And.LessThan(.5f),"with soft dark edges, not a tunnel");
+            var still=look;still.Saturation=still.Vignette=still.Tint.a=0;
+            Assert.That(Describe(still),Is.EqualTo(Describe(new FestivalTrip.Perception{Tint=new Color(look.Tint.r,look.Tint.g,look.Tint.b,0)})),"and nothing of a dose: "+Describe(look));
+            Assert.That(Describe(FestivalTrip.For(spirit,"me",true,Moment)),Is.EqualTo(Describe(look)),"reduced motion leaves it as it is");
+            Assert.That(Describe(FestivalTrip.For(spirit,"me",false,Moment+7.3f)),Is.EqualTo(Describe(look)),"it never moves or flashes");
+            spirit.LevelIndex=1;Assert.That(FestivalTrip.For(spirit,"me",false,Moment).Tint.a,Is.LessThanOrEqualTo(FestivalTrip.NightTint),"at night the cast stays a whisper");
+            var trip=Trip();var view=View();spirit.LevelIndex=0;
+            trip.Apply(spirit,"me",view,NoActors,false,Moment,.02f);
+            Assert.That(trip.GetComponentInChildren<Canvas>(true).gameObject.activeSelf,"the overlay draws it");
+            Assert.That(Part<RawImage>(trip,"Trip vignette").color.a,Is.EqualTo(look.Vignette));Assert.That(Part<Image>(trip,"Trip tint").color,Is.EqualTo(look.Tint));
+            Assert.That(Lids(trip).enabled,Is.False,"through open eyes");
+            Assert.That(view.GetComponent<AudioLowPassFilter>(),Is.Null,"and the sound stays clear");
+            spirit.Players[0].Life="Alive";spirit.Players[0].Effects.Clear();trip.Apply(spirit,"me",view,NoActors,false,Moment,.02f);
+            Assert.That(Describe(FestivalTrip.For(spirit,"me",false,Moment)),Is.EqualTo(Nothing),"revived, the view is plain again");
+            Assert.That(trip.GetComponentInChildren<Canvas>(true).gameObject.activeSelf,Is.False,"and the overlay goes");
         }
 
         // The tilt and the extra colour are the local player's own dose, day and night alike, and nothing else's: a sober

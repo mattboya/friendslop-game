@@ -129,7 +129,13 @@ namespace Festival.Presentation
         // A hit's value times strength up to 1, then on to strong at 2.
         private static float Stacked(float strength,float hit,float strong)=>strength<=1?hit*strength:Mathf.Lerp(hit,strong,strength-1);
 
-        /// <summary>The local player's trip in state, never for a spirit. A dose shows only while the festival is shown (Playing or
+        /// <summary>What a spirit sees instead of any trip: the world drained of colour under a cool cast, with soft dark edges. It
+        /// holds still and is no dose (no surface pattern, eyes, trails, glow, tilt, lag or muffle). At night its cast stays at NightTint.</summary>
+        public static Perception Spirit(bool night)=>new Perception{Tint=new Color(.55f,.72f,1,night?Mathf.Min(SpiritTint,NightTint):SpiritTint),Vignette=SpiritVignette,Saturation=-SpiritDrain};
+        // Starting points for the playtest. URP's grade saturation runs -100 to 100.
+        private const float SpiritTint=.08f,SpiritVignette=.3f,SpiritDrain=60;
+
+        /// <summary>The local player's trip in state; a spirit sees only the Spirit look. A dose shows only while the festival is shown (Playing or
         /// Results), only for their own dose of 1 or more (cross-cutting call 3), and at night with its tint and haze held to NightTint.
         /// Giggle Gas shows by the summed strength of the player's hits (GAS-4: up to two); it lives only at camp (the host clears it
         /// as the crew leaves), so never with a dose. It pulses on beat, the camp music's phase (FestivalCampAudio.Beat); with no music
@@ -141,7 +147,7 @@ namespace Festival.Presentation
             foreach(var p in state.Players)
             {
                 if(p.Id!=localPlayerId)continue;
-                if(p.Life=="Spirit")return default;
+                if(p.Life=="Spirit")return Spirit(FestivalNightLighting.IsNight(state));
                 foreach(var e in p.Effects)
                 {
                     if(e.Id==FestivalSimulation.GiggleGasEffect)return Gas((float)FestivalSimulation.GiggleGasStrength(p,state.SimulationSeconds),reducedMotion,beat??Mathf.Repeat(time*2,1));
