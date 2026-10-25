@@ -133,6 +133,9 @@ namespace Festival.Network
         // DANCE-13: a Dj chart is the DJ ride (DjRide), blocks and greys (RhythmNote.Grey) in lanes 0-2 on the stage song's beat; the
         // host judges each Rhythm input's Direction as the new lane, the DJ stands at the riser's mixer (Catalog.StageDjX/Z), and
         // RoundState.StageCheerScore/StageCheerUntilWorldSeconds carry the crowd's cheer to every view (-1 in older rounds).
+        // DIALOG-15: a talk is four turns (ConversationTurns), the greeting, small talk, the ask and the close, each with its own
+        // replies ("reply.<topic>.<round>.<style>") and lines. Reply takes turns 0-3 and TalkAck names a retained outcome at
+        // Direction 4, not 3, so a version-9 client's outcome acknowledgment and dismissal would land on the fourth turn instead.
         public const int ProtocolVersion=10;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
