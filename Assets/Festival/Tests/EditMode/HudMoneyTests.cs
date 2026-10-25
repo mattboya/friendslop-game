@@ -116,7 +116,7 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Result),Is.EqualTo("SOLD +20 ramen packets"));
             var palm=Day(0);var you=Crew(palm,"you",1);you.Cash=87;palm.StashCash=5;palm.LevelSales=120;
             Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:true),Is.EqualTo("HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE"),"cash and SALES lit");
-            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:false),Is.EqualTo(FestivalHudText.Vitals(palm,you)),"unlit as before");
+            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:false),Is.EqualTo("HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE"),"unlit as before");
             Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(FestivalHudText.MoneyFlashOn),Is.EqualTo(new[]{true,true,false,true,false,false,false}),"lit on the even quarter-seconds of the stamp's 1.5 s");
             Assert.That(FestivalHudText.SaleStampSeconds,Is.EqualTo(1.5f));
         }
@@ -129,6 +129,7 @@ namespace Festival.Tests
             ConversationOutcome Ended(string kind,string result){var o=new ConversationOutcome{RoundId=s.RoundId,InteractionId="talk_"+you.ConversationOutcomes.Count,Kind=kind,Result=result,Sequence=++you.ConversationOutcomeSequence};you.ConversationOutcomes.Add(o);return o;}
             Ended("Sale","SOLD +$10");
             Assert.That(news.Follow(s,you,0),Is.Null,"a sale from before your first view");
+            Assert.That(news.Follow(s,you,0),Is.Null,"nor on the next frame");
             var sold=Ended("Sale","SOLD +$15");
             Assert.That(news.Follow(s,you,0),Is.SameAs(sold),"a sale that ends while you watch");
             Assert.That(news.Follow(s,you,0),Is.Null,"stamped once");
@@ -138,10 +139,32 @@ namespace Festival.Tests
             Assert.That(news.Follow(s,you,0),Is.SameAs(back),"a sale that comes back");
             Ended("Sale","NO SALE");
             Assert.That(news.Follow(s,you,1),Is.Null,"a rejoin's first view");
+            Assert.That(news.Follow(s,you,1),Is.Null,"nor the rejoin's next frame");
             var busted=Ended("Sale","BUSTED");
             Assert.That(news.Follow(s,you,1),Is.SameAs(busted),"a sale that ends after the rejoin");
             s.RoundId="night_1";you.ConversationOutcomes.Add(new ConversationOutcome{RoundId=s.RoundId,InteractionId="talk_night",Kind="Sale",Result="SOLD +$10",Sequence=++you.ConversationOutcomeSequence});
             Assert.That(news.Follow(s,you,1),Is.Null,"a new level's first view");
+            Assert.That(news.Follow(s,you,1),Is.Null,"nor the new level's next frame");
+        }
+
+        // The chat window is open on the sale's last line while the stamp shows, and the stamp overlaps its top-left corner. Drawn
+        // over it, the stamp hides while the pass, the map or a dance covers the screen.
+        [Test] public void TheSaleStampDrawsOverTheChatWindowAndHidesUnderThePass()
+        {
+            const System.Reflection.BindingFlags Private=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
+            var go=new UnityEngine.GameObject("Sale stamp HUD");
+            try
+            {
+                var hud=go.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",Private).Invoke(hud,null);
+                var stamp=hud.transform.Find("Festival HUD/Sale stamp");var chat=hud.transform.Find("Festival HUD/Chat window");
+                Assert.That(stamp!=null&&chat!=null,Is.True,"setup: the HUD builds both");
+                Assert.That(stamp.GetSiblingIndex(),Is.GreaterThan(chat.GetSiblingIndex()),"the stamp is drawn after the chat window");
+                typeof(FestivalHud).GetField("saleStampAt",Private).SetValue(hud,UnityEngine.Time.unscaledTime);
+                var show=typeof(FestivalHud).GetMethod("ShowSaleStamp",Private);var day=Day(0);
+                show.Invoke(hud,new object[]{day,true});Assert.That(stamp.gameObject.activeSelf,Is.True,"a sale just stamped, with nothing over it");
+                show.Invoke(hud,new object[]{day,false});Assert.That(stamp.gameObject.activeSelf,Is.False,"under the pass");
+            }
+            finally{UnityEngine.Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
         }
 
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()

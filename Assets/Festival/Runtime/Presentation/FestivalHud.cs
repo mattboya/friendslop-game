@@ -454,8 +454,6 @@ namespace Festival.Presentation
                 }
             }
             reviewPanel.SetActive(false);
-            saleStampPanel=Card(root.transform,"Sale stamp",new Vector2(.36f,.6f),new Vector2(.64f,.7f),true);Accent(saleStampPanel.transform,Orange);
-            saleStamp=Label(saleStampPanel.transform,"Sale result",44,TextAnchor.MiddleCenter);saleStamp.color=Orange;Fill(saleStamp.rectTransform,10);ShrinkToFit(saleStamp,20);saleStampPanel.SetActive(false);
             noticePanel=Card(root.transform,"Session notice",new Vector2(.368f,.785f),new Vector2(.695f,.849f),true);
             Accent(noticePanel.transform,Orange);
             notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);ShrinkToFit(notice,14);noticePanel.SetActive(false);
@@ -649,6 +647,9 @@ namespace Festival.Presentation
             // DIALOG-3: a reply picked in a talk is the host's Reply command.
             chatWindow.Send=c=>session.Command(c.Kind,c.TargetId,c.ItemId,c.Amount,c.Direction,c.TimeSeconds);
             chatWindow.CheckReply=(check,choice)=>session.SpeechBubbles?.SelectCheckReply(session.State,session.LocalPlayer,check,choice,session.ConnectionGeneration,session.EstimatedWorldSeconds);
+            // Built after the chat window, which is open on the sale's last line and whose corner the stamp overlaps (ShowSaleStamp).
+            saleStampPanel=Card(root.transform,"Sale stamp",new Vector2(.36f,.6f),new Vector2(.64f,.7f),true);Accent(saleStampPanel.transform,Orange);
+            saleStamp=Label(saleStampPanel.transform,"Sale result",44,TextAnchor.MiddleCenter);saleStamp.color=Orange;Fill(saleStamp.rectTransform,10);ShrinkToFit(saleStamp,20);saleStampPanel.SetActive(false);
             BuildHowToPlay(root.transform);
             BuildComfortChoice(root.transform);
         }
@@ -990,6 +991,7 @@ namespace Festival.Presentation
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
             bool uncovered=!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf;
+            ShowSaleStamp(state,uncovered);
             UpdateLife(state,player,uncovered);
             UpdateMinigame(state,player,uncovered);
             UpdateLightShow(state,player,uncovered);
@@ -1162,7 +1164,6 @@ namespace Festival.Presentation
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             TrackSale(state,player);
             vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),saleFlash&&FestivalHudText.MoneyFlashOn(Time.unscaledTime-saleStampAt));
-            saleStampPanel.SetActive(state.Phase=="Playing"&&Time.unscaledTime-saleStampAt<FestivalHudText.SaleStampSeconds);
             var threat=FestivalHudText.Threat(state,player);
             threatShown=FestivalHudText.EaseThreat(threatShown,threat.Fill,Time.unscaledDeltaTime,session?.Profile?.Data.ReducedMotion??true);
             threatFill.anchorMax=new Vector2(threatShown,1);threatFillImage.color=threatWord.color=ThreatColors[threat.Band];threatWord.text=FestivalHudText.ThreatBands[threat.Band];
@@ -2408,6 +2409,8 @@ namespace Festival.Presentation
             string reply=FestivalHudText.BuyReply(buyItem,cashWhileBuying,player.Cash);
             if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
         }
+        // Built over the pass, the map and a dance's dimmer, the stamp hides under them as the panels built before them do.
+        private void ShowSaleStamp(RoundState state,bool uncovered)=>saleStampPanel.SetActive(uncovered&&state.Phase=="Playing"&&Time.unscaledTime-saleStampAt<FestivalHudText.SaleStampSeconds);
         // Clearing lastNotice shows a second sale's notice even when it reads as the first's did.
         private void TrackSale(RoundState state,PlayerState player)
         {
