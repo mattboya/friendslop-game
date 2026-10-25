@@ -529,12 +529,40 @@ namespace Festival.Presentation
 
         /// <summary>
         /// The player card: health, pocket and the crew's stash, then the level's sales, life and the warning (Condition). The warning
-        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does.
+        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does. flashMoney lights your
+        /// cash and the level's SALES in the HUD's orange, as a paid sale flashes them (MoneyFlashOn).
         /// </summary>
-        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G")
+        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G",bool flashMoney=false)
         {
             string condition=Condition(s,p,talk,ditch);
-            return ("HP "+p.Health+Dot+Money(s,p,p.Cash)+Dot+"STASH "+Money(s,p,s.StashCash)+"\n"+"SALES "+Money(s,p,s.LevelSales)+Dot+p.Life).ToUpperInvariant()+(condition==""?"":Dot+condition);
+            string Lit(string text)=>flashMoney?"<color=#FC7741>"+text+"</color>":text;
+            return "HP "+p.Health+Dot+Lit(Money(s,p,p.Cash).ToUpperInvariant())+Dot+("STASH "+Money(s,p,s.StashCash)).ToUpperInvariant()+"\n"
+                +Lit(("SALES "+Money(s,p,s.LevelSales)).ToUpperInvariant())+Dot+p.Life.ToUpperInvariant()+(condition==""?"":Dot+condition);
+        }
+        /// <summary>How long a sale's result stays stamped mid-screen, and whether a paid one's flash is lit `since` seconds after it:
+        /// on the even quarter-seconds of the stamp.</summary>
+        public const float SaleStampSeconds=1.5f;
+        public static bool MoneyFlashOn(float since)=>since>=0&&since<SaleStampSeconds&&(int)(since*4)%2==0;
+        /// <summary>Follows the viewer's own conversation outcomes for the sale stamp. Follow gives the newest sale that ended with a
+        /// Result since the last call, once; null otherwise. It reads the outcomes, not the chat window, so a sale whose window Esc
+        /// shut is stamped too. The first view of a connection or a round only takes note, so a rejoin replays no sale.</summary>
+        public sealed class SaleNews
+        {
+            string round;
+            int connection=-1;
+            long seen;
+            public ConversationOutcome Follow(RoundState s,PlayerState viewer,int connectionGeneration)
+            {
+                var outcomes=viewer.ConversationOutcomes;if(outcomes==null)return null;
+                if(round!=s.RoundId||connection!=connectionGeneration)
+                {
+                    round=s.RoundId;connection=connectionGeneration;seen=0;foreach(var o in outcomes)seen=Math.Max(seen,o.Sequence);
+                    return null;
+                }
+                var sale=outcomes.FindLast(o=>o.RoundId==s.RoundId&&o.Kind=="Sale"&&o.Result!=""&&o.Sequence>seen);
+                if(sale!=null)seen=sale.Sequence;
+                return sale;
+            }
         }
         /// <summary>The gear bar's heading: Slot1-Slot3 equip (left out while they reply in a chat), Use, Drop (left out while held Drop
         /// drops nothing).</summary>

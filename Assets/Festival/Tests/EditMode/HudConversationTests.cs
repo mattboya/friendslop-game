@@ -262,6 +262,22 @@ namespace Festival.Tests
             Assert.That(FestivalChatWindow.HeaderFor(s,new InteractionState{Id="talk",Kind="Sale",TargetId="npc_1",Ask=FestivalSimulation.HighAsk},sam),Is.EqualTo("SELL  •  HIGH 15 RAMEN PACKETS  •  NEEDS 75%"),"in Sam's ramen");
         }
 
+        // A sale ends on how it ended, as a line of its own in the chat window, in your money (the HUD hands the window the notice
+        // it read with FestivalHudText.MoneyText).
+        [Test] public void ASaleEndsOnItsResultInYourMoney()
+        {
+            var game=Day(out var you,out var them,"Buyer");foreach(var dose in game.State.Doses)dose.Dose=1;you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="sale",Kind="StartSale",TargetId=them.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: the sale starts");
+            var talk=game.Interaction(you.InteractionId);var window=Window(game,you);
+            for(int t=0;talk.Status=="Active";t++){Follow(window,game,you.Id,t);Assert.That(window.Pick(Smooth(talk.Turns[t])),Is.True,"reply "+(t+1));}
+            var view=View(game,you.Id);var me=Me(view,you.Id);var outcome=me.ConversationOutcomes.Find(o=>o.InteractionId==talk.Id);
+            Assert.That(outcome?.Notice,Is.EqualTo("SOLD Tongue Stamps  •  +$10"),"setup: the host's notice, in dollars");
+            me.Ordinal=1;view.FestivalIndex=1;
+            window.FollowOutcome(outcome,10,false,false,FestivalHudText.MoneyText(view,me,outcome.Notice));
+            var thread=Thread(window);
+            Assert.That(thread[thread.Length-1],Is.EqualTo("= SOLD Tongue Stamps  •  +10 ramen packets"),"the last line, in your money: "+string.Join(" | ",thread));
+        }
+
         // DIALOG-3: a talk keeps you face to face, held still as a dance holds you (FestivalSession freezes the move on Roots), until it
         // ends or you walk out of it with Cancel; a chat check, a ride or a task leaves you free to move as before.
         [Test] public void ATalkHoldsYouStillAsADanceDoes()

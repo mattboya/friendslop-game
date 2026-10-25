@@ -240,6 +240,11 @@ namespace Festival.Presentation
         private float lifeUntil;
         private readonly FestivalHudText.LifeNews lifeNews=new FestivalHudText.LifeNews();
         private const float LifeBannerSeconds=6;
+        private GameObject saleStampPanel;
+        private Text saleStamp;
+        private float saleStampAt=-100;
+        private bool saleFlash;
+        private readonly FestivalHudText.SaleNews saleNews=new FestivalHudText.SaleNews();
         private string tipId="",tipRound="";
         private float tipShown;
         // MINI-1: the minigame card (FestivalHudText.MinigameCard): the booth's ring and countdown, the game under way, its result.
@@ -444,6 +449,8 @@ namespace Festival.Presentation
                 }
             }
             reviewPanel.SetActive(false);
+            saleStampPanel=Card(root.transform,"Sale stamp",new Vector2(.36f,.6f),new Vector2(.64f,.7f),true);Accent(saleStampPanel.transform,Orange);
+            saleStamp=Label(saleStampPanel.transform,"Sale result",44,TextAnchor.MiddleCenter);saleStamp.color=Orange;Fill(saleStamp.rectTransform,10);ShrinkToFit(saleStamp,20);saleStampPanel.SetActive(false);
             noticePanel=Card(root.transform,"Session notice",new Vector2(.368f,.785f),new Vector2(.695f,.849f),true);
             Accent(noticePanel.transform,Orange);
             notice=Label(noticePanel.transform,"Notice",20,TextAnchor.MiddleCenter);Fill(notice.rectTransform,14);ShrinkToFit(notice,14);noticePanel.SetActive(false);
@@ -929,7 +936,7 @@ namespace Festival.Presentation
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
-            if(!session.Connected){lifeUntil=0;lifePanel.SetActive(false);spiritTag.SetActive(false);ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
+            if(!session.Connected){lifeUntil=0;lifePanel.SetActive(false);spiritTag.SetActive(false);saleStampPanel.SetActive(false);ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
             rosterPanel.SetActive(!showMenu);
             var state=session.State;var player=session.LocalPlayer;if(state==null||player==null){rhythmShade.SetActive(false);rhythmPanel.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();return;}
             handGear.Clear();foreach(var item in player.Inventory)if(item.ItemId!="little_spoon")handGear.Add(item);
@@ -1138,7 +1145,9 @@ namespace Festival.Presentation
                 Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"));
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
-            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"));
+            TrackSale(state,player);
+            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),saleFlash&&FestivalHudText.MoneyFlashOn(Time.unscaledTime-saleStampAt));
+            saleStampPanel.SetActive(state.Phase=="Playing"&&Time.unscaledTime-saleStampAt<FestivalHudText.SaleStampSeconds);
             var threat=FestivalHudText.Threat(state,player);
             threatShown=FestivalHudText.EaseThreat(threatShown,threat.Fill,Time.unscaledDeltaTime,session?.Profile?.Data.ReducedMotion??true);
             threatFill.anchorMax=new Vector2(threatShown,1);threatFillImage.color=threatWord.color=ThreatColors[threat.Band];threatWord.text=FestivalHudText.ThreatBands[threat.Band];
@@ -1615,7 +1624,7 @@ namespace Festival.Presentation
             if(!covered&&outcome!=null)
             {
                 bool leave=state.Phase!="Playing"||player.InteractionId!=""||!chatWindow.OutcomeWithinReach(outcome,state,player)&&player.Life!="Detained";
-                chatWindow.FollowOutcome(outcome,Time.unscaledTime,session.Profile.Data.ReducedMotion,leave);
+                chatWindow.FollowOutcome(outcome,Time.unscaledTime,session.Profile.Data.ReducedMotion,leave,FestivalHudText.MoneyText(state,player,outcome.Notice));
                 if(chatWindow.OutcomeDisplayed)session.AcknowledgeConversationOutcome(outcome);
                 if(!chatWindow.Open)session.DismissConversationOutcome(outcome.DeliveryId);
             }
@@ -2382,6 +2391,13 @@ namespace Festival.Presentation
             buyInteractionId="";
             string reply=FestivalHudText.BuyReply(buyItem,cashWhileBuying,player.Cash);
             if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
+        }
+        // Clearing lastNotice shows a second sale's notice even when it reads as the first's did.
+        private void TrackSale(RoundState state,PlayerState player)
+        {
+            var sale=saleNews.Follow(state,player,session?.ConnectionGeneration??0);if(sale==null)return;
+            session?.SetMessage(sale.Notice);lastNotice="";saleStampAt=Time.unscaledTime;saleFlash=sale.Result.StartsWith("SOLD",StringComparison.Ordinal);
+            saleStamp.text=FestivalHudText.MoneyText(state,player,sale.Result).ToUpperInvariant();
         }
         // ECON-8: a random find is announced only once the host gives it to you, so whoever lost the race to it hears nothing.
         private void PickUp(DropState drop)

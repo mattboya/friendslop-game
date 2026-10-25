@@ -269,8 +269,9 @@ namespace Festival.Presentation
             Dismiss();threadId=target=followedRound=outcomeDelivery=dismissedRound=dismissedId="";followedStart=dismissedStart=-1;over=false;
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();Offer(null,null);
         }
-        /// <summary>Owner-only final delivery, independent of the removed active interaction. No extra reply turn is invented.</summary>
-        public bool FollowOutcome(ConversationOutcome outcome,float now,bool reducedMotion,bool leave)
+        /// <summary>Owner-only final delivery, independent of the removed active interaction. No extra reply turn is invented.
+        /// notice, when given, is the outcome's Notice as the viewer reads it (FestivalHudText.MoneyText).</summary>
+        public bool FollowOutcome(ConversationOutcome outcome,float now,bool reducedMotion,bool leave,string notice=null)
         {
             if(outcome==null)return false;
             if(outcomeDelivery!=outcome.DeliveryId)
@@ -287,7 +288,7 @@ namespace Festival.Presentation
                 for(int t=0;t<turnsShown&&t<graded.Length;t++)if(graded[t]<0)graded[t]=ConversationLines.Silence;
                 if(MeterShown)Meter();
                 if(outcome.Reaction!=""){TheySay(outcome.Reaction,true);Tint(graded.Length);}
-                if(outcome.Notice!="")Note(outcome.Notice);
+                notice??=outcome.Notice;if(notice!="")Note(notice);
                 if(outcome.Hunch!="")Note(outcome.Hunch);
                 Offer(null,null);
             }

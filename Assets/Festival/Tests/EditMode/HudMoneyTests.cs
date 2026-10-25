@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using Festival.Core;
 using Festival.Network;
@@ -97,6 +98,50 @@ namespace Festival.Tests
             var palm=Day(0);var you=Crew(palm,"you",0);var playa=Day(1);var sam=Crew(playa,"sam",1);
             Assert.That(FestivalHudText.MoneyText(palm,you,FestivalHudText.FoundCashNotice(4)),Is.EqualTo("Found $4 on the ground!"));
             Assert.That(FestivalHudText.MoneyText(playa,sam,FestivalHudText.FoundCashNotice(4)),Is.EqualTo("Found 4 ramen packets on the ground!"));
+        }
+
+        // A sale's outcome reads in your money wherever it shows, from what the host wrote in dollars: its notice in the HUD's message
+        // and the chat window, its result on the stamp. A paid sale flashes your cash and SALES on the player card, lit every other
+        // quarter-second for the stamp's 1.5 s.
+        [Test] public void ASalesResultReadsInYourMoneyAndFlashesTheCard()
+        {
+            var game=new FestivalSimulation(7);game.AddPlayer("ash","Ash");var sam=game.AddPlayer("sam","Sam");game.State.FestivalIndex=1;game.State.Phase="Playing";game.State.Npcs.Clear();
+            string buyer="buyer_0";for(int k=1;DialogueGrammar.PersonaFor(buyer,"")=="Raver"||DialogueGrammar.PersonaFor(buyer,"")=="Burner";k++)buyer="buyer_"+k;
+            game.State.Npcs.Add(new NpcState{Id=buyer,Role="Buyer",X=0,Z=1.5f,Yaw=180});sam.X=0;sam.Z=0;sam.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            Assert.That(game.Execute("sam",new GameCommand{Id="greedy",Kind="StartSale",TargetId=buyer,ItemId="stock_lsd",Amount=FestivalSimulation.GreedyAsk}).Accepted,Is.True,"setup: a Greedy sale");
+            var sale=game.Interaction(sam.InteractionId);
+            for(int t=0;sale.Status=="Active";t++){var turn=sale.Turns[sale.Turns.Count-1];Assert.That(game.Execute("sam",new GameCommand{Id="reply_"+t,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=sale.Turns.Count-1}).Accepted,Is.True,"setup: reply "+(t+1));}
+            var outcome=sam.ConversationOutcomes.Find(o=>o.InteractionId==sale.Id);
+            Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Notice),Is.EqualTo("SOLD Tongue Stamps  •  +20 ramen packets"));
+            Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Result),Is.EqualTo("SOLD +20 ramen packets"));
+            var palm=Day(0);var you=Crew(palm,"you",1);you.Cash=87;palm.StashCash=5;palm.LevelSales=120;
+            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:true),Is.EqualTo("HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE"),"cash and SALES lit");
+            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:false),Is.EqualTo(FestivalHudText.Vitals(palm,you)),"unlit as before");
+            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(FestivalHudText.MoneyFlashOn),Is.EqualTo(new[]{true,true,false,true,false,false,false}),"lit on the even quarter-seconds of the stamp's 1.5 s");
+            Assert.That(FestivalHudText.SaleStampSeconds,Is.EqualTo(1.5f));
+        }
+
+        // The stamp follows your own outcomes, not the chat window, so a sale whose window Esc shut is stamped too. Each sale is
+        // stamped once, and a rejoin or a level's first view only takes note of the sales already there.
+        [Test] public void TheStampShowsEachSaleOnceAndNoneFromBeforeYouJoined()
+        {
+            var s=Day(0);s.RoundId="day_1";var you=Crew(s,"you",0);var news=new FestivalHudText.SaleNews();
+            ConversationOutcome Ended(string kind,string result){var o=new ConversationOutcome{RoundId=s.RoundId,InteractionId="talk_"+you.ConversationOutcomes.Count,Kind=kind,Result=result,Sequence=++you.ConversationOutcomeSequence};you.ConversationOutcomes.Add(o);return o;}
+            Ended("Sale","SOLD +$10");
+            Assert.That(news.Follow(s,you,0),Is.Null,"a sale from before your first view");
+            var sold=Ended("Sale","SOLD +$15");
+            Assert.That(news.Follow(s,you,0),Is.SameAs(sold),"a sale that ends while you watch");
+            Assert.That(news.Follow(s,you,0),Is.Null,"stamped once");
+            Ended("Buy","");Ended("Conversation","");Ended("Sale","");
+            Assert.That(news.Follow(s,you,0),Is.Null,"a buy, a chat and a sale with no result");
+            var back=Ended("Sale","NO SALE");
+            Assert.That(news.Follow(s,you,0),Is.SameAs(back),"a sale that comes back");
+            Ended("Sale","NO SALE");
+            Assert.That(news.Follow(s,you,1),Is.Null,"a rejoin's first view");
+            var busted=Ended("Sale","BUSTED");
+            Assert.That(news.Follow(s,you,1),Is.SameAs(busted),"a sale that ends after the rejoin");
+            s.RoundId="night_1";you.ConversationOutcomes.Add(new ConversationOutcome{RoundId=s.RoundId,InteractionId="talk_night",Kind="Sale",Result="SOLD +$10",Sequence=++you.ConversationOutcomeSequence});
+            Assert.That(news.Follow(s,you,1),Is.Null,"a new level's first view");
         }
 
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()

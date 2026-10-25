@@ -147,6 +147,41 @@ namespace Festival.Tests
                     Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.True,"setup: the buy hands over a Tongue Stamp ("+session.Message+")");
                     Expect("bought","Notice","Bought Tongue Stamps for 5 friendship bracelets");
                     Fits("bought","Notice");NoDollars("bought");
+
+                    // That unit offered to a buyer at the Greedy ask from the list, talked through smoothly. The talk names
+                    // the ask; the sale stamps its result mid-screen for 1.5 s, says it in the notice and the chat window, and flashes the
+                    // card's cash and SALES, all in your bracelets.
+                    sim.State.Npcs.Remove(seller);
+                    string buyerId="money_buyer_0";for(int k=1;DialogueGrammar.PersonaFor(buyerId,"")=="Raver"||DialogueGrammar.PersonaFor(buyerId,"")=="Burner";k++)buyerId="money_buyer_"+k;
+                    var buyer=new NpcState{Id=buyerId,Role="Buyer",X=0,Z=1.5f,Yaw=180};sim.State.Npcs.Add(buyer);
+                    yield return new WaitForSeconds(.4f);
+                    string greedy=FestivalHudText.OfferAction(sim.State,player,buyer,"stock_lsd",FestivalSimulation.GreedyAsk);
+                    Button ask=null;foreach(var b in hud.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name=="Action:"+greedy)ask=b;
+                    if(ask==null)failures.Add("beside a buyer: no \""+greedy+"\"");
+                    else
+                    {
+                        int cash=player.Cash;ask.onClick.Invoke();yield return new WaitForSeconds(.4f);
+                        var sale=sim.Interaction(player.InteractionId);
+                        Assert.That(sale!=null&&sale.Kind=="Sale"&&sale.Ask==FestivalSimulation.GreedyAsk,Is.True,"setup: the Greedy ask starts a Greedy sale ("+session.Message+")");
+                        Expect("selling","Chat header",FestivalChatWindow.HeaderFor(sim.State,sale,player));
+                        while(sale.Status=="Active"&&sale.Turns.Count>0)
+                        {
+                            var turn=sale.Turns[sale.Turns.Count-1];
+                            Assert.That(sim.Execute(player.Id,new GameCommand{Id="money_sale_"+sale.Turns.Count,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=sale.Turns.Count-1}).Accepted,Is.True,"setup: a smooth reply");
+                        }
+                        bool lit=false;float shownAt=Time.unscaledTime;
+                        while(Time.unscaledTime-shownAt<1f){lit|=Read("Vitals").Contains("<color=");yield return null;}
+                        int paid=player.Cash-cash;Assert.That(paid,Is.GreaterThan(0),"setup: the Greedy sale paid ("+session.Message+")");
+                        string amount=FestivalHudText.Money(sim.State,player,paid);
+                        Expect("sold","Notice","SOLD Tongue Stamps  •  +"+amount);
+                        Expect("sold","Sale result",("SOLD +"+amount).ToUpperInvariant());
+                        if(!lit)failures.Add("sold: the card's cash and SALES never flash");
+                        var chat=hud.GetComponentInChildren<FestivalChatWindow>(true);var lines=new List<string>();for(int i=0;i<chat.Bubbles;i++)lines.Add(chat.Shown(i));
+                        if(lines.Count==0||lines[lines.Count-1]!="SOLD Tongue Stamps  •  +"+amount)failures.Add("sold: the chat window doesn't end on the sale: "+string.Join(" | ",lines));
+                        Fits("sold","Notice","Sale result");NoDollars("sold");
+                        yield return new WaitForSeconds(FestivalHudText.SaleStampSeconds);
+                        if(Find("Sale result")!=null)failures.Add("sold: the stamp stays up past its "+FestivalHudText.SaleStampSeconds+" s");
+                    }
                 }
             }
             finally
