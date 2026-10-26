@@ -224,17 +224,17 @@ namespace Festival.Presentation
         {
             // The HUD runs this every frame, and the regex allocates.
             if(text.IndexOf("ress ",StringComparison.Ordinal)>=0&&!(interact=="E"&&chat=="F"&&drop=="G"&&use=="Q"))
-                text=PressedKey.Replace(text,m=>m.Groups[1].Value+(m.Groups[2].Value=="E"?interact:m.Groups[2].Value=="F"?chat:m.Groups[2].Value=="G"?drop:use));
+                text=PressedKey.Replace(text,m=>m.Groups[1].Value+Spoken(m.Groups[2].Value=="E"?interact:m.Groups[2].Value=="F"?chat:m.Groups[2].Value=="G"?drop:use));
             // After the letters, so a slot bound to E is not read again as Interact.
             if(text.IndexOf('{')<0)return text;
             return ActionToken.Replace(text,m=>Spoken(m.Groups[1].Value=="Slot1"?slot1:m.Groups[1].Value=="Slot2"?slot2:m.Groups[1].Value=="Slot3"?slot3:m.Groups[1].Value=="Spin"?spin:sides));
         }
         static readonly Regex PressedKey=new Regex(@"\b([Pp]ress )([EFGQ])\b");
         static readonly Regex ActionToken=new Regex(@"\{(Slot1|Slot2|Slot3|Spin|SpinSides)\}");
-        // A mouse button's short name, as CONTROLS lists it ("LMB"), reads as a click in a sentence. The side buttons have no short
-        // name, and their own reads like a way to walk.
+        // A mouse button's short name, as CONTROLS lists it ("LMB", "MOUSE BACK": FestivalInput.Label), reads as a click or a button
+        // in a sentence.
         static string Spoken(string key)=>key=="LMB"?"left click":key=="RMB"?"right click":key=="MMB"?"middle click"
-            :key=="BACK"?"the mouse back button":key=="FORWARD"?"the mouse forward button":key;
+            :key=="MOUSE BACK"?"the mouse back button":key=="MOUSE FORWARD"?"the mouse forward button":key;
         // A range of rebound keys would hide the middle one, so only today's 1, 2, 3 read as a range.
         static string SlotKeys(string slot1,string slot2,string slot3,string or)=>slot1=="1"&&slot2=="2"&&slot3=="3"?"1–3":slot1+", "+slot2+or+slot3;
         /// <summary>Only a ground gear drop offers pickup; stop ditch and shared-stash results keep their destination.</summary>

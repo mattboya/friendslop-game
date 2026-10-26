@@ -240,6 +240,8 @@ namespace Festival.Tests
         {
             Assert.That(FestivalHudText.PressKeys("Press E. press F, press G or Press Q. Express G, press Esc, press 1.","R","H","K","Z"),
                 Is.EqualTo("Press R. press H, press K or Press Z. Express G, press Esc, press 1."),"each pressed letter names its bound key");
+            Assert.That(FestivalHudText.PressKeys("Press G to return it, or press E.",drop:"MOUSE BACK",interact:"LMB"),Is.EqualTo("Press the mouse back button to return it, or press left click."),
+                "a pressed mouse button reads as one, as the action tokens do");
             Assert.That(FestivalHudText.GearHeading(true),Is.EqualTo("GEAR   /   1–3 EQUIP     Q USE     G DROP"),"today's keys by default");
             Assert.That(FestivalHudText.GearHeading(true,"Z","X","C","U","K"),Is.EqualTo("GEAR   /   Z, X, C EQUIP     U USE     K DROP"),"each bound slot key");
             Assert.That(FestivalHudText.GearHeading(false,"Z","X","C","U","K"),Is.EqualTo("GEAR   /   U USE     K DROP"),"no equip while 1-3 reply");
@@ -262,7 +264,7 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.PressKeys(words),Is.EqualTo("Hold left click to spin them in front of you, right click at your sides."),"today's words with no override");
             Assert.That(FestivalHudText.PressKeys(words,spin:"K",sides:"L"),Is.EqualTo("Hold K to spin them in front of you, L at your sides."),"the bound Spin and SpinSides keys");
             Assert.That(FestivalHudText.PressKeys(words,spin:"RMB",sides:"LMB"),Is.EqualTo("Hold right click to spin them in front of you, left click at your sides."),"swapped mouse buttons read as clicks");
-            Assert.That(FestivalHudText.PressKeys(words,spin:"BACK",sides:"FORWARD"),Is.EqualTo("Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
+            Assert.That(FestivalHudText.PressKeys(words,spin:"MOUSE BACK",sides:"MOUSE FORWARD"),Is.EqualTo("Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
                 "the side buttons, which have no short name, read as mouse buttons, never a way to walk");
             Assert.That(FestivalHudText.PressKeys(vote),Is.EqualTo("Click a friend for each award, or press 1, 2 or 3."),"today's slot keys with no override");
             Assert.That(FestivalHudText.PressKeys(vote,slot1:"7",slot2:"8",slot3:"9"),Is.EqualTo("Click a friend for each award, or press 7, 8 or 9."),"the bound slot keys");
@@ -302,6 +304,13 @@ namespace Festival.Tests
                 var day=Level(0,0);you=Crew(day,"you","You");
                 typeof(FestivalHud).GetMethod("UpdateChat",Private).Invoke(hud,new object[]{day,you,false});
                 Assert.That(Shown(go,"Equipment heading"),Does.StartWith("GEAR   /   Z, X, C EQUIP     "),"the gear bar names each bound slot key");
+                you.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});you.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});
+                var hand=(System.Collections.IList)typeof(FestivalHud).GetField("handGear",Private).GetValue(hud);hand.Clear();foreach(var item in you.Inventory)hand.Add(item);
+                typeof(FestivalHud).GetMethod("UpdateText",Private).Invoke(hud,new object[]{day,you});
+                var slots=new List<string>();foreach(var t in go.GetComponentsInChildren<Text>(true))if(t.name=="Slot label")slots.Add(t.text);
+                Assert.That(slots,Is.EqualTo(new[]{"Z ▸ Practice poi ×1","X  Confetti cannon ×1","C  EMPTY"}),"each gear slot names its bound key");
+                Assert.That(FestivalHudGear.Toast(you,new List<ItemStack>(you.Inventory),1,"G","X"),Is.EqualTo("X  •  CONFETTI CANNON"),"the switch line names the pressed slot's key");
+                Assert.That(FestivalHudGear.Toast(you,new List<ItemStack>(you.Inventory),1),Is.EqualTo("2  •  CONFETTI CANNON"),"today's 1-3 by default");
                 string reply=null;foreach(var (title,text) in FestivalHudText.HowToPlay(session.Controls))if(title=="EVERYONE ELSE")reply=text;
                 Assert.That(reply,Does.Contain("answer with Z, X or C the way"),"How to Play names each bound reply key");
             });
@@ -316,6 +325,17 @@ namespace Festival.Tests
                 typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
                 Assert.That(Shown(go,"Notice"),Is.EqualTo("Equipped Practice poi. Hold the mouse back button to spin them in front of you, the mouse forward button at your sides."),
                     "the poi reply names the side buttons as mouse buttons");
+            });
+            WithReboundHud(keys=>keys.Drop.ApplyBindingOverride(0,"<Mouse>/backButton"),(session,hud,go)=>
+            {
+                Assert.That(session.Controls.Label(session.Controls.Drop),Is.EqualTo("Mouse Back"),"the key's name says mouse");
+                session.SetMessage("Holding Practice poi. Bring it to the seller, or press G to return it.");
+                typeof(FestivalHud).GetMethod("Update",Private).Invoke(hud,null);
+                Assert.That(Shown(go,"Notice"),Is.EqualTo("Holding Practice poi. Bring it to the seller, or press the mouse back button to return it."),"the host's reply names the bound Drop button");
+                string drop=(string)typeof(FestivalHud).GetMethod("Bound",Private).Invoke(hud,new object[]{session.Controls.Drop,"G"});
+                Assert.That(FestivalHudText.HoldToStopFor("Dance",drop),Is.EqualTo("HOLD MOUSE BACK TO STOP DANCING"),"the stop line under the lanes");
+                var screen=new FestivalSettingsScreen(session.Profile,session.Settings,new Festival.Integrations.UnavailableVoiceSession(),session.Controls,null,new MicrophoneMonitorTests.Fixture());
+                Assert.That(screen.Value(System.Linq.Enumerable.First(FestivalSettingsScreen.Rows,r=>r.Tab==FestivalSettingsScreen.Tab.Controls&&r.Label=="DROP")),Is.EqualTo("MOUSE BACK"),"the CONTROLS row");
             });
         }
 

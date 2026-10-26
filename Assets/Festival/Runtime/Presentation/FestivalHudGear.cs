@@ -18,13 +18,14 @@ namespace Festival.Presentation
         public static string Blocked(PlayerState p,string drop="G")=>p.CampVisitId!=""?"Not inside the "+(CampFeatures.Find(p.CampVisitId)?.Kind.ToLowerInvariant()??"camp space")
             :p.HeldOfferId!=""?"Holding an unpaid item: pay or put it back ("+drop+")":"";
 
-        /// <summary>The line over the gear bar as a key or the wheel picks slot `slot` (0-2) of `hand`, the gear bar's items: its number
-        /// and what's in it, or why nothing switches (Blocked). "" for a player who isn't up and free: the host refuses them and says why.</summary>
-        public static string Toast(PlayerState p,List<ItemStack> hand,int slot,string drop="G")
+        /// <summary>The line over the gear bar as a key or the wheel picks slot `slot` (0-2) of `hand`, the gear bar's items: its key
+        /// (the slot number when none is given) and what's in it, or why nothing switches (Blocked). "" for a player who isn't up and
+        /// free: the host refuses them and says why.</summary>
+        public static string Toast(PlayerState p,List<ItemStack> hand,int slot,string drop="G",string key=null)
         {
             if(p.Life!="Alive")return "";
             string blocked=Blocked(p,drop);if(blocked!="")return blocked;
-            return (slot+1)+Dot+(slot<hand.Count?Catalog.FindItem(hand[slot].ItemId)?.Name.ToUpperInvariant()??hand[slot].ItemId:"EMPTY");
+            return (key??(slot+1).ToString())+Dot+(slot<hand.Count?Catalog.FindItem(hand[slot].ItemId)?.Name.ToUpperInvariant()??hand[slot].ItemId:"EMPTY");
         }
 
         /// <summary>Whether the wheel switches anything for p: all three slots, even empty, and neither a dance (FestivalHudText.StopsByHold)

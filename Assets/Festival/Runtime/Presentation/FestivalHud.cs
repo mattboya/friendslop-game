@@ -477,7 +477,7 @@ namespace Festival.Presentation
                 float left=.045f+i*.313f;
                 var slot=Card(inventoryPanel.transform,"Slot "+(i+1),new Vector2(left,.08f),new Vector2(left+.293f,.70f),true);
                 slotFrames[i]=slot.GetComponent<Image>();
-                slotTexts[i]=Label(slot.transform,"Slot label",18,TextAnchor.MiddleCenter);Fill(slotTexts[i].rectTransform,4);
+                slotTexts[i]=Label(slot.transform,"Slot label",18,TextAnchor.MiddleCenter);Fill(slotTexts[i].rectTransform,4);ShrinkToFit(slotTexts[i],12);
             }
             // HUD-8: a switch flashes just over the bar (UpdateKeyboard), riding on it, so it hides whenever the bar does.
             gearToast=Card(inventoryPanel.transform,"Gear switch line",Vector2.zero,Vector2.one,true);SetRect(Rect(gearToast),new Vector2(0,1),Vector2.one,new Vector2(0,8),new Vector2(0,52));
@@ -1217,7 +1217,7 @@ namespace Festival.Presentation
                 var item=i<handGear.Count?handGear[i]:null;
                 bool equipped=item!=null&&item.ItemId==EquippedItem(player);
                 slotFrames[i].color=i==selectedSlot?new Color(.13f,.34f,.32f,1):new Color(.07f,.13f,.15f,1);
-                slotTexts[i].text=(i+1)+(i==selectedSlot?" ▸ ":"  ")+(item==null?"EMPTY":ItemName(item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
+                slotTexts[i].text=SlotKey(i)+(i==selectedSlot?" ▸ ":"  ")+(item==null?"EMPTY":ItemName(item.ItemId)+" ×"+item.Count+(equipped?"  ●":""));
                 slotTexts[i].color=equipped?new Color(1,.79f,.53f):Paper;
             }
             int ready=state.Players.FindAll(p=>p.Ready).Count;
@@ -1387,15 +1387,15 @@ namespace Festival.Presentation
             {
                 CancelGearHold();
                 // HUD-8: the switch flashes over the gear bar, or why not: inside a tent, or behind an unpaid item, nothing switches.
-                string toast=FestivalHudGear.Toast(player,handGear,equipSlot,Bound(session?.Controls?.Drop,"G"));if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
+                string toast=FestivalHudGear.Toast(player,handGear,equipSlot,Bound(session?.Controls?.Drop,"G"),SlotKey(equipSlot));if(toast!=""){gearToastText.text=toast;gearToastUntil=Time.unscaledTime+FestivalHudGear.ToastSeconds;}
                 if(FestivalHudGear.Blocked(player)=="")
                 {
                     selectedSlot=equipSlot;selectedThisFrame=true;manualEquipmentTick=state.Tick;
                     string item=equipSlot<handGear.Count&&handGear[equipSlot].Count>0?handGear[equipSlot].ItemId:"";
                     bool stowing=!fromWheel&&item!=""&&item==EquippedItem(player);
                     if(stowing)item="";
-                    if(stowing)gearToastText.text=(equipSlot+1)+"  •  STOWED  •  HANDS FREE";
-                    else if(item=="")gearToastText.text=(equipSlot+1)+"  •  EMPTY  •  HANDS FREE";
+                    if(stowing)gearToastText.text=SlotKey(equipSlot)+"  •  STOWED  •  HANDS FREE";
+                    else if(item=="")gearToastText.text=SlotKey(equipSlot)+"  •  EMPTY  •  HANDS FREE";
                     qAsked="";
                     pendingEquipment=true;pendingEquipmentItem=item;pendingEquipmentRound=state.RoundId;pendingEquipmentCommand="";
                     pendingEquipmentAt=Time.unscaledTime;pendingEquipmentGeneration=session.ConnectionGeneration;pendingEquipmentReceipt=player.VisualReceiptSequence;
@@ -1911,7 +1911,7 @@ namespace Festival.Presentation
             foreach(int lane in new[]{2,0,1,3})
             {
                 var arrow=controls.Notes[lane].bindings[0];moved|=arrow.effectivePath!=arrow.path;
-                arrows+=controls.Notes[lane].GetBindingDisplayString(0);alternates+=controls.NoteKey(lane);
+                arrows+=FestivalInput.Label(controls.Notes[lane],0);alternates+=controls.NoteKey(lane);
             }
             rhythmControls.text=((moved?arrows:"ARROWS")+" OR "+alternates).ToUpperInvariant();
         }
@@ -2341,6 +2341,8 @@ namespace Festival.Presentation
             if(!keyLabels.TryGetValue(action,out var key)||key.Path!=path||key.Layout!=layout)keyLabels[action]=key=(path,layout,session.Controls.Label(action).ToUpperInvariant());
             return key.Label;
         }
+        // AnswerKeys starts with today's slot keys, 1-3.
+        private string SlotKey(int slot)=>Bound(slot==0?session?.Controls?.Slot1:slot==1?session?.Controls?.Slot2:session?.Controls?.Slot3,AnswerKeys[slot]);
         // Players read an item's display name, never its internal id (THEME-2: "Tongue Stamps", not "stock_lsd").
         private static string ItemName(string id)=>Catalog.FindItem(id)?.Name??id;
         /// <summary>ECON-3: whether Q (Use) on item, pressed at `now` (the HUD's clock), takes it. Using stock is taking it yourself (the

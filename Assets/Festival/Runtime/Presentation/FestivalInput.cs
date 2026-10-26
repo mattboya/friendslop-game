@@ -120,9 +120,15 @@ namespace Festival.Presentation
             }
         }
         private InputAction Button(string name,string binding) => Map.AddAction(name,InputActionType.Button,binding);
-        public string Label(InputAction action) => action==Look&&action.bindings[0].effectivePath=="<Mouse>/delta"?"Mouse":action.GetBindingDisplayString();
+        public string Label(InputAction action) => action==Look&&action.bindings[0].effectivePath=="<Mouse>/delta"?"Mouse":action.bindings.Count==1?Label(action,0):action.GetBindingDisplayString();
+        // Every key name starts here, so friendlier short names belong in this switch too. The Input System calls the side buttons
+        // Back and Forward, which read like a way to walk.
+        public static string Label(InputAction action,int binding)=>action.bindings[binding].effectivePath switch
+        {
+            "<Mouse>/backButton"=>"Mouse Back","<Mouse>/forwardButton"=>"Mouse Forward",_=>action.GetBindingDisplayString(binding),
+        };
         // A rhythm lane's WASD key as bound now: binding 1 (binding 0 is its arrow), overrides included.
-        public string NoteKey(int lane) => Notes[lane].GetBindingDisplayString(1);
+        public string NoteKey(int lane) => Label(Notes[lane],1);
         // A changed profile (including RESET TAB) reaches this same live map without losing its authored identity.
         public void SynchronizeBindings()
         {
