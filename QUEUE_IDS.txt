@@ -99,3 +99,42 @@ SET-7 — The slot keys and mouse side buttons read right (built with SET-8)
 TEST-12 — Hosted tests that name a tripper give that tripper the dose they mean
 TEST-13 — Test harness fixes: the light show worst case, one Unity slot for each label, and a dirty start stops Unity
 TEST-11 — The light show worst case fails whenever Sober breaks (built with TEST-13)
+ESC-5 — A friend dragged along the west fence stays inside the map, so a rescued friend can always walk
+LOOK-2 — Security, the missing friend and two vendors wear their role's colour, not a random one
+LOOK-3 — The smoke's role and outfit lineups frame the people, and one script renders every outfit part
+LOOK-4 — Standing festivalgoers rest their arms at their sides, and hands on hips is a real pose
+LOOK-5 — Every player wears a crew scarf, so friends stand out from the crowd at any distance
+ESC-3 — A security stop leaves a real way out: the wheel waits, ditching says what is left, two stops both count
+GAS-10 — Restore refuses a negative value in each per-player event count
+ECON-13 — The money flash obeys Reduced Motion, a background ack keeps the notice, the sale stamp blocks nothing
+DANCE-15 — The stage backdrop hides the DJ from watchers behind it
+HUD-18 — A paid release or revival that does nothing refunds the $10, and only the changed figure flashes
+LOOP-10 — The downed hint tells the truth, and no card covers the death banner or reels
+ESC-6 — A dragged body follows its dragger along walls, and the dragger can always let go
+LOOP-9 — No tip covers the YOU'RE BACK banner, and one number sets the revivals of a level
+MINI-11 — Every minigame card fits at 130% text, and the cups turn clock comment is true
+SET-9 — Every key line names the bound key, side mouse buttons read as mouse buttons, overlapping sessions keep graphics
+MINI-12 — Mystery Cups odds follow who is at the table, and the rules intro says what each player can do
+POI-9 — On a joined client, held poi spin from the first frame of a swap to poi
+DOCS-2 — The README links current docs, and the wave protocol refreshes the status file (built with DOCS-3)
+TEST-10 — The README names the true last line of a two-player smoke (built with DOCS-3)
+DIALOG-16 — The bigger sign boards keep clear of the art around them (built with DIALOG-17)
+POLO-10 — Host and clients seat a late rider in the same gondola, and a rider's tag reads over the wheel
+CROWD-10 — The character doc names the GPU (Batched) mesh deformation mode (built with DOCS-3)
+PLAYA-10 — A second F on an active deck set gets a refusal that fits
+DOCS-3 — The README, the status file and the character doc match the game, and verify-project checks them
+CAMP-5 — The seated headliner faces the chair's way and stands up clear of the chair
+WAVE-4 — The Ferris wheel seat and name tag fixes (built with POLO-10)
+DIALOG-17 — The sign board fixes (built with DIALOG-16)
+ECON-12 — Tests pin the VIP offer price and the fixed pushed-ask suspicion
+HUD-17 — Tests pin no +$0 survivor line and one line for the tank carrier
+TEST-15 — The chart decode test runs on every stage song with a tolerant compare
+DIALOG-19 — The talk meter lands on the host's score, and the last lines fit their replies
+TEST-16 — The fog check ignores the colour grade, the runner restore works, a failed run reports leaks
+DEV-3 — The test mode tag, switch and clear title tell the truth
+TRIP-23 — Near speech bubbles stay readable under Pony Dust's lids
+MUSIC-9 — The stage pass and its refusal name the main stage
+DIALOG-18 — A view never shows the grade of a reply the player did not pick
+MUSIC-8 — The small stage is heard only near it, levels open on the main song, stage tests ride every song
+ECON-14 — A failed trust dance costs no ask, a handed-back unit returns to its slot, Esc keeps the sale result
+DIALOG-20 — Talks score in points, and the trust dance makes the talk easier or harder instead of ending it
