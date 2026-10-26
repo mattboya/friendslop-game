@@ -51,6 +51,9 @@ namespace Festival.Core
                 ChatDiagnostic?.Invoke("StockVisibility","cleared:"+cop.Id+":"+p.Id,State.RoundId,now);
 #endif
                 return false;}
+            // ESC-3: up on the Ferris wheel nobody can talk, ditch or walk away (MayStep, Apply), so the stop waits for the turn: its
+            // clocks stand still, and the guard waits at the base. Stowing the stock up there still ends it, above.
+            if(OnWheel(State,p.Id)){e.StartSeconds=System.Math.Min(now,e.StartSeconds+dt);e.SeenSeconds=now;return true;}
             if(now-e.SeenSeconds>=BoltSeconds){Hush(p);cop.Evidence.Remove(e);return false;}
             double held=now-e.StartSeconds;
             // K2: mid-talk the warning waits for the talk's end (HeardOut), as the arrest warning does.

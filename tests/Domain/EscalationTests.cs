@@ -13,7 +13,8 @@ public static class EscalationTests
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
-            ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance})
+            ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,
+            AStopWaitsForAWheelRider})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -503,5 +504,29 @@ public static class EscalationTests
         Check(off.Accepted&&a.DragTargetId=="","4 m from the body the dragger still lets go (\""+off.Reason+"\")");
         Check(!s.Execute("c",Command("Drag","b")).Accepted,"a friend 10 m off can't take hold of the body");
         Check(!s.Execute("a",Command("Drag","b")).Accepted,"nor can the dragger once they've let go, from 4 m");
+    }
+    // ESC-3 item 1: up on the Ferris wheel nobody can talk, ditch, walk or cancel, so a stop waits for the rider: its clock stands
+    // still for the turn, with the guard waiting at the base, and runs on from where it was once the rider is down. Stopped as
+    // they board, or stopped at the base and boarding 5 s later, nobody is warned or arrested on the wheel.
+    static void AStopWaitsForAWheelRider()
+    {
+        foreach(double before in new[]{0,5})
+        {
+            var s=Level(1);s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=s.State.Npcs[0];cop.X=Festivals.WheelX;cop.Z=Festivals.WheelZ+6;cop.Yaw=180;
+            var a=s.Player("a");a.X=Festivals.WheelX;a.Z=Festivals.WheelZ+1;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});a.EquippedItemId="stock_lsd";
+            string when=before==0?"stopped as they board":"stopped 5 s before boarding";
+            if(before==0)Check(s.Execute("a",Command(FestivalSimulation.RideWheelKind)).Accepted,"setup: a boards the wheel");
+            s.Tick(.1);Check(cop.Mode=="Stop","setup: "+when+" (mode "+cop.Mode+")");
+            if(before>0){s.Tick(before);a.X=Festivals.WheelX;a.Z=Festivals.WheelZ+1;Check(s.Execute("a",Command(FestivalSimulation.RideWheelKind)).Accepted,"setup: a boards the wheel 5 s into the stop");}
+            bool warned=false;
+            while(FestivalSimulation.OnWheel(s.State,"a")){s.Tick(.1);warned|=Says(a,LastChance);Check(cop.Mode=="Stop"&&a.Life=="Alive",when+": no arrest warning on the wheel (mode "+cop.Mode+", "+a.Life+")");}
+            Check(!warned,when+": no last chance on the wheel either");
+            Check(Dist(cop.X,cop.Z,a.X,a.Z)<=2.05,when+": the guard waits at the base ("+Dist(cop.X,cop.Z,a.X,a.Z)+" m off)");
+            double held=before;double Left(double at)=>at-held;
+            s.Tick(Left(11.85));Check(!Says(a,LastChance)&&cop.Mode=="Stop",when+": down again, the stop runs on from "+held+" s, unwarned before 12 s (\""+a.NpcSpeech+"\")");
+            s.Tick(.3);Check(Says(a,LastChance),when+": the last chance at 12 s of the stop's own clock (\""+a.NpcSpeech+"\")");
+            s.Tick(7.6);Check(cop.Mode=="Stop",when+": the stop holds until 20 s of its clock (mode "+cop.Mode+")");
+            s.Tick(.3);Check(cop.Mode=="ArrestWarning",when+": ignored to 20 s of its clock, an arrest warning (mode "+cop.Mode+")");
+        }
     }
 }

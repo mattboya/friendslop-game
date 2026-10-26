@@ -129,7 +129,8 @@ namespace Festival.Core
         /// <summary>Whether p stands at the Ferris wheel's base on Palm Mirage, where RideWheel boards (the HUD offers the ride there).</summary>
         public static bool AtWheel(RoundState s,PlayerState p)=>s.FestivalIndex==Festivals.PoloFestival&&Near(p,Festivals.WheelX,Festivals.WheelZ,Festivals.WheelReach);
         // Anyone at the base boards for one turn, any number at once. In the rules the rider stays at the base, where anything
-        // that could reach them still can, and cannot step off or cancel until the turn ends (MayStep, Apply's Cancel).
+        // that could reach them still can, and cannot step off or cancel until the turn ends (MayStep, Apply's Cancel). ESC-3: so a
+        // security stop's clock stands still while they ride (Pursue), the guard waiting at the base.
         CommandResult RideWheel(PlayerState p)
         {
             if(State.FestivalIndex!=Festivals.PoloFestival)return Reject("There's no Ferris wheel at this festival");
