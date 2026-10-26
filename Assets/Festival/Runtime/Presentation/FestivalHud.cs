@@ -521,14 +521,14 @@ namespace Festival.Presentation
             tipPanel=Card(root.transform,"First-time tip card",new Vector2(.022f,.535f),new Vector2(.42f,.615f),true);
             Accent(tipPanel.transform,Mint);
             tipText=Label(tipPanel.transform,"First-time tip",18,TextAnchor.MiddleLeft);Place(tipText.rectTransform,.035f,.06f,.97f,.90f);ShrinkToFit(tipText,13);tipPanel.SetActive(false);
-            // Clear of the death reels in the bottom-left (their first row tops out at .29) and under the sundown card (.71).
+            // Clear of the death reels in the bottom-left (their first row tops out at .29), and under the sundown warning while it shows.
             lifePanel=Card(root.transform,"Life banner",new Vector2(.30f,.56f),new Vector2(.70f,.70f),true);lifePanel.GetComponent<Image>().raycastTarget=false;
             Accent(lifePanel.transform,Mint);
             lifeTitle=Label(lifePanel.transform,"Life title",30,TextAnchor.MiddleCenter);lifeTitle.fontStyle=FontStyle.Normal;Place(lifeTitle.rectTransform,.04f,.56f,.96f,.94f);
             lifeDetail=Label(lifePanel.transform,"Life detail",18,TextAnchor.MiddleCenter);lifeDetail.color=MutedPaper;Place(lifeDetail.rectTransform,.05f,.05f,.95f,.56f);ShrinkToFit(lifeDetail,13);
             lifePanel.SetActive(false);
-            // Between the voice line and the equipment bar.
-            spiritTag=Card(root.transform,"Spirit tag",new Vector2(.44f,.03f),new Vector2(.56f,.08f),true);spiritTag.GetComponent<Image>().raycastTarget=false;
+            // Between the voice line and the equipment bar, under the first row of death reels, whose foot is at .055.
+            spiritTag=Card(root.transform,"Spirit tag",new Vector2(.44f,.006f),new Vector2(.56f,.046f),true);spiritTag.GetComponent<Image>().raycastTarget=false;
             var spiritWord=Label(spiritTag.transform,"Spirit tag text",20,TextAnchor.MiddleCenter);spiritWord.text="SPIRIT";spiritWord.fontStyle=FontStyle.Normal;spiritWord.color=new Color(.62f,.8f,1,1);Fill(spiritWord.rectTransform,2);
             spiritTag.SetActive(false);
             // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
@@ -1008,7 +1008,8 @@ namespace Festival.Presentation
             UpdateMinigame(state,player,uncovered);
             UpdateLightShow(state,player,uncovered);
             UpdateBriefing(state,player,uncovered&&!minigamePanel.activeSelf);
-            UpdateTip(state,player,uncovered);
+            // A tip due while the life banner shows waits for it, so it never covers YOU'RE BACK.
+            UpdateTip(state,player,uncovered&&!lifePanel.activeSelf);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
             if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
@@ -1071,6 +1072,9 @@ namespace Festival.Presentation
             ApplyTextReflow(textScale);
             if(!session.Connected)return;
             UpdateTrippingLayout();
+            // The sundown warning comes down with the text scale and the dose card, so the banner reads its place after the reflow.
+            float lifeTop=sundownPanel.activeSelf?Mathf.Min(.70f,Rect(sundownPanel).anchorMin.y-.01f):.70f;
+            if(Rect(lifePanel).anchorMax.y!=lifeTop)Place(Rect(lifePanel),.30f,lifeTop-.14f,.70f,lifeTop);
             if(session.SpeechBubbles!=null&&session.SpeechBubbles.Ceiling==null)session.SpeechBubbles.Ceiling=TopCardsFoot;
             bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
             foreach(var delivery in session.SpeechDeliveries.Deliveries)
@@ -2218,7 +2222,7 @@ namespace Festival.Presentation
                 NpcState check=null;
                 if(player.Life=="Spirit")
                 {
-                    if(Near(player,24,-20)&&state.ConnectedCrewCount==1&&player.RevivalCount<2)AddAction("Self revive at medical (15 seconds)",()=>session.Command("BeginRevival",player.Id),ref y);
+                    if(Near(player,24,-20)&&state.ConnectedCrewCount==1&&FestivalGuidance.RevivalsLeft(player)>0)AddAction("Self revive at medical (15 seconds)",()=>session.Command("BeginRevival",player.Id),ref y);
                     if(Near(player,24,-20))AddAction("Memorial chime",()=>session.Command("Chime"),ref y);
                 }
                 else if(state.Phase=="Playing"&&player.Life=="Alive")
