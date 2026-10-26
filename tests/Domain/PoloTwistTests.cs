@@ -201,6 +201,12 @@ public static class PoloTwistTests
         Check(Sale(1,-11,-11)==plain,"Ember Playa has no VIP zones, got "+Sale(1,-11,-11));
         var s=Vip();int doubled=Sell(s,s.Player("p0"),Npc(s,"buyer"));
         Check(s.State.LevelSales==doubled&&s.State.GrossSales==doubled,"the double pay counts toward the day's quota");
+        foreach(var (x,fair,high,greedy) in new[]{(-11f,20,30,40),(0f,10,15,20)})
+        {
+            var offer=Vip();var buyer=Npc(offer,"buyer");buyer.X=x;Place(offer,0,x,22.5);var p=offer.Player("p0");
+            int[] named={FestivalSimulation.SalePrice(offer.State,p,buyer,FestivalSimulation.FairAsk),FestivalSimulation.SalePrice(offer.State,p,buyer,FestivalSimulation.HighAsk),FestivalSimulation.SalePrice(offer.State,p,buyer,FestivalSimulation.GreedyAsk)};
+            Check(named[0]==fair&&named[1]==high&&named[2]==greedy,"at x "+x+" the offer names Fair, High and Greedy at $"+fair+", $"+high+", $"+greedy+", got $"+string.Join(", $",named));
+        }
     }
 
     static void TheNightMarketSellsWristbands()

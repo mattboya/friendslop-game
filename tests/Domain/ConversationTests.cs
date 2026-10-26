@@ -748,9 +748,13 @@ public static class ConversationTests
                 Check(again.Accepted==(extra==0)&&(extra==0||again.Reason=="Not after that ask. They won't buy from you again."),end+" at ask "+ask+": the buyer "+(extra==0?"hears your next offer":"won't buy from you again")+": "+again.Reason);
                 if(extra>0)Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"a refused offer keeps the stock");
             }
-        // Another seller is still welcome.
-        var crew=Pair("Sale");crew.State.Phase="Shopping";crew.AddPlayer("p1","P1");crew.State.Phase="Playing";var friend=crew.Player("p1");friend.X=0;friend.Z=0;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        // Another seller is still welcome. In a crew of three within 5 m the talk's 20 grows with the pack (x1.35, to 27), but the
+        // pushed ask's 30 does not.
+        var crew=Pair("Sale");crew.State.Phase="Shopping";crew.AddPlayer("p1","P1");crew.AddPlayer("p2","P2");crew.State.Phase="Playing";var friend=crew.Player("p1");friend.X=0;friend.Z=0;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var third=crew.Player("p2");third.X=3;third.Z=0;
         Talk(crew,Sale(crew,FestivalSimulation.GreedyAsk),Every(Awkward));
+        double heat=Partner(crew).Observers.Find(o=>o.PlayerId=="p0")?.Suspicion??0;
+        Check(Math.Abs(heat-(20*1.35+30))<1e-9,"in a crew of three the failed Greedy ask adds exactly 30 to the buyer, beside the talk's packed 27, got "+heat);
         Check(crew.Execute("p1",new GameCommand{Id="talk"+(sequence++),Kind="StartSale",TargetId=Partner(crew).Id,ItemId="stock_lsd"}).Accepted,"a friend can still sell to them");
     }
 
