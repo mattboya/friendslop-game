@@ -91,7 +91,7 @@ namespace Festival.Presentation
         /// <summary>POLO-5: draws this body at <paramref name="scale"/> times the size FestivalSession.Actor has just given it.</summary>
         public void Ride(float scale){transform.localScale*=scale;RideScale=scale;}
         Material ownedMaterial;
-        Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
+        Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial,crewMaterial;
         float lastAppliedThreat=-1;
         int skinStep;
         float lastAnimationTime;
@@ -172,6 +172,9 @@ namespace Festival.Presentation
             if(sequence==suppressedReceiptSequence||age<0||age>1||string.IsNullOrEmpty(item))return;
             receivedItem=item;receiptAt=AnimationSeconds-age;RefreshEquipment();
         }
+        public const string CrewRole="Crew";
+        // No accent, staff role or stall wears this magenta. The glow keeps it readable at night.
+        public static readonly Color CrewColor=new Color(.96f,.16f,.82f);
         public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
         {
             var asset=Resources.Load<GameObject>("FestivalCharacter");
@@ -205,6 +208,11 @@ namespace Festival.Presentation
             actor.lensMaterial=new Material(actor.ownedMaterial){name="Festival eyewear"};actor.lensMaterial.SetFloat("_Smoothness",.68f);
             actor.scleraMaterial=new Material(template){name="Festival eye whites",mainTexture=Texture2D.whiteTexture,color=new Color(.98f,.95f,.88f)};
             actor.scleraMaterial.SetFloat("_Smoothness",.22f);
+            if(role==CrewRole)
+            {
+                actor.crewMaterial=new Material(actor.ownedMaterial){name="Festival crew scarf",mainTexture=Texture2D.whiteTexture,color=CrewColor};
+                if(actor.crewMaterial.HasProperty("_EmissionColor")){actor.crewMaterial.EnableKeyword("_EMISSION");actor.crewMaterial.SetColor("_EmissionColor",CrewColor*.45f);}
+            }
             foreach(var renderer in go.GetComponentsInChildren<Renderer>(true))
             {
                 if(renderer.name=="EyeGlow")
@@ -281,12 +289,13 @@ namespace Festival.Presentation
             if(mesh.StartsWith("HairTop_"))return mesh=="HairTop_"+look.Hairstyle && look.Headgear<0;
             if(mesh=="HairUnderHat")return look.Headgear==2 || look.Headgear==3;
             if(mesh.StartsWith("Hairstyle_"))return mesh=="Hairstyle_"+look.Hairstyle;
-            if(mesh.StartsWith("Accessory_"))return mesh=="Accessory_"+look.Accessory;
+            if(mesh.StartsWith("Accessory_"))return mesh=="Accessory_"+look.Accessory||mesh=="Accessory_2"&&look.Role==CrewRole;
             if(mesh.StartsWith("Role_"))return mesh=="Role_"+look.Role;
             return false;
         }
         Material SurfaceFor(string mesh)
         {
+            if(mesh=="Accessory_2"&&crewMaterial!=null)return crewMaterial;
             if(mesh.StartsWith("Shirt_")||mesh.StartsWith("Pants_"))return garmentMaterial;
             if(mesh.StartsWith("Body_")||mesh.StartsWith("Face_"))return skinMaterial;
             if(mesh.StartsWith("Hair")||mesh.StartsWith("FacialHair_"))return hairMaterial;
@@ -918,7 +927,7 @@ namespace Festival.Presentation
             if(garmentPalette!=null){if(Application.isPlaying)Destroy(garmentPalette);else DestroyImmediate(garmentPalette);}
             if(skinPalette!=null){if(Application.isPlaying)Destroy(skinPalette);else DestroyImmediate(skinPalette);}
             if(eyeMaterial!=null){if(Application.isPlaying)Destroy(eyeMaterial);else DestroyImmediate(eyeMaterial);}
-            foreach(var material in new[]{garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial})
+            foreach(var material in new[]{garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial,crewMaterial})
                 if(material!=null){if(Application.isPlaying)Destroy(material);else DestroyImmediate(material);}
         }
     }

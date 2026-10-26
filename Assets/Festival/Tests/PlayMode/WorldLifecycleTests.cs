@@ -449,6 +449,29 @@ namespace Festival.Tests
             finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
             yield return null;
         }
+        [UnityTest]public IEnumerator AJoinedFriendSeesTheHostInTheCrewScarf()
+        {
+            var host=new GameObject("Crew scarf host").AddComponent<FestivalSession>();
+            var friend=new GameObject("Crew scarf friend").AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while((friend.LocalPlayer==null||!Actors(friend).ContainsKey(host.LocalPlayerId)||!Actors(host).ContainsKey(friend.LocalPlayerId))&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                foreach(var (view,id,who) in new[]{(friend,host.LocalPlayerId,"the friend's view of the host"),(host,friend.LocalPlayerId,"the host's view of the friend")})
+                {
+                    Assert.That(Actors(view).ContainsKey(id),Is.True,who+" draws the body");
+                    var scarf=System.Array.Find(Actors(view)[id].GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.name=="Accessory_2");
+                    Assert.That(scarf!=null&&scarf.enabled&&scarf.gameObject.activeInHierarchy,Is.True,who+" wears the crew scarf");
+                    Assert.That(scarf.sharedMaterial.color==FestivalCharacter.CrewColor,Is.True,who+": in the crew colour, not "+scarf.sharedMaterial.color);
+                }
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friend.gameObject);Object.Destroy(host.gameObject);}
+            yield return null;
+        }
         [UnityTest]public IEnumerator ResidentDjHandsStayOnTheConsole()
         {
             var root=new GameObject("DJ contact test");

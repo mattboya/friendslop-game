@@ -1111,7 +1111,7 @@ namespace Festival.Network
                 bool djing=p.VisualPose=="Dj"&&p.Life=="Alive";
                 Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,djing?180:wheel?180:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
-                    p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
+                    p.Life=="Alive"?p.VisualPose:p.Life,FestivalCharacter.CrewRole,0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
                     string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:djing?FestivalWorld.StageDjHeight:at.y);
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)

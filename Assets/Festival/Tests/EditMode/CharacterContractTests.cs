@@ -256,6 +256,34 @@ namespace Festival.Tests
             }
             finally{Object.DestroyImmediate(root);}
         }
+        // Name tags end at 7 m, so the scarf is how a friend stands out from the crowd. One who drew the scarf in the crowd wears
+        // it in their own accent.
+        [Test]public void PlayersWearTheCrewScarfAndNobodyElseDoes()
+        {
+            var root=new GameObject("Crew marker test");
+            try
+            {
+                SkinnedMeshRenderer Part(FestivalCharacter actor,string part)=>System.Array.Find(actor.GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.enabled&&r.name==part);
+                bool Marked(FestivalCharacter actor){var scarf=Part(actor,"Accessory_2");return scarf!=null&&scarf.sharedMaterial.color==FestivalCharacter.CrewColor;}
+                string backpacker=null,scarfWearer=null;
+                for(int i=0;backpacker==null||scarfWearer==null;i++)
+                {
+                    var id="player_"+i;var accessory=FestivalAppearance.For(id).Accessory;
+                    if(accessory==0&&backpacker==null)backpacker=id;if(accessory==2&&scarfWearer==null)scarfWearer=id;
+                }
+                foreach(var id in new[]{backpacker,scarfWearer,"player_1"})
+                {
+                    var player=FestivalCharacter.Create(root.transform,id,Color.white,FestivalCharacter.CrewRole);
+                    Assert.That(Marked(player),Is.True,id+" wears the crew scarf");
+                    if(id==backpacker)Assert.That(Part(player,"Accessory_0"),Is.Not.Null,"over the backpack it drew");
+                    player.UpdateDetailForDistance(40);Assert.That(Marked(player),Is.True,id+" wears it far off too");
+                }
+                foreach(var role in new[]{"Attendee","Security","Friend","Medic","Vendor0","Vendor1","Vendor2"})
+                    foreach(var id in new[]{scarfWearer,backpacker})
+                        Assert.That(Marked(FestivalCharacter.Create(root.transform,id,Color.white,role)),Is.False,role+" "+id+" wears no crew scarf");
+            }
+            finally{Object.DestroyImmediate(root);}
+        }
         [Test]public void HatsSelectClearHairLayersForEveryHeadgearType()
         {
             var root=new GameObject("Hat and hair fit test");
