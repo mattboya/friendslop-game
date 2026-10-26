@@ -26,11 +26,12 @@ Runtime changes to the distance meshes beyond 10 m and returns to detailed meshe
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/generate_festival_hands.py
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/audit_character_fit.py
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/review_character_quality.py
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/render_people_sheets.py
 node scripts/unity.mjs build-mac-development
 node scripts/native-smoke.mjs
 ```
 
-`review_character_quality.py` produces disposable neutral-light front, back, side, top, bottom and face inspection renders. Its cameras and review materials are not exported into the game. The original pre-revision generator, manifest and native capture are retained in `artifacts/character-quality-before/`.
+`review_character_quality.py` produces disposable neutral-light front, back, side, top, bottom and face inspection renders. Its cameras and review materials are not exported into the game. `render_people_sheets.py` renders the people review sheets from the runtime FBX: all four variants of each wardrobe slot, the 12 faces, 8 expression states, the 6 roles and the 6 bodies, front and back, into the ignored `artifacts/people-sheets/` (`-- --only roles,roles-back` picks sheets, `-- --dry-run` lists them without Blender). Its visibility rules and colours copy `FestivalCharacter.KeepMesh` and `FestivalAppearance`. The original pre-revision generator, manifest and native capture are retained in `artifacts/character-quality-before/`.
 
 ## Evidence and limits
 
