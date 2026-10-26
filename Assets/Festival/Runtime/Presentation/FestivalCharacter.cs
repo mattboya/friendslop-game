@@ -703,9 +703,14 @@ namespace Festival.Presentation
                 if(key=="Idle"||key=="")Layer("Head",new Vector3(nod*10f*still,look*28f*still,0));
                 if(idleStyle==1&&key=="Idle"&&equippedProp==null&&carriedPoi=="")
                 {
-                    // Hands on hips.
+                    // Hands on hips: the forearms turn in about Z, since a bend about X holds them out in front like a tray.
                     Aim("ArmL",new Vector3(12*still,0,-8+42*still));Aim("ArmR",new Vector3(12*still,0,8-42*still));
-                    Aim("ForearmL",new Vector3(-95*still,0,-20*still));Aim("ForearmR",new Vector3(-95*still,0,20*still));
+                    Aim("ForearmL",new Vector3(0,0,-105*still));Aim("ForearmR",new Vector3(0,0,105*still));
+                }
+                else if((key=="Idle"||key==""||key=="Walk")&&equippedProp==null&&carriedPoi==""&&(phone==null||!phone.Shown))
+                {
+                    // The generated palm faces the front in the bind pose, so each wrist yaws it in toward the thigh ("L" bones sit on +X).
+                    Layer("HandL",new Vector3(0,-80*still,0));Layer("HandR",new Vector3(0,80*still,0));
                 }
             }
             // Carry a prop with a bent elbow instead of swinging it through the
