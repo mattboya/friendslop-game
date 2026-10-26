@@ -87,13 +87,15 @@ public static class DrumCircleTests
         }
         Check(FestivalSimulation.MinigameKinds.Contains("DrumCircle"),"the bag deals the drum circle now its real consumers have landed");
     }
+    // Booths 0 and 2 are nearer the small stage's front, yet out of its earshot (StageMusic.SmallHearingRadius): every circle
+    // drums to the main stage's song, the one heard at its booth.
     static void ACircleDrumsToTheStageNearerItsBooth()
     {
-        foreach(var (spot,stage) in new[]{(0,StageMusic.Small),(1,StageMusic.Main),(2,StageMusic.Small)})
+        foreach(int spot in new[]{0,1,2})
         {
-            var s=Started(spot:spot);var at=Festivals.BoothSpots[spot];int expected=StageMusic.Track(s.State,stage);
-            Check(StageMusic.Nearer(at.X,at.Z)==stage,"setup: booth "+spot+" is nearer the "+(stage==StageMusic.Small?"small":"main")+" stage");
-            foreach(string id in s.State.Booth.PlayerIds){int got=RequiredPart(s,id).StageTrack;Check(got==expected,"booth "+spot+": "+id+"'s part drums to the nearer stage's song "+expected+", got "+got);}
+            var s=Started(spot:spot);var at=Festivals.BoothSpots[spot];int expected=StageMusic.Track(s.State,StageMusic.Main);
+            Check(StageMusic.Nearer(at.X,at.Z)==StageMusic.Main,"booth "+spot+" is out of the small stage's earshot");
+            foreach(string id in s.State.Booth.PlayerIds){int got=RequiredPart(s,id).StageTrack;Check(got==expected,"booth "+spot+": "+id+"'s part drums to the main stage's song "+expected+", got "+got);}
         }
     }
     static void AllBandsUseTheWorstFinalScoreAndRawNearbySuspicion()

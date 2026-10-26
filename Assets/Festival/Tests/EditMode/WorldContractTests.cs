@@ -226,8 +226,8 @@ namespace Festival.Tests
             foreach(var row in Festivals.CashFindSpots)foreach(var at in row)spots.Add(("a cash find spot",at.X,at.Z,2));
             foreach(var landmark in CloudShapes.Landmarks)spots.Add(("the "+landmark.Name+" cloud stash",landmark.Stash.X,landmark.Stash.Z,2.5f));
             for(int i=0;i<FestivalCrowdLayout.Count;i++){var at=FestivalCrowdLayout.Spot(i);spots.Add(("festivalgoer "+i+"'s place",at.X,at.Z,2.8f));}
-            // FestivalSimulation's MapReady puts the crew of up to eight at -7 + 2 i, -29.
-            for(int i=0;i<8;i++)spots.Add(("crew member "+i+"'s arrival",-7+2*i,-29,1.5f));
+            // FestivalSimulation's MapReady puts the crew of up to eight at Festivals.Arrival.
+            for(int i=0;i<8;i++)spots.Add(("crew member "+i+"'s arrival",Festivals.Arrival(i).X,Festivals.Arrival(i).Z,1.5f));
             foreach(var spot in spots)Assert.That(Gap(spot.X,spot.Z),Is.GreaterThanOrEqualTo(spot.Clear),"the small stage "+area+" is within "+spot.Clear+" m of "+spot.Name+" at "+spot.X+", "+spot.Z);
             foreach(var zone in Festivals.VipZones)Assert.That(RectGap(new Rect(zone.MinX,zone.MinZ,zone.MaxX-zone.MinX,zone.MaxZ-zone.MinZ)),Is.GreaterThanOrEqualTo(3),"clear of the VIP ropes");
             // A lap of either loop takes under 40 s.
@@ -250,7 +250,34 @@ namespace Festival.Tests
             Assert.That(world.NavigationReady,Is.True,"setup: the festival navmesh");
             Assert.That(NavMesh.SamplePosition(new Vector3(StageMusic.SmallX,0,StageMusic.SmallZ+2.5f),out var lawn,.3f,NavMesh.AllAreas),Is.True,"the lawn at its lip is walkable");
             var route=new NavMeshPath();
-            Assert.That(NavMesh.CalculatePath(new Vector3(-7,0,-29),lawn.position,NavMesh.AllAreas,route)&&route.status==NavMeshPathStatus.PathComplete,Is.True,"the crew walks from its arrival to the small stage's lip");
+            Assert.That(NavMesh.CalculatePath(new Vector3(Festivals.Arrival(0).X,0,Festivals.Arrival(0).Z),lawn.position,NavMesh.AllAreas,route)&&route.status==NavMeshPathStatus.PathComplete,Is.True,"the crew walks from its arrival to the small stage's lip");
+        }
+        // The crew of up to eight lands beside the camp gate, out of the small stage's earshot (StageMusicTests), on open lawn: off
+        // every path, clear of every prop, the Ferris wheel and the booths' rings, with a walk to the main stage, on both festivals.
+        [Test]public void TheCrewArrivesOnOpenLawnBesideTheCampGate()
+        {
+            root=new GameObject("Arrival placement");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");
+            var festival=root.transform.Find(FestivalWorld.RootName);Assert.That(world.NavigationReady,Is.True,"setup: the festival navmesh");
+            foreach(int index in new[]{Festivals.PoloFestival,Festivals.PlayaFestival})
+            {
+                world.SetTwists(new RoundState{Phase="Playing",FestivalIndex=index});Physics.SyncTransforms();
+                for(int i=0;i<8;i++)
+                {
+                    var at=Festivals.Arrival(i);var spot=new Vector3(at.X,0,at.Z);string who=Festivals.Name(index)+": crew member "+i+"'s arrival at "+at.X+", "+at.Z;
+                    Assert.That(Vector2.Distance(new Vector2(at.X,at.Z),new Vector2(Festivals.CampGateX,Festivals.CampGateZ)),Is.LessThan(20),who+" is beside the camp gate");
+                    Assert.That(NavMesh.SamplePosition(spot,out var ground,.3f,NavMesh.AllAreas),Is.True,who+" is walkable");
+                    // A body and a step round it, from the ground up: a path's flat box under it counts too.
+                    var room=new Bounds(spot+Vector3.up,new Vector3(1.4f,2,1.4f));
+                    foreach(var c in festival.GetComponentsInChildren<Collider>())
+                        if(c.enabled&&c.name!="Ground"&&!c.name.EndsWith(" boundary",System.StringComparison.Ordinal))Assert.That(c.bounds.Intersects(room),Is.False,who+" stands in "+Path(c.transform));
+                    foreach(var r in festival.GetComponentsInChildren<Renderer>())
+                        if(r.enabled&&r.bounds.size.x<30&&r.bounds.size.z<30&&!IsAmbient(r.transform))Assert.That(r.bounds.Intersects(room),Is.False,who+" stands on or in "+Path(r.transform)+" "+r.bounds);
+                    Assert.That(Vector2.Distance(new Vector2(at.X,at.Z),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.GreaterThan(Festivals.WheelReach+1),who+" is out of the Ferris wheel's reach");
+                    foreach(var booth in Festivals.BoothSpots)Assert.That(Vector2.Distance(new Vector2(at.X,at.Z),new Vector2(booth.X,booth.Z)),Is.GreaterThan(FestivalSimulation.MinigameRingRadius+1),who+" is out of a booth's ring");
+                    var route=new NavMeshPath();
+                    Assert.That(NavMesh.CalculatePath(ground.position,new Vector3(Catalog.StageTakeoverX,0,Catalog.StageTakeoverZ-1),NavMesh.AllAreas,route)&&route.status==NavMeshPathStatus.PathComplete,Is.True,who+" walks to the main stage");
+                }
+            }
         }
         private static bool IsAmbient(Transform t){for(;t!=null;t=t.parent)if(t.name.StartsWith("ambient_",System.StringComparison.Ordinal))return true;return false;}
         private static string Path(Transform t){var name=t.name;for(t=t.parent;t!=null&&t.name!=FestivalWorld.RootName;t=t.parent)name=t.name+"/"+name;return name;}

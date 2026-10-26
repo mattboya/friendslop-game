@@ -174,6 +174,9 @@ namespace Festival.Network
         // MINI-12: the tripper's Booth.Hint is one reliability step lower only when the tripper is the one player at the table; a
         // friend alone at the table while the tripper is detained keeps the crew's odds, so a version-10 client's card would name the
         // solo odds.
+        // MUSIC-8: the small stage is heard, and charts, only within StageMusic.SmallHearingRadius of its front, so Drum Circles at
+        // booths 0 and 2 now chart to the main stage's song, and the crew arrives at Festivals.Arrival; a version-10 client would
+        // drum to the wrong song.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

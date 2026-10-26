@@ -136,9 +136,9 @@ namespace Festival.Tests
                     drums.Follow(other,4.5,AudioSettings.dspTime);Assert.That(drums.Music,Is.Null,why+": the song stops");
                 }
                 drums.Follow(state,4.5,AudioSettings.dspTime);drums.Follow(null,0,AudioSettings.dspTime);Assert.That(drums.Music,Is.Null,"leaving the session stops it");
-                state.Booth.Spot=0;var small=FestivalMusic.For(StageMusic.Track(state,StageMusic.Small));
-                Assert.That(FestivalSimulation.DrumCircleTrack(state),Is.EqualTo(StageMusic.Track(state,StageMusic.Small)),"setup: the west booth is nearer the small stage");
-                drums.Follow(state,4.5,AudioSettings.dspTime);Assert.That(drums.Music.clip,Is.SameAs(small.Audio),"the circle plays the small stage's song");
+                state.Booth.Spot=0;
+                Assert.That(FestivalSimulation.DrumCircleTrack(state),Is.EqualTo(StageMusic.Track(state,StageMusic.Main)),"the west booth is nearer the small stage's front but out of its earshot");
+                drums.Follow(state,4.5,AudioSettings.dspTime);Assert.That(drums.Music.clip,Is.SameAs(track.Audio),"so its circle plays the main stage's song, the one heard there");
             }
             finally
             {

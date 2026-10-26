@@ -118,7 +118,7 @@ public static class SimulationTests {
   Assert(!s.Execute("a",C("FinishReview")).Accepted,"review blocks shopping until votes");for(int award=0;award<3;award++)Assert(s.Execute("a",C("ReviewVote",target:"b",amount:award)).Accepted,"host votes a friend for each award");Assert(!s.Execute("a",C("FinishReview")).Accepted,"wait for connected crew");for(int award=0;award<3;award++)Assert(s.Execute("b",C("ReviewVote",target:"a",amount:award)).Accepted,"crew votes a friend for each award");Assert(!s.Execute("b",C("FinishReview")).Accepted,"only host opens shop");Assert(s.Execute("a",C("FinishReview")).Accepted&&s.State.Phase=="Shopping","review precedes next shop");
   s=Game();s.State.LevelIndex=1;s.State.DurationSeconds=.2;s.Tick(.3);Assert(s.State.Result=="Time expired","night deadline");
   s=Game();p=s.Player("a");var witness=s.State.Npcs[0];witness.X=p.X;witness.Z=p.Z+1;witness.Yaw=180;var nonWitness=s.State.Npcs[10];nonWitness.X=35;nonWitness.Z=35;
-  Assert(s.Execute("a",C("Dance",target:witness.Id)).Accepted,"local dance starts");s.Tick(9);
+  Assert(s.Execute("a",C("Dance",target:witness.Id)).Accepted,"local dance starts");for(int k=0;k<400&&p.InteractionId!="";k++)s.Tick(.05);
   var localSuspicion=witness.Observers.Find(o=>o.PlayerId==p.Id);var remoteSuspicion=nonWitness.Observers.Find(o=>o.PlayerId==p.Id);
   Assert(localSuspicion!=null&&localSuspicion.Suspicion>0&&remoteSuspicion!=null&&remoteSuspicion.Suspicion==0,"suspicion is observer-local");
   s=Game();p=s.Player("a");s.State.Npcs.Clear();p.X=0;p.Z=0;var listener=new NpcState{Id="listener",X=0,Z=1,Yaw=180,CanTalk=true};listener.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});s.State.Npcs.Add(listener);

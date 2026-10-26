@@ -47,7 +47,7 @@ namespace Festival.Core
         // The chart starts with the game at the held stage position. Existing simulation timestamps advance by exactly the game clock;
         // chart/music consumers use this public game-local adapter, never the held world transport.
         public static double DrumChartSeconds(RoundState s,InteractionState i)=>s.Booth.Seconds-(i.StartSeconds-(s.SimulationSeconds-s.Booth.Seconds));
-        /// <summary>The song of the stage nearer the booth, so every part and the circle's own speakers (FestivalDrumAudio) share
+        /// <summary>The song heard at the booth (StageMusic.Nearer), so every part and the circle's own speakers (FestivalDrumAudio) share
         /// one song.</summary>
         public static int DrumCircleTrack(RoundState s){int spot=s.Booth.Spot;var at=spot>=0&&spot<Festivals.BoothSpots.Length?Festivals.BoothSpots[spot]:new WorldPoint(StageMusic.MainX,StageMusic.MainZ);return StageMusic.TrackAt(s,at.X,at.Z);}
         void StartDrumCircle()

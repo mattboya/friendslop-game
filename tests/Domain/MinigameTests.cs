@@ -165,7 +165,7 @@ public static class MinigameTests
             ("the Ferris wheel",Festivals.WheelX,Festivals.WheelZ,8),
             // Visions.cs's secret spots, which take in SplitObjective.cs's lost friends' spots.
             ("a secret spot",16,-4,2.5),("a secret spot",-16,5,2.5),("a secret spot",-24,25,2.5),("a secret spot",25,24,2.5),("a secret spot",18,5,2.5)};
-        for(int i=0;i<8;i++){var shelf=Catalog.ShopPoint(false,i);stands.Add(("a night-market shelf",shelf.X,shelf.Z,2.5));stands.Add(("the level's spawn row",-7+2*i,-29,1));}
+        for(int i=0;i<8;i++){var shelf=Catalog.ShopPoint(false,i);stands.Add(("a night-market shelf",shelf.X,shelf.Z,2.5));var arrival=Festivals.Arrival(i);stands.Add(("the level's spawn row",arrival.X,arrival.Z,1));}
         foreach(var tank in Festivals.GiggleTankSpots)stands.Add(("a Giggle Tank spot",tank.X,tank.Z,Festivals.GiggleTankReach));
         foreach(var landmark in CloudShapes.Landmarks)stands.Add(("the "+landmark.Name+"'s cloud stash",landmark.Stash.X,landmark.Stash.Z,2.5));
         // Festivalgoers start up to .3 m off their places, and a sale or a dance is made within 2.5 m of them.

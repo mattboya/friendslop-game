@@ -31,6 +31,10 @@ namespace Festival.Core
         public static int SalesPerBuyer(int crew)=>2+(crew-1)/4;
         // The old shuttle stop is the way back to camp.
         public const float CampGateX=0,CampGateZ=-32,CampGateRadius=5;
+        // The crew arrives in two rows of four on the open lawn east of the camp gate, off the paths and out of the small stage's
+        // earshot (StageMusic.SmallHearingRadius), so a level opens on the main stage's song.
+        public const float ArrivalX=10,ArrivalZ=-29;
+        public static WorldPoint Arrival(int index)=>new WorldPoint(ArrivalX+2*(index%4),ArrivalZ-2.5f*(index/4));
         // POLO-1: Palm Mirage's twists (FestivalTwists.cs). Influencers film along their facing: a live player within FilmRange,
         // inside the FilmConeDegrees cone and in line of sight, puts every wook within FilmWitnessRadius of them on alert at
         // FilmSuspicionPerSecond, a passive gain like sprinting in view.

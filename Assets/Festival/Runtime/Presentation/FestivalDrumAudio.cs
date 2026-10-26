@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Festival.Presentation
 {
     /// <summary>MINI-2: the Drum Circle's own song. While the game runs the stage holds its world sample (FestivalStageAudio) and the
-    /// world stands still; the circle plays the song of the stage nearer its booth on from that held sample by the game's own clock, the clock its
+    /// world stands still; the circle plays the song heard at its booth on from that held sample by the game's own clock, the clock its
     /// parts' authored grid was laid on, so the drummers play to the music. Heard in the circle rather than from the stage. It
     /// stops as the game is scored, and as the session ends.</summary>
     public sealed class FestivalDrumAudio : MonoBehaviour

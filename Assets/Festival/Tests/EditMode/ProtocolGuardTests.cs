@@ -29,7 +29,8 @@ namespace Festival.Tests
         // A chart reads "DurationSeconds|Id,Direction,TimeSeconds,HoldSeconds;...", and a grey on the DJ ride adds ",1".
         // The spin reads "reel stops|rest|take|react|total".
         // A stage anchor reads "StageFirstHeadWorldSeconds,StageFirstHeadDelaySeconds,StageBeatStride".
-        // The stages read "MainX,MainZ,SmallX,SmallZ|spin seed=main track,small track;..." for each of PickSeeds.
+        // The stages read "MainX,MainZ,SmallX,SmallZ|spin seed=main track,small track;..." for each of PickSeeds. From version 11
+        // the fronts end with ",SmallHearingRadius", and "|x,z;..." adds each crew member's arrival spot (Festivals.Arrival).
         static readonly IReadOnlyDictionary<int,Recording> Recordings=new Dictionary<int,Recording>
         {
             // Version 5: exact archive a1c99e295610a6c312c391f72fcb9bf0392b0976. Version 5 notes had no holds, so each hold reads 0.
@@ -398,7 +399,7 @@ namespace Festival.Tests
                     "8|0,0,2,0;1,1,2.5,0;2,0,3,0;3,0,3.25,0,1;4,2,3.5,0;5,1,3.75,0;6,0,4,0;7,1,4.25,0;8,1,4.5,0;9,1,5,0;10,2,5.5,0;11,2,6,0;12,2,6.5,0;13,2,7,0;14,1,7.25,0;15,0,7.5,0",
                     "8|0,0,2,0;1,1,2.5,0;2,0,3,0;3,1,3.25,0;4,2,3.5,0;5,1,3.75,0;6,0,4,0;7,1,4.25,0;8,1,4.5,0;9,0,4.75,0;10,1,5,0;11,0,5.25,0;12,2,5.5,0;13,1,5.75,0;14,2,6,0;15,2,6.5,0;16,1,6.75,0;17,2,7,0;18,1,7.25,0;19,0,7.5,0",
                 },
-                "0,27.5,-12,-28.5|0=4,5;1=2,4;2=5,7;3=5,3;4=4,2;5=1,3;6=4,3;7=1,5;8=4,7;9=2,6;10=1,7;11=3,7;12=7,5;13=6,2;14=1,4;15=5,2;-1=3,1;123456789=2,4;2147483647=2,6;-2147483648=4,7"),
+                "0,27.5,-12,-28.5,20|0=4,5;1=2,4;2=5,7;3=5,3;4=4,2;5=1,3;6=4,3;7=1,5;8=4,7;9=2,6;10=1,7;11=3,7;12=7,5;13=6,2;14=1,4;15=5,2;-1=3,1;123456789=2,4;2147483647=2,6;-2147483648=4,7|10,-29;12,-29;14,-29;16,-29;10,-31.5;12,-31.5;14,-31.5;16,-31.5"),
         };
 
         static Recording Current()
@@ -414,8 +415,10 @@ namespace Festival.Tests
         // Each level shuffles two of every measured loop onto the stages (StageMusic).
         static IEnumerable<int> PlayedTracks()=>Enumerable.Range(1,StageBeats.Tracks.Length);
         static readonly int[] PickSeeds=Enumerable.Range(0,16).Concat(new[]{-1,123456789,int.MaxValue,int.MinValue}).ToArray();
-        static string Stages()=>string.Join(",",new[]{StageMusic.MainX,StageMusic.MainZ,StageMusic.SmallX,StageMusic.SmallZ}.Select(v=>R(v)))+"|"
-            +string.Join(";",PickSeeds.Select(seed=>seed.ToString(CultureInfo.InvariantCulture)+"="+StageMusic.Track(seed,StageMusic.Main)+","+StageMusic.Track(seed,StageMusic.Small)));
+        const int Crew=8;
+        static string Stages()=>string.Join(",",new[]{StageMusic.MainX,StageMusic.MainZ,StageMusic.SmallX,StageMusic.SmallZ,StageMusic.SmallHearingRadius}.Select(v=>R(v)))+"|"
+            +string.Join(";",PickSeeds.Select(seed=>seed.ToString(CultureInfo.InvariantCulture)+"="+StageMusic.Track(seed,StageMusic.Main)+","+StageMusic.Track(seed,StageMusic.Small)))+"|"
+            +string.Join(";",Enumerable.Range(0,Crew).Select(index=>R(Festivals.Arrival(index).X)+","+R(Festivals.Arrival(index).Z)));
         static InteractionState CheckDance()=>new InteractionState{Kind="ConfirmDance",ChartSeed=42,NoteCount=4,BeatSeconds=.5,ChartDifficulty=3};
         static InteractionState Stage(int track,double startWorldSeconds,string kind)
         {
@@ -529,8 +532,9 @@ namespace Festival.Tests
                 Assert.That(stage.Any(s=>s.Track==track&&s.StartWorldSeconds==start&&s.Kind==kind),Is.True,"track "+track+" has a "+kind+" stage recording from "+R(start)+" s");
         }
 
-        // A client works out each stage's song from the public spin seed, and the host charts a dance to the nearer stage's song,
-        // so a change to the shuffle or to a stage's front would pass every chart guard.
+        // A client works out each stage's song from the public spin seed, and the host charts a dance to the song heard where it
+        // starts (the small stage's only in its earshot), so a change to the shuffle, a stage's front, the earshot or where the crew
+        // arrives would pass every chart guard.
         [Test] public void TheStagePickAndFrontsMatchTheRecording()
         {
             var stages=Current().Stages;
@@ -538,6 +542,13 @@ namespace Festival.Tests
             var halves=stages.Split('|');var fronts=halves[0].Split(',');var picks=halves[1].Split(';');
             Same("the stage fronts","the main stage's x",D(fronts[0]),StageMusic.MainX);Same("the stage fronts","the main stage's z",D(fronts[1]),StageMusic.MainZ);
             Same("the stage fronts","the small stage's x",D(fronts[2]),StageMusic.SmallX);Same("the stage fronts","the small stage's z",D(fronts[3]),StageMusic.SmallZ);
+            Same("the stage fronts","the recorded field count",fronts.Length,5);Same("the stage fronts","the small stage's hearing radius",D(fronts[4]),StageMusic.SmallHearingRadius);
+            Same("the arrival","the recorded part count",halves.Length,3);var arrivals=halves[2].Split(';');Same("the arrival","the recorded spot count",arrivals.Length,Crew);
+            for(int index=0;index<arrivals.Length;index++)
+            {
+                var spot=arrivals[index].Split(',');
+                Same("the arrival","spot "+index+"'s x",D(spot[0]),Festivals.Arrival(index).X);Same("the arrival","spot "+index+"'s z",D(spot[1]),Festivals.Arrival(index).Z);
+            }
             Same("the stage pick","the recorded spin seed count",picks.Length,PickSeeds.Length);
             foreach(var entry in picks)
             {
