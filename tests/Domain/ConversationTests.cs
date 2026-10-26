@@ -28,7 +28,7 @@ public static class ConversationTests
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,AFlopWorksNoOneUpForTheTalkItLeadsTo,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
-            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
+            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,AFailedTrustDanceIsNotAFailedAsk,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -750,6 +750,28 @@ public static class ConversationTests
         var crew=Pair("Sale");crew.State.Phase="Shopping";crew.AddPlayer("p1","P1");crew.State.Phase="Playing";var friend=crew.Player("p1");friend.X=0;friend.Z=0;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
         Talk(crew,Sale(crew,FestivalSimulation.GreedyAsk),Every(Awkward));
         Check(crew.Execute("p1",new GameCommand{Id="talk"+(sequence++),Kind="StartSale",TargetId=Partner(crew).Id,ItemId="stock_lsd"}).Accepted,"a friend can still sell to them");
+    }
+
+    // A wary buyer's trust dance comes before any reply, so a dance you miss, or a sale you call off in it, is no failed ask: a
+    // Greedy ask leaves the buyer and each watcher where a Fair one does, and the buyer still hears you.
+    static void AFailedTrustDanceIsNotAFailedAsk()
+    {
+        foreach(bool cancel in new[]{false,true})
+        {
+            string After(int ask)
+            {
+                var s=Pair("Sale");var buyer=Partner(s);buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+                var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+                var i=Sale(s,ask);Check(i.TrustDance&&i.WitnessIds.Contains("watcher")&&i.WitnessIds.Contains(buyer.Id),"setup: they ask for a dance first, and the watcher sees it");
+                if(cancel)Check(Act(s,"p0","Cancel").Accepted&&i.Status=="Cancelled","setup: you call the sale off in the dance");
+                else for(int guard=0;FestivalSimulation.TrustDancing(i)&&i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+                Check(!FestivalSimulation.TrustDancing(i)||i.Status!="Active","setup: the dance is over");
+                var seen=buyer.Observers.Find(o=>o.PlayerId=="p0");
+                return "buyer "+seen.Suspicion+(seen.RefusesSales?" refusing":"")+", watcher "+watcher.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+            }
+            string fair=After(FestivalSimulation.FairAsk),greedy=After(FestivalSimulation.GreedyAsk);
+            Check(greedy==fair,(cancel?"calling it off in the dance":"a missed dance")+" at Greedy leaves them as at Fair ("+fair+"), got "+greedy);
+        }
     }
 
     // A snapshot keeps a sale's ask; one from before asks restores it as Fair, and an ask outside Fair to Greedy is refused.

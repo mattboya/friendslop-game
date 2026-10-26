@@ -25,9 +25,10 @@ namespace Festival.Core
         public static int SalePrice(RoundState s,PlayerState seller,NpcState buyer,int ask)=>(int)Math.Round(SalePay(ask,1)*VipPayout(s,seller,buyer)*PayoutMultiplier(s),MidpointRounding.AwayFromZero);
         // A High or Greedy ask that ends in no sale or is walked away from: the buyer and each watcher, once, grow that much more
         // suspicious of the seller, and the buyer refuses them for the rest of the level.
+        // A sale called off in the trust dance never reached the ask, so it is no failed ask.
         void PushedAskFailed(InteractionState i,PlayerState p)
         {
-            var buyer=State.Npcs.Find(n=>n.Id==i.TargetId);if(buyer==null||i.Ask==FairAsk)return;
+            var buyer=State.Npcs.Find(n=>n.Id==i.TargetId);if(buyer==null||i.Ask==FairAsk||TrustDancing(i))return;
             foreach(var n in State.Npcs)if(n==buyer||i.WitnessIds.Contains(n.Id))Adjust(n,p,AskSuspicion[i.Ask],packed:false);
             Observe(buyer,p).RefusesSales=true;
         }
