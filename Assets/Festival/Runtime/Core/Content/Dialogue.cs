@@ -27,11 +27,12 @@ namespace Festival.Core
         public const int Redraws=5;
         // A key: the kind and an FNV-1a hash of the words, short enough for the profile and the session's 64-letter limit.
         public static string Key(string kind,string text) { ulong hash=14695981039346656037UL; foreach(char c in text??"") hash=unchecked((hash^c)*1099511628211UL); return kind+"_"+hash.ToString("x16"); }
-        // The line drawn, and its key (its kind and body) for Acknowledge.
-        public string Fresh(LineGrammar grammar,string kind,int festival,ContentRandom random,out string key,ICollection<string> reserved=null)
+        // The line drawn, and its key (its kind and body) for Acknowledge; the other form gives its body too.
+        public string Fresh(LineGrammar grammar,string kind,int festival,ContentRandom random,out string key,ICollection<string> reserved=null)=>Fresh(grammar,kind,festival,random,out key,out _,reserved);
+        public string Fresh(LineGrammar grammar,string kind,int festival,ContentRandom random,out string key,out string body,ICollection<string> reserved=null)
         {
-            string line=""; key="";
-            for(int draw=0;draw<=Redraws;draw++) { line=grammar.Line(kind,festival,random,out var body); key=Key(kind,body); if((Seen==null||!Seen.Contains(key))&&(reserved==null||!reserved.Contains(key))) break; }
+            string line=""; key=""; body="";
+            for(int draw=0;draw<=Redraws;draw++) { line=grammar.Line(kind,festival,random,out body); key=Key(kind,body); if((Seen==null||!Seen.Contains(key))&&(reserved==null||!reserved.Contains(key))) break; }
             return line;
         }
         public DialogueLine Select(string context,int festival,int seed,ICollection<string> reserved=null)

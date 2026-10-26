@@ -18,7 +18,7 @@ public static class LineGrammarTests
         foreach(var test in new Action[]{EverySlotFillsFromItsOwnTable,AKindDrawsEachOfItsTemplatesAndParts,TheSameSeedGivesTheSameLine,
             EachFestivalUsesOnlyItsOwnTaggedParts,AOrAnFollowsTheSoundOfTheNextWord,VerbsAndNounsAgreeWithThePartBeforeThem,
             EverySentenceStartsWithACapital,SpacesStayTidyAroundEmptyParts,DressingIsSaidButLeftOutOfTheBody,AuthoringMistakesFailLoudly,
-            EveryTalkRoundHasItsOwnRepliesInEveryStyle,NoDealLineNamesAPrice})
+            EveryTalkRoundHasItsOwnRepliesInEveryStyle,NoDealLineNamesAPrice,NoReplySaysAWordOfItsDressingAgain,EachTalksLastLineFitsItsReplies})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" line grammar test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -184,6 +184,39 @@ public static class LineGrammarTests
         }
         foreach(var kind in TheirRoundLines)for(int festival=0;festival<Festivals.Count;festival++)Draw(kind,festival);
         Check(faults.Count==0,faults.Count+" fault(s) in the talk rounds' lines:\n  "+string.Join("\n  ",faults.Take(20)));
+    }
+
+    // A talk reply's hello or tail never says again a word of its body ("Hey, neighbor. Hey, neighbor, how are you?",
+    // "Bestie! Bestie!"): a reply whose dressing would is said bare, in every topic, persona, round and festival. Small words
+    // (the, you) may repeat.
+    static void NoReplySaysAWordOfItsDressingAgain()
+    {
+        var dressings=new List<string>();foreach(var style in ConversationLines.Styles){dressings.AddRange(ConversationLines.Parts[style+"_hi"]);dressings.AddRange(ConversationLines.Parts[style+"_tail"]);}
+        List<string> Words(string text)=>Regex.Matches(text.ToLowerInvariant(),"[a-z]+").Select(m=>m.Value).ToList();
+        var repeats=new SortedSet<string>();int dressed=0;
+        foreach(var topic in ConversationLines.Topics)foreach(var persona in new List<string>(DialogueGrammar.Personas){ConversationLines.Security})for(int festival=0;festival<Festivals.Count;festival++)
+            for(int seed=0;seed<60;seed++)for(int turn=0;turn<ConversationLines.Rounds.Length;turn++)
+                foreach(var reply in ConversationLines.Turn(topic,persona,"Regular",festival,turn,turn==0?-1:ConversationLines.SoSo,false,0,new ContentRandom(seed*7+turn)).Replies)
+                    foreach(var dressing in dressings)
+                    {
+                        string body=reply.StartsWith(dressing+" ",StringComparison.Ordinal)?reply.Substring(dressing.Length+1):reply.EndsWith(" "+dressing,StringComparison.Ordinal)?reply.Substring(0,reply.Length-dressing.Length-1):null;
+                        if(body==null)continue;dressed++;
+                        if(Words(dressing).Any(word=>word.Length>=3&&!SmallWords.Contains(word)&&Words(body).Contains(word)))repeats.Add(reply);
+                    }
+        Check(dressed>5000,"setup: most replies still come dressed, got "+dressed);
+        Check(repeats.Count==0,repeats.Count+" repl(ies) say a word of their body again in their hello or tail:\n  "+string.Join("\n  ",repeats.Take(20)));
+    }
+    static readonly HashSet<string> SmallWords=new HashSet<string>{"the","and","you","for","are","but","not","all","was","can","got","get","now","one","out","how","who","its","his","her","our","too"};
+
+    // Each talk's last line fits the replies that answer it. A buyer's or a seller's asks whether you have a deal, as
+    // the talk has not settled it yet; security's says where things stand, for a goodbye to answer, and asks nothing.
+    static void EachTalksLastLineFitsItsReplies()
+    {
+        var faults=new List<string>();
+        foreach(var kind in new[]{"line.sale.close","line.buy.close"})foreach(var line in ConversationLines.Parts[kind])if(!line.EndsWith("?",StringComparison.Ordinal))faults.Add(kind+" doesn't ask: \""+line+"\"");
+        foreach(var line in ConversationLines.Parts["line.security.close"])
+            if(line.Contains("?")||new[]{"question","answer","reason","tell me"}.Any(ask=>line.IndexOf(ask,StringComparison.OrdinalIgnoreCase)>=0))faults.Add("line.security.close asks for an answer: \""+line+"\"");
+        Check(faults.Count==0,faults.Count+" last line(s) don't fit their replies:\n  "+string.Join("\n  ",faults));
     }
 
     // A sale's price depends on its ask and the multipliers, and Ember Playa's money is not dollars, so no line of a sale or a buy,

@@ -53,7 +53,7 @@ namespace Festival.Core
             int skip=random.Next(3),soso=-1;
             for(int style=0;soso<0;style++) if(style!=taste.liked&&style!=taste.hated&&skip--==0) soso=style;
             var styles=new[]{taste.liked,soso,taste.hated};var grades=new[]{Smooth,SoSo,Awkward};Shuffle(grades,random);
-            for(int r=0;r<3;r++) { said.Grades[r]=grades[r]; said.Replies[r]=Say(ReplyKind(topic,round,Styles[styles[grades[r]]]),festival,random,history,said.GrammarKeys); }
+            for(int r=0;r<3;r++) { said.Grades[r]=grades[r]; said.Replies[r]=Reply(ReplyKind(topic,round,Styles[styles[grades[r]]]),festival,random,history,said.GrammarKeys); }
             if(garbled>0)
             {
                 var spots=new[]{0,1,2};Shuffle(spots,random);
@@ -88,6 +88,26 @@ namespace Festival.Core
             if(!Tastes.ContainsKey(persona)||grade<Smooth||grade>Silence)throw new ArgumentException("Unknown reaction persona or grade");
             string kind=grade==Silence?"react.silence":"react."+persona+"."+grade;
             var keys=new List<string>();string line=Say(kind,festival,random,history,keys);key=keys[0];return line;
+        }
+        // Many bodies already open with their style's hello or close on its tail, and "Bestie! Bestie, you came!" reads as a slip.
+        private static string Reply(string kind,int festival,ContentRandom random,DialogueHistory history,ICollection<string> keys)
+        {
+            history=history??new DialogueHistory();
+            string line=history.Fresh(Grammar,kind,festival,random,out var key,out var body);history.Acknowledge(key);keys?.Add(key);
+            if(line==body) return line;
+            var words=Words(body);var dressing=Words(line);foreach(var word in words) dressing.Remove(word);
+            return dressing.Exists(word=>word.Length>=3&&Array.IndexOf(SmallWords,word)<0&&words.Contains(word))?body:line;
+        }
+        private static readonly string[] SmallWords={"the","and","you","for","are","but","not","all","was","can","got","get","now","one","out","how","who","its","his","her","our","too"};
+        private static List<string> Words(string text)
+        {
+            var words=new List<string>();int start=-1;
+            for(int at=0;at<=text.Length;at++)
+            {
+                bool letter=at<text.Length&&char.IsLetter(text[at]);
+                if(letter&&start<0) start=at; else if(!letter&&start>=0) { words.Add(text.Substring(start,at-start).ToLowerInvariant()); start=-1; }
+            }
+            return words;
         }
         private static string Say(string kind,int festival,ContentRandom random,DialogueHistory history,ICollection<string> keys=null)
         {
@@ -306,9 +326,10 @@ namespace Festival.Core
             ["line.sale.small"]=new[]{"So, have you been here all weekend?","You don't look like a regular. Or do you?","I've been watching {song} from {landmark}. You?",
                 "{friend} said someone around here was friendly.","Busy out here. Good cover, I guess.","I've had {snack}. Now I want something better.",
                 "You've got that look. Like you know things.","Is it always this loud by {landmark}?"},
-            ["line.sale.close"]=new[]{"Alright. Cash is ready. Let's do this.","Okay, I'm in. Hand it over slow.","Fine, you've convinced me. Quick, though.",
-                "Deal. Before {stranger} looks over.","Okay. Pass it during {song}.","Last chance to back out. No? Good.",
-                "Cash in my hand, yours in a second.","So, are we doing this or what?"},
+            // Their last line asks whether there's a deal: the talk settles it, so it never agrees before the score is in.
+            ["line.sale.close"]=new[]{"So, what do you say?","Well? Are we doing this or not?","Alright. Can you convince me, then?",
+                "Before {stranger} looks over: yes or no?","Okay. Do we do this during {song}?","Last chance. Is it worth it?",
+                "So where does that leave us?","So, are we doing this or what?"},
             // Buying from a seller: an opening, sizing each other up, the ask, sealing it.
             ["buy.greet.cosmic"]=new[]{"Hi. The stars said you might carry some joy.","Hello, gentle soul. I'm open to receiving.","Hey. Your energy feels like a shop for dreams.",
                 "Greetings. I followed a feeling to you.","Hi, friend. Got a minute for a seeker?","Hey. The trees pointed at you. Weird, right?"},
@@ -343,9 +364,9 @@ namespace Festival.Core
             ["line.buy.small"]=new[]{"You new around here? I like to know my people.","Who sent you? Just curious.","Having a good weekend? You look like you are.",
                 "I don't usually talk to strangers. Go on.","You've been by {landmark} a lot, huh?","Relax. Small talk first. How's the music?",
                 "You seem alright. Tell me about yourself.","Hm. You look like you can keep a secret."},
-            ["line.buy.close"]=new[]{"Okay. Cash first, then we never met.","Alright, I like you. Here's how this goes.","Fine. One. Keep it in your pocket.",
-                "Deal. Don't make a scene about it.","Okay, hand me the cash. Slowly.","Last thing: you didn't get this from me.",
-                "Right then. Quick swap, on three.","Good. Now act like we're old friends."},
+            ["line.buy.close"]=new[]{"So. Still want one?","Alright. What's it going to be?","Hm. Can I trust you with one?",
+                "Okay. Are we doing this quietly?","Right then. Yes or no?","Last thing: you won't make a scene, right?",
+                "So, are we doing this?","Okay. Why should I sell to you?"},
             // Answering to security: a hello, small talk, your story, signing off.
             ["security.greet.cosmic"]=new[]{"Hello, guardian. Your aura is very official.","Hey. I come in peace, like a leaf.","Hi. Did the stars send you to me?",
                 "Greetings, protector of the vibes.","Whoa, hi. Your badge is so shiny.","Hello. I feel a lot of tension. Breathe?"},
@@ -377,9 +398,10 @@ namespace Festival.Core
                 "Thanks! Here, kandi! No? Okay, bye!","Love you! Stay hydrated on shift!","Bye! I'll be good, promise!"},
             ["security.close.plain"]=new[]{"Understood. I'll be on my way.","Right. Thanks for your time.","Okay. Anything else, or am I free to go?",
                 "Fair enough. I'll keep moving.","Thanks. Have a quiet shift.","Alright. Sorry for the trouble."},
-            ["line.security.close"]=new[]{"Alright. Last question, and think carefully.","Okay. Here's where we land on this.","Let me decide what to do with you.",
-                "Fine. Anything else I should know?","Alright. Final answer?","Okay. Give me one reason to let this go.",
-                "Last chance to tell me straight.","Right. Let's wrap this up."},
+            // Security's last line says where things stand, for your goodbye to answer, and asks nothing.
+            ["line.security.close"]=new[]{"Alright. I've heard enough for now.","Okay. Here's where we land on this.","Let me decide what to do with you.",
+                "Fine. That'll do for now.","Alright. I'll be keeping an eye on you.","Okay. I'll make up my mind now.",
+                "Right. I think we're done here.","Right. Let's wrap this up."},
         };
         // FestivalLines' parts and these, each reply: its round's body in its style, bare or dressed with the style's hello or tail
         // ("reply.<topic>.<round>.<style>", ReplyKind), and each reaction: its lead, then its comment ("react.<persona>.<grade>",
