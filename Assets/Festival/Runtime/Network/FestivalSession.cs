@@ -1071,10 +1071,11 @@ namespace Festival.Network
             return s.StageCheerScore>=.4?((hash&1)==0?"Dance":pose):"Idle";
         }
         // Local click prediction yields to the captured host state throughout the game and banner. Internal: the HUD sets the
-        // first-person hands during a pending gear swap after this session does, so it must pass the same spins.
-        internal bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
+        // first-person hands during a pending gear swap after this session does, so it must pass the same spins, for the item on its
+        // way to your hands (item), not the one the view still holds.
+        internal bool PresentedPoiSpin(PlayerState player,string item=null)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player,item??player.EquippedItemId):player.VisualPoiSpin;
         // POI-7: left click wins when both are held, as on the host (ApplyMovement).
-        internal bool PresentedPoiSpinSides(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpinSides;
+        internal bool PresentedPoiSpinSides(PlayerState player,string item=null)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player,item??player.EquippedItemId):player.VisualPoiSpinSides;
         private void UpdateActors()
         {
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();

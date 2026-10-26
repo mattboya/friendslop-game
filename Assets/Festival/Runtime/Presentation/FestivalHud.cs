@@ -1557,9 +1557,12 @@ namespace Festival.Presentation
         private void ShowPendingEquipment(RoundState state,PlayerState player)
         {
             var hands=session.ViewCamera?.GetComponentInChildren<FestivalHands>(true);
+            // The view still holds the old item, so the spin follows the item on its way.
+            bool spin=session.PresentedPoiSpin(player,pendingEquipmentItem),sides=session.PresentedPoiSpinSides(player,pendingEquipmentItem);
             hands?.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);
-            hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),session.PresentedPoiSpin(player),FestivalSimulation.ArtCarOf(state,player.Id)>=0,session.PresentedPoiSpinSides(player));
-            session.LocalWorldCharacter?.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);
+            hands?.SetState(player,state.SimulationSeconds,state.Transfers.Exists(t=>t.ToId==player.Id),spin,FestivalSimulation.ArtCarOf(state,player.Id)>=0,sides);
+            var body=session.LocalWorldCharacter;
+            if(body!=null){body.SetManualEquipment(pendingEquipmentItem,pendingEquipmentReceipt);body.SpinningPoi=spin;body.SpinningPoiSides=sides;}
         }
         private void ClearPendingEquipment()
         {

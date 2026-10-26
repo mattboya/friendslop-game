@@ -249,6 +249,69 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // A swap from other gear to poi waits for the host's view too, and that view still holds the old item.
+        [UnityTest]public IEnumerator AHeldSpinShowsFromTheFirstFrameOfASwapToPoiOnAJoinedClient()
+        {
+            UseAVirtualMouse("Poi in mouse");UseAVirtualKeyboard("Poi in keyboard");
+            var world=new GameObject("Poi in world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostRoot=new GameObject("Poi in host");var host=hostRoot.AddComponent<FestivalSession>();var hostHud=hostRoot.AddComponent<FestivalHud>();yield return null;
+            var clientRoot=new GameObject("Poi in client");var client=clientRoot.AddComponent<FestivalSession>();var hud=clientRoot.AddComponent<FestivalHud>();yield return null;
+            var nextSnapshot=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);
+            var pending=typeof(FestivalHud).GetField("pendingEquipment",BindingFlags.NonPublic|BindingFlags.Instance);
+            FestivalPoiRig[] Rigs()=>client.ViewCamera.GetComponentsInChildren<FestivalPoiRig>();
+            bool Spinning(){var rigs=Rigs();return rigs.Length>=2&&rigs.All(r=>r.Spinning&&!r.SideSpin&&!r.Carrying);}
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);for(float until=Time.realtimeSinceStartup+30;host.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);hostHud.enabled=false;host.Controls.Map.Disable();client.Join("Spinner","127.0.0.1",port);
+                for(float until=Time.realtimeSinceStartup+30;client.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(client.LocalPlayer,Is.Not.Null,client.Message);
+                var game=Simulation(host);var me=game.Player(client.LocalPlayerId);me.X=0;me.Z=19;client.Command("Ready");yield return new WaitForSeconds(.3f);
+                yield return StartLevel(host,client.LocalPlayerId);client.Profile.Data.ThirdPerson=false;
+                // The host trips, on a dose, so the level never doses the spinner mid-test.
+                game.State.Npcs.Clear();game.State.TripperId=host.LocalPlayerId;me.Effects.Clear();
+                var tripper=game.Player(host.LocalPlayerId);tripper.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);tripper.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
+                me.Inventory.Clear();me.Inventory.Add(new ItemStack{ItemId="confetti",Count=1});me.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});me.EquippedItemId="confetti";
+                for(float until=Time.realtimeSinceStartup+3;client.LocalPlayer.EquippedItemId!="confetti"&&Time.realtimeSinceStartup<until;)yield return null;
+                InputSystem.QueueStateEvent(TestMouse,new MouseState().WithButton(MouseButton.Left,true));yield return new WaitForSeconds(.2f);
+                Assert.That(Rigs(),Is.Empty,"setup: with the confetti cannon in hand, the held click spins nothing");
+
+                // Slot 2 holds the practice poi. The host takes the swap, but its view of it is held back. Every frame from the one
+                // that starts the swap is checked.
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.Digit2));
+                int frames=0,before=0,seen=0;
+                for(float until=Time.realtimeSinceStartup+1.5f;Time.realtimeSinceStartup<until;)
+                {
+                    yield return null;
+                    if(++seen==2)InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());
+                    if(!(bool)pending.GetValue(hud)){if(frames>0)break;Assert.That(++before,Is.LessThan(4),"setup: the slot key starts the swap");continue;}
+                    Assert.That(Spinning(),Is.True,"frame "+frames+" of the pending swap: the practice poi on their way spin in your hands");
+                    Assert.That(client.LocalWorldCharacter.SpinningPoi,Is.True,"frame "+frames+" of the pending swap: and on your body");
+                    frames++;
+                }
+                Assert.That(me.EquippedItemId,Is.EqualTo("poi_practice"),"setup: the host takes the swap");
+                Assert.That(frames,Is.GreaterThan(10),"setup: the swap stayed pending for a while");
+
+                // The host's view arrives: the practice poi keep spinning.
+                nextSnapshot.SetValue(host,0d);
+                for(float until=Time.realtimeSinceStartup+3;client.LocalPlayer.EquippedItemId!="poi_practice"&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(client.LocalPlayer.EquippedItemId,Is.EqualTo("poi_practice"),"setup: the host's view confirms the swap");
+                yield return null;
+                Assert.That(Spinning(),Is.True,"the confirmed practice poi spin");
+
+                // The swap back: the view still holds the poi, but the confetti cannon is on its way, so the pair is put away at once.
+                nextSnapshot.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                yield return Tap(Key.Digit1);
+                Assert.That(pending.GetValue(hud),Is.True,"setup: the swap back waits for the host's view");
+                for(int frame=0;frame<10;frame++){Assert.That(Rigs(),Is.Empty,"frame "+frame+" of the swap back: no poi in your hands");yield return null;}
+                nextSnapshot.SetValue(host,0d);
+                InputSystem.QueueStateEvent(TestMouse,new MouseState().WithButton(MouseButton.Left,false));yield return null;
+            }
+            finally{client.Leave();host.Leave();Object.Destroy(clientRoot);Object.Destroy(hostRoot);Object.Destroy(world);}
+            yield return null;
+        }
+
         // The virtual devices and the input settings go back however the test ended (an error log skips its own finally).
         private Mouse mouse;
         private Keyboard keyboard;
