@@ -35,8 +35,10 @@ public sealed partial class FestivalSimulation {
     // only a few metres (ShoutRange).
     bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>SightRange(n)||p.Life!="Alive"||Hidden(n,p))return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return ClearSight(n.X,n.Z,p);}
     // The set's DJ stands up on the riser, inside the stage's solid block, where the host's waist-high sight line never reaches,
-    // so they are in plain view of anyone in range who faces them, an influencer's phone included (InFrame).
-    bool ClearSight(float x,float z,PlayerState p)=>HasLineOfSight==null||Djing(p)||HasLineOfSight(x,z,p.X,p.Z);
+    // so they are in plain view of anyone in range in front of the backdrop who faces them, an influencer's phone included
+    // (InFrame). Behind it the host's sight line decides, and it always meets the backdrop or the stage block.
+    // ponytail: the backdrop's line, not its ends, so a watcher just past either end and behind that line loses the DJ too.
+    bool ClearSight(float x,float z,PlayerState p)=>HasLineOfSight==null||Djing(p)&&z<Catalog.StageBackdropZ||HasLineOfSight(x,z,p.X,p.Z);
     bool Djing(PlayerState p)=>Interaction(p.InteractionId)?.Kind=="Dj";
     // The riser is out of the crowd's reach, so it closes in on the set's DJ, strikes and gives up the chase at the stage front.
     WorldPoint CrowdReach(PlayerState p)=>Djing(p)?new WorldPoint(Catalog.StageTakeoverX,Catalog.StageTakeoverZ):new WorldPoint(p.X,p.Z);

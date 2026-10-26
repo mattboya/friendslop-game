@@ -14,7 +14,7 @@ public static class DjSetTests
             GreysComeFromNightOneAndLaterPhrasesGetBusier,CatchingEveryBlockAndDodgingEveryGreyScoresOne,StayingInOneLaneScoresAboutAThird,
             AGreyHitCostsATenthAndOnlyLaneChangesCount,ALaneChangeThatCatchesNothingCostsATenth,BlindMashingNeverEarnsTheCrowd,
             AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage,TheCrowdAndTheCopsSeeTheDjOnTheRiser,
-            ASwarmStrikesTheDjFromTheStageFront})
+            TheBackdropHidesTheDjFromWatchersBehindIt,ASwarmStrikesTheDjFromTheStageFront})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" DJ set test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -267,6 +267,21 @@ public static class DjSetTests
         Check(cop.Evidence.Exists(e=>e.PlayerId=="p0"&&e.Kind=="VisibleStock"),"a cop facing the riser sees the stock in the DJ's hand");
         game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=24,Yaw=0};game.State.Npcs.Add(cam);
         Start(game);Check(game.IsOnCamera(cam,p),"an influencer filming the riser has the DJ in frame");
+    }
+
+    // The backdrop behind the riser is a wall: a festivalgoer, a cop or an influencer's phone behind it never sees the DJ through
+    // it, though the lawn in front keeps its view under the same blocked sight line (TheCrowdAndTheCopsSeeTheDjOnTheRiser).
+    static void TheBackdropHidesTheDjFromWatchersBehindIt()
+    {
+        var game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;var p=game.Player("p0");
+        var watcher=new NpcState{Id="watcher",Kind="Wook",X=0,Z=38,Yaw=180};var seen=new ObserverState{PlayerId="p0",Suspicion=40};watcher.Observers.Add(seen);game.State.Npcs.Add(watcher);
+        Start(game);double before=seen.LastSeenSeconds;for(int t=0;t<200;t++)game.Tick(.05);
+        Check(p.InteractionId!=""&&seen.LastSeenSeconds==before,"a festivalgoer behind the backdrop never sees the DJ through it, last saw them at "+seen.LastSeenSeconds+" of "+game.State.SimulationSeconds);
+        game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cop=new NpcState{Id="cop_0",Kind="Cop",X=3,Z=38,Yaw=180};game.State.Npcs.Add(cop);
+        Start(game);p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";game.Tick(.05);
+        Check(!cop.Evidence.Exists(e=>e.PlayerId=="p0"),"a cop behind the backdrop never sees the stock in the DJ's hand");
+        game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=37,Yaw=180};game.State.Npcs.Add(cam);
+        Start(game);Check(!game.IsOnCamera(cam,p),"an influencer behind the backdrop never has the DJ in frame");
     }
 
     // The riser is out of the crowd's reach: a swarm strikes the DJ from the stage front, as it did when the set was played there,

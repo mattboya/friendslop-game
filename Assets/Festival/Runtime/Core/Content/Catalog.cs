@@ -26,6 +26,9 @@ namespace Festival.Core
         // A set starts and ends on the lawn at the takeover spot, and is played at the resident's mixer up on the riser.
         // StageCheerRange is measured from the takeover spot.
         public const float StageDjX=0f,StageDjZ=30.84f,StageCheerRange=20f;
+        // The front face of the main stage's backdrop (FestivalWorld's "Stage backdrop", z 35.75-36.25): the DJ on the riser is in
+        // plain view only in front of it.
+        public const float StageBackdropZ=35.75f;
         public static readonly ItemDefinition[] Items = {
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
             // POLO-2, ECON-1: a clean sale pays $10 (FestivalSimulation.PerfectSalePay) at dose 1, and dose, VIP zones, double

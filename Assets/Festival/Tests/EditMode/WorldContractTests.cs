@@ -164,6 +164,27 @@ namespace Festival.Tests
             Assert.That(p.InteractionId,Is.Empty,"setup: the whole set played");
             Assert.That(seen.Suspicion,Is.EqualTo(40).Within(.001),"the set leaves the watcher's suspicion where it was");
         }
+        // The backdrop behind the riser is a wall: a festivalgoer behind it never sees the DJ through it, while one beside the stage
+        // block keeps the DJ in view through the whole set.
+        [Test]public void TheBackdropHidesTheDjFromAWatcherBehindItButNotFromBesideTheStage()
+        {
+            root=new GameObject("DJ backdrop sight");var world=root.AddComponent<FestivalWorld>();world.Build();world.SetPhase("Playing");Physics.SyncTransforms();
+            var backdrop=root.transform.Find(FestivalWorld.RootName).Find("Stage backdrop").GetComponent<Collider>().bounds;
+            Assert.That(backdrop.min.z,Is.EqualTo(Catalog.StageBackdropZ).Within(.01f),"the rules' backdrop line is the built backdrop's front face");
+            foreach(var (who,x,z,yaw,sees) in new[]{("behind the backdrop",0f,38f,180f,false),("beside the stage block",11f,31f,270f,true)})
+            {
+                var game=new FestivalSimulation(9);var p=game.AddPlayer("p0","P0");game.State.Phase="Playing";game.State.SimulationSeconds=10;game.State.Npcs.Clear();game.HasLineOfSight=FestivalSession.LineOfSight;
+                p.X=Catalog.StageTakeoverX;p.Z=Catalog.StageTakeoverZ;p.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+                var seen=new ObserverState{PlayerId="p0",Suspicion=40};var watcher=new NpcState{Id="watcher",Kind="Wook",X=x,Z=z,Yaw=yaw};watcher.Observers.Add(seen);game.State.Npcs.Add(watcher);
+                Assert.That(game.Execute("p0",new GameCommand{Id="dj",Kind="Dj"}).Accepted,Is.True,"setup: the set starts");
+                for(int step=0;step<2000&&p.InteractionId!="";step++)
+                {
+                    game.Tick(.05);
+                    if(p.InteractionId!="")Assert.That(game.State.SimulationSeconds-seen.LastSeenSeconds<.1,Is.EqualTo(sees),"a watcher "+who+" at "+game.State.SimulationSeconds+" s, last saw the DJ at "+seen.LastSeenSeconds+" s, standing at "+watcher.X+", "+watcher.Z);
+                }
+                Assert.That(p.InteractionId,Is.Empty,"setup: the whole set played");
+            }
+        }
         // The host's navigation stops a swarm at the stage lip, short of the riser: it strikes the DJ from the stage front, as it did
         // when the set was played there, so a stage pass never shelters a swarmed player.
         [Test]public void ASwarmAtTheStageFrontStrikesTheDjOnTheRiser()
