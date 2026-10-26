@@ -35,6 +35,26 @@ namespace Festival.Tests
             Assert.That(Wire(game,player.Id).Players.Find(p=>p.Id==player.Id).Inventory[0].Count,Is.EqualTo(1),"concealment does not consume the unit");
         }
 
+        // ESC-3: one guard, two stopped players. The guard walks after the friend (first in the crew's order), and the owner's card
+        // still shows the owner's own stop, then its arrest warning, through the wire; a player it has no case on sees a patrol.
+        [Test] public void EachStoppedPlayerKeepsTheirStopOnTheirCard()
+        {
+            var game=new FestivalSimulation(1);var friend=game.AddPlayer("friend","Friend");var player=game.AddPlayer("owner","Owner");var third=game.AddPlayer("third","Third");
+            game.State.Phase="Playing";game.State.Npcs.Clear();var cop=new NpcState{Id="cop_0",Kind="Cop",X=0,Z=0,Yaw=0};game.State.Npcs.Add(cop);
+            game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);friend.X=30;friend.Z=30;third.X=-30;third.Z=-30;
+            player.X=0;player.Z=5;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});player.EquippedItemId="stock_lsd";game.Tick(.1);
+            Assert.That(Card(game),Does.Contain("SECURITY STOP"),"setup: the owner is stopped");
+            friend.X=1;friend.Z=6;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});friend.EquippedItemId="stock_lsd";game.Tick(.1);
+            Assert.That(cop.TargetId,Is.EqualTo("friend"),"setup: the guard turns to the friend");
+            Assert.That(Card(game),Does.Contain("SECURITY STOP"),"the owner's card keeps the owner's own stop");
+            var mine=Wire(game,"owner").Npcs.Find(n=>n.Id==cop.Id);
+            Assert.That(mine.TargetId,Is.EqualTo("owner"),"the owner's view names only the owner as the guard's case");
+            var bystander=Wire(game,"third").Npcs.Find(n=>n.Id==cop.Id);
+            Assert.That(bystander.Mode,Is.EqualTo("Patrol"),"a player the guard has no case on sees a patrol");Assert.That(bystander.TargetId,Is.Empty);
+            game.Tick(20);
+            Assert.That(Card(game),Does.StartWith("ARREST WARNING"),"20 s on, the owner's card shows the owner's own arrest warning");
+        }
+
         [Test] public void ReservedStockSurvivesJsonRestoreAndFeedsTheStopCard()
         {
             var game=Scene(out var player,out var cop);game.State.Npcs.Remove(cop);

@@ -91,7 +91,8 @@ namespace Festival.Core
     // A cop's case on a player (Danger.cs, SecurityStops.cs): Kind VisibleStock is a security stop, WavedOn one talked down,
     // and WitnessedDeal or IgnoredStop an arrest warning, detaining at DetainAt. ESC-2: a stop runs from StartSeconds, and the
     // cop last saw them at SeenSeconds; -1 in older snapshots, whose stops are timed from the load.
-    [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt, StartSeconds=-1, SeenSeconds=-1; }
+    // ESC-3: Warned marks a stop whose last chance the guard has said (false in older snapshots, which may say it once more).
+    [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt, StartSeconds=-1, SeenSeconds=-1; public bool Warned; }
     [Serializable] public sealed class NpcState {
         public string Id="",Kind="Wook",Mode="Blending",TargetId="",IdlePose="Idle"; public float X,Z,Yaw;
         // TRIP-2: Buyer, Narc, Regular or (at night) ClueHolder, dealt as the crew leaves camp; never sent to clients. "" is not

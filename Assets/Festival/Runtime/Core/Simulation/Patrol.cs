@@ -20,14 +20,14 @@ namespace Festival.Core
         void Patrol(NpcState cop,double dt)
         {
             cop.Mode="Patrol";cop.TargetId="";
-            var talk=State.Interactions.Find(i=>i.Status=="Active"&&i.TargetId==cop.Id);var talker=talk==null?null:Player(talk.PlayerId);
-            if(talker!=null){cop.Yaw=Bearing(cop.X,cop.Z,talker.X,talker.Z);return;}
+            if(FacesTalker(cop))return;
             double ahead=Bearing(CrowdCentre.X,CrowdCentre.Z,cop.X,cop.Z)+PatrolLeadDegrees;if(ahead<0)ahead+=360;
             var next=PatrolPoint((int)Math.Floor(ahead*PatrolPoints/360)+1);
             var point=Move(cop.X,cop.Z,next.X,next.Z,PatrolSpeed*dt);
             if(Distance(cop.X,cop.Z,point.X,point.Z)>0)cop.Yaw=Bearing(cop.X,cop.Z,point.X,point.Z);
             cop.X=point.X;cop.Z=point.Z;
         }
+        bool FacesTalker(NpcState cop){var talk=State.Interactions.Find(i=>i.Status=="Active"&&i.TargetId==cop.Id);var talker=talk==null?null:Player(talk.PlayerId);if(talker==null)return false;cop.Yaw=Bearing(cop.X,cop.Z,talker.X,talker.Z);return true;}
         static float Bearing(float x,float z,float tx,float tz)=>(float)(Math.Atan2(tx-x,tz-z)*180/Math.PI);
     }
 }

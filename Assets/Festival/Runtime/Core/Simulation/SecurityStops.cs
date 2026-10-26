@@ -30,13 +30,20 @@ namespace Festival.Core
         void WaveOn(string copId,PlayerState p){var e=StopBy(copId,p);if(e!=null){e.Kind="WavedOn";Hush(p);}}
         // K2: a talk that doesn't wave p on leaves the stop as it was, and the warning Pursue held back for it comes as it ends, if
         // the stop is past StopWarnSeconds and not yet an arrest warning.
-        void HeardOut(string copId,PlayerState p){var e=StopBy(copId,p);if(e==null)return;double held=State.SimulationSeconds-e.StartSeconds;if(held>=StopWarnSeconds&&held<StopArrestSeconds)Bark(State.Npcs.Find(n=>n.Id==copId),p,WarnBark);}
+        void HeardOut(string copId,PlayerState p){var e=StopBy(copId,p);if(e==null)return;double held=State.SimulationSeconds-e.StartSeconds;if(held>=StopWarnSeconds&&held<StopArrestSeconds){e.Warned=true;Bark(State.Npcs.Find(n=>n.Id==copId),p,WarnBark);}}
         EvidenceState StopBy(string copId,PlayerState p)=>State.Npcs.Find(n=>n.Id==copId)?.Evidence.Find(x=>x.PlayerId==p.Id&&x.Kind=="VisibleStock");
+        /// <summary>ESC-3: cop's case on playerId as that player's own view shows it: "ArrestWarning", "Stop", or "" with none, whoever
+        /// the cop is walking after (PoliceTick). FestivalSession.ViewFor sends it to that player alone.</summary>
+        public static string CaseOn(RoundState s,NpcState cop,string playerId)
+        {
+            var p=s.Players.Find(x=>x.Id==playerId);var e=cop.Kind=="Cop"&&p!=null&&p.Connected&&p.Life=="Alive"?cop.Evidence.Find(x=>x.PlayerId==playerId):null;
+            return e==null?"":Arrests(e)?"ArrestWarning":e.Kind=="VisibleStock"?"Stop":"";
+        }
 
         // Whether cop goes after p this tick on evidence e, turned to face them. Concealment retracts the call-out; ditching all
         // stock in the cop's sight says so and claims stock lying in view. A stop also ends once p has kept out
         // of its sight for BoltSeconds. Ignored, it escalates only in the cop's sight, and never mid-talk: the cop hears a talk
-        // out. Ceiling: a cop works one case at a time (PoliceTick), so a second player's stop waits, its clocks running.
+        // out. ESC-3: PoliceTick runs this for every case each tick, so a second player's stop keeps its clocks and its warning.
         bool Pursue(NpcState cop,PlayerState p,EvidenceState e,double dt)
         {
             double now=State.SimulationSeconds;
@@ -56,8 +63,9 @@ namespace Festival.Core
             if(OnWheel(State,p.Id)){e.StartSeconds=System.Math.Min(now,e.StartSeconds+dt);e.SeenSeconds=now;return true;}
             if(now-e.SeenSeconds>=BoltSeconds){Hush(p);cop.Evidence.Remove(e);return false;}
             double held=now-e.StartSeconds;
-            // K2: mid-talk the warning waits for the talk's end (HeardOut), as the arrest warning does.
-            if(held>=StopWarnSeconds&&held-dt<StopWarnSeconds&&!TalkingTo(p,cop))Bark(cop,p,WarnBark);
+            // K2: mid-talk the warning waits for the talk's end (HeardOut). ESC-3: it is said once (Warned), the first free tick from
+            // 12 s, so walking out of a talk or a tick spent on another case cannot lose it.
+            if(!e.Warned&&held>=StopWarnSeconds&&held<StopArrestSeconds&&!TalkingTo(p,cop)){e.Warned=true;Bark(cop,p,WarnBark);}
             // The usual 4 s from an arrest warning to detention, as for a witnessed deal (RecordDeal).
             if(held>=StopArrestSeconds&&seen&&!TalkingTo(p,cop)){e.Kind="IgnoredStop";e.DetainAt=now+4;}
             return true;
@@ -69,7 +77,8 @@ namespace Festival.Core
         {
             var d=State.Drops.Find(x=>x.ClaimedBy==cop.Id);if(d==null)return false;
             cop.Mode="Patrol";cop.TargetId="";double dist=Distance(cop.X,cop.Z,d.X,d.Z);if(dist>.1)cop.Yaw=Bearing(cop.X,cop.Z,d.X,d.Z);
-            if(State.SimulationSeconds<d.ClaimAt)return true;
+            // ESC-3: while it waits, a player who talks to it gets its face, as on patrol.
+            if(State.SimulationSeconds<d.ClaimAt){FacesTalker(cop);return true;}
             if(dist<=2.5){State.Drops.Remove(d);CrewNews(null,"Items","SECURITY TOOK the ditched "+Catalog.FindItem(d.ItemId)?.Name);return true;}
             var point=Move(cop.X,cop.Z,d.X,d.Z,3*dt);cop.X=point.X;cop.Z=point.Z;return true;
         }

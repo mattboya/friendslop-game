@@ -163,6 +163,8 @@ namespace Festival.Network
         // the chat window's meter lands on it, not on its own count.
         // DIALOG-18: a talk reaches its talker as a copy in which every reply not picked has grade -1, so the meter moves on the
         // host's echo of a pick and no client can read the smooth reply ahead.
+        // ESC-3: a view shows each cop's case on its viewer (Mode Stop or ArrestWarning, TargetId the viewer) whoever the cop walks
+        // after, and snapshots mark a stop whose last chance was said (EvidenceState.Warned, false in older rounds).
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -1021,8 +1023,10 @@ namespace Festival.Network
                 {
                     // CROWD-3: a festivalgoer scattering from an arrest does so in every client's view; whom it suspects stays masked.
                     // A distracted one dances in every view too; only its target still learns whom it suspects.
+                    // ESC-3: a cop shows each player their own case, Stop or ArrestWarning, whoever it is walking after.
                     bool scattering=npc.Mode==FestivalSimulation.Scattering,targetsViewer=!scattering&&npc.TargetId==viewer,shown=scattering||npc.Mode=="Distracted";
-                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer||shown?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
+                    string own=npc.Kind=="Cop"?FestivalSimulation.CaseOn(source,npc,viewer):"";
+                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=own!=""?own:targetsViewer||shown?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=own!=""||targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
