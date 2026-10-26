@@ -15,7 +15,7 @@ public static class EscalationTests
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
             ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,
             AStopWaitsForAWheelRider,GDitchesOneAtATimeAndSaysWhatIsLeft,GDitchesMidChat,
-            OneGuardKeepsTwoStops,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker})
+            OneGuardKeepsTwoStops,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -282,6 +282,7 @@ public static class EscalationTests
         Check(talk.Status=="Complete"&&talk.Score>=.75&&talk.Score<.85,"setup: the talk scores .75 or a little more (got "+talk.Score+")");
         for(int tick=0;tick<20;tick++){InFront(cop,a,3);s.Tick(.1);}
         Check(cop.Mode=="Patrol"&&cop.TargetId==""&&!cop.Evidence.Exists(e=>e.Kind=="VisibleStock"),"a talk scoring .75 clears the stop: 2 s on, stock right in front of the guard, it lets them be (mode "+cop.Mode+")");
+        Check(cop.Evidence.Exists(e=>e.PlayerId=="a"&&e.Kind=="WavedOn")&&FestivalSimulation.CaseOn(s.State,cop,"a")=="","waved on and still in the guard's sight, a's own view shows no case (\""+FestivalSimulation.CaseOn(s.State,cop,"a")+"\")");
         open=false;s.Tick(.1);open=true;InFront(cop,a,3);s.Tick(.1);
         Check(cop.Mode=="Stop","once the guard has lost sight of them, stock in view starts a fresh stop (mode "+cop.Mode+")");
 
@@ -597,6 +598,33 @@ public static class EscalationTests
         s.Tick(24.1-(s.State.SimulationSeconds-bAt));Check(b.Life=="Detained"&&a.Life=="Alive","4 s after its warning b is detained, a still free ("+b.Life+", a "+a.Life+")");
         Check(FestivalSimulation.CaseOn(s.State,cop,"a")=="Stop"&&FestivalSimulation.CaseOn(s.State,cop,"b")=="","a's view keeps its stop, and detained b's shows no case ("+FestivalSimulation.CaseOn(s.State,cop,"a")+", "+FestivalSimulation.CaseOn(s.State,cop,"b")+")");
     }
+    // ESC-3: with two stops open, the guard sees a third player's stock in the way it faces (toward a, whom it walks after), not
+    // toward the last stop it checked (b).
+    static void AGuardWithTwoStopsSeesNothingBehindIt()
+    {
+        var s=TwoStopsSplitUp(out var cop,out var b,out var c);c.X=cop.X+8;c.Z=cop.Z+3;
+        Check(Off(To(cop,c),cop.Yaw)>100&&Off(To(cop,c),To(cop,b))<60,"setup: c behind the guard, toward b (c at "+To(cop,c)+", yaw "+cop.Yaw+", b at "+To(cop,b)+")");
+        s.Tick(.1);Check(!cop.Evidence.Exists(e=>e.PlayerId=="c"),"stock behind the guard's back starts no stop, though b stands that way (\""+c.NpcSpeech+"\")");
+    }
+    static void AGuardWithTwoStopsSeesStockInFront()
+    {
+        var s=TwoStopsSplitUp(out var cop,out var b,out var c);c.X=cop.X-7;c.Z=cop.Z+2;
+        Check(Off(To(cop,c),cop.Yaw)<60&&Off(To(cop,c),To(cop,b))>100,"setup: c in front of the guard, away from b (c at "+To(cop,c)+", yaw "+cop.Yaw+", b at "+To(cop,b)+")");
+        s.Tick(.2);Check(cop.Evidence.Exists(e=>e.PlayerId=="c"&&e.Kind=="VisibleStock"),"stock in plain view in front of the guard starts a stop ("+string.Join(",",cop.Evidence.ConvertAll(e=>e.PlayerId+":"+e.Kind))+")");
+    }
+    // a and b stopped by one guard and split up, the guard on a (first in the crew's order); c, with stock, far off.
+    static FestivalSimulation TwoStopsSplitUp(out NpcState cop,out PlayerState b,out PlayerState c)
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.AddPlayer("c","C");s.State.Phase="Playing";
+        s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
+        var a=s.Player("a");b=s.Player("b");c=s.Player("c");a.X=0;a.Z=5;b.X=30;b.Z=30;c.X=-30;c.Z=-30;
+        foreach(var p in new[]{a,b,c}){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
+        s.Tick(.1);b.X=1;b.Z=6;s.Tick(.1);a.X=-5;a.Z=6;b.X=5;b.Z=6;s.Tick(.1);
+        Check(cop.TargetId=="a"&&cop.Evidence.FindAll(e=>e.Kind=="VisibleStock").Count==2&&Off(To(cop,a),cop.Yaw)<1,"setup: the guard stops a and b and faces a (on "+cop.TargetId+", yaw "+cop.Yaw+")");
+        return s;
+    }
+    static double To(NpcState n,PlayerState p)=>Math.Atan2(p.X-n.X,p.Z-n.Z)*180/Math.PI;
+    static double Off(double a,double b){double d=Math.Abs(a-b)%360;return d>180?360-d:d;}
     // A stop's last chance is said once, whenever the guard is free to say it: walking out of a talk with the guard past 12 s,
     // the next tick says it (K2 held it for the talk's end, which only a finished talk reached).
     static void TheLastChanceComesAfterAWalkOut()
