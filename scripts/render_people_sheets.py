@@ -18,9 +18,9 @@ SKIN = [(.32,.19,.15),(.43,.25,.18),(.55,.34,.23),(.68,.44,.30),(.77,.54,.37),(.
 HAIR = [(.10,.07,.07),(.23,.12,.09),(.41,.23,.12),(.66,.43,.19),(.85,.68,.35),(.85,.83,.73),(.78,.29,.13),(.22,.77,.69),(.81,.31,.66),(.39,.39,.85)]
 CLOTH = [(.94,.32,.42),(.19,.79,.69),(.95,.67,.24),(.64,.40,.84),(.26,.49,.84),(.83,.78,.48),(.27,.36,.29),(.80,.48,.31),(.93,.83,.68),(.18,.22,.33)]
 ACCENT = [(.99,.74,.20),(.22,.92,.78),(.98,.45,.58),(.52,.37,.93),(.95,.94,.72),(.33,.73,.98),(.91,.49,.24),(.30,.36,.40)]
-# FestivalAppearance.SleeveTint and palette slot 7 for the roles that fix them.
+# FestivalAppearance.SleeveTint and AccentTint (palette slot 7) for the roles that fix them.
 ROLE_SLEEVE = {"Friend": (.99,.44,.22), "Security": (.30,.48,.72)}
-ROLE_ACCENT = {"Medic": (.20,.92,.71)}
+ROLE_ACCENT = {"Medic": (.20,.92,.71), "Security": (.86,.95,.16), "Friend": (.99,.44,.22), "Vendor0": (.93,.26,.47), "Vendor2": (.98,.68,.21)}
 
 BASE = dict(gender=0, shape=1, face=1, shirt=1, pants=1, shoes=0, hairstyle=1, skin=4, haircolor=2, shirtcolor=1, pantscolor=9,
             shoecolor=1, accent=0)

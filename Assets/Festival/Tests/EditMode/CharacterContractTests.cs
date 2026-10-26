@@ -188,6 +188,31 @@ namespace Festival.Tests
                 k.SkinColor,k.HairColor,k.ShirtColor,k.PantsColor,k.ShoeColor,k.AccentColor),Is.EqualTo("1,2,3,1,0,1,2,-1,2,1,7,8,3,1,3,6"),
                 "player_29 looks as before, but for the pants");
         }
+        // The vests and aprons are cut from palette slot 7. The fabric palette is not readable, so read the skin copy of the same colours.
+        [Test]public void EachStaffRoleWearsItsOwnColourAndAttendeesKeepTheirAccents()
+        {
+            Color32 Slot7(string id,string role)
+            {
+                var palette=FestivalAppearance.For(id,role).CreatePalette(skin:true);
+                try{return palette.GetPixel(palette.width/8*7+palette.width/16,0);}finally{Object.DestroyImmediate(palette);}
+            }
+            var worn=new System.Collections.Generic.Dictionary<string,Color32>();
+            foreach(var role in new[]{"Security","Friend","Vendor0","Vendor2","Medic"})
+            {
+                worn[role]=Slot7("look2_person_0",role);
+                for(int i=1;i<20;i++)Assert.That(Slot7("look2_person_"+i,role),Is.EqualTo(worn[role]),role+" "+i+" wears the role's colour");
+            }
+            Color Of(string role)=>worn[role];
+            var security=Of("Security");
+            Assert.That(security.r>.75f&&security.g>.85f&&security.b<.3f,Is.True,"security wears hi-vis yellow, not "+security);
+            Assert.That((Vector4)Of("Friend"),Is.EqualTo((Vector4)(Color)(Color32)FestivalAppearance.For("look2_person_0","Friend").SleeveTint),"the missing friend's jacket is the orange of its sleeves");
+            var roles=new[]{"Security","Friend","Vendor0","Vendor2","Medic"};
+            for(int a=0;a<roles.Length;a++)for(int b=a+1;b<roles.Length;b++)
+                Assert.That(Vector4.Distance(Of(roles[a]),Of(roles[b])),Is.GreaterThan(.2f),roles[a]+" and "+roles[b]+" wear different colours");
+            var accents=new System.Collections.Generic.HashSet<Color32>();
+            for(int i=0;i<20;i++)accents.Add(Slot7("look2_person_"+i,"Attendee"));
+            Assert.That(accents.Count,Is.GreaterThanOrEqualTo(4),"attendees still spread over several accents");
+        }
         [Test]public void RuntimeActorEnablesExactlyOneRequiredVariantPerSlot()
         {
             var root=new GameObject("Wardrobe test");
