@@ -115,6 +115,9 @@ namespace Festival.Core
             if(c.Kind=="Use"&&c.ItemId==ConfettiItem&&State.Phase=="Shopping")return Use(p,c);
             if(State.Phase!="Playing")return Reject("Start the round first");
             if(c.Kind==DeckSetKind)return BeginDeckSet(p);
+            // ESC-3: a chat holds you as long as you like while a stop's clock runs, and the card still says DITCH IT (G), so G ditches mid
+            // chat. Not mid-dance (G stops it), mid-talk with the guard or up on the Ferris wheel (the stop waits there, Pursue).
+            if(c.Kind=="Drop"&&p.InteractionId!=""&&Stopped(p)&&UntimedChat(Interaction(p.InteractionId)))return Drop(p,c);
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
             switch(c.Kind) {
                 case "Consume": return Consume(p,c);

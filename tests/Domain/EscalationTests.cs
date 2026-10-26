@@ -14,7 +14,7 @@ public static class EscalationTests
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
             ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,
-            AStopWaitsForAWheelRider})
+            AStopWaitsForAWheelRider,GDitchesOneAtATimeAndSaysWhatIsLeft,GDitchesMidChat})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -528,5 +528,45 @@ public static class EscalationTests
             s.Tick(7.6);Check(cop.Mode=="Stop",when+": the stop holds until 20 s of its clock (mode "+cop.Mode+")");
             s.Tick(.3);Check(cop.Mode=="ArrestWarning",when+": ignored to 20 s of its clock, an arrest warning (mode "+cop.Mode+")");
         }
+    }
+    // ESC-3 item 3: during a stop G ditches one unit at a time and says how many are left, so a player carrying two isn't told
+    // the stock is gone while the stop goes on. The stop ends with the last one.
+    static void GDitchesOneAtATimeAndSaysWhatIsLeft()
+    {
+        var s=Stopped(out var cop,out var a);a.Inventory.Find(i=>i.ItemId=="stock_lsd").Count=2;
+        var first=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(first.Accepted&&Count(a,"stock_lsd")==1&&first.Reason=="DITCHED 1 Tongue Stamps  •  1 left","one G ditches one of two and says one is left (\""+first.Reason+"\")");
+        s.Tick(.1);Check(cop.Mode=="Stop","with one still in hand the stop holds (mode "+cop.Mode+")");
+        var last=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(last.Accepted&&Count(a,"stock_lsd")==0&&last.Reason=="DITCHED 1 Tongue Stamps  •  0 left","the next G ditches the last and says so (\""+last.Reason+"\")");
+        s.Tick(.1);Check(cop.Mode=="Patrol"&&Says(a,"Fine. Move along."),"and the stop is over (mode "+cop.Mode+")");
+        s=Stopped(out cop,out a,()=>false);a.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});a.EquippedItemId="poi_practice";
+        var plain=s.Execute("a",Command("Drop",item:"poi_practice"));
+        Check(plain.Accepted&&plain.Reason=="Dropped Practice poi","out of a stop G drops what's in hand, as ever (\""+plain.Reason+"\")");
+    }
+    // ESC-3 item 2: a chat check holds you as long as you like while the stop's clock runs, and the card still says DITCH IT (G),
+    // so mid chat G ditches the stock and the chat goes on. Out of a stop the chat still keeps G from dropping anything.
+    static void GDitchesMidChat()
+    {
+        FestivalSimulation Chatting(out NpcState cop,out PlayerState a,bool stopped)
+        {
+            var s=Stopped(out cop,out a,stopped?null:(Func<bool>)(()=>false));s.State.TripperId="a";
+            s.State.Npcs.Add(new NpcState{Id="seen",Role="Buyer",X=a.X+1,Z=a.Z,Yaw=-90});s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="seen"});
+            var chat=s.Execute("a",Command("ConfirmChat","seen"));Check(chat.Accepted,"setup: the tripper starts a chat check (\""+chat.Reason+"\")");return s;
+        }
+        var s=Chatting(out var cop,out var a,true);Check(cop.Mode=="Stop","setup: the stop is on (mode "+cop.Mode+")");
+        var mid=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(mid.Accepted&&Count(a,"stock_lsd")==0&&s.Interaction(a.InteractionId)?.Kind=="ConfirmChat","mid chat check G ditches the stock, and the chat goes on (\""+mid.Reason+"\")");
+        s.Tick(.1);Check(cop.Mode=="Patrol"&&Says(a,"Fine. Move along."),"ditched in the guard's sight, the stop is over (mode "+cop.Mode+", \""+a.NpcSpeech+"\")");
+        // So does a talk with a festivalgoer, waiting on your reply.
+        s=Stopped(out cop,out a);var partner=new NpcState{Id="talker",Role="Regular",CanTalk=true,X=a.X+1,Z=a.Z,Yaw=-90};s.State.Npcs.Add(partner);
+        var talk=s.Execute("a",Command("Conversation","talker"));Check(talk.Accepted&&!s.Interaction(a.InteractionId).TrustDance,"setup: the stopped player talks to a festivalgoer, no dance first (\""+talk.Reason+"\")");
+        Check(s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted&&Count(a,"stock_lsd")==0,"mid talk with a festivalgoer G ditches the stock too");
+        // But not mid-talk with the guard who stopped you: that talk keeps time, and G there ditches nothing.
+        s=Stopped(out cop,out a);s.Tick(1);var asked=s.Execute("a",Command("Police",cop.Id));Check(asked.Accepted,"setup: the stopped player talks to the guard (\""+asked.Reason+"\")");
+        var police=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(!police.Accepted&&Count(a,"stock_lsd")==1,"mid-talk with the guard G ditches nothing (\""+police.Reason+"\")");
+        s=Chatting(out cop,out a,false);Check(cop.Mode=="Patrol","setup: no stop");
+        Check(!s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted&&Count(a,"stock_lsd")==1,"with no stop on, a chat check still keeps G from dropping anything");
     }
 }

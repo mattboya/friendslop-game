@@ -33,7 +33,7 @@ public static class MoneyGuardTests
         new[]{"Economy.cs","Add(p,c.ItemId,1)","buyer: the reply 'X bought for $5' and the pocket toast"},
         new[]{"Economy.cs","Take(p,c.ItemId,1)","taker: 'TOOK Tongue Stamps  •  1 left'"},
         new[]{"Economy.cs","Take(p,c.ItemId,1)","placer: 'STASH BOX PLACED  •  the crew can stash here'"},
-        new[]{"Economy.cs","Take(p,item,1)","dropper: the reply 'Dropped X' or 'X ditched'"},
+        new[]{"Economy.cs","Take(p,item,1)","dropper: the reply 'Dropped X', or in a security stop 'DITCHED 1 Tongue Stamps  •  1 left'"},
         new[]{"Economy.cs","Take(p,c.ItemId,1)","actor: the reply 'X left in the shared stash'"},
         new[]{"Economy.cs","stash.Items.Add(newItemStack{ItemId=c.ItemId,Count=1})","crew: 'STASH  •  +1 Tongue Stamps  •  Ash'"},
         new[]{"Economy.cs","item.Count++","crew: 'STASH  •  +1 Tongue Stamps  •  Ash'"},
