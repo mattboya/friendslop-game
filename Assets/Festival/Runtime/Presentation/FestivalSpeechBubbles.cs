@@ -211,11 +211,19 @@ namespace Festival.Presentation
                 }
                 placed.Add((bubble,new Vector3(head.x,bottom,head.z),speech.SpeakerId,reducedMotion?1:Mathf.Lerp(.94f,1,(float)speech.AgeSeconds/.16f)));
             }
-            Place(view,profile?.TextScale??1);
+            Place(view,profile?.TextScale??1,LidLine(state,localPlayerId,reducedMotion));
         }
-        // The whole stack is pulled down at once so it stays in the band even a metre away. It stays in the world, so walls still hide it.
+        // The height where the resting upper lid is half dark down the middle of the view (EyeShade's soft edge), 1 with open eyes.
+        // ponytail: middle column and resting lid only (blinks still pass); use the bubble's x if PLAYTEST-1 finds an off-centre speaker hard to read.
+        static float LidLine(RoundState state,string localPlayerId,bool reducedMotion)
+        {
+            float rest=FestivalTrip.For(state,localPlayerId,reducedMotion,0).Eye;
+            if(rest<=0)return 1;
+            return .5f+(1-rest)/2*(1-FestivalTrip.EyeSoftness(FestivalTrip.LaneEffect(state.Players.Find(p=>p.Id==localPlayerId)))/2);
+        }
+        // The whole stack is pulled down at once so it stays in the band and under the lid even a metre away. It stays in the world, so walls still hide it.
         // A view with no camera, or a speaker level with or behind it, keeps the world-sized bubble over the head.
-        void Place(Transform view,float textScale)
+        void Place(Transform view,float textScale,float lid)
         {
             if(placed.Count==0)return;
             var lens=view.GetComponent<Camera>();float unit=CapHeight*textScale/capWorld;
@@ -230,7 +238,7 @@ namespace Festival.Presentation
                     bubble.Root.position=foot+Vector3.up*(offset+bubble.Height*.5f);bubble.Root.localScale=Vector3.one*pop;continue;
                 }
                 float depth=at.z-Lead,frustum=lens.orthographic?2*lens.orthographicSize:2*depth*Mathf.Tan(lens.fieldOfView*.5f*Mathf.Deg2Rad);
-                float half=(Width+Padding*2)*.5f*unit/lens.aspect,top=Mathf.Min(BandTop,(Ceiling?.Invoke(at.x-half,at.x+half)??1)-CardGap);
+                float half=(Width+Padding*2)*.5f*unit/lens.aspect,top=Mathf.Min(Mathf.Min(BandTop,lid-CardGap),(Ceiling?.Invoke(at.x-half,at.x+half)??1)-CardGap);
                 float low=Mathf.Max(BandBottom,Mathf.Min(at.y,top-tall[speaker]*unit));
                 bubble.Root.position=lens.ViewportToWorldPoint(new Vector3(at.x,low+(offset+bubble.Height*.5f)*unit,depth));
                 bubble.Root.localScale=Vector3.one*(unit*frustum*pop);
