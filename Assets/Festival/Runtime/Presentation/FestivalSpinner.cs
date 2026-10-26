@@ -152,7 +152,8 @@ namespace Festival.Presentation
 
         // LOOP-4: every positive-cash death spins its own small one-reel slot in the corner, three KEEP tiles to one DROP, read off the
         // death's frozen public summary on the world clock, so every viewer (the dead player and spirits too) sees the same spin land
-        // just as the pile does. It sits on its own canvas under the HUD and takes no clicks, so it never stops anyone doing anything.
+        // just as the pile does. It sits on its own canvas, over the trip's look and under the HUD, and takes no clicks, so it never stops
+        // anyone doing anything.
         public const string DeathCanvasName="Festival death spinner";
         // The result rests DeathResultSeconds, fading out over its last DeathFadeSeconds; presentation only, no protocol meaning.
         public const float DeathResultSeconds=2.5f,DeathPopSeconds=.3f,DeathFadeSeconds=.3f;
@@ -322,7 +323,8 @@ namespace Festival.Presentation
             font=Resources.Load<Font>("FestivalDisplay");if(font==null)font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             overlay=Overlay("Festival spinner",110); // over the HUD (100)
             // No GraphicRaycaster on either canvas: neither takes a click.
-            deathOverlay=Overlay(DeathCanvasName,90);deathOverlay.SetActive(false);
+            // Over the trip's look (90), so the spirit's dark edges never dim the money a reel lands on, and under the HUD (100).
+            deathOverlay=Overlay(DeathCanvasName,95);deathOverlay.SetActive(false);
             backdrop=Panel(overlay.transform,"Spinner backdrop",new Color(Ink.r,Ink.g,Ink.b,.92f),Vector2.zero,Vector2.one);
             var cabinet=Block(backdrop.transform,"Cabinet",Orange,new Vector2(-40,0),CabinetSize);
             var face=(RectTransform)Panel(cabinet,"Face",Ink,Vector2.zero,Vector2.one).transform;face.offsetMin=new Vector2(16,16);face.offsetMax=new Vector2(-16,-16);
