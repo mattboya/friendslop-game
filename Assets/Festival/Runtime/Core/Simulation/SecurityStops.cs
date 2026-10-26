@@ -63,8 +63,8 @@ namespace Festival.Core
             if(OnWheel(State,p.Id)){e.StartSeconds=System.Math.Min(now,e.StartSeconds+dt);e.SeenSeconds=now;return true;}
             if(now-e.SeenSeconds>=BoltSeconds){Hush(p);cop.Evidence.Remove(e);return false;}
             double held=now-e.StartSeconds;
-            // K2: mid-talk the warning waits for the talk's end (HeardOut). ESC-3: it is said once (Warned), the first free tick from
-            // 12 s, so walking out of a talk or a tick spent on another case cannot lose it.
+            // K2: mid-talk the warning waits for the talk's end (HeardOut). ESC-3: Pursue says it once (Warned), the first free tick from
+            // 12 s, so a walk-out or a tick on another case cannot lose it. HeardOut repeats it after any talk that fails.
             if(!e.Warned&&held>=StopWarnSeconds&&held<StopArrestSeconds&&!TalkingTo(p,cop)){e.Warned=true;Bark(cop,p,WarnBark);}
             // The usual 4 s from an arrest warning to detention, as for a witnessed deal (RecordDeal).
             if(held>=StopArrestSeconds&&seen&&!TalkingTo(p,cop)){e.Kind="IgnoredStop";e.DetainAt=now+4;}
