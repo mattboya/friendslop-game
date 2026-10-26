@@ -13,7 +13,7 @@ public static class EscalationTests
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
-            ADraggedFriendStaysInsideTheFence})
+            ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -443,8 +443,8 @@ public static class EscalationTests
         }
         Walk(East+.35f,a.Z);Walk(East+.35f,(Front+Back)/2);
         Check(b.Life=="Downed"&&a.DragTargetId=="b","the friend is still downed and dragged beside the east wall");
-        Walk(East+.35f,Back+1.5f);
-        Check(b.X==a.X-1&&b.Z==a.Z,"past the back the friend follows at the dragger's side again ("+b.X+", "+b.Z+")");
+        Walk(East+.35f,Back+1.5f);Walk(East+.35f,Back+3);
+        Check(Math.Abs(Dist(a.X,a.Z,b.X,b.Z)-1)<.01&&b.Z<a.Z,"past the back the friend follows a metre behind again ("+b.X+", "+b.Z+"; dragger at "+a.X+", "+a.Z+")");
     }
     // ESC-5: a dragger walking along the west fence keeps the friend inside the grounds (|x| <= 39), and once rescued the friend
     // walks off east.
@@ -459,5 +459,49 @@ public static class EscalationTests
         Check(s.Execute("a",Command("Rescue","b")).Accepted,"setup: a rescues them");s.Tick(3.1);
         Check(b.Life=="Alive","setup: the friend is back on their feet ("+b.Life+")");
         Check(s.TryMove("b",b.X+4f/30,b.Z,0,1.0/30),"the rescued friend's step east is taken (from "+b.X+")");
+    }
+    // ESC-6: a dragged friend trails a metre behind the dragger, so they follow along a wall of the security building and round
+    // its corners: walked right round it both ways at the host's 1/30 s steps, the body never jumps or falls behind, and never
+    // lands inside. The dragger keeps to Slide's .3-.35 m off each wall, as in the built world.
+    static void ADraggedFriendFollowsAlongTheWalls()
+    {
+        float w=West-.35f,f=Front-.3f,e=East+.35f,k=Back+.33f;
+        var loop=new[]{(w,f),(e,f),(e,k),(w,k),(w,f)};
+        foreach(bool reverse in new[]{false,true})
+        {
+            var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();
+            var a=s.Player("a");var b=s.Player("b");b.Life="Downed";b.DownedRemaining=1e6;
+            var route=new List<(float X,float Z)>(loop);if(reverse)route.Reverse();
+            a.X=route[0].X;a.Z=route[0].Z;b.X=a.X-(reverse?0:1);b.Z=a.Z-(reverse?1:0);
+            Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+            double jump=0,gap=0;string worst="";
+            for(int leg=1;leg<route.Count;leg++)
+            {
+                var (fx,fz)=(a.X,a.Z);var (tx,tz)=route[leg];int steps=(int)Math.Ceiling(Dist(fx,fz,tx,tz)/(2.0/30));
+                for(int i=1;i<=steps;i++)
+                {
+                    float x=fx+(tx-fx)*i/steps,z=fz+(tz-fz)*i/steps,bx=b.X,bz=b.Z;
+                    Check(s.TryMove("a",x,z,0,1.0/30),"the dragger's step to "+x+", "+z+" is taken");
+                    if(Festivals.SecurityBuilding.Contains(b.X,b.Z,.32f))throw new Exception("Escalation: the dragged friend lands inside the security building at "+b.X+", "+b.Z+" (dragger at "+a.X+", "+a.Z+")");
+                    double moved=Dist(bx,bz,b.X,b.Z);if(moved>jump){jump=moved;worst=bx+","+bz+" -> "+b.X+","+b.Z+" (dragger at "+a.X+","+a.Z+")";}
+                    gap=Math.Max(gap,Dist(a.X,a.Z,b.X,b.Z));
+                }
+            }
+            string way=reverse?"anticlockwise":"clockwise";
+            Check(jump<=.6,way+": the body follows step by step, never jumping more than .6 m (a corner's slide out is the largest, about .45 m) (largest "+jump+" m, "+worst+")");
+            Check(gap<=1.5,way+": the body keeps within 1.5 m of the dragger, well inside the 2.5 m reach of Drag and Rescue (largest gap "+gap+" m)");
+        }
+    }
+    // ESC-6: the dragger can always let go, however far the body has fallen behind; claiming a body still needs its reach.
+    static void ADraggerLetsGoFromAnyDistance()
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.AddPlayer("c","C");s.State.Phase="Playing";s.State.Npcs.Clear();
+        var a=s.Player("a");var b=s.Player("b");var c=s.Player("c");b.Life="Downed";b.DownedRemaining=35;a.X=0;a.Z=0;b.X=-1;b.Z=0;c.X=10;c.Z=10;
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+        b.X=-4;Check(Dist(a.X,a.Z,b.X,b.Z)>=4,"setup: the body lies 4 m off");
+        var off=s.Execute("a",Command("Drag","b"));
+        Check(off.Accepted&&a.DragTargetId=="","4 m from the body the dragger still lets go (\""+off.Reason+"\")");
+        Check(!s.Execute("c",Command("Drag","b")).Accepted,"a friend 10 m off can't take hold of the body");
+        Check(!s.Execute("a",Command("Drag","b")).Accepted,"nor can the dragger once they've let go, from 4 m");
     }
 }

@@ -178,10 +178,20 @@ namespace Festival.Core
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
             if(Distance(p.X,p.Z,x,z)>.001)ReleaseCampSeat(p.Id);
             p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);
-            // A dragged body skips the walls, and only Free lets anyone out of the closed security building, so the body waits outside.
-            // ESC-5: it waits inside the fence too, or the friend would stand up where TryMove refuses every step.
-            // ponytail: it can jump round a corner when it follows again; route the body if that reads badly.
-            if(target!=null&&target.Life=="Downed"&&!Festivals.SecurityBuilding.Contains(x-1,z,.4f)&&InBounds(x-1,z)){target.X=x-1;target.Z=z;}return true;
+            if(target!=null&&target.Life=="Downed"){var trail=Trail(target.X,target.Z,x,z);target.X=trail.X;target.Z=trail.Z;}return true;
+        }
+        // ESC-6: only Free lets anyone out of the closed security building, so the body slides to its nearest face; the fence is ESC-5's.
+        // ponytail: a straight pull cuts a corner by a few centimetres; only the security building pushes the body back out.
+        static WorldPoint Trail(float bx,float bz,float x,float z)
+        {
+            double gap=Distance(bx,bz,x,z);if(gap>1){bx=x+(float)((bx-x)/gap);bz=z+(float)((bz-z)/gap);}
+            var b=Festivals.SecurityBuilding;const float clear=.4f;
+            if(b.Contains(bx,bz,clear))
+            {
+                float west=bx-b.MinX,east=b.MaxX-bx,front=bz-b.MinZ,back=b.MaxZ-bz,least=Math.Min(Math.Min(west,east),Math.Min(front,back));
+                if(least==west)bx=b.MinX-clear;else if(least==east)bx=b.MaxX+clear;else if(least==front)bz=b.MinZ-clear;else bz=b.MaxZ+clear;
+            }
+            return new WorldPoint(Math.Max(-39,Math.Min(39,bx)),Math.Max(-39,Math.Min(39,bz)));
         }
         /// <summary>How fast p may move now, in metres a second. FestivalSession.ApplyMovement moves at it and TryMove refuses faster
         /// steps, so the host's two movement paths share one rule. A poi spin ignores Sprint, so it can't be held all game for free.</summary>
