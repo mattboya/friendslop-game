@@ -157,7 +157,9 @@ namespace Festival.Network
         // NET-8: ProtocolGuardTests records both stage fronts and the pick for fixed spin seeds.
         // HUD-16: snapshots carry each player's own money news (PlayerState.MoneyNewsLog and MoneyNewsSequence, owner-only in
         // views); a version-9 client ignores it.
-        public const int ProtocolVersion=10;
+        // 11: wave 2026-10-26 starts a new semantic boundary; published version-10 peers are rejected.
+        // Subsequent units append only the version-11 changes they actually land.
+        public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
