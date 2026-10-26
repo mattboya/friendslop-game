@@ -544,6 +544,67 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // In a hosted camp the headliner faces the chair's way (south) for the whole seat, whichever way they look, and
+        // stands up off the chair's front when the seat ends. You walk up looking north at the chair and sit, still looking north.
+        // Then a friend in a backpack, the deepest accessory, sits until their seat ends. Each body is measured on the real chair
+        // prop where the session draws it: nothing reaches through the chair's back or the RESERVED board over it.
+        [UnityTest] public IEnumerator AHeadlinerFacesTheChairsWayWhileSeatedAndStandsUpClearOfIt()
+        {
+            var world=new GameObject("CAMP-5 chair world").AddComponent<FestivalWorld>();yield return null;
+            var host=new GameObject("CAMP-5 hosted chair");var session=host.AddComponent<FestivalSession>();yield return null;
+            var mesh=new Mesh();
+            try
+            {
+                yield return Hosted(session);
+                var game=Simulation(session);var record=game.State.CampEggs.Find(e=>e.Id=="chair");var chair=world.CampEggs.Prop("chair");
+                var actors=(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var you=game.Player(session.LocalPlayerId);you.X=record.X;you.Z=record.Z-1.5f;
+                foreach(var field in new[]{"yaw","viewYaw"})typeof(FestivalSession).GetField(field,BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,0f);
+                yield return new WaitForSeconds(.3f);
+                session.Command("CampEgg","chair");
+                yield return new WaitForSeconds(.6f);
+                Assert.That(FestivalSimulation.CampSeated(game.State,you.Id),Is.True,"setup: you sit in the chair");
+                var yours=actors[you.Id].GetComponent<FestivalCharacter>();
+                Assert.That(Mathf.Abs(Mathf.DeltaAngle(yours.transform.eulerAngles.y,180)),Is.LessThan(1f),"seated while you look north, your body faces the chair's way, south (host yaw "+you.Yaw+")");
+                Assert.That(ThroughTheChair(yours,chair,mesh),Is.Empty,"seated, your body stays out of the chair's back and board");
+                yield return Until(()=>!FestivalSimulation.CampSeated(game.State,you.Id),4.5f);
+                yield return new WaitForSeconds(1f);
+                Assert.That(yours.Pose,Is.EqualTo("Idle"),"setup: your seat has ended");
+                Assert.That(ThroughTheChair(yours,chair,mesh),Is.Empty,"standing up, your body stays out of the chair's back and board, drawn at "+yours.transform.position.ToString("F2"));
+                string friend=null;for(int i=2;friend==null;i++)if(FestivalAppearance.For("player_"+i).Accessory==0&&"player_"+i!=you.Id)friend="player_"+i;
+                var pal=game.AddPlayer(friend,friend);pal.X=record.X;pal.Z=record.Z-1;you.X=record.X+3;
+                yield return new WaitForSeconds(.3f);
+                Assert.That(game.Execute(friend,new GameCommand{Id="sit",Kind="CampEgg",TargetId="chair"}).Accepted,Is.True,"setup: "+friend+" sits");
+                yield return Until(()=>!FestivalSimulation.CampSeated(game.State,friend),4.5f);
+                yield return new WaitForSeconds(1f);
+                var theirs=actors[friend].GetComponent<FestivalCharacter>();
+                Assert.That(theirs.Pose,Is.EqualTo("Idle"),"setup: "+friend+"'s seat has ended");
+                Assert.That(Array.Find(theirs.GetComponentsInChildren<SkinnedMeshRenderer>(true),skin=>skin.name=="Accessory_0").enabled,Is.True,"setup: "+friend+" stands in their backpack");
+                Assert.That(ThroughTheChair(theirs,chair,mesh),Is.Empty,"standing up, "+friend+"'s body and backpack stay out of the chair's back and board, drawn at "+theirs.transform.position.ToString("F2"));
+            }
+            finally{Object.Destroy(mesh);session.Leave();Object.Destroy(host);Object.Destroy(world.gameObject);}
+            yield return null;
+        }
+        // Each skinned part of body that reaches past the front face of the chair's back or the RESERVED board, and how far.
+        static List<string> ThroughTheChair(FestivalCharacter body,Transform chair,Mesh mesh)
+        {
+            var backs=new List<Bounds>();foreach(var name in new[]{"Chair back","Reserved board"})backs.Add(chair.Find(name).GetComponent<Renderer>().bounds);
+            var deepest=new Dictionary<string,float>();
+            foreach(var skin in body.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                if(!skin.enabled)continue;skin.BakeMesh(mesh,true);var toWorld=skin.transform.localToWorldMatrix;
+                foreach(var vertex in mesh.vertices)
+                {
+                    var p=toWorld.MultiplyPoint3x4(vertex);
+                    foreach(var back in backs)
+                        if(Mathf.Abs(p.x-back.center.x)<back.extents.x&&Mathf.Abs(p.y-back.center.y)<back.extents.y&&p.z>back.min.z&&p.z<back.max.z+.5f)
+                            deepest[skin.name]=Mathf.Max(deepest.TryGetValue(skin.name,out var was)?was:0,p.z-back.min.z);
+                }
+            }
+            var parts=new List<string>();foreach(var pair in deepest)parts.Add(pair.Key+" "+pair.Value.ToString("0.000")+" m");
+            return parts;
+        }
+
         // The pass counts the secrets this machine has found, and says so when there are none left to find.
         [UnityTest] public IEnumerator ThePassCountsYourCampSecretsAndSaysWhenYouHaveFoundAllEight()
         {

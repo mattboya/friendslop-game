@@ -13,6 +13,7 @@ public static class CampEggTests
         AllEightEggsUseTheirOwnHostPointAndLine();
         AcceptedPokesPersistPerEggAndDiscoveriesSurviveIntermediateEvents();
         TheChairHasOneOwnerForFourSecondsAndMovementReleasesIt();
+        AHeadlinerFacesTheChairsWayAndStandsUpOffItsFront();
         NewVisitsResetPropsButKeepOwnerDiscoveriesAndOlderSnapshotsRestore();
         RefusedEggsNeverChangePropsAndAllEightDiscoveriesAccumulate();
         RestoreKeepsActivePropsAndRejectsCorruptRecords();
@@ -137,6 +138,22 @@ public static class CampEggTests
         var review=new FestivalSimulation(0);var reviewer=review.AddPlayer("host","Host");review.State.Phase="CampReview";reviewer.X=-10;reviewer.Z=3.5f;
         Check(review.Execute(reviewer.Id,Poke("chair")).Accepted,"chair works during debrief");review.Tick(4.1);
         Check(review.State.CampEggs.Find(e=>e.Id=="chair").SeatedPlayerId=="","debrief ticks also release the seat");
+    }
+    // The chair faces south (yaw 180), and so does its headliner for the whole seat, whichever way they look: every client
+    // sends its camera's yaw with each move intent, and TryMove takes it unless HoldsFacing. When the seat ends by itself they stand
+    // up off its front, facing the same way, so no body or backpack stands in the chair. A step off it stands them where they step.
+    static void AHeadlinerFacesTheChairsWayAndStandsUpOffItsFront()
+    {
+        var game=new FestivalSimulation(0);var p=game.AddPlayer("host","Host");var chair=game.State.CampEggs.Find(e=>e.Id=="chair");
+        p.X=chair.X;p.Z=chair.Z-1.5f;p.Yaw=0;
+        Check(game.Execute(p.Id,Poke("chair")).Accepted&&p.Yaw==180,"setup: a headliner who walked up looking north sits facing south");
+        foreach(float look in new[]{0f,90f,270f,359f})Check(game.TryMove(p.Id,p.X,p.Z,look,.05)&&p.Yaw==180&&FestivalSimulation.CampSeated(game.State,p.Id),"looking to "+look+" keeps the seated headliner facing the chair's way, not "+p.Yaw);
+        game.Tick(3.9);Check(p.X==chair.X&&p.Z==chair.Z,"seated on the chair's point for the whole seat");
+        game.Tick(.2);
+        Check(!FestivalSimulation.CampSeated(game.State,p.Id)&&p.X==chair.X&&Math.Abs(p.Z-(chair.Z-.7f))<1e-4&&p.Yaw==180,"the seat ends by itself: they stand up .7 m off the chair's front, still facing south, at ("+p.X+", "+p.Z+") yaw "+p.Yaw);
+        Check(game.TryMove(p.Id,p.X,p.Z,0,.05)&&p.Yaw==0,"standing again, they look about freely");
+        p.X=chair.X;p.Z=chair.Z;Check(game.Execute(p.Id,Poke("chair","again")).Accepted,"setup: sits again");
+        Check(game.TryMove(p.Id,p.X+.2f,p.Z,90,.1)&&p.X==chair.X+.2f&&p.Z==chair.Z&&p.Yaw==90,"a step off the chair stands them where they stepped, turned the way they look");
     }
     static void NewVisitsResetPropsButKeepOwnerDiscoveriesAndOlderSnapshotsRestore()
     {
