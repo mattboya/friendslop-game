@@ -175,13 +175,14 @@ namespace Festival.Presentation
         public const string CrewRole="Crew";
         // No accent, staff role or stall wears this magenta. The glow keeps it readable at night.
         public static readonly Color CrewColor=new Color(.96f,.16f,.82f);
-        public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
+        public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee",string look=null)
         {
+            look??=name;
             var asset=Resources.Load<GameObject>("FestivalCharacter");
             var go=asset!=null?Instantiate(asset,parent):new GameObject(name);
             go.name=name;go.transform.SetParent(parent,false);
             var actor=go.AddComponent<FestivalCharacter>();
-            actor.Appearance=FestivalAppearance.For(name,role);
+            actor.Appearance=FestivalAppearance.For(look,role);
             actor.fitName="Fit_"+actor.Appearance.Gender+"_"+actor.Appearance.Shape;
             if(distantMeshes==null)
             {
@@ -192,7 +193,7 @@ namespace Festival.Presentation
             var template=Resources.Load<Material>("FestivalLit");
             if(template==null)template=new Material(Shader.Find("Standard"));
             actor.HeightScale=actor.Appearance.Scale.y;
-            actor.danceStyle=FestivalAppearance.Pick(name,"dance",3);
+            actor.danceStyle=FestivalAppearance.Pick(look,"dance",3);
             actor.ownedPalette=actor.Appearance.CreatePalette();
             actor.ownedMaterial=new Material(template){name="Festival actor palette"};
             actor.ownedMaterial.mainTexture=actor.ownedPalette;
@@ -250,7 +251,7 @@ namespace Festival.Presentation
             // Never reset the presentation root: its facing belongs to the session.
             foreach(var t in go.GetComponentsInChildren<Transform>())if(animatedBones.Contains(t.name)&&!actor.bones.ContainsKey(t.name)){actor.bones[t.name]=t;actor.rest[t.name]=t.localRotation;}
             if(actor.bones.TryGetValue("Hips",out var pelvis))actor.restHips=pelvis.localPosition;
-            actor.idleStyle=FestivalAppearance.Pick(name,"idle",3);
+            actor.idleStyle=FestivalAppearance.Pick(look,"idle",3);
             if(actor.bones.Count==15)
                 actor.footPlant=new FestivalFootPlant(actor.transform,actor.bones["Hips"],
                     actor.bones["LegL"],actor.bones["ShinL"],actor.bones["FootL"],
@@ -267,7 +268,7 @@ namespace Festival.Presentation
                 var key=actor.faceRenderer.sharedMesh.GetBlendShapeName(i);
                 if(key.EndsWith("Smile"))actor.smileIndex=i;if(key.EndsWith("Concern"))actor.concernIndex=i;
             }
-            actor.phase=FestivalAppearance.Pick(name,"phase",100)*.137f;
+            actor.phase=FestivalAppearance.Pick(look,"phase",100)*.137f;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(actor.bones.Count<15 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
             if(actor.blinkIndex<0||actor.detailParts.Count==0)Debug.LogWarning("[Festival.Art] Facial animation or distant character meshes are missing: "+name);

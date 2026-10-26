@@ -933,6 +933,11 @@ namespace Festival.Tests
                 Expect("night 2","Roster","HOME  0 / 2\nYOU  •  AWAY\nSAM  •  BODY AWAY");
                 Expect("night 2 beside a body","Prompt","Carry Sam's body");
                 Fits("night 2","Roster");
+                var actors=(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var corpse=actors["body_"+mate.Id].GetComponent<FestivalCharacter>();
+                if(!corpse.Appearance.Equals(actors[mate.Id].GetComponent<FestivalCharacter>().Appearance))failures.Add("night 2: Sam's body wears another look than Sam ("+corpse.Appearance.Role+")");
+                var corpseScarf=System.Array.Find(corpse.GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.enabled&&r.name=="Accessory_2");
+                if(corpseScarf==null||corpseScarf.sharedMaterial.color!=FestivalCharacter.CrewColor)failures.Add("night 2: Sam's body wears no crew scarf");
                 PressE();yield return new WaitForSeconds(.6f);
                 if(player.CarryBodyId!=mate.Id)failures.Add("night 2 beside a body: E does not pick it up ("+session.Message+")");
                 Expect("night 2 carrying a body","Prompt","Put down Sam's body");

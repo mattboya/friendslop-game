@@ -1167,17 +1167,17 @@ namespace Festival.Network
                 // A drop floats its display name ("Tongue Stamps", THEME-2), a cash pile its amount in the viewer's money; its id still picks the model.
                 foreach(var d in State.Drops){Actor(d.Id,FestivalHudText.DropLabel(State,local,d),d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}
                 // Night 2 bodies lie in the downed pose (and play the dragged motion while carried) until a revival lifts them.
-                foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed");seen.Add(id);}
+                foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed",FestivalCharacter.CrewRole,look:b.PlayerId);seen.Add(id);}
             }
             foreach(var pair in actors)pair.Value.gameObject.SetActive(seen.Contains(pair.Key));
             ViewCamera.backgroundColor=spirit?new Color(.08f,.2f,.24f):new Color(.13f,.1f,.22f);
         }
-        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null,float y=0,bool filming=false,bool recording=false)
+        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null,float y=0,bool filming=false,bool recording=false,string look=null)
         {
             if(!actors.TryGetValue(id,out var tr))
             {
                 GameObject go;
-                if(height>.25f)go=FestivalCharacter.Create(actorRoot,id,color,role).gameObject;
+                if(height>.25f)go=FestivalCharacter.Create(actorRoot,id,color,role,look).gameObject;
                 else
                 {
                     string resource=DropModel(model??label);
