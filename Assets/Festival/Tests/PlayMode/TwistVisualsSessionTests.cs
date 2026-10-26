@@ -286,8 +286,9 @@ namespace Festival.Tests
         // Holds this machine's frames near 30 a second, as a slow one runs them.
         private sealed class SlowFrames:MonoBehaviour{private void Update()=>System.Threading.Thread.Sleep(30);}
 
-        // Seen from the grass beside the wheel, a riding friend's name tag floats clear of their gondola's roof. Solids hide tags, so
-        // this counts the pixels the tag lights with that gondola drawn against those it lights with the gondola hidden.
+        // Seen from the grass beside the wheel, a riding friend's name tag floats clear of their gondola's roof, and a second into the
+        // ride the wheel's spokes, rims and A-frame legs between it and you hide none of it either. Solids hide tags, so this
+        // counts the pixels the tag lights with the wheel drawn against those it lights with the whole wheel hidden.
         [UnityTest]public IEnumerator ARidingFriendsNameTagShowsAboveTheirGondolasRoof()
         {
             var world=new GameObject("Tag world");world.AddComponent<FestivalWorld>();yield return null;
@@ -331,11 +332,11 @@ namespace Festival.Tests
                     return lit;
                 }
                 int held=Lit();
-                var parts=cabin.GetComponentsInChildren<Renderer>();foreach(var part in parts)part.enabled=false;
+                var parts=GameObject.Find("Ferris wheel").GetComponentsInChildren<Renderer>();foreach(var part in parts)part.enabled=false;
                 int alone=Lit();
                 foreach(var part in parts)part.enabled=true;camera.fieldOfView=zoom;
                 Assert.That(alone,Is.GreaterThan(30),"setup: the tag is in view");
-                Assert.That(held,Is.GreaterThanOrEqualTo(alone*.9f),friend+"'s gondola hides "+(alone-held)+" of the "+alone+" pixels their name tag lights");
+                Assert.That(held,Is.GreaterThanOrEqualTo(alone*.9f),"the Ferris wheel (its gondolas, spokes, rims and legs) hides "+(alone-held)+" of the "+alone+" pixels "+friend+"'s name tag lights");
             }
             finally
             {

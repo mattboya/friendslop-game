@@ -193,6 +193,20 @@ namespace Festival.Presentation
         private static Vector3 Rim(float degrees)=>new Vector3(0,WheelRadius*Mathf.Sin(degrees*Mathf.Deg2Rad),WheelRadius*Mathf.Cos(degrees*Mathf.Deg2Rad));
         private static float Angle(double seconds)=>(float)(seconds%Festivals.WheelRideSeconds/Festivals.WheelRideSeconds*360);
 
+        // The legs and bearings stand 1.1 m out of the wheel's plane (1.28 m with their thickness), the rims .8 m, the axle 1.2 m.
+        public const float FrameHalfWidth=1.5f;
+        // Keeps a pulled tag off the camera's near plane.
+        private const float MaxPull=.9f;
+        // Seen from outside the frame, a rider's tag slides along its line to the eye until it clears the frame, and shrinks by the
+        // same ratio, so it covers the same pixels in front of the spokes and legs. It stays depth-tested against everything else.
+        public static void InFrontOfFrame(Transform tag,Vector3 eye)
+        {
+            var at=tag.position;float side=eye.x-Festivals.WheelX,from=at.x-Festivals.WheelX;
+            if(Mathf.Abs(side)<=FrameHalfWidth||Mathf.Abs(from)>=FrameHalfWidth)return;
+            float pull=Mathf.Min((Mathf.Sign(side)*FrameHalfWidth-from)/(side-from),MaxPull);
+            tag.position=Vector3.Lerp(at,eye,pull);tag.localScale*=1-pull;
+        }
+
         // The camp van (existing vehicle art, its front at the model's -z) pulls a neon-railed party deck.
         private static Transform ArtCar(Transform car,int k)
         {
