@@ -19,6 +19,7 @@ public static class MoneyGuardTests
         new[]{"Conversations.cs","State.LevelSales+=payout","seller: 'SOLD Tongue Stamps  •  +$10' and the SALES flash; crew: 'SALES  •  +$10  •  Ash sold Tongue Stamps'"},
         new[]{"Conversations.cs","Add(p,item,1)","seller: 'NO SALE  •  Tongue Stamps back in your hand' (or They walk off, You walked off, SALE OFF)"},
         new[]{"Danger.cs","p.Inventory.RemoveAll(x=>Stock(x.ItemId))","detainee: 'SECURITY FINE  •  −$10  •  SECURITY TOOK 2 Tongue Stamps'"},
+        new[]{"Danger.cs","s.Count++","detainee: the unit under the sale card counts in 'SECURITY TOOK 2 Tongue Stamps' (a stack already taken, in the list the line reads)"},
         new[]{"Danger.cs","p.Cash-=fine","detainee: 'SECURITY FINE  •  −$10  •  SECURITY TOOK ...' (no line when the fine is 0 and nothing is taken)"},
         new[]{"Danger.cs","p.Cash=0","everyone: the death reel 'DROPPED $40'"},
         new[]{"Danger.cs","p.Inventory.Clear()","the dead: GearLossNotice 'Your gear dropped where you fell'"},
@@ -54,6 +55,8 @@ public static class MoneyGuardTests
         new[]{"Economy.cs","Add(p,c.ItemId,c.Amount)","withdrawer: 'FROM THE STASH  •  1 Tongue Stamps'"},
         new[]{"Economy.cs","stash.Items.Remove(item)","crew: 'STASH  •  −1 Tongue Stamps  •  Ash'"},
         new[]{"FestivalSimulation.cs","p.Inventory.Add(newItemStack{ItemId=item,Count=count})","nobody directly: the Add helper, each caller has its own row"},
+        new[]{"FestivalSimulation.cs","s.Count+=count","nobody directly: the Add helper, each caller has its own row"},
+        new[]{"FestivalSimulation.cs","s.Count-=count","nobody directly: the Take helper, each caller has its own row"},
         new[]{"FestivalSimulation.cs","p.Inventory.Remove(s)","nobody directly: the Take helper, each caller has its own row"},
         new[]{"FestivalTwists.cs","p.Cash-=band.Price","buyer: the reply 'VIP wristband bought for $X', then the pocket toast with −$X"},
         new[]{"FestivalTwists.cs","Add(p,VipWristband,1)","buyer: the reply 'VIP wristband bought for $X'"},
@@ -80,11 +83,13 @@ public static class MoneyGuardTests
         new[]{"Weekend.cs","after.Inventory=before.Inventory","nobody: the next level carries gear over unchanged"},
         new[]{"Weekend.cs","stash.Items.RemoveAll(x=>x.ItemId==GiggleTankItem)","crew: 'STASH  •  −1 Giggle Tank  •  tanks never leave the level'"},
     };
-    // Cash, StashCash and LevelSales writes anywhere in Core; the inventory helpers (Add/Take) in Simulation; carried items,
-    // wristbands and stash items changing in place; and a drop leaving the ground (a pickup, or security taking ditched stock).
-    static readonly Regex Money=new Regex(@"[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)\s*(?:\+=|-=|=(?!=)|\+\+|--)[^;{}]*");
-    static readonly Regex Helper=new Regex(@"(?<![\w.])(?:Take|Add)\((?!PlayerState)[^()]*\)");
-    static readonly Regex Lists=new Regex(@"[\w.]*\.(?:Inventory|Wristbands|Items)\.(?:Add|Remove|RemoveAll|Clear|Insert)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[\w.]*\.Drops\.(?:Remove|RemoveAll|Clear)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[\w.]*\.Inventory\s*=(?!=)[^;{}]*|\bitem\.Count\s*(?:\+=|-=|\+\+|--)[^;{}]*");
+    // Cash, StashCash and LevelSales writes anywhere in Core, by any assignment operator or ++/-- either side; the inventory helpers
+    // (Add/Take) in Simulation, whatever their arguments; carried items, wristbands and stash items changing in place, any stack's
+    // Count included (List.Count is read-only, so each write is an ItemStack's); and a drop leaving the ground (a pickup, or
+    // security taking ditched stock).
+    static readonly Regex Money=new Regex(@"[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)\s*(?:[-+*/%&|^]=|<<=|>>=|\?\?=|=(?!=)|\+\+|--)[^;{}]*|(?:\+\+|--)\s*(?:[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)|\w+\.Count)\b");
+    static readonly Regex Helper=new Regex(@"(?<![\w.])(?:Take|Add)\((?!PlayerState)(?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)");
+    static readonly Regex Lists=new Regex(@"[\w.]*\.(?:Inventory|Wristbands|Items)\.(?:Add|Remove|RemoveAll|Clear|Insert)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[\w.]*\.Drops\.(?:Remove|RemoveAll|Clear)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[\w.]*\.Inventory\s*=(?!=)[^;{}]*|\b\w+\.Count\s*(?:[-+*/]=|\+\+|--|=(?!=))[^;{}]*");
     // Known limit: a string literal that holds ";//" hides the rest of its line from the scan.
     static readonly Regex Comments=new Regex(@"/\*[\s\S]*?\*/|^\s*//.*$|(?<=[;{})])\s*//.*$",RegexOptions.Multiline);
     public static void Run()
@@ -100,6 +105,11 @@ public static class MoneyGuardTests
         var found=Scan("Assets/Festival/Runtime/Core/Simulation/X.cs",source);
         string[] expected={"p.Cash+=5","State.StashCash-=2","State.LevelSales=0","Take(p,\"a\",1)","Add(p,i.ItemId,1)","p.Inventory.RemoveAll(x=>Stock(x.ItemId))","p.Wristbands.Remove(id)","stash.Items.Add(newItemStack{ItemId=\"a\",Count=1})","item.Count++","State.Drops.Remove(d)","after.Inventory=before.Inventory"};
         Check(string.Join(" | ",found)==string.Join(" | ",expected),"the scan finds each kind of write once, got: "+string.Join(" | ",found));
+        // Every compound operator and the prefix forms, any stack's count, and helper arguments that call a method.
+        source="void Y(PlayerState p){if(p.Cash>=5&&p.Cash!=0&&p.Inventory.Count<3&&s.Count==0)return;State.StashCash/=2;p.Cash*=2;p.Cash%=3;++p.Cash;--State.LevelSales;s.Count+=count;stack.Count--;s.Count=0;++s.Count;Add(p,SellerStock(i.TargetId),1);Take(p,FirstStock(p),1);}";
+        found=Scan("Assets/Festival/Runtime/Core/Simulation/Y.cs",source);
+        expected=new[]{"State.StashCash/=2","p.Cash*=2","p.Cash%=3","++p.Cash","--State.LevelSales","s.Count+=count","stack.Count--","s.Count=0","++s.Count","Add(p,SellerStock(i.TargetId),1)","Take(p,FirstStock(p),1)"};
+        Check(string.Join(" | ",found)==string.Join(" | ",expected),"the scan finds every form of write once, got: "+string.Join(" | ",found));
         Check(Scan("Assets/Festival/Runtime/Core/Content/X.cs","Add(chart,beat,0,lane,beatSeconds);").Count==0,"Add/Take outside Simulation are not the inventory helpers");
     }
     static void EveryCoreWriteIsAnnounced()
