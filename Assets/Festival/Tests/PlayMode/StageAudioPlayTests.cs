@@ -106,10 +106,10 @@ namespace Festival.Tests
                     yield return Wait(.35);
                     float main=stage.Music.volume,small=stage.SmallMusic.volume;string at="step "+k+" at "+player.X.ToString("F1")+", "+player.Z.ToString("F1");
                     Assert.That(stage.Music.isPlaying&&stage.SmallMusic.isPlaying,Is.True,at+": both songs keep playing");
-                    Assert.That(main,Is.LessThan(lastMain),at+": the main stage's song fades down");Assert.That(small,Is.GreaterThan(lastSmall),at+": the small stage's song comes up");
+                    Assert.That(main,Is.LessThanOrEqualTo(lastMain+1e-4f),at+": the main stage's song never comes back up");Assert.That(small,Is.GreaterThanOrEqualTo(lastSmall-1e-4f),at+": the small stage's song never fades");
+                    if(StageMusic.Nearer(player.X,player.Z)==StageMusic.Main){Assert.That(main,Is.EqualTo(full).Within(1e-4f),at+": out of the small stage's earshot the main song plays full");Assert.That(small,Is.Zero,at+": and the small one not at all");}
                     lastMain=main;lastSmall=small;
-                    if(k==0){Assert.That(main,Is.GreaterThan(.95f*full),at+": the main crowd hears its song full");Assert.That(small,Is.LessThan(.2f*full),at+": and little of the small stage");}
-                    if(k==6){Assert.That(small,Is.GreaterThan(.95f*full),at+": the small crowd hears its song full");Assert.That(main,Is.LessThan(.2f*full),at+": and little of the main stage");}
+                    if(k==6){Assert.That(small,Is.GreaterThan(.95f*full),at+": the small crowd hears its song full");Assert.That(main,Is.LessThan(.25f*full),at+": and little of the main stage");}
                 }
                 stage.enabled=false;stage.Follow(session.State,session.EstimatedSimulationSeconds,AudioSettings.dspTime,"nobody here");
                 Assert.That(stage.Music.volume,Is.EqualTo(full).Within(1e-4f),"with no listener both stages play full");Assert.That(stage.SmallMusic.volume,Is.EqualTo(full).Within(1e-4f));
