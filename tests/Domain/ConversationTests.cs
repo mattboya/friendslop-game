@@ -26,7 +26,7 @@ public static class ConversationTests
             ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,ADanceMovesWhereTheTalkStarts,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
-            AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
+            AWorkedUpFestivalgoerWontTalk,AFlopWorksNoOneUpForTheTalkItLeadsTo,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
             EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -202,6 +202,26 @@ public static class ConversationTests
             var started=Act(s,"p0",kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");
             Check(!started.Accepted&&started.Reason=="They're too agitated to chat","a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
             Check(p.InteractionId==""&&p.Cash==cash&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==stock,"and nothing starts, held or taken ("+p.InteractionId+", $"+p.Cash+")");
+        }
+    }
+
+    // K2: the talk after a trust dance roots you too, so a flop before a crew of four (+34 a head) works up neither the wary buyer
+    // nor a watcher at 50, whose accusation would carry to the buyer. You stand in the talk 12 s unhit.
+    static void AFlopWorksNoOneUpForTheTalkItLeadsTo()
+    {
+        var s=new FestivalSimulation(7);for(int k=0;k<4;k++)s.AddPlayer("p"+k,"P"+k);s.State.Phase="Playing";s.State.Npcs.Clear();
+        var buyer=new NpcState{Id=Goer("Wook"),Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true};s.State.Npcs.Add(buyer);
+        buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+        var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=50});s.State.Npcs.Add(watcher);
+        for(int k=0;k<4;k++){var q=s.Player("p"+k);q.X=k==0?0:-1.5f+k;q.Z=k==0?0:-2;}
+        var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var i=Sale(s,FestivalSimulation.FairAsk);Check(i.TrustDance&&i.WitnessIds.Contains(watcher.Id),"setup: a wary buyer asks for a watched dance first");
+        for(int guard=0;FestivalSimulation.TrustDancing(i)&&i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+        string Mode(NpcState n)=>n.Mode+" at "+n.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+        for(int tick=1;tick<=120;tick++)
+        {
+            s.Tick(.1);
+            Check(i.Status=="Active"&&buyer.Mode!="Accusing"&&buyer.Mode!="Swarming"&&watcher.Mode!="Accusing"&&watcher.Mode!="Swarming"&&p.Health==100,"+"+tick/10.0+" s into the talk after a flop, no one is worked up and you are unhit (talk "+i.Status+", buyer "+Mode(buyer)+", watcher "+Mode(watcher)+", health "+p.Health+")");
         }
     }
 
@@ -502,10 +522,13 @@ public static class ConversationTests
             Check(i.HeadStart==(how==0?FestivalSimulation.FailedDanceStart:0),verdict+" starts it "+(how==0?"two points down":"level")+", got "+i.HeadStart);
             Check(i.HintedReply==(how==2?Array.IndexOf(i.Turns[0].Grades,Smooth):-1),verdict+(how==2?" hints the first round's smooth reply":" hints nothing")+", got "+i.HintedReply);
             Check(ConversationLines.Parts["react.dance."+how].Contains(i.Turns[0].Reaction),verdict+": their first line reacts to it, got \""+i.Turns[0].Reaction+"\"");
+            string danceKey=i.Turns[0].GrammarKeys.Find(k=>k.StartsWith("react.dance."+how+"_"));
+            Check(danceKey!=null&&!p.Dialogue.Seen.Contains(danceKey),verdict+": turn 0 carries the reaction's history key, unseen until you reply ("+string.Join(",",i.Turns[0].GrammarKeys)+")");
             int moved=(int)Math.Round(20-35*(double)danced/notes.Count,MidpointRounding.AwayFromZero);
             Check(buyer.Observers[0].Suspicion==40+moved&&watcher.Observers[0].Suspicion==20+moved&&!buyer.Observers[0].RefusesSales,verdict+" moves the buyer and the watcher by the dance alone ("+moved+"), no ask's 30 before the ask (buyer "+buyer.Observers[0].Suspicion+", watcher "+watcher.Observers[0].Suspicion+")");
             Talk(s,i,Every(Smooth));
             Check(i.Turns.Count==FestivalSimulation.ConversationTurns&&p.Cash-cash==(how==0?10:20),verdict+" then four smooth replies: "+(how==0?"6 of 8, talked down to $10":"8 of 8, the Greedy $20")+", got $"+(p.Cash-cash)+" at "+i.Score);
+            Check(p.Dialogue.Seen.Contains(danceKey),verdict+": replying to turn 0 marks its dance reaction heard, so it rarely comes back");
         }
     }
 

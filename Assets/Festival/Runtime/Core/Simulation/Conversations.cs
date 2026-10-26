@@ -104,7 +104,9 @@ namespace Festival.Core
             if(TrustDancing(i))
             {
                 double danced=Judge(i);int delta=RhythmDelta(danced);
-                foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,delta);
+                // K2: the talk that follows roots p, so the dance lifts no one to WookTick's accusing 70 (a watcher's shout would
+                // carry it to the partner); the talk's own Score moves them again once p is free.
+                foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId){var o=Observe(n,p);double before=o.Suspicion;Adjust(n,p,delta);if(before<70&&o.Suspicion>=70)o.Suspicion=69;}
                 i.HeadStart=danced<TrustScore?FailedDanceStart:0;
                 i.DialogueText="";i.DurationSeconds=State.SimulationSeconds-i.StartSeconds;AddTurn(i,p);
                 var first=i.Turns[0];var history=new DialogueHistory{Seen=new System.Collections.Generic.List<string>(p.Dialogue.Seen??new System.Collections.Generic.List<string>())};
