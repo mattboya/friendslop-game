@@ -300,6 +300,12 @@ namespace Festival.Tests
                 Finish(game,player,talk);var outcome=player.ConversationOutcomes.Single();
                 Quietly("the outcome's acknowledgement",()=>session.AcknowledgeConversationOutcome(outcome));
                 Quietly("the outcome's dismissal",()=>session.DismissConversationOutcome(outcome.DeliveryId));
+                // A line outside a talk, such as a dance line, is also acknowledged in the background.
+                Assert.That(game.Execute(player.Id,new GameCommand{Id="dance",Kind="Dance",TargetId=partner.Id}).Accepted,Is.True,"setup: a dance with the festivalgoer");
+                var dance=game.Interaction(player.InteractionId);Assert.That(dance.DialogueId,Is.Not.Empty,"setup: the dance shows a line");
+                Quietly("a dance line's acknowledgement",()=>session.AcknowledgeDisplayedDialogue(dance));
+                session.SetMessage(Sold);session.AcknowledgeDisplayedDialogue(new InteractionState{Id="dance_gone",Kind="Dance",PlayerId=player.Id,DialogueId="line_gone"});
+                Assert.That(session.LastLocalCommandResult.Accepted,Is.False,"setup: the host refuses a line it does not show");Assert.That(session.Message,Is.EqualTo("Dialogue is not active"),"a refused line acknowledgement says why");
             }
             finally{UnityEngine.Object.DestroyImmediate(root);LocalProfile.Folder=previous;FestivalInput.PreferencesScope=scope;if(Directory.Exists(folder))Directory.Delete(folder,true);}
             yield return new ExitPlayMode();

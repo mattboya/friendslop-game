@@ -548,8 +548,8 @@ namespace Festival.Network
             =>SendCommand(kind,target,item,amount,direction,time);
         /// <summary>The exact issued identity lets local callers match a rejection even when another reply arrives immediately afterward.</summary>
         public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)=>Send(kind,target,item,amount,direction,time);
-        // A quiet command is a talk acknowledgement, which goes out on its own as lines show: accepted, it leaves the message, so a
-        // sale's or a buy's result stays up.
+        // A quiet command is a line's acknowledgement (TalkAck, or DialogueAck for a line outside a talk), which goes out on its own as
+        // lines show: accepted, it leaves the message, so a sale's or a buy's result, or a money line, stays up.
         string Send(string kind,string target="",string item="",int amount=0,int direction=0,double time=0,bool quiet=false)
         {
             if(!Connected||LocalPlayer==null)return "";
@@ -801,7 +801,7 @@ namespace Festival.Network
             if(interaction==null||interaction.PlayerId!=LocalPlayerId)return;
             if(FestivalSimulation.Talks(interaction.Kind)&&interaction.Turns.Count>0){AcknowledgeConversationTurn(interaction);return;}
             if(string.IsNullOrEmpty(interaction.DialogueId)||acknowledgedDialogue==interaction.Id+interaction.DialogueId)return;
-            acknowledgedDialogue=interaction.Id+interaction.DialogueId;Command("DialogueAck",interaction.DialogueId);
+            acknowledgedDialogue=interaction.Id+interaction.DialogueId;Send("DialogueAck",interaction.DialogueId,quiet:true);
         }
         public void AcknowledgeConversationTurn(InteractionState interaction)
         {
