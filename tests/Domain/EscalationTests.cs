@@ -581,6 +581,9 @@ public static class EscalationTests
         s.Tick(.1);Check(cop.Mode=="Stop"&&cop.TargetId=="b","setup: the guard stops b (mode "+cop.Mode+", on "+cop.TargetId+")");double bAt=s.State.SimulationSeconds;
         s.Tick(9.9);a.X=1;a.Z=6;s.Tick(.1);
         Check(cop.Evidence.Exists(e=>e.PlayerId=="a"&&e.Kind=="VisibleStock")&&cop.TargetId=="a","setup: 10 s on it stops a too, and turns to a (on "+cop.TargetId+")");double aAt=s.State.SimulationSeconds;
+        double To(PlayerState p)=>Math.Atan2(p.X-cop.X,p.Z-cop.Z)*180/Math.PI;
+        a.X=-4;a.Z=6;b.X=4;b.Z=6;s.Tick(.1);
+        Check(Math.Abs(cop.Yaw-To(a))<1,"split up, the guard faces a, whom it walks after, not b (yaw "+cop.Yaw+", a at "+To(a)+", b at "+To(b)+")");
         bool bWarned=false,aWarned=false;
         while(s.State.SimulationSeconds-bAt<12.3){s.Tick(.1);bWarned|=Says(b,LastChance);}
         Check(bWarned,"b hears the last chance at 12 s of b's stop, though the guard is on a (\""+b.NpcSpeech+"\")");
@@ -588,6 +591,7 @@ public static class EscalationTests
         Check(b.Life=="Alive"&&!cop.Evidence.Exists(e=>e.PlayerId=="b"&&e.Kind!="VisibleStock"),"no arrest warning for b before 20 s");
         s.Tick(.3);Check(cop.Evidence.Exists(e=>e.PlayerId=="b"&&e.Kind=="IgnoredStop"),"at 20 s b's stop is an arrest warning ("+string.Join(",",cop.Evidence.ConvertAll(e=>e.PlayerId+":"+e.Kind))+")");
         Check(cop.TargetId=="b"&&cop.Mode=="ArrestWarning","an arrest to make comes first: the guard goes after b (mode "+cop.Mode+", on "+cop.TargetId+")");
+        Check(Math.Abs(cop.Yaw-To(b))<1,"and faces b, not a (yaw "+cop.Yaw+", b at "+To(b)+", a at "+To(a)+")");
         while(s.State.SimulationSeconds-aAt<12.3){s.Tick(.1);aWarned|=Says(a,LastChance);}
         Check(aWarned,"a hears the last chance at 12 s of a's own stop (\""+a.NpcSpeech+"\")");
         s.Tick(24.1-(s.State.SimulationSeconds-bAt));Check(b.Life=="Detained"&&a.Life=="Alive","4 s after its warning b is detained, a still free ("+b.Life+", a "+a.Life+")");
