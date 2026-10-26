@@ -240,10 +240,12 @@ namespace Festival.Presentation
         /// <summary>Only a ground gear drop offers pickup; stop ditch and shared-stash results keep their destination.</summary>
         public static string DropNotice(string message,FestivalInput input)=>message.StartsWith("Dropped ",StringComparison.Ordinal)?message+Dot+input.Label(input.Interact).ToUpperInvariant()+" to pick it up":message;
 
-        /// <summary>Results heading: the level the crew cleared, or that the weekend is over.</summary>
+        /// <summary>Results heading: the level the crew cleared, or that the weekend is over. A test-mode win claims no quota or
+        /// rescue, since CLEAR LEVEL (TEST) ends a level as a success with neither.</summary>
         public static string OutcomeTitle(RoundState s)
         {
             if(s.Result!="Success")return "WEEKEND OVER"+Dot+"BACK TO DAY 1";
+            if(s.TestMode)return Cleared(s)+" (TEST)";
             return (!Festivals.For(s).Night?"QUOTA MET":s.LevelIndex==Festivals.LevelCount-1?"EVERYONE HOME":s.SecondFriend.Active?"FRIENDS RESCUED":"FRIEND RESCUED")+Dot+Cleared(s);
         }
         // A win's "DAY 1 CLEARED", or the whole festival's once Night 2 is.

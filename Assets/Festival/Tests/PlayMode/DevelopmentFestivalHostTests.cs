@@ -147,8 +147,9 @@ namespace Festival.Tests
             yield return null;
         }
 
-        // The test-build host's pause menu turns TEST MODE on. Then the HUD wears its tag, the clock reads NO LIMIT past the
-        // level's length, a detained player is offered Free me (test) and only then, and CLEAR LEVEL (TEST) ends the level.
+        // The test-build host's pause menu turns TEST MODE on. Then the HUD wears its tag beside the clock, hidden with it under the
+        // pass and the map, the clock reads NO LIMIT past the level's length, a detained player is offered Free me (test)
+        // and only then, and CLEAR LEVEL (TEST) ends the level.
         [UnityTest] public IEnumerator TheHostsPauseMenuTurnsTestModeOnAndTheHudShowsIt()
         {
             var world=new GameObject("DEV-2 world");world.AddComponent<FestivalWorld>();yield return null;
@@ -170,10 +171,15 @@ namespace Festival.Tests
                 toggle.onClick.Invoke();yield return new WaitForSeconds(.2f);
                 Assert.That(sim.State.TestMode,Is.True,"the switch turns test mode on: "+session.Message);
                 Assert.That(Find("TEST MODE: ON"),Is.Not.Null,"the switch reads ON");
+                Assert.That(Read("Test mode"),Is.EqualTo("(hidden)"),"the pass hides the tag with the clock beside it");
                 session.MenuOpen=false;sim.State.ElapsedSeconds=sim.State.DurationSeconds+30;yield return new WaitForSeconds(.2f);
                 Assert.That(sim.State.Phase,Is.EqualTo("Playing"),"past the level's length the level plays on");
                 Assert.That(Read("Test mode"),Is.EqualTo("TEST MODE"),"the HUD wears the tag");
                 Assert.That(Read("Time"),Is.EqualTo("NO LIMIT"),"the clock reads NO LIMIT");
+                var hud=root.GetComponent<FestivalHud>();hud.DevelopmentMapVisible=true;yield return null;yield return null;
+                Assert.That(Read("Time")+" / "+Read("Test mode"),Is.EqualTo("(hidden) / (hidden)"),"the map hides the tag with the clock");
+                hud.DevelopmentMapVisible=false;yield return null;yield return null;
+                Assert.That(Read("Test mode"),Is.EqualTo("TEST MODE"),"and the tag comes back with the clock");
                 // Your actions are on the pass's crew list.
                 session.MenuOpen=true;yield return null;
                 foreach(var b in root.GetComponentsInChildren<Button>(false))if(b.name=="CREW + NEARBY")b.onClick.Invoke();

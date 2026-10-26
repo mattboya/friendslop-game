@@ -977,7 +977,6 @@ namespace Festival.Presentation
             testModeButton.SetActive(tester);clearLevelButton.SetActive(tester&&state.TestMode&&state.Phase=="Playing");
             testModeButton.GetComponentInChildren<Text>().text=state.TestMode?"TEST MODE: ON":"TEST MODE: OFF";
             crewButton.anchorMax=new Vector2(tester?.495f:.955f,crewButton.anchorMax.y);
-            testModeTag.SetActive(state.TestMode);
             UpdateText(state,player);
             trippingPanel.SetActive(!showMenu&&tripping.text!="");
             UpdateGearLayout(handGear.Count>0);
@@ -998,6 +997,8 @@ namespace Festival.Presentation
             {
                 objectivePanel.SetActive(false);timerPanel.SetActive(false);vitalPanel.SetActive(false);voice.gameObject.SetActive(false);rosterPanel.SetActive(false);promptPanel.SetActive(false);nearbyPanel.SetActive(false);noticePanel.SetActive(false);heldDetailPanel.SetActive(false);checkoutPanel.SetActive(false);trippingPanel.SetActive(false);
             }
+            // The tag sits beside the clock, so it hides with it under the pass, the map and the rhythm lanes.
+            testModeTag.SetActive(state.TestMode&&timerPanel.activeSelf);
             inventoryPanel.SetActive(!showMenu&&!rhythmPanel.activeSelf&&!mapPanel.activeSelf&&state.Phase!="CampReview");
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
