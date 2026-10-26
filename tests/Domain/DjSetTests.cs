@@ -72,11 +72,15 @@ public static class DjSetTests
         Check(i.Status=="Interrupted"&&p.X==Catalog.StageTakeoverX&&p.Z==Catalog.StageTakeoverZ,"an interrupted set puts you back on the lawn");
     }
 
+    // One spin seed for each of the eight levels, picked so the main stage plays loops 1-7 (and 3 again): the ride rides every loop's beat grid.
+    static readonly int[] LoopSeeds={5,1,11,0,2,13,12,11};
     static void TheRideRidesTheStageSongsBeatInThreeLanes()
     {
+        var mains=new HashSet<int>();foreach(int seed in LoopSeeds)mains.Add(StageMusic.Track(seed,StageMusic.Main));
+        Check(mains.Count==StageBeats.Tracks.Length,"setup: the eight levels' seeds put all seven loops on the main stage, got "+string.Join(",",mains));
         foreach(int festival in new[]{0,1})for(int level=0;level<Festivals.LevelCount;level++)
         {
-            var game=Floor(festival,level);game.State.SpinSeed=festival*Festivals.LevelCount+level;double world=FestivalSimulation.WorldSeconds(game.State);var i=Start(game);
+            var game=Floor(festival,level);game.State.SpinSeed=LoopSeeds[festival*Festivals.LevelCount+level];double world=FestivalSimulation.WorldSeconds(game.State);var i=Start(game);
             int choice=StageMusic.Track(game.State,StageMusic.Main);
             Check(Math.Abs(i.StartSeconds-(game.State.SimulationSeconds+2))<1e-9,"a 2 s countdown, as before");
             var track=StageBeats.For(i.StageTrack);
