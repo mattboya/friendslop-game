@@ -329,7 +329,7 @@ public static class MinigameTests
         {"RoundState.NextCashFindAt","Playing elapsed deadline: never a simulation timestamp"},
         {"RoundState.StageCheerScore","a score"},{"RoundState.StageCheerUntilWorldSeconds","the crowd's cheer expiry on the pause-safe world clock"},
         {"ObserverState.Suspicion","suspicion"},{"NpcState.Suspicion","suspicion"},
-        {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"InteractionState.BeatSeconds","a length"},
+        {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"ConversationOutcome.Score","a settled talk's score"},{"InteractionState.BeatSeconds","a length"},
         {"InteractionState.StageFirstHeadWorldSeconds","authored stage world clock: the pause leaves music at the same position"},
         {"InteractionState.StageFirstHeadDelaySeconds","chart-relative lead, independent of simulation pause"},{"InteractionState.StageBeatStride","musical beat count, not a timestamp"},
         {"RhythmInput.TimeSeconds","seconds into its interaction"},

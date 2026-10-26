@@ -77,9 +77,10 @@ namespace Festival.Core
         public string OwnerId="",InteractionId="";
     }
     // Result: the short stamp a sale ends on ("SOLD +$10", "NO SALE", "BUSTED"), in dollars; "" for other talks and in older snapshots.
+    // Score: the talk's settled score, where the chat window's meter lands; -1 for a talk cut short and in older snapshots.
     [Serializable] public sealed class ConversationOutcome {
         public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="",Result="";
-        public long Sequence; public List<string> GrammarKeys=new List<string>();
+        public long Sequence; public List<string> GrammarKeys=new List<string>(); public double Score=-1;
     }
     // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind is what the HUD flashes: Cash, Stash,
     // Sales or Items.

@@ -28,7 +28,7 @@ public static class ConversationTests
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
-            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded})
+            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -761,6 +761,23 @@ public static class ConversationTests
         for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);o=Ended(s,i);
         Check(o.Notice=="They walk off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a lost trust dance says they walk off, and where the unit went: \""+o.Notice+"\"");
         Check(FestivalSimulation.MoneyNotice("LOST PROPERTY RETURNED",5)=="LOST PROPERTY RETURNED  •  +$5"&&FestivalSimulation.MoneyNotice("SECURITY FINE",-10)=="SECURITY FINE  •  −$10","the money notice every change of cash uses");
+    }
+
+    // A settled talk's outcome carries its Score, so the chat window's meter lands where the host settled it. A talk
+    // cut short (walked away from, busted) has no score, -1, so the meter stays where it stood; so has an outcome from before.
+    static void AnOutcomeCarriesItsSettledScore()
+    {
+        ConversationOutcome Ended(FestivalSimulation s,InteractionState i)=>s.Player("p0").ConversationOutcomes.Find(o=>o.InteractionId==i.Id);
+        foreach(var kind in Kinds)
+        {
+            var s=Pair(kind);var i=Talk(s,Start(s,kind),Smooth,SoSo,Smooth,Awkward);var o=Ended(s,i);
+            Check(i.Score>0&&o!=null&&o.Score==i.Score,"a settled "+kind+"'s outcome carries its score, "+i.Score+", got "+o?.Score);
+        }
+        var cut=Pair("Sale");var sale=Sale(cut,FestivalSimulation.FairAsk);Check(Say(cut,sale,Smooth).Accepted,"setup: a smooth first reply");
+        Check(Act(cut,"p0","EndChat",sale.Id).Accepted,"setup: you walk away");
+        Check(Ended(cut,sale)?.Score==-1,"a sale walked away from has no score, got "+Ended(cut,sale)?.Score);
+        var older=JsonSerializer.Deserialize<ConversationOutcome>("{\"DeliveryId\":\"old\"}",new JsonSerializerOptions{IncludeFields=true});
+        Check(older.Score==-1,"an outcome from before scores has none, got "+older.Score);
     }
 
     // A talk in a snapshot from before conversations (no turns, no trust dance) restores, and carries on as a conversation.

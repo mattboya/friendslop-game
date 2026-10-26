@@ -159,6 +159,8 @@ namespace Festival.Network
         // views); a version-9 client ignores it.
         // 11: wave 2026-10-26 starts a new semantic boundary; published version-10 peers are rejected.
         // Subsequent units append only the version-11 changes they actually land.
+        // DIALOG-19: ConversationOutcome.Score carries a settled talk's score (-1 for a talk cut short, and in older snapshots), and
+        // the chat window's meter lands on it, not on its own count.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
