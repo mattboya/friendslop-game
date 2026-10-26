@@ -14,6 +14,8 @@ namespace Festival.Presentation
             Role=role;
             Gender=Pick(id,"gender",2);Shape=Pick(id,"shape",3);Face=Pick(id,"face",6);
             Shirt=Pick(id,"shirt",4);Pants=PickWeighted(id,"pants",PantsWeights);Shoes=Pick(id,"shoes",4);
+            // The hoodie's folded hood covers the back of the crew scarf, so the crew never wears it.
+            if(role==FestivalCharacter.CrewRole&&Shirt==1)Shirt=new[]{0,2,3}[Pick(id,"crewshirt",3)];
             Headgear=Optional(id,"headgear",4);Sunglasses=Optional(id,"sunglasses",4);
             FacialHair=Gender==0?Optional(id,"facialhair",4):-1;
             Hairstyle=Pick(id,"hairstyle",4);Accessory=Optional(id,"accessory",4);

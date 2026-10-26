@@ -61,7 +61,7 @@ namespace Festival.Presentation
             go.transform.localRotation=Quaternion.identity;
             go.transform.localScale=Vector3.one*.56f;
             var hands=go.AddComponent<FestivalHands>();
-            var look=FestivalAppearance.For(playerId);
+            var look=FestivalAppearance.For(playerId,FestivalCharacter.CrewRole);
             var template=Resources.Load<Material>("FestivalLit");
             if(template==null)template=new Material(Shader.Find("Standard"));
             hands.material=new Material(template){name="First-person festival palette"};
