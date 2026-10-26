@@ -758,17 +758,20 @@ namespace Festival.Presentation
             var gallery=new FestivalCharacter[6];
             var roles=new[]{"Security","Medic","Friend","Vendor0","Vendor1","Vendor2"};
             var poses=new[]{"Accusing","Rescue","ReadClue","Idle","Dance","Extract"};
+            captureCamera.fieldOfView=LineupFieldOfView;capturePosition=LineupCameraPosition;captureRotation=LineupCameraRotation;
             for(int i=0;i<gallery.Length;i++)
             {
                 var id=GalleryId(i%2,i/2,-1,-1);
                 gallery[i]=FestivalCharacter.Create(transform,id,Color.white,roles[i]);
-                gallery[i].transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
-                gallery[i].transform.rotation=Quaternion.Euler(0,180,0);
-                gallery[i].transform.localScale=Vector3.Scale(Vector3.one*.84f,gallery[i].ShapeScale);
+                StandInLineup(gallery[i],i);
                 gallery[i].Pose=poses[i];
                 if(i==0)gallery[i].SetLittleSpoon(true);
             }
             yield return new WaitForSeconds(1);
+            // Read once the frame is done: FestivalSession.Update puts the camera back at the eye, and LateUpdate here aims it again.
+            yield return new WaitForEndOfFrame();
+            var rolesOut=LineupOutOfFrame(captureCamera,gallery);
+            if(rolesOut!=null){Fail("fit gallery out of frame: roles, "+rolesOut);yield break;}
             var rolePath=Path.Combine(dir,session.IsHost?"host-fit-roles.png":"client-fit-roles.png");
             ScreenCapture.CaptureScreenshot(rolePath);
             yield return new WaitForSeconds(1);
@@ -780,12 +783,13 @@ namespace Festival.Presentation
             {
                 var id=GalleryId(i%2,i/2,i%4,(i+1)%4);
                 gallery[i]=FestivalCharacter.Create(transform,id,Color.white);
-                gallery[i].transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
-                gallery[i].transform.rotation=Quaternion.Euler(0,180,0);
-                gallery[i].transform.localScale=Vector3.Scale(Vector3.one*.84f,gallery[i].ShapeScale);
+                StandInLineup(gallery[i],i);
                 gallery[i].Pose=i%2==0?"Dance":"Rescue";
             }
             yield return new WaitForSeconds(1);
+            yield return new WaitForEndOfFrame();
+            var outfitsOut=LineupOutOfFrame(captureCamera,gallery);
+            if(outfitsOut!=null){Fail("fit gallery out of frame: outfits, "+outfitsOut);yield break;}
             var outfitPath=Path.Combine(dir,session.IsHost?"host-fit-outfits.png":"client-fit-outfits.png");
             ScreenCapture.CaptureScreenshot(outfitPath);
             yield return new WaitForSeconds(1);
@@ -1493,6 +1497,34 @@ namespace Festival.Presentation
                 if((look.Face>=3)==deadpan&&look.Headgear<0&&look.Sunglasses<0&&look.FacialHair<0&&look.Accessory!=3&&found++==ordinal)return id;
             }
             throw new System.InvalidOperationException("Face gallery profile unavailable");
+        }
+        // Six people 1.4 m apart fill the 16:9 capture's width from 6.1 m at this field of view.
+        public const float LineupFieldOfView=48;
+        public static readonly Vector3 LineupCameraPosition=new Vector3(0,1.3f,-11.6f);
+        public static readonly Quaternion LineupCameraRotation=Quaternion.LookRotation(new Vector3(0,1,-5.5f)-LineupCameraPosition);
+        public static void StandInLineup(FestivalCharacter person,int i)
+        {
+            person.transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
+            person.transform.rotation=Quaternion.Euler(0,180,0);
+            person.transform.localScale=Vector3.Scale(Vector3.one*.84f,person.ShapeScale);
+        }
+        // The first person whose drawn bounds leave the view, with the corner's viewport point, or null when all are whole in frame.
+        public static string LineupOutOfFrame(Camera camera,FestivalCharacter[] people)
+        {
+            foreach(var person in people)
+            {
+                Bounds? whole=null;
+                foreach(var renderer in person.GetComponentsInChildren<Renderer>())
+                    if(renderer.enabled){var b=whole??renderer.bounds;b.Encapsulate(renderer.bounds);whole=b;}
+                if(whole==null)return person.name+" draws nothing";
+                var min=whole.Value.min;var max=whole.Value.max;
+                for(int corner=0;corner<8;corner++)
+                {
+                    var point=camera.WorldToViewportPoint(new Vector3((corner&1)==0?min.x:max.x,(corner&2)==0?min.y:max.y,(corner&4)==0?min.z:max.z));
+                    if(point.z<=0||point.x<0||point.x>1||point.y<0||point.y>1)return person.name+" at viewport "+point;
+                }
+            }
+            return null;
         }
         static string GalleryId(int gender,int shape,int shirt,int pants)
         {

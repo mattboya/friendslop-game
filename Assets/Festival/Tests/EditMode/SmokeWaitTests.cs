@@ -1,6 +1,7 @@
 using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Festival.Tests
 {
@@ -10,6 +11,23 @@ namespace Festival.Tests
         static RoundState Round()=>new RoundState{RoundId="test-round",SimulationSeconds=70};
         static DevelopmentSmoke.GameplayWait Wait(RoundState state,double real=100,double budget=15.75,double realLimit=double.PositiveInfinity)
             =>new DevelopmentSmoke.GameplayWait("solo medical revival",state,real,budget,realLimit);
+        // The grove camera the lineups once reused looks away from them, so the check must also fail there.
+        [Test]public void TheFitLineupCameraFramesAllSixPeople()
+        {
+            var root=new GameObject("Lineup frame test");
+            try
+            {
+                var camera=new GameObject("Lineup camera").AddComponent<Camera>();camera.transform.SetParent(root.transform);camera.aspect=16f/9f;
+                var people=new FestivalCharacter[6];var roles=new[]{"Security","Medic","Friend","Vendor0","Vendor1","Vendor2"};
+                for(int i=0;i<people.Length;i++){people[i]=FestivalCharacter.Create(root.transform,"lineup_frame_"+i,Color.white,roles[i]);DevelopmentSmoke.StandInLineup(people[i],i);}
+                camera.fieldOfView=DevelopmentSmoke.LineupFieldOfView;
+                camera.transform.SetPositionAndRotation(DevelopmentSmoke.LineupCameraPosition,DevelopmentSmoke.LineupCameraRotation);
+                Assert.That(DevelopmentSmoke.LineupOutOfFrame(camera,people),Is.Null,"the lineup camera frames all six");
+                camera.transform.position=new Vector3(-10,2.4f,-4);camera.transform.rotation=Quaternion.LookRotation(new Vector3(-24,1.3f,6)-camera.transform.position);
+                Assert.That(DevelopmentSmoke.LineupOutOfFrame(camera,people),Does.StartWith("lineup_frame_0 at viewport"),"the grove camera misses them");
+            }
+            finally{Object.DestroyImmediate(root);}
+        }
         [Test]public void LoadedFramesDoNotSpendTheRevivalSimulationBudget()
         {
             var state=Round();var wait=Wait(state);
