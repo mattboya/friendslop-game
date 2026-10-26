@@ -326,8 +326,9 @@ namespace Festival.Tests
             Assert.That(window.Going,Is.EqualTo(.5f),"it starts in the middle");
             Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Iffy));
             Assert.That(window.Need,Is.EqualTo(-1f),"a chat needs no score, so the meter has no mark");
-            // Smooth first and last, awkward between: WARM, IFFY, then COLD as each echo comes back.
-            string[] words={FestivalChatWindow.Warm,FestivalChatWindow.Iffy,FestivalChatWindow.Cold};int final=FestivalSimulation.ConversationTurns-1;
+            // Smooth first and last, awkward between, in points of 8 with each turn still to come as so-so: 5 WARM, 3 COLD, then 1
+            // COLD as each echo comes back.
+            string[] words={FestivalChatWindow.Warm,FestivalChatWindow.Cold,FestivalChatWindow.Cold};int final=FestivalSimulation.ConversationTurns-1;
             for(int t=0;t<=final;t++)
             {
                 var turn=talk.Turns[t];bool smooth=t==0||t==final;float before=window.Going;
@@ -354,6 +355,56 @@ namespace Festival.Tests
             Assert.That(window.BubbleColor(last),Is.EqualTo(FestivalChatWindow.ReactionColour((float)talk.Score)),"their closing reaction takes the colour the talk landed on");
             Assert.That(window.MeterShown&&window.Going==(float)talk.Score,Is.True,"the meter stays where the talk landed while the window lingers");
             Assert.That(FestivalChatWindow.Colour(1).g>FestivalChatWindow.Colour(1).r&&FestivalChatWindow.Colour(0).r>FestivalChatWindow.Colour(0).g,Is.True,"it runs from red to green");
+        }
+
+        // A wary festivalgoer's trust dance, danced with `share` of its notes, then the talk it leads on to.
+        static InteractionState AfterADance(FestivalSimulation game,PlayerState you,NpcState them,double share)
+        {
+            them.Observers.Add(new ObserverState{PlayerId=you.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="dance_talk",Kind="Conversation",TargetId=them.Id}).Accepted,Is.True,"setup: the chat starts");
+            var talk=game.Interaction(you.InteractionId);Assert.That(talk.TrustDance,Is.True,"setup: they ask for a dance first");
+            var notes=RhythmChart.For(talk).Notes;foreach(var note in notes.GetRange(0,(int)System.Math.Round(notes.Count*share)))talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int guard=0;FestivalSimulation.TrustDancing(talk)&&guard<200;guard++)game.Tick(.1);
+            Assert.That(talk.Status=="Active"&&talk.Turns.Count==1,Is.True,"setup: the talk follows the dance");
+            return talk;
+        }
+
+        // The meter counts points from where the dance left the talk. A failed dance starts it 2 points down (2 of 8 with every turn
+        // still to come as so-so), COLD, and their word on the dance opens the thread in that colour.
+        [Test] public void TheMeterCountsPointsFromWhereTheDanceLeftIt()
+        {
+            var game=Day(out var you,out var them);var talk=AfterADance(game,you,them,0);var window=Window(game,you);
+            Assert.That(talk.HeadStart,Is.EqualTo(FestivalSimulation.FailedDanceStart),"setup: a failed dance");
+            Follow(window,game,you.Id,0);
+            Assert.That(window.Going,Is.EqualTo(.25f).Within(1e-6),"a failed dance starts the meter at 2 of 8");
+            Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Cold));
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+talk.Turns[0].Reaction,"< "+talk.Turns[0].Line}),"their word on the dance, then their first line");
+            Assert.That(window.BubbleColor(0),Is.EqualTo(FestivalChatWindow.ReactionColour(.25f)),"their word on the dance takes the meter's colour");
+            Assert.That(window.Pick(Smooth(talk.Turns[0])),Is.True,"setup: a smooth first reply");Follow(window,game,you.Id,1);
+            Assert.That(window.Going,Is.EqualTo(.375f).Within(1e-6),"a smooth reply's echo lifts it by 2 points less the so-so it stood for: 3 of 8");
+        }
+
+        // A nailed trust dance marks round 1's best reply on the talker's screen, and only there: not on another reply, not once
+        // picked, not in round 2, and never after a talk with no dance. The reply's own words stay as dealt.
+        [Test] public void ANailedDanceMarksRoundOnesBestReplyOnly()
+        {
+            var game=Day(out var you,out var them);var talk=AfterADance(game,you,them,1);var window=Window(game,you);
+            int best=Smooth(talk.Turns[0]);Assert.That(talk.HintedReply,Is.EqualTo(best),"setup: a nailed dance hints the smooth reply");
+            Follow(window,game,you.Id,0);
+            Assert.That(window.Hinted,Is.EqualTo(best),"the hinted reply carries the mark");
+            for(int i=0;i<3;i++)
+            {
+                Assert.That(window.HintLabel(i),Is.EqualTo(i==best?FestivalChatWindow.HintMark:""),"reply "+(i+1)+(i==best?" is marked":" is not"));
+                Assert.That(window.ReplyLabel(i),Is.EqualTo(talk.Turns[0].Replies[i]),"reply "+(i+1)+" reads as dealt");
+            }
+            Assert.That(window.Going,Is.EqualTo(.5f),"a nailed dance starts the talk level");
+            Assert.That(window.Pick(best),Is.True,"setup: the hinted reply picked");
+            Assert.That(window.Hinted,Is.EqualTo(-1),"a picked turn drops the mark");
+            Follow(window,game,you.Id,1);
+            Assert.That(window.Hinted==-1&&window.HintLabel(0)==""&&window.HintLabel(1)==""&&window.HintLabel(2)=="",Is.True,"round 2 has no mark");
+            Object.DestroyImmediate(canvas);
+            var plain=Day(out var me,out var someone);Talk(plain,me,someone);var other=Window(plain,me);Follow(other,plain,me.Id,0);
+            Assert.That(other.Hinted,Is.EqualTo(-1),"a talk with no dance has no mark");
         }
 
         // A joined client's last pick in a security talk reaches the host after the turn's time ran out. The host

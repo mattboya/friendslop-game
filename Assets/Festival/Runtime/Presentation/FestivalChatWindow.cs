@@ -55,6 +55,11 @@ namespace Festival.Presentation
         /// <summary>The score a talk needs, which the meter marks: a buy's FestivalSimulation.BuyScore, a sale's full price at its ask
         /// (FestivalSimulation.SaleNeeds); -1 for none.</summary>
         public static float NeedFor(InteractionState talk)=>talk?.Kind=="Buy"?(float)FestivalSimulation.BuyScore:talk?.Kind=="Sale"?(float)FestivalSimulation.SaleNeeds(talk.Ask):-1;
+        /// <summary>The mark a nailed trust dance puts on round 1's best reply, on the talker's screen alone
+        /// (InteractionState.HintedReply). Words alone: the HUD font has no star glyph.</summary>
+        public const string HintMark="THEY'D LIKE THIS";
+        // The mark's width at the right of its reply, in canvas pixels; the reply's own words make room for it.
+        const float HintWidth=128;
         // Their typed line's hidden rest keeps its place, so the bubble doesn't grow as the letters come.
         const string Hidden="<color=#00000000>";
 
@@ -62,7 +67,7 @@ namespace Festival.Presentation
         sealed class Bubble{public GameObject Root;public RectTransform Back,Mark;public Image BackImage,MarkImage;public Text Line,MarkText;public CanvasGroup Group;public string Said="";public bool Theirs,Note,Whole;public float At,WholeAt,FadeFrom;public int Letters;}
         readonly List<Bubble> thread=new List<Bubble>(),fading=new List<Bubble>(),spare=new List<Bubble>();
         readonly Button[] replies=new Button[MaxReplies];
-        readonly Text[] replyTexts=new Text[MaxReplies],replyKeys=new Text[MaxReplies];
+        readonly Text[] replyTexts=new Text[MaxReplies],replyKeys=new Text[MaxReplies],hints=new Text[MaxReplies];
         readonly TextGenerator measure=new TextGenerator();
         Font font;Sprite rounded;Text header,slur,meterWord;RectTransform bar,track,viewport,content,meter,meterFill,meterMark;Image meterFillImage;CanvasGroup group;
         Action<int> onPick;int offered;
@@ -77,6 +82,8 @@ namespace Festival.Presentation
         // The grade heard on each turn of the talk followed (Silence for a turn left unanswered), -1 for none yet; the score the host
         // settled it on, -1 until then.
         readonly int[] graded=new int[FestivalSimulation.ConversationTurns];float settled=-1;
+        // The points the talk started on after its trust dance (InteractionState.HeadStart).
+        int headStart;
 
         /// <summary>Builds the window, hidden, on the HUD's canvas where the chat card was: right of centre, between the crew card
         /// and the gear bar (FestivalHud moves it beside the pass while the menu is open).</summary>
@@ -115,7 +122,9 @@ namespace Festival.Presentation
                 window.replyKeys[i].resizeTextForBestFit=true;window.replyKeys[i].resizeTextMinSize=10;window.replyKeys[i].resizeTextMaxSize=21;
                 var question=window.Label(reply,"Question",19,TextAnchor.MiddleLeft,Ink);Pixels(question.rectTransform,Vector2.zero,Vector2.one,new Vector2(46,1),new Vector2(-8,-1));
                 question.resizeTextForBestFit=true;question.resizeTextMinSize=12;question.resizeTextMaxSize=question.fontSize;
-                window.replies[i]=button;window.replyTexts[i]=question;
+                var hint=window.Label(reply,"Hint",13,TextAnchor.MiddleRight,TheirMark);hint.text=HintMark;hint.fontStyle=FontStyle.Bold;
+                Pixels(hint.rectTransform,new Vector2(1,0),new Vector2(1,1),new Vector2(-HintWidth,1),new Vector2(-8,-1));hint.gameObject.SetActive(false);
+                window.replies[i]=button;window.replyTexts[i]=question;window.hints[i]=hint;
             }
             window.Offer(null,null);
             root.gameObject.SetActive(false);
@@ -173,9 +182,10 @@ namespace Festival.Presentation
         public int Replies=>offered;
         /// <summary>Whether the talk meter shows (a talk, never a chat check or the camp seller's talk).</summary>
         public bool MeterShown=>meter.gameObject.activeSelf;
-        /// <summary>How the talk is going, 0-1: the score it lands on if every turn not yet answered goes so-so. It starts at .5, a
-        /// smooth reply lifts it and an awkward one or a silence drops it, each once the host's echo of the pick arrives, and once
-        /// the talk settles it is the score the host settled (ConversationOutcome.Score).</summary>
+        /// <summary>How the talk is going, 0-1: the score it lands on if every turn not yet answered goes so-so, in the host's points.
+        /// It starts at .5, or .25 after a failed trust dance; a smooth reply lifts it and an awkward one or a silence drops it, each
+        /// once the host's echo of the pick arrives, and once the talk settles it is the score the host settled
+        /// (ConversationOutcome.Score).</summary>
         public float Going=>settled>=0?settled:GoingThrough(graded.Length);
         public string GoingWord=>meterWord.text;
         public Color GoingColor=>meterFillImage.color;
@@ -185,6 +195,9 @@ namespace Festival.Presentation
         public string ReplyKey(int i)=>replyKeys[i].text;
         public void SetReplyKeys(string first,string second,string third){replyKeys[0].text=first;replyKeys[1].text=second;replyKeys[2].text=third;}
         public string ReplyLabel(int i)=>replyTexts[i].text;
+        /// <summary>The reply carrying the hint mark (HintMark), -1 for none, and what reply i's mark shows ("" for none).</summary>
+        public int Hinted{get;private set;}=-1;
+        public string HintLabel(int i)=>hints[i].gameObject.activeSelf?hints[i].text:"";
         /// <summary>Whether reply i can be picked: offered, not dimmed, and not on a timed turn whose bar is empty (the host would
         /// refuse it as a silence).</summary>
         public bool CanReply(int i)=>i>=0&&i<offered&&replies[i].interactable&&!(track.gameObject.activeSelf&&TimeLeft<=0);
@@ -198,7 +211,7 @@ namespace Festival.Presentation
             clock=now;gameObject.SetActive(true);this.header.text=header;group.alpha=1;
             if(threadId==this.threadId)return;
             this.threadId=threadId;this.mark=mark;lingers=true;over=false;turnsShown=turnsSaid=0;hunch="";outcomeDelivery="";track.gameObject.SetActive(false);slur.gameObject.SetActive(false);
-            meter.gameObject.SetActive(false);for(int t=0;t<graded.Length;t++)graded[t]=-1;settled=-1;
+            meter.gameObject.SetActive(false);for(int t=0;t<graded.Length;t++)graded[t]=-1;settled=-1;headStart=0;
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();
             Offer(null,null);dirty=true;
         }
@@ -216,7 +229,7 @@ namespace Festival.Presentation
         /// reply's index when 1-3 or a click picks it.</summary>
         public void Offer(string[] lines,Action<int> pick)
         {
-            offered=lines==null?0:Mathf.Min(lines.Length,MaxReplies);onPick=pick;
+            offered=lines==null?0:Mathf.Min(lines.Length,MaxReplies);onPick=pick;Hint(-1);
             for(int i=0;i<MaxReplies;i++)
             {
                 replies[i].gameObject.SetActive(i<offered);replies[i].interactable=true;
@@ -229,10 +242,16 @@ namespace Festival.Presentation
         public bool Pick(int index)
         {
             if(!CanReply(index))return false;
-            Dim(index);onPick?.Invoke(index);
+            Dim(index);Hint(-1);onPick?.Invoke(index);
             return true;
         }
         void Dim(int i){replies[i].interactable=false;replyTexts[i].color=Dimmed;replyKeys[i].color=Dimmed;}
+        // The hint mark on reply `reply` alone (-1 for none); its words make room for it.
+        void Hint(int reply)
+        {
+            Hinted=reply>=0&&reply<offered?reply:-1;
+            for(int i=0;i<MaxReplies;i++){bool on=i==Hinted;hints[i].gameObject.SetActive(on);Pixels(replyTexts[i].rectTransform,Vector2.zero,Vector2.one,new Vector2(46,1),new Vector2(on?-HintWidth-8:-8,-1));}
+        }
         /// <summary>Each frame: types their lines on, fades out bubbles past the last MaxBubbles, fills the time bar (0-1) and lays
         /// the thread out from the foot up when it changed. Allocates only as a typed line gains a letter.</summary>
         public void Advance(float now,float timeLeft,bool reducedMotion)
@@ -348,6 +367,7 @@ namespace Festival.Presentation
         void FollowTalk(InteractionState talk)
         {
             if(!MeterShown){meter.gameObject.SetActive(true);Mark(NeedFor(talk));Place(viewport,.04f,offered>0?ThreadOverReplies:ThreadAlone,.96f,ThreadUnderMeter);dirty=true;}
+            headStart=talk.HeadStart;
             for(int t=0;t<talk.Turns.Count&&t<graded.Length;t++){var heard=talk.Turns[t];if(heard.Pick>=0)graded[t]=heard.Grades[heard.Pick];else if(t<talk.Turns.Count-1)graded[t]=ConversationLines.Silence;}
             Meter();
             for(;turnsShown<talk.Turns.Count;turnsShown++)
@@ -357,18 +377,20 @@ namespace Festival.Presentation
                 if(turn.Reaction!=""){TheySay(turn.Reaction,false);Tint(GoingThrough(at));}
                 TheySay(turn.Line,false);
                 Offer(turn.Replies,i=>{for(int r=0;r<offered;r++)Dim(r);YouSay(turn.Replies[i]);turnsSaid=at+1;Send?.Invoke(new GameCommand{Kind="Reply",Amount=i,Direction=at});});
+                if(at==0)Hint(talk.HintedReply);
             }
             hunch=talk.Hunch;
             bool garbled=talk.Turns.Count>0&&Array.Exists(talk.Turns[talk.Turns.Count-1].Garbled,g=>g);
             slur.text="TRIPPING • SOME REPLIES SLUR";slur.gameObject.SetActive(garbled);
         }
 
-        // How the talk is going once the first `heard` turns are counted: each later turn, and each with nothing heard yet, as so-so.
+        // How the talk is going once the first `heard` turns are counted, in the host's points (FestivalSimulation.Points) from where
+        // the dance left it: each later turn, and each with nothing heard yet, as so-so; never below 0.
         float GoingThrough(int heard)
         {
-            float sum=0;
-            for(int t=0;t<graded.Length;t++){int g=t<heard?graded[t]:-1;sum+=g<0||g==ConversationLines.SoSo?.5f:g==ConversationLines.Smooth?1:0;}
-            return sum/graded.Length;
+            int points=headStart;
+            for(int t=0;t<graded.Length;t++){int g=t<heard?graded[t]:-1;points+=FestivalSimulation.Points(g<0?ConversationLines.SoSo:g);}
+            return Mathf.Max(0,points)/(float)FestivalSimulation.TalkPoints;
         }
         void Meter(){float going=Going;meterFill.anchorMax=new Vector2(going,1);meterFillImage.color=Colour(going);meterWord.text=Word(going);}
         // A thin ink line across the track at `need`, or none.
