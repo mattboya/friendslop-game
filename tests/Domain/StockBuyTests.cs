@@ -148,8 +148,8 @@ public static class StockBuyTests
             Check(p.InteractionId==""&&p.Cash==15&&Count(p,kind)==1,who+": walking off refunds it (cash $"+p.Cash+")");
 
             // A sloppy buy that lands still buys.
-            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,SoSo,Awkward,SoSo);
-            Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": smooth, so-so, awkward and so-so is a sloppy buy, score "+sloppy.Score);
+            Check(Ask(s,p,seller).Accepted,who+": a sloppy buy starts");var sloppy=Talk(s,p,Smooth,Smooth,Awkward,SoSo);
+            Check(sloppy.Score>=.4&&sloppy.Score<.75,"setup: "+who+": two smooth, an awkward and a so-so is a sloppy buy, score "+sloppy.Score);
             Check(Count(p,kind)==2&&p.Cash==10&&seller.StockSold==2,who+": a sloppy buy hands over a unit too (cash $"+p.Cash+", "+Count(p,kind)+" held)");
 
             // Hands filled mid-buy: the unit lands at the buyer's feet.

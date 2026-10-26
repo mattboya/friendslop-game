@@ -287,11 +287,17 @@ public static class EscalationTests
         Check(cop.Mode=="Stop","once the guard has lost sight of them, stock in view starts a fresh stop (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);double began=s.State.SimulationSeconds;s.Tick(1);
-        talk=Talk(s,a,cop,Smooth,SoSo,Awkward,SoSo);Finish(s,talk);
+        talk=Talk(s,a,cop,Smooth,SoSo,Awkward,Smooth);Finish(s,talk);
         Check(talk.Status=="Complete"&&talk.Score>=.5&&talk.Score<.75,"setup: the talk scores .5 or a little more, under .75 (got "+talk.Score+")");
         s.Tick(.1);Check(cop.Mode=="Stop","a talk scoring .5 keeps the stop (mode "+cop.Mode+")");
         s.Tick(19.85-(s.State.SimulationSeconds-began));Check(cop.Mode=="Stop","its clock runs on: a stop until 20 s (mode "+cop.Mode+")");
         s.Tick(.3);Check(cop.Mode=="ArrestWarning","and an arrest warning at 20 s (mode "+cop.Mode+")");
+
+        // An awkward reply costs a point, so three smooth replies and an awkward one (5 of 8) do not wave them on.
+        s=Stopped(out cop,out a);s.Tick(1);
+        talk=Talk(s,a,cop,Smooth,Smooth,Smooth,Awkward);Finish(s,talk);
+        Check(talk.Status=="Complete"&&Math.Abs(talk.Score-.625)<1e-9,"setup: three smooth replies and an awkward one score 5 of 8 (got "+talk.Score+")");
+        s.Tick(.1);Check(cop.Mode=="Stop"&&!cop.Evidence.Exists(e=>e.Kind=="WavedOn"),"heard out, not waved on: the stop holds (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);began=s.State.SimulationSeconds;s.Tick(17);
         talk=Talk(s,a,cop,Silence);bool warned=false,free=true;

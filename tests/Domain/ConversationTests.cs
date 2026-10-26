@@ -8,8 +8,8 @@ using Festival.Core;
 // DIALOG-3: selling, buying, chatting and talking to security are conversations, not dances. Each is four turns (the greeting,
 // small talk, the ask and the close, each with replies of its own): they say a line and you pick one of three replies (1-3).
 // Only Police replies time out after ReplySeconds. One reply is smooth, one so-so and one
-// awkward, by the taste of the person you're talking to, which their opener hints at; a dose garbles some. The average of
-// the turns is the talk's score, and settles it as the dance did. A wary festivalgoer asks for a dance first.
+// awkward, by the taste of the person you're talking to, which their opener hints at; a dose garbles some. The replies'
+// points are the talk's score, and settle it as the dance did. A wary festivalgoer asks for a dance first.
 public static class ConversationTests
 {
     static int sequence;
@@ -22,7 +22,7 @@ public static class ConversationTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EachTalkIsFourRoundsOfThreeReplies,TheirLineFollowsTheRound,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
-            ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
+            ATalkScoresItsRepliesPoints,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
             ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
@@ -283,18 +283,21 @@ public static class ConversationTests
         }
     }
 
-    // Smooth scores 1, so-so .5 and awkward or silence 0, averaged over the four turns. Only Police silence lets each turn run its 4 s.
-    static void ATalkScoresTheAverageOfItsReplies()
+    // Smooth scores 2 points, so-so 1 and awkward or silence -1, and the score is the total over 8, never below 0. Only Police
+    // silence lets each turn run its 4 s.
+    static void ATalkScoresItsRepliesPoints()
     {
+        Check(FestivalSimulation.Points(Smooth)==2&&FestivalSimulation.Points(SoSo)==1&&FestivalSimulation.Points(Awkward)==-1&&FestivalSimulation.Points(Silence)==-1&&FestivalSimulation.TalkPoints==8,"replies are worth 2, 1, -1 and -1, out of 8");
         foreach(var kind in Kinds)
         {
-            var s=Pair(kind);var all=Talk(s,Start(s,kind),Every(Smooth));Check(all.Score==1,"an all-smooth "+kind+" scores 1, got "+all.Score);
+            var s=Pair(kind);var all=Talk(s,Start(s,kind),Every(Smooth));Check(all.Score==1,"an all-smooth "+kind+" scores 8 of 8, got "+all.Score);
             s=Pair(kind);var i=Start(s,kind);double began=s.State.SimulationSeconds;Talk(s,i,Every(Awkward));
-            Check(i.Score==0,"an all-awkward "+kind+" scores 0, got "+i.Score);
+            Check(i.Score==0,"an all-awkward "+kind+" scores -4, held at 0, got "+i.Score);
             if(kind=="Police"){s=Pair(kind);i=Start(s,kind);began=s.State.SimulationSeconds;Talk(s,i,Every(Silence));Check(i.Score==0&&i.Turns.Count==4&&i.Turns.All(t=>t.Pick==-1)&&Math.Abs(s.State.SimulationSeconds-began-4*FestivalSimulation.ReplySeconds)<.11,"Police alone scores four silent turns after 16 seconds");}
-            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward,Smooth);Check(Math.Abs(mixed.Score-.625)<1e-9,"smooth, so-so, awkward and smooth average .625, got "+mixed.Score);
-            s=Pair(kind);var good=Talk(s,Start(s,kind),Smooth,Awkward,SoSo,SoSo);Check(Math.Abs(good.Score-.5)<1e-9,"smooth, awkward and two so-so average .5, got "+good.Score);
-            s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-.875)<1e-9,"three smooth and a so-so average .875, got "+sure.Score);
+            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward,Smooth);Check(Math.Abs(mixed.Score-.5)<1e-9,"smooth, so-so, awkward and smooth score 4 of 8, got "+mixed.Score);
+            s=Pair(kind);var poor=Talk(s,Start(s,kind),Smooth,Awkward,SoSo,SoSo);Check(Math.Abs(poor.Score-.375)<1e-9,"smooth, awkward and two so-so score 3 of 8, got "+poor.Score);
+            s=Pair(kind);var split=Talk(s,Start(s,kind),Smooth,Smooth,Awkward,Awkward);Check(Math.Abs(split.Score-.25)<1e-9,"two smooth and two awkward score 2 of 8, got "+split.Score);
+            s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-.875)<1e-9,"three smooth and a so-so score 7 of 8, as the old average did, got "+sure.Score);
             Check(s.Player("p0").LastRhythmScore==sure.Score,"the talk's score is the player's last result");
         }
     }
@@ -319,26 +322,30 @@ public static class ConversationTests
         Check(!Act(s,"p0","Reply",amount:0,direction:0).Accepted,"a dance takes no reply");
     }
 
-    // The score settles a talk as the dance's did: a sale pays in full at .75 and half at .4, and returns the stock below; a buy
-    // hands over a unit at .4 and refunds below; security at .75 waves off a stop; and the watchers move by RhythmDelta.
+    // Totals at and just under each line settle a talk as the dance's score did: a sale's pay (the stock back only on no sale), a
+    // buy at 4 points, security waving off a stop at 6, and the watchers' RhythmDelta.
     static void TheScoreSettlesTheTalkAsTheDanceDid()
     {
-        int Sold(params int[] grades){var s=Pair("Sale");var p=s.Player("p0");int cash=p.Cash;var i=Talk(s,Start(s,"Sale"),grades);Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(i.Score<.4),"a sale scoring "+i.Score+" keeps the stock only below .4");return p.Cash-cash;}
-        Check(Sold(Smooth,Smooth,Smooth,SoSo)==FestivalSimulation.PerfectSalePay,"a sale at .875 pays in full");
-        Check(Sold(Smooth,SoSo,Awkward,SoSo)==5,"a sale at .5 pays half");
-        Check(Sold(Smooth,Awkward,Awkward,SoSo)==0,"a sale at .375 pays nothing and returns the stock");
-        foreach(var (grades,bought) in new[]{(new[]{Smooth,SoSo,Awkward,SoSo},true),(new[]{SoSo,Awkward,Awkward,Awkward},false)})
+        int Fair=FestivalSimulation.FairAsk,High=FestivalSimulation.HighAsk,Greedy=FestivalSimulation.GreedyAsk;
+        int[] seven={Smooth,Smooth,Smooth,SoSo},six={Smooth,Smooth,SoSo,SoSo},five={Smooth,Smooth,Smooth,Awkward},four={Smooth,Smooth,SoSo,Awkward},three={Smooth,SoSo,SoSo,Awkward},two={Smooth,Smooth,Awkward,Awkward};
+        foreach(var (ask,grades,paid) in new[]{(Fair,six,10),(Fair,five,5),(Fair,four,5),(Fair,three,0),(High,six,15),(High,five,10),(High,four,10),(High,three,0),(Greedy,seven,20),(Greedy,six,10),(Greedy,five,10),(Greedy,four,0),(Fair,two,0)})
+        {
+            var s=Pair("Sale");var p=s.Player("p0");int cash=p.Cash;var i=Talk(s,Sale(s,ask),grades);
+            Check(p.Cash-cash==paid,"ask "+ask+" at "+(i.Score*FestivalSimulation.TalkPoints)+" points pays "+paid+", got "+(p.Cash-cash));
+            Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(paid==0),"ask "+ask+" at "+i.Score+": only a no-sale hands the stock back");
+        }
+        foreach(var (grades,bought) in new[]{(four,true),(three,false)})
         {
             var s=Pair("Buy");var p=s.Player("p0");string kind=FestivalSimulation.SellerStock(Partner(s).Id);var i=Talk(s,Start(s,"Buy"),grades);
-            Check(p.Inventory.Exists(x=>x.ItemId==kind)==bought&&p.Cash==(bought?15:20),"a buy scoring "+i.Score+(bought?" hands over a unit for $5":" refunds the $5")+" ($"+p.Cash+")");
+            Check(p.Inventory.Exists(x=>x.ItemId==kind)==bought&&p.Cash==(bought?15:20),"a buy at "+(i.Score*FestivalSimulation.TalkPoints)+" points"+(bought?" hands over a unit for $5":" refunds the $5")+" ($"+p.Cash+")");
         }
-        foreach(var (grades,waved) in new[]{(new[]{Smooth,Smooth,Smooth,SoSo},true),(new[]{Smooth,SoSo,SoSo,SoSo},false)})
+        foreach(var (grades,waved) in new[]{(six,true),(five,false),(new[]{Smooth,Smooth,Smooth,Silence},false)})
         {
             var s=Pair("Police");var cop=Partner(s);s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});s.Player("p0").EquippedItemId="stock_lsd";cop.Evidence.Add(new EvidenceState{PlayerId="p0",Kind="VisibleStock",StartSeconds=0,SeenSeconds=0});
             var i=Talk(s,Start(s,"Police"),grades);
-            Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+i.Score+(waved?" waves the stop off":" keeps the stop"));
+            Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+(i.Score*FestivalSimulation.TalkPoints)+" points"+(waved?" waves the stop off":" keeps the stop"));
         }
-        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward,SoSo},3)})
+        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,Smooth,Awkward,SoSo},3)})
         {
             var s=Pair("Conversation");var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
             var i=Talk(s,Start(s,"Conversation"),grades);
@@ -378,7 +385,7 @@ public static class ConversationTests
     static void ATalkSettlesItsPartnerAndWitnessesOnce()
     {
         foreach(var kind in Kinds)foreach(float yaw in new[]{0f,180f})
-            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward,SoSo},3)})
+            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,Smooth,Awkward,SoSo},3)})
             {
                 var s=Pair(kind);var partner=Partner(s);partner.Yaw=yaw;
                 partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});

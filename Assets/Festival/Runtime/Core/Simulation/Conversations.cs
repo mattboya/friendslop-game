@@ -7,9 +7,9 @@ namespace Festival.Core
     /// pick one of three replies with the Reply command (Amount the reply 0-2, Direction the turn 0-3). DIALOG-9 waits for each pick;
     /// only Police turns count silence after ReplySeconds. One reply is smooth, one so-so and one awkward by the person's taste
     /// (ConversationLines),
-    /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
-    /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
-    /// partner's and watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
+    /// and a dose garbles one of them a turn, two from dose 3. Each reply is worth Points (smooth 2, so-so 1, awkward or nothing
+    /// -1), and the total over TalkPoints, never below 0, is the talk's Score, which settles it as the dance used to: a sale's pay,
+    /// a buy, security waving off a stop, and every partner's and watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
     /// first asks for a dance (TrustAsk): eight beats on the talk's own chart, danced and watched like any dance. TrustScore or
     /// better wins their trust and the talk follows; less and they walk off, the talk over at 0. A chat or a buy reads the
     /// person: a reply that lands draws out a line with their role's tell, more often the smoother it was (TellOdds), and the
@@ -20,6 +20,11 @@ namespace Festival.Core
         public const int ConversationTurns=4;
         public const double ReplySeconds=4,TrustDanceSuspicion=40,TrustScore=.6;
         public const string TrustAsk="Dance with me first, then we talk.";
+        /// <summary>What a reply of this grade (ConversationLines.Smooth, SoSo, Awkward or Silence) is worth. A talk's Score is its
+        /// points over TalkPoints, never below 0, so every line keeps its place: a Fair sale's full price at 6, a buy at 4, security
+        /// waving you on at 6.</summary>
+        public static int Points(int grade)=>grade==ConversationLines.Smooth?2:grade==ConversationLines.SoSo?1:-1;
+        public const int TalkPoints=2*ConversationTurns;
         public static bool Talks(string kind)=>kind=="Sale"||kind=="Buy"||kind=="Conversation"||kind=="Police";
         /// <summary>Whether talk i is still in the dance a wary festivalgoer asked for, before its first turn.</summary>
         public static bool TrustDancing(InteractionState i)=>Talks(i.Kind)&&i.TrustDance&&i.Turns.Count==0;
@@ -101,8 +106,8 @@ namespace Festival.Core
                 i.DialogueText="";i.DurationSeconds=State.SimulationSeconds-i.StartSeconds;AddTurn(i,p);return false;
             }
             if(i.Turns.Count<ConversationTurns){AddTurn(i,p);return false;}
-            double total=0;foreach(var turn in i.Turns){int grade=Graded(turn);total+=grade==ConversationLines.Smooth?1:grade==ConversationLines.SoSo?.5:0;}
-            i.Score=total/ConversationTurns;p.LastRhythmScore=i.Score;p.Performances++;
+            int total=0;foreach(var turn in i.Turns)total+=Points(Graded(turn));
+            i.Score=Math.Max(0,total)/(double)TalkPoints;p.LastRhythmScore=i.Score;p.Performances++;
             int moved=RhythmDelta(i.Score);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,moved);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ChatDiagnostic?.Invoke("TalkSettled",i.Kind,State.RoundId,State.SimulationSeconds);

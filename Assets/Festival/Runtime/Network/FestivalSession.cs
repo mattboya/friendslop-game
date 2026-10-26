@@ -165,6 +165,8 @@ namespace Festival.Network
         // host's echo of a pick and no client can read the smooth reply ahead.
         // ESC-3: a view shows each cop's case on its viewer (Mode Stop or ArrestWarning, TargetId the viewer) whoever the cop walks
         // after, and snapshots mark a stop whose last chance was said (EvidenceState.Warned, false in older rounds).
+        // DIALOG-20: a talk's Score is its replies' points (smooth 2, so-so 1, awkward or silent -1) over 8, never below 0, so every
+        // line keeps its place; a version-10 client's meter would count the old average.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
