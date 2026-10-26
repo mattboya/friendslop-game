@@ -47,14 +47,19 @@ function changedStockFiles()
   return diff.status===0?diff.stdout.trim():'';
 }
 
+// Not `checkout --`: that restores from the index and needs the repo root. This form also undoes a staged change or new file.
+function restoreAdvice(paths)
+{
+  return `Restore them with: git -C ${JSON.stringify(root)} restore --source=HEAD --staged --worktree -- ${paths.split('\n').map(p=>JSON.stringify(p)).join(' ')}`;
+}
+
 function run(label,args,expectedMarker='')
 {
   // A file that already differs would fail the check after Unity and blame this run.
   const dirty=changedStockFiles();
   if(dirty)
   {
-    const paths=dirty.split('\n');
-    console.error(`Committed stock files differ from HEAD before Unity ran:\n${dirty}\nUnity did not start. Restore them with: git checkout -- ${paths.map(p=>JSON.stringify(p)).join(' ')}`);
+    console.error(`Committed stock files differ from HEAD before Unity ran:\n${dirty}\nUnity did not start. ${restoreAdvice(dirty)}`);
     process.exit(3);
   }
   const log=path.join(artifacts,`unity-${label}.log`);
@@ -64,6 +69,9 @@ function run(label,args,expectedMarker='')
   if(result.stdout)process.stdout.write(result.stdout);
   if(result.stderr)process.stderr.write(result.stderr);
   if(result.error)console.error(result.error.message);
+  // Checked before the exit code, so a run that fails its tests still reports the files it changed.
+  const changed=changedStockFiles();
+  if(changed)console.error(`Unity changed committed stock files (they differ from HEAD after this run):\n${changed}\n${restoreAdvice(changed)}`);
   if(result.status!==0)
   {
     if(existsSync(log))console.error(`Unity failed; inspect ${log}`);
@@ -77,12 +85,7 @@ function run(label,args,expectedMarker='')
       process.exit(1);
     }
   }
-  const changed=changedStockFiles();
-  if(changed)
-  {
-    console.error(`Unity changed committed stock files (they differ from HEAD after this run):\n${changed}`);
-    process.exit(3);
-  }
+  if(changed)process.exit(3);
 }
 
 // `test-edit|test-play -testFilter <filter>` runs only the tests Unity's filter matches (a regular expression on full test
