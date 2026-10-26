@@ -216,6 +216,7 @@ namespace Festival.Tests
                 yield return StartLevel(host,client.LocalPlayerId);client.Profile.Data.ThirdPerson=false;
                 // The host trips, so the level never doses the spinner mid-test.
                 game.State.Npcs.Clear();game.State.TripperId=host.LocalPlayerId;me.Effects.Clear();
+                var hostPlayer=game.Player(host.LocalPlayerId);hostPlayer.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);hostPlayer.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});
                 me.Inventory.Clear();me.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});me.Inventory.Add(new ItemStack{ItemId="poi_led",Count=1});me.EquippedItemId="poi_practice";
                 for(float until=Time.realtimeSinceStartup+3;client.LocalPlayer.EquippedItemId!="poi_practice"&&Time.realtimeSinceStartup<until;)yield return null;
                 HoldRight(true);for(float until=Time.realtimeSinceStartup+2;!Sides()&&Time.realtimeSinceStartup<until;)yield return null;
