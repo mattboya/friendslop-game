@@ -80,7 +80,9 @@ public sealed partial class FestivalSimulation {
     void Detain(PlayerState p){if(p.Life!="Alive")return;var i=Interaction(p.InteractionId);string held=i!=null&&i.Kind=="Sale"?i.ReservedItemId:"";if(held!="")i.ReservedItemId="";Cancel(p,"Police bust");LoseGiggleTank(p);ReturnOffers(p.Id);var taken=p.Inventory.FindAll(x=>Stock(x.ItemId));p.Inventory.RemoveAll(x=>Stock(x.ItemId));if(held!=""){var s=taken.Find(x=>x.ItemId==held);if(s==null)taken.Add(new ItemStack{ItemId=held,Count=1});else s.Count++;}if(!p.Inventory.Exists(x=>x.ItemId==p.EquippedItemId))p.EquippedItemId="";int fine=Math.Min(p.Cash,10);p.Cash-=fine;if(fine>0||taken.Count>0)News(p,fine>0?"Cash":"Items",DetainNews(fine,taken));p.Life="Detained";p.EscapeProgress=0;p.X=Festivals.SecurityBuilding.CentreX;p.Z=Festivals.SecurityBuilding.CentreZ;p.DragTargetId="";}
     void ClearEvidence(string id){foreach(var n in State.Npcs)n.Evidence.RemoveAll(e=>e.PlayerId==id);}
     public const double DeathWheelSeconds=2.5;
-    public const int DeathSpinLimit=24; // Eight players, each with at most two revivals and three deaths per round.
+    // A player dies at most once more than the level's revivals, and eight players at that many deaths bound the history.
+    const int DeathsPerLevel=FestivalGuidance.RevivalsPerLevel+1;
+    public const int DeathSpinLimit=8*DeathsPerLevel;
     // The independent death stream freezes only after cancellation/refunds and returned handoffs.
     void FreezeDeathCash(PlayerState p)
     {
@@ -101,18 +103,18 @@ public sealed partial class FestivalSimulation {
         foreach(var p in state.Players)
         {
             bool spin=p.DeathSpinSequence>0;
-            if(!Finite(p.DeathSpinAt)||p.DeathSpinSequence<0||p.DeathSpinSequence>3||p.DeathSpinAmount<0||p.DeathCashDropped<0||p.DeathCashDropped!=0&&p.DeathCashDropped!=p.DeathSpinAmount
+            if(!Finite(p.DeathSpinAt)||p.DeathSpinSequence<0||p.DeathSpinSequence>DeathsPerLevel||p.DeathSpinAmount<0||p.DeathCashDropped<0||p.DeathCashDropped!=0&&p.DeathCashDropped!=p.DeathSpinAmount
                 ||p.DeathSpinId==null||p.DeathSpinRoundId==null||p.DeathSpinName==null||p.DeathSpinName.Length>24
                 ||spin&&(p.DeathSpinAt<0||p.DeathSpinAmount==0||p.DeathSpinRoundId!=state.RoundId||p.DeathSpinId!=state.RoundId+":death:"+p.Id+":"+p.DeathSpinSequence)
                 ||!spin&&(p.DeathSpinAt!=-1||p.DeathSpinAmount!=0||p.DeathCashDropped!=0||p.DeathSpinSeed!=0||p.DeathSpinId!=""||p.DeathSpinRoundId!=""||p.DeathSpinName!="")
-                ||p.GearLossSequence<0||p.GearLossSequence>3||p.GearLossKind!=(p.GearLossSequence>0?"Death":"")||p.GearLossNotice!=(p.GearLossSequence>0?DeathGearLossNotice:""))throw new ArgumentException("Invalid snapshot death event");
+                ||p.GearLossSequence<0||p.GearLossSequence>DeathsPerLevel||p.GearLossKind!=(p.GearLossSequence>0?"Death":"")||p.GearLossNotice!=(p.GearLossSequence>0?DeathGearLossNotice:""))throw new ArgumentException("Invalid snapshot death event");
         }
         if(state.DeathSpins==null||state.DeathSpins.Count>DeathSpinLimit)throw new ArgumentException("Invalid snapshot death history");
         var deathIds=new HashSet<string>();var deathSequences=new Dictionary<string,long>();double lastDeathAt=-1,now=WorldSeconds(state);
         foreach(var spin in state.DeathSpins)
         {
             var owner=spin==null?null:state.Players.Find(p=>p.Id==spin.PlayerId);
-            if(spin==null||owner==null||string.IsNullOrEmpty(spin.RoundId)||spin.RoundId!=state.RoundId||spin.Sequence<1||spin.Sequence>3||spin.Sequence>owner.DeathSpinSequence
+            if(spin==null||owner==null||string.IsNullOrEmpty(spin.RoundId)||spin.RoundId!=state.RoundId||spin.Sequence<1||spin.Sequence>DeathsPerLevel||spin.Sequence>owner.DeathSpinSequence
                 ||spin.Id!=state.RoundId+":death:"+spin.PlayerId+":"+spin.Sequence||!deathIds.Add(spin.Id)||string.IsNullOrEmpty(spin.Name)||spin.Name.Length>24
                 ||spin.Amount<=0||spin.CashDropped!=0&&spin.CashDropped!=spin.Amount||!Finite(spin.AtWorldSeconds)||spin.AtWorldSeconds<0||!Finite(now)||spin.AtWorldSeconds>now+1e-6||spin.AtWorldSeconds<lastDeathAt
                 ||deathSequences.TryGetValue(spin.PlayerId,out var previous)&&spin.Sequence<=previous)throw new ArgumentException("Invalid snapshot death history event");
@@ -155,7 +157,7 @@ public sealed partial class FestivalSimulation {
     CommandResult Rescue(PlayerState p,GameCommand c){var t=Player(c.TargetId);if(t==null||t.Life!="Downed"||!Near(p,t.X,t.Z)||AttackerNear(t,3)||RecoveryClaimed(t.Id))return Reject("Distract attackers and reach downed friend");return BeginTask(p,"Rescue",t.Id,3);}
     bool RecoveryClaimed(string id){return State.Interactions.Exists(i=>i.Status=="Active"&&i.TargetId==id&&(i.Kind=="Rescue"||i.Kind=="Revival"||i.Kind=="Release"));}
     CommandResult Release(PlayerState p,GameCommand c){var t=Player(c.TargetId);bool paid=c.Amount==1;if(t==null||t.Life!="Detained"||RecoveryClaimed(t.Id)||!Near(p,paid?27:-28,paid?5:16)||(paid&&p.Cash<10))return Reject("Release: $10 at holding desk or free task at lost property");var i=NewInteraction(p,"Release",t.Id,paid?3:10);if(paid){p.Cash-=10;i.ReservedCash=10;News(p,"Cash",MoneyNotice("RELEASE FOR "+t.Name,-i.ReservedCash));}return Ok();}
-    CommandResult Revive(PlayerState p,GameCommand c){var t=Player(c.TargetId);bool paid=c.Amount==1;bool self=t==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(State.Phase!="Playing"||t==null||t.Life!="Spirit"||t.RevivalCount>=2||(!self&&!p.Wristbands.Contains(t.Id))||!Near(p,24,-20)||RecoveryClaimed(t.Id)||(paid&&p.Cash<10)||p.Life!=(self?"Spirit":"Alive"))return Reject("Bring a wristband to medical; a lone spirit can complete a longer self-revival task");var i=NewInteraction(p,"Revival",t.Id,self?15:paid?3:10);if(paid){p.Cash-=10;i.ReservedCash=10;News(p,"Cash",MoneyNotice(self?"YOUR REVIVAL":"REVIVAL FOR "+t.Name,-i.ReservedCash));}return Ok();}
+    CommandResult Revive(PlayerState p,GameCommand c){var t=Player(c.TargetId);bool paid=c.Amount==1;bool self=t==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(State.Phase!="Playing"||t==null||t.Life!="Spirit"||FestivalGuidance.RevivalsLeft(t)==0||(!self&&!p.Wristbands.Contains(t.Id))||!Near(p,24,-20)||RecoveryClaimed(t.Id)||(paid&&p.Cash<10)||p.Life!=(self?"Spirit":"Alive"))return Reject("Bring a wristband to medical; a lone spirit can complete a longer self-revival task");var i=NewInteraction(p,"Revival",t.Id,self?15:paid?3:10);if(paid){p.Cash-=10;i.ReservedCash=10;News(p,"Cash",MoneyNotice(self?"YOUR REVIVAL":"REVIVAL FOR "+t.Name,-i.ReservedCash));}return Ok();}
     // A level that ends in TEST MODE earns no cosmetic: it would save into every player's profile, a joined friend's too.
     void End(string result){if(State.Phase=="Results")return;BankGiggleTanks();State.Phase="Results";State.Result=result;ResetCashFinds();if(result=="Success"&&!State.RewardCommitted){State.RewardCommitted=true;State.Survivors=State.Players.FindAll(p=>p.Connected&&p.Life=="Alive"&&Near(p,Festivals.CampGateX,Festivals.CampGateZ,Festivals.CampGateRadius)).Count;State.SurvivorBonus=Math.Max(0,State.Survivors-1)*10;State.StashCash+=State.SurvivorBonus;if(State.SurvivorBonus>0)CrewNews(null,"Stash",MoneyNotice("STASH",State.SurvivorBonus)+"  •  survivor bonus");if(!TestModeOn)foreach(var p in State.Players)p.HasCosmetic=true;UnlockNextFestival(State);}foreach(var p in State.Players){Cancel(p,"Round ended");p.Badge="";}foreach(var t in State.Transfers.ToArray())ReturnOffer(t);foreach(var n in State.Npcs)if(n.Kind=="Cop"){n.Evidence.Clear();n.Mode="Patrol";n.TargetId="";}}
 }

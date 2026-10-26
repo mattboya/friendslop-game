@@ -34,7 +34,7 @@ namespace Festival.Core
             // TEST MODE lifts only the time limit: the clock runs on, so the schedules that read ElapsedSeconds keep their times.
             if(!TestModeOn&&State.ElapsedSeconds>=State.DurationSeconds)return DayLevel?SundownResult():"Time expired";
             var connected=State.Players.FindAll(p=>p.Connected);
-            bool soloCanRecover=connected.Count==1&&(connected[0].Life=="Downed"||connected[0].Life=="Spirit"&&connected[0].RevivalCount<2);
+            bool soloCanRecover=connected.Count==1&&(connected[0].Life=="Downed"||connected[0].Life=="Spirit"&&FestivalGuidance.RevivalsLeft(connected[0])>0);
             if(!connected.Exists(p=>p.Life=="Alive"||p.Life=="Detained")&&!soloCanRecover)return WipedOut;
             return "";
         }

@@ -123,7 +123,7 @@ namespace Festival.Core
 
         private static PlayerState Escort(RoundState state,string id) => state.Players.Find(p=>p.Id==id&&p.Connected&&p.Life=="Alive");
 
-        /// <summary>Revivals each player gets in a level. Danger.Revive, the Revival interaction and Weekend still check a literal 2.</summary>
+        /// <summary>Revivals each player gets in a level.</summary>
         public const int RevivalsPerLevel=2;
         public static int RevivalsLeft(PlayerState player)=>Math.Max(0,RevivalsPerLevel-player.RevivalCount);
 

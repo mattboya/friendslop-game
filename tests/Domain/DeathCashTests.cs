@@ -309,16 +309,18 @@ public static class DeathCashTests
         var empty=Crew(4);var owner=empty.Player("owner");owner.Cash=0;Die(empty,owner);
         Check(owner.DeathSpinAt==-1&&owner.DeathSpinSequence==0&&owner.DeathSpinAmount==0&&empty.State.Drops.TrueForAll(d=>d.ItemId!="cash"),"zero cash records no spin and no cash pile");
         var s=Crew(4);owner=s.Player("owner");var friend=s.Player("friend");
-        for(int death=1;death<=3;death++)
+        // A player can die once more than the level's revivals.
+        int limit=FestivalGuidance.RevivalsPerLevel+1;
+        for(int death=1;death<=limit;death++)
         {
             owner.Cash=40;owner.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});friend.X=owner.X;friend.Z=owner.Z;Die(s,owner);
-            Check(owner.DeathSpinSequence==death&&owner.GearLossSequence==death,"each of the three real deaths has a new independent sequence");
+            Check(owner.DeathSpinSequence==death&&owner.GearLossSequence==death,"each real death has a new independent sequence");
             new FestivalSimulation().Restore(Saved(s.State));
             var band=s.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==owner.Id);
             Check(s.Execute(friend.Id,new GameCommand{Id="band-"+death,Kind="Pickup",TargetId=band.Id}).Accepted,"setup: living friend claims the owner's wristband");
             friend.X=owner.X=24;friend.Z=owner.Z=-20;
             var revival=s.Execute(friend.Id,new GameCommand{Id="revive-"+death,Kind="BeginRevival",TargetId=owner.Id});
-            if(death==3)Check(!revival.Accepted&&owner.Life=="Spirit","a third real revival is refused without a fourth death sequence");
+            if(death==limit)Check(!revival.Accepted&&owner.Life=="Spirit","a revival past the level's "+FestivalGuidance.RevivalsPerLevel+" is refused without another death sequence");
             else{Check(revival.Accepted,"setup: actual free revival begins");s.Tick(10.1);Check(owner.Life=="Alive"&&owner.RevivalCount==death,"the real revival finishes and counts the use");}
         }
     }
