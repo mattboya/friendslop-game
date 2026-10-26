@@ -30,7 +30,8 @@ namespace Festival.Core
         public LightShowState LightShow=new LightShowState();
         // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
         // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
-        // clock. Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
+        // clock. The first turn's TurnAt lies CupsIntroSeconds (3 s) after the pour, ahead of Seconds while the card reads the rules.
+        // Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
         // nobody. Spiked: which cup is, -1 before; it never leaves the host. Hint: the cup the tripper is shown as spiked, sent to them
         // alone, -1 in everyone else's view (FestivalSimulation.VisibleBooth).
         public int Cups,Turn,Pot,Spiked=-1,Hint=-1; public double TurnAt; public string SpikedBy="";

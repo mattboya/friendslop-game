@@ -284,24 +284,62 @@ namespace Festival.Tests
         // long names, a hunch and a $1,000 pot.
         [Test]public void EveryMysteryCupsCardFitsTheMinigameCard()
         {
-            var root=new GameObject("Cups card fit HUD");
+            var s=Level(out var you,out _);s.Phase=FestivalSimulation.MinigamePhase;s.TripperId=you.Id;s.Doses.Add(new PlayerDose{PlayerId=you.Id,Dose=4});var b=s.Booth;
+            for(int i=0;i<7;i++){var p=new PlayerState{Id="long"+i,Name="Long Festival Friend "+i};s.Players.Add(p);b.PlayerIds.Add(p.Id);b.Turns.Add(p.Id);}
+            b.PlayerIds.Add(you.Id);b.Turns.Add(you.Id);b.Cups=FestivalSimulation.CupsFor(8);b.Hint=9;
+            var cards=new List<(string,string)>();
+            b.Seconds=.5;b.TurnAt=3;cards.Add(Card(s,you));
+            b.Seconds=3;b.Pot=1000;b.Drunk.AddRange(new[]{0,1,2});cards.Add(Card(s,you));
+            b.Turn=7;cards.Add(Card(s,you));
+            b.ScoredAt=4;b.Seconds=4;b.SpikedBy="long3";b.Drunk.Add(8);cards.Add(Card(s,you));
+            b.SpikedBy="";b.Drunk.Clear();b.Drunk.Add(4);b.Pot=1003;cards.Add(Card(s,you));
+            b.Drunk.Clear();cards.Add(Card(s,you));
+            Assert.That(CutInTheMinigameCard(cards),Is.Empty,"cut in the minigame card");
+        }
+
+        // A crew of eight with 24-letter names, the longest name FestivalSimulation.AddPlayer keeps.
+        [Test]public void EveryDrumCircleCardFitsTheMinigameCard()
+        {
+            var s=Level(out var you,out _,FestivalSimulation.DrumCircleGame);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;
+            for(int i=0;i<7;i++){var p=new PlayerState{Id="long"+i,Name="Longer Festival Friend "+i};s.Players.Add(p);b.PlayerIds.Add(p.Id);b.DrumAccuracies.Add(new DrumAccuracy{PlayerId=p.Id,Accuracy=1});}
+            b.PlayerIds.Add(you.Id);b.DrumAccuracies.Add(new DrumAccuracy{PlayerId=you.Id,Accuracy=1});b.Seconds=20;
+            var cards=new List<(string,string)>{Card(s,you)};
+            b.ScoredAt=40;b.Seconds=40;b.DrumWorstScore=0;b.ClockChange=-30;b.DrumAccuracies[3].Accuracy=0;cards.Add(Card(s,you));
+            b.DrumWorstScore=1;b.ClockChange=45;b.DrumAccuracies[3].Accuracy=.99;cards.Add(Card(s,you));
+            Assert.That(cards[0].Item2,Does.StartWith("Longer Fes… 100%  •  Longer Fes… 100%  •  "),"each part's name is cut to its first 10 letters");
+            Assert.That(cards[0].Item2.Split('\n')[0].Split(new[]{"  •  "},System.StringSplitOptions.None).Length,Is.EqualTo(8),"and the running card names all eight parts");
+            Assert.That(cards[1].Item2,Does.Contain("Worst part: Longer Festival Friend 3, 0%."),"the verdict names the worst part in full");
+            Assert.That(CutInTheMinigameCard(cards),Is.Empty,"cut in the minigame card");
+        }
+
+        // A spirit watches the show, so its cards are measured too.
+        [Test]public void EveryLightShowCardFitsTheMinigameCard()
+        {
+            var s=Level(out var you,out var sam,FestivalSimulation.LightShowGame);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;sam.Life="Spirit";
+            LightShowPlayer Record(string id){var x=new LightShowPlayer{PlayerId=id,Dose=4};for(int k=0;k<LightShow.QuestionSlots;k++)x.Questions.Add(new LightShowQuestion{Prompt="Q",Choices={"A","B","C","D"},CorrectIndex=0});return x;}
+            for(int i=0;i<7;i++){var p=new PlayerState{Id="long"+i,Name="Longer Festival Friend "+i};s.Players.Add(p);b.PlayerIds.Add(p.Id);b.LightShow.Players.Add(Record(p.Id));}
+            b.PlayerIds.Add(you.Id);var mine=Record(you.Id);b.LightShow.Players.Add(mine);
+            var cards=new List<(string,string)>();
+            b.Seconds=.5;cards.Add(Card(s,you));cards.Add(Card(s,sam));
+            b.Seconds=LightShow.ShowSeconds;b.LightShow.Slot=0;b.LightShow.SlotAt=LightShow.ShowSeconds;cards.Add(Card(s,you));cards.Add(Card(s,sam));
+            mine.Answers.Add(0);cards.Add(Card(s,you));
+            foreach(var x in b.LightShow.Players){x.Answers.Clear();x.Answers.AddRange(new[]{0,0,0});}
+            b.LightShow.Slot=LightShow.QuestionSlots;b.ScoredAt=40;b.Seconds=40;b.ClockChange=45;cards.Add(Card(s,you));cards.Add(Card(s,sam));
+            Assert.That(cards[5].Item2,Does.StartWith("Crew score +120: Longer Festival Friend 0 +15"),"setup: the tally names all eight players");
+            Assert.That(CutInTheMinigameCard(cards),Is.Empty,"cut in the minigame card");
+        }
+
+        // Each card's title and detail as the minigame card shows them at 1920x1080, at normal and the largest text: what is cut, if any.
+        static List<string> CutInTheMinigameCard(List<(string,string)> cards)
+        {
+            var root=new GameObject("Minigame card fit HUD");var cut=new List<string>();
             try
             {
                 var hud=root.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(hud,null);
                 var canvas=root.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);canvas.transform.localScale=Vector3.one;
                 Text title=null,detail=null;foreach(var t in root.GetComponentsInChildren<Text>(true)){if(t.name=="Minigame title")title=t;if(t.name=="Minigame detail")detail=t;}
                 Assert.That(detail,Is.Not.Null,"setup: the minigame card's detail");Canvas.ForceUpdateCanvases();
-                var s=Level(out var you,out _);s.Phase=FestivalSimulation.MinigamePhase;s.TripperId=you.Id;s.Doses.Add(new PlayerDose{PlayerId=you.Id,Dose=4});var b=s.Booth;
-                for(int i=0;i<7;i++){var p=new PlayerState{Id="long"+i,Name="Long Festival Friend "+i};s.Players.Add(p);b.PlayerIds.Add(p.Id);b.Turns.Add(p.Id);}
-                b.PlayerIds.Add(you.Id);b.Turns.Add(you.Id);b.Cups=FestivalSimulation.CupsFor(8);b.Hint=9;
-                var cards=new List<(string,string)>();
-                b.Seconds=.5;b.TurnAt=3;cards.Add(Card(s,you));
-                b.Seconds=3;b.Pot=1000;b.Drunk.AddRange(new[]{0,1,2});cards.Add(Card(s,you));
-                b.Turn=7;cards.Add(Card(s,you));
-                b.ScoredAt=4;b.Seconds=4;b.SpikedBy="long3";b.Drunk.Add(8);cards.Add(Card(s,you));
-                b.SpikedBy="";b.Drunk.Clear();b.Drunk.Add(4);b.Pot=1003;cards.Add(Card(s,you));
-                b.Drunk.Clear();cards.Add(Card(s,you));
-                var measure=new TextGenerator();var cut=new List<string>();var reflow=typeof(FestivalHud).GetMethod("ApplyTextReflow",BindingFlags.Instance|BindingFlags.NonPublic);
+                var measure=new TextGenerator();var reflow=typeof(FestivalHud).GetMethod("ApplyTextReflow",BindingFlags.Instance|BindingFlags.NonPublic);
                 foreach(float scale in new[]{1f,1.3f})
                 {
                     reflow.Invoke(hud,new object[]{scale});
@@ -311,9 +349,9 @@ namespace Festival.Tests
                         measure.Populate(heading,title.GetGenerationSettings(title.rectTransform.rect.size));if(measure.characterCountVisible<heading.Length)cut.Add(scale+"x: "+heading);
                     }
                 }
-                Assert.That(cut,Is.Empty,"cut in the minigame card");
             }
             finally{Object.DestroyImmediate(root);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
+            return cut;
         }
 
         // E drinks the cup under the aim dot and F calls it, for the player who is up alone, until the game is scored.

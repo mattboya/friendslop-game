@@ -71,16 +71,17 @@ namespace Festival.Presentation
             return b.Drunk.Contains(b.Hint)?" Your hunch was wrong: cup "+(b.Hint+1)+" was safe.":" Nobody drank cup "+(b.Hint+1)+", so your hunch stays a guess.";
         }
         /// <summary>MINI-2: the Drum Circle on the card. While it runs, every part's live accuracy in roster order, the viewer's own as
-        /// "You". Once scored: the worst part's verdict, whose part it was, what the result did to the clock and the crowd, and when the
-        /// festival starts again. The verdict follows the worst part's band (DrumCircle.ClockChange), which the fifteen-second floor
-        /// can shrink on the clock but never on the crowd.</summary>
+        /// "You", each name cut to its first 10 letters so eight parts fit at the largest text. Once scored: the worst part's
+        /// verdict, whose part it was in full, what the result did to the clock and the crowd, and when the festival starts again. The
+        /// verdict follows the worst part's band (DrumCircle.ClockChange), which the fifteen-second floor can shrink on the clock but
+        /// never on the crowd.</summary>
         static (string Title,string Detail) DrumCard(RoundState s,PlayerState p)
         {
             var b=s.Booth;
             if(b.ScoredAt<0)
             {
                 var parts=new System.Collections.Generic.List<string>();
-                foreach(string id in b.PlayerIds)parts.Add((id==p.Id?"You":NameOf(s,id))+" "+Percent(DrumAccuracy(b,id)));
+                foreach(string id in b.PlayerIds)parts.Add((id==p.Id?"You":ShortName(NameOf(s,id)))+" "+Percent(DrumAccuracy(b,id)));
                 return (MinigameName(b.Kind),string.Join(Dot,parts)+"\nThe worst drummer sets the clock.");
             }
             int band=DrumBand(b);
@@ -163,6 +164,7 @@ namespace Festival.Presentation
         static int DrumBand(MinigameState b)=>b.Kind!=FestivalSimulation.DrumCircleGame||b.DrumWorstScore<0?0:DrumCircle.ClockChange(new[]{b.DrumWorstScore});
         static double DrumAccuracy(MinigameState b,string id)=>b.DrumAccuracies?.Find(x=>x.PlayerId==id)?.Accuracy??0;
         static string Percent(double accuracy)=>(int)Math.Round(accuracy*100)+"%";
+        static string ShortName(string name)=>name.Length>10?name.Substring(0,10).TrimEnd()+"…":name;
         /// <summary>A game's name as its booth sign and card read it; "MINIGAME" for one this build cannot name.</summary>
         public static string MinigameName(string kind)=>kind==FestivalSimulation.MysteryCupsGame?"MYSTERY CUPS":kind==FestivalSimulation.DrumCircleGame?"DRUM CIRCLE":kind==FestivalSimulation.LightShowGame?"LIGHT SHOW":"MINIGAME";
         // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash.
