@@ -250,7 +250,8 @@ namespace Festival.Presentation
         private const float LifeBannerSeconds=6;
         private GameObject saleStampPanel;
         private Text saleStamp;
-        private float saleStampAt=-100,moneyFlashAt=-100;
+        private float saleStampAt=-100;
+        private readonly FestivalHudText.MoneyFlash moneyFlash=new FestivalHudText.MoneyFlash();
         private readonly FestivalHudText.SaleNews saleNews=new FestivalHudText.SaleNews();
         private string tipId="",tipRound="";
         private float tipShown;
@@ -656,7 +657,7 @@ namespace Festival.Presentation
             chatWindow.Send=c=>session.Command(c.Kind,c.TargetId,c.ItemId,c.Amount,c.Direction,c.TimeSeconds);
             chatWindow.CheckReply=(check,choice)=>session.SpeechBubbles?.SelectCheckReply(session.State,session.LocalPlayer,check,choice,session.ConnectionGeneration,session.EstimatedWorldSeconds);
             // Built after the chat window, which is open on the sale's last line and whose corner the stamp overlaps (ShowSaleStamp).
-            saleStampPanel=Card(root.transform,"Sale stamp",new Vector2(.36f,.6f),new Vector2(.64f,.7f),true);Accent(saleStampPanel.transform,Orange);
+            saleStampPanel=Card(root.transform,"Sale stamp",new Vector2(.36f,.6f),new Vector2(.64f,.7f),true);saleStampPanel.GetComponent<Image>().raycastTarget=false;Accent(saleStampPanel.transform,Orange);
             saleStamp=Label(saleStampPanel.transform,"Sale result",44,TextAnchor.MiddleCenter);saleStamp.color=Orange;Fill(saleStamp.rectTransform,10);ShrinkToFit(saleStamp,20);saleStampPanel.SetActive(false);
             BuildHowToPlay(root.transform);
             BuildComfortChoice(root.transform);
@@ -1003,13 +1004,13 @@ namespace Festival.Presentation
             gearToast.SetActive(Time.unscaledTime<gearToastUntil);
             UpdateSundownAndResults(state,player,showMenu);
             bool uncovered=!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf;
-            ShowSaleStamp(state,uncovered);
             UpdateLife(state,player,uncovered);
             UpdateMinigame(state,player,uncovered);
             UpdateLightShow(state,player,uncovered);
             UpdateBriefing(state,player,uncovered&&!minigamePanel.activeSelf);
             // A tip due while the life banner shows waits for it, so it never covers YOU'RE BACK.
             UpdateTip(state,player,uncovered&&!lifePanel.activeSelf);
+            ShowSaleStamp(state,uncovered);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
             if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
@@ -1021,7 +1022,7 @@ namespace Festival.Presentation
             else if(!visionStashNoticed&&uncovered){visionStashNoticed=true;session.SetMessage(FestivalHudText.VisionStashNotice);lastNotice="";}
             // PLAYA-5: what the crowd tipped for your deck set, once. Only your own view carries the receipt.
             string tips=FestivalSimulation.DeckTipSpeech(state,player);
-            if(tips!=""&&uncovered&&deckTipNoticed!=state.RoundId+"/"+player.DeckTipDeliveryId){deckTipNoticed=state.RoundId+"/"+player.DeckTipDeliveryId;session.SetMessage(tips);lastNotice="";}
+            if(tips!=""&&uncovered&&deckTipNoticed!=state.RoundId+"/"+player.DeckTipDeliveryId){deckTipNoticed=state.RoundId+"/"+player.DeckTipDeliveryId;session.SetMessage(tips);lastNotice="";moneyFlash.Sold(Time.unscaledTime);}
             // A grab plays the oh-yeah at once; its notice waits, like the others, until nothing covers it.
             if(giggleTankNews.Follow(state,player,session.ConnectionGeneration))
             {
@@ -1042,7 +1043,7 @@ namespace Festival.Presentation
             if(uncovered&&gearLossNotice==""&&!freshLine&&Time.unscaledTime>=moneyNoticeAt)
             {
                 var news=moneyNews.Take(Time.unscaledTime);
-                if(news!=null){session.SetMessage(news.Text);moneyLineSeen=news.Text;lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;if(FestivalHudText.FlashesMoney(news))moneyFlashAt=Time.unscaledTime;}
+                if(news!=null){session.SetMessage(news.Text);moneyLineSeen=news.Text;lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;moneyFlash.Light(news,Time.unscaledTime);}
             }
             reticle.SetActive(!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf&&!lightShowPanel.activeSelf);
             ApplyEffects(player);
@@ -1212,7 +1213,7 @@ namespace Festival.Presentation
             timerText.text=FestivalHudText.Clock(state);
             tripping.text=FestivalHudText.Tripping(state,player.Id);
             TrackSale(state,player);
-            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),FestivalHudText.MoneyFlashOn(Time.unscaledTime-moneyFlashAt));
+            vitals.text=FestivalHudText.Vitals(state,player,Bound(session?.Controls?.Interact,"E"),Bound(session?.Controls?.Drop,"G"),moneyFlash.Lit(Time.unscaledTime,session?.Profile?.Data.ReducedMotion??true));
             var threat=FestivalHudText.Threat(state,player);
             threatShown=FestivalHudText.EaseThreat(threatShown,threat.Fill,Time.unscaledDeltaTime,session?.Profile?.Data.ReducedMotion??true);
             threatFill.anchorMax=new Vector2(threatShown,1);threatFillImage.color=threatWord.color=ThreatColors[threat.Band];threatWord.text=FestivalHudText.ThreatBands[threat.Band];
@@ -2466,14 +2467,16 @@ namespace Festival.Presentation
             string reply=FestivalHudText.BuyReply(buyItem,cashWhileBuying,player);
             if(reply!=""){session.SetMessage(reply);soldToYou.Add(buySeller);}
         }
-        // Built over the pass, the map and a dance's dimmer, the stamp hides under them as the panels built before them do.
-        private void ShowSaleStamp(RoundState state,bool uncovered)=>saleStampPanel.SetActive(uncovered&&state.Phase=="Playing"&&Time.unscaledTime-saleStampAt<FestivalHudText.SaleStampSeconds);
+        // Built over the pass, the map and a dance's dimmer, the stamp hides under them as the panels built before them do. Built after
+        // the cards it overlaps too, it waits while one shows, so Update calls it after they update.
+        private void ShowSaleStamp(RoundState state,bool uncovered)=>saleStampPanel.SetActive(uncovered&&state.Phase=="Playing"&&Time.unscaledTime-saleStampAt<FestivalHudText.SaleStampSeconds
+            &&!lightShowPanel.activeSelf&&!tipPanel.activeSelf&&!checkoutPanel.activeSelf&&!lifePanel.activeSelf&&!heldDetailPanel.activeSelf);
         // Clearing lastNotice shows a second sale's notice even when it reads as the first's did. Queued money news waits its turn behind it.
         private void TrackSale(RoundState state,PlayerState player)
         {
             var sale=saleNews.Follow(state,player,session?.ConnectionGeneration??0);if(sale==null)return;
             session?.SetMessage(sale.Notice);lastNotice="";saleStampAt=Time.unscaledTime;moneyNoticeAt=saleStampAt+FestivalHudText.MoneyNewsSeconds;
-            if(sale.Result.StartsWith("SOLD",StringComparison.Ordinal))moneyFlashAt=saleStampAt;
+            if(sale.Result.StartsWith("SOLD",StringComparison.Ordinal))moneyFlash.Sold(saleStampAt);
             saleStamp.text=FestivalHudText.MoneyText(state,player,sale.Result).ToUpperInvariant();
         }
         // ECON-8: a random find is announced only once the host gives it to you, so whoever lost the race to it hears nothing.

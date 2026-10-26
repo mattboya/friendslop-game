@@ -486,8 +486,15 @@ namespace Festival.Presentation
         public const float MoneyNewsSeconds=2.5f;
         /// <summary>The camp shelf's thank-you, with what the buy cost, in dollars for MoneyText.</summary>
         public static string PocketUpdated(int spent)=>"Oh, hey, thanks!  •  −$"+spent+"  •  POCKET UPDATED";
-        /// <summary>Whether a notice lights the card's cash and SALES, as a paid sale does (MoneyFlashOn). The stash and items have no flash.</summary>
-        public static bool FlashesMoney(MoneyNews n)=>n.Kind=="Cash"||n.Kind=="Sales";
+        /// <summary>Lights on the player card only the figure a change moved, each for the stamp's 1.5 s (MoneyFlashOn). Sold is your
+        /// own paid sale or deck set, which moves your cash and SALES together but reaches you with no Sales news.</summary>
+        public sealed class MoneyFlash
+        {
+            float cashAt=-100,stashAt=-100,salesAt=-100;
+            public void Light(MoneyNews n,float now){if(n.Kind=="Cash")cashAt=now;else if(n.Kind=="Stash")stashAt=now;else if(n.Kind=="Sales")salesAt=now;}
+            public void Sold(float now){cashAt=salesAt=now;}
+            public (bool Cash,bool Stash,bool Sales) Lit(float now,bool reducedMotion)=>(MoneyFlashOn(now-cashAt,reducedMotion),MoneyFlashOn(now-stashAt,reducedMotion),MoneyFlashOn(now-salesAt,reducedMotion));
+        }
         /// <summary>Follows the viewer's own money news (PlayerState.MoneyNewsLog, owner-only in views). The first view of a
         /// connection only takes note, so a join or a rejoin never replays old news; a new round's news all shows, since a level's
         /// start can itself lose a Giggle Tank. Take gives each new notice once, oldest first, and Watch gives back one cut short.</summary>
@@ -598,20 +605,20 @@ namespace Festival.Presentation
 
         /// <summary>
         /// The player card: health, pocket and the crew's stash, then the level's sales, life and the warning (Condition). The warning
-        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does. flashMoney lights your
-        /// cash and the level's SALES in the HUD's orange, as a paid sale flashes them (MoneyFlashOn).
+        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does. lit lights your cash,
+        /// the crew's STASH and the level's SALES in the HUD's orange, each on its own, as a change to it flashes it (MoneyFlash).
         /// </summary>
-        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G",bool flashMoney=false)
+        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G",(bool Cash,bool Stash,bool Sales) lit=default)
         {
             string condition=Condition(s,p,talk,ditch);
-            string Lit(string text)=>flashMoney?"<color=#FC7741>"+text+"</color>":text;
-            return "HP "+p.Health+Dot+Lit(Money(s,p,p.Cash).ToUpperInvariant())+Dot+("STASH "+Money(s,p,s.StashCash)).ToUpperInvariant()+"\n"
-                +Lit(("SALES "+Money(s,p,s.LevelSales)).ToUpperInvariant())+Dot+p.Life.ToUpperInvariant()+(condition==""?"":Dot+condition);
+            static string Lit(bool on,string text)=>on?"<color=#FC7741>"+text+"</color>":text;
+            return "HP "+p.Health+Dot+Lit(lit.Cash,Money(s,p,p.Cash).ToUpperInvariant())+Dot+Lit(lit.Stash,("STASH "+Money(s,p,s.StashCash)).ToUpperInvariant())+"\n"
+                +Lit(lit.Sales,("SALES "+Money(s,p,s.LevelSales)).ToUpperInvariant())+Dot+p.Life.ToUpperInvariant()+(condition==""?"":Dot+condition);
         }
         /// <summary>How long a sale's result stays stamped mid-screen, and whether a paid one's flash is lit `since` seconds after it:
-        /// on the even quarter-seconds of the stamp.</summary>
+        /// on the even quarter-seconds of the stamp, or the whole stamp with no blink under Reduced Motion.</summary>
         public const float SaleStampSeconds=1.5f;
-        public static bool MoneyFlashOn(float since)=>since>=0&&since<SaleStampSeconds&&(int)(since*4)%2==0;
+        public static bool MoneyFlashOn(float since,bool reducedMotion=false)=>since>=0&&since<SaleStampSeconds&&(reducedMotion||(int)(since*4)%2==0);
         /// <summary>Follows the viewer's own conversation outcomes for the sale stamp. Follow gives the newest sale that ended with a
         /// Result since the last call, once; null otherwise. It reads the outcomes, not the chat window, so a sale whose window Esc
         /// shut is stamped too. The first view of a connection or a round only takes note, so a rejoin replays no sale.</summary>

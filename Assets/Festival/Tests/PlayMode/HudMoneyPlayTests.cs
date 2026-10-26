@@ -387,6 +387,43 @@ namespace Festival.Tests
             Assert.That(mineFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"your sale's notice shows "+mineFor.ToString("0.00")+" s: "+timeline);
         }
 
+        // A friend's sale lights SALES on the running card, never your cash, which it did not change.
+        [UnityTest]public IEnumerator AFriendsSaleLightsSalesButNotYourCash()
+        {
+            var world=new GameObject("Friend's sale world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Friend's sale HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("lit_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                sim.State.Npcs.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.X=0;player.Z=0;mate.X=20;mate.Z=0;
+                mate.Inventory.Clear();mate.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.EquippedItemId="stock_lsd";
+                string buyer="lit_buyer_0";for(int k=1;DialogueGrammar.PersonaFor(buyer,"")=="Raver"||DialogueGrammar.PersonaFor(buyer,"")=="Burner";k++)buyer="lit_buyer_"+k;
+                sim.State.Npcs.Add(new NpcState{Id=buyer,Role="Buyer",X=20,Z=1.5f,Yaw=180});
+                yield return new WaitForSeconds(.6f);
+                int cash=player.Cash;
+                Assert.That(sim.Execute(mate.Id,new GameCommand{Id="lit_sale",Kind="StartSale",TargetId=buyer,ItemId="stock_lsd",Amount=FestivalSimulation.FairAsk}).Accepted,Is.True,"setup: their sale");
+                var talk=sim.Interaction(mate.InteractionId);
+                for(int n=0;talk.Status=="Active";n++){var turn=talk.Turns[talk.Turns.Count-1];Assert.That(sim.Execute(mate.Id,new GameCommand{Id="lit_reply_"+n,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=talk.Turns.Count-1}).Accepted,Is.True,"setup: their reply");}
+                string cashLit="",salesLit="";
+                for(float end=Time.realtimeSinceStartup+3;Time.realtimeSinceStartup<end;)
+                {
+                    string card=Read("Vitals");
+                    if(card.Contains("<color=#FC7741>$"+cash+"</color>"))cashLit=card;
+                    if(card.Contains("<color=#FC7741>SALES "))salesLit=card;
+                    yield return null;
+                }
+                Assert.That(player.Cash,Is.EqualTo(cash),"setup: your cash is unchanged");
+                Assert.That(cashLit,Is.Empty,"a friend's sale lit your unchanged cash: "+cashLit.Replace("\n"," | "));
+                Assert.That(salesLit,Is.Not.Empty,"a friend's sale lights SALES");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+        }
+
         // LOOP-4: a real joined friend dies with $40 and the roll drops it. The host and the dead friend both see the corner reel name
         // them. The host keeps walking and works the menu while it turns; the menu offers no pickup until the reel lands, then offers
         // the pile, read in dollars over the voucher model, and taking it adds the $40 to the host's cash.

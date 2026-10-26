@@ -26,6 +26,7 @@ namespace Festival.Tests
         static Transform Hud(GameObject at,string path)=>at.transform.Find("Festival HUD/"+path);
         static bool Shown(GameObject at,string path){var t=Hud(at,path);return t!=null&&t.gameObject.activeInHierarchy;}
         static string Text(GameObject at,string path)=>Hud(at,path)?.GetComponent<Text>()?.text;
+        static bool CashAndSalesLit(GameObject at){string card=at.GetComponentsInChildren<Text>().FirstOrDefault(t=>t.name=="Vitals")?.text??"";return System.Text.RegularExpressions.Regex.IsMatch(card,"^HP \\d+  •  <color=#FC7741>")&&card.Contains("\n<color=#FC7741>SALES ");}
         static Button Listed(GameObject at,string label)=>at.GetComponentsInChildren<Button>(true).FirstOrDefault(b=>b.name=="Action:"+label&&b.gameObject.activeSelf);
         InteractionState Doing=>sim.Interaction(player.InteractionId);
         IEnumerator Until(System.Func<bool> done,float seconds){for(float until=Time.realtimeSinceStartup+seconds;!done()&&Time.realtimeSinceStartup<until;)yield return null;}
@@ -288,14 +289,16 @@ namespace Festival.Tests
                 Assert.That(player.DeckTipAmount,Is.GreaterThan(0),"setup: the crowd tipped the perfect set");
                 Assert.That(Doing?.Kind,Is.EqualTo(FestivalSimulation.RideCarKind),"the set ends on a plain ride");
 
-                string tips="The crowd tipped",hostNotice="";bool riderTold=false;
+                string tips="The crowd tipped",hostNotice="";bool riderTold=false,riderLit=false;
                 for(float until=Time.realtimeSinceStartup+1.5f;Time.realtimeSinceStartup<until;)
                 {
                     yield return null;
-                    riderTold|=Shown(root,"Session notice")&&(Text(root,"Session notice/Notice")??"").Contains(tips);
+                    riderTold|=Shown(root,"Session notice")&&(Text(root,"Session notice/Notice")??"").Contains(tips);riderLit|=CashAndSalesLit(root);
                     if(Shown(hostRoot,"Session notice")&&(Text(hostRoot,"Session notice/Notice")??"").Contains(tips))hostNotice=Text(hostRoot,"Session notice/Notice");
                 }
+                for(float until=Time.realtimeSinceStartup+.5f;riderTold&&!riderLit&&Time.realtimeSinceStartup<until;){yield return null;riderLit|=CashAndSalesLit(root);}
                 Assert.That(riderTold,Is.True,"the rider is told what the crowd tipped: "+Text(root,"Session notice/Notice"));
+                Assert.That(riderLit,Is.True,"the tips light the rider's cash and SALES: "+root.GetComponentsInChildren<Text>().FirstOrDefault(t=>t.name=="Vitals")?.text);
                 Assert.That(Text(root,"Session notice/Notice"),Does.Contain(Festivals.CurrencyName(Festivals.PlayaFestival,player.Ordinal,player.DeckTipAmount)));
                 Assert.That(hostNotice,Is.Empty,"nobody else hears it");
             }

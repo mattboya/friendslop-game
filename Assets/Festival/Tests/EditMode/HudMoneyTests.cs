@@ -171,7 +171,8 @@ namespace Festival.Tests
             news.Follow(game.State,ash,2);Assert.That(news.Take(0)?.Text,Is.EqualTo("GIGGLE TANK LOST"),"a new level's news is all new, the loss its start made included");
         }
         // A money line that another line replaces inside its MoneyNewsSeconds comes back before the rest of the queue. A line that had
-        // its slot, or that a clear wiped, does not, and a new level forgets it.
+        // its slot does not. A clear (your last reply's key) followed by another line inside the slot brings it back; a clear alone
+        // does not. A new level forgets it.
         [Test] public void AMoneyLineCutShortComesBackFirst()
         {
             var game=Hosted(0);var ash=game.Player("ash");var news=new FestivalHudText.MoneyNewsFollower();news.Follow(game.State,ash,1);
@@ -191,11 +192,17 @@ namespace Festival.Tests
             game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();news.Follow(game.State,ash,1);news.Watch(Sold,24.4f);
             Assert.That(news.Take(27),Is.Null,"a new level forgets the last level's line");
         }
-        // A change to your cash or the level's SALES lights the card's money as a paid sale does; the stash and items have no flash.
-        [Test] public void OnlyCashAndSalesNewsFlashTheCard()
+        // A money notice lights only the figure it changed, so a friend's sale never lights your unchanged cash. Your own paid sale
+        // moves both your cash and SALES (TrackSale).
+        [Test] public void EachMoneyNoticeLightsOnlyTheFigureItChanged()
         {
-            foreach(var (kind,flashes) in new[]{("Cash",true),("Sales",true),("Stash",false),("Items",false)})
-                Assert.That(FestivalHudText.FlashesMoney(new MoneyNews{Kind=kind}),Is.EqualTo(flashes),kind);
+            var palm=Day(0);var you=Crew(palm,"you",1);you.Cash=87;palm.StashCash=5;palm.LevelSales=120;
+            string Card(string kind){var flash=new FestivalHudText.MoneyFlash();if(kind=="SOLD")flash.Sold(10);else flash.Light(new MoneyNews{Kind=kind},10);return FestivalHudText.Vitals(palm,you,lit:flash.Lit(10.1f,false));}
+            Assert.That(Card("Sales"),Is.EqualTo("HP 100  •  $87  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE"),"a friend's sale lights SALES, not your cash");
+            Assert.That(Card("Stash"),Is.EqualTo("HP 100  •  $87  •  <color=#FC7741>STASH $5</color>\nSALES $120  •  ALIVE"),"stash news lights only the STASH");
+            Assert.That(Card("Cash"),Is.EqualTo("HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\nSALES $120  •  ALIVE"),"your cash news leaves SALES unlit");
+            Assert.That(Card("Items"),Is.EqualTo("HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE"),"items light nothing");
+            Assert.That(Card("SOLD"),Is.EqualTo("HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE"),"your own sale lights your cash and SALES");
         }
         [Test] public void TheShelfsThankYouNamesThePrice()
         {
@@ -206,7 +213,7 @@ namespace Festival.Tests
 
         // A sale's outcome reads in your money wherever it shows, from what the host wrote in dollars: its notice in the HUD's message
         // and the chat window, its result on the stamp. A paid sale flashes your cash and SALES on the player card, lit every other
-        // quarter-second for the stamp's 1.5 s.
+        // quarter-second for the stamp's 1.5 s; with Reduced Motion on they stay lit for the 1.5 s, with no blink.
         [Test] public void ASalesResultReadsInYourMoneyAndFlashesTheCard()
         {
             var game=new FestivalSimulation(7);game.AddPlayer("ash","Ash");var sam=game.AddPlayer("sam","Sam");game.State.FestivalIndex=1;game.State.Phase="Playing";game.State.Npcs.Clear();
@@ -219,9 +226,14 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Notice),Is.EqualTo("SOLD Tongue Stamps  •  +20 ramen packets"));
             Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Result),Is.EqualTo("SOLD +20 ramen packets"));
             var palm=Day(0);var you=Crew(palm,"you",1);you.Cash=87;palm.StashCash=5;palm.LevelSales=120;
-            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:true),Is.EqualTo("HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE"),"cash and SALES lit");
-            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:false),Is.EqualTo("HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE"),"unlit as before");
-            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(FestivalHudText.MoneyFlashOn),Is.EqualTo(new[]{true,true,false,true,false,false,false}),"lit on the even quarter-seconds of the stamp's 1.5 s");
+            const string Lit="HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE",Unlit="HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE";
+            Assert.That(FestivalHudText.Vitals(palm,you,lit:(true,false,true)),Is.EqualTo(Lit),"cash and SALES lit");
+            Assert.That(FestivalHudText.Vitals(palm,you),Is.EqualTo(Unlit),"unlit as before");
+            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(t=>FestivalHudText.MoneyFlashOn(t)),Is.EqualTo(new[]{true,true,false,true,false,false,false}),"lit on the even quarter-seconds of the stamp's 1.5 s");
+            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(t=>FestivalHudText.MoneyFlashOn(t,true)),Is.EqualTo(new[]{true,true,true,true,true,false,false}),"Reduced Motion: lit through the 1.5 s, no blink");
+            var sold=new FestivalHudText.MoneyFlash();sold.Sold(10);
+            foreach(float t in new[]{10f,10.3f,10.8f,11.3f,11.45f})Assert.That(FestivalHudText.Vitals(palm,you,lit:sold.Lit(t,true)),Is.EqualTo(Lit),"Reduced Motion keeps the sale's cash and SALES lit at "+(t-10)+" s");
+            Assert.That(FestivalHudText.Vitals(palm,you,lit:sold.Lit(11.5f,true)),Is.EqualTo(Unlit),"and unlit once the 1.5 s end");
             Assert.That(FestivalHudText.SaleStampSeconds,Is.EqualTo(1.5f));
         }
 
@@ -252,7 +264,8 @@ namespace Festival.Tests
         }
 
         // The chat window is open on the sale's last line while the stamp shows, and the stamp overlaps its top-left corner. Drawn
-        // over it, the stamp hides while the pass, the map or a dance covers the screen.
+        // over it, the stamp hides while the pass, the map or a dance covers the screen. It catches no clicks, and it waits while a
+        // card it would draw over shows.
         [Test] public void TheSaleStampDrawsOverTheChatWindowAndHidesUnderThePass()
         {
             const System.Reflection.BindingFlags Private=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
@@ -265,7 +278,18 @@ namespace Festival.Tests
                 Assert.That(stamp.GetSiblingIndex(),Is.GreaterThan(chat.GetSiblingIndex()),"the stamp is drawn after the chat window");
                 typeof(FestivalHud).GetField("saleStampAt",Private).SetValue(hud,UnityEngine.Time.unscaledTime);
                 var show=typeof(FestivalHud).GetMethod("ShowSaleStamp",Private);var day=Day(0);
+                Assert.That(stamp.GetComponentsInChildren<UnityEngine.UI.Graphic>(true).Where(g=>g.raycastTarget).Select(g=>g.name),Is.Empty,"the stamp catches no clicks");
+                var covered=new[]{"Light Show questions","First-time tip card","Counter price confirmation","Life banner","Held item label"}.Select(name=>hud.transform.Find("Festival HUD/"+name)).ToArray();
+                Assert.That(covered,Has.None.Null,"setup: the HUD builds each card the stamp would cover");
+                foreach(var card in covered)card.gameObject.SetActive(false);
                 show.Invoke(hud,new object[]{day,true});Assert.That(stamp.gameObject.activeSelf,Is.True,"a sale just stamped, with nothing over it");
+                foreach(var card in covered)
+                {
+                    card.gameObject.SetActive(true);show.Invoke(hud,new object[]{day,true});
+                    Assert.That(stamp.gameObject.activeSelf,Is.False,"hidden while the "+card.name+" shows");
+                    card.gameObject.SetActive(false);
+                }
+                show.Invoke(hud,new object[]{day,true});Assert.That(stamp.gameObject.activeSelf,Is.True,"back once the card goes");
                 show.Invoke(hud,new object[]{day,false});Assert.That(stamp.gameObject.activeSelf,Is.False,"under the pass");
             }
             finally{UnityEngine.Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
