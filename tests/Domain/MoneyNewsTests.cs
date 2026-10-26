@@ -148,7 +148,7 @@ public static class MoneyNewsTests
         foreach(bool sold in new[]{true,false})
         {
             var game=new FestivalSimulation(7);game.AddPlayer("host","Ash");game.AddPlayer("friend","Sam");game.State.Phase="Playing";
-            var ash=game.Player("host");var sam=game.Player("friend");ash.X=0;ash.Z=0;ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            var ash=game.Player("host");var sam=game.Player("friend");ash.X=0;ash.Z=0;ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});ash.EquippedItemId="stock_lsd";
             string goer="";for(int n=0;goer=="";n++)if(DialogueGrammar.PersonaFor("goer_"+n,"")=="Wook")goer="goer_"+n;
             game.State.Npcs.Clear();game.State.Npcs.Add(new NpcState{Id=goer,Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true});
             Check(game.Execute("host",new GameCommand{Id="news"+(sequence++),Kind="StartSale",TargetId=goer,ItemId="stock_lsd",Amount=FestivalSimulation.FairAsk}).Accepted,"setup: the sale starts");

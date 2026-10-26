@@ -101,13 +101,13 @@ public static class ConversationTests
 
     // A festivalgoer id that talks like this persona (DialogueGrammar.PersonaFor goes by the id alone).
     static string Goer(string persona){for(int n=0;;n++)if(DialogueGrammar.PersonaFor("goer_"+n,"")==persona)return "goer_"+n;}
-    // p0 alone on Palm Mirage's Day 1, 1.5 m in front of `id`, who faces them: a cop for security, a buyer to sell to, a regular to
-    // buy from, a regular to chat with. A wook never asks for a dance first unless wary, so the talks start talking.
+    // p0 alone on Palm Mirage's Day 1, 1.5 m in front of `id`, who faces them: a cop for security, a buyer to sell to (the unit in
+    // hand), a regular to buy from, a regular to chat with. A wook never asks for a dance first unless wary, so the talks start talking.
     static FestivalSimulation Pair(string kind,int seed=7,string id=null)
     {
         var s=new FestivalSimulation(seed);s.AddPlayer("p0","P0");s.State.Phase="Playing";s.State.Npcs.Clear();
         s.State.Npcs.Add(new NpcState{Id=id??Goer("Wook"),Kind=kind=="Police"?"Cop":"Wook",Role=kind=="Sale"?"Buyer":"Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true});
-        var p=s.Player("p0");p.X=0;p.Z=0;if(kind=="Sale")p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var p=s.Player("p0");p.X=0;p.Z=0;if(kind=="Sale"){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
         return s;
     }
     static NpcState Partner(FestivalSimulation s)=>s.State.Npcs[0];
@@ -789,17 +789,34 @@ public static class ConversationTests
     }
 
     // Offering your last unit from your hand puts your next gear in your hand for the talk. A talk that fails, or that you walk
-    // away from, gives the unit back to the hand it left, equipped again. A unit offered from the pocket goes back there.
+    // away from, gives the unit back to the hand it left, equipped again. A unit offered from the pocket goes back there, and the
+    // notice says which. Either way it goes back to its own slot of the gear bar, so its key still picks it.
     static void AHandedBackUnitGoesBackInYourHand()
     {
         foreach(bool walk in new[]{false,true})foreach(bool held in new[]{true,false})
         {
-            var s=Pair("Sale");var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});p.EquippedItemId=held?"stock_lsd":"merch_bag";
+            var s=Pair("Sale");var p=s.Player("p0");p.Inventory.Insert(0,new ItemStack{ItemId="map",Count=1});p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});p.EquippedItemId=held?"stock_lsd":"map";
             var i=Sale(s,FestivalSimulation.FairAsk);
-            Check(p.EquippedItemId=="merch_bag"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"setup: the last unit is on offer and the merch bag is in your hand");
+            Check(p.EquippedItemId=="map"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"setup: the last unit is on offer and the map is in your hand");
             if(walk)Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away from the sale");else Talk(s,i,Every(Awkward));
             Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd"&&x.Count==1),"the unit comes back");
-            Check(p.EquippedItemId==(held?"stock_lsd":"merch_bag"),(walk?"walking away":"a failed talk")+(held?" puts the unit back in your hand":" leaves the pocketed unit in your pocket")+", holding "+p.EquippedItemId);
+            Check(p.EquippedItemId==(held?"stock_lsd":"map"),(walk?"walking away":"a failed talk")+(held?" puts the unit back in your hand":" leaves the pocketed unit in your pocket")+", holding "+p.EquippedItemId);
+            string gear=string.Join(",",p.Inventory.Select(x=>x.ItemId)),notice=p.ConversationOutcomes.Find(o=>o.InteractionId==i.Id)?.Notice??"";
+            Check(notice==(walk?"You walked off":"NO SALE")+"  •  Tongue Stamps back in your "+(held?"hand":"gear"),"the notice says where the unit went: \""+notice+"\"");
+            Check(gear=="map,stock_lsd,merch_bag",(walk?"walking away":"a failed talk")+" puts the unit back in its own slot, got "+gear);
+        }
+        // A unit whose stack stays (two on offer from the pocket) joins it in place. A sale from an older snapshot, with no
+        // ReservedSlot, hands the last unit back at the end of the bar.
+        {
+            var s=Pair("Sale");var p=s.Player("p0");p.Inventory[0].Count=2;p.Inventory.Insert(0,new ItemStack{ItemId="map",Count=1});p.EquippedItemId="map";
+            var i=Sale(s,FestivalSimulation.FairAsk);Talk(s,i,Every(Awkward));
+            Check(string.Join(",",p.Inventory.Select(x=>x.ItemId+"x"+x.Count))=="mapx1,stock_lsdx2","a unit from a stack that stayed joins it in place, got "+string.Join(",",p.Inventory.Select(x=>x.ItemId+"x"+x.Count)));
+            s=Pair("Sale");p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="map",Count=1});p.EquippedItemId="stock_lsd";i=Sale(s,FestivalSimulation.FairAsk);
+            var json=JsonNode.Parse(JsonSerializer.Serialize(s.State,new JsonSerializerOptions{IncludeFields=true}));
+            json["Interactions"].AsArray().Single(x=>x["Id"].GetValue<string>()==i.Id).AsObject().Remove("ReservedSlot");
+            var older=new FestivalSimulation();older.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),new JsonSerializerOptions{IncludeFields=true}));
+            var talk=older.Interaction(i.Id);Talk(older,talk,Every(Awkward));
+            Check(string.Join(",",older.Player("p0").Inventory.Select(x=>x.ItemId))=="map,stock_lsd"&&older.Player("p0").EquippedItemId=="stock_lsd","an older sale hands the unit back at the end of the bar and in your hand, got "+string.Join(",",older.Player("p0").Inventory.Select(x=>x.ItemId)));
         }
     }
 

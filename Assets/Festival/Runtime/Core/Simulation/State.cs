@@ -132,7 +132,9 @@ namespace Festival.Core
         public List<ConversationTurn> Turns=new List<ConversationTurn>(); public bool TrustDance; public string Hunch="";
         // A sale's ask (FestivalSimulation.FairAsk, HighAsk or GreedyAsk), from StartSale's Amount; Fair in older snapshots.
         // ReservedEquipped: the unit on offer left the seller's hand, so a handed-back one is equipped again; false in older snapshots.
-        public int Ask; public bool ReservedEquipped;
+        // ReservedSlot: where its stack sat in the seller's gear, so a handed-back last unit takes that slot (and key) again; -1, the
+        // end of the bar, in older snapshots.
+        public int Ask; public bool ReservedEquipped; public int ReservedSlot=-1;
         // HeadStart: the points a talk starts on after its trust dance; HintedReply: the round-1 reply a nailed dance hints, -1 for
         // none. ViewFor sends both to the talker alone. 0 and -1 in older snapshots.
         public int HeadStart,HintedReply=-1;

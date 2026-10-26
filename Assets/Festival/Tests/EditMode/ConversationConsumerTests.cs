@@ -105,8 +105,8 @@ namespace Festival.Tests
             for(int turn=0;talk.Status=="Active";turn++)Assert.That(game.Execute(player.Id,new GameCommand{Id="trust_reply_"+turn,Kind="Reply",Direction=turn,Amount=Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Awkward)}).Accepted,Is.True);
             Assert.That(player.Cash,Is.EqualTo(cash));Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
             var outcome=player.ConversationOutcomes.Single();
-            // A sale also says where the unit went.
-            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your hand":""));Assert.That(outcome.Reaction,Is.Not.Empty);
+            // A sale also says where the unit went: this seller held nothing, so back in the gear.
+            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your gear":""));Assert.That(outcome.Reaction,Is.Not.Empty);
             game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Reaction,Is.EqualTo(outcome.Reaction));
             Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Reaction).And.Not.Contain(outcome.DeliveryId));
         }

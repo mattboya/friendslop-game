@@ -177,6 +177,8 @@ namespace Festival.Network
         // MUSIC-8: the small stage is heard, and charts, only within StageMusic.SmallHearingRadius of its front, so Drum Circles at
         // booths 0 and 2 now chart to the main stage's song, and the crew arrives at Festivals.Arrival; a version-10 client would
         // drum to the wrong song.
+        // ECON-14: InteractionState.ReservedSlot keeps the offered stack's gear slot (-1, the end of the bar, in older snapshots), so
+        // a handed-back last unit returns to it; it reaches only the seller's own view, and a version-10 client ignores it.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

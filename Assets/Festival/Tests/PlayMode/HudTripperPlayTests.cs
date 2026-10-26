@@ -332,7 +332,7 @@ namespace Festival.Tests
                     if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;FestivalSimulation.TrustDancing(talk)&&n<400;n++)sim.Tick(.1);Assert.That(talk.Status=="Active"&&talk.HeadStart==FestivalSimulation.FailedDanceStart,Is.True,scenario+": the missed dance leads on to the talk");}
                     for(int t=0;t<FestivalSimulation.ConversationTurns;t++){int grade=scenario=="awkward"||trust?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
                     Assert.That(player.InteractionId,Is.Empty);var outcome=player.ConversationOutcomes.Last();
-                    if(trust)Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your hand":""),scenario+": the talk after the dance ends as a talk");
+                    if(trust)Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your gear":""),scenario+": the talk after the dance ends as a talk");
                     if(scenario=="narc")Assert.That(player.Life,Is.EqualTo("Detained"));
                     view.enabled=true;yield return null;yield return new WaitForSeconds(.7f);
                     Assert.That(window.Open&&window.Lingering,Is.True,scenario+": a terminal delivery survives an entirely missed live view");

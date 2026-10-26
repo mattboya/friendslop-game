@@ -41,7 +41,7 @@ namespace Festival.Core
             bool wary=Wary(npc,p);if(wary)GiveDanceRoom(p,npc);
             var i=NewInteraction(p,kind,npc.Id,0);p.ConversationThreadId=i.Id;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);
-            if(kind=="Sale"){i.ReservedEquipped=p.EquippedItemId==c.ItemId;Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
+            if(kind=="Sale"){i.ReservedEquipped=p.EquippedItemId==c.ItemId;i.ReservedSlot=p.Inventory.FindIndex(s=>s.ItemId==c.ItemId);Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
             if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;PublishSpeech(p,npc.Id,"FESTIVALGOER",TrustAsk,i.StartSeconds+i.DurationSeconds-State.SimulationSeconds,i.Id);}else AddTurn(i,p);
@@ -196,13 +196,14 @@ namespace Festival.Core
             if(i.Kind=="Police"){if(i.Score>=.75)WaveOn(i.TargetId,p);else HeardOut(i.TargetId,p);}
             DeliverConversationOutcome(i,p,notice,result);
         }
-        // A sale's unit back from a failed or cut talk: in the seller's gear, in their hand again if it left it, or at their feet
-        // when their hands filled meanwhile. Returns head and where the unit went.
+        // A sale's unit back from a failed or cut talk: in the seller's gear (a last unit in the slot its stack left), in their hand
+        // again if it left it, or at their feet when their hands filled meanwhile. Returns head and where the unit went.
         string HandBack(InteractionState i,PlayerState p,string head)
         {
             string item=i.ReservedItemId,name=Catalog.FindItem(item)?.Name??item;i.ReservedItemId="";
             if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});return head+"  •  "+name+" dropped at your feet";}
-            Add(p,item,1);if(i.ReservedEquipped)p.EquippedItemId=item;return head+"  •  "+name+" back in your hand";
+            if(Count(p,item)==0&&i.ReservedSlot>=0)p.Inventory.Insert(Math.Min(i.ReservedSlot,p.Inventory.Count),new ItemStack{ItemId=item,Count=1});else Add(p,item,1);
+            if(i.ReservedEquipped)p.EquippedItemId=item;return head+"  •  "+name+(p.EquippedItemId==item?" back in your hand":" back in your gear");
         }
     }
 }
