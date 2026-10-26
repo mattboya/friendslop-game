@@ -579,7 +579,9 @@ namespace Festival.Network
         void ReceiveLocalCommandResult(CommandResult result)
         {
             bool quiet=result.Id!=null&&quietCommands.Remove(result.Id);
-            if(!quiet||!result.Accepted)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+            // An EndChat that raced the talk's end to the host finds the window already closed, and the message
+            // already holds what ended the talk, such as the sale's result.
+            if((!quiet||!result.Accepted)&&result.Reason!=FestivalSimulation.NoChatToEnd)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
             lastLocalCommandResult=CopyResult(result);
             var listeners=LocalCommandResultReceived;
             if(listeners!=null)foreach(Action<CommandResult> listener in listeners.GetInvocationList())listener(CopyResult(result));

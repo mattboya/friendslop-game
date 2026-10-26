@@ -8,11 +8,12 @@ namespace Festival.Core
 #endif
         /// <summary>DIALOG-9: reply-based festivalgoer talks and chat checks wait for their owner. Police and trust dances keep time.</summary>
         public static bool UntimedChat(InteractionState i)=>i!=null&&(i.Kind=="ConfirmChat"||Talks(i.Kind)&&i.Kind!="Police"&&!TrustDancing(i));
+        public const string NoChatToEnd="No active chat to end";
 
         CommandResult EndChat(PlayerState p,GameCommand c)
         {
             var i=Interaction(c.TargetId);
-            if(i==null||i.Id!=p.InteractionId||i.PlayerId!=p.Id||i.Status!="Active"||i.Kind!="ConfirmChat"&&(!Talks(i.Kind)||TrustDancing(i)))return Reject("No active chat to end");
+            if(i==null||i.Id!=p.InteractionId||i.PlayerId!=p.Id||i.Status!="Active"||i.Kind!="ConfirmChat"&&(!Talks(i.Kind)||TrustDancing(i)))return Reject(NoChatToEnd);
             if(State.Phase!="Playing"||p.Life!="Alive")return Reject("Chat is not interactive");
             if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");return Reject("Chat is out of reach");}
             if(i.Kind=="ConfirmChat")FinishInteraction(i,p);else Cancel(p,"Cancelled");
