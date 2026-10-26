@@ -161,6 +161,8 @@ namespace Festival.Network
         // Subsequent units append only the version-11 changes they actually land.
         // DIALOG-19: ConversationOutcome.Score carries a settled talk's score (-1 for a talk cut short, and in older snapshots), and
         // the chat window's meter lands on it, not on its own count.
+        // DIALOG-18: a talk reaches its talker as a copy in which every reply not picked has grade -1, so the meter moves on the
+        // host's echo of a pick and no client can read the smooth reply ahead.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -1050,11 +1052,19 @@ namespace Festival.Network
             var receiptOwner=view.Players.Find(p=>p.Id==viewer);string tip=FestivalSimulation.DeckTipSpeech(source,local);
             if(receiptOwner!=null&&tip!=""&&receiptOwner.SpeechDeliveryId=="")
             {receiptOwner.NpcSpeech=tip;receiptOwner.NpcSpeaker="FESTIVALGOERS";receiptOwner.NpcSpeechUntil=source.Phase==FestivalSimulation.MinigamePhase?local.DeckTipUntilWorldSeconds:local.DeckTipUntilWorldSeconds+source.Booth.Seconds;}
-            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>i.Kind==FestivalSimulation.DrumPartKind?JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(i)):i);return view;
+            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>i.Kind==FestivalSimulation.DrumPartKind?JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(i)):FestivalSimulation.Talks(i.Kind)?TalkView(i):i);return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
             // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map, not even from
             // the Ferris wheel (POLO-3, WheelFriendAreas above).
             WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
+            // The talker, the host included, gets a copy that keeps only the grade of each reply they picked: no client can read the
+            // smooth reply before it picks.
+            static InteractionState TalkView(InteractionState talk)
+            {
+                var copy=JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(talk));
+                foreach(var turn in copy.Turns)for(int r=0;r<turn.Grades.Length;r++)if(r!=turn.Pick)turn.Grades[r]=-1;
+                return copy;
+            }
         }
         /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;

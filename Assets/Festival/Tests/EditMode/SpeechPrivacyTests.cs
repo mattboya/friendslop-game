@@ -47,6 +47,27 @@ namespace Festival.Tests
             var owner=View(game,player.Id);Assert.That(owner.Players.Find(p=>p.Id==player.Id).NpcSpeech,Is.EqualTo(spoken.Last()),"private outcomes never enter the public latest-line projection");
             Assert.That(owner.Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Reaction,Is.EqualTo(player.ConversationOutcomes.Single().Reaction));
         }
+        // The talker's view, the host's own included, carries the grade of each reply they picked (the meter moves on that echo)
+        // and no other, so no client can read the smooth reply before it picks. The host's talk keeps every grade.
+        [Test] public void ATalkersViewCarriesOnlyThePickedRepliesGrades()
+        {
+            var game=Pair(out var player,out var npc);Act(game,player,"start","Conversation",npc.Id);var talk=game.Interaction(player.InteractionId);
+            Act(game,player,"reply_0","Reply",amount:1,direction:0);
+            var every=new[]{ConversationLines.Smooth,ConversationLines.SoSo,ConversationLines.Awkward};
+            foreach(var view in new[]{FestivalSession.ViewFor(game,player.Id),View(game,player.Id)})
+            {
+                var shown=view.Interactions.Single(i=>i.Id==talk.Id);
+                Assert.That(shown.Turns.Count,Is.EqualTo(2),"setup: the first reply picked, the second turn live");
+                Assert.That(shown.Turns[0].Pick==1&&shown.Turns[0].Grades[1]==talk.Turns[0].Grades[1],Is.True,"the picked reply's grade comes back as the host's echo");
+                foreach(int r in new[]{0,2})Assert.That(shown.Turns[0].Grades[r],Is.EqualTo(-1),"no grade for reply "+(r+1)+", not picked");
+                Assert.That(shown.Turns[1].Grades,Is.All.EqualTo(-1),"nor for any reply of the live turn");
+                Assert.That(shown.Turns[1].Replies,Is.EqualTo(talk.Turns[1].Replies),"the replies themselves still show");
+            }
+            foreach(var turn in talk.Turns)Assert.That(turn.Grades.OrderBy(g=>g),Is.EqualTo(every),"the host keeps every grade");
+            FestivalSession.ViewFor(game,player.Id).Interactions.Single(i=>i.Id==talk.Id).Turns[1].Pick=2;
+            Assert.That(talk.Turns[1].Pick,Is.EqualTo(-1),"the host's own view is a copy: changing it changes nothing on the host");
+            Assert.That(View(game,"friend").Interactions,Is.Empty,"and nobody else gets the talk at all");
+        }
         [Test] public void EverySpeechViewIsDetachedFromTheHostAndFromOtherRecipients()
         {
             var game=Pair(out var player,out var npc);Act(game,player,"bark","Talk",npc.Id);

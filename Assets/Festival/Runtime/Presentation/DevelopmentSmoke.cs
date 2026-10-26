@@ -165,6 +165,7 @@ namespace Festival.Presentation
                 if(sim.State.Players.Count<2){Fail("camp peers");yield break;}
                 sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;
                 sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
+                StartCoroutine(SmoothTalks(sim,sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Id));
             }
             float campX=session.IsHost?-1:1;
             yield return Until(session,"camp placement",()=>Near(session.LocalPlayer,campX,6),CampSeconds);
@@ -1306,15 +1307,30 @@ namespace Festival.Presentation
                         if(!File.Exists(capture)){failed="conversation card render";yield break;}
                         capture=null;
                     }
-                    replied=turn;session.Command("Reply",amount:SmoothReply(talk.Turns[turn]),direction:turn);
+                    // A view carries no grade of a reply not yet picked, so the host reads its own talk. A joined client has none to read
+                    // and says the first reply, which the host's smoke made smooth (SmoothTalks).
+                    var own=session.DevelopmentSimulation?.Interaction(id);
+                    replied=turn;session.Command("Reply",amount:own!=null&&own.Turns.Count>turn?SmoothReply(own.Turns[turn]):0,direction:turn);
                 }
                 if(!Holds(session,wait))yield break;
                 yield return null;
             }
             End(session,wait);
         }
-        /// <summary>DIALOG-3: the reply the smokes pick on a talk's turn: the smooth one, as a player who reads the person well would.</summary>
+        /// <summary>The reply the smokes pick on a talk's turn: the smooth one, as a player who reads the person well would. Give it
+        /// the host's own turn: a view carries no grade of a reply not yet picked.</summary>
         public static int SmoothReply(ConversationTurn turn)=>Array.IndexOf(turn.Grades,ConversationLines.Smooth);
+        // A joined client's smoke can't read a grade, so it says the first reply. Every host frame, each reply that player's live talk
+        // has not picked turns smooth: a pick reaches the host a round trip after its turn, so never before this has run.
+        static IEnumerator SmoothTalks(FestivalSimulation sim,string id)
+        {
+            for(;;)
+            {
+                var talk=sim.State.Interactions.Find(i=>i.PlayerId==id&&i.Status=="Active"&&FestivalSimulation.Talks(i.Kind));
+                if(talk!=null)foreach(var turn in talk.Turns)if(turn.Pick<0)for(int r=0;r<turn.Grades.Length;r++)turn.Grades[r]=ConversationLines.Smooth;
+                yield return null;
+            }
+        }
         // ECON-2: buys a unit of this kind from the festivalgoer the host stood at (x, z), dancing it perfectly, as a sale is.
         IEnumerator BuyStock(FestivalSession session,string kind,float x,float z)
         {

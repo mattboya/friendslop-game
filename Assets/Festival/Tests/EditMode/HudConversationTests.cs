@@ -408,8 +408,8 @@ namespace Festival.Tests
             Assert.That(window.Going,Is.EqualTo(before).Within(1e-6),"a cut sale has no score: the meter stays at "+before+" ("+word+"), got "+window.Going+" ("+window.GoingWord+")");
         }
 
-        // The talker's own view carries every reply's grade (FestivalSession.ViewFor sends their talk whole). The meter reads only the
-        // replies already picked, so it gives nothing away: change every grade of a reply not picked, and it reads the same.
+        // The meter reads only the replies already picked (the talker's view carries no other grade, SpeechPrivacyTests), so even
+        // a view that carried them would give nothing away: change every grade of a reply not picked, and it reads the same.
         [Test] public void TheMeterReadsOnlyTheRepliesYouPicked()
         {
             var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);
