@@ -10,7 +10,7 @@ A playable macOS prototype of the [festival-weekend design](docs/GAME_DESIGN_202
 
 Open `Builds/macOS/Development/FestivalCoop.app`. On the title screen, choose **PLAY**, then **HOST A GAME** to enter the campsite immediately; friends choose **PLAY**, then **JOIN A FRIEND** with your LAN address. Pick up a shelf item with E, carry it to the seller, then press E twice to inspect and pay. Handheld gear equips automatically; the Little Spoon is worn as a necklace. Press 1–3 to equip another handheld item and Q to use it. Explore a car, tent or porta potty with E, use F for its gag, and E or G to leave; use E at the camp DJ to change the music. At the lit trailhead, press E to ready. When every connected player is ready, a five-second countdown and the spin start Day 1, an eight-minute level. After the round, everyone votes for a silly award with 1–3, and the host opens the shop with E. One player can also complete the full route alone.
 
-See [the playtest guide](docs/PLAYTEST_2026-09-24.md) for the complete objective and recovery steps.
+See [the festival-weekend design](docs/GAME_DESIGN_2026-09-30.md) for the complete objective of each level.
 
 ## Rebuild the native player
 
@@ -26,7 +26,7 @@ node scripts/native-solo-smoke.mjs
 node scripts/native-smoke.mjs
 ```
 
-Each smoke ends with one pass line per player, for example `SOLO NATIVE SMOKE PASSED in 105.2 s real; 61 gameplay waits ended, 0 failed; slowest solo night 1 start sim 15.10/250.00 s real 15.09 s`. The two-player smoke prints a `HOST NATIVE SMOKE PASSED` and a `CLIENT NATIVE SMOKE PASSED` line. Each gameplay wait has a budget of simulation seconds, not real seconds. A failed run names its wait as `FAILED <wait> (<reason>)`, and the player logs are in `artifacts/native-smoke/`. A whole smoke stops after 900 real seconds. On a heavily loaded machine, raise that limit with `FESTIVAL_SMOKE_TIMEOUT_SECONDS`, for example `FESTIVAL_SMOKE_TIMEOUT_SECONDS=1800 node scripts/native-solo-smoke.mjs`.
+The solo smoke ends with one pass line, for example `SOLO NATIVE SMOKE PASSED in 105.2 s real; 61 gameplay waits ended, 0 failed; slowest solo night 1 start sim 15.10/250.00 s real 15.09 s`. The two-player smoke prints a `HOST NATIVE SMOKE PASSED:` and a `CLIENT NATIVE SMOKE PASSED:` line, then `TWO-CLIENT NATIVE SMOKE PASSED`. Then a third player captures the connection screens, and a full pass ends with `CONNECTION UI CAPTURE PASSED in N s real`. A smoke passed only when it prints its last pass line and exits with code 0. Each gameplay wait has a budget of simulation seconds, not real seconds. A failed run names its wait as `FAILED <wait> (<reason>)`, and the player logs are in `artifacts/native-smoke/`. A whole smoke stops after 900 real seconds. On a heavily loaded machine, raise that limit with `FESTIVAL_SMOKE_TIMEOUT_SECONDS`, for example `FESTIVAL_SMOKE_TIMEOUT_SECONDS=1800 node scripts/native-solo-smoke.mjs`.
 
 The generator creates `Assets/Festival/Generated/Bootstrap.unity`; generated content is deliberately kept separate from hand-authored source.
 

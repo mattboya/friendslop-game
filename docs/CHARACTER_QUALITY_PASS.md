@@ -19,7 +19,7 @@ The master is approximately 2.3 m tall before the existing runtime scale. The he
 
 The detailed file contains 182,576 triangles across all mutually exclusive variants. The distance file contains 58,371. A conservative sum of the most expensive options, including mutually exclusive headgear and top hair, is 44,804 detailed triangles or 14,323 distant triangles. These are mesh budgets, not full-frame draw counts.
 
-Runtime changes to the distance meshes beyond 10 m and returns to detailed meshes inside 8 m. The live dance portrait always uses detailed meshes. Meshes are shared across actors. The native desktop build uses Unity's GPU mesh deformation mode; see the [Unity mesh deformation API](https://docs.unity.com/en-us/engine/6000.0/script-reference/unityeditor/playersettings/meshdeformation).
+Runtime changes to the distance meshes beyond 10 m and returns to detailed meshes inside 8 m. The live dance portrait always uses detailed meshes. Meshes are shared across actors. The native desktop build uses Unity's GPU (Batched) mesh deformation mode; see the [Unity mesh deformation API](https://docs.unity.com/en-us/engine/6000.0/script-reference/unityeditor/playersettings/meshdeformation).
 
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/generate_modular_character.py
