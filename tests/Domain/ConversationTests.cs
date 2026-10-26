@@ -710,7 +710,7 @@ public static class ConversationTests
             Check(Act(s,"p0","StartSale",Partner(s).Id,"stock_lsd",amount:bad).Reason=="Ask Fair, High or Greedy","the ask is checked before the stock");
         }
         // At dose 2 (x1.25), whole talks: all smooth (1) pays the ask's price, all so-so (.5) Fair's half, High talked down to Fair's
-        // price, Greedy nothing; all awkward (0) is no sale at any ask.
+        // price, Greedy nothing; all awkward (0) is no sale at any ask. A sale talked down names the full price at the same x1.25.
         foreach(var (ask,smooth,soso) in new[]{(Fair,13,6),(High,19,13),(Greedy,25,0)})
             foreach(var (grade,expected) in new[]{(Smooth,smooth),(SoSo,soso),(Awkward,0)})
             {
@@ -719,6 +719,8 @@ public static class ConversationTests
                 if(grade==Smooth)Check(FestivalSimulation.SalePrice(s.State,p,Partner(s),ask)==expected,"ask "+ask+"'s offer names what a full sale pays, "+expected+", got "+FestivalSimulation.SalePrice(s.State,p,Partner(s),ask));
                 Talk(s,i,Every(grade));
                 Check(p.Cash-cash==expected&&s.State.LevelSales-sales==expected,"ask "+ask+" at "+i.Score+" pays "+expected+" at dose 2, got "+(p.Cash-cash));
+                string notice=p.ConversationOutcomes.Find(o=>o.InteractionId==i.Id)?.Notice??"";
+                Check(grade==SoSo&&expected>0?notice.EndsWith("  •  talked down from $"+smooth):!notice.Contains("talked down"),"ask "+ask+" at "+i.Score+" names the full price of $"+smooth+" only when talked down: \""+notice+"\"");
                 Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(expected==0),"only a no-sale hands the stock back");
             }
     }

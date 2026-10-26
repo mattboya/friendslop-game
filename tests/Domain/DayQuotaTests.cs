@@ -102,7 +102,7 @@ public static class DayQuotaTests
     // (detained, the stock gone).
     static void EverySaleEndsOneClearWay()
     {
-        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};
+        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};int talkedDown=0;
         foreach(int seed in new[]{3,17,29,41,53,67})
         {
             var s=new FestivalSimulation(seed);var p=s.AddPlayer("p0","P0");p.X=0;p.Z=19;Act(s,"p0","Ready");s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);Act(s,"p0","MapReady");
@@ -140,6 +140,9 @@ public static class DayQuotaTests
                 {
                     Check(p.Cash-cash==s.State.LevelSales-sales&&left==units-1&&!dropped,where+": a paid sale counts its pay and takes one unit");
                     Check(outcome?.Result=="SOLD +$"+(p.Cash-cash)&&notice.StartsWith("SOLD ")&&notice.Contains("+$"+(p.Cash-cash)),where+": a paid sale says SOLD and its pay, +$"+(p.Cash-cash));endings["paid"]++;
+                    // A sale talked down names a full price above what it paid, its multipliers and all (EachAskPaysByItsTable pins one).
+                    int down=notice.IndexOf("  •  talked down from $",StringComparison.Ordinal);
+                    if(down>=0){talkedDown++;Check(int.Parse(notice.Substring(down+"  •  talked down from $".Length))>p.Cash-cash,where+": talked down from more than it paid");}
                 }
                 else if(dropped){Check(left==units-1&&s.State.LevelSales==sales&&notice.EndsWith("dropped at your feet")&&outcome.Result=="NO SALE",where+": a unit with no room is at your feet, and it says so");endings["dropped"]++;}
                 else
@@ -151,6 +154,7 @@ public static class DayQuotaTests
             }
         }
         foreach(var ending in endings)Check(ending.Value>0,"the fuzz reaches every ending, but none was "+ending.Key+": "+string.Join(", ",endings));
+        Check(talkedDown>0,"the fuzz reaches a sale talked down");
     }
 
     static void ExtractWaitsForTheQuota()
