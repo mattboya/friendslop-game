@@ -12,7 +12,8 @@ public static class EscalationTests
         var failures=new List<string>();
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
-            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding})
+            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
+            ADraggedFriendStaysInsideTheFence})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -444,5 +445,19 @@ public static class EscalationTests
         Check(b.Life=="Downed"&&a.DragTargetId=="b","the friend is still downed and dragged beside the east wall");
         Walk(East+.35f,Back+1.5f);
         Check(b.X==a.X-1&&b.Z==a.Z,"past the back the friend follows at the dragger's side again ("+b.X+", "+b.Z+")");
+    }
+    // ESC-5: a dragger walking along the west fence keeps the friend inside the grounds (|x| <= 39), and once rescued the friend
+    // walks off east.
+    static void ADraggedFriendStaysInsideTheFence()
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();
+        var a=s.Player("a");var b=s.Player("b");b.Life="Downed";b.DownedRemaining=35;a.X=-38.4f;a.Z=0;b.X=-37.4f;b.Z=0;
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+        for(float x=-38.4f;x>-38.68f;){x=Math.Max(-38.68f,x-2f/30);Check(s.TryMove("a",x,0,0,1.0/30),"the dragger's step to "+x+" is taken");}
+        Check(Math.Abs(b.X)<=39&&Math.Abs(b.Z)<=39,"the dragged friend stays inside the fence ("+b.X+", "+b.Z+"; dragger at "+a.X+")");
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a lets go");
+        Check(s.Execute("a",Command("Rescue","b")).Accepted,"setup: a rescues them");s.Tick(3.1);
+        Check(b.Life=="Alive","setup: the friend is back on their feet ("+b.Life+")");
+        Check(s.TryMove("b",b.X+4f/30,b.Z,0,1.0/30),"the rescued friend's step east is taken (from "+b.X+")");
     }
 }
