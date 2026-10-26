@@ -81,15 +81,22 @@ public static class SimulationTests {
   Assert(q.VisualConfettiBurstSequence==0,"an older snapshot counts no burst");
   Assert(old.Execute(q.Id,C("Use","confetti")).Accepted&&q.VisualConfettiBurstSequence==1,"its next burst counts one, got "+q.VisualConfettiBurstSequence);
  }
- // Restore refuses a negative public event count on any player, as it refuses a negative CampEggSequence, and keeps the
+ // Restore refuses a negative event count on any player, as it refuses a negative CampEggSequence, and keeps the
  // round it had. A count of zero or more restores as saved.
  static void RestoreRefusesANegativeEventCount(){
   var options=new JsonSerializerOptions{IncludeFields=true};var s=new FestivalSimulation();s.AddPlayer("a","A");s.AddPlayer("b","B");
   string json=JsonSerializer.Serialize(s.State,options);
-  foreach(var counter in new (string Name,Action<PlayerState,int> Set,Func<PlayerState,int> Get)[]{
-   ("VisualGiggleTakeSequence",(p,v)=>p.VisualGiggleTakeSequence=v,p=>p.VisualGiggleTakeSequence),
-   ("VisualConfettiBurstSequence",(p,v)=>p.VisualConfettiBurstSequence=v,p=>p.VisualConfettiBurstSequence),
-   ("GiggleTankBankSequence",(p,v)=>p.GiggleTankBankSequence=v,p=>p.GiggleTankBankSequence)}){
+  foreach(var counter in new (string Name,Action<PlayerState,long> Set,Func<PlayerState,long> Get)[]{
+   ("VisualGiggleTakeSequence",(p,v)=>p.VisualGiggleTakeSequence=(int)v,p=>p.VisualGiggleTakeSequence),
+   ("VisualConfettiBurstSequence",(p,v)=>p.VisualConfettiBurstSequence=(int)v,p=>p.VisualConfettiBurstSequence),
+   ("GiggleTankBankSequence",(p,v)=>p.GiggleTankBankSequence=(int)v,p=>p.GiggleTankBankSequence),
+   ("SpeechSequence",(p,v)=>p.SpeechSequence=v,p=>p.SpeechSequence),
+   ("VisualDanceStepSequence",(p,v)=>p.VisualDanceStepSequence=(int)v,p=>p.VisualDanceStepSequence),
+   ("VisualReceiptSequence",(p,v)=>p.VisualReceiptSequence=(int)v,p=>p.VisualReceiptSequence),
+   ("DialogueRevision",(p,v)=>p.DialogueRevision=v,p=>p.DialogueRevision),
+   ("ConversationOutcomeSequence",(p,v)=>p.ConversationOutcomeSequence=v,p=>p.ConversationOutcomeSequence),
+   ("ConversationDismissedSequence",(p,v)=>p.ConversationDismissedSequence=v,p=>p.ConversationDismissedSequence),
+   ("MoneyNewsSequence",(p,v)=>p.MoneyNewsSequence=v,p=>p.MoneyNewsSequence)}){
    var good=JsonSerializer.Deserialize<RoundState>(json,options);counter.Set(good.Players[1],3);
    var restored=new FestivalSimulation();restored.Restore(good);Assert(counter.Get(restored.Player("b"))==3,counter.Name+" = 3 restores as saved");
    var bad=JsonSerializer.Deserialize<RoundState>(json,options);counter.Set(bad.Players[1],-1);
