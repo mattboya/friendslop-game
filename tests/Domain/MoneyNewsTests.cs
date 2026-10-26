@@ -136,11 +136,15 @@ public static class MoneyNewsTests
         Heard(sam,"Stash: STASH  •  +$15  •  Ash found the cloud's stash","the crew");Check(ash.MoneyNewsLog.Count==0,"the finder keeps their CloudStashNotice, not a second line");
         Call(game,"Recruited",new InteractionState{TargetId="friend"},sam);
         Heard(ash,"Stash: STASH  •  +$20  •  Sam found a lost friend","the crew");Heard(sam,"Stash: STASH  •  +$20  •  Sam found a lost friend","the recruiter too");
-        ash.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.GiggleTankItem,Count=1});ash.X=Festivals.CampGateX;ash.Z=Festivals.CampGateZ;Call(game,"BankGiggleTanks");
+        ash.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.GiggleTankItem,Count=1});ash.X=Festivals.CampGateX;ash.Z=Festivals.CampGateZ;int carrierLines=ash.MoneyNewsLog.Count;Call(game,"BankGiggleTanks");
         Heard(sam,"Stash: STASH  •  +$"+Festivals.GiggleTankCash+"  •  Ash brought the Giggle Tank home","the crew");
+        Check(ash.MoneyNewsLog.Count==carrierLines,"the carrier keeps their GiggleTankHome notice, not a second line: got '"+Last(ash)+"'");
         sam.X=ash.X;sam.Z=ash.Z;Call(game,"End","Success");
         Check(game.State.SurvivorBonus==10,"setup: two survivors bank $10");
         Heard(ash,"Stash: STASH  •  +$10  •  survivor bonus","everyone");Heard(sam,"Stash: STASH  •  +$10  •  survivor bonus","everyone");
+        var lone=Play();ash=lone.Player("host");sam=lone.Player("friend");ash.X=Festivals.CampGateX;ash.Z=Festivals.CampGateZ;sam.X=30;sam.Z=0;Call(lone,"End","Success");
+        Check(lone.State.Survivors==1&&lone.State.SurvivorBonus==0,"setup: one survivor at the gate banks nothing");
+        foreach(var p in lone.State.Players)Check(p.MoneyNewsLog.Count==0,"no bonus, no survivor line: "+p.Name+" got '"+Last(p)+"'");
     }
     // The seller reads the sale's own outcome ("SOLD Tongue Stamps  •  +$10"); the rest of the crew read what it added to SALES.
     static void ASaleTellsTheCrewWhatItMade()
