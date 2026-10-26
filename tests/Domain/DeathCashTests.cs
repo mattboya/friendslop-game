@@ -24,6 +24,7 @@ public static class DeathCashTests
         CashPilesRejectInvalidAmountsWithoutSpendingThePile();
         RefundsAndReturnedGearSettleBeforeDeath();
         ZeroCashAndRealRevivalLimits();
+        AloneWithNoRevivalsLeftTheDownedHintSaysTheLevelEnds();
         TheDownedCardCountsDownAndAloneNamesTheTent();
     }
     static void EveryDeathEmitsItsFrozenPublicRecord()
@@ -286,6 +287,22 @@ public static class DeathCashTests
         owner.RevivalCount=2;
         Check(FestivalGuidance.RevivalsLeft(owner)==0&&FestivalGuidance.Headline(s.State,owner)=="SPIRIT • NO REVIVALS LEFT","both used: \""+FestivalGuidance.Headline(s.State,owner)+"\"");
         Check(FestivalGuidance.Hint(s.State,owner)=="No revivals left this level: you stay a spirit until it ends.","and nobody is sent to the tent for nothing");
+    }
+    // Alone with every revival used, the downed time running out ends the level (Weekend.LevelEndCheck), not a trip to the tent.
+    static void AloneWithNoRevivalsLeftTheDownedHintSaysTheLevelEnds()
+    {
+        var s=Crew(4);var owner=s.Player("owner");s.Disconnect("friend");
+        owner.Life="Downed";owner.DownedRemaining=27.2;owner.RevivalCount=FestivalGuidance.RevivalsPerLevel-1;
+        Check(FestivalGuidance.Hint(s.State,owner)=="Nobody can help you up alone. When the time runs out, you become a spirit and can come back at the medical tent.","one revival left: the hint names the tent");
+        owner.DownedRemaining=.05;s.Tick(.1);
+        Check(owner.Life=="Spirit"&&s.State.Phase=="Playing","one revival left: alone, the spirit can still come back and the level goes on: phase "+s.State.Phase+", result \""+s.State.Result+"\"");
+        var last=Crew(4);owner=last.Player("owner");last.Disconnect("friend");
+        owner.Life="Downed";owner.DownedRemaining=27.2;owner.RevivalCount=FestivalGuidance.RevivalsPerLevel;
+        string hint=FestivalGuidance.Hint(last.State,owner);
+        Check(hint=="Nobody can help you up alone, and you have no revivals left: when the time runs out, the level ends.","none left: the hint tells the truth: \""+hint+"\"");
+        Check(FestivalGuidance.Headline(last.State,owner)=="DOWNED • 28 s","the card still counts the downed seconds");
+        owner.DownedRemaining=.05;last.Tick(.1);
+        Check(owner.Life=="Spirit"&&last.State.Phase=="Results"&&last.State.Result==FestivalSimulation.WipedOut,"none left: when the time runs out, the level ends: phase "+last.State.Phase+", result \""+last.State.Result+"\"");
     }
     static void ZeroCashAndRealRevivalLimits()
     {
