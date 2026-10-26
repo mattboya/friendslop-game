@@ -12,8 +12,6 @@ namespace Festival.Tests
     // changing calibrated input time. After each phrase of a set the crowd roars with its score.
     public sealed class StageAudioTests
     {
-        private static string Clip(FestivalMusic.Track track)=>track==null?"nothing":track.Clip;
-
         // At quit Unity can destroy the speakers before the stage audio's OnDisable stops them (native smoke, 2026-10-16).
         [Test]public void StoppingAfterTheSpeakersAreGoneThrowsNothing()
         {
@@ -140,7 +138,8 @@ namespace Festival.Tests
             return stage;
         }
         static AudioSource[] SmallDecks(FestivalStageAudio stage)=>(AudioSource[])typeof(FestivalStageAudio).GetField("smallDecks",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);
-        static void RemoveStage(GameObject host)
+        // EditMode skips OnDestroy, so every test that wakes a FestivalStageAudio cleans up its speakers and crowd roar here.
+        internal static void RemoveStage(GameObject host)
         {
             var stage=host.GetComponent<FestivalStageAudio>();if(stage!=null&&Decks(stage)!=null)UnityEngine.Object.DestroyImmediate(Decks(stage)[0].gameObject);
             if(stage!=null&&SmallDecks(stage)!=null)UnityEngine.Object.DestroyImmediate(SmallDecks(stage)[0].gameObject);
@@ -206,7 +205,7 @@ namespace Festival.Tests
             Assert.That(FestivalStageAudio.Mix(StageMusic.MainX,StageMusic.MainZ,StageMusic.Main),Is.EqualTo(1).Within(1e-4f));
             Assert.That(FestivalStageAudio.Mix(StageMusic.SmallX,StageMusic.SmallZ,StageMusic.Main),Is.EqualTo(0).Within(1e-4f));
         }
-        static RoundState Clock(double world,string phase="Playing")=>new RoundState{Phase=phase,RoundId="same-song",SimulationSeconds=world,FestivalIndex=0,LevelIndex=1};
+        static RoundState Clock(double world,string phase="Playing")=>new RoundState{Phase=phase,RoundId="same-song",SimulationSeconds=world};
         static int Expected(FestivalMusic.Track track,double world)=>(int)Math.Floor(RhythmChart.StageSampleAtWorld(track.Beats,world));
         [Test]public void TwoViewsScheduleTheProjectedSharedWorldSampleIncludingLoopJoins()
         {
