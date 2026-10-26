@@ -90,6 +90,23 @@ public static class MoneyNewsTests
         Check(ash.Cash==20,"the cancel gives it back");Heard(ash,"Cash: REVIVAL CALLED OFF  •  +$10","the payer");
         game.Disconnect("friend");ash.Life="Spirit";
         Check(Act(game,"host","BeginRevival","host",1).Accepted,"setup: a lone spirit pays for their own revival");Heard(ash,"Cash: YOUR REVIVAL  •  −$10","the lone spirit");
+        // A paid release or revival that ends with nothing to do gives the $10 back and says so: Sam is out before the release ends
+        // (the fourth escape step, or TEST MODE's Free me), or a friend joins during a lone spirit's revival.
+        foreach(bool testMode in new[]{false,true})
+        {
+            game=Play();ash=game.Player("host");sam=game.Player("friend");game.DevelopmentFestivalSelection=testMode;
+            if(testMode)Check(Act(game,"host",FestivalSimulation.TestModeKind).Accepted,"setup: test mode on");
+            sam.Life="Detained";sam.EscapeProgress=3;sam.HelpUntil=0;ash.Cash=20;ash.X=27;ash.Z=5;
+            Check(Act(game,"host","BeginRelease","friend",1).Accepted&&ash.Cash==10,"setup: a paid release holds the $10");
+            game.Tick(1);Check(Act(game,"friend",testMode?FestivalSimulation.TestFreeKind:"HelpSelf").Accepted&&sam.Life=="Alive","setup: Sam gets out first");
+            game.Tick(2.5);Check(game.State.Interactions.Find(i=>i.Kind=="Release").Status!="Active","setup: the release ends");
+            Check(ash.Cash==20,"a release with nobody to free gives the $10 back"+(testMode?" (Free me)":"")+", cash $"+ash.Cash);Heard(ash,"Cash: RELEASE CALLED OFF  •  +$10","the payer"+(testMode?" (Free me)":""));
+        }
+        game=Play();ash=game.Player("host");game.Disconnect("friend");ash.Life="Spirit";ash.Cash=20;ash.X=24;ash.Z=-20;
+        Check(Act(game,"host","BeginRevival","host",1).Accepted&&ash.Cash==10,"setup: a lone spirit pays for their own revival");
+        game.Tick(5);game.AddPlayer("friend","Sam");game.Tick(10.5);
+        Check(game.State.Interactions.Find(i=>i.Kind=="Revival").Status!="Active"&&ash.Life=="Spirit","setup: the revival ends with no revive once a friend is back");
+        Check(ash.Cash==20,"a revival that revives nobody gives the $10 back, cash $"+ash.Cash);Heard(ash,"Cash: REVIVAL CALLED OFF  •  +$10","the spirit");
     }
     static void AFailedBuyGivesThePriceBack()
     {

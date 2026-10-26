@@ -50,8 +50,9 @@ public sealed partial class FestivalSimulation {
         case "LostProperty":if(i.TargetId==State.LostPropertyTask.ToString()){p.Cash+=5;State.LostPropertyTask++;News(p,"Cash",MoneyNotice("LOST PROPERTY RETURNED",5));}break;
         case "Medical":int treated=p.Effects.FindLastIndex(Treatable);if(Count(p,"medical_voucher")>0&&treated>=0){Take(p,"medical_voucher",1);News(p,"Items","MEDICAL VOUCHER USED  •  "+(Catalog.FindEffect(p.Effects[treated].Id)?.Name??"effect")+" treated");p.Effects.RemoveAt(treated);}break;
         case "Rescue":var down=Player(i.TargetId);if(down!=null&&down.Life=="Downed"&&!AttackerNear(down,3)){down.Life="Alive";down.Health=40;down.RecoveryUntil=State.SimulationSeconds+5;down.DownedRemaining=0;}break;
-        case "Release":var prisoner=Player(i.TargetId);if(prisoner!=null&&prisoner.Life=="Detained")Free(prisoner);break;
-        case "Revival":var spirit=Player(i.TargetId);bool self=spirit==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(spirit!=null&&spirit.Life=="Spirit"&&FestivalGuidance.RevivalsLeft(spirit)>0&&(self||p.Wristbands.Remove(spirit.Id))){if(!self)News(p,"Items","WRISTBAND USED  •  "+spirit.Name+" is back");spirit.Life="Alive";spirit.Health=40;spirit.RevivalCount++;spirit.Effects.Clear();spirit.X=24;spirit.Z=-20;spirit.RecoveryUntil=State.SimulationSeconds+5;}break;
+        // TaskStillValid checks only where the payer stands, so a paid release or revival that frees or revives nobody refunds here.
+        case "Release":var prisoner=Player(i.TargetId);if(prisoner!=null&&prisoner.Life=="Detained")Free(prisoner);else Refund(p,i);break;
+        case "Revival":var spirit=Player(i.TargetId);bool self=spirit==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(spirit!=null&&spirit.Life=="Spirit"&&FestivalGuidance.RevivalsLeft(spirit)>0&&(self||p.Wristbands.Remove(spirit.Id))){if(!self)News(p,"Items","WRISTBAND USED  •  "+spirit.Name+" is back");spirit.Life="Alive";spirit.Health=40;spirit.RevivalCount++;spirit.Effects.Clear();spirit.X=24;spirit.Z=-20;spirit.RecoveryUntil=State.SimulationSeconds+5;}else Refund(p,i);break;
     }
     // A narc's buy (SettleBuy) has already ended as a "Police bust".
     FinishConfirm(i);i.ReservedCash=0;if(i.Status=="Active")i.Status="Complete";if(i.Kind=="Dj")LeaveStage(p);p.InteractionId="";}
