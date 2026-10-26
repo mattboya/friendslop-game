@@ -88,22 +88,27 @@ namespace Festival.Tests
             try{Assert.That(session.PendingConversationOutcome,Is.Null,"host acknowledgment keeps the dismissed outcome closed after reconnect");}
             finally{UnityEngine.Object.DestroyImmediate(root);}
         }
+        // A failed trust dance leads on to the talk, two points down, with the stock or the price still held. The talk then
+        // settles as any talk does, and its outcome stays the talker's alone.
         [TestCase("Sale")] [TestCase("Buy")] [TestCase("Conversation")]
-        public void FailedTrustRefundsAndRetainsThePrivateWalkOff(string kind)
+        public void AFailedTrustDanceLeadsOnToAPrivateTalk(string kind)
         {
             var game=Pair(0,out var player,out var partner);partner.Role=kind=="Sale"?"Buyer":"Regular";
             partner.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=40});game.HasLineOfSight=(ax,az,bx,bz)=>false;
             if(kind=="Sale")player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int cash=player.Cash;
             var result=game.Execute(player.Id,new GameCommand{Id="trust_start",Kind=kind=="Conversation"?kind:"Start"+kind,TargetId=partner.Id,ItemId=kind=="Sale"?"stock_lsd":FestivalSimulation.SellerStock(partner.Id)});
             Assert.That(result.Accepted,Is.True,result.Reason);var talk=game.Interaction(player.InteractionId);Assert.That(talk.TrustDance,Is.True);
-            for(int n=0;talk.Status=="Active"&&n<100;n++)game.Tick(.1);
-            Assert.That(talk.Status,Is.EqualTo("Complete"));Assert.That(player.Cash,Is.EqualTo(cash));
-            Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
-            var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));
-            // A sale's walk-off also says where the unit went.
-            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"They walk off  •  Tongue Stamps back in your hand":"They walk off."));
-            game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Notice,Is.EqualTo(outcome.Notice));
-            Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Notice));
+            for(int n=0;FestivalSimulation.TrustDancing(talk)&&n<100;n++)game.Tick(.1);
+            Assert.That(talk.Status=="Active"&&talk.Turns.Count==1&&talk.HeadStart==FestivalSimulation.FailedDanceStart,Is.True,"the talk follows the missed dance, two points down");
+            Assert.That(talk.Turns[0].Reaction,Is.Not.Empty,"their first line reacts to the dance");
+            Assert.That(player.ConversationOutcomes,Is.Empty,"nothing has ended");
+            for(int turn=0;talk.Status=="Active";turn++)Assert.That(game.Execute(player.Id,new GameCommand{Id="trust_reply_"+turn,Kind="Reply",Direction=turn,Amount=Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Awkward)}).Accepted,Is.True);
+            Assert.That(player.Cash,Is.EqualTo(cash));Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
+            var outcome=player.ConversationOutcomes.Single();
+            // A sale also says where the unit went.
+            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your hand":""));Assert.That(outcome.Reaction,Is.Not.Empty);
+            game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Reaction,Is.EqualTo(outcome.Reaction));
+            Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Reaction).And.Not.Contain(outcome.DeliveryId));
         }
         [Test] public void ExplicitNarcBustKeepsItsExplanationAfterDetentionTeleport()
         {

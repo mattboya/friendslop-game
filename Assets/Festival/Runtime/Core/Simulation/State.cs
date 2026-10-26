@@ -133,6 +133,9 @@ namespace Festival.Core
         // A sale's ask (FestivalSimulation.FairAsk, HighAsk or GreedyAsk), from StartSale's Amount; Fair in older snapshots.
         // ReservedEquipped: the unit on offer left the seller's hand, so a handed-back one is equipped again; false in older snapshots.
         public int Ask; public bool ReservedEquipped;
+        // HeadStart: the points a talk starts on after its trust dance; HintedReply: the round-1 reply a nailed dance hints, -1 for
+        // none. ViewFor sends both to the talker alone. 0 and -1 in older snapshots.
+        public int HeadStart,HintedReply=-1;
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).

@@ -23,7 +23,7 @@ public static class ConversationTests
         var failures=new List<string>();
         foreach(var test in new Action[]{EachTalkIsFourRoundsOfThreeReplies,TheirLineFollowsTheRound,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
             ATalkScoresItsRepliesPoints,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
-            ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
+            ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,ADanceMovesWhereTheTalkStarts,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
@@ -439,9 +439,8 @@ public static class ConversationTests
     }
 
     // A festivalgoer whose suspicion of you is 40 or more asks you to dance first: TrustAsk, then eight beats on the talk's own
-    // chart, danced and witnessed like a dance. At .6 or more they trust you: everyone watching, and they, move by the dance's
-    // RhythmDelta, and the talk follows. Below .6 they walk off: the talk ends at 0, a sale's stock and a buy's cash come back,
-    // and the watchers move once, for the dance. Security never asks.
+    // chart, danced and witnessed like a dance. Everyone watching, and they, move once by the dance's RhythmDelta. The talk always
+    // follows, the stock or the price still held: level after a good dance, two points down under .6. Security never asks.
     static void AWaryFestivalgoerAsksForADanceFirst()
     {
         Check(FestivalSimulation.TrustDanceSuspicion==40&&FestivalSimulation.TrustScore==.6,"the trust dance comes at 40 and passes at .6");
@@ -476,16 +475,39 @@ public static class ConversationTests
             var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
             var i=Start(s,kind);var notes=RhythmChart.For(i).Notes;int under=(int)Math.Ceiling(TrustScoreNotes(notes.Count))-1;
             foreach(var note in notes.Take(under))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-            for(int guard=0;i.Status=="Active"&&guard<100;guard++)s.Tick(.1);
-            Check(i.Status=="Complete"&&i.Score==0&&i.Turns.Count==0,"a "+kind+" danced under .6 ends at 0 with no talk ("+i.Status+", "+i.Score+")");
-            Check(p.NpcSpeech=="Nah. Not feeling it."&&p.NpcSpeaker=="FESTIVALGOER"&&p.NpcSpeechUntil>s.State.SimulationSeconds,"failed trust dance gives the owner a readable partner rejection for "+kind+": speech=\""+p.NpcSpeech+"\"");
-            Check(p.Cash==cash&&p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(kind=="Sale")&&p.Inventory.Count==(kind=="Sale"?1:0),"they walk off: the stock or the cash comes back");
+            for(int guard=0;i.Turns.Count==0&&i.Status=="Active"&&guard<100;guard++)s.Tick(.1);
+            Check(i.Status=="Active"&&i.Turns.Count==1&&i.HeadStart==FestivalSimulation.FailedDanceStart,"a "+kind+" danced under .6 goes on to its talk, two points down ("+i.Status+", "+i.Turns.Count+" turns, head start "+i.HeadStart+")");
+            Check(p.Cash==cash-(kind=="Buy"?5:0)&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"the stock or the price stays held for the talk ($"+p.Cash+")");
             double score=(double)under/notes.Count;int moved=(int)Math.Round(20-35*score,MidpointRounding.AwayFromZero);
             Check(watcher.Observers[0].Suspicion==20+moved&&Partner(s).Observers[0].Suspicion==40+moved,"the watcher and they move once, by the dance's RhythmDelta "+moved+" (watcher "+watcher.Observers[0].Suspicion+", partner "+Partner(s).Observers[0].Suspicion+")");
         }
     }
     // The fewest of `count` perfect notes that score .6.
     static double TrustScoreNotes(int count)=>FestivalSimulation.TrustScore*count;
+
+    // A failed dance (under .6) starts the talk two points down, a nailed one (.9 or better) hints round 1's smooth reply
+    // (HintedReply), and one between starts it level. Before the ask, a Greedy sale's suspicion moves by the dance alone.
+    static void ADanceMovesWhereTheTalkStarts()
+    {
+        foreach(var (how,share) in new[]{(0,.5),(1,.8),(2,1.0)})
+        {
+            var s=Pair("Sale");var buyer=Partner(s);buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});var p=s.Player("p0");int cash=p.Cash;
+            var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+            var i=Sale(s,FestivalSimulation.GreedyAsk);Check(i.TrustDance,"setup: a wary buyer asks for a dance first");
+            var notes=RhythmChart.For(i).Notes;int danced=(int)Math.Round(notes.Count*share);
+            foreach(var note in notes.Take(danced))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int guard=0;FestivalSimulation.TrustDancing(i)&&i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+            string verdict=new[]{"a failed","an all-right","a nailed"}[how]+" dance ("+danced+" of "+notes.Count+" notes)";
+            Check(i.Status=="Active"&&i.Turns.Count==1,verdict+" goes on to the talk ("+i.Status+")");
+            Check(i.HeadStart==(how==0?FestivalSimulation.FailedDanceStart:0),verdict+" starts it "+(how==0?"two points down":"level")+", got "+i.HeadStart);
+            Check(i.HintedReply==(how==2?Array.IndexOf(i.Turns[0].Grades,Smooth):-1),verdict+(how==2?" hints the first round's smooth reply":" hints nothing")+", got "+i.HintedReply);
+            Check(ConversationLines.Parts["react.dance."+how].Contains(i.Turns[0].Reaction),verdict+": their first line reacts to it, got \""+i.Turns[0].Reaction+"\"");
+            int moved=(int)Math.Round(20-35*(double)danced/notes.Count,MidpointRounding.AwayFromZero);
+            Check(buyer.Observers[0].Suspicion==40+moved&&watcher.Observers[0].Suspicion==20+moved&&!buyer.Observers[0].RefusesSales,verdict+" moves the buyer and the watcher by the dance alone ("+moved+"), no ask's 30 before the ask (buyer "+buyer.Observers[0].Suspicion+", watcher "+watcher.Observers[0].Suspicion+")");
+            Talk(s,i,Every(Smooth));
+            Check(i.Turns.Count==FestivalSimulation.ConversationTurns&&p.Cash-cash==(how==0?10:20),verdict+" then four smooth replies: "+(how==0?"6 of 8, talked down to $10":"8 of 8, the Greedy $20")+", got $"+(p.Cash-cash)+" at "+i.Score);
+        }
+    }
 
     // Seeded per festivalgoer, 1 in 4 ravers and burners want a dance before any talk, however calm; no one else does.
     static void SomeRaversAndBurnersAlwaysDanceFirst()
@@ -636,9 +658,10 @@ public static class ConversationTests
         Check(w.Life=="Alive"&&w.Cash==20&&off.Status!="Active","walking off a narc's buy is safe, the $5 back ("+w.Life+", $"+w.Cash+")");
         var stop=Pair("Buy");Partner(stop).Role="Narc";var q=stop.Player("p0");Start(stop,"Buy");
         Check(Act(stop,"p0","Cancel").Accepted&&q.Life=="Alive"&&q.Cash==20,"stopping a narc's buy is safe, the $5 back");
-        var shy=Pair("Buy");Partner(shy).Role="Narc";Partner(shy).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});var r=shy.Player("p0");var walked=Start(shy,"Buy");
-        for(int guard=0;walked.Status=="Active"&&guard<100;guard++)shy.Tick(.1);
-        Check(walked.TrustDance&&walked.Turns.Count==0&&r.Life=="Alive"&&r.Cash==20,"a narc who walks off after a poor trust dance busts no one ("+r.Life+", $"+r.Cash+")");
+        var shy=Pair("Buy");Partner(shy).Role="Narc";Partner(shy).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});var r=shy.Player("p0");var danced=Start(shy,"Buy");
+        for(int guard=0;FestivalSimulation.TrustDancing(danced)&&guard<100;guard++)shy.Tick(.1);
+        Check(danced.TrustDance&&danced.Status=="Active"&&danced.Turns.Count==1&&r.Life=="Alive"&&r.Cash==15,"a poor trust dance with a narc leads on to the talk: no bust yet, the $5 held ("+r.Life+", $"+r.Cash+")");
+        Check(Act(shy,"p0","Cancel").Accepted&&r.Life=="Alive"&&r.Cash==20,"and walking out of it is safe, the $5 back");
     }
 
     // A sale makes an ask (StartSale's Amount): Fair $10, High $15 or Greedy $20 before the multipliers. Fair pays in full at .75
@@ -763,10 +786,11 @@ public static class ConversationTests
         s=Pair("Sale");p=s.Player("p0");i=Sale(s,FestivalSimulation.FairAsk);
         s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",X=p.X+1,Z=p.Z,Evidence=new List<EvidenceState>{new EvidenceState{PlayerId="p0",Kind="WitnessedDeal",DetainAt=s.State.SimulationSeconds}}});s.Tick(.1);o=Ended(s,i);
         Check(p.Life=="Detained"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd")&&o!=null&&o.Notice=="BUSTED  •  security took your stock"&&o.Result=="BUSTED"&&o.Reaction=="","a bust mid-sale says BUSTED: \""+o?.Notice+"\"");
-        // A wary buyer you lose in the dance first walks off, and it says so.
+        // A wary buyer you lose in the dance first still talks; a talk that then fails is no sale, and it says so.
         s=Pair("Sale");Partner(s).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});i=Sale(s,FestivalSimulation.FairAsk);Check(i.TrustDance,"setup: they ask for a dance first");
-        for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);o=Ended(s,i);
-        Check(o.Notice=="They walk off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a lost trust dance says they walk off, and where the unit went: \""+o.Notice+"\"");
+        for(int guard=0;FestivalSimulation.TrustDancing(i)&&guard<200;guard++)s.Tick(.1);
+        Check(i.Status=="Active"&&Ended(s,i)==null,"setup: a lost trust dance leads on to the talk");Talk(s,i,Every(Awkward));o=Ended(s,i);
+        Check(o.Notice=="NO SALE  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a talk that fails after a lost dance says NO SALE, and where the unit went: \""+o.Notice+"\"");
         Check(FestivalSimulation.MoneyNotice("LOST PROPERTY RETURNED",5)=="LOST PROPERTY RETURNED  •  +$5"&&FestivalSimulation.MoneyNotice("SECURITY FINE",-10)=="SECURITY FINE  •  −$10","the money notice every change of cash uses");
     }
 

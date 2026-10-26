@@ -68,6 +68,25 @@ namespace Festival.Tests
             Assert.That(talk.Turns[1].Pick,Is.EqualTo(-1),"the host's own view is a copy: changing it changes nothing on the host");
             Assert.That(View(game,"friend").Interactions,Is.Empty,"and nobody else gets the talk at all");
         }
+        // A nailed trust dance hints the first round's smooth reply to the talker alone. Their view carries its index, and
+        // still no grade; nobody else's view carries the talk at all.
+        [Test] public void ANailedDancesHintReachesTheTalkerAlone()
+        {
+            var game=Pair(out var player,out var npc);npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
+            Act(game,player,"start","Conversation",npc.Id);var talk=game.Interaction(player.InteractionId);Assert.That(talk.TrustDance,Is.True,"setup: a dance first");
+            foreach(var note in RhythmChart.For(talk).Notes)talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int n=0;FestivalSimulation.TrustDancing(talk)&&n<100;n++)game.Tick(.1);
+            int smooth=Array.IndexOf(talk.Turns[0].Grades,ConversationLines.Smooth);
+            Assert.That(talk.Status=="Active"&&talk.HintedReply==smooth,Is.True,"setup: the nailed dance hints the smooth reply");
+            var shown=View(game,player.Id).Interactions.Single(i=>i.Id==talk.Id);
+            Assert.That(shown.HintedReply,Is.EqualTo(smooth),"the talker's view carries the hinted reply");
+            Assert.That(shown.Turns[0].Grades,Is.All.EqualTo(-1),"and still no grade");
+            foreach(var other in new[]{"friend","ghost"})
+            {
+                var view=View(game,other);Assert.That(view.Interactions,Is.Empty,other+" gets no talk");
+                Assert.That(JsonUtility.ToJson(view),Does.Not.Contain("HintedReply"),other+"'s view carries no hint");
+            }
+        }
         [Test] public void EverySpeechViewIsDetachedFromTheHostAndFromOtherRecipients()
         {
             var game=Pair(out var player,out var npc);Act(game,player,"bark","Talk",npc.Id);

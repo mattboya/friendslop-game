@@ -83,6 +83,13 @@ namespace Festival.Core
             if(role=="Buyer") return HunchBuyer;
             return seller?HunchSeller:HunchMusic;
         }
+        /// <summary>Their word on the trust dance, as the talk starts: `how` 0 under FestivalSimulation.TrustScore, 1 between, 2 at
+        /// FestivalSimulation.NailedScore or better.</summary>
+        public static string DanceReaction(int how,int festival,ContentRandom random,DialogueHistory history,out string key)
+        {
+            if(how<0||how>2)throw new ArgumentException("Unknown dance verdict "+how);
+            var keys=new List<string>();string line=Say("react.dance."+how,festival,random,history,keys);key=keys[0];return line;
+        }
         public static string Reaction(string persona,int grade,int festival,ContentRandom random,DialogueHistory history,out string key)
         {
             if(!Tastes.ContainsKey(persona)||grade<Smooth||grade>Silence)throw new ArgumentException("Unknown reaction persona or grade");
@@ -192,6 +199,13 @@ namespace Festival.Core
                 "A confused soul spun circles at {landmark}.","I sent someone very lost to {landmark}.","Someone's waiting by {landmark}. Looks lonely.",
                 "A lost one borrowed my map near {landmark}.","A lost one asked me about {landmark}. Twice."},
 
+            // Their word on your trust dance before the talk: a flop, all right, nailed.
+            ["react.dance.0"]=new[]{"Ha, okay, you can't dance. Go on…","Oof. Those were not moves. Talk, then.","Wow, two left feet. Fine, I'm listening.",
+                "That was rough. Make the talk better.","Okay, dancing's not your thing. Go on…","Yikes. Well, you tried. What's up?"},
+            ["react.dance.1"]=new[]{"Not bad. Okay, let's talk.","Alright, you can move. What's up?","Fair enough. You've earned a chat.",
+                "Decent. Go on, then.","Okay, okay. I'm listening.","That'll do. So, what's up?"},
+            ["react.dance.2"]=new[]{"You've got moves! Okay, talk to me.","Whoa, you can really dance! What's up?","Now that's a dance! I like you already.",
+                "Wow. Okay, you've got my attention.","Those moves! Alright, I'm all ears.","Okay, that was amazing. Talk to me."},
             // Each style's hello and tail, dressing round the reply.
             ["cosmic_hi"]=new[]{"Far out.","Whoa.","Mmm.","Oh, wow.","Duuude.","Breathe."},
             ["cosmic_tail"]=new[]{"It's all one.","Feel that?","The trees agree.","Namaste.","Magic, man.","Cosmic."},

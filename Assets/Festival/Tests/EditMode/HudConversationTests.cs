@@ -230,7 +230,8 @@ namespace Festival.Tests
             for(int guard=0;talk.Turns.Count==0&&guard<200;guard++)game.Tick(.1);
             Assert.That(talk.Status=="Active"&&talk.Turns.Count==1,Is.True,"setup: a good dance wins their trust, and the talk follows");
             Assert.That(Follow(window,game,you.Id,1),Is.True,"now the window opens");
-            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+talk.Turns[0].Line}),"on their first line");
+            Assert.That(talk.Turns[0].Reaction,Is.Not.Empty,"setup: their first turn reacts to the dance");
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+talk.Turns[0].Reaction,"< "+talk.Turns[0].Line}),"on their word on the dance, then their first line");
             Assert.That(window.Replies,Is.EqualTo(3),"with your three replies");
         }
 

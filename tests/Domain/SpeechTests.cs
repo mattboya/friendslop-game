@@ -27,7 +27,7 @@ public static class SpeechTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{TalkNamesTheFestivalgoerWhoSpoke,ASoberChallengeLineIsSaidByTheNpc,ADosedChallengeLineIsSaidByThePlayer,AChatCheckIsNeverPutOnThePlayer,AcceptedBarksHaveEightStableDeliveries,AcceptedRepliesAndNpcTurnsSurviveOneSnapshot,EqualLinesAndASharedNpcKeepTheirIdentities,TrustAskAndFailureArePublicButTheOutcomeIsPrivate,SecurityRetractionsAndCancellationKeepDeliveryIds,DitchingNeverLeavesAPublicWarningQueued,LegacyExpiryRemainsPauseSafeWithoutPublishingAnonymousSpeech})
+        foreach(var test in new Action[]{TalkNamesTheFestivalgoerWhoSpoke,ASoberChallengeLineIsSaidByTheNpc,ADosedChallengeLineIsSaidByThePlayer,AChatCheckIsNeverPutOnThePlayer,AcceptedBarksHaveEightStableDeliveries,AcceptedRepliesAndNpcTurnsSurviveOneSnapshot,EqualLinesAndASharedNpcKeepTheirIdentities,TrustAskAndFirstLineArePublicButTheDanceReactionIsPrivate,SecurityRetractionsAndCancellationKeepDeliveryIds,DitchingNeverLeavesAPublicWarningQueued,LegacyExpiryRemainsPauseSafeWithoutPublishingAnonymousSpeech})
             try{test();}catch(Exception e){failures.Add(test.Method.Name+" -> "+e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -89,14 +89,16 @@ public static class SpeechTests
         Start(game,game.Player("p1"),npc,"Conversation");var delivered=Deliveries(game.State);
         Check(delivered.Count==4&&delivered.Select(d=>d["DeliveryId"].GetValue<string>()).Distinct().Count()==4,"two players talking to one NPC retain separate delivery identities");
     }
-    static void TrustAskAndFailureArePublicButTheOutcomeIsPrivate()
+    static void TrustAskAndFirstLineArePublicButTheDanceReactionIsPrivate()
     {
         var game=ConversationPair(out var player,out var npc);npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=40});game.HasLineOfSight=(ax,az,bx,bz)=>false;
         Start(game,player,npc,"Conversation");var talk=game.Interaction(player.InteractionId);
         Check(Deliveries(game.State).Count==1&&Deliveries(game.State)[0]["Text"].GetValue<string>()==FestivalSimulation.TrustAsk,"the actual NPC trust ask is spoken");
         game.Tick(talk.StartSeconds-game.State.SimulationSeconds+talk.DurationSeconds+.8);
-        var delivered=Deliveries(game.State);Check(delivered.Count==2&&delivered.Last()["SpeakerId"].GetValue<string>()==npc.Id&&delivered.Last()["Text"].GetValue<string>()=="Nah. Not feeling it.","the neutral failed-trust rejection is public");
-        Check(player.ConversationOutcomes[0].Notice=="They walk off."&&!delivered.Any(d=>d["Text"].GetValue<string>()==player.ConversationOutcomes[0].Notice),"the durable walk-off notice remains private");
+        // A failed dance leads on to the talk. Their first line is public, as every line of theirs is; their reaction to
+        // the dance, as every reaction, stays on the talker's card.
+        var delivered=Deliveries(game.State);Check(delivered.Count==2&&delivered.Last()["SpeakerId"].GetValue<string>()==npc.Id&&delivered.Last()["Text"].GetValue<string>()==talk.Turns[0].Line,"after the dance their first line is public");
+        Check(talk.Turns[0].Reaction!=""&&!delivered.Any(d=>d["Text"].GetValue<string>()==talk.Turns[0].Reaction)&&player.ConversationOutcomes.Count==0,"their reaction to the dance stays private, and nothing has ended");
     }
     static void SecurityRetractionsAndCancellationKeepDeliveryIds()
     {

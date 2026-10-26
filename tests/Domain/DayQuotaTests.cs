@@ -96,9 +96,10 @@ public static class DayQuotaTests
     }
 
     // Random sales on a real Palm Mirage Day 1, on fixed seeds: its cops, narcs and buyers, wary festivalgoers' trust dances
-    // danced perfectly or skipped, random asks and replies with time between them, walk-offs, and hands that fill mid-talk. Every sale ends
-    // one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says, the unit gone), handed back (the unit
-    // in your hand again, equipped if it was), dropped at your feet, or busted (detained, the stock gone).
+    // danced perfectly or skipped (a talk follows either way), random asks and replies with time between them, walk-offs, and hands
+    // that fill mid-talk. Every sale ends one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says,
+    // the unit gone), handed back (the unit in your hand again, equipped if it was), dropped at your feet, or busted (detained, the
+    // stock gone).
     static void EverySaleEndsOneClearWay()
     {
         var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};
@@ -144,7 +145,7 @@ public static class DayQuotaTests
                 else
                 {
                     Check(left==units&&p.Cash==cash&&s.State.LevelSales==sales&&notice.EndsWith("back in your hand")&&outcome.Result=="NO SALE",where+": otherwise the unit is back, and it says so");
-                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings[notice.StartsWith("They walk off")?"walked off":"back"]++;
+                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings[notice.StartsWith("You walked off")||notice.StartsWith("They walk off")?"walked off":"back"]++;
                 }
             }
         }

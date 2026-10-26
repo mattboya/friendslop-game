@@ -167,6 +167,10 @@ namespace Festival.Network
         // after, and snapshots mark a stop whose last chance was said (EvidenceState.Warned, false in older rounds).
         // DIALOG-20: a talk's Score is its replies' points (smooth 2, so-so 1, awkward or silent -1) over 8, never below 0, so every
         // line keeps its place; a version-10 client's meter would count the old average.
+        // DIALOG-20: a trust dance never ends its talk: under TrustScore it starts InteractionState.HeadStart (-2) points down,
+        // counted in its Score; at NailedScore or better InteractionState.HintedReply names round 1's smooth reply to the talker
+        // alone (0 and -1 in older snapshots); turn 0's Reaction is their word on the dance. A version-10 client would wait for a
+        // walk-off that never comes.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

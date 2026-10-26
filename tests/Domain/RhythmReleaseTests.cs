@@ -118,8 +118,9 @@ public static class RhythmReleaseTests
             var inputs=Heads(chart).GetRange(0,heads);
             if(release!="none")inputs.Add((hold.Direction,release=="early"?hold.TimeSeconds+.01:hold.TimeSeconds+hold.HoldSeconds-.1,1));
             inputs.Sort((a,b)=>a.time.CompareTo(b.time));Send(game,interaction,inputs);Verdict(game,interaction);
-            Check(release=="early"?interaction.Status=="Complete"&&interaction.Turns.Count==0:interaction.Status=="Active"&&interaction.Turns.Count==1,
-                release+" release "+(release=="early"?"loses":"retains")+" the credit needed to unlock the conversation");
+            // The talk follows any dance; the credit decides whether it starts level or two points down.
+            Check(interaction.Status=="Active"&&interaction.Turns.Count==1&&interaction.HeadStart==(release=="early"?FestivalSimulation.FailedDanceStart:0),
+                release+" release "+(release=="early"?"loses":"retains")+" the credit that starts the conversation level (head start "+interaction.HeadStart+")");
         }
     }
     static void ArrivalOrderIsNeverReplacedByTimestampOrder()
