@@ -14,7 +14,7 @@ public static class DjSetTests
             GreysComeFromNightOneAndLaterPhrasesGetBusier,CatchingEveryBlockAndDodgingEveryGreyScoresOne,StayingInOneLaneScoresAboutAThird,
             AGreyHitCostsATenthAndOnlyLaneChangesCount,ALaneChangeThatCatchesNothingCostsATenth,BlindMashingNeverEarnsTheCrowd,
             AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage,TheCrowdAndTheCopsSeeTheDjOnTheRiser,
-            TheBackdropHidesTheDjFromWatchersBehindIt,ASwarmStrikesTheDjFromTheStageFront})
+            TheBackdropHidesTheDjFromWatchersBehindIt,ASwarmStrikesTheDjFromTheStageFront,APassAtTheSmallStageSendsYouToTheMainStage})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" DJ set test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -267,6 +267,18 @@ public static class DjSetTests
         Check(cop.Evidence.Exists(e=>e.PlayerId=="p0"&&e.Kind=="VisibleStock"),"a cop facing the riser sees the stock in the DJ's hand");
         game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=24,Yaw=0};game.State.Npcs.Add(cam);
         Start(game);Check(game.IsOnCamera(cam,p),"an influencer filming the riser has the DJ in frame");
+    }
+
+    // The small stage has a riser, a deck and a resident DJ of its own, but a stage pass plays the main stage's takeover deck,
+    // so the pass and its refusal both name the main stage.
+    static void APassAtTheSmallStageSendsYouToTheMainStage()
+    {
+        string text=Catalog.FindItem("stage_pass").Description;
+        Check(text.StartsWith("At the main stage, ",StringComparison.Ordinal),"the pass says which stage it plays, got: "+text);
+        var game=Floor();var p=game.Player("p0");p.X=StageMusic.SmallX;p.Z=StageMusic.SmallZ+1.5f;
+        var result=game.Execute("p0",new GameCommand{Id="dj-small"+(sequence++),Kind="Use",ItemId="stage_pass"});
+        Check(!result.Accepted&&result.Reason=="Move up to the main stage's front deck with a pass","at the small stage's lip the pass sends you to the main stage, got "+result.Accepted+" '"+result.Reason+"'");
+        Check(p.Inventory.Exists(x=>x.ItemId=="stage_pass")&&p.InteractionId=="","and you keep the pass, with no set started");
     }
 
     // The backdrop behind the riser is a wall: a festivalgoer, a cop or an influencer's phone behind it never sees the DJ through
