@@ -15,7 +15,7 @@ public static class EscalationTests
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
             ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,
             AStopWaitsForAWheelRider,GDitchesOneAtATimeAndSaysWhatIsLeft,GDitchesMidChat,
-            OneGuardKeepsTwoStops,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker})
+            OneGuardKeepsTwoStops,AGuardHearsATalkOutThroughAnArrest,AGuardHearsATalkOutBeforeTheCrewOrder,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -603,6 +603,28 @@ public static class EscalationTests
         Check(aWarned,"a hears the last chance at 12 s of a's own stop (\""+a.NpcSpeech+"\")");
         s.Tick(24.1-(s.State.SimulationSeconds-bAt));Check(b.Life=="Detained"&&a.Life=="Alive","4 s after its warning b is detained, a still free ("+b.Life+", a "+a.Life+")");
         Check(FestivalSimulation.CaseOn(s.State,cop,"a")=="Stop"&&FestivalSimulation.CaseOn(s.State,cop,"b")=="","a's view keeps its stop, and detained b's shows no case ("+FestivalSimulation.CaseOn(s.State,cop,"a")+", "+FestivalSimulation.CaseOn(s.State,cop,"b")+")");
+    }
+    // K2 with two stops: the guard stands by a talker and hears the talk out, though the other stop turns into an arrest
+    // mid-talk, or comes first in the crew's order. The other arrest still lands on time.
+    static void AGuardHearsATalkOutThroughAnArrest()=>HearsATalkOut(false);
+    static void AGuardHearsATalkOutBeforeTheCrewOrder()=>HearsATalkOut(true);
+    static void HearsATalkOut(bool bFirst)
+    {
+        var s=new FestivalSimulation(1);if(bFirst)s.AddPlayer("b","B");s.AddPlayer("a","A");if(!bFirst)s.AddPlayer("b","B");s.State.Phase="Playing";
+        s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
+        var a=s.Player("a");var b=s.Player("b");a.X=0;a.Z=2;b.X=-6;b.Z=6;string when=bFirst?" (b first in the crew)":" (b's arrest warning mid-talk)";
+        foreach(var p in new[]{a,b}){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
+        s.Tick(.1);double began=s.State.SimulationSeconds;
+        Check(cop.Evidence.FindAll(e=>e.Kind=="VisibleStock").Count==2,"setup: the guard stops a and b"+when);
+        s.Tick(bFirst?.1:16.9);var talk=Talk(s,a,cop,Smooth);
+        void Hears()=>Check(talk.Status=="Active"&&cop.TargetId=="a"&&Off(To(cop,a),cop.Yaw)<1,"the guard stays on a and faces a mid-talk"+when+" at "+(s.State.SimulationSeconds-began)+" s (talk "+talk.Status+", on "+cop.TargetId+", yaw "+cop.Yaw+", a at "+To(cop,a)+")");
+        s.Tick(3);Hears();Reply(s,a,talk,Smooth);s.Tick(3);
+        Check(bFirst||cop.Evidence.Exists(e=>e.PlayerId=="b"&&e.Kind=="IgnoredStop"),"setup: b's stop is an arrest warning by "+(s.State.SimulationSeconds-began)+" s");
+        Hears();
+        Reply(s,a,talk,Smooth);Reply(s,a,talk,Smooth);
+        Check(talk.Status=="Complete"&&cop.Evidence.Exists(e=>e.PlayerId=="a"&&e.Kind=="WavedOn")&&a.Life=="Alive","a smooth talk waves a on"+when+" (talk "+talk.Status+", score "+talk.Score+", a "+a.Life+")");
+        if(bFirst)Check(FestivalSimulation.CaseOn(s.State,cop,"b")=="Stop","b's stop is still on (\""+FestivalSimulation.CaseOn(s.State,cop,"b")+"\")");
+        else{s.Tick(24.2-(s.State.SimulationSeconds-began));Check(b.Life=="Detained"&&a.Life=="Alive","4 s after b's warning b is detained on time, a still free (b "+b.Life+", a "+a.Life+")");}
     }
     // ESC-3: with two stops open, the guard sees a third player's stock in the way it faces (toward a, whom it walks after), not
     // toward the last stop it checked (b).
