@@ -25,9 +25,10 @@ namespace Festival.Core
         /// <summary>What the next safe cup adds to the pot: the nth adds CupStep × n.</summary>
         public static int NextCupPays(MinigameState b)=>CupStep*(b.Drunk.Count+1);
         /// <summary>How often the tripper's hunch marks the spiked cup: their vision reliability for the spun dose (75 / 50 / 25 / 10%),
-        /// one step less sure in a game they play alone (50 / 25 / 10 / 10%), so a lone player cannot skip the marked cup for a free pot.
+        /// one step less sure in a game the tripper plays alone (50 / 25 / 10 / 10%), so a lone player cannot skip the marked cup for a
+        /// free pot. A friend alone at the table while the tripper is away from it (detained, say) keeps the crew's odds.
         /// Every view carries the doses and the players, so the card can name these odds.</summary>
-        public static double HunchReliability(RoundState s)=>Reliability[Math.Min(Reliability.Length-1,TripperDose(s)-1+(s.Booth.PlayerIds.Count==1?1:0))];
+        public static double HunchReliability(RoundState s)=>Reliability[Math.Min(Reliability.Length-1,TripperDose(s)-1+(s.Booth.PlayerIds.Count==1&&s.Booth.PlayerIds[0]==s.TripperId?1:0))];
         /// <summary>The booth as viewer's view carries it (FestivalSession.ViewFor): never which cup is spiked, and the tripper's hint
         /// to the tripper alone. The rest of the game is public.</summary>
         public static MinigameState VisibleBooth(RoundState s,string viewer){var b=s.Booth.Copy();b.Spiked=-1;if(viewer==""||viewer!=s.TripperId)b.Hint=-1;return b;}

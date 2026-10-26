@@ -171,6 +171,9 @@ namespace Festival.Network
         // counted in its Score; at NailedScore or better InteractionState.HintedReply names round 1's smooth reply to the talker
         // alone (0 and -1 in older snapshots); turn 0's Reaction is their word on the dance. A version-10 client would wait for a
         // walk-off that never comes.
+        // MINI-12: the tripper's Booth.Hint is one reliability step lower only when the tripper is the one player at the table; a
+        // friend alone at the table while the tripper is detained keeps the crew's odds, so a version-10 client's card would name the
+        // solo odds.
         public const int ProtocolVersion=11;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

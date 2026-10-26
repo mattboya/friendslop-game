@@ -10,8 +10,8 @@ using Festival.Core;
 // that runs out calls it. The nth safe cup adds $5 × n to the pot. The spiked cup loses the pot and gives the drinker a dose for the
 // rest of the level, or one stronger, up to 4, without touching the spin's doses, so the tripper's visions stay as they are. Calling
 // it pays the pot as sales: by day split across the players' cash, toward the quota; by night into the stash. Once only the spiked
-// cup is left, the game calls it. Only the tripper is shown a hunch cup, right at their vision reliability, one step less alone,
-// and the first turn's clock starts after the card's 3 s rules intro.
+// cup is left, the game calls it. Only the tripper is shown a hunch cup, right at their vision reliability, one step less when
+// the tripper plays alone, and the first turn's clock starts after the card's 3 s rules intro.
 public static class MysteryCupsTests
 {
     static readonly JsonSerializerOptions Json=new JsonSerializerOptions{IncludeFields=true};
@@ -33,7 +33,7 @@ public static class MysteryCupsTests
         var failures=new List<string>();
         foreach(var test in new Action[]{OneCupIsSpikedBySeedAmongTwoMoreThanTheCrew,TurnsGoRoundInASeededOrder,ATurnThatRunsOutCallsIt,
             ThePotGrowsByFiveDollarsTimesTheCupsDrunk,TheSpikedCupLosesThePotAndDosesTheDrinker,CallingItPaysTheCrewByDayAndTheStashByNight,
-            TheLastSafeCupCallsIt,TheCapCallsIt,TheFirstTurnStartsAfterTheRulesIntro,TheHintIsRightAtTheTrippersReliability,ASoloHunchIsOneStepLessSure,OnlyTheTrippersViewIsShownTheHint,ASnapshotKeepsTheCupsGame,AVisibleBoothCannotRewriteHostOrAnotherViewer})
+            TheLastSafeCupCallsIt,TheCapCallsIt,TheFirstTurnStartsAfterTheRulesIntro,TheHintIsRightAtTheTrippersReliability,ASoloHunchIsOneStepLessSure,ADetainedTrippersHunchKeepsTheCrewsOdds,OnlyTheTrippersViewIsShownTheHint,ASnapshotKeepsTheCupsGame,AVisibleBoothCannotRewriteHostOrAnotherViewer})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" Mystery Cups test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -251,7 +251,7 @@ public static class MysteryCupsTests
         }
     }
 
-    // Alone at the table nobody argues the hunch over, so it is one reliability step less sure than the tripper's visions
+    // A tripper alone at the table has nobody to argue the hunch over, so it is one reliability step less sure than their visions
     // (50 / 25 / 10 / 10% by dose), and a lone player cannot skip the marked cup for a free pot. A crew game keeps the visions' odds.
     static void ASoloHunchIsOneStepLessSure()
     {
@@ -265,6 +265,32 @@ public static class MysteryCupsTests
             double rate=(double)right/trials;
             Check(Math.Abs(rate-reliability)<.06,"solo at dose "+dose+" the hunch is right "+reliability+" of the time, got "+rate.ToString("F3"));
         }
+    }
+
+    // A busted tripper waits in the security building while the friend alone at the table plays. The tripper is not at the
+    // table, so it is no solo game: the hunch keeps the visions' odds (75 / 50 / 25 / 10% by dose) and still goes to the tripper alone.
+    static void ADetainedTrippersHunchKeepsTheCrewsOdds()
+    {
+        var s=Leave(960,2,0,0);s.Tick(s.State.SpinEndsAt-s.State.SimulationSeconds+.1);
+        foreach(var p in s.State.Players)s.Execute(p.Id,new GameCommand{Id="map"+(sequence++),Kind="MapReady"});
+        Check(s.State.Phase=="Playing","setup: the crew is at the festival");s.State.Npcs.Clear();
+        var at=FestivalSimulation.BoothAt(s.State);s.State.Booth.Kind=FestivalSimulation.MysteryCupsGame;
+        var tripper=s.Player(s.State.TripperId);var friend=s.State.Players.Find(p=>p.Id!=s.State.TripperId);
+        // What Danger.Detain leaves on a bust: no interaction, Life "Detained", held in the security building.
+        tripper.Life="Detained";tripper.InteractionId="";tripper.X=Festivals.SecurityBuilding.CentreX;tripper.Z=Festivals.SecurityBuilding.CentreZ;
+        friend.X=at.X;friend.Z=at.Z;
+        for(double t=0;t<3.5&&!Running(s);t+=.1)s.Tick(.1);
+        var b=s.State.Booth;var spun=s.State.Doses.Find(d=>d.PlayerId==tripper.Id);
+        Check(Running(s)&&b.PlayerIds.Count==1&&b.PlayerIds[0]==friend.Id,"setup: the friend plays alone while the tripper is detained");
+        foreach(var (dose,reliability) in new[]{(1,.75),(2,.50),(3,.25),(4,.10)})
+        {
+            spun.Dose=dose;int right=0,trials=600;
+            Check(FestivalSimulation.HunchReliability(s.State)==reliability,"a detained tripper at dose "+dose+": the card names the crew's "+reliability+", got "+FestivalSimulation.HunchReliability(s.State));
+            for(int k=0;k<trials;k++){s.State.DealSeed=3000+k;s.PourCups();if(b.Hint==b.Spiked)right++;}
+            double rate=(double)right/trials;
+            Check(Math.Abs(rate-reliability)<.06,"a detained tripper at dose "+dose+": the hunch is right "+reliability+" of the time, got "+rate.ToString("F3"));
+        }
+        Check(FestivalSimulation.VisibleBooth(s.State,tripper.Id).Hint==b.Hint&&FestivalSimulation.VisibleBooth(s.State,friend.Id).Hint==-1,"the hint still goes to the tripper alone");
     }
 
     // What each player's view carries of the cups: the spiked cup never; the hint only in the tripper's. The host keeps both.

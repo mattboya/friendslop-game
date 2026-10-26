@@ -248,12 +248,12 @@ namespace Festival.Tests
         }
 
         // Before the first turn's clock starts everyone at the booth reads the rules, and the tripper's hunch waits. The player up may
-        // drink at once, which ends the intro.
+        // drink at once, which ends the intro. Only the player up may call it, so the rules say so.
         [Test]public void MysteryCupsOpensWithItsRules()
         {
             var s=Level(out var you,out var sam);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;s.TripperId=you.Id;b.Hint=1;
             b.PlayerIds.AddRange(new[]{"you","sam"});b.Cups=4;b.Turns.AddRange(new[]{"sam","you"});b.Seconds=.5;b.TurnAt=FestivalSimulation.CupsIntroSeconds;
-            const string rules="One of these 4 cups is spiked. Each safe cup grows the pot.\nCall it any time to bank the pot.\nThe spiked cup loses the pot and doses whoever drinks it.";
+            const string rules="One of these 4 cups is spiked. Each safe cup grows the pot.\nOn your turn, call it to bank the pot.\nThe spiked cup loses the pot and doses whoever drinks it.";
             Assert.That(Card(s,you),Is.EqualTo(("MYSTERY CUPS",rules)),"the tripper reads the rules, the hunch not yet");
             Assert.That(Card(s,sam),Is.EqualTo(Card(s,you)),"and so does the player up");
             Assert.That(rules.Split('\n').Length,Is.EqualTo(3),"in three lines");

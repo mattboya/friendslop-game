@@ -50,7 +50,7 @@ namespace Festival.Presentation
                     :DayPayout(s,p,b)+", counted as sales.";
                 return ("+"+Money(s,p,b.Pot),paid+again);
             }
-            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\nCall it any time to bank the pot."
+            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\nOn your turn, call it to bank the pot."
                 +"\nThe spiked cup loses the pot and doses whoever drinks it.");
             string up=FestivalSimulation.CupsTurn(s),seconds=WholeSeconds(b.TurnAt+FestivalSimulation.CupTurnSeconds-b.Seconds)+" s",next=Money(s,p,FestivalSimulation.NextCupPays(b)),pot=Money(s,p,b.Pot);
             string hunch=b.Hint>=0&&!b.Drunk.Contains(b.Hint)?" Your trip says cup "+(b.Hint+1)+"… trips like yours are right "+HunchOdds(FestivalSimulation.HunchReliability(s))+".":"";
