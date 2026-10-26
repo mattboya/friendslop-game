@@ -16,6 +16,8 @@ namespace Festival.Core
         {
             if(State.FestivalIndex!=Festivals.PlayaFestival)return Reject("There are no art-car decks at this festival");
             var ride=Interaction(p.InteractionId);
+            // A joined view shows the plain ride for a moment after F, so a second F can find the set it started.
+            if(ride!=null&&ride.PlayerId==p.Id&&ride.Status=="Active"&&ride.Kind==DeckSetKind)return Reject("Your set is already playing");
             if(ride==null||ride.PlayerId!=p.Id||ride.Status!="Active"||ride.Kind!=RideCarKind||Car(ride)<0)return Reject("Climb aboard an art car first");
             if(!CanPlayDeckSet(State,p))return Reject("Someone's already on this deck");
             // Retiring a plain ride is not a Cancel: it costs no suspicion and spends no pass.
