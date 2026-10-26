@@ -160,7 +160,12 @@ namespace Festival.Presentation
         /// platform then; once its Seats are taken, in the next one round to come down to it, the one that has just gone up, the one
         /// after next, and so on. Those sharing a gondola sit side by side across it. MINI-1: now is on the world's clock (WheelClock), and
         /// so is the platform each boarded at. kept holds the gondola each rider was given, by id, with when they boarded: they keep it
-        /// to the end of that ride, so nobody moves into a seat that a rider ahead of them frees. With no kept, all are seated afresh.</summary>
+        /// to the end of that ride, so nobody moves into a seat that a rider ahead of them frees. With no kept, all are seated afresh.
+        /// A new rider's gondola depends only on boarding times: each kept rider whose turn covers the moment the new one boarded fills
+        /// a seat, even once this view no longer shows them aboard. So the host, seating from a view each tick, and a client, from a
+        /// snapshot each .1 s that can first show a rider after those ahead have stepped off, seat them alike. A kept seat is forgotten
+        /// a whole ride after its turn ends, when nobody still aboard can have boarded during it. A client that joins mid-ride never saw
+        /// those who stepped off before, so it can still seat riders apart from the host (visual only).</summary>
         public static Vector3 Seat(RoundState state,PlayerState rider,double now,Dictionary<string,(double Since,int Gondola)> kept)
         {
             kept??=new Dictionary<string,(double,int)>();
@@ -168,19 +173,28 @@ namespace Festival.Presentation
             aboard.Sort((a,b)=>a.VisualWheelSince!=b.VisualWheelSince?a.VisualWheelSince.CompareTo(b.VisualWheelSince):string.CompareOrdinal(a.Id,b.Id));
             // The world's clock: as a minigame ends it moves VisualWheelSince on by the game's length but leaves this, to within rounding.
             double Boarding(PlayerState p)=>FestivalSimulation.WorldSeconds(state,p.VisualWheelSince);
-            var left=new List<string>();foreach(var pair in kept)if(!aboard.Exists(p=>p.Id==pair.Key&&System.Math.Abs(Boarding(p)-pair.Value.Since)<1e-3))left.Add(pair.Key);
-            foreach(var id in left)kept.Remove(id);
-            var seated=new int[Gondolas];foreach(var pair in kept)seated[pair.Value.Gondola]++;
+            // Also forgotten: a seat from a later clock (an earlier level), and one whose rider is aboard again inside its turn (tests
+            // reuse ids on a clock that goes back).
+            double world=FestivalSimulation.WorldSeconds(state),ride=Festivals.WheelRideSeconds;var stale=new List<string>();
+            foreach(var pair in kept)
+            {
+                var again=aboard.Find(p=>p.Id==pair.Key);double since=pair.Value.Since;
+                if(world>=since+2*ride||since>world+1e-3||again!=null&&Boarding(again)>since+1e-3&&Boarding(again)<since+ride-1e-3)stale.Add(pair.Key);
+            }
+            foreach(var id in stale)kept.Remove(id);
             foreach(var p in aboard)
             {
-                if(kept.ContainsKey(p.Id))continue;
-                double since=Boarding(p);int boarded=Boarded(since),k=boarded;
-                for(int j=1;seated[k]>=Seats&&j<Gondolas;j++)k=(boarded+(j%2==1?(j+1)/2:Gondolas-j/2))%Gondolas;
-                kept[p.Id]=(since,k);seated[k]++;
+                double since=Boarding(p);if(kept.TryGetValue(p.Id,out var mine)&&System.Math.Abs(mine.Since-since)<1e-3)continue;
+                var taken=new int[Gondolas];
+                foreach(var pair in kept)if(pair.Key!=p.Id&&pair.Value.Since<=since+1e-3&&since<pair.Value.Since+ride-1e-3)taken[pair.Value.Gondola]++;
+                int boarded=Boarded(since),k=boarded;
+                for(int j=1;taken[k]>=Seats&&j<Gondolas;j++)k=(boarded+(j%2==1?(j+1)/2:Gondolas-j/2))%Gondolas;
+                kept[p.Id]=(since,k);
             }
-            int gondola=kept[rider.Id].Gondola,place=0;
-            foreach(var p in aboard){if(p.Id==rider.Id)break;if(kept[p.Id].Gondola==gondola)place++;}
-            return new Vector3(Festivals.WheelX+((place+.5f)/seated[gondola]-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
+            // Spread by those aboard: kept still holds riders who have stepped off.
+            int gondola=kept[rider.Id].Gondola,place=0,sharing=0;
+            foreach(var p in aboard)if(kept[p.Id].Gondola==gondola){if(p.Id==rider.Id)place=sharing;sharing++;}
+            return new Vector3(Festivals.WheelX+((place+.5f)/sharing-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
         }
         private static int Boarded(double since)
         {

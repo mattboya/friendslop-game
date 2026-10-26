@@ -219,6 +219,43 @@ namespace Festival.Tests
             Assert.That(moved,Is.Empty,"Riders who change gondola mid-ride:\n"+string.Join("\n",moved));
         }
 
+        // The host seats riders from its view every 1/30 s tick, a joined client from a snapshot every .1 s, each keeping the
+        // gondolas it gave. Two friends fill the platform's gondola; a third boards one to six ticks before their turn ends, at each
+        // phase of the client's snapshots. A client's first snapshot of the third can come after the two have stepped off, yet it
+        // seats the third where the host did: in the next gondola, since the platform's was full when they boarded.
+        [Test]public void TheHostAndAJoinedClientSeatALateRiderInTheSameGondola()
+        {
+            const double Tick=1/30.0,Snapshot=.1,Ride=Festivals.WheelRideSeconds,First=3*Tick;var differ=new List<string>();
+            for(int before=1;before<=6;before++)foreach(int phase in new[]{0,1,2})
+            {
+                double late=First+Ride-before*Tick;var boards=new Dictionary<string,double>{{"a0",First},{"a1",First},{"b",late}};
+                RoundState At(double now)
+                {
+                    var round=new RoundState{Phase="Playing",SimulationSeconds=now};
+                    foreach(var pair in boards)round.Players.Add(new PlayerState{Id=pair.Key,VisualWheelSince=now>=pair.Value-1e-9&&now<pair.Value+Ride-1e-9?pair.Value:-1});
+                    return round;
+                }
+                // The gondola a view gives b the first time it sees b aboard, after seating everyone aboard in every view before.
+                int Watch(List<double> views,Dictionary<string,(double Since,int Gondola)> kept)
+                {
+                    foreach(var now in views)
+                    {
+                        var round=At(now);foreach(var p in round.Players)if(p.VisualWheelSince>=0)FestivalTwistVisuals.Seat(round,p,now,kept);
+                        if(round.Players.Find(p=>p.Id=="b").VisualWheelSince>=0)return kept["b"].Gondola;
+                    }
+                    return -1;
+                }
+                var host=new List<double>();for(int k=0;k*Tick<=late+1;k++)host.Add(k*Tick);
+                var client=new List<double>();for(int k=0;k*Snapshot+phase*Tick<=late+1;k++)client.Add(System.Math.Floor((k*Snapshot+phase*Tick)/Tick+1e-9)*Tick);
+                var onHostSeats=new Dictionary<string,(double Since,int Gondola)>();
+                int onHost=Watch(host,onHostSeats),onClient=Watch(client,new Dictionary<string,(double Since,int Gondola)>());
+                Assert.That(onHost,Is.GreaterThanOrEqualTo(0),"setup: the host sees b aboard");
+                Assert.That(onHost,Is.Not.EqualTo(onHostSeats["a0"].Gondola),"the host seats b, boarding "+before+" tick(s) before a0 and a1 step off, apart from them");
+                if(onHost!=onClient)differ.Add("b boards "+before+" tick(s) before a0 and a1 step off, snapshot phase "+phase+": host gondola "+onHost+", client gondola "+onClient);
+            }
+            Assert.That(differ,Is.Empty,"A late rider in different gondolas on the host and on a joined client:\n"+string.Join("\n",differ));
+        }
+
         // The widest seated body at full size, from either side: shape 2's accessory 1 reaches .56 m out from its middle (measured
         // over 240 looks), so two of them side by side need 1.12 m between their middles.
         private const float SeatedWidth=1.12f;
