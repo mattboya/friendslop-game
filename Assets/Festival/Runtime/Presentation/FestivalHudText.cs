@@ -434,6 +434,18 @@ namespace Festival.Presentation
 
         /// <summary>ESC-2: the cop stopping p over visible stock, or null. A view shows a cop's real mode only to the player it targets.</summary>
         public static NpcState StoppedBy(RoundState s,PlayerState p)=>s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="Stop");
+        /// <summary>ESC-3: whether G ditches stock for p now, as the host's Drop takes it in a stop: with nothing under way, or mid chat
+        /// (FestivalSimulation.UntimedChat). Never mid-talk with the guard, mid-dance (G stops it) or up on the Ferris wheel.</summary>
+        public static bool DitchesOnG(RoundState s,PlayerState p)=>StoppedBy(s,p)!=null&&(p.InteractionId==""||FestivalSimulation.UntimedChat(s.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")));
+        /// <summary>ESC-3: the stop's line mid-talk with the guard who stopped you (no TALK key to press), and up on the Ferris wheel,
+        /// where the stop's clock waits for you (FestivalSimulation.Pursue).</summary>
+        public const string StopTalking="SECURITY STOP • TALKING",StopOnWheel="SECURITY STOP • GUARD WAITING BELOW";
+        static string StopLine(RoundState s,PlayerState p,NpcState stopper,string talk,string ditch)
+        {
+            if(FestivalSimulation.OnWheel(s,p.Id))return StopOnWheel;
+            var doing=s.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active");
+            return doing!=null&&doing.Kind=="Police"&&doing.TargetId==stopper.Id?StopTalking:"SECURITY STOP • TALK ("+talk+") • DITCH IT ("+ditch+") • OR WALK AWAY";
+        }
         /// <summary>ESC-2: the session notice as security stops you: why, the three ways out, and what ignoring it costs.</summary>
         public static readonly string StopNotice="SECURITY SAW YOUR STOCK: talk, ditch it or walk away within "+FestivalSimulation.StopArrestSeconds+" s, or you're arrested";
         /// <summary>TRIP-8: the session notice for whoever finds the cloud's stash (RoundState.CloudStashFinderId), in dollars like the
@@ -555,7 +567,8 @@ namespace Festival.Presentation
             // alert, so ON CAMERA leads the storm line, joined as one warning; the two above still take the whole line.
             bool arrest=s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
             string storm=FestivalWorld.ShowsFestival(s.Phase)&&p.Life=="Alive"&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"";
-            string warning=arrest?"ARREST WARNING":StoppedBy(s,p)!=null?"SECURITY STOP • TALK ("+talk+") • DITCH IT ("+ditch+") • OR WALK AWAY"
+            var stopper=StoppedBy(s,p);
+            string warning=arrest?"ARREST WARNING":stopper!=null?StopLine(s,p,stopper,talk,ditch)
                 :p.VisualFilmedBy.Count>0?(storm==""?"ON CAMERA":"ON CAMERA • "+storm):storm;
             if(p.Effects.Count==0)return warning;
             string effects=Catalog.EffectsLine(p.Effects).ToUpperInvariant();

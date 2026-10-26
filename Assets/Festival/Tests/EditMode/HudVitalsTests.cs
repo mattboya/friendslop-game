@@ -45,6 +45,33 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.Condition(s,you),Is.Empty,"and a patrol alone is nothing to report");
         }
 
+        // ESC-3: the stop's line says only what works. Mid-talk with the guard who stopped you it says you're talking, with no
+        // TALK (E) to press; up on the Ferris wheel, where the stop waits for you, it says the guard waits below. G ditches stock in
+        // a stop, mid chat too, but not mid-talk with the guard, mid-dance or up on the wheel.
+        [Test] public void TheStopLineSaysOnlyWhatWorks()
+        {
+            var s=new RoundState{Phase="Playing"};var you=new PlayerState{Id="you",Name="You"};s.Players.Add(you);
+            var stopper=new NpcState{Id="cop_0",Kind="Cop",Mode="Stop",TargetId="you"};s.Npcs.Add(stopper);
+            void Doing(string kind,string target){s.Interactions.Clear();you.InteractionId="";if(kind=="")return;you.InteractionId="i_"+kind;s.Interactions.Add(new InteractionState{Id=you.InteractionId,PlayerId="you",Kind=kind,TargetId=target,Status="Active"});}
+            Assert.That(FestivalHudText.DitchesOnG(s,you),Is.True,"a stop with nothing under way: G ditches");
+            Doing("Police","cop_0");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP • TALKING"),"mid-talk with the guard who stopped you");
+            Assert.That(FestivalHudText.Condition(s,you),Does.Not.Contain("TALK ("),"no TALK key to press mid-talk");
+            Assert.That(FestivalHudText.DitchesOnG(s,you),Is.False,"nor G, mid-talk with the guard");
+            Doing("Police","cop_1");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"a talk with another guard leaves the stop's ways out");
+            Doing(FestivalSimulation.RideWheelKind,"wheel");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo("SECURITY STOP • GUARD WAITING BELOW"),"up on the Ferris wheel the stop waits");
+            Assert.That(FestivalHudText.DitchesOnG(s,you),Is.False,"and G does nothing up there");
+            Doing("ConfirmChat","seen");
+            Assert.That(FestivalHudText.Condition(s,you),Is.EqualTo(Stop),"mid chat check the stop's ways out stand");
+            Assert.That(FestivalHudText.DitchesOnG(s,you),Is.True,"and G ditches, as the line says");
+            Doing("Dance","seen");
+            Assert.That(FestivalHudText.DitchesOnG(s,you),Is.False,"mid-dance G stops the dance instead");
+            Doing("",null);stopper.Mode="Patrol";
+            Assert.That(FestivalHudText.DitchesOnG(s,you),Is.False,"no stop, no ditch");
+        }
+
         // HUD-5: a festivalgoer swarming you lunges for 20 HP a hit. The threat bar says so (SWARMING, full) while a cop stopping
         // you over visible stock keeps the warning line, so both show at once. Only a swarm on you counts (a view shows a festivalgoer's
         // real mode only to the player it targets): one on a friend, or one a distraction has broken off, reads by suspicion alone.

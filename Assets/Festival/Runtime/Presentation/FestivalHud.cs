@@ -1421,7 +1421,7 @@ namespace Festival.Presentation
             HoldToStop(dancing&&!DropCovered()&&rhythmFocused?session.Controls.Drop:null);
             if(dropTap&&!DropCovered()&&checkoutItem!=""){checkoutItem="";return;}
             if(dropTap&&!DropCovered()&&state.Phase=="Shopping"&&player.HeldOfferId!=""){session.Command("ReturnOffer");return;}
-            if(dropTap&&!DropCovered()&&gearKeys&&player.InteractionId==""&&FestivalHudText.StoppedBy(state,player)!=null)
+            if(dropTap&&!DropCovered()&&gearKeys&&FestivalHudText.DitchesOnG(state,player))
             {
                 var stock=player.Inventory.Find(i=>i.Count>0&&Catalog.FindItem(i.ItemId)?.Category=="Stock");
                 if(stock!=null)session.Command("Drop",item:stock.ItemId);
