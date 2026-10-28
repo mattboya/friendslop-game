@@ -69,10 +69,15 @@ namespace Festival.Core
         /// <summary>HUD-4: whether players can act in this phase: at camp shopping and at the festival. The host refuses any other
         /// action as "Round is not interactive", and the HUD offers none then (the wheels spinning, the festival loading).</summary>
         public static bool Interactive(string phase)=>phase=="Playing"||phase=="Shopping";
+        /// <summary>A Cancel's Direction when the HUD sends it from the lanes: it stops only what is still on them.</summary>
+        public const int LanesStop=1;
         CommandResult Apply(PlayerState p,GameCommand c) {
             // PLAYA-8: a joined view lags the host, so a Cancel can name an interaction that has already ended or been replaced
             // (F turns a plain ride into a deck set). Refuse it at no cost. A Cancel that names nothing keeps its old meaning.
             if(c.Kind=="Cancel"&&c.TargetId!=""&&c.TargetId!=p.InteractionId)return Reject("That action already ended");
+            // A trust dance becomes its talk on the same interaction, so a stop sent from the dance can arrive after it, where it would
+            // walk off the talk at a pushed ask's cost.
+            if(c.Kind=="Cancel"&&c.Direction==LanesStop&&!(Interaction(p.InteractionId) is InteractionState on&&on.Status=="Active"&&IsRhythm(on)))return Reject("That action already ended");
             if(State.Phase==MinigamePhase)return Paused(p,c);
             if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");ReleaseCampSeat(p.Id);p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
             if(c.Kind=="Start") {

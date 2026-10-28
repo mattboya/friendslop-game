@@ -181,6 +181,10 @@ namespace Festival.Network
         // a handed-back last unit returns to it; it reaches only the seller's own view, and a version-10 client ignores it.
         // 12: wave 2026-10-28 starts a new semantic boundary; version-11 peers are rejected.
         // Subsequent units append only the version-12 changes they actually land.
+        // ECON-15: a Cancel whose Direction is FestivalSimulation.LanesStop (1) was sent from the lanes (a held G, or a stop while the
+        // view shows a dance); the host refuses it as 'That action already ended' unless the sender's interaction is still on the
+        // lanes, so a stop from a trust dance that arrives after the dance never walks off its talk. A version-11 host would take it
+        // as a walk-off.
         public const int ProtocolVersion=12;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();

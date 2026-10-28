@@ -28,7 +28,7 @@ public static class ConversationTests
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
             AWorkedUpFestivalgoerWontTalkOrDance,AFestivalgoerWorkedUpMidTalkEndsIt,AFlopWorksNoOneUpForTheTalkItLeadsTo,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
-            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,AFailedTrustDanceIsNotAFailedAsk,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
+            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,AFailedTrustDanceIsNotAFailedAsk,AStopFromTheDanceNeverWalksOffItsTalk,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -806,6 +806,38 @@ public static class ConversationTests
             string fair=After(FestivalSimulation.FairAsk),greedy=After(FestivalSimulation.GreedyAsk);
             Check(greedy==fair,(cancel?"calling it off in the dance":"a missed dance")+" at Greedy leaves them as at Fair ("+fair+"), got "+greedy);
         }
+    }
+
+    // A joined seller's stop of the trust dance can reach the host after the dance became its talk on the same interaction. Sent from
+    // the lanes, it calls the sale off inside the dance at no ask cost, and after it the host refuses it. A plain Cancel still walks off.
+    static void AStopFromTheDanceNeverWalksOffItsTalk()
+    {
+        foreach(int ask in new[]{FestivalSimulation.FairAsk,FestivalSimulation.GreedyAsk})
+            foreach(string when in new[]{"in the dance","after the dance","plain, after the dance"})
+            {
+                var s=Pair("Sale");var buyer=Partner(s);buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+                var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+                var i=Sale(s,ask);Check(i.TrustDance&&i.WitnessIds.Contains("watcher"),"setup: they ask for a watched dance first");
+                if(when!="in the dance")for(int guard=0;FestivalSimulation.TrustDancing(i)&&guard<300;guard++)s.Tick(.05);
+                Check(FestivalSimulation.TrustDancing(i)==(when=="in the dance")&&i.Status=="Active","setup: "+when+" ("+i.Turns.Count+" turns)");
+                var p=s.Player("p0");double Of(NpcState n)=>n.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+                double heard=Of(buyer),seen=Of(watcher);int outcomes=p.ConversationOutcomes.Count;
+                var stop=Act(s,"p0","Cancel",i.Id,direction:when=="plain, after the dance"?0:FestivalSimulation.LanesStop);
+                string at="ask "+ask+", "+when+": ";
+                if(when=="after the dance")
+                {
+                    Check(!stop.Accepted&&stop.Reason=="That action already ended",at+"the host refuses the stop, got "+stop.Accepted+" '"+stop.Reason+"'");
+                    Check(i.Status=="Active"&&p.InteractionId==i.Id&&i.Turns.Count==1,at+"the talk goes on at its first turn ("+i.Status+")");
+                    Check(Of(buyer)==heard&&Of(watcher)==seen&&!buyer.Observers[0].RefusesSales,at+"no one grows more suspicious and the buyer still hears you, got buyer "+heard+" -> "+Of(buyer)+", watcher "+seen+" -> "+Of(watcher));
+                    Check(p.ConversationOutcomes.Count==outcomes&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),at+"no outcome, and the unit stays offered");
+                }
+                else
+                {
+                    Check(stop.Accepted&&i.Status=="Cancelled",at+"the stop ends the sale ("+stop.Reason+")");
+                    bool pushed=when!="in the dance"&&ask==FestivalSimulation.GreedyAsk;
+                    Check(Of(buyer)==Math.Min(100,heard+20+(pushed?30:0))&&buyer.Observers[0].RefusesSales==pushed,at+"the walk-off costs "+(pushed?"the talk's 20 and the ask's 30":"the talk's 20 only")+", up to 100, got "+heard+" -> "+Of(buyer));
+                }
+            }
     }
 
     // A snapshot keeps a sale's ask; one from before asks restores it as Fair, and an ask outside Fair to Greedy is refused.
