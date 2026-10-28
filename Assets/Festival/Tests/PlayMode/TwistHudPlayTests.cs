@@ -169,8 +169,9 @@ namespace Festival.Tests
 
                 // POLO-5 (Matt: "the player never goes into it"): halfway round, your eye is up in the gondola the wheel draws, and
                 // Sam sits beside you in it rather than standing or striding in the air. The turn is moved on by starting both rides
-                // earlier. The serialized boarding time must stay nonnegative, including after an explicitly ended short chat.
-                void Started(double ago){if(sim.State.SimulationSeconds<ago+1)sim.Tick(ago+1-sim.State.SimulationSeconds);foreach(var i in sim.State.Interactions)if(i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")i.StartSeconds=sim.State.SimulationSeconds-ago;}
+                // earlier, in the gondola at the platform then. The serialized boarding time must stay nonnegative, including after an
+                // explicitly ended short chat.
+                void Started(double ago){if(sim.State.SimulationSeconds<ago+1)sim.Tick(ago+1-sim.State.SimulationSeconds);foreach(var i in sim.State.Interactions)if(i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active"){i.StartSeconds=sim.State.SimulationSeconds-ago;i.TargetId=FestivalSimulation.PlatformGondola(FestivalSimulation.WorldSeconds(sim.State,i.StartSeconds)).ToString();}}
                 Started(Festivals.WheelRideSeconds/2);
                 var sam=GameObject.Find(mate.Id);
                 yield return new WaitForSeconds(.5f);
