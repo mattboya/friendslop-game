@@ -84,15 +84,19 @@ public static class MoneyGuardTests
         new[]{"Weekend.cs","after.Inventory=before.Inventory","nobody: the next level carries gear over unchanged"},
         new[]{"Weekend.cs","stash.Items.RemoveAll(x=>x.ItemId==GiggleTankItem)","crew: 'STASH  •  −1 Giggle Tank  •  tanks never leave the level'"},
     };
-    // Cash, StashCash and LevelSales writes anywhere in Core, by any assignment operator or ++/-- either side; the inventory helpers
-    // (Add/Take) in Simulation, whatever their arguments; carried items, wristbands and stash items changing in place, any stack's
-    // Count included (List.Count is read-only, so each write is an ItemStack's); and a drop leaving the ground (a pickup, or
-    // security taking ditched stock).
-    static readonly Regex Money=new Regex(@"[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)\s*(?:[-+*/%&|^]=|<<=|>>=|\?\?=|=(?!=)|\+\+|--)[^;{}]*|(?:\+\+|--)\s*(?:[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)|\w+\.Count)\b");
-    static readonly Regex Helper=new Regex(@"(?<![\w.])(?:Take|Add)\((?!PlayerState)(?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)");
-    static readonly Regex Lists=new Regex(@"[\w.]*\.(?:Inventory|Wristbands|Items)\.(?:Add|Remove|RemoveAll|Clear|Insert)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[\w.]*\.Drops\.(?:Remove|RemoveAll|Clear)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)|[\w.]*\.Inventory\s*=(?!=)[^;{}]*|\b\w+\.Count\s*(?:[-+*/]=|\+\+|--|=(?!=))[^;{}]*");
-    // Known limit: a string literal that holds ";//" hides the rest of its line from the scan.
-    static readonly Regex Comments=new Regex(@"/\*[\s\S]*?\*/|^\s*//.*$|(?<=[;{})])\s*//.*$",RegexOptions.Multiline);
+    // Cash, StashCash and LevelSales writes anywhere in Core, by any assignment operator or ++/-- either side, or in a tuple;
+    // the inventory helpers (Add/Take) in Simulation, whatever their arguments; carried items, wristbands and stash items changing
+    // in place by any List method that adds or removes, or by an indexer set; any stack's Count, however it is reached (List.Count
+    // is read-only, so each write is an ItemStack's); and a drop leaving the ground (a pickup, or security taking ditched stock).
+    // Args is one balanced (...) at any depth (.NET balancing groups); Member is a member path with indexers and calls in it.
+    const string Args=@"\((?>[^()]+|\((?<d>)|\)(?<-d>))*(?(d)(?!))\)",Member=@"(?:[\w.\[\]]|"+Args+@"(?=\.))*";
+    static readonly Regex Money=new Regex(@"[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)\s*(?:[-+*/%&|^]=|<<=|>>=|\?\?=|=(?!=)|\+\+|--)[^;{}]*|(?:\+\+|--)\s*(?:[\w.\[\]]*\.(?:Cash|StashCash|LevelSales)|"+Member+@"\.Count)\b|\([^()]*\.(?:Cash|StashCash|LevelSales|Count)\b[^()]*\)\s*=(?![=>])[^;{}]*");
+    static readonly Regex Helper=new Regex(@"(?<![\w.])(?:Take|Add)\s*(?!\(\s*PlayerState\b)"+Args);
+    static readonly Regex Lists=new Regex(@"[\w.\[\]]*\.(?:Inventory|Wristbands|Items)\.(?:Add|AddRange|Insert|InsertRange|Remove|RemoveAt|RemoveAll|RemoveRange|Clear)\s*"+Args
+        +@"|[\w.\[\]]*\.Drops\.(?:Remove|RemoveAt|RemoveAll|RemoveRange|Clear)\s*"+Args
+        +@"|[\w.\[\]]*\.(?:Inventory|Wristbands|Items|Drops)(?:\[[^\]]*\])?\s*=(?![=>])[^;{}]*|"+Member+@"\.Count\s*(?:[-+*/]=|\+\+|--|=(?!=))[^;{}]*");
+    // Strings and chars stay (an amount's text, an item id); comments go, wherever they start.
+    static readonly Regex Comments=new Regex(@"@""(?:[^""]|"""")*""|""(?:[^""\\\n]|\\.)*""|'(?:[^'\\\n]|\\.)+'|/\*[\s\S]*?\*/|//.*");
     public static void Run()
     {
         ScanFindsEachKindOfWrite();
@@ -112,6 +116,17 @@ public static class MoneyGuardTests
         expected=new[]{"State.StashCash/=2","p.Cash*=2","p.Cash%=3","++p.Cash","--State.LevelSales","s.Count+=count","stack.Count--","s.Count=0","++s.Count","Add(p,SellerStock(i.TargetId),1)","Take(p,FirstStock(p),1)"};
         Check(string.Join(" | ",found)==string.Join(" | ",expected),"the scan finds every form of write once, got: "+string.Join(" | ",found));
         Check(Scan("Assets/Festival/Runtime/Core/Content/X.cs","Add(chart,beat,0,lane,beatSeconds);").Count==0,"Add/Take outside Simulation are not the inventory helpers");
+        // Any List method that adds or removes, an indexer set, a stack's Count reached through an indexer or a Find, a tuple
+        // write, a space before a helper's parenthesis, and helper arguments nested three deep.
+        source="void Z(PlayerState p){p.Inventory.RemoveAt(0);p.Inventory[0].Count--;p.Inventory.Find(x=>Stock(x.ItemId)).Count-=1;(p.Cash,State.StashCash)=(p.Cash-1,State.StashCash+1);p.Wristbands.RemoveAt(0);p.Inventory.AddRange(new List<ItemStack>{new ItemStack{ItemId=\"x\",Count=1}});State.Drops.RemoveAt(0);p.Inventory[0]=new ItemStack{ItemId=\"x\",Count=9};State.Stashes[0].Items.RemoveAt(0);p.Inventory.RemoveRange(0,1);Take (p,\"medical_voucher\",1);Add(p,String.Concat(String.Concat(String.Concat(\"stock_\",\"lsd\"))),1);State.Stashes[0].Items.Find(x=>x.Count>0).Count--;}";
+        found=Scan("Assets/Festival/Runtime/Core/Simulation/Z.cs",source);
+        expected=new[]{"p.Inventory.RemoveAt(0)","p.Inventory[0].Count--","p.Inventory.Find(x=>Stock(x.ItemId)).Count-=1","(p.Cash,State.StashCash)=(p.Cash-1,State.StashCash+1)","p.Wristbands.RemoveAt(0)","p.Inventory.AddRange(newList<ItemStack>{newItemStack{ItemId=\"x\",Count=1}})","State.Drops.RemoveAt(0)","p.Inventory[0]=newItemStack","State.Stashes[0].Items.RemoveAt(0)","p.Inventory.RemoveRange(0,1)","Take(p,\"medical_voucher\",1)","Add(p,String.Concat(String.Concat(String.Concat(\"stock_\",\"lsd\"))),1)","State.Stashes[0].Items.Find(x=>x.Count>0).Count--"};
+        Check(string.Join(" | ",found)==string.Join(" | ",expected),"the scan finds each of the thirteen forms once, got: "+string.Join(" | ",found));
+        // A string or a char that holds // or quotes is not a comment, and code after it is scanned; a comment after any token is.
+        source="void W(PlayerState p){string s=\"a;//b\";p.Cash+=1;char q='\"';p.Cash-=2;var u=\"http://x\";State.StashCash+=3;Log(a, // p.Cash+=9;\n b);}";
+        found=Scan("Assets/Festival/Runtime/Core/Simulation/W.cs",source);
+        expected=new[]{"p.Cash+=1","p.Cash-=2","State.StashCash+=3"};
+        Check(string.Join(" | ",found)==string.Join(" | ",expected),"strings and chars are not comments, got: "+string.Join(" | ",found));
     }
     static void EveryCoreWriteIsAnnounced()
     {
@@ -131,7 +146,7 @@ public static class MoneyGuardTests
     // Every write in one file's source, whitespace removed, in source order.
     static List<string> Scan(string path,string source)
     {
-        string code=Comments.Replace(source,"");
+        string code=Comments.Replace(source,m=>m.Value[0]=='/'?"":m.Value);
         var hits=new List<(int At,string Text)>();
         foreach(Match m in Money.Matches(code))hits.Add((m.Index,m.Value));
         foreach(Match m in Lists.Matches(code))hits.Add((m.Index,m.Value));
