@@ -209,11 +209,13 @@ public static class LineGrammarTests
     static readonly HashSet<string> SmallWords=new HashSet<string>{"the","and","you","for","are","but","not","all","was","can","got","get","now","one","out","how","who","its","his","her","our","too"};
 
     // Each talk's last line fits the replies that answer it. A buyer's or a seller's asks whether you have a deal, as
-    // the talk has not settled it yet; security's says where things stand, for a goodbye to answer, and asks nothing.
+    // the talk has not settled it yet, and never to be persuaded, as every reply signs the deal off; security's says where things stand, for a goodbye to answer, and asks nothing.
     static void EachTalksLastLineFitsItsReplies()
     {
         var faults=new List<string>();
         foreach(var kind in new[]{"line.sale.close","line.buy.close"})foreach(var line in ConversationLines.Parts[kind])if(!line.EndsWith("?",StringComparison.Ordinal))faults.Add(kind+" doesn't ask: \""+line+"\"");
+        foreach(var kind in new[]{"line.sale.close","line.buy.close"})foreach(var line in ConversationLines.Parts[kind])
+            if(new[]{"convince","why should","persuade"}.Any(ask=>line.IndexOf(ask,StringComparison.OrdinalIgnoreCase)>=0))faults.Add(kind+" asks to be persuaded: \""+line+"\"");
         foreach(var line in ConversationLines.Parts["line.security.close"])
             if(line.Contains("?")||new[]{"question","answer","reason","tell me"}.Any(ask=>line.IndexOf(ask,StringComparison.OrdinalIgnoreCase)>=0))faults.Add("line.security.close asks for an answer: \""+line+"\"");
         Check(faults.Count==0,faults.Count+" last line(s) don't fit their replies:\n  "+string.Join("\n  ",faults));

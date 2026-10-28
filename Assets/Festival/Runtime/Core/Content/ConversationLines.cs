@@ -341,7 +341,7 @@ namespace Festival.Core
                 "{friend} said someone around here was friendly.","Busy out here. Good cover, I guess.","I've had {snack}. Now I want something better.",
                 "You've got that look. Like you know things.","Is it always this loud by {landmark}?"},
             // Their last line asks whether there's a deal: the talk settles it, so it never agrees before the score is in.
-            ["line.sale.close"]=new[]{"So, what do you say?","Well? Are we doing this or not?","Alright. Can you convince me, then?",
+            ["line.sale.close"]=new[]{"So, what do you say?","Well? Are we doing this or not?","Alright. Do we have a deal?",
                 "Before {stranger} looks over: yes or no?","Okay. Do we do this during {song}?","Last chance. Is it worth it?",
                 "So where does that leave us?","So, are we doing this or what?"},
             // Buying from a seller: an opening, sizing each other up, the ask, sealing it.
@@ -380,7 +380,7 @@ namespace Festival.Core
                 "You seem alright. Tell me about yourself.","Hm. You look like you can keep a secret."},
             ["line.buy.close"]=new[]{"So. Still want one?","Alright. What's it going to be?","Hm. Can I trust you with one?",
                 "Okay. Are we doing this quietly?","Right then. Yes or no?","Last thing: you won't make a scene, right?",
-                "So, are we doing this?","Okay. Why should I sell to you?"},
+                "So, are we doing this?","Okay. Deal or no deal?"},
             // Answering to security: a hello, small talk, your story, signing off.
             ["security.greet.cosmic"]=new[]{"Hello, guardian. Your aura is very official.","Hey. I come in peace, like a leaf.","Hi. Did the stars send you to me?",
                 "Greetings, protector of the vibes.","Whoa, hi. Your badge is so shiny.","Hello. I feel a lot of tension. Breathe?"},
