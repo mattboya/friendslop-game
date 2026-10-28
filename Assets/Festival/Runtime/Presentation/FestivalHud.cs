@@ -925,6 +925,10 @@ namespace Festival.Presentation
             // light (the session drives the world only while connected), and the settings put away so the title shows why it ended.
             if(wasConnected&&!session.Connected){settingsOpen=false;if(world!=null)world.ShowCamp();}
             wasConnected=session.Connected;
+            // A click in the open list, or E, clears the notice with its accepted reply: a money line still due goes back before the
+            // notice and the list's heading read the clear.
+            if(session.State!=null&&session.LocalPlayer!=null)moneyNews.Follow(session.State,session.LocalPlayer,session.ConnectionGeneration);
+            string heldLine=moneyNews.Watch(session.Message,Time.unscaledTime);if(heldLine!=null)session.SetMessage(heldLine);
             // The host's replies name money in dollars; each player reads their own (PLAYA-1).
             string message=session.State!=null&&session.LocalPlayer!=null?FestivalHudText.MoneyText(session.State,session.LocalPlayer,session.Message):session.Message;
             var keys=session.Controls;
@@ -1044,8 +1048,6 @@ namespace Festival.Presentation
             // that: a reply from the same step (a narc's bust, a buy's price) must stay readable. The death reel's gear notice writes the
             // notice text itself for its 5 s, so a queued line waits for it rather than being hidden under it. The open list's heading
             // reads the line, so it comes under the pass while the list is up.
-            moneyNews.Follow(state,player,session.ConnectionGeneration);
-            moneyNews.Watch(session.Message,Time.unscaledTime);
             if(session.Message!=moneyLineSeen){moneyLineSeen=session.Message;moneyLineSeenAt=Time.unscaledTime;}
             bool freshLine=!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<moneyLineSeenAt+FestivalHudText.MoneyNewsSeconds;
             if((uncovered||actionsPanel.activeSelf)&&gearLossNotice==""&&!freshLine&&Time.unscaledTime>=moneyNoticeAt)

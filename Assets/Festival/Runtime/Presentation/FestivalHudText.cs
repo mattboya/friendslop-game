@@ -531,13 +531,15 @@ namespace Festival.Presentation
                 line=due[0];due.RemoveAt(0);lineUntil=now+MoneyNewsSeconds;return line;
             }
             /// <summary>Reads the notice line each frame. When another line replaces the notice Take gave before its MoneyNewsSeconds
-            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) alone gives nothing back.</summary>
-            public void Watch(string message,float now)
+            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) before that end returns
+            /// the notice's text to put straight back; null otherwise.</summary>
+            public string Watch(string message,float now)
             {
+                if(line==null||message==line.Text)return null;
                 // A clear keeps the watch: a 1-3 reply key, or a client's result, clears the line a frame before the sale's notice.
-                if(line==null||message==line.Text||string.IsNullOrEmpty(message))return;
+                if(string.IsNullOrEmpty(message))return now<lineUntil?line.Text:null;
                 if(now<lineUntil)due.Insert(0,line);
-                line=null;
+                line=null;return null;
             }
         }
         /// <summary>The life banner's headings: as you become a spirit, and as a revival brings you back.</summary>

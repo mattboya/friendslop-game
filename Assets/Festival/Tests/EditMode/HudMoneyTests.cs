@@ -171,8 +171,8 @@ namespace Festival.Tests
             news.Follow(game.State,ash,2);Assert.That(news.Take(0)?.Text,Is.EqualTo("GIGGLE TANK LOST"),"a new level's news is all new, the loss its start made included");
         }
         // A money line that another line replaces inside its MoneyNewsSeconds comes back before the rest of the queue. A line that had
-        // its slot does not. A clear (your last reply's key) followed by another line inside the slot brings it back; a clear alone
-        // does not. A new level forgets it.
+        // its slot does not. A clear (an accepted reply) inside the slot gives the line straight back to the notice, and one after it
+        // does not. A clear followed by another line inside the slot brings it back. A new level forgets it.
         [Test] public void AMoneyLineCutShortComesBackFirst()
         {
             var game=Hosted(0);var ash=game.Player("ash");var news=new FestivalHudText.MoneyNewsFollower();news.Follow(game.State,ash,1);
@@ -184,9 +184,12 @@ namespace Festival.Tests
             Assert.That(news.Take(12.9f)?.Text,Is.EqualTo(Friend),"the friend's line cut at .4 s shows again, before the stash line");
             news.Watch(Friend,13f);news.Watch(Sold,12.9f+FestivalHudText.MoneyNewsSeconds+.1f);
             Assert.That(news.Take(16)?.Text,Is.EqualTo(Stash),"a line that had its slot does not show again");
-            news.Watch("",16.5f);news.Watch(Sold,16.6f);
+            Assert.That(news.Watch("",16.5f),Is.EqualTo(Stash),"an accepted reply's clear inside the slot gives the line straight back");
+            news.Watch(Sold,16.6f);
             Assert.That(news.Take(19)?.Text,Is.EqualTo(Stash),"a line cleared by your last reply's key and then cut by your sale shows again");
-            news.Watch("",19.5f);news.Watch(Sold,19+FestivalHudText.MoneyNewsSeconds+.1f);
+            news.Watch("",19.5f);
+            Assert.That(news.Watch("",19+FestivalHudText.MoneyNewsSeconds+.05f),Is.Null,"a clear after the slot gives nothing back");
+            news.Watch(Sold,19+FestivalHudText.MoneyNewsSeconds+.1f);
             Assert.That(news.Take(23),Is.Null,"a clear with no other line inside the slot is not another line");
             Log(Friend);Assert.That(news.Take(24)?.Text,Is.EqualTo(Friend),"setup: the line is up");
             game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();news.Follow(game.State,ash,1);news.Watch(Sold,24.4f);

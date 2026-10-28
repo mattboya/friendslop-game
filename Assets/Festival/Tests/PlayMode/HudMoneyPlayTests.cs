@@ -389,8 +389,9 @@ namespace Festival.Tests
         }
 
         // Esc opens the menu on the CREW + NEARBY list. A deposit clicked there keeps it open, and the list's heading reads
-        // the deposit's line with its amount, since the notice line hides under the pass; a withdrawal's line follows it. A dance
-        // clicked there shuts the menu, so the dance has your keys.
+        // the deposit's line with its amount, since the notice line hides under the pass. A withdrawal clicked .3 s later follows
+        // it: its accepted reply clears the notice, yet each line holds the heading for its time. A dance clicked there shuts the
+        // menu, so the dance has your keys.
         [UnityTest]public IEnumerator TheMenusListStaysOpenForADepositAndReadsItsLine()
         {
             UseAVirtualKeyboard("Menu list keyboard");
@@ -412,17 +413,25 @@ namespace Festival.Tests
                 yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
                 Assert.That(session.MenuOpen,Is.True,"setup: Esc opens the menu");
                 Assert.That(Heading(),Is.EqualTo("NEARBY / CREW"),"setup: the list's heading");
-                foreach(var (label,line,cash) in new[]{("Deposit $5 in shared stash","INTO THE STASH  •  −$5",35),("Withdraw $5 from shared stash","FROM THE STASH  •  +$5",40)})
+                const string Deposited="INTO THE STASH  •  −$5",Withdrawn="FROM THE STASH  •  +$5";
+                float depositedFor=0,withdrawnFor=0,start=Time.realtimeSinceStartup;string last=null;var timeline=new List<string>();
+                void Note()
                 {
-                    var row=Row(label);for(float end=Time.realtimeSinceStartup+1;row==null&&Time.realtimeSinceStartup<end;){yield return null;row=Row(label);}
+                    string h=Heading();if(h==Deposited)depositedFor+=Time.unscaledDeltaTime;else if(h==Withdrawn)withdrawnFor+=Time.unscaledDeltaTime;
+                    if(h!=last){last=h;timeline.Add((Time.realtimeSinceStartup-start).ToString("0.00")+"s "+h);}
+                }
+                foreach(var (label,cash) in new[]{("Deposit $5 in shared stash",35),("Withdraw $5 from shared stash",40)})
+                {
+                    var row=Row(label);for(float end=Time.realtimeSinceStartup+1;row==null&&Time.realtimeSinceStartup<end;){yield return null;Note();row=Row(label);}
                     Assert.That(row,Is.Not.Null,"the list offers \""+label+"\" (listed: \""+Listed()+"\")");
                     row.onClick.Invoke();
-                    string heading=Heading();
-                    for(float end=Time.realtimeSinceStartup+FestivalHudText.MoneyNewsSeconds+1;heading!=line&&Time.realtimeSinceStartup<end;){yield return null;heading=Heading();}
-                    Assert.That(session.MenuOpen,Is.True,label+" keeps the menu open");
                     Assert.That(player.Cash,Is.EqualTo(cash),"setup: "+label+" moved your cash");
-                    Assert.That(heading,Is.EqualTo(line),"the list's heading reads what "+label+" did");
+                    for(float end=Time.realtimeSinceStartup+.3f;Time.realtimeSinceStartup<end;){yield return null;Note();}
+                    Assert.That(session.MenuOpen,Is.True,label+" keeps the menu open");
                 }
+                for(float end=Time.realtimeSinceStartup+2*FestivalHudText.MoneyNewsSeconds;Time.realtimeSinceStartup<end;){yield return null;Note();}
+                Assert.That(depositedFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"the deposit's line holds the list's heading: "+string.Join(" -> ",timeline));
+                Assert.That(withdrawnFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"the withdrawal's line follows it: "+string.Join(" -> ",timeline));
                 var dance=Row("Dance with festivalgoer");Assert.That(dance,Is.Not.Null,"the list offers the dance (listed: \""+Listed()+"\")");
                 dance.onClick.Invoke();yield return null;
                 Assert.That(session.MenuOpen,Is.False,"a dance shuts the menu");
