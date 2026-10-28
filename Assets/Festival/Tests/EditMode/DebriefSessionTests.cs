@@ -69,9 +69,9 @@ namespace Festival.Tests
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":3}"),Is.False,"a client with the 7% dose sliver is told its version is incompatible");
         }
 
-        [Test] public void ThisBuildAdvertisesTheVersionElevenBoundary()
+        [Test] public void ThisBuildAdvertisesTheVersionTwelveBoundary()
         {
-            Assert.That(FestivalSession.ProtocolVersion,Is.EqualTo(11),"the new semantic boundary is version 11");
+            Assert.That(FestivalSession.ProtocolVersion,Is.EqualTo(12),"the new semantic boundary is version 12");
         }
 
         [Test] public void ACheckpointVersionSixBuildCannotJoin()
@@ -99,9 +99,14 @@ namespace Festival.Tests
             Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":10}"),Is.False,"a version 10 peer shows other players the grade of every reply and plays the old music radius");
         }
 
-        [Test] public void AVersionElevenBuildCanJoin()
+        [Test] public void AVersionElevenBuildCannotJoin()
         {
-            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Current\",\"Token\":\"\",\"Protocol\":11}"),Is.True,"version 11 peers agree on the new semantic boundary");
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Old\",\"Token\":\"\",\"Protocol\":11}"),Is.False,"a version 11 peer takes a late stop from a trust dance as a walk-off and seats Ferris wheel riders from its own view");
+        }
+
+        [Test] public void AVersionTwelveBuildCanJoin()
+        {
+            Assert.That(FestivalSession.AcceptsHello("{\"Name\":\"Current\",\"Token\":\"\",\"Protocol\":12}"),Is.True,"version 12 peers agree on the new semantic boundary");
         }
     }
 }

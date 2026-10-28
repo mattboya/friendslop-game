@@ -179,7 +179,9 @@ namespace Festival.Network
         // drum to the wrong song.
         // ECON-14: InteractionState.ReservedSlot keeps the offered stack's gear slot (-1, the end of the bar, in older snapshots), so
         // a handed-back last unit returns to it; it reaches only the seller's own view, and a version-10 client ignores it.
-        public const int ProtocolVersion=11;
+        // 12: wave 2026-10-28 starts a new semantic boundary; version-11 peers are rejected.
+        // Subsequent units append only the version-12 changes they actually land.
+        public const int ProtocolVersion=12;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
