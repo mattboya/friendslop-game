@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using Festival.Presentation;
 using NUnit.Framework;
-using UnityEditor;
 using UnityEditor.Build.Player;
 using UnityEngine;
 namespace Festival.Tests
@@ -63,43 +62,28 @@ namespace Festival.Tests
         // The player scripts as each build variant compiles them, put through the check the final gates run on built apps.
         [Test,Timeout(900000)] public void ReleasePlayerScriptsLeaveTheStageBenchmarkOut()
         {
-            string folder=Path.Combine(Path.GetTempPath(),"festival-stage-benchmark-build-"+Guid.NewGuid().ToString("N"));
+            string folder=Path.Combine(Path.GetTempPath(),"festival-stage-benchmark-build-"+Guid.NewGuid().ToString("N")),noisy=null;
             try
             {
-                string Compile(string variant,ScriptCompilationOptions options)
-                {
-                    string output=Path.Combine(folder,variant);Directory.CreateDirectory(output);
-                    var result=PlayerBuildInterface.CompilePlayerScripts(new ScriptCompilationSettings{target=BuildTarget.StandaloneOSX,group=BuildTargetGroup.Standalone,options=options},output);
-                    Assert.That(result.assemblies,Does.Contain("Festival.Runtime.dll"),variant+" player scripts compile");
-                    return output;
-                }
-                string development=Compile("Development",ScriptCompilationOptions.DevelopmentBuild),release=Compile("Release",ScriptCompilationOptions.None);
+                string development=PlayerScriptBuild.Compile(folder,"Development",ScriptCompilationOptions.DevelopmentBuild),release=PlayerScriptBuild.Compile(folder,"Release",ScriptCompilationOptions.None);
                 Assert.That(Verify(development,release),Does.StartWith("exit 0").And.Contain("MAC RELEASE DIAGNOSTIC EXCLUSION PASSED"));
                 string leaked=Path.Combine(folder,"Leaked");Directory.CreateDirectory(leaked);
                 File.Copy(Path.Combine(release,"Festival.Runtime.dll"),Path.Combine(leaked,"Festival.Runtime.dll"));File.AppendAllText(Path.Combine(leaked,"Festival.Runtime.dll"),nameof(DevelopmentStageBenchmark));
                 Assert.That(Verify(development,leaked),Does.Not.StartWith("exit 0").And.Contain("Release assembly contains DevelopmentStageBenchmark"),"a Release that kept the benchmark driver is refused");
             }
-            // Editor work left by the compile and verify runs about 0.3 s more and puts GC.Alloc samples on this thread, which fails later fixtures' garbage probes.
-            // A collect does not stop it; only time does. A loaded machine can need a longer wait.
-            finally{if(Directory.Exists(folder))Directory.Delete(folder,true);System.Threading.Thread.Sleep(1000);}
+            finally{if(Directory.Exists(folder))Directory.Delete(folder,true);noisy=PlayerScriptBuild.WaitForQuietGc();}
+            Assert.That(noisy,Is.Null,"later fixtures' garbage probes need this thread quiet again");
         }
 
         static string Verify(string development,string release)
         {
-            var start=new ProcessStartInfo(Node(),"scripts/verify-release-diagnostics.mjs \""+development+"\" \""+release+"\"")
+            var start=new ProcessStartInfo(PlayerScriptBuild.Node("scripts/verify-release-diagnostics.mjs"),"scripts/verify-release-diagnostics.mjs \""+development+"\" \""+release+"\"")
                 {WorkingDirectory=Path.GetDirectoryName(Application.dataPath),UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true};
             using(var verify=Process.Start(start))
             {
                 string output=verify.StandardOutput.ReadToEnd()+verify.StandardError.ReadToEnd();verify.WaitForExit();
                 return "exit "+verify.ExitCode+"\n"+output;
             }
-        }
-        // An Editor opened from the Hub may not have node on its PATH.
-        static string Node()
-        {
-            foreach(string folder in (Environment.GetEnvironmentVariable("PATH")??"").Split(':'))if(folder!=""&&File.Exists(Path.Combine(folder,"node")))return Path.Combine(folder,"node");
-            foreach(string candidate in new[]{"/opt/homebrew/bin/node","/usr/local/bin/node"})if(File.Exists(candidate))return candidate;
-            Assert.Fail("node is needed to run scripts/verify-release-diagnostics.mjs");return null;
         }
     }
 }
