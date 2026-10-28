@@ -185,6 +185,10 @@ namespace Festival.Network
         // view shows a dance); the host refuses it as 'That action already ended' unless the sender's interaction is still on the
         // lanes, so a stop from a trust dance that arrives after the dance never walks off its talk. A version-11 host would take it
         // as a walk-off.
+        // POLO-11: the host seats each Ferris wheel rider as they board: a RideWheel's TargetId names their gondola (0-7; "wheel" in
+        // older snapshots, read as the one at the platform when they boarded), and every view carries it as
+        // PlayerState.VisualWheelGondola (-1 off the wheel), so every client seats every rider where the host did; a version-11 client
+        // ignores it and seats riders from what it has seen.
         public const int ProtocolVersion=12;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
@@ -1036,6 +1040,8 @@ namespace Festival.Network
                 copy.VisualGiggling=FestivalSimulation.Giggling(p,source.SimulationSeconds);
                 // POLO-5: when their turn on the Ferris wheel began, for every client to seat them in the same gondola; -1 off it.
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
+                // The gondola the host seated them in, so a client that first sees them late seats them there too; -1 off it.
+                copy.VisualWheelGondola=FestivalSimulation.WheelGondola(source,p.Id);
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
                 if(p.Id!=viewer){copy.MoneyNewsLog=new List<MoneyNews>();copy.MoneyNewsSequence=0;copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);

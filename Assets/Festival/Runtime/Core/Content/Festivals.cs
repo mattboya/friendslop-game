@@ -59,6 +59,8 @@ namespace Festival.Core
         // WheelAreaSize grid, fixed to the map, they stand in (POLO-3).
         public const float WheelX=20,WheelZ=-28,WheelReach=2.5f,WheelAreaSize=20;
         public const double WheelRideSeconds=20;
+        // The wheel's WheelGondolas gondolas hang evenly round the rim, each seating WheelSeats side by side (FestivalTwistVisuals).
+        public const int WheelGondolas=8,WheelSeats=2;
         // PLAYA-1: Ember Playa's twists (FestivalTwists.cs). Money there reads as odd objects, a different kind for each crew
         // member by their PlayerState.Ordinal, over the same dollar economy.
         public const int PlayaFestival=1;

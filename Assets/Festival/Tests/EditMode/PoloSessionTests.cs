@@ -126,6 +126,42 @@ namespace Festival.Tests
             foreach(var viewer in game.State.Players)Assert.That(Wire(game,viewer.Id).Players.Find(p=>p.Id==rider.Id).VisualWheelSince,Is.EqualTo(-1),viewer.Id+"'s client lets "+rider.Id+" off the wheel");
         }
 
+        // The host seats each rider as they board, and every client's copy of every rider carries that gondola, so a client
+        // that first sees them late (a reconnect, or a spirit revived mid-ride) seats them where the host did; -1 off the wheel. A
+        // snapshot from before the host picked gondolas (its ride names the wheel, its players carry no VisualWheelGondola) restores
+        // through the wire format, and every view seats its rider in the gondola that hung at the platform when they boarded.
+        [Test] public void EveryClientSeatsEachRiderInTheGondolaTheHostGaveThem()
+        {
+            var game=Level(0);
+            foreach(var viewer in game.State.Players)Assert.That(Wire(game,viewer.Id).Players.TrueForAll(p=>p.VisualWheelGondola==-1),Is.True,"setup: nobody rides yet, so "+viewer.Id+"'s client seats nobody");
+            foreach(var rider in game.State.Players)
+            {
+                rider.X=Festivals.WheelX;rider.Z=Festivals.WheelZ+1;
+                Assert.That(game.Execute(rider.Id,new GameCommand{Id="ride_"+rider.Id,Kind=FestivalSimulation.RideWheelKind}).Accepted,Is.True,"setup: "+rider.Id+" boards");
+            }
+            var seats=game.State.Players.ConvertAll(p=>FestivalSimulation.WheelGondola(game.State,p.Id));
+            Assert.That(seats[0]>=0&&seats[1]==seats[0]&&seats[2]!=seats[0],Is.True,"setup: the first two share a gondola and the host seats the third in another ("+string.Join(", ",seats)+")");
+            game.Tick(5);
+            foreach(var viewer in game.State.Players)
+            {
+                var view=Wire(game,viewer.Id);
+                for(int r=0;r<seats.Count;r++)Assert.That(view.Players.Find(p=>p.Id==game.State.Players[r].Id).VisualWheelGondola,Is.EqualTo(seats[r]),viewer.Id+"'s client seats "+game.State.Players[r].Id+" in the gondola the host gave them");
+            }
+            Assert.That(game.State.Players.TrueForAll(p=>p.VisualWheelGondola==-1),Is.True,"the host's own state never carries it");
+            var json=JsonUtility.ToJson(game.State);var older=JsonUtility.FromJson<RoundState>(json);
+            foreach(var ride in older.Interactions)if(ride.Kind==FestivalSimulation.RideWheelKind)ride.TargetId="wheel";
+            json=System.Text.RegularExpressions.Regex.Replace(JsonUtility.ToJson(older),"\"VisualWheelGondola\":-?\\d+,?","");
+            Assert.That(json.Contains("VisualWheelGondola"),Is.False,"setup: the older snapshot carries no VisualWheelGondola");
+            var restored=new FestivalSimulation();restored.Restore(JsonUtility.FromJson<RoundState>(json));
+            var turn=restored.State.Interactions.Find(i=>i.Kind==FestivalSimulation.RideWheelKind);
+            int platform=FestivalSimulation.PlatformGondola(FestivalSimulation.WorldSeconds(restored.State,turn.StartSeconds));
+            foreach(var viewer in restored.State.Players)foreach(var p in Wire(restored,viewer.Id).Players)
+                Assert.That(p.VisualWheelGondola,Is.EqualTo(platform),viewer.Id+"'s client seats "+p.Id+", restored from an older snapshot, in the gondola at the platform when they boarded");
+            game.Tick(Festivals.WheelRideSeconds);
+            Assert.That(game.State.Players.Exists(p=>FestivalSimulation.OnWheel(game.State,p.Id)),Is.False,"setup: the turn is over");
+            foreach(var viewer in game.State.Players)Assert.That(Wire(game,viewer.Id).Players.TrueForAll(p=>p.VisualWheelGondola==-1),Is.True,viewer.Id+"'s client lets everyone off the wheel");
+        }
+
         // POLO-6: an influencer filming you is no secret to you: your card says ON CAMERA, and the phone that has you shows REC. So
         // your own copy in your own view names every influencer filming you. Nobody else's view says so, and the host never holds it.
         [TestCase("Playing")][TestCase(FestivalSimulation.MinigamePhase)]

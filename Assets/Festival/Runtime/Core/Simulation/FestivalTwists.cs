@@ -111,6 +111,24 @@ namespace Festival.Core
         /// <summary>Whether playerId is riding the Ferris wheel. Reads a client's view too, since a view carries its own player's
         /// interactions, so the rider's client can mark every cop (every view carries every cop) while this holds.</summary>
         public static bool OnWheel(RoundState s,string playerId)=>s.Interactions.Exists(i=>i.PlayerId==playerId&&i.Kind==RideWheelKind&&i.Status=="Active");
+        /// <summary>The gondola (0 to WheelGondolas-1) the host seated playerId in as they boarded the Ferris wheel (RideWheel),
+        /// or -1 off it. FestivalSession.ViewFor sends it with when they boarded, so every client seats every rider where the host
+        /// did, whenever it first sees them.</summary>
+        public static int WheelGondola(RoundState s,string playerId){var ride=s.Interactions.Find(i=>i.PlayerId==playerId&&i.Kind==RideWheelKind&&i.Status=="Active");return ride==null?-1:Gondola(s,ride);}
+        // A ride's gondola is its TargetId. One from an older snapshot names the wheel ("wheel") instead: its rider sits in the
+        // gondola that hung at the platform when they boarded.
+        static int Gondola(RoundState s,InteractionState ride)=>Gondola(ride.TargetId)>=0?Gondola(ride.TargetId):PlatformGondola(WorldSeconds(s,ride.StartSeconds));
+        static int Gondola(string target)=>int.TryParse(target,out int k)&&k>=0&&k<Festivals.WheelGondolas?k:-1;
+        static bool ValidWheelRide(InteractionState i)=>i.Kind!=RideWheelKind||i.TargetId=="wheel"||Gondola(i.TargetId)>=0;
+        /// <summary>The gondola (0 to WheelGondolas-1) hanging lowest, at the platform, at world clock reading at. Gondola k
+        /// hangs 360k/WheelGondolas degrees round the rim from the axle's level ahead, and the rim turns once a WheelRideSeconds
+        /// (FestivalTwistVisuals draws it so), so gondola 6 is at the bottom at 0 s and the next one round comes down to it each
+        /// WheelRideSeconds/WheelGondolas.</summary>
+        public static int PlatformGondola(double at)
+        {
+            const int n=Festivals.WheelGondolas;
+            return (int)(((long)Math.Round(at%Festivals.WheelRideSeconds/Festivals.WheelRideSeconds*n-n/4.0)%n+n)%n);
+        }
         /// <summary>At night a Ferris wheel rider sees roughly where each lost friend is (WheelFriendAreas).</summary>
         public static bool WheelShowsFriend(RoundState s,string viewer)=>OnWheel(s,viewer)&&Festivals.For(s).Night;
         /// <summary>POLO-3: what viewer makes out from the wheel, the WheelArea of each friend still lost (the first, then a big
@@ -131,11 +149,18 @@ namespace Festival.Core
         // Anyone at the base boards for one turn, any number at once. In the rules the rider stays at the base, where anything
         // that could reach them still can, and cannot step off or cancel until the turn ends (MayStep, Apply's Cancel). ESC-3: so a
         // security stop's clock stands still while they ride (Pursue), the guard waiting at the base.
+        // The host seats them as they board (the ride's TargetId): in the gondola at the platform if a seat is free, else in
+        // the next one round to come down to it, the one that has just gone up, the one after next, and so on. Only riders still
+        // aboard hold a seat, so one who left early (downed, or dropped out) has freed theirs.
         CommandResult RideWheel(PlayerState p)
         {
             if(State.FestivalIndex!=Festivals.PoloFestival)return Reject("There's no Ferris wheel at this festival");
             if(!AtWheel(State,p))return Reject("Board the Ferris wheel at its base");
-            NewInteraction(p,RideWheelKind,"wheel",Festivals.WheelRideSeconds);return Ok("One full turn: you're up there until it comes round");
+            const int n=Festivals.WheelGondolas;var taken=new int[n];
+            foreach(var ride in State.Interactions)if(ride.Kind==RideWheelKind&&ride.Status=="Active")taken[Gondola(State,ride)]++;
+            int platform=PlatformGondola(WorldSeconds(State)),k=platform;
+            for(int j=1;taken[k]>=Festivals.WheelSeats&&j<n;j++)k=(platform+(j%2==1?(j+1)/2:n-j/2))%n;
+            NewInteraction(p,RideWheelKind,k.ToString(),Festivals.WheelRideSeconds);return Ok("One full turn: you're up there until it comes round");
         }
 
         // PLAYA-1: Ember Playa's twists, off on every other festival. Tuning lives in Festivals.cs; the odd-object money is

@@ -47,6 +47,7 @@ namespace Festival.Core
             // a current round from here on, so saving it again does not re-read a weekend Day 1 as an old rescue.
             if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
             foreach(var interaction in state.Interactions)if(interaction==null||!RhythmChart.ValidStageAnchor(interaction))throw new ArgumentException("Invalid snapshot stage chart");
+            if(!state.Interactions.TrueForAll(ValidWheelRide))throw new ArgumentException("Invalid snapshot wheel ride");
             ValidateDeathState(state);
             ValidateCashFindState(state);
             state.SchemaVersion=RoundState.CurrentSchemaVersion;
