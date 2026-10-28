@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using Festival.Core;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 using Object = UnityEngine.Object;
 
 namespace Festival.Tests
@@ -131,6 +134,50 @@ namespace Festival.Tests
                 Assert.That(Marked(renderer),Is.False,person.name+"'s "+renderer.name+": people are never patterned");
             foreach(var name in new[]{FestivalGiggleTank.Name,FestivalClouds.RootName})
                 foreach(var renderer in grounds.Find(name).GetComponentsInChildren<Renderer>(true))Assert.That(Marked(renderer),Is.False,name+"'s "+renderer.name+" stays clean");
+        }
+
+        // The pattern lies on world planes, so on a part that moves it would stay put while the part slides through it.
+        [Test]public void SceneryThatMovesStaysClean()
+        {
+            var root=new GameObject("Trip surface world");made.Add(root);var world=root.AddComponent<FestivalWorld>();world.Build();
+            var grounds=root.transform.Find(FestivalWorld.RootName);
+            static bool Marked(Renderer renderer)=>(renderer.renderingLayerMask&FestivalTripSurfaces.SurfaceLayer)!=0;
+            var polo=grounds.Find(FestivalTwistVisuals.PoloRootName);var playa=grounds.Find(FestivalTwistVisuals.PlayaRootName);var wheel=polo.Find("Ferris wheel");
+            var moving=new List<Transform>{wheel.Find("Wheel rotor"),playa.Find("Effigy/Effigy fire")};
+            foreach(Transform part in wheel)if(part.name=="Gondola")moving.Add(part);
+            foreach(Transform part in playa)if(part.name.StartsWith("Art car",StringComparison.Ordinal))moving.Add(part);
+            foreach(Transform part in grounds)if(part.name=="Stage lamp")moving.Add(part);
+            Assert.That(moving.Count,Is.EqualTo(2+8+Festivals.ArtCars+5),"setup: the rotor, the fire, eight gondolas, the art cars and five stage lamps");
+            foreach(var part in moving)foreach(var renderer in part.GetComponentsInChildren<Renderer>(true))
+                Assert.That(Marked(renderer),Is.False,part.name+"'s "+renderer.name+" moves, so it stays clean");
+            int still=0;
+            foreach(var twists in new[]{polo,playa})foreach(var renderer in twists.GetComponentsInChildren<Renderer>(true))
+                if(!moving.Exists(part=>renderer.transform.IsChildOf(part))){Assert.That(Marked(renderer),renderer.name+" under "+renderer.transform.parent.name+" stands still, so it keeps the pattern");still++;}
+            Assert.That(still,Is.GreaterThan(20),"setup: the wheel's frame, the VIP ropes and sign and the effigy stand still");
+            var marked=new List<Renderer>();foreach(var renderer in grounds.GetComponentsInChildren<Renderer>(true))if(Marked(renderer))marked.Add(renderer);
+            foreach(int festival in new[]{Festivals.PoloFestival,Festivals.PlayaFestival})
+            {
+                var round=new RoundState{Phase="Playing",FestivalIndex=festival,SimulationSeconds=3};world.SetTwists(round);
+                var was=marked.ConvertAll(renderer=>renderer.transform.localToWorldMatrix);
+                round.SimulationSeconds=9.7;world.SetTwists(round);
+                for(int i=0;i<marked.Count;i++)Assert.That(marked[i].transform.localToWorldMatrix,Is.EqualTo(was[i]),Festivals.Name(festival)+": "+marked[i].name+" keeps the pattern, so it stays put");
+            }
+        }
+
+        [Test]public void ADosedFrameMakesNoGarbage()
+        {
+            var view=Eye("Trip surface view");var scenery=Block("Scenery",new Vector3(0,0,6));FestivalTripSurfaces.Mark(scenery.transform);
+            var target=new RenderTexture(Width,Height,24);made.Add(target);view.targetTexture=target;
+            using(var surfaces=new FestivalTripSurfaces())
+            {
+                Assert.That(surfaces.Available,"setup: the pattern's shader loads");
+                var looks=new[]{FestivalTrip.Look("lsd",4,false,2),FestivalTrip.Look("lsd",4,false,2.1f)};int shown=0;
+                TestDelegate frame=()=>{surfaces.Show(view,looks[shown++%2]);view.Render();};
+                // The first frames start the pass and build its render graph.
+                for(int i=0;i<3;i++)frame();
+                Assert.That(frame,Is.Not.AllocatingGCMemory(),"a dosed frame makes no garbage");
+            }
+            view.targetTexture=null;
         }
 
         private Camera Eye(string name)

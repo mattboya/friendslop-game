@@ -347,6 +347,9 @@ namespace Festival.Presentation
             PoloDressing=new FestivalPoloDressing(owned,groundTrees,earth);
             // TRIP-11: here, so the Giggle Tank, the clouds and the goods built after stay clean of a dose's pattern.
             FestivalTripSurfaces.Mark(owned);
+            // But not what moves: the twists' turning, driving and burning parts and the sweeping stage lamps.
+            foreach(var part in twists.Moving())FestivalTripSurfaces.Unmark(part);
+            foreach(var lamp in stageLights)FestivalTripSurfaces.Unmark(lamp.transform);
             // GAS-2: hidden until a view has a Giggle Tank (SetTwists).
             giggleTank=FestivalGiggleTank.Build(owned);giggleTank.gameObject.SetActive(false);
             // LIGHT-2: the day sky's clouds hang under the festival, so camp has none.

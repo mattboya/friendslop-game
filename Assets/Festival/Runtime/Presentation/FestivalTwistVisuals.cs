@@ -103,6 +103,8 @@ namespace Festival.Presentation
             for(int i=0;i<flames.Count;i++)flames[i].Flame.localScale=Vector3.Scale(flames[i].Size,new Vector3(1,1+FlickerDepth*Mathf.Sin(clock*FlickerHz+i*1.7f),1));
             fireLight.intensity=FireGlow*(1+.15f*Mathf.Sin(clock*13));
         }
+        /// <summary>Every part Apply moves. A new moving part belongs here too, or a dose's pattern slides over it.</summary>
+        public IEnumerable<Transform> Moving(){yield return rotor;foreach(var gondola in gondolas)yield return gondola;foreach(var car in cars)yield return car;yield return fire;}
 
         // Brass posts round the zone's edge, a velvet rope between them; the knobs glow so the ropes read at night.
         private static void Ropes(Transform ropes,Festivals.Area zone)
