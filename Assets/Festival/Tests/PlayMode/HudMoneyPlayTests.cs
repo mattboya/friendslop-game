@@ -388,6 +388,50 @@ namespace Festival.Tests
             Assert.That(mineFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"your sale's notice shows "+mineFor.ToString("0.00")+" s: "+timeline);
         }
 
+        // Esc opens the menu on the CREW + NEARBY list. A deposit clicked there keeps it open, and the list's heading reads
+        // the deposit's line with its amount, since the notice line hides under the pass; a withdrawal's line follows it. A dance
+        // clicked there shuts the menu, so the dance has your keys.
+        [UnityTest]public IEnumerator TheMenusListStaysOpenForADepositAndReadsItsLine()
+        {
+            UseAVirtualKeyboard("Menu list keyboard");
+            var world=new GameObject("Menu list world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Menu list HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            Button Row(string label)=>hud.GetComponentsInChildren<Button>(false).FirstOrDefault(b=>b.name=="Action:"+label);
+            string Listed()=>string.Join(" | ",hud.GetComponentsInChildren<Button>(false).Where(b=>b.name.StartsWith("Action:")).Select(b=>b.name.Substring(7)));
+            string Heading()=>hud.GetComponentsInChildren<Text>(false).FirstOrDefault(t=>t.name=="Actions heading")?.text??"(hidden)";
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                sim.State.Npcs.Clear();sim.State.Visions.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.X=0;player.Z=0;player.Cash=40;
+                sim.State.Stashes.Add(new StashState{Id="menu_box",X=0,Z=1});sim.State.Npcs.Add(new NpcState{Id="menu_buyer_2",Role="Buyer",X=0,Z=1.5f,Yaw=180});
+                yield return new WaitForSeconds(.6f);
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                Assert.That(session.MenuOpen,Is.True,"setup: Esc opens the menu");
+                Assert.That(Heading(),Is.EqualTo("NEARBY / CREW"),"setup: the list's heading");
+                foreach(var (label,line,cash) in new[]{("Deposit $5 in shared stash","INTO THE STASH  •  −$5",35),("Withdraw $5 from shared stash","FROM THE STASH  •  +$5",40)})
+                {
+                    var row=Row(label);for(float end=Time.realtimeSinceStartup+1;row==null&&Time.realtimeSinceStartup<end;){yield return null;row=Row(label);}
+                    Assert.That(row,Is.Not.Null,"the list offers \""+label+"\" (listed: \""+Listed()+"\")");
+                    row.onClick.Invoke();
+                    string heading=Heading();
+                    for(float end=Time.realtimeSinceStartup+FestivalHudText.MoneyNewsSeconds+1;heading!=line&&Time.realtimeSinceStartup<end;){yield return null;heading=Heading();}
+                    Assert.That(session.MenuOpen,Is.True,label+" keeps the menu open");
+                    Assert.That(player.Cash,Is.EqualTo(cash),"setup: "+label+" moved your cash");
+                    Assert.That(heading,Is.EqualTo(line),"the list's heading reads what "+label+" did");
+                }
+                var dance=Row("Dance with festivalgoer");Assert.That(dance,Is.Not.Null,"the list offers the dance (listed: \""+Listed()+"\")");
+                dance.onClick.Invoke();yield return null;
+                Assert.That(session.MenuOpen,Is.False,"a dance shuts the menu");
+                Assert.That(sim.Interaction(player.InteractionId)?.Kind,Is.EqualTo("Dance"),"setup: the dance started ("+session.Message+")");
+                session.Command("Cancel");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+        }
+
         // A friend's sale lights SALES on the running card, never your cash, which it did not change.
         [UnityTest]public IEnumerator AFriendsSaleLightsSalesButNotYourCash()
         {

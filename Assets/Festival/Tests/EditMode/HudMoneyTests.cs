@@ -323,6 +323,46 @@ namespace Festival.Tests
             finally{UnityEngine.Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
         }
 
+        // In the Esc menu's CREW + NEARBY list, a deposit keeps the menu open for the next click, and a dance shuts it so the dance
+        // has your keys.
+        [Test] public void TheMenusListStaysOpenForADepositAndShutsForADance()
+        {
+            const System.Reflection.BindingFlags Private=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
+            var go=new UnityEngine.GameObject("Menu list HUD");FestivalSession session=null;
+            try
+            {
+                session=go.AddComponent<FestivalSession>();typeof(FestivalSession).GetMethod("Awake",Private).Invoke(session,null);
+                var hud=go.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",Private).Invoke(hud,null);
+                var day=Day(0);var you=Crew(day,"you",0);you.Cash=40;
+                day.Stashes.Add(new StashState{Id="box",X=0,Z=1});day.Npcs.Add(new NpcState{Id="buyer_1",Role="Buyer",X=0,Z=1.5f,Yaw=180});
+                typeof(FestivalHud).GetMethod("UpdateActions",Private).Invoke(hud,new object[]{day,you});
+                var rows=go.GetComponentsInChildren<UnityEngine.UI.Button>(true).Where(b=>b.gameObject.activeSelf&&b.name.StartsWith("Action:")).ToList();
+                var deposit=rows.Find(b=>b.name=="Action:Deposit $5 in shared stash");var dance=rows.Find(b=>b.name=="Action:Dance with festivalgoer");
+                Assert.That(deposit!=null&&dance!=null,Is.True,"setup: the list offers both: "+string.Join(" | ",rows.Select(b=>b.name)));
+                session.MenuOpen=true;deposit.onClick.Invoke();
+                Assert.That(session.MenuOpen,Is.True,"a deposit keeps the menu open for the next click");
+                dance.onClick.Invoke();
+                Assert.That(session.MenuOpen,Is.False,"a dance shuts it, so the dance has your keys");
+            }
+            finally
+            {
+                if(session!=null){session.Controls?.Dispose();(typeof(FestivalSession).GetProperty("Settings")?.GetValue(session) as System.IDisposable)?.Dispose();
+                    if(session.ViewCamera!=null)UnityEngine.Object.DestroyImmediate(session.ViewCamera.gameObject);
+                    var actors=typeof(FestivalSession).GetField("actorRoot",Private).GetValue(session) as UnityEngine.Transform;if(actors!=null)UnityEngine.Object.DestroyImmediate(actors.gameObject);}
+                UnityEngine.Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();
+            }
+        }
+        // Every command the list sends: a click on one that starts something shuts the menu, and any other keeps it open.
+        [TestCase("Dance",true)][TestCase("Conversation",true)][TestCase("StartSale",true)][TestCase("StartBuy",true)]
+        [TestCase("ConfirmDance",true)][TestCase("ConfirmChat",true)][TestCase("Police",true)]
+        [TestCase(FestivalSimulation.RideWheelKind,true)][TestCase(FestivalSimulation.RideCarKind,true)][TestCase(FestivalSimulation.DeckSetKind,true)][TestCase("Dj",true)]
+        [TestCase("Extract",true)][TestCase("LostProperty",true)][TestCase("FindFriend",true)][TestCase("BeginRelease",true)][TestCase("BeginRevival",true)]
+        [TestCase("Rescue",true)][TestCase("Drag",true)][TestCase("CarryBody",true)][TestCase("HelpSelf",true)][TestCase("Use",true)]
+        [TestCase(FestivalSimulation.LieDownKind,true)][TestCase("Cancel",true)][TestCase(FestivalSimulation.TestFreeKind,true)]
+        [TestCase("Deposit",false)][TestCase("Withdraw",false)][TestCase("Pickup",false)][TestCase("Transfer",false)][TestCase("AcceptTransfer",false)]
+        [TestCase("CancelTransfer",false)][TestCase("Chime",false)][TestCase("Buy",false)][TestCase(FestivalSimulation.GrabGiggleTankKind,false)][TestCase("",false)]
+        public void AListedCommandShutsTheMenuOnlyWhenItStartsSomething(string kind,bool closes)=>Assert.That(FestivalHudText.ClosesMenu(kind),Is.EqualTo(closes),kind==""?"a line that does nothing":kind);
+
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()
         {
             // The HUD and the shelves' price tags never write a dollar sign themselves: every amount, down to the stash, release and

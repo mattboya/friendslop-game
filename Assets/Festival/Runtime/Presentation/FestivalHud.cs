@@ -63,6 +63,7 @@ namespace Festival.Presentation
         private float threatShown;
         private RectTransform actionsContent;
         private ScrollRect actionsScroll;
+        private Text actionsHeading;
         private GameObject nextButton, cancelButton, resumeButton, promptKeycap;
         private Text status, notice, levelBanner, objective, objectiveTitle, vitals, roster, menuRoster, menuPhase, campSecrets, prompt, preview, rhythmStatus, rhythmDialogue, rhythmJudgment, rhythmCombo, rhythmTiming, dancerHeading, dancerCaption, dialogueSpeaker, dialogueLine, mapText, mapTitle, voice, timerText,checkoutText,settingsText,heldDetailText,heldTitle,heldPrice,inventoryHeading,emptyGearLabel,reviewText,reviewReveal,reviewStatus,tripping;
         // SET-1: the one settings screen the title and the pass open (FestivalSettingsScreen): its tab buttons, a widget row for each
@@ -629,7 +630,7 @@ namespace Festival.Presentation
 
             actionsPanel=Card(root.transform,"Actions",new Vector2(.73f,.20f),new Vector2(.975f,.78f),true);
             Accent(actionsPanel.transform,Mint);
-            var actionsHeading=Label(actionsPanel.transform,"Actions heading",24,TextAnchor.MiddleLeft);actionsHeading.text="NEARBY / CREW";actionsHeading.fontStyle=FontStyle.Normal;Place(actionsHeading.rectTransform,.07f,.88f,.93f,.97f);
+            actionsHeading=Label(actionsPanel.transform,"Actions heading",24,TextAnchor.MiddleLeft);actionsHeading.text=FestivalHudText.ActionsHeading;actionsHeading.fontStyle=FontStyle.Normal;Place(actionsHeading.rectTransform,.07f,.88f,.93f,.97f);ShrinkToFit(actionsHeading,12);
             var viewport=Panel(actionsPanel.transform,"Action scroll viewport",Color.clear,new Vector2(.045f,.035f),new Vector2(.955f,.87f));viewport.GetComponent<Image>().raycastTarget=true;
             viewport.AddComponent<RectMask2D>();
             var content=Panel(viewport.transform,"Action list",Color.clear,new Vector2(0,1),new Vector2(1,1));
@@ -931,7 +932,8 @@ namespace Festival.Presentation
             status.color=connectionError==""?new Color(.25f,.35f,.32f):new Color(.58f,.16f,.12f);
             if(session.Message!=lastNotice){lastNotice=session.Message;noticeUntil=Time.unscaledTime+5;}
             notice.text=message;
-            noticePanel.SetActive(session.Connected&&!session.MenuOpen&&!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<noticeUntil&&session.Message!="Accepted");
+            bool noticeDue=!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<noticeUntil&&session.Message!="Accepted";
+            noticePanel.SetActive(session.Connected&&!session.MenuOpen&&noticeDue);
             titlePanel.SetActive(!session.Connected&&!settingsOpen);
             if(session.Connected){pendingComfortStart=null;comfortPanel.SetActive(false);}
             bool showMenu=session.Connected&&session.MenuOpen;
@@ -955,6 +957,8 @@ namespace Festival.Presentation
             string allFound=session.Profile.CampEggCompletionText;campSecrets.text=session.Profile.CampEggCountText+(allFound==""?"":"\n"+allFound);
             settingsBack.text=session.Connected?"BACK TO PASS":"BACK";
             actionsPanel.SetActive(showMenu&&crewOpen&&!settingsOpen&&session.State?.Phase=="Playing");
+            // A deposit or gear keeps the list open, and the pass hides the notice line, so the list's heading reads that line while due.
+            actionsHeading.text=actionsPanel.activeSelf&&noticeDue?message:FestivalHudText.ActionsHeading;
             checkoutPanel.SetActive(session.Connected&&!showMenu&&checkoutItem!="");
             voice.text=session.Connected?(session.Voice.Available?session.Voice.Status:"VOICE OFF"):"";
             if(!session.Connected){lifeUntil=0;lifePanel.SetActive(false);spiritTag.SetActive(false);saleStampPanel.SetActive(false);ClearPendingEquipment();levelBanner.text="";objective.text="";objectiveTitle.text="";vitals.text="";timerText.text="";roster.text="";prompt.text="";promptPanel.SetActive(false);nearbyPanel.SetActive(false);reviewPanel.SetActive(false);heldDetailPanel.SetActive(false);rosterPanel.SetActive(false);inventoryPanel.SetActive(false);reticle.SetActive(false);rhythmPanel.SetActive(false);rhythmShade.SetActive(false);dancePanel.SetActive(false);drumPanel.SetActive(false);dancePreview.Hide();dialoguePanel.SetActive(false);mapPanel.SetActive(false);mapShade.SetActive(false);trippingPanel.SetActive(false);testModeTag.SetActive(false);briefingPanel.SetActive(false);tipPanel.SetActive(false);sellerTalk.End();chatWindow.Close();sundownPanel.SetActive(false);resultsPanel.SetActive(false);minigamePanel.SetActive(false);lightShowPanel.SetActive(false);ApplyEffects(null);FrameTitle();return;}
@@ -1036,12 +1040,13 @@ namespace Festival.Presentation
             UpdateGearLossNotice(state,player,uncovered&&!minigamePanel.activeSelf&&!resultsPanel.activeSelf&&!reviewPanel.activeSelf&&!briefingPanel.activeSelf);
             // One money notice per MoneyNewsSeconds, so a queue of them each holds the line, and none over any other line younger than
             // that: a reply from the same step (a narc's bust, a buy's price) must stay readable. The death reel's gear notice writes the
-            // notice text itself for its 5 s, so a queued line waits for it rather than being hidden under it.
+            // notice text itself for its 5 s, so a queued line waits for it rather than being hidden under it. The open list's heading
+            // reads the line, so it comes under the pass while the list is up.
             moneyNews.Follow(state,player,session.ConnectionGeneration);
             moneyNews.Watch(session.Message,Time.unscaledTime);
             if(session.Message!=moneyLineSeen){moneyLineSeen=session.Message;moneyLineSeenAt=Time.unscaledTime;}
             bool freshLine=!string.IsNullOrEmpty(session.Message)&&Time.unscaledTime<moneyLineSeenAt+FestivalHudText.MoneyNewsSeconds;
-            if(uncovered&&gearLossNotice==""&&!freshLine&&Time.unscaledTime>=moneyNoticeAt)
+            if((uncovered||actionsPanel.activeSelf)&&gearLossNotice==""&&!freshLine&&Time.unscaledTime>=moneyNoticeAt)
             {
                 var news=moneyNews.Take(Time.unscaledTime);
                 if(news!=null){session.SetMessage(news.Text);moneyLineSeen=news.Text;lastNotice="";moneyNoticeAt=Time.unscaledTime+FestivalHudText.MoneyNewsSeconds;}
@@ -2168,85 +2173,85 @@ namespace Festival.Presentation
             // TRIP-4: E runs the first action listed, so lying on the grass E gets you up before anything else.
             bool lying=FestivalSimulation.LyingDown(state,player.Id);
             string doing=player.InteractionId;
-            if(lying)AddAction(FestivalHudText.GetUpAction,()=>session.Command("Cancel",doing),ref y);
+            if(lying)AddAction(FestivalHudText.GetUpAction,"Cancel",()=>session.Command("Cancel",doing),ref y);
             // E runs the first action listed. Ending the level comes before the carry prompts, so the leader standing beside
             // a body already home at the gate still ends Night 2 with E, and a carrier arriving there does too.
-            if(state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId==""&&FestivalSimulation.CanExtract(state,player))AddAction(FestivalHudText.ExtractAction(state),()=>session.Command("Extract"),ref y);
+            if(state.Phase=="Playing"&&player.Life=="Alive"&&player.InteractionId==""&&FestivalSimulation.CanExtract(state,player))AddAction(FestivalHudText.ExtractAction(state),"Extract",()=>session.Command("Extract"),ref y);
             if(state.Phase=="Playing")foreach(var body in state.Bodies)
             {
                 string label=FestivalHudText.BodyAction(state,player,body),bodyId=body.PlayerId;
-                if(label!="")AddAction(label,()=>session.Command("CarryBody",bodyId),ref y);
+                if(label!="")AddAction(label,"CarryBody",()=>session.Command("CarryBody",bodyId),ref y);
             }
-            if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape",()=>session.Command("HelpSelf"),ref y);
-            if(state.Phase=="Playing"&&state.TestMode&&player.Life=="Detained")AddAction(FestivalHudText.FreeMeAction,()=>session.Command(FestivalSimulation.TestFreeKind),ref y);
+            if(state.Phase=="Playing"&&(player.Life=="Downed"||player.Life=="Detained"))AddAction(player.Life=="Downed"?"Make a scene to distract attackers":"Distract security / work on escape","HelpSelf",()=>session.Command("HelpSelf"),ref y);
+            if(state.Phase=="Playing"&&state.TestMode&&player.Life=="Detained")AddAction(FestivalHudText.FreeMeAction,FestivalSimulation.TestFreeKind,()=>session.Command(FestivalSimulation.TestFreeKind),ref y);
             if(!lying&&FestivalHudText.CanCancel(state,player))
             {
                 // PLAYA-5: a plain art car ride lists its deck set beside the way off. Both read the view again when chosen, so a list
                 // from just before a set began can neither stop it nor ask for another. The way off names the ride it listed, so the
                 // host refuses it too when the view itself is behind.
                 bool deck=FestivalSimulation.CanPlayDeckSet(state,player);
-                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player,Bound(session?.Controls?.Chat,"F")),()=>{if(!deck||session.LocalPlayer?.InteractionId==doing)FinishCurrentAction(doing);},ref y);
+                AddAction(ActiveConfirmation(state,player)!=null?"Finish chat check":FestivalHudText.CancelAction(state,player,Bound(session?.Controls?.Chat,"F")),"Cancel",()=>{if(!deck||session.LocalPlayer?.InteractionId==doing)FinishCurrentAction(doing);},ref y);
                 if(deck)foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))
-                    AddAction(label,()=>{if(FestivalSimulation.CanPlayDeckSet(session.State,session.LocalPlayer))session.Command(command.Kind);},ref y);
+                    AddAction(label,command.Kind,()=>{if(FestivalSimulation.CanPlayDeckSet(session.State,session.LocalPlayer))session.Command(command.Kind);},ref y);
             }
             // ESC-2: security stopping you comes next, so E talks to them as the card says (TALK (E)), even with a festivalgoer nearer
             // or the stock you just ditched at your feet. Until the guard has walked into reach (the host's 2.5 m), E says so and does
             // nothing: what E would do instead, a sale or a buy beside a festivalgoer, is a deal in the guard's sight, an arrest.
             var stopper=player.InteractionId==""?FestivalHudText.StoppedBy(state,player):null;
-            if(stopper!=null){if(Near(player,stopper.X,stopper.Z,2.5f))AddAction("Talk to security",()=>session.Command("Police",stopper.Id),ref y);else AddAction(FestivalHudText.StopApproachAction,()=>{},ref y);}
-            var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,()=>session.Command("AcceptTransfer",offer.Id),ref y);
-            var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
+            if(stopper!=null){if(Near(player,stopper.X,stopper.Z,2.5f))AddAction("Talk to security","Police",()=>session.Command("Police",stopper.Id),ref y);else AddAction(FestivalHudText.StopApproachAction,"",()=>{},ref y);}
+            var offer=state.Transfers.Find(t=>t.ToId==player.Id);if(offer!=null)AddAction("Accept "+ItemName(offer.ItemId)+" ×"+offer.Amount,"AcceptTransfer",()=>session.Command("AcceptTransfer",offer.Id),ref y);
+            var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);if(outgoing!=null)AddAction("Cancel handoff","CancelTransfer",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             // TRIP-8: in the middle of anything (lying on the grass, a talk, a check, a task) the host takes only its way out above, a
             // handoff or a call for help, so nothing else is listed; with no festivalgoer beside you the strip stays empty (ECON-5).
             NpcState npc=null;
             if(player.InteractionId=="")
             {
-                var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction(FestivalHudText.PickupAction(state,player,drop),()=>PickUp(drop),ref y);
+                var drop=Nearest(state.Drops,player.X,player.Z,2.5f);if(drop!=null)AddAction(FestivalHudText.PickupAction(state,player,drop),"Pickup",()=>PickUp(drop),ref y);
                 var stash=Nearest(state.Stashes,player.X,player.Z,2.7f);
                 if(stash!=null)
                 {
                     string stashId=stash.Id;
-                    if(player.Cash>=5)AddAction("Deposit "+FestivalHudText.Money(state,player,5)+" in shared stash",()=>session.Command("Deposit",stashId,amount:5),ref y);
-                    if(state.StashCash>=5)AddAction("Withdraw "+FestivalHudText.Money(state,player,5)+" from shared stash",()=>session.Command("Withdraw",stashId,amount:5),ref y);
+                    if(player.Cash>=5)AddAction("Deposit "+FestivalHudText.Money(state,player,5)+" in shared stash","Deposit",()=>session.Command("Deposit",stashId,amount:5),ref y);
+                    if(state.StashCash>=5)AddAction("Withdraw "+FestivalHudText.Money(state,player,5)+" from shared stash","Withdraw",()=>session.Command("Withdraw",stashId,amount:5),ref y);
                     if(handGear.Count>0)
                     {
                         string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
-                        AddAction("Deposit "+ItemName(item),()=>session.Command("Deposit",stashId,item,1),ref y);
+                        AddAction("Deposit "+ItemName(item),"Deposit",()=>session.Command("Deposit",stashId,item,1),ref y);
                     }
                     var stored=stash.Items.Find(i=>i.Count>0);
-                    if(stored!=null){string item=stored.ItemId;AddAction("Withdraw "+ItemName(item),()=>session.Command("Withdraw",stashId,item,1),ref y);}
+                    if(stored!=null){string item=stored.ItemId;AddAction("Withdraw "+ItemName(item),"Withdraw",()=>session.Command("Withdraw",stashId,item,1),ref y);}
                 }
                 foreach(var mate in state.Players)
                 {
                     // Before the reach check: a detained friend is held out of arm's reach, and the host's Release checks only the payer's spot.
-                    if(mate.Id!=player.Id&&mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay "+FestivalHudText.Money(state,player,10)+" release for "+mate.Name,()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
+                    if(mate.Id!=player.Id&&mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay "+FestivalHudText.Money(state,player,10)+" release for "+mate.Name,"BeginRelease",()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
                     if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
-                    if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,()=>session.Command("Drag",mate.Id),ref y);}
+                    if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,"Rescue",()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,"Drag",()=>session.Command("Drag",mate.Id),ref y);}
                 }
                 NpcState check=null;
                 if(player.Life=="Spirit")
                 {
-                    if(Near(player,24,-20)&&state.ConnectedCrewCount==1&&FestivalGuidance.RevivalsLeft(player)>0)AddAction("Self revive at medical (15 seconds)",()=>session.Command("BeginRevival",player.Id),ref y);
-                    if(Near(player,24,-20))AddAction("Memorial chime",()=>session.Command("Chime"),ref y);
+                    if(Near(player,24,-20)&&state.ConnectedCrewCount==1&&FestivalGuidance.RevivalsLeft(player)>0)AddAction("Self revive at medical (15 seconds)","BeginRevival",()=>session.Command("BeginRevival",player.Id),ref y);
+                    if(Near(player,24,-20))AddAction("Memorial chime","Chime",()=>session.Command("Chime"),ref y);
                 }
                 else if(state.Phase=="Playing"&&player.Life=="Alive")
                 {
                     // Either lost friend (a big crew has two, CROWD-2): the one FindFriend goes to, from the same pick.
                     string lost=FestivalSimulation.FriendToFind(state,player);
-                    if(lost!="")AddAction((lost=="friend"?state.FriendFound:state.SecondFriend.Found)?"Take over friend escort":"Recruit missing friend",()=>session.Command("FindFriend"),ref y);
+                    if(lost!="")AddAction((lost=="friend"?state.FriendFound:state.SecondFriend.Found)?"Take over friend escort":"Recruit missing friend","FindFriend",()=>session.Command("FindFriend"),ref y);
                     if(Near(player,-28,16))
                     {
                         var detained=state.Players.Find(p=>p.Life=="Detained");
-                        if(detained!=null)AddAction("Free release task for "+detained.Name,()=>session.Command("BeginRelease",detained.Id),ref y);
-                        AddAction("Return lost property for "+FestivalHudText.Money(state,player,5),()=>session.Command("LostProperty"),ref y);
+                        if(detained!=null)AddAction("Free release task for "+detained.Name,"BeginRelease",()=>session.Command("BeginRelease",detained.Id),ref y);
+                        AddAction("Return lost property for "+FestivalHudText.Money(state,player,5),"LostProperty",()=>session.Command("LostProperty"),ref y);
                     }
                     if(Near(player,24,-20))
                     {
                         var spirit=state.Players.Find(p=>p.Life=="Spirit"&&player.Wristbands.Contains(p.Id));
-                        if(spirit!=null){AddAction("Revive "+spirit.Name+" — free task",()=>session.Command("BeginRevival",spirit.Id),ref y);AddAction("Revive "+spirit.Name+" — pay "+FestivalHudText.Money(state,player,10),()=>session.Command("BeginRevival",spirit.Id,amount:1),ref y);}
-                        if(player.Effects.Exists(FestivalSimulation.Treatable)&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher",()=>session.Command("Use",item:"medical_voucher"),ref y);
+                        if(spirit!=null){AddAction("Revive "+spirit.Name+" — free task","BeginRevival",()=>session.Command("BeginRevival",spirit.Id),ref y);AddAction("Revive "+spirit.Name+" — pay "+FestivalHudText.Money(state,player,10),"BeginRevival",()=>session.Command("BeginRevival",spirit.Id,amount:1),ref y);}
+                        if(player.Effects.Exists(FestivalSimulation.Treatable)&&player.Inventory.Exists(i=>i.ItemId=="medical_voucher"))AddAction("Use medical voucher","Use",()=>session.Command("Use",item:"medical_voucher"),ref y);
                     }
-                    if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover",()=>session.Command("Dj"),ref y);
+                    if(Near(player,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,Catalog.StageTakeoverStartRange)&&player.Inventory.Exists(i=>i.ItemId=="stage_pass"))AddAction("Start DJ takeover","Dj",()=>session.Command("Dj"),ref y);
                     // The tripper beside someone they have an unchecked vision about: E checks by dancing, F (ChatKey) by chatting.
                     // Anyone else beside Palm Mirage's VIP guard: E or F talks them past the rope (POLO-1).
                     check=FestivalHudText.CheckTarget(state,player);
@@ -2254,13 +2259,13 @@ namespace Festival.Presentation
                     {
                         string checkId=check.Id;
                         // VISION-3: someone the host won't let anyone check right now is said to be busy; E does nothing.
-                        if(FestivalSimulation.Engaged(state,check))AddAction(FestivalHudText.BusyAction,()=>{},ref y);
+                        if(FestivalSimulation.Engaged(state,check))AddAction(FestivalHudText.BusyAction,"",()=>{},ref y);
                         else if(FestivalSimulation.CanCheckVision(state,player,check))
                         {
-                            AddAction(FestivalHudText.CheckDanceActionFor(Bound(session?.Controls?.Chat,"F")),()=>session.Command("ConfirmDance",checkId),ref y);
-                            AddAction(FestivalHudText.CheckChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
+                            AddAction(FestivalHudText.CheckDanceActionFor(Bound(session?.Controls?.Chat,"F")),"ConfirmDance",()=>session.Command("ConfirmDance",checkId),ref y);
+                            AddAction(FestivalHudText.CheckChatAction,"ConfirmChat",()=>session.Command("ConfirmChat",checkId),ref y);
                         }
-                        else AddAction(FestivalHudText.RopeChatAction,()=>session.Command("ConfirmChat",checkId),ref y);
+                        else AddAction(FestivalHudText.RopeChatAction,"ConfirmChat",()=>session.Command("ConfirmChat",checkId),ref y);
                     }
                     // The festival's twists where they stand: the Ferris wheel, the VIP stall, a passing art car.
                     AddTwistActions(state,player,ref y);
@@ -2268,8 +2273,8 @@ namespace Festival.Presentation
                 npc=state.Phase=="Playing"&&player.Life=="Alive"?Nearest(state.Npcs,player.X,player.Z,2.5f):null;
                 if(npc!=null)
                 {
-                    if(npc.Kind=="Cop"){if(npc!=stopper)AddAction("Talk to security",()=>session.Command("Police",npc.Id),ref y);}
-                    else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id),Bound(session?.Controls?.Chat,"F")))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId,command.Amount),ref y);
+                    if(npc.Kind=="Cop"){if(npc!=stopper)AddAction("Talk to security","Police",()=>session.Command("Police",npc.Id),ref y);}
+                    else foreach(var (label,command) in FestivalHudText.FestivalgoerActions(state,player,npc,soldToYou.Contains(state.RoundId+"/"+npc.Id),Bound(session?.Controls?.Chat,"F")))AddAction(label,command.Kind,()=>session.Command(command.Kind,command.TargetId,command.ItemId,command.Amount),ref y);
                 }
                 // Offering your gear to a friend in reach follows the errands above, the checks and the festivalgoer beside you: the sober
                 // crew sticks by the tripper, so a friend is often in reach, and E must not hand them your gear (your stock, ECON-3)
@@ -2277,11 +2282,11 @@ namespace Festival.Presentation
                 if(handGear.Count>0)
                 {
                     string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
-                    foreach(var mate in state.Players)if(mate.Id!=player.Id&&FestivalSimulation.CanHandoff(player,mate))AddAction("Offer "+ItemName(item)+" to "+mate.Name,()=>session.Command("Transfer",mate.Id,item,1),ref y);
+                    foreach(var mate in state.Players)if(mate.Id!=player.Id&&FestivalSimulation.CanHandoff(player,mate))AddAction("Offer "+ItemName(item)+" to "+mate.Name,"Transfer",()=>session.Command("Transfer",mate.Id,item,1),ref y);
                 }
                 // TRIP-4: lying down comes last of all, after the festivalgoer beside you, so E never lies you down instead of dancing,
                 // chatting or selling.
-                if(FestivalSimulation.CanLieDown(state,player))AddAction(FestivalHudText.LieDownAction,()=>session.Command(FestivalSimulation.LieDownKind),ref y);
+                if(FestivalSimulation.CanLieDown(state,player))AddAction(FestivalHudText.LieDownAction,FestivalSimulation.LieDownKind,()=>session.Command(FestivalSimulation.LieDownKind),ref y);
             }
             // DANCE-12: mid-dance E runs nothing, not even the cancel listed first, so a stray E can't stop it or start a buy, a
             // dance or a gear offer from the list; the lane's bottom line says to hold G (UpdateKeyboard). The list stays clickable.
@@ -2299,30 +2304,31 @@ namespace Festival.Presentation
             nearby.text=MoreActions(nearbyLabels,Bound(session?.Controls?.Menu,"ESC"));UpdateNearbyLayout();
             FinishActions();
         }
-        private void AddTwistActions(RoundState state,PlayerState player,ref float y){foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);}
+        private void AddTwistActions(RoundState state,PlayerState player,ref float y){foreach(var (label,command) in FestivalGuidance.TwistActions(state,player))AddAction(label,command.Kind,()=>session.Command(command.Kind,command.TargetId,command.ItemId),ref y);}
 
         private void AddHandoffActions(RoundState state,PlayerState player,ref float y)
         {
             var incoming=state.Transfers.Find(t=>t.ToId==player.Id);
-            if(incoming!=null)AddAction("Accept "+ItemName(incoming.ItemId)+" ×"+incoming.Amount,()=>session.Command("AcceptTransfer",incoming.Id),ref y);
+            if(incoming!=null)AddAction("Accept "+ItemName(incoming.ItemId)+" ×"+incoming.Amount,"AcceptTransfer",()=>session.Command("AcceptTransfer",incoming.Id),ref y);
             var outgoing=state.Transfers.Find(t=>t.FromId==player.Id);
-            if(outgoing!=null)AddAction("Cancel handoff",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
+            if(outgoing!=null)AddAction("Cancel handoff","CancelTransfer",()=>session.Command("CancelTransfer",outgoing.Id),ref y);
             if(outgoing!=null||handGear.Count==0)return;
             string item=handGear[Mathf.Clamp(selectedSlot,0,handGear.Count-1)].ItemId;
             foreach(var mate in state.Players)
             {
                 if(mate.Id==player.Id||!mate.Connected||mate.Life!="Alive"||!FestivalSimulation.CanHandoff(player,mate))continue;
                 var recipient=mate;
-                AddAction("Offer "+ItemName(item)+" to "+recipient.Name,()=>session.Command("Transfer",recipient.Id,item,1),ref y);
+                AddAction("Offer "+ItemName(item)+" to "+recipient.Name,"Transfer",()=>session.Command("Transfer",recipient.Id,item,1),ref y);
             }
         }
 
-        private void AddAction(string label,Action action,ref float y)
+        // kind is the command the row sends ("" for a line that does nothing), for FestivalHudText.ClosesMenu.
+        private void AddAction(string label,string kind,Action action,ref float y)
         {
-            // K1: a click on the Esc menu's list is a choice made, so the menu shuts on it: a dance, sale, buy or talk it starts takes
-            // your keys, which the open menu would drop, and its pass no longer covers the lanes offering only CANCEL ACTION. E runs
+            // A click on the Esc menu's list that starts something shuts the menu: a dance, sale, buy or talk takes your keys, which
+            // the open menu would drop, and its pass would cover the lanes. A deposit or gear keeps it open for the next click. E runs
             // the bare action (the menu is shut whenever E acts).
-            Action chosen=()=>{action();session.MenuOpen=false;};
+            Action chosen=()=>{action();if(FestivalHudText.ClosesMenu(kind))session.MenuOpen=false;};
             GameObject item;
             if(activeActionCount<dynamicActions.Count)
             {

@@ -695,6 +695,15 @@ namespace Festival.Presentation
             return actions;
         }
 
+        /// <summary>Whether a click on a command in the Esc menu's CREW + NEARBY list shuts the menu: one that starts or ends what you
+        /// are doing does, so it has your keys. Any other kind keeps the menu open, so a new list command needs its row here and in
+        /// HudMoneyTests.AListedCommandShutsTheMenuOnlyWhenItStartsSomething.</summary>
+        public static bool ClosesMenu(string kind)=>MenuClosers.Contains(kind);
+        static readonly HashSet<string> MenuClosers=new HashSet<string>{"Dance","Conversation","StartSale","StartBuy","ConfirmDance","ConfirmChat","Police",
+            FestivalSimulation.RideWheelKind,FestivalSimulation.RideCarKind,FestivalSimulation.DeckSetKind,"Dj","Extract","LostProperty","FindFriend","BeginRelease",
+            "BeginRevival","Rescue","Drag","CarryBody","HelpSelf","Use",FestivalSimulation.LieDownKind,"Cancel",FestivalSimulation.TestFreeKind};
+        public const string ActionsHeading="NEARBY / CREW";
+
         /// <summary>A sale's three asks by name, as the offer and the talk's title line say them.</summary>
         public static readonly string[] AskNames={"Fair","High","Greedy"};
         /// <summary>"Offer Tongue Stamps  •  Fair $10", "Ask high  •  $15" or "Ask greedy  •  $20", in the viewer's money.</summary>
