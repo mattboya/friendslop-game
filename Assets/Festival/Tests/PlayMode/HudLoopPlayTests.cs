@@ -348,6 +348,28 @@ namespace Festival.Tests
                     Assert.That(card.Overlaps(banner),Is.False,"the banner ("+F(banner)+") leaves death reel "+i+" ("+F(card)+") clear");
                     Assert.That(card.Overlaps(tag),Is.False,"the SPIRIT tag ("+F(tag)+") leaves death reel "+i+" ("+F(card)+") clear");
                 }
+                // The tag keeps its word on short and wide screens, each as the HUD canvas's logical size there
+                // (ScaleWithScreenSize 1920x1080, match .5): a 1080p window, 21:9 and 32:9, which cut it even at 100% text.
+                var hudCanvas=Screen1080("Festival HUD");var missed=new List<string>();
+                foreach(var (screen,size,scale) in new[]{("a 1080p window",new Vector2(2047,1013),1.3f),("21:9",new Vector2(2217,935),1.3f),("32:9",new Vector2(2715,764),1.3f),("32:9",new Vector2(2715,764),1f)})
+                {
+                    session.Profile.Data.TextScale=scale;hudCanvas.sizeDelta=size;yield return null;yield return null;Canvas.ForceUpdateCanvases();
+                    word=DropText(root,"Spirit tag text");
+                    if(word.cachedTextGenerator.characterCountVisible!=word.text.Length)missed.Add("on "+screen+" at "+Mathf.RoundToInt(scale*100)+"% text the tag shows "+word.cachedTextGenerator.characterCountVisible+" of its "+word.text.Length+" letters (box "+word.rectTransform.rect.height.ToString("F1")+" px, font "+word.fontSize+")");
+                }
+                session.Profile.Data.TextScale=1.3f;hudCanvas.sizeDelta=new Vector2(1920,1080);yield return null;yield return null;
+                // While it shows, the banner keeps its place or lowers: the sundown warning that ends under it never snaps it up.
+                Canvas.ForceUpdateCanvases();float top=Share(Shown("Life banner")).yMax;bool sundownGone=false;int after=0;
+                for(float until=Time.realtimeSinceStartup+7;after<10&&Time.realtimeSinceStartup<until;)
+                {
+                    yield return null;var shown=Shown("Life banner");if(shown==null)break;
+                    if(Shown("Sundown warning")==null){sundownGone=true;after++;}
+                    Canvas.ForceUpdateCanvases();float now=Share(shown).yMax;
+                    if(now>top+.0005f)missed.Add("the banner moves up while it shows (top "+top.ToString("F3")+" -> "+now.ToString("F3")+(sundownGone?", the sundown warning gone":"")+")");
+                    top=now;
+                }
+                Assert.That(sundownGone,Is.True,"setup: the sundown warning ends while the banner shows");
+                Assert.That(missed,Is.Empty,"short and wide screens, and the banner's place:\n"+string.Join("\n",missed));
                 // Riya brings your wristband to the medical tent.
                 var band=game.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==player.Id);Assert.That(band,Is.Not.Null,"setup: your wristband drops where you fell");
                 var riya=mates[3];riya.X=band.X;riya.Z=band.Z;

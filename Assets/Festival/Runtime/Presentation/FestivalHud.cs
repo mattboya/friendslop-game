@@ -533,7 +533,7 @@ namespace Festival.Presentation
             lifePanel.SetActive(false);
             // Between the voice line and the equipment bar, under the first row of death reels, whose foot is at .055.
             spiritTag=Card(root.transform,"Spirit tag",new Vector2(.44f,.006f),new Vector2(.56f,.046f),true);spiritTag.GetComponent<Image>().raycastTarget=false;
-            var spiritWord=Label(spiritTag.transform,"Spirit tag text",20,TextAnchor.MiddleCenter);spiritWord.text="SPIRIT";spiritWord.fontStyle=FontStyle.Normal;spiritWord.color=new Color(.62f,.8f,1,1);Fill(spiritWord.rectTransform,2);
+            var spiritWord=Label(spiritTag.transform,"Spirit tag text",20,TextAnchor.MiddleCenter);spiritWord.text="SPIRIT";spiritWord.fontStyle=FontStyle.Normal;spiritWord.color=new Color(.62f,.8f,1,1);Fill(spiritWord.rectTransform,2);ShrinkToFit(spiritWord,13);
             spiritTag.SetActive(false);
             // LOOP-5: the results banner, in the middle for the whole results. Over the aim dot, which has nothing to aim at then;
             // built before the map and the menus so they draw over it, and it catches no clicks.
@@ -1081,8 +1081,9 @@ namespace Festival.Presentation
             ApplyTextReflow(textScale);
             if(!session.Connected)return;
             UpdateTrippingLayout();
-            // The sundown warning comes down with the text scale and the dose card, so the banner reads its place after the reflow.
-            float lifeTop=sundownPanel.activeSelf?Mathf.Min(.70f,Rect(sundownPanel).anchorMin.y-.01f):.70f;
+            // The top cards come down with the text scale and the dose card, so the banner reads its place after the reflow. While
+            // it shows it only lowers: a card that goes away under it never snaps it up.
+            float foot=Mathf.Min(.70f,TopCardsFoot(.30f,.70f)-.01f),lifeTop=lifePanel.activeSelf?Mathf.Min(Rect(lifePanel).anchorMax.y,foot):foot;
             if(Rect(lifePanel).anchorMax.y!=lifeTop)Place(Rect(lifePanel),.30f,lifeTop-.14f,.70f,lifeTop);
             if(session.SpeechBubbles!=null&&session.SpeechBubbles.Ceiling==null)session.SpeechBubbles.Ceiling=TopCardsFoot;
             bool visible=chatWindow!=null&&chatWindow.Open&&!session.MenuOpen&&!mapPanel.activeSelf;
