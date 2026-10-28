@@ -50,8 +50,9 @@ namespace Festival.Presentation
                     :DayPayout(s,p,b)+", counted as sales.";
                 return ("+"+Money(s,p,b.Pot),paid+again);
             }
-            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\nOn your turn, call it to bank the pot."
-                +"\nThe spiked cup loses the pot and doses whoever drinks it.");
+            // A spirit or a detained player watches and never gets a turn, so their rules say so.
+            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\n"
+                +(b.PlayerIds.Contains(p.Id)?"On your turn, call it to bank the pot.":"You're watching: the players call it on their turn.")+"\nThe spiked cup loses the pot and doses whoever drinks it.");
             string up=FestivalSimulation.CupsTurn(s),seconds=WholeSeconds(b.TurnAt+FestivalSimulation.CupTurnSeconds-b.Seconds)+" s",next=Money(s,p,FestivalSimulation.NextCupPays(b)),pot=Money(s,p,b.Pot);
             string hunch=b.Hint>=0&&!b.Drunk.Contains(b.Hint)?" Your trip says cup "+(b.Hint+1)+"… trips like yours are right "+HunchOdds(FestivalSimulation.HunchReliability(s))+".":"";
             return ((MinigameName(b.Kind)+Dot+"POT "+pot).ToUpperInvariant(),
@@ -167,12 +168,14 @@ namespace Festival.Presentation
         static string ShortName(string name)=>name.Length>10?name.Substring(0,10).TrimEnd()+"…":name;
         /// <summary>A game's name as its booth sign and card read it; "MINIGAME" for one this build cannot name.</summary>
         public static string MinigameName(string kind)=>kind==FestivalSimulation.MysteryCupsGame?"MYSTERY CUPS":kind==FestivalSimulation.DrumCircleGame?"DRUM CIRCLE":kind==FestivalSimulation.LightShowGame?"LIGHT SHOW":"MINIGAME";
-        // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash.
+        // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash. A watcher gets
+        // nothing, so their line names who was paid instead of reading "each".
         static string DayPayout(RoundState s,PlayerState p,MinigameState b)
         {
             int crew=Math.Max(1,b.PlayerIds.Count),share=b.Pot/crew,stash=b.Pot-share*crew;
             if(share==0)return "Called it: the whole "+Money(s,p,b.Pot)+" pot goes to the stash";
-            return "Called it: "+Money(s,p,share)+" each"+(stash>0?", "+Money(s,p,stash)+" to the stash":"");
+            string paid=b.PlayerIds.Count==1?" to "+(b.PlayerIds[0]==p.Id?"you":NameOf(s,b.PlayerIds[0])):b.PlayerIds.Contains(p.Id)?" each":" to each player";
+            return "Called it: "+Money(s,p,share)+paid+(stash>0?", "+Money(s,p,stash)+" to the stash":"");
         }
         // A player's name as the view has it, else as the game captured it at its start: a spirit's view lists only spirits.
         static string NameOf(RoundState s,string id)=>s.Players.Find(x=>x.Id==id)?.Name??s.Booth.Participants?.Find(x=>x.Id==id)?.Name??"A friend";

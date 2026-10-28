@@ -1424,8 +1424,9 @@ namespace Festival.Presentation
 #endif
                 }
             }
-            // MINI-4: F calls Mystery Cups for the player who is up (MinigamePrompt says so).
-            if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&FestivalSimulation.CupsTurn(state)==player.Id){session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);return;}
+            // F calls Mystery Cups for the player who is up (MinigamePrompt says so). Anyone else's F asks too: the host's refusal,
+            // "It's Sam's turn" or "You're watching this one", is the notice.
+            if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen&&FestivalSimulation.CupsTurn(state)!=""){session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.CallCups);return;}
             if(session.Controls.Chat.WasPressedThisFrame()&&!session.MenuOpen)ChatKey(state,player);
             // DANCE-12: E sits between the W and D lanes, so mid-dance it runs nothing, even in the moment before UpdateActions
             // next drops the primary action, and a tap of G drops nothing; holding G stops the dance (HoldToStop). K2: mid-talk a

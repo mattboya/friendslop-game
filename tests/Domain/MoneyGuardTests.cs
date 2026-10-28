@@ -72,7 +72,7 @@ public static class MoneyGuardTests
         new[]{"Interactions.cs","p.Wristbands.Remove(spirit.Id)","reviver: 'WRISTBAND USED  •  Sam is back' (none for a self-revival)"},
         new[]{"MoneyNews.cs","p.Cash+=i.ReservedCash","payer: 'NO DEAL  •  +$5', 'RELEASE CALLED OFF  •  +$10' or 'REVIVAL CALLED OFF  •  +$10'"},
         new[]{"MysteryCups.cs","State.LevelSales+=b.Pot","everyone: the minigame card '+$pot', counted as sales"},
-        new[]{"MysteryCups.cs","p.Cash+=share","everyone: the minigame card 'Called it: $X each'"},
+        new[]{"MysteryCups.cs","p.Cash+=share","players: the minigame card 'Called it: $X each' ('$X to you' alone at the table); a watcher reads '$X to Sam' or '$X to each player'"},
         new[]{"MysteryCups.cs","State.StashCash+=b.Pot-share*crew.Count","everyone: the minigame card '$Y to the stash'"},
         new[]{"SecurityStops.cs","State.Drops.Remove(d)","crew: 'SECURITY TOOK the ditched Tongue Stamps'"},
         new[]{"SplitObjective.cs","State.StashCash+=FriendReward","crew: 'STASH  •  +$20  •  Sam found a lost friend'"},

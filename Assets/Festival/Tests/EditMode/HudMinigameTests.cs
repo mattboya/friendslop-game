@@ -130,14 +130,32 @@ namespace Festival.Tests
         {
             var s=Level(out var you,out var sam);s.FestivalIndex=festival;you.Ordinal=2;s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;b.ScoredAt=12;b.Seconds=12.5;
             string M(int amount)=>FestivalHudText.Money(s,you,amount);const string again=" The festival starts again in 4.";
-            foreach(var (crew,pot,line) in new[]{(1,5,"Called it: "+M(5)+" each, counted as sales."),(3,15,"Called it: "+M(5)+" each, counted as sales."),
+            foreach(var (crew,pot,line) in new[]{(1,5,"Called it: "+M(5)+" to you, counted as sales."),(3,15,"Called it: "+M(5)+" each, counted as sales."),
                 (2,15,"Called it: "+M(7)+" each, "+M(1)+" to the stash, counted as sales."),(3,35,"Called it: "+M(11)+" each, "+M(2)+" to the stash, counted as sales."),
                 (8,5,"Called it: the whole "+M(5)+" pot goes to the stash, counted as sales."),(8,60,"Called it: "+M(7)+" each, "+M(4)+" to the stash, counted as sales.")})
             {
-                b.PlayerIds.Clear();for(int i=0;i<crew;i++)b.PlayerIds.Add("p"+i);b.Pot=pot;
+                b.PlayerIds.Clear();b.PlayerIds.Add(you.Id);for(int i=1;i<crew;i++)b.PlayerIds.Add("p"+i);b.Pot=pot;
                 Assert.That(Card(s,you),Is.EqualTo(("+"+M(pot),line+again)),crew+" players calling a "+pot+" pot");
             }
             s.LevelIndex=1;Assert.That(Card(s,you).Item2,Is.EqualTo("Called it: "+M(60)+" to the stash."+again),"night banks it all");
+        }
+
+        // A detained tripper or a spirit watches Mystery Cups and is never paid, so no line of theirs may promise a turn or a share.
+        [Test]public void AWatcherIsToldTheyWatchAndWhoThePotPaid()
+        {
+            var s=Level(out var you,out var sam);s.Phase=FestivalSimulation.MinigamePhase;var b=s.Booth;you.Life="Detained";s.TripperId=you.Id;
+            b.PlayerIds.Add(sam.Id);b.Turns.Add(sam.Id);b.Cups=FestivalSimulation.CupsFor(1);b.Seconds=.5;b.TurnAt=FestivalSimulation.CupsIntroSeconds;
+            Assert.That(Card(s,you).Item2,Is.EqualTo("One of these 4 cups is spiked. Each safe cup grows the pot.\nYou're watching: the players call it on their turn.\nThe spiked cup loses the pot and doses whoever drinks it."),"the watcher's rules say they watch, in three lines");
+            Assert.That(Card(s,sam).Item2.Split('\n')[1],Is.EqualTo("On your turn, call it to bank the pot."),"the player's rules are unchanged");
+            const string again=" The festival starts again in 4.";
+            b.ScoredAt=12;b.Seconds=12.5;b.Pot=5;b.Drunk.Add(0);
+            Assert.That(Card(s,you),Is.EqualTo(("+$5","Called it: $5 to Sam, counted as sales."+again)),"the watcher reads who the pot paid");
+            Assert.That(Card(s,sam),Is.EqualTo(("+$5","Called it: $5 to you, counted as sales."+again)),"the lone player reads that it paid them");
+            var ash=new PlayerState{Id="ash",Name="Ash"};s.Players.Add(ash);b.PlayerIds.Add(ash.Id);b.Pot=15;you.Life="Spirit";
+            Assert.That(Card(s,you).Item2,Is.EqualTo("Called it: $7 to each player, $1 to the stash, counted as sales."+again),"a watcher of two players reads what each was paid");
+            Assert.That(Card(s,sam).Item2,Is.EqualTo("Called it: $7 each, $1 to the stash, counted as sales."+again),"the players read each share");
+            b.Pot=1;Assert.That(Card(s,you).Item2,Is.EqualTo(Card(s,sam).Item2),"a pot too small to share reads the same for everyone");
+            s.LevelIndex=1;b.Pot=15;Assert.That(Card(s,you).Item2,Is.EqualTo(Card(s,sam).Item2),"and so does a night's, banked to the stash");
         }
 
         // A spirit's view lists only spirits, so cups names who is up and who drank the spiked cup from the roster captured at the
@@ -294,6 +312,11 @@ namespace Festival.Tests
             b.ScoredAt=4;b.Seconds=4;b.SpikedBy="long3";b.Drunk.Add(8);cards.Add(Card(s,you));
             b.SpikedBy="";b.Drunk.Clear();b.Drunk.Add(4);b.Pot=1003;cards.Add(Card(s,you));
             b.Drunk.Clear();cards.Add(Card(s,you));
+            // A watcher's rules, and the end card naming the one long-named player it paid.
+            var watcher=new PlayerState{Id="watcher",Name="Watcher",Life="Spirit"};s.Players.Add(watcher);
+            b.ScoredAt=-1;b.Seconds=.5;b.TurnAt=3;b.Drunk.Clear();cards.Add(Card(s,watcher));
+            b.PlayerIds.RemoveAll(id=>id!="long0");b.ScoredAt=4;b.Seconds=4;b.Drunk.Add(4);b.Pot=1000;cards.Add(Card(s,watcher));cards.Add(Card(s,you));
+            Assert.That(cards[cards.Count-2].Item2,Does.StartWith("Called it: $1000 to Long Festival Friend 0, counted as sales."),"setup: the watcher reads the long name");
             Assert.That(CutInTheMinigameCard(cards),Is.Empty,"cut in the minigame card");
         }
 

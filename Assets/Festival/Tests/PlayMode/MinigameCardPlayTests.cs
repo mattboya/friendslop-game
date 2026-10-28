@@ -4,6 +4,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 using TMPro;
@@ -13,11 +14,13 @@ namespace Festival.Tests
     // MINI-6 on the live HUD of a hosted crew of three and a spirit: the booth's sign names its game; the dose card and the day
     // quota stay up through Mystery Cups and its banner; the called pot shows on the quota at once, and the banner says each share
     // and what the stash keeps; the spirit's own view names whose turn it is from the roster captured at the start. The card
-    // opens with the rules, and the tripper's hunch cup shimmers amber in their view alone.
+    // opens with the rules, and the tripper's hunch cup shimmers amber in their view alone. The spirit's rules say it watches,
+    // and F on a friend's turn calls nothing: the notice says whose turn it is.
     public sealed class MinigameCardPlayTests:FestivalPlayModeTest
     {
         [UnityTest]public IEnumerator TheCardsHoldThroughCupsAndItsBannerSaysWhereThePotWent()
         {
+            UseAVirtualKeyboard("cups card keyboard");
             var world=new GameObject("impl-U60 card world");world.AddComponent<FestivalWorld>();yield return null;
             var host=new GameObject("impl-U60 card session");var session=host.AddComponent<FestivalSession>();var hud=host.AddComponent<FestivalHud>();
             yield return null;
@@ -64,10 +67,15 @@ namespace Festival.Tests
 
                 var b=sim.State.Booth;int safe=b.Spiked==0?1:0;string up=FestivalSimulation.CupsTurn(sim.State);
                 Assert.That(up,Is.Not.EqualTo(me.Id),"setup: a friend drinks first");
+                // The game holds the world's clock, so this waits in real time.
+                yield return Tap(Key.F);yield return Wait(.2f);
+                Assert.That(FestivalSimulation.CupsTurn(sim.State)==up&&b.Pot==0&&b.ScoredAt<0,Is.True,"F on a friend's turn calls nothing: "+session.Message);
+                Assert.That(Find("Notice")?.text,Is.EqualTo("It's "+sim.Player(up).Name+"'s turn"),"and the notice says whose turn it is");
                 Assert.That(b.Seconds,Is.LessThan(b.TurnAt),"setup: the rules intro is up");
                 Assert.That(Find("Minigame detail")?.text,Does.StartWith("One of these "+b.Cups+" cups is spiked."),"the live card opens with the rules");
-                var spirit=FestivalSession.ViewFor(sim,ghost.Id);var living=FestivalSession.ViewFor(sim,me.Id);
-                Assert.That(FestivalHudText.MinigameCard(living,living.Players.Find(p=>p.Id==me.Id)),Is.EqualTo(FestivalHudText.MinigameCard(spirit,spirit.Players.Find(p=>p.Id==ghost.Id))),"the tripper's rules carry no hunch");
+                var spirit=FestivalSession.ViewFor(sim,ghost.Id);var living=FestivalSession.ViewFor(sim,me.Id);var friend=FestivalSession.ViewFor(sim,sam.Id);
+                Assert.That(FestivalHudText.MinigameCard(living,living.Players.Find(p=>p.Id==me.Id)),Is.EqualTo(FestivalHudText.MinigameCard(friend,friend.Players.Find(p=>p.Id==sam.Id))),"the tripper's rules carry no hunch");
+                Assert.That(FestivalHudText.MinigameCard(spirit,spirit.Players.Find(p=>p.Id==ghost.Id)).Detail.Split('\n')[1],Is.EqualTo("You're watching: the players call it on their turn."),"the spirit's rules say it watches");
                 // In the tripper's view alone the hunch cup shimmers amber; in a friend's view no cup does.
                 var booth=host.GetComponent<FestivalMinigameView>().Booth.Find(FestivalMinigameView.CupsName);
                 Material Look(Transform cups,int i)=>cups.Find(FestivalMinigameView.CupName(i)).GetComponentInChildren<MeshRenderer>().sharedMaterial;

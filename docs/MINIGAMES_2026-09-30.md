@@ -158,6 +158,11 @@ became of the pot and, to the tripper, whether the hunch was right, as far as th
 the last cup left; a hunch cup drunk safely was wrong; one nobody drank before the call stays a guess, because the spiked
 cup never leaves the host.
 
+As built (MINI-13): a spirit or a detained player watches without a turn, so their rules' middle line reads "You're
+watching: the players call it on their turn.", and the end card names whom the day's pot paid: "$5 each" to the players at
+a table of two or more, "$5 to you" or "$5 to Sam" at a table of one, and "$5 to each player" to a watcher. F on someone
+else's turn asks the host, and its refusal is the notice: "It's Sam's turn", or "You're watching this one".
+
 ## Rejected ideas
 
 - **Group Photo**, where everyone picks a matching pose, and **Tripper Telephone**, where the tripper relays
