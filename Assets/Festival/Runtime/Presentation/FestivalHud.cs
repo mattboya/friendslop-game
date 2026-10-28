@@ -2236,7 +2236,8 @@ namespace Festival.Presentation
                     // Before the reach check: a detained friend is held out of arm's reach, and the host's Release checks only the payer's spot.
                     if(mate.Id!=player.Id&&mate.Life=="Detained"&&Near(player,27,5))AddAction("Pay "+FestivalHudText.Money(state,player,10)+" release for "+mate.Name,"BeginRelease",()=>session.Command("BeginRelease",mate.Id,amount:1),ref y);
                     if(mate.Id==player.Id||!FestivalSimulation.CanHandoff(player,mate))continue;
-                    if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,"Rescue",()=>session.Command("Rescue",mate.Id),ref y);AddAction("Drag "+mate.Name,"Drag",()=>session.Command("Drag",mate.Id),ref y);}
+                    // The friend you drag is let go by the same Drag, so their row says so.
+                    if(mate.Life=="Downed"){AddAction("Rescue "+mate.Name,"Rescue",()=>session.Command("Rescue",mate.Id),ref y);AddAction((player.DragTargetId==mate.Id?"Let go of ":"Drag ")+mate.Name,"Drag",()=>session.Command("Drag",mate.Id),ref y);}
                 }
                 NpcState check=null;
                 if(player.Life=="Spirit")
@@ -2309,8 +2310,9 @@ namespace Festival.Presentation
             else if(talking)prompt.text=Bound(session?.Controls?.Menu,"ESC")+" TO WALK AWAY";
             else prompt.text=primaryAction==null?"":dynamicActions.Find(g=>g.name.StartsWith("Action:"))?.name.Substring(7);
             // ECON-3: beside a festivalgoer or a cop, the strip lists what else there is, each a click away in the Esc menu's list.
+            // So it does while you drag a friend, so the way to let go is on screen.
             nearbyLabels.Clear();
-            if(npc!=null&&primaryAction!=null)for(int i=0;i<activeActionCount;i++)nearbyLabels.Add(dynamicActions[i].name.Substring(7));
+            if((npc!=null||player.DragTargetId!="")&&primaryAction!=null)for(int i=0;i<activeActionCount;i++)nearbyLabels.Add(dynamicActions[i].name.Substring(7));
             nearby.text=MoreActions(nearbyLabels,Bound(session?.Controls?.Menu,"ESC"));UpdateNearbyLayout();
             FinishActions();
         }

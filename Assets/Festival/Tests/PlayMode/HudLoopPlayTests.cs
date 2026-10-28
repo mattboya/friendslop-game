@@ -371,6 +371,37 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // While you drag a friend, their row says it lets go, in the strip under the prompt and in the Esc menu's list,
+        // and a click on it lets go.
+        [UnityTest]public IEnumerator ADraggerSeesHowToLetGo()
+        {
+            var world=new GameObject("Drag world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Drag HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            Button Row(string label){foreach(var b in root.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name=="Action:"+label)return b;return null;}
+            string Listed(){var listed=new List<string>();foreach(var b in root.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name.StartsWith("Action:"))listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
+            try
+            {
+                session.Host("Dragger",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);
+                var sam=game.AddPlayer("drag_sam","Sam");sam.Ready=true;
+                yield return StartLevel(session);
+                var player=game.Player(session.LocalPlayerId);game.State.Npcs.Clear();game.State.Visions.Clear();
+                player.X=0;player.Z=0;sam.X=-1;sam.Z=0;sam.Life="Downed";sam.DownedRemaining=1e6;
+                yield return new WaitForSeconds(.4f);
+                Assert.That(Row("Drag Sam"),Is.Not.Null,"setup: beside a downed friend you can drag them (listed: "+Listed()+")");
+                session.Command("Drag",sam.Id);yield return new WaitForSeconds(.4f);
+                Assert.That(player.DragTargetId,Is.EqualTo(sam.Id),"setup: you drag Sam ("+session.Message+")");
+                Assert.That(Row("Drag Sam"),Is.Null,"dragging, no row still says Drag (listed: "+Listed()+")");
+                var off=Row("Let go of Sam");Assert.That(off,Is.Not.Null,"dragging, the row says it lets go (listed: "+Listed()+")");
+                Assert.That(DropText(root,"Nearby")?.text,Does.Contain("Let go of Sam"),"and the strip under the prompt shows it");
+                off.onClick.Invoke();yield return new WaitForSeconds(.4f);
+                Assert.That(player.DragTargetId,Is.Empty,"a click on it lets go");
+                Assert.That(Row("Drag Sam"),Is.Not.Null,"and the row offers the drag again (listed: "+Listed()+")");
+            }
+            finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
         [UnityTest]public IEnumerator ResetDisclosuresFitActualResultsCampReviewShoppingAndHelpInBothCurrencies()
         {
             var world=new GameObject("impl-U53 reset world");world.AddComponent<FestivalWorld>();yield return null;
