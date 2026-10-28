@@ -138,3 +138,23 @@ DIALOG-18 — A view never shows the grade of a reply the player did not pick
 MUSIC-8 — The small stage is heard only near it, levels open on the main song, stage tests ride every song
 ECON-14 — A failed trust dance costs no ask, a handed-back unit returns to its slot, Esc keeps the sale result
 DIALOG-20 — Talks score in points, and the trust dance makes the talk easier or harder instead of ending it
+CAMP-6 — The headliner's chair fits every body, and a crossbody pouch slips off for the seat
+DEV-4 — A test clear stays marked as a test after TEST MODE is switched off during Results
+DIALOG-21 — A cut talk's card drops the hint mark, a refused late reply shows as too late, last lines ask for a deal
+DIALOG-22 — A festivalgoer too worked up to talk also refuses a dance
+DOCS-4 — The docs link check fails on links GitHub cannot open (wrong case, ignored or untracked files)
+ECON-15 — A late stop from a trust dance never walks off its talk, and every talk ending has an Esc race test
+ECON-16 — Only clicks that start something close the Escape menu; deposits keep it open and show their amount
+ESC-8 — A dragger is refused the DJ set and the Ferris wheel, and the row says Let go of the friend
+ESC-9 — A security line closes a lingering chat window
+HUD-20 — A money figure lights only when its own value moved, the money guard finds more silent writes, the sale stamp waits under a card
+LOOP-11 — The SPIRIT card always shows its word, the life banner keeps still, the death-history test follows the revival limit
+MINI-13 — Mystery Cups tells a watcher they are out and names who got the payout
+NET-6 — The host's own view is a copy of the simulation, as each client's is
+PLAYA-11 — A PlayMode case checks the double-F deck set notice
+POLO-11 — The host picks each Ferris wheel rider's gondola so every view agrees, and a riding friend's tag reads from the steps
+SET-10 — Key names in How to Play and under the dance lanes read whole, with separators
+TEST-17 — EditMode hosts use a free port, and a domain check refuses a literal Host port in the tests
+TEST-8 — The player-script compile tests wait for the Editor's garbage to stop instead of sleeping 1 s
+TRIP-21 — The dose surface pattern stays off moving scenery, and a test keeps the surface pass free of garbage
+WAVE-2 — A festivalgoer who gets worked up mid-talk or mid-dance ends it at once
