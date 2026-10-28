@@ -18,7 +18,7 @@ namespace Festival.Tests
             root=new GameObject("impl-U58 wheel fallback");var world=root.AddComponent<FestivalWorld>();
             var state=new RoundState{Phase="Playing",SimulationSeconds=70};var rider=new PlayerState{Id="you",VisualWheelSince=20};state.Players.Add(rider);
             float lead=FestivalWorld.GlideLead(6,Time.unscaledDeltaTime);
-            var expected=FestivalTwistVisuals.Seat(state,rider,70+lead,null);
+            var expected=FestivalTwistVisuals.Seat(state,rider,70+lead);
             Assert.That(Vector3.Distance(world.WheelSeat(state,rider,6),expected),Is.LessThan(.001f),"fallback advances on world clock, not boarding timestamp");
             state.Phase=FestivalSimulation.MinigamePhase;state.Booth.Seconds=35;state.SimulationSeconds=105;
             Assert.That(Vector3.Distance(world.WheelSeat(state,rider,6),expected),Is.LessThan(.001f),"game holds seat");

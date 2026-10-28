@@ -814,7 +814,7 @@ namespace Festival.Presentation
         public Vector3 WheelSeat(RoundState state,PlayerState rider,float rate)
         {
             float lead=GlideLead(rate,Time.unscaledDeltaTime);
-            return twists!=null?twists.Seat(state,rider,twists.WheelClock+lead):FestivalTwistVisuals.Seat(state,rider,FestivalSimulation.WorldSeconds(state)+lead,null);
+            return FestivalTwistVisuals.Seat(state,rider,(twists!=null?twists.WheelClock:FestivalSimulation.WorldSeconds(state))+lead);
         }
         /// <summary>POLO-7: how many seconds ahead of a target moving at a steady pace to aim a glide that closes 1-exp(-rate·dt) of
         /// the gap each dt-second frame, so it keeps up with the target: dt·q/(1-q), q=exp(-rate·dt). Under 1/rate by less than half a

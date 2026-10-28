@@ -104,7 +104,7 @@ namespace Festival.Tests
             for(int f=1;f<60;f++)Step();
             Assert.That(Quaternion.Angle(stopped,rotor.localRotation),Is.EqualTo(18).Within(.5f),"a second of play turns it a second's worth, 18°");
             var rider=new PlayerState{Id="rider",VisualWheelSince=round.SimulationSeconds};round.Players.Add(rider);
-            var seat=twists.Seat(round,rider,twists.WheelClock);
+            var seat=FestivalTwistVisuals.Seat(round,rider,twists.WheelClock);
             Assert.That(seat.y,Is.LessThan(2.5f),"a rider boarding after the game sits in the gondola down at the platform, at "+seat);
             Assert.That(Vector2.Distance(Flat(seat),new Vector2(Festivals.WheelX,Festivals.WheelZ)),Is.LessThanOrEqualTo(Festivals.WheelReach),"beside it");
         }
@@ -116,7 +116,7 @@ namespace Festival.Tests
         // who board together (one, two, three, or the whole crew of eight) never sit in one another: riders who share a gondola sit
         // side by side at least a seated body's width apart (SeatedWidth, drawn at RiderScale), so once it is full the rest ride the
         // gondolas round from it, each in one gondola all the way round and back where they boarded. A rider who boards later takes
-        // no place in theirs.
+        // no place in theirs. Each sits where the host seated them (HostSeats).
         [Test]public void RidersSitInTheGondolaTheyBoardedAllTheWayRound()
         {
             var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var round=Round(Festivals.PoloFestival);
@@ -127,14 +127,15 @@ namespace Festival.Tests
             const float Head=.15f;var touching=new Collider[8];
             foreach(int crew in new[]{1,2,3,8})foreach(double since in new[]{0,3.7,11.2})
             {
-                round.Players.Clear();for(int r=0;r<crew;r++)round.Players.Add(new PlayerState{Id="rider "+r,VisualWheelSince=since});
-                round.Players.Add(new PlayerState{Id="later rider",VisualWheelSince=since+5});round.Players.Add(new PlayerState{Id="walker"});
+                var boards=new List<(string,double,double)>();for(int r=0;r<crew;r++)boards.Add(("rider "+r,since,Stays));boards.Add(("later rider",since+5,Stays));
+                var seats=HostSeats(boards.ToArray());round.Players.Clear();
+                foreach(var (id,on,_) in boards)round.Players.Add(new PlayerState{Id=id,VisualWheelSince=on,VisualWheelGondola=seats[id]});round.Players.Add(new PlayerState{Id="walker"});
                 var theirs=new int[crew];var start=new Vector3[crew];
                 foreach(double part in new[]{0,.25,.5,.75,1})
                 {
                     double now=since+part*Festivals.WheelRideSeconds;round.SimulationSeconds=now;twists.Apply(round,0);Physics.SyncTransforms();
                     string when=crew+" aboard, boarded "+since+" s, "+part*100+"% round: ";var eyes=new List<Vector3>();
-                    for(int r=0;r<crew;r++)eyes.Add(twists.Seat(round,round.Players[r],now)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight);
+                    for(int r=0;r<crew;r++)eyes.Add(FestivalTwistVisuals.Seat(round,round.Players[r],now)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight);
                     for(int r=0;r<crew;r++)
                     {
                         var eye=eyes[r];int inside=gondolas.FindIndex(g=>Bounds(g).Contains(eye));
@@ -173,7 +174,7 @@ namespace Festival.Tests
         {
             var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var round=Round(Festivals.PoloFestival);var gondolas=Gondolas(grounds);
             const double Frame=1/60.0,First=.1,Apart=.25,Game=3;const int Crew=5;
-            Vector3 Seat(PlayerState rider)=>twists.Seat(round,rider,twists.WheelClock);
+            Vector3 Seat(PlayerState rider)=>FestivalTwistVisuals.Seat(round,rider,twists.WheelClock);
             int Nearest(Vector3 seat){int nearest=0;for(int k=1;k<gondolas.Count;k++)if(Vector3.Distance(seat,gondolas[k].position)<Vector3.Distance(seat,gondolas[nearest].position))nearest=k;return nearest;}
             var moved=new List<string>();
             // Cut short: -1 lets every ride run its whole turn; otherwise the first two get off this far into theirs. The last run
@@ -181,7 +182,8 @@ namespace Festival.Tests
             foreach(var (cut,game,run) in new[]{(-1.0,false,"full rides: "),(Festivals.WheelRideSeconds/2,false,"the first two cut short: "),(Festivals.WheelRideSeconds/2,true,"cut short, then a minigame: ")})
             {
                 round.Players.Clear();round.SimulationSeconds=0;twists.Apply(round,0);
-                var riders=new PlayerState[Crew];var theirs=new int[Crew];
+                var riders=new PlayerState[Crew];var theirs=new int[Crew];var boards=new (string,double,double)[Crew];
+                for(int r=0;r<Crew;r++)boards[r]=("rider "+r,First+Apart*r,Stays);var seats=HostSeats(boards);
                 for(int r=0;r<Crew;r++){riders[r]=new PlayerState{Id="rider "+r};round.Players.Add(riders[r]);theirs[r]=-1;}
                 var counted=new HashSet<int>();
                 void See(double now)
@@ -209,7 +211,7 @@ namespace Festival.Tests
                     {
                         double since=First+Apart*r;
                         bool aboard=now>=since&&now<since+Festivals.WheelRideSeconds&&!(cut>=0&&r<2&&now>=since+cut);
-                        riders[r].VisualWheelSince=aboard?since+round.Booth.Seconds:-1;
+                        riders[r].VisualWheelSince=aboard?since+round.Booth.Seconds:-1;riders[r].VisualWheelGondola=aboard?seats[riders[r].Id]:-1;
                     }
                     See(now);
                 }
@@ -219,43 +221,65 @@ namespace Festival.Tests
             Assert.That(moved,Is.Empty,"Riders who change gondola mid-ride:\n"+string.Join("\n",moved));
         }
 
-        // The host seats riders from its view every 1/30 s tick, a joined client from a snapshot every .1 s, each keeping the
-        // gondolas it gave. Two friends fill the platform's gondola; a third boards one to six ticks before their turn ends, at each
-        // phase of the client's snapshots. A client's first snapshot of the third can come after the two have stepped off, yet it
-        // seats the third where the host did: in the next gondola, since the platform's was full when they boarded.
+        // The host seats riders from its view every 1/30 s tick, a joined client from a snapshot every .1 s, and a client that joins
+        // (or comes back, or is revived from a spirit) late from its first snapshot alone. Two friends fill the platform's gondola; a
+        // third boards one to six ticks before their turn ends, at each phase of the client's snapshots. Every view carries
+        // the gondola the host gave each rider, so each seats the third where the host did: in the next gondola, since the platform's
+        // was full when they boarded, even a view that first sees them after the two have stepped off. When one of the two left the
+        // wheel 5 s in (downed, or dropped out), the third takes the seat they freed, beside the other, in every view.
         [Test]public void TheHostAndAJoinedClientSeatALateRiderInTheSameGondola()
         {
             const double Tick=1/30.0,Snapshot=.1,Ride=Festivals.WheelRideSeconds,First=3*Tick;var differ=new List<string>();
-            for(int before=1;before<=6;before++)foreach(int phase in new[]{0,1,2})
+            var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var gondolas=Gondolas(grounds);
+            // Which gondola a seat at now is in: the nearest, with the wheel drawn at now (snapped there from 5 s on).
+            int GondolaAt(Vector3 seat,double now)
             {
-                double late=First+Ride-before*Tick;var boards=new Dictionary<string,double>{{"a0",First},{"a1",First},{"b",late}};
+                foreach(double at in new[]{now+5,now})twists.Apply(new RoundState{Phase="Playing",FestivalIndex=Festivals.PoloFestival,SimulationSeconds=at},0);
+                int nearest=0;for(int k=1;k<gondolas.Count;k++)if(Vector3.Distance(seat,gondolas[k].position)<Vector3.Distance(seat,gondolas[nearest].position))nearest=k;
+                return nearest;
+            }
+            foreach(bool early in new[]{false,true})for(int before=1;before<=6;before++)foreach(int phase in new[]{0,1,2})
+            {
+                double late=First+Ride-before*Tick,off=early?First+5:Stays;
+                var seats=HostSeats(("a0",First,Stays),("a1",First,off),("b",late,Stays));
+                var boards=new Dictionary<string,(double On,double Off)>{{"a0",(First,First+Ride)},{"a1",(First,System.Math.Min(off,First+Ride))},{"b",(late,late+Ride)}};
                 RoundState At(double now)
                 {
                     var round=new RoundState{Phase="Playing",SimulationSeconds=now};
-                    foreach(var pair in boards)round.Players.Add(new PlayerState{Id=pair.Key,VisualWheelSince=now>=pair.Value-1e-9&&now<pair.Value+Ride-1e-9?pair.Value:-1});
+                    foreach(var pair in boards){bool on=now>=pair.Value.On-1e-9&&now<pair.Value.Off-1e-9;round.Players.Add(new PlayerState{Id=pair.Key,VisualWheelSince=on?pair.Value.On:-1,VisualWheelGondola=on?seats[pair.Key]:-1});}
                     return round;
                 }
-                // The gondola a view gives b the first time it sees b aboard, after seating everyone aboard in every view before.
-                int Watch(List<double> views,Dictionary<string,(double Since,int Gondola)> kept)
+                // The gondola a view draws b in the first time it sees b aboard.
+                int Watch(List<double> views)
                 {
-                    foreach(var now in views)
-                    {
-                        var round=At(now);foreach(var p in round.Players)if(p.VisualWheelSince>=0)FestivalTwistVisuals.Seat(round,p,now,kept);
-                        if(round.Players.Find(p=>p.Id=="b").VisualWheelSince>=0)return kept["b"].Gondola;
-                    }
+                    foreach(var now in views){var round=At(now);var b=round.Players.Find(p=>p.Id=="b");if(b.VisualWheelSince>=0)return GondolaAt(FestivalTwistVisuals.Seat(round,b,now),now);}
                     return -1;
                 }
                 var host=new List<double>();for(int k=0;k*Tick<=late+1;k++)host.Add(k*Tick);
                 var client=new List<double>();for(int k=0;k*Snapshot+phase*Tick<=late+1;k++)client.Add(System.Math.Floor((k*Snapshot+phase*Tick)/Tick+1e-9)*Tick);
-                var onHostSeats=new Dictionary<string,(double Since,int Gondola)>();
-                int onHost=Watch(host,onHostSeats),onClient=Watch(client,new Dictionary<string,(double Since,int Gondola)>());
-                Assert.That(onHost,Is.GreaterThanOrEqualTo(0),"setup: the host sees b aboard");
-                Assert.That(onHost,Is.Not.EqualTo(onHostSeats["a0"].Gondola),"the host seats b, boarding "+before+" tick(s) before a0 and a1 step off, apart from them");
-                if(onHost!=onClient)differ.Add("b boards "+before+" tick(s) before a0 and a1 step off, snapshot phase "+phase+": host gondola "+onHost+", client gondola "+onClient);
+                int onHost=Watch(host),onClient=Watch(client),late1=Watch(new List<double>{late+1});
+                string when=(early?"a1 left 5 s in; ":"")+"b boards "+before+" tick(s) before a0 and a1's turn ends, snapshot phase "+phase+": ";
+                Assert.That(onHost,Is.EqualTo(seats["b"]),when+"the host draws b in the gondola it seated them in");
+                Assert.That(seats["b"]==seats["a0"],Is.EqualTo(early),when+(early?"b takes the seat a1 freed, beside a0":"b rides apart from a0 and a1"));
+                if(onClient!=onHost||late1!=onHost)differ.Add(when+"host gondola "+onHost+", joined client "+onClient+", a client that first sees b 1 s in "+late1);
             }
-            Assert.That(differ,Is.Empty,"A late rider in different gondolas on the host and on a joined client:\n"+string.Join("\n",differ));
+            Assert.That(differ,Is.Empty,"A late rider in different gondolas on the host and on a client:\n"+string.Join("\n",differ));
         }
-
+        // The gondola the host (FestivalSimulation.RideWheel) seats each rider in as they board at Since, in that order; one
+        // whose Off comes before a later boarding has left the wheel early (dropped out) by then. The rules' clock is set, not ticked.
+        private const double Stays=double.PositiveInfinity;
+        private static Dictionary<string,int> HostSeats(params (string Id,double Since,double Off)[] boards)
+        {
+            var game=new FestivalSimulation(1);game.State.Phase="Playing";game.State.FestivalIndex=Festivals.PoloFestival;var seats=new Dictionary<string,int>();
+            foreach(var b in boards)game.State.Players.Add(new PlayerState{Id=b.Id,X=Festivals.WheelX,Z=Festivals.WheelZ+1});
+            foreach(var b in boards)
+            {
+                foreach(var gone in boards)if(gone.Off<=b.Since&&FestivalSimulation.OnWheel(game.State,gone.Id))game.Disconnect(gone.Id);
+                game.State.SimulationSeconds=b.Since;var boarded=game.Execute(b.Id,new GameCommand{Id="ride "+b.Id,Kind=FestivalSimulation.RideWheelKind});
+                Assert.That(boarded.Accepted,Is.True,"setup: "+b.Id+" boards: "+boarded.Reason);seats[b.Id]=FestivalSimulation.WheelGondola(game.State,b.Id);
+            }
+            return seats;
+        }
         // The widest seated body at full size, from either side: shape 2's accessory 1 reaches .56 m out from its middle (measured
         // over 240 looks), so two of them side by side need 1.12 m between their middles.
         private const float SeatedWidth=1.12f;
@@ -270,13 +294,13 @@ namespace Festival.Tests
             const double Settle=1;var off=new List<string>();
             foreach(int fps in new[]{30,60,144})foreach(float rate in new[]{15f,20f})
             {
-                float dt=1f/fps,worst=0;var glided=FestivalTwistVisuals.Seat(round,rider,0,null);
+                float dt=1f/fps,worst=0;var glided=FestivalTwistVisuals.Seat(round,rider,0);
                 for(int frame=1;frame*(double)dt<=Settle+Festivals.WheelRideSeconds;frame++)
                 {
-                    double now=frame*(double)dt;var target=FestivalTwistVisuals.Seat(round,rider,now+FestivalWorld.GlideLead(rate,dt),null);
+                    double now=frame*(double)dt;var target=FestivalTwistVisuals.Seat(round,rider,now+FestivalWorld.GlideLead(rate,dt));
                     // The session's glide, as Actor and UpdateCamera move the body and the eye each frame.
                     glided=Vector3.Lerp(glided,target,1-Mathf.Exp(-rate*dt));
-                    if(now>=Settle)worst=Mathf.Max(worst,Vector3.Distance(glided,FestivalTwistVisuals.Seat(round,rider,now,null)));
+                    if(now>=Settle)worst=Mathf.Max(worst,Vector3.Distance(glided,FestivalTwistVisuals.Seat(round,rider,now)));
                 }
                 if(worst>=.003f)off.Add(fps+" fps, gliding at "+rate+": "+(worst*1000).ToString("0.0")+" mm off the seat");
             }
