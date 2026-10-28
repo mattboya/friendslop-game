@@ -26,7 +26,7 @@ public static class ConversationTests
             ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,ADanceMovesWhereTheTalkStarts,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
-            AWorkedUpFestivalgoerWontTalk,AFlopWorksNoOneUpForTheTalkItLeadsTo,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
+            AWorkedUpFestivalgoerWontTalkOrDance,AFestivalgoerWorkedUpMidTalkEndsIt,AFlopWorksNoOneUpForTheTalkItLeadsTo,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
             EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,AFailedTrustDanceIsNotAFailedAsk,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -188,11 +188,11 @@ public static class ConversationTests
         }
     }
 
-    // K2: someone worked up about you (accusing you, or swarming you) is too agitated to chat, sell or buy, as Talk's bark and the
-    // chat check already said: a talk roots you, and they would hit you while you stand in it. Nothing is taken or held.
-    static void AWorkedUpFestivalgoerWontTalk()
+    // Someone worked up about you (accusing you, or swarming you) is too agitated to chat, sell, buy or dance, as Talk's bark and
+    // the chat check already said: each roots you, and they would hit you while you stand in it. Nothing is taken or held.
+    static void AWorkedUpFestivalgoerWontTalkOrDance()
     {
-        foreach(var kind in new[]{"Conversation","Sale","Buy"})foreach(bool swarming in new[]{false,true})
+        foreach(var kind in new[]{"Conversation","Sale","Buy","Dance"})foreach(bool swarming in new[]{false,true})
         {
             var s=Pair(kind);var npc=Partner(s);var p=s.Player("p0");p.Cash=20;
             npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=0});
@@ -200,8 +200,36 @@ public static class ConversationTests
             string mode=npc.Mode;Check(mode==(swarming?"Swarming":"Accusing"),"setup: they are "+(swarming?"swarming":"accusing")+" p0 (mode "+mode+")");
             int cash=p.Cash,stock=p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0;
             var started=Act(s,"p0",kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");
-            Check(!started.Accepted&&started.Reason=="They're too agitated to chat","a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
+            string refusal=kind=="Dance"?"They're too agitated to dance":"They're too agitated to chat";
+            Check(!started.Accepted&&started.Reason==refusal,"a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
             Check(p.InteractionId==""&&p.Cash==cash&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==stock,"and nothing starts, held or taken ("+p.InteractionId+", $"+p.Cash+")");
+        }
+    }
+
+    // A partner worked up mid-way (here by a shout from a watcher at 95) ends the talk, its trust dance, the dance or the check at
+    // once with the start's refusal, before they swarm you where you stand. It is their doing, so it costs no pushed ask.
+    static void AFestivalgoerWorkedUpMidTalkEndsIt()
+    {
+        foreach(var kind in new[]{"Conversation","Sale","Buy","Dance","TrustDance","ConfirmChat","ConfirmDance"})
+        {
+            string start=kind=="TrustDance"?"Sale":kind;var s=Pair(start);var npc=Partner(s);var p=s.Player("p0");p.Cash=20;
+            npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=kind=="TrustDance"?FestivalSimulation.TrustDanceSuspicion:30,LastSeenSeconds=0});
+            if(start.StartsWith("Confirm",StringComparison.Ordinal)){s.State.TripperId="p0";s.State.Visions.Add(new VisionState{Id="vision",Kind="Buyer",NpcId=npc.Id});}
+            var i=start=="Sale"?Sale(s,FestivalSimulation.HighAsk):Start(s,start);int held=i.ReservedCash;
+            Check(i.TrustDance==(kind=="TrustDance")&&i.Status=="Active"&&(held>0)==(start=="Buy"),"setup: the "+kind+" is under way ("+i.Status+", $"+held+" held)");
+            var shouter=new NpcState{Id="shouter",Kind="Wook",X=3,Z=1.5f,Yaw=-90};shouter.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=0});s.State.Npcs.Add(shouter);
+            // The shout lifts them to 70 after their own tick, so they turn Accusing on the next.
+            s.Tick(.2);
+            Check(npc.Mode=="Accusing","setup: the shout works their partner up ("+npc.Mode+" at "+npc.Observers.Find(o=>o.PlayerId=="p0").Suspicion+")");
+            string refusal=kind=="Dance"||kind=="ConfirmDance"?"They're too agitated to dance":"They're too agitated to chat";
+            Check(i.Status==refusal&&p.InteractionId=="","a "+kind+" whose partner gets worked up ends at once, as their refusal (\""+i.Status+"\", p0 in \""+p.InteractionId+"\")");
+            if(start=="Sale")
+            {
+                var o=p.ConversationOutcomes.Find(x=>x.InteractionId==i.Id);
+                Check(o!=null&&o.Notice=="SALE OFF  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE"&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==1,"the sale hands its unit back and says so (\""+o?.Notice+"\")");
+                Check(!npc.Observers.Find(x=>x.PlayerId=="p0").RefusesSales,"and the pushed ask costs nothing: they still buy from p0");
+            }
+            if(start=="Buy"){string news=p.MoneyNewsLog[p.MoneyNewsLog.Count-1].Text;Check(p.Cash==20&&news=="NO DEAL  •  +$"+held,"the buy's held price comes back and says so ($"+p.Cash+", was $20; \""+news+"\")");}
         }
     }
 
