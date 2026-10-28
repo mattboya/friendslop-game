@@ -9,7 +9,7 @@ public static class DeathCashTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{PublicHistoryRetainsTwentyFourActualDeathsAndResets,PublicHistoryUsesImmutableWorldTimeThroughARealBooth,LegacySnapshotsDoNotSynthesizePublicDeaths})
+        foreach(var test in new Action[]{PublicHistoryRetainsEveryActualDeathAndResets,PublicHistoryUsesImmutableWorldTimeThroughARealBooth,LegacySnapshotsDoNotSynthesizePublicDeaths})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+": "+error.Message);}
         Check(failures.Count==0,string.Join("\n",failures));
         EveryDeathEmitsItsFrozenPublicRecord();
@@ -73,21 +73,23 @@ public static class DeathCashTests
         var restored=new FestivalSimulation();restored.Restore(zero);
         Check(restored.State.DeathSpins.Count==1&&restored.State.DeathSpins[0].AtWorldSeconds==0&&restored.State.DeathSpins[0].Seed==276,"a valid time-zero public death restores without normalization or a new RNG draw");
     }
-    static void PublicHistoryRetainsTwentyFourActualDeathsAndResets()
+    static void PublicHistoryRetainsEveryActualDeathAndResets()
     {
         var s=new FestivalSimulation(43);
         for(int k=0;k<8;k++)s.AddPlayer("player-"+k,"Friend "+k);
         s.State.Phase="Playing";s.State.Npcs.Clear();s.State.SpinSeed=4;
         string firstId="";double firstAt=0;int firstSeed=0,firstOutcome=0;
-        for(int death=1;death<=3;death++)for(int k=0;k<8;k++)
+        // Each friend dies once more than a level's revivals allow, so the history fills whatever RevivalsPerLevel is.
+        int deaths=FestivalGuidance.RevivalsPerLevel+1,all=8*deaths;
+        for(int death=1;death<=deaths;death++)for(int k=0;k<8;k++)
         {
             // A multiplayer wipe ends before the last downed expiry. Disconnect the seven spirits before the final solo death.
-            if(death==3&&k==7)for(int gone=0;gone<7;gone++)s.Disconnect("player-"+gone);
+            if(death==deaths&&k==7)for(int gone=0;gone<7;gone++)s.Disconnect("player-"+gone);
             var owner=s.Player("player-"+k);var helper=s.Player(k==0?"player-1":"player-0");owner.Cash=40;owner.X=helper.X=0;owner.Z=helper.Z=0;
             Die(s,owner);
             Check(s.State.DeathSpins.Count==(death-1)*8+k+1,"each real death is appended even when no view polls between deaths");
             if(death==1&&k==0){firstId=s.State.DeathSpins[0].Id;firstAt=s.State.DeathSpins[0].AtWorldSeconds;firstSeed=s.State.DeathSpins[0].Seed;firstOutcome=s.State.DeathSpins[0].CashDropped;owner.Name="Changed";}
-            if(death<3)
+            if(death<deaths)
             {
                 var band=s.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==owner.Id);
                 Check(s.Execute(helper.Id,new GameCommand{Id="band-"+death+"-"+k,Kind="Pickup",TargetId=band.Id}).Accepted,"setup: living helper claims the actual wristband");
@@ -96,11 +98,11 @@ public static class DeathCashTests
                 s.Tick(10.1);Check(owner.Life=="Alive"&&owner.RevivalCount==death,"the actual revival completes without consuming death history");
             }
         }
-        Check(s.State.DeathSpins.Count==24,"eight players with two actual revivals retain the full bounded twenty-four-event history");
+        Check(s.State.DeathSpins.Count==all,"eight players with "+(deaths-1)+" actual revivals each retain the full bounded "+all+"-event history");
         var first=s.State.DeathSpins[0];Check(first.Id==firstId&&first.AtWorldSeconds==firstAt&&first.Name=="Friend 0"&&first.Amount==40&&first.Seed==firstSeed&&first.CashDropped==firstOutcome,"later positive deaths and name changes cannot rewrite earlier immutable records");
         s.Disconnect("player-0");s.AddPlayer("player-0","Rejoined");
         var restored=new FestivalSimulation();restored.Restore(Saved(s.State));
-        Check(restored.State.DeathSpins.Count==24&&restored.State.DeathSpins[0].Id==firstId,"disconnect, reconnect and System.Text.Json restore retain every emitted record");
+        Check(restored.State.DeathSpins.Count==all&&restored.State.DeathSpins[0].Id==firstId,"disconnect, reconnect and System.Text.Json restore retain every emitted record");
         string round=s.State.RoundId;s.State.Phase="Results";s.State.Result="Failure";
         Check(s.Execute("player-0",new GameCommand{Id="new-round",Kind="Reset"}).Accepted&&s.State.RoundId!=round&&s.State.DeathSpins.Count==0,"the actual round reset discards old public deaths");
     }
