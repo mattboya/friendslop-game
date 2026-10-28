@@ -526,22 +526,23 @@ public static class EscalationTests
             return s;
         }
         var car=Festivals.ArtCarAt(0,0);var missed=new List<string>();
-        foreach(var (what,festival,x,z,kind,refusal) in new[]{("the DJ set",Festivals.PoloFestival,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,"Dj","Let go of your friend before you take the stage"),
-            ("the Ferris wheel",Festivals.PoloFestival,Festivals.WheelX,Festivals.WheelZ+1,FestivalSimulation.RideWheelKind,"Let go of your friend before you climb aboard"),
-            ("an art car",Festivals.PlayaFestival,car.X,car.Z,FestivalSimulation.RideCarKind,"Let go of your friend before you climb aboard")})
+        foreach(var (what,festival,x,z,kind,item,refusal) in new[]{("the DJ set",Festivals.PoloFestival,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,"Dj","","Let go of your friend before you take the stage"),
+            ("the DJ set from the pass in hand (Q)",Festivals.PoloFestival,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,"Use","stage_pass","Let go of your friend before you take the stage"),
+            ("the Ferris wheel",Festivals.PoloFestival,Festivals.WheelX,Festivals.WheelZ+1,FestivalSimulation.RideWheelKind,"","Let go of your friend before you climb aboard"),
+            ("an art car",Festivals.PlayaFestival,car.X,car.Z,FestivalSimulation.RideCarKind,"","Let go of your friend before you climb aboard")})
         foreach(bool carry in new[]{false,true})
         try
         {
             var s=Holding(festival,x,z,carry);var a=s.Player("a");string who=(carry?"carrying a body, ":"dragging a friend, ")+what;
             float bx=carry?s.State.Bodies[0].X:s.Player("b").X,bz=carry?s.State.Bodies[0].Z:s.Player("b").Z;
-            var start=s.Execute("a",Command(kind));
+            var start=s.Execute("a",Command(kind,"",item));
             Check(!start.Accepted&&start.Reason==refusal,who+" is refused with \""+refusal+"\" (got "+start.Accepted+" \""+start.Reason+"\")");
             Check(a.InteractionId==""&&a.X==x&&a.Z==z&&s.Player("a").Inventory.Exists(i=>i.ItemId=="stage_pass"&&i.Count==1),who+": nothing starts, a stays put and keeps the pass");
             s.TryMove("a",a.X,a.Z,0,1.0/30);
             float nx=carry?s.State.Bodies[0].X:s.Player("b").X,nz=carry?s.State.Bodies[0].Z:s.Player("b").Z;
             Check(Dist(bx,bz,nx,nz)<=1.01,who+": the body stays by where it was, not on the deck or the ride ("+bx+","+bz+" -> "+nx+","+nz+")");
             var off=s.Execute("a",Command(carry?"DropBody":"Drag",carry?"":"b"));Check(off.Accepted&&a.DragTargetId==""&&a.CarryBodyId=="",who+": a can let go ("+off.Reason+")");
-            var free=s.Execute("a",Command(kind));Check(free.Accepted,who+": with hands free it starts (\""+free.Reason+"\")");
+            var free=s.Execute("a",Command(kind,"",item));Check(free.Accepted,who+": with hands free it starts (\""+free.Reason+"\")");
         }
         catch(Exception e){missed.Add(e.Message);}
         Check(missed.Count==0,string.Join("\n",missed));

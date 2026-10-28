@@ -125,9 +125,9 @@ namespace Festival.Core
             // chat. Not mid-dance (G stops it), mid-talk with the guard or up on the Ferris wheel (the stop waits there, Pursue).
             if(c.Kind=="Drop"&&p.InteractionId!=""&&Stopped(p)&&UntimedChat(Interaction(p.InteractionId)))return Drop(p,c);
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
-            // The stage deck and the rides take you off with your hands free, so a dragged friend or a carried body never jumps
-            // after you, and nothing holds you while you hold them (Drag and DropBody wait for a set or a ride to end).
-            if((c.Kind=="Dj"||c.Kind==RideWheelKind||c.Kind==RideCarKind)&&(p.DragTargetId!=""||p.CarryBodyId!=""))return Reject("Let go of your friend before you "+(c.Kind=="Dj"?"take the stage":"climb aboard"));
+            // The rides and the stage deck (BeginDj) take you off with your hands free, so a dragged friend or a carried body never
+            // jumps after you, and nothing holds you while you hold them (Drag and DropBody wait for a set or a ride to end).
+            if((c.Kind==RideWheelKind||c.Kind==RideCarKind)&&(p.DragTargetId!=""||p.CarryBodyId!=""))return Reject("Let go of your friend before you climb aboard");
             switch(c.Kind) {
                 case "Consume": return Consume(p,c);
                 case "Use": return Use(p,c);
