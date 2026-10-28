@@ -82,8 +82,8 @@ namespace Festival.Core
         public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="",Result="";
         public long Sequence; public List<string> GrammarKeys=new List<string>(); public double Score=-1;
     }
-    // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind is what the HUD flashes: Cash, Stash,
-    // Sales or Items.
+    // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind sorts it: Cash, Stash, Sales or Items.
+    // The HUD lights a card figure when its value moves, never by Kind, so Stash also covers stock into the stash.
     [Serializable] public sealed class MoneyNews { public long Sequence; public string Kind="",Text=""; }
     // RefusesSales: PlayerId's High or Greedy ask failed with this festivalgoer, who buys nothing more from them this level.
     // Host-only, as ViewFor copies only Suspicion; false in older snapshots.

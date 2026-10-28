@@ -106,7 +106,8 @@ namespace Festival.Tests
                 player.Effects.Clear();player.Cash=187;sim.State.StashCash=45;sim.State.LevelSales=12;player.X=0;player.Z=0;mate.X=30;mate.Z=0;
                 sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
                 var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.X=1.5f;cop.Z=0;cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
-                yield return new WaitForSeconds(.4f);
+                // The card lights each figure the setup just moved, so read it once the flash is over.
+                yield return new WaitForSeconds(FestivalHudText.SaleStampSeconds+.2f);
                 Expect("Day 1","Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  ARREST WARNING");
                 int quota=FestivalSimulation.DayQuota(sim.State);
                 Expect("Day 1","Objective title","DAY QUOTA  12 FRIENDSHIP BRACELETS / "+quota+" FRIENDSHIP BRACELETS");

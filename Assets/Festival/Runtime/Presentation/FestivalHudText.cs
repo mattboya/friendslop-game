@@ -486,13 +486,23 @@ namespace Festival.Presentation
         public const float MoneyNewsSeconds=2.5f;
         /// <summary>The camp shelf's thank-you, with what the buy cost, in dollars for MoneyText.</summary>
         public static string PocketUpdated(int spent)=>"Oh, hey, thanks!  •  −$"+spent+"  •  POCKET UPDATED";
-        /// <summary>Lights on the player card only the figure a change moved, each for the stamp's 1.5 s (MoneyFlashOn). Sold is your
-        /// own paid sale or deck set, which moves your cash and SALES together but reaches you with no Sales news.</summary>
+        /// <summary>Lights on the player card each figure whose value moved, each for the stamp's 1.5 s (MoneyFlashOn): your cash,
+        /// the crew's STASH and the level's SALES, whoever moved it and whatever told you. Watch compares only while the card shows,
+        /// so a change under the pass, the map or a dance lights as the card comes back. The first view of a connection or a round
+        /// only takes note, so a join or a level's fresh SALES never lights.</summary>
         public sealed class MoneyFlash
         {
             float cashAt=-100,stashAt=-100,salesAt=-100;
-            public void Light(MoneyNews n,float now){if(n.Kind=="Cash")cashAt=now;else if(n.Kind=="Stash")stashAt=now;else if(n.Kind=="Sales")salesAt=now;}
-            public void Sold(float now){cashAt=salesAt=now;}
+            string round;
+            int connection=-1,cash,stash,sales;
+            public void Watch(RoundState s,PlayerState viewer,int connectionGeneration,bool shown,float now)
+            {
+                if(round!=s.RoundId||connection!=connectionGeneration){round=s.RoundId;connection=connectionGeneration;cash=viewer.Cash;stash=s.StashCash;sales=s.LevelSales;return;}
+                if(!shown)return;
+                if(viewer.Cash!=cash){cash=viewer.Cash;cashAt=now;}
+                if(s.StashCash!=stash){stash=s.StashCash;stashAt=now;}
+                if(s.LevelSales!=sales){sales=s.LevelSales;salesAt=now;}
+            }
             public (bool Cash,bool Stash,bool Sales) Lit(float now,bool reducedMotion)=>(MoneyFlashOn(now-cashAt,reducedMotion),MoneyFlashOn(now-stashAt,reducedMotion),MoneyFlashOn(now-salesAt,reducedMotion));
         }
         /// <summary>Follows the viewer's own money news (PlayerState.MoneyNewsLog, owner-only in views). The first view of a
