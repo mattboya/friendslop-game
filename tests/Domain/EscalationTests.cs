@@ -15,7 +15,7 @@ public static class EscalationTests
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
             ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,NothingCarriesADraggerOff,
             AStopWaitsForAWheelRider,GDitchesOneAtATimeAndSaysWhatIsLeft,GDitchesMidChat,
-            OneGuardKeepsTwoStops,AGuardHearsATalkOutThroughAnArrest,AGuardHearsATalkOutBeforeTheCrewOrder,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker})
+            OneGuardKeepsTwoStops,AGuardHearsATalkOutThroughAnArrest,AGuardHearsATalkOutBeforeTheCrewOrder,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker,AnEscAfterATalkEndedIsNoChatToEnd})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -697,6 +697,43 @@ public static class EscalationTests
         Check(Says(a,LastChance),"walked out past 12 s, the guard gives the last chance at once (\""+a.NpcSpeech+"\")");
         var said=a.SpeechSequence;s.Tick(3);
         Check(a.SpeechSequence==said,"and says it once ("+a.SpeechSequence+" lines, was "+said+")");
+    }
+    // A joined client's Esc can reach the host just after a talk ended there. The session keeps the message that ended the talk
+    // only when the refusal is exactly FestivalSimulation.NoChatToEnd, so every way a talk ends must answer a late EndChat with it.
+    static void AnEscAfterATalkEndedIsNoChatToEnd()
+    {
+        void Late(string end,FestivalSimulation s,PlayerState a,InteractionState talk)
+        {
+            Check(talk.Status!="Active"&&a.InteractionId=="","setup: "+end+" ("+talk.Status+")");
+            string before=a.Life+" $"+a.Cash+" stock "+Count(a,"stock_lsd")+" outcomes "+a.ConversationOutcomes.Count+" speech "+a.SpeechSequence;
+            var late=s.Execute("a",Command("EndChat",talk.Id));
+            string after=a.Life+" $"+a.Cash+" stock "+Count(a,"stock_lsd")+" outcomes "+a.ConversationOutcomes.Count+" speech "+a.SpeechSequence;
+            Check(!late.Accepted&&late.Reason==FestivalSimulation.NoChatToEnd,end+": a late Esc is refused as \""+FestivalSimulation.NoChatToEnd+"\", got "+late.Accepted+" \""+late.Reason+"\"");
+            Check(after==before,end+": and changes nothing ("+before+" -> "+after+")");
+        }
+        var s=Stopped(out var cop,out var a);s.Tick(1);var talk=Talk(s,a,cop,Awkward,Awkward,Awkward,Awkward);Finish(s,talk);
+        Late("a talk with security heard out",s,a,talk);
+        s=Stopped(out cop,out a);s.Tick(1);talk=Talk(s,a,cop,Smooth);
+        Check(s.Execute("a",Command("EndChat",talk.Id)).Accepted,"setup: a walks out of the talk with security");
+        Late("a talk with security walked out of",s,a,talk);
+
+        // `guard` keeps cop_0 and puts it in sight of the deal; otherwise no guard is left to see it.
+        FestivalSimulation Sale(bool guard,out PlayerState seller,out NpcState buyer,out InteractionState sale)
+        {
+            var game=Level(1);game.State.Npcs.RemoveAll(n=>!guard||n.Id!="cop_0");seller=game.Player("a");seller.X=0;seller.Z=5;
+            if(guard){var watching=game.State.Npcs[0];watching.X=0;watching.Z=0;watching.Yaw=0;}
+            string id="esc_buyer_0";for(int k=1;DialogueGrammar.PersonaFor(id,"")!="Wook";k++)id="esc_buyer_"+k;
+            buyer=new NpcState{Id=id,Kind="Wook",Role="Buyer",X=0,Z=6.5f,Yaw=180,CanTalk=true};game.State.Npcs.Add(buyer);
+            seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});seller.EquippedItemId="stock_lsd";
+            Check(game.Execute("a",Command("StartSale",id,"stock_lsd")).Accepted,"setup: a offers the buyer a Tongue Stamp");
+            sale=game.Interaction(seller.InteractionId);return game;
+        }
+        s=Sale(false,out a,out var walker,out talk);walker.X=8;s.Tick(.1);
+        Check(talk.Status=="Moved away or target changed","setup: the buyer walks off ("+talk.Status+")");
+        Late("a sale the buyer walked off from",s,a,talk);
+        s=Sale(true,out a,out _,out talk);for(int guard=0;a.Life=="Alive"&&guard<100;guard++)s.Tick(.1);
+        Check(talk.Status=="Police bust","setup: the guard who saw the deal busts a ("+talk.Status+", "+a.Life+")");
+        Late("a sale busted by a guard who saw the deal",s,a,talk);
     }
     // ESC-3: a guard standing by stock it saw ditched turns to a player who starts a talk with it, as a patrolling guard does,
     // and back to the stock when the talk is over.
