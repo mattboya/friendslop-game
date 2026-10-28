@@ -22,6 +22,7 @@ namespace Festival.Presentation
         /// <summary>The first-person eye height of whoever sits in the headliner's chair: just over the seated body's own eyes (Head
         /// bone at about .97 m, its eyes about .24 m above), as the 1.65 m standing eye sits just over a standing body's.</summary>
         public const float ChairEyeHeight=1.25f;
+        private const float ChairSide=.4f;
         /// <summary>A prop shows its gag's line on a child of LineName and sounds from a child of VoiceName.</summary>
         public const string LineName="Camp egg line",VoiceName="Camp egg voice";
         // A line stays up long enough to read; the flamingo sags flat over DeflateSeconds, or at once with reduced motion.
@@ -259,15 +260,17 @@ namespace Festival.Presentation
                     Label(prop,"DO NOT PRESS",new Vector3(.55f,.845f,.12f),new Vector3(90,180,0),.012f);break;
                 case "chair":
                     // A low camp chair facing south, the way the host turns its headliner. Its canvas (top .23 m) meets the trousers of a
-                    // body in FestivalCharacter's CampChair pose.
-                    Part(prop,"Chair seat",PrimitiveType.Cube,new Vector3(0,.21f,.05f),new Vector3(.62f,.04f,.58f),"CanvasRose");
-                    Part(prop,"Chair back",PrimitiveType.Cube,new Vector3(0,.5f,.36f),new Vector3(.62f,.58f,.04f),"CanvasRose");
-                    foreach(float x in new[]{-.31f,.31f})
+                    // body in FestivalCharacter's CampChair pose. Its armrests and legs stand ChairSide out to clear the widest seated body:
+                    // shape 2's hips, elbows and shirts reach .36-.39 m out at the armrests' height, and trousers .35 m out at the legs. A
+                    // crossbody pouch slips off for the seat, as a backpack does (FestivalCharacter).
+                    Part(prop,"Chair seat",PrimitiveType.Cube,new Vector3(0,.21f,.05f),new Vector3(2*ChairSide,.04f,.58f),"CanvasRose");
+                    Part(prop,"Chair back",PrimitiveType.Cube,new Vector3(0,.5f,.36f),new Vector3(2*ChairSide,.58f,.04f),"CanvasRose");
+                    foreach(float x in new[]{-ChairSide,ChairSide})
                     {
                         Part(prop,"Chair arm",PrimitiveType.Cube,new Vector3(x,.5f,.05f),new Vector3(.05f,.04f,.58f),"Metal");
                         foreach(float z in new[]{-.22f,.32f})Part(prop,"Chair leg",PrimitiveType.Cylinder,new Vector3(x,.25f,z),new Vector3(.03f,.25f,.03f),"Metal");
                     }
-                    Part(prop,"Reserved board",PrimitiveType.Cube,new Vector3(0,.865f,.37f),new Vector3(.66f,.15f,.02f),"Cream");
+                    Part(prop,"Reserved board",PrimitiveType.Cube,new Vector3(0,.865f,.37f),new Vector3(2*ChairSide+.04f,.15f,.02f),"Cream");
                     Label(prop,"RESERVED: HEADLINER",new Vector3(0,.865f,.355f),Vector3.zero,.016f,dark:true);
                     Label(prop,"RESERVED: HEADLINER",new Vector3(0,.865f,.385f),new Vector3(0,180,0),.016f,dark:true);break;
                 case "lost_found":

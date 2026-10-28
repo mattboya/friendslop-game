@@ -125,8 +125,9 @@ namespace Festival.Presentation
         Texture2D ownedPalette,garmentPalette,skinPalette;
         Renderer eyeRenderer;
         Renderer spoonRenderer;
-        // The worn backpack (Accessory_0), slipped off in the headliner's chair: it reaches about .2 m through the chair's back.
-        Renderer backpackRenderer;
+        // The worn bag, slipped off in the headliner's chair: a backpack (Accessory_0) reaches about .2 m through the chair's back, and a
+        // crossbody pouch (Accessory_1) hangs .45-.56 m out at the front, through the armrests and legs.
+        Renderer bagRenderer;
         SkinnedMeshRenderer faceRenderer;
         int blinkIndex=-1;
         int intoxicatedEyesIndex=-1;
@@ -231,7 +232,7 @@ namespace Festival.Presentation
                     else renderer.sharedMaterial=actor.SurfaceFor(renderer.name);
                     renderer.enabled=actor.KeepMesh(renderer.name);
                     if(renderer.name=="Equipment_LittleSpoon")actor.spoonRenderer=renderer;
-                    if(renderer.name=="Accessory_0"&&renderer.enabled)actor.backpackRenderer=renderer;
+                    if((renderer.name=="Accessory_0"||renderer.name=="Accessory_1")&&renderer.enabled)actor.bagRenderer=renderer;
                 }
                 if(renderer is SkinnedMeshRenderer skin && !renderer.name.StartsWith("Body_"))
                 {
@@ -441,7 +442,7 @@ namespace Festival.Presentation
             // the ground it rolls over. PLAYA-5: a deck set dances up there the same way. POLO-5: a Ferris wheel rider sits in their
             // gondola as it carries them round.
             bool seated=Pose==FestivalSimulation.RideWheelKind,chair=Pose==FestivalSimulation.CampChairPose,decking=Pose==FestivalSimulation.DeckSetKind,riding=seated||chair||decking||Pose==FestivalSimulation.RideCarKind;
-            if(backpackRenderer!=null)backpackRenderer.enabled=!chair;
+            if(bagRenderer!=null)bagRenderer.enabled=!chair;
             float measuredSpeed=hasPrevious&&delta.magnitude<2&&!riding?Mathf.Min(6,delta.magnitude/animationDelta):0;
             float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
