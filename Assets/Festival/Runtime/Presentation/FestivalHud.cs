@@ -1589,7 +1589,7 @@ namespace Festival.Presentation
             if(key==null||session.MenuOpen||!key.IsPressed())stopHeldSince=-1;
             else if(key.WasPressedThisFrame())stopHeldSince=Time.unscaledTime;
             float held=stopHeldSince<0?0:(Time.unscaledTime-stopHeldSince)/FestivalHudText.HoldToStopSeconds;
-            if(held>=1){stopHeldSince=-1;held=0;session.Command("Cancel",session.LocalPlayer?.InteractionId);}
+            if(held>=1){stopHeldSince=-1;held=0;FinishCurrentAction(session.LocalPlayer?.InteractionId);}
             ShowStopHold(held);
         }
 
@@ -2036,10 +2036,12 @@ namespace Festival.Presentation
         private static InteractionState ActiveConfirmation(RoundState state,PlayerState player)=>player==null?null:state?.Interactions.Find(i=>i.Id==player.InteractionId&&i.PlayerId==player.Id&&i.Status=="Active"&&i.Kind=="ConfirmChat");
         // `seen` is the interaction the player acted on. The host refuses the Cancel once that one has ended, so a joined view
         // that lags can't stop what replaced it. A chat check ends only when it is the one acted on, so a stale stop can't end it.
+        // A stop of a dance the view shows says so (LanesStop): a trust dance turns into its talk on the same interaction.
         private void FinishCurrentAction(string seen)
         {
             var check=ActiveConfirmation(session.State,session.LocalPlayer);
-            if(check!=null&&check.Id==seen)session.Command("EndChat",check.Id);else session.Command("Cancel",seen);
+            if(check!=null&&check.Id==seen)session.Command("EndChat",check.Id);
+            else session.Command("Cancel",seen,direction:FestivalInput.IsRhythm(session.State?.Interactions.Find(i=>i.Id==seen&&i.Status=="Active"))?FestivalSimulation.LanesStop:0);
         }
         private void UpdateActions(RoundState state,PlayerState player)
         {

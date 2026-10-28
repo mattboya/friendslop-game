@@ -1,11 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -124,6 +127,67 @@ namespace Festival.Tests
                 Assert.That(refused,Has.None.EqualTo("No active chat to end"),"the refusal leaves the sale's result as the message: "+detail);
             }
             finally{client.LocalCommandResultReceived-=heard;client.Leave();host.Leave();Object.Destroy(clientObject);Object.Destroy(hostObject);Object.Destroy(world);}
+            yield return null;
+        }
+        // A held G for the trust dance a joined seller's lagging view still shows can reach the host after the dance became its talk.
+        // The host refuses it and the talk goes on at no ask cost; so does the menu's CANCEL ACTION, which reads the same view.
+        [UnityTest] public IEnumerator AJoinedSellersLateHeldGLeavesTheTalkOn()
+        {
+            UseAVirtualKeyboard("Late stop keyboard");
+            var world=new GameObject("Late stop world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Late stop host");var host=hostObject.AddComponent<FestivalSession>();
+            var clientObject=new GameObject("Late stop client");var client=clientObject.AddComponent<FestivalSession>();clientObject.AddComponent<FestivalHud>();
+            typeof(FestivalSession).GetProperty("Profile").SetValue(host,new LocalProfile("late-stop-host-"+System.Guid.NewGuid().ToString("N")));
+            typeof(FestivalSession).GetProperty("Profile").SetValue(client,new LocalProfile("late-stop-client-"+System.Guid.NewGuid().ToString("N")));
+            yield return null;
+            var sends=typeof(FestivalSession).GetField("nextSnapshot",BindingFlags.NonPublic|BindingFlags.Instance);
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);client.Join("Seller","127.0.0.1",port);
+                while(client.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(client.LocalPlayer,Is.Not.Null,client.Message);
+                var game=Simulation(host);var seller=game.Player(client.LocalPlayerId);
+                seller.X=0;seller.Z=19;client.Command("Ready");
+                while(!seller.Ready&&Time.realtimeSinceStartup<deadline)yield return null;yield return StartLevel(host,seller.Id);
+                game.State.Npcs.Clear();seller.X=0;seller.Z=0;seller.Effects.Clear();host.LocalPlayer.X=30;host.LocalPlayer.Z=30;
+                host.MenuOpen=client.MenuOpen=false;game.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;
+                string buyerId="late_stop_0";for(int k=1;DialogueGrammar.PersonaFor(buyerId,"")!="Wook";k++)buyerId="late_stop_"+k;
+                var buyer=new NpcState{Id=buyerId,Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true};buyer.Observers.Add(new ObserverState{PlayerId=seller.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});game.State.Npcs.Add(buyer);
+                seller.Inventory.RemoveAll(i=>i.ItemId=="stock_lsd");seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});seller.EquippedItemId="stock_lsd";
+                Assert.That(game.Execute(seller.Id,new GameCommand{Id="late-stop-sale",Kind="StartSale",TargetId=buyer.Id,ItemId="stock_lsd",Amount=FestivalSimulation.GreedyAsk}).Accepted,Is.True,"setup: a Greedy sale starts");
+                var talk=game.Interaction(seller.InteractionId);Assert.That(FestivalSimulation.TrustDancing(talk),Is.True,"setup: the wary buyer asks for a dance first");
+                deadline=Time.realtimeSinceStartup+10;
+                while(!(client.State.Interactions.Find(i=>i.Id==talk.Id) is InteractionState shown&&FestivalSimulation.TrustDancing(shown))&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(FestivalHudText.StopsByHold(client.State,client.LocalPlayer),Is.True,"setup: the seller's view shows the dance");
+
+                // The seller's view stops here, still on the dance, while the host's dance becomes the talk.
+                sends.SetValue(host,Time.realtimeSinceStartupAsDouble+1000);
+                for(int guard=0;FestivalSimulation.TrustDancing(talk)&&guard<400;guard++)game.Tick(.05);
+                Assert.That(talk.Status=="Active"&&talk.Turns.Count==1,Is.True,"setup: the host's talk is at its first turn ("+talk.Status+")");
+                double heat=buyer.Observers[0].Suspicion;
+                bool Refused(int after)=>game.State.Commands.Skip(after).Any(c=>c.PlayerId==seller.Id&&c.Result.Reason=="That action already ended");
+                int sent=game.State.Commands.Count;
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState(Key.G));yield return new WaitForSeconds(FestivalHudText.HoldToStopSeconds+.25f);
+                InputSystem.QueueStateEvent(TestKeyboard,new KeyboardState());
+                for(deadline=Time.realtimeSinceStartup+3;talk.Status=="Active"&&!Refused(sent)&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(talk.Status,Is.EqualTo("Active"),"the late held G leaves the talk on: "+client.Message);
+                Assert.That(Refused(sent),Is.True,"the host refused the stop from the dance");
+                Assert.That(buyer.Observers[0].Suspicion==heat&&!buyer.Observers[0].RefusesSales,Is.True,"no walk-off: the buyer stays at "+heat+" and still buys, got "+buyer.Observers[0].Suspicion);
+                sent=game.State.Commands.Count;
+                clientObject.GetComponentsInChildren<Button>(true).First(b=>b.name=="CANCEL ACTION").onClick.Invoke();
+                for(deadline=Time.realtimeSinceStartup+3;talk.Status=="Active"&&!Refused(sent)&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(talk.Status,Is.EqualTo("Active"),"nor does the menu's CANCEL ACTION, which reads the same view");
+                Assert.That(Refused(sent),Is.True,"the host refused the menu's stop");
+                Assert.That(buyer.Observers[0].Suspicion==heat&&!buyer.Observers[0].RefusesSales,Is.True,"no walk-off from the menu either: the buyer stays at "+heat+", got "+buyer.Observers[0].Suspicion);
+
+                // Once the view catches up, the talk is on the chat window.
+                sends.SetValue(host,0d);
+                for(deadline=Time.realtimeSinceStartup+3;FestivalChatWindow.LiveChat(client.State,client.LocalPlayer)==null&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(FestivalChatWindow.LiveChat(client.State,client.LocalPlayer)?.Id,Is.EqualTo(talk.Id),"the seller's view catches up to the talk");
+            }
+            finally{client.Leave();host.Leave();Object.Destroy(clientObject);Object.Destroy(hostObject);Object.Destroy(world);}
             yield return null;
         }
     }
