@@ -1654,11 +1654,12 @@ namespace Festival.Presentation
             if(session==null)return;
             session.ConsumeMenuPress=ConsumeChatMenu;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived+=EquipmentCommandResult;
             session.LocalCommandResultReceived-=FoundCash;session.LocalCommandResultReceived+=FoundCash;
+            if(chatWindow!=null){session.LocalCommandResultReceived-=chatWindow.Refused;session.LocalCommandResultReceived+=chatWindow.Refused;}
         }
         private void OnDisable()
         {
             if(session?.Controls!=null){session.Controls.CancelHeldNotes();ReleaseRhythmInputs();}ResetRhythm();
-            if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;}
+            if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;if(chatWindow!=null)session.LocalCommandResultReceived-=chatWindow.Refused;}
             CancelGearHold();dropPressConsumed=session?.Controls?.DropPhysicallyPressed??false;stopHeldSince=-1;
             ClearPendingEquipment();sellerTalk.End();chatWindow?.ResetSession();session?.SpeechBubbles?.RetireCheck();talkLine.Reset();
             pendingComfortStart=null;if(comfortPanel!=null)comfortPanel.SetActive(false);
@@ -2528,7 +2529,7 @@ namespace Festival.Presentation
             rosterPanel.GetComponent<Image>().color=high?new Color(.01f,.025f,.03f,1):new Color(.025f,.064f,.071f,.95f);
             reticle.GetComponent<Image>().color=high?new Color(1,.95f,.71f,1):new Color(.88f,.90f,.74f,.65f);
         }
-        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(ohYeah!=null)Destroy(ohYeah);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
+        private void OnDestroy(){if(session!=null){if(session.ConsumeMenuPress==ConsumeChatMenu)session.ConsumeMenuPress=null;session.LocalCommandResultReceived-=EquipmentCommandResult;session.LocalCommandResultReceived-=FoundCash;if(chatWindow!=null)session.LocalCommandResultReceived-=chatWindow.Refused;}ClearPendingEquipment();if(shopChime!=null)Destroy(shopChime);if(ohYeah!=null)Destroy(ohYeah);if(discSprite!=null)Destroy(discSprite);if(discTexture!=null)Destroy(discTexture);if(roundedSprite!=null)Destroy(roundedSprite);if(roundedTexture!=null)Destroy(roundedTexture);if(arrowSprite!=null)Destroy(arrowSprite);if(arrowTexture!=null)Destroy(arrowTexture);if(arrowOutlineSprite!=null)Destroy(arrowOutlineSprite);if(arrowOutlineTexture!=null)Destroy(arrowOutlineTexture);}
 
         private void StartHost(){if(!ushort.TryParse(hostPortField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text;WaitForComfort(()=>{Remember(null);session.Host(name,port);});}
         private void StartJoin(){if(!ushort.TryParse(portField.text,out var port)||port==0){connectionError="Port must be 1–65535.";return;}connectionError="";string name=nameField.text,address=addressField.text;WaitForComfort(()=>{Remember(address);session.Join(name,address,port);});}

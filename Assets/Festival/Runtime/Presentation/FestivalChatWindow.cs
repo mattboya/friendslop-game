@@ -79,6 +79,8 @@ namespace Festival.Presentation
         float clock,laidWidth=-1;bool dirty,reduced,lingers,over;
         // DIALOG-3: in a talk, the turns shown so far and those your reply has been said for; the hunch it will end on (Linger).
         int turnsShown,turnsSaid;string hunch="";
+        // Your reply as said on each turn of the talk followed, until the host refuses it (Refused) or it scrolls away.
+        readonly Bubble[] said=new Bubble[FestivalSimulation.ConversationTurns];
         // The grade heard on each turn of the talk followed (Silence for a turn left unanswered), -1 for none yet; the score the host
         // settled it on, -1 until then.
         readonly int[] graded=new int[FestivalSimulation.ConversationTurns];float settled=-1;
@@ -211,7 +213,7 @@ namespace Festival.Presentation
             clock=now;gameObject.SetActive(true);this.header.text=header;group.alpha=1;
             if(threadId==this.threadId)return;
             this.threadId=threadId;this.mark=mark;lingers=true;over=false;turnsShown=turnsSaid=0;hunch="";outcomeDelivery="";track.gameObject.SetActive(false);slur.gameObject.SetActive(false);
-            meter.gameObject.SetActive(false);for(int t=0;t<graded.Length;t++)graded[t]=-1;settled=-1;headStart=0;
+            meter.gameObject.SetActive(false);for(int t=0;t<graded.Length;t++){graded[t]=-1;said[t]=null;}settled=-1;headStart=0;
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();
             Offer(null,null);dirty=true;
         }
@@ -225,6 +227,22 @@ namespace Festival.Presentation
         }
         /// <summary>DIALOG-3: a line of its own across the thread, unmarked and whole at once: what a talk left you feeling.</summary>
         public void Note(string line){var b=Take(false,line);b.Note=true;b.Whole=true;b.WholeAt=clock;b.Mark.gameObject.SetActive(false);b.BackImage.color=NoteBubble;Show(b);Add(b);}
+        /// <summary>What stands in the thread where a reply the host refused stood (Refused).</summary>
+        public const string NotHeard="TOO LATE  •  they didn't hear you";
+        /// <summary>Each result of your commands, as the session hands them in (FestivalHud). A joined client's bar runs
+        /// behind the host's clock, so a pick just before it empties can arrive after the turn ran out, or after the talk's last turn
+        /// ended it: the host refuses it and counts a silence. Your reply then turns into NotHeard in its place, so the thread never
+        /// shows a reply the host didn't hear. Every other result does nothing.</summary>
+        public void Refused(CommandResult result)
+        {
+            if(result==null||result.Accepted||result.Reason!=FestivalSimulation.LateReply&&result.Reason!=FestivalSimulation.NoTalkToReply)return;
+            // ponytail: the newest reply said takes the refusal; replies are a turn apart, so a refusal never trails the next pick.
+            for(int t=said.Length-1;t>=0;t--)if(said[t]!=null)
+            {
+                var b=said[t];said[t]=null;
+                b.Note=true;b.Said=NotHeard;b.Letters=-2;b.Mark.gameObject.SetActive(false);b.BackImage.color=NoteBubble;Show(b);dirty=true;return;
+            }
+        }
         /// <summary>The replies under the thread, up to MaxReplies, all pickable; null or none hides them. `pick` runs with the
         /// reply's index when 1-3 or a click picks it.</summary>
         public void Offer(string[] lines,Action<int> pick)
@@ -279,7 +297,7 @@ namespace Festival.Presentation
         {
             if(!lingers||leave){Dismiss();return false;}
             header.text="CHAT OVER  •  "+CloseKey+" CLOSE";
-            if(!over){over=true;clock=now;track.gameObject.SetActive(false);slur.gameObject.SetActive(false);for(int i=0;i<offered;i++)Dim(i);if(hunch!="")Note(hunch);}
+            if(!over){over=true;clock=now;track.gameObject.SetActive(false);slur.gameObject.SetActive(false);for(int i=0;i<offered;i++)Dim(i);Hint(-1);if(hunch!="")Note(hunch);}
             gameObject.SetActive(true);Advance(now,0,reducedMotion);
             group.alpha=1;
             return true;
@@ -288,7 +306,7 @@ namespace Festival.Presentation
         public void Dismiss(){dismissedRound=followedRound;dismissedId=threadId;dismissedStart=followedStart;lingers=false;Close();}
         public void ResetSession()
         {
-            Dismiss();threadId=target=followedRound=outcomeDelivery=dismissedRound=dismissedId="";followedStart=dismissedStart=-1;over=false;
+            Dismiss();threadId=target=followedRound=outcomeDelivery=dismissedRound=dismissedId="";followedStart=dismissedStart=-1;over=false;Array.Clear(said,0,said.Length);
             foreach(var b in thread)Recycle(b);foreach(var b in fading)Recycle(b);thread.Clear();fading.Clear();Offer(null,null);
         }
         /// <summary>Owner-only final delivery, independent of the removed active interaction. No extra reply turn is invented.
@@ -376,7 +394,7 @@ namespace Festival.Presentation
                 var turn=talk.Turns[turnsShown];int at=turnsShown;
                 if(turn.Reaction!=""){TheySay(turn.Reaction,false);Tint(GoingThrough(at));}
                 TheySay(turn.Line,false);
-                Offer(turn.Replies,i=>{for(int r=0;r<offered;r++)Dim(r);YouSay(turn.Replies[i]);turnsSaid=at+1;Send?.Invoke(new GameCommand{Kind="Reply",Amount=i,Direction=at});});
+                Offer(turn.Replies,i=>{for(int r=0;r<offered;r++)Dim(r);YouSay(turn.Replies[i]);said[at]=thread[thread.Count-1];turnsSaid=at+1;Send?.Invoke(new GameCommand{Kind="Reply",Amount=i,Direction=at});});
                 if(at==0)Hint(talk.HintedReply);
             }
             hunch=talk.Hunch;
@@ -405,7 +423,8 @@ namespace Festival.Presentation
         void Add(Bubble b)
         {
             thread.Add(b);dirty=true;
-            while(thread.Count>MaxBubbles){var old=thread[0];thread.RemoveAt(0);old.FadeFrom=clock;fading.Add(old);}
+            // A reply scrolled away is recycled for later lines, so Refused forgets it.
+            while(thread.Count>MaxBubbles){var old=thread[0];thread.RemoveAt(0);old.FadeFrom=clock;fading.Add(old);int k=Array.IndexOf(said,old);if(k>=0)said[k]=null;}
         }
         // What b shows at the clock: their "…" for TypingSeconds, then the letters typed so far with the rest hidden, then the whole
         // line. Swapping "…" for the line resizes the bubble; the letters coming in don't.

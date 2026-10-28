@@ -23,6 +23,8 @@ namespace Festival.Core
         public const double ReplySeconds=4,TrustDanceSuspicion=40,TrustScore=.6,NailedScore=.9;
         public const int FailedDanceStart=-2;
         public const string TrustAsk="Dance with me first, then we talk.";
+        /// <summary>A Reply the host refuses as too late for its turn, or once the talk is over. The chat window matches these reasons.</summary>
+        public const string LateReply="Too late: that moment has passed",NoTalkToReply="No conversation to reply in";
         /// <summary>What a reply of this grade (ConversationLines.Smooth, SoSo, Awkward or Silence) is worth. A talk's Score is its
         /// points over TalkPoints, never below 0, so every line keeps its place: a Fair sale's full price at 6, a buy at 4, security
         /// waving you on at 6.</summary>
@@ -60,9 +62,9 @@ namespace Festival.Core
         CommandResult Reply(PlayerState p,GameCommand c)
         {
             var i=Interaction(p.InteractionId);
-            if(i==null||i.Status!="Active"||!Talks(i.Kind)||i.Turns.Count==0)return Reject("No conversation to reply in");
+            if(i==null||i.Status!="Active"||!Talks(i.Kind)||i.Turns.Count==0)return Reject(NoTalkToReply);
             var turn=i.Turns[i.Turns.Count-1];
-            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject("Too late: that moment has passed");
+            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject(LateReply);
             if(c.Amount<0||c.Amount>2)return Reject("Pick reply 1, 2 or 3");
             AcknowledgeGrammar(p,turn.GrammarKeys,i.Id+":"+(i.Turns.Count-1));
             turn.Pick=c.Amount;PublishSpeech(p,p.Id,p.Name,turn.Replies[c.Amount],7,i.Id);

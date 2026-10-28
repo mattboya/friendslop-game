@@ -413,7 +413,7 @@ namespace Festival.Tests
         {
             var game=Day(out var you,out _);var cop=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=cop.X+.3f;you.Z=cop.Z;
             var talk=Talk(game,you,cop,"Police");var window=Window(game,you);bool late=false;
-            window.Send=c=>{c.Id="hud_talk_"+sent.Count;if(!late)sent.Add(game.Execute(you.Id,c));};
+            GameCommand held=null;window.Send=c=>{c.Id="hud_talk_"+sent.Count;if(!late)sent.Add(game.Execute(you.Id,c));else held=c;};
             int[] wanted={ConversationLines.Smooth,ConversationLines.Smooth,ConversationLines.Awkward,ConversationLines.Smooth};
             for(int t=0;t<FestivalSimulation.ConversationTurns;t++)
             {
@@ -428,6 +428,13 @@ namespace Festival.Tests
             Assert.That(window.Follow(view,me,view.SimulationSeconds,10,false),Is.False,"setup: the talk is over");
             window.FollowOutcome(me.ConversationOutcomes.Find(o=>o.InteractionId==talk.Id),10,false,false);
             Assert.That(window.Going,Is.EqualTo((float)talk.Score).Within(1e-6),"the meter lands on the host's score, "+talk.Score+", not on the refused pick ("+window.GoingWord+")");
+            // The held pick reaches the host after the talk ended, and the thread drops it too.
+            var last=talk.Turns[FestivalSimulation.ConversationTurns-1];string mine="> "+last.Replies[System.Array.IndexOf(last.Grades,wanted[FestivalSimulation.ConversationTurns-1])];
+            Assert.That(Thread(window),Does.Contain(mine),"setup: the last pick was said");
+            var refused=game.Execute(you.Id,held);Assert.That(refused.Accepted,Is.False,"setup: the host refuses the pick that came after the talk ended ("+refused.Reason+")");
+            window.Refused(refused);
+            Assert.That(Thread(window),Does.Not.Contain(mine),"the thread drops the last reply the host never heard: "+string.Join(" | ",Thread(window)));
+            Assert.That(Thread(window),Does.Contain("= "+FestivalChatWindow.NotHeard),"and says so where it stood");
         }
 
         // A security turn's bar empty on your screen takes no pick, so the thread never shows a reply the host
@@ -443,6 +450,48 @@ namespace Festival.Tests
             for(int i=0;i<3;i++)Assert.That(window.CanReply(i),Is.False,"reply "+(i+1)+" can't be picked once the bar is empty");
             Assert.That(window.Pick(0),Is.False,"and 1 picks nothing");
             Assert.That(sent,Is.Empty,"nor sends anything");
+        }
+
+        // A talk cut short (here by a down) after a nailed dance lingers with every reply dimmed, and none of them keeps the
+        // mark: a talk that is over has no reply to recommend.
+        [Test] public void ACutTalksLingeringCardDropsTheMark()
+        {
+            var game=Day(out var you,out var them);var talk=AfterADance(game,you,them,1);var window=Window(game,you);
+            int best=Smooth(talk.Turns[0]);Follow(window,game,you.Id,0);
+            Assert.That(window.Hinted,Is.EqualTo(best),"setup: the nailed dance's mark shows");
+            you.Life="Downed";you.DownedRemaining=35;game.Tick(.1);
+            Assert.That(talk.Status,Is.EqualTo("Interrupted"),"setup: the down cuts the talk");
+            Follow(window,game,you.Id,1);
+            Assert.That(window.Lingering&&!window.CanReply(best),Is.True,"setup: the card lingers, its replies dimmed ("+window.Header+")");
+            Assert.That(window.Hinted==-1&&window.HintLabel(best)=="",Is.True,"the over card shows no mark (Hinted "+window.Hinted+", \""+window.HintLabel(best)+"\")");
+        }
+
+        // A joined client's clock lags the host's, so a security pick taken just before its bar empties can reach the host
+        // after the turn ran out. The host refuses it and counts a silence; the HUD hands the refusal to the window (Refused), and your
+        // reply turns into a note that they didn't hear it, in its place, so the thread never shows a reply the host counted as a
+        // silence. A reply the host heard keeps its place.
+        [Test] public void ALatePickTheHostRefusedTurnsIntoANote()
+        {
+            var game=Day(out var you,out _);var cop=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=cop.X+.3f;you.Z=cop.Z;
+            var talk=Talk(game,you,cop,"Police");var window=Window(game,you);GameCommand inFlight=null;window.Send=c=>inFlight=c;
+            double deadline=talk.StartSeconds+talk.DurationSeconds;var view=View(game,you.Id);
+            window.Follow(view,Me(view,you.Id),deadline-.08,0,false);
+            int pick=Smooth(talk.Turns[0]);string mine="> "+talk.Turns[0].Replies[pick];
+            Assert.That(window.CanReply(pick)&&window.Pick(pick),Is.True,"setup: the bar shows time left, so the pick is taken");
+            Assert.That(Thread(window),Does.Contain(mine),"setup: the pick is said at once");
+            while(game.State.SimulationSeconds<deadline+.05)game.Tick(1.0/30);
+            inFlight.Id="late";var result=game.Execute(you.Id,inFlight);
+            Assert.That(!result.Accepted&&talk.Turns[0].Pick<0&&talk.Turns.Count==2,Is.True,"setup: the host refused the late pick and counted a silence ("+result.Reason+")");
+            view=View(game,you.Id);window.Follow(view,Me(view,you.Id),view.SimulationSeconds,1,false);
+            window.Refused(result);
+            var thread=Thread(window);
+            Assert.That(thread,Does.Not.Contain(mine),"the thread drops the reply the host counted as a silence: "+string.Join(" | ",thread));
+            Assert.That(thread,Is.EqualTo(new[]{"< "+talk.Turns[0].Line,"= "+FestivalChatWindow.NotHeard,"< "+talk.Turns[1].Reaction,"< "+talk.Turns[1].Line}),"it says so where the reply stood: "+string.Join(" | ",thread));
+            Assert.That(window.Going,Is.EqualTo(.25f).Within(1e-6),"the meter counts the silence: -1 where so-so stood, 2 of 8");
+            int next=Smooth(talk.Turns[1]);Assert.That(window.Pick(next),Is.True,"setup: the next pick in time");
+            inFlight.Id="next";var heard=game.Execute(you.Id,inFlight);Assert.That(heard.Accepted,Is.True,"setup: the host hears it");window.Refused(heard);
+            window.Refused(new CommandResult{Accepted=false,Reason="NPC is busy"});
+            Assert.That(Thread(window),Does.Contain("> "+talk.Turns[1].Replies[next]),"a reply the host heard, or another command's refusal, changes no reply");
         }
 
         // A sale that a bust cuts short has no score, so the meter stays where it stood.
