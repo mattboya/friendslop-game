@@ -268,6 +268,7 @@ namespace Festival.Tests
                 Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-clear",Kind=FestivalSimulation.TestClearLevelKind}).Accepted,Is.True,"the host clears Night 2");
                 Assert.That(game.State.Result,Is.EqualTo("Success"));
                 Assert.That(FestivalHudText.OutcomeTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("PALM MIRAGE CLEARED (TEST)"),"the results say the clear was a test, not that everyone got home");
+                Assert.That(FestivalHudText.ResultsBannerTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("PALM MIRAGE CLEARED (TEST)"),"and so does the banner in the middle");
                 profile.RememberUnlocks(game.State);
                 Assert.That(game.State.UnlockedFestivalCount,Is.EqualTo(1),"clearing Night 2 in test mode unlocks nothing");
                 Assert.That(new LocalProfile(id).Data.UnlockedFestivalCount,Is.EqualTo(1),"the saved profile still says 1 unlocked");
@@ -278,6 +279,9 @@ namespace Festival.Tests
                 game.State.Phase="Playing";
                 Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-clear-day",Kind=FestivalSimulation.TestClearLevelKind}).Accepted,Is.True,"the host clears Day 1 with nothing sold");
                 Assert.That(FestivalHudText.OutcomeTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("DAY 1 CLEARED (TEST)"),"a test clear never says QUOTA MET");
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-off-in-results",Kind=FestivalSimulation.TestModeKind}).Accepted,Is.False,"test mode holds through the results");
+                Assert.That(FestivalHudText.OutcomeTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("DAY 1 CLEARED (TEST)"),"so the heading never turns into QUOTA MET");
+                Assert.That(FestivalHudText.ResultsBannerTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("DAY 1 CLEARED (TEST)"),"and the banner agrees with it");
             }
             finally{if(File.Exists(file))File.Delete(file);}
         }

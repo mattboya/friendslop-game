@@ -20,7 +20,8 @@ namespace Festival.Core
                 Free(p);return Ok("Freed (test)");
             }
             if(p.Id!=State.HostPlayerId)return Reject("Only the host runs test mode");
-            if(c.Kind==TestModeKind){State.TestMode=!State.TestMode;return Ok(State.TestMode?"TEST MODE on":"TEST MODE off");}
+            // The results heading reads TestMode, so the mode a level ended in holds until camp.
+            if(c.Kind==TestModeKind){if(State.Phase=="Results")return Reject("Switch test mode while a level plays or at camp");State.TestMode=!State.TestMode;return Ok(State.TestMode?"TEST MODE on":"TEST MODE off");}
             if(!State.TestMode)return Reject("Test mode is off");
             if(State.Phase!="Playing")return Reject("Clear a level while it plays");
             End("Success");return Ok("Level cleared (test)");

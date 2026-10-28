@@ -980,10 +980,10 @@ namespace Festival.Presentation
             cancelButton.GetComponentInChildren<Text>().text=ActiveConfirmation(state,player)!=null?"FINISH CHAT CHECK":"CANCEL ACTION";
             resumeButton.SetActive(!nextButton.activeSelf&&!cancelButton.activeSelf);
             // Only a test build's host may send these. Everyone else, a joined friend too, still sees the tag.
-            bool tester=session.IsHost&&session.DevelopmentFestivalSelection;
-            testModeButton.SetActive(tester);clearLevelButton.SetActive(tester&&state.TestMode&&state.Phase=="Playing");
+            bool tester=session.IsHost&&session.DevelopmentFestivalSelection,testSwitch=tester&&state.Phase!="Results";
+            testModeButton.SetActive(testSwitch);clearLevelButton.SetActive(tester&&state.TestMode&&state.Phase=="Playing");
             testModeButton.GetComponentInChildren<Text>().text=state.TestMode?"TEST MODE: ON":"TEST MODE: OFF";
-            crewButton.anchorMax=new Vector2(tester?.495f:.955f,crewButton.anchorMax.y);
+            crewButton.anchorMax=new Vector2(testSwitch?.495f:.955f,crewButton.anchorMax.y);
             UpdateText(state,player);
             trippingPanel.SetActive(!showMenu&&tripping.text!="");
             UpdateGearLayout(handGear.Count>0);

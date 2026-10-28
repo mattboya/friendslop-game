@@ -195,6 +195,11 @@ namespace Festival.Tests
                 var clear=Find("CLEAR LEVEL (TEST)");Assert.That(clear,Is.Not.Null,"in test mode the host's pass offers CLEAR LEVEL");
                 clear.onClick.Invoke();yield return new WaitForSeconds(.2f);
                 Assert.That(sim.State.Phase=="Results"&&sim.State.Result=="Success",Is.True,"CLEAR LEVEL ends the level as a success: "+sim.State.Result);
+                session.MenuOpen=false;yield return null;yield return null;
+                Assert.That(Read("Results title"),Is.EqualTo("DAY 1 CLEARED (TEST)"),"the results banner says the clear was a test");
+                session.MenuOpen=true;yield return null;
+                Assert.That(Find("TEST MODE: ON")??Find("TEST MODE: OFF"),Is.Null,"the results hide the switch");
+                Assert.That(((RectTransform)Find("CREW + NEARBY").transform).anchorMax.x,Is.EqualTo(.955f).Within(.001f),"CREW + NEARBY takes back the switch's room");
             }
             finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
             yield return null;

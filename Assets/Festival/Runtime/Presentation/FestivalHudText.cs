@@ -262,11 +262,12 @@ namespace Festival.Presentation
         }
 
         /// <summary>LOOP-5: the results banner's heading, in the middle of the screen for the whole results: why the weekend is over
-        /// ("MISSED THE QUOTA", "TIME EXPIRED", "THE CREW WAS WIPED OUT"), or the level or festival cleared. "" until results.</summary>
+        /// ("MISSED THE QUOTA", "TIME EXPIRED", "THE CREW WAS WIPED OUT"), or the level or festival cleared, with OutcomeTitle's
+        /// " (TEST)" mark on a test clear. "" until results.</summary>
         public static string ResultsBannerTitle(RoundState s)
         {
             if(s.Phase!="Results")return "";
-            if(s.Result=="Success")return Cleared(s);
+            if(s.Result=="Success")return Cleared(s)+(s.TestMode?" (TEST)":"");
             return (s.Result==FestivalSimulation.WipedOut?"The crew was wiped out":s.Result).ToUpperInvariant();
         }
         /// <summary>LOOP-5: under the banner's heading, a loss says what a day sold of its quota in the viewer's money and that the
