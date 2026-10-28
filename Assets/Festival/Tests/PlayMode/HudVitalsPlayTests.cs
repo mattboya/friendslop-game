@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -308,6 +309,73 @@ namespace Festival.Tests
                 yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
                 Assert.That(window.Open,Is.False,"the Menu key closes the ended chat");
                 Assert.That(heading.text,Does.EndWith("G DROP"),"with the chat closed, the gear bar offers G DROP again");
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+        }
+        // A talk with security that is over stays up to read, but security speaking to you closes it, so nothing covers the
+        // guard: the last chance said while it lingers, the last chance said as a poor talk ends, and an arrest warning, which says
+        // nothing.
+        [UnityTest]public IEnumerator SecuritySpeakingClosesTheChatItLeft()
+        {
+            const string LastChance="Last chance. Empty your pockets.";
+            var world=new GameObject("Cut in world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Cut in HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);session.MenuOpen=false;
+                // The stop's clocks are moved back below; a stop that starts before 0 is timed from the load, so the level runs a while first.
+                sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");sim.Tick(25);player.X=0;player.Z=0;player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});player.EquippedItemId="stock_lsd";
+                var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");sim.State.Npcs.RemoveAll(n=>n.Kind=="Cop"&&n!=cop);cop.Evidence.Clear();cop.X=2;cop.Z=0;cop.Yaw=-90;
+                yield return new WaitForSeconds(.4f);
+                Assert.That(cop.Mode,Is.EqualTo("Stop"),"setup: security stops you over the stock ("+session.Message+")");
+                var stop=cop.Evidence.Find(e=>e.PlayerId==player.Id&&e.Kind=="VisibleStock");
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                int commands=0;
+                IEnumerator Talk(){Assert.That(sim.Execute(player.Id,new GameCommand{Id="cut_in_"+(++commands),Kind="Police",TargetId=cop.Id}).Accepted,Is.True,"setup: you talk to security");yield return new WaitForSeconds(.3f);Assert.That(window.Open,Is.True,"setup: the talk is on the chat window");}
+                bool Shown(string line)=>SpeechTexts(hud).Any(t=>t.text==line);
+
+                // The talk is walked out of at 1 s, too soon for a last chance, so its chat lingers; at 12 s the guard says it.
+                yield return Talk();var talk=sim.Interaction(player.InteractionId);
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="cut_in_"+(++commands),Kind="Cancel"}).Accepted,Is.True,"setup: the talk ends");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(window.Lingering,Is.True,"setup: the ended chat stays up to read");
+                stop.StartSeconds=sim.State.SimulationSeconds-12.05;
+                for(deadline=Time.realtimeSinceStartup+2;player.NpcSpeech!=LastChance&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(player.NpcSpeech,Is.EqualTo(LastChance),"setup: at 12 s the guard gives the last chance");
+                yield return new WaitForSeconds(.2f);
+                Assert.That(window.Open,Is.False,"the last chance closes the chat it left");
+                Assert.That(Shown(LastChance),Is.True,"and the guard's line is on screen");
+
+                // A poor talk over at 13 s: the guard says the last chance as it ends, and the chat never stays over it.
+                yield return Talk();talk=sim.Interaction(player.InteractionId);
+                for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)
+                    Assert.That(sim.Execute(player.Id,new GameCommand{Id="cut_in_"+(++commands),Kind="Reply",Amount=System.Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Awkward),Direction=turn}).Accepted,Is.True,"setup: an awkward reply on turn "+turn);
+                Assert.That(talk.Status=="Complete"&&player.NpcSpeech==LastChance,Is.True,"setup: the poor talk ends on the last chance ("+talk.Status+", \""+player.NpcSpeech+"\")");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(window.Open,Is.False,"a last chance said as the talk ends closes its chat at once");
+                Assert.That(Shown(LastChance),Is.True,"and the guard's line is on screen");
+
+                // Walked out of past the last chance, a talk's chat lingers until the 20 s arrest warning, which closes it.
+                yield return Talk();
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="cut_in_"+(++commands),Kind="Cancel"}).Accepted,Is.True,"setup: the talk ends");
+                yield return new WaitForSeconds(.3f);
+                Assert.That(window.Lingering,Is.True,"setup: the ended chat stays up to read, the last chance already said");
+                stop.StartSeconds=sim.State.SimulationSeconds-20.05;
+                for(deadline=Time.realtimeSinceStartup+2;cop.Mode!="ArrestWarning"&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(cop.Mode,Is.EqualTo("ArrestWarning"),"setup: at 20 s it is an arrest warning");
+                yield return new WaitForSeconds(.2f);
+                Assert.That(window.Open,Is.False,"the arrest warning closes the chat it left");
             }
             finally
             {

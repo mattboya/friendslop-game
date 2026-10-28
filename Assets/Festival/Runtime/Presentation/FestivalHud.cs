@@ -177,6 +177,8 @@ namespace Festival.Presentation
         // whether it sits beside the pass (the menu is open) rather than in play's spot.
         private FestivalChatWindow chatWindow;
         private int chatConnectionGeneration=-1;
+        // The newest line said to the player (PlayerState.SpeechDeliveryId) while their chat was live.
+        private string heardInChat="";
         // CAMP-1: Marigold's talk at camp, on the chat window, and the world she stands in (FestivalWorld.CampSeller).
         private readonly CampSellerTalk sellerTalk=new CampSellerTalk(Environment.TickCount);
         private FestivalWorld world;
@@ -1686,6 +1688,11 @@ namespace Festival.Presentation
             return false;
         }
 
+        /// <summary>Whether security has cut in on p since the chat they were last in: a guard's line to p other than `heard`, the
+        /// newest line p's view showed while that chat was live, or an arrest warning on p, which says nothing. A waved-on talk takes
+        /// its guard lines back, so its chat lingers.</summary>
+        public static bool SecurityCutsIn(RoundState s,PlayerState p,string heard)=>p.NpcSpeaker=="SECURITY"&&p.NpcSpeech!=""&&p.SpeechDeliveryId!=heard
+            ||s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
         private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
         {
             if(chatBesidePass!=showMenu){chatBesidePass=showMenu;Place(Rect(chatWindow.gameObject),showMenu?.735f:.60f,.155f,showMenu?.985f:.975f,.652f);}
@@ -1694,6 +1701,7 @@ namespace Festival.Presentation
             chatWindow.CloseKey=Bound(session?.Controls?.Menu,"ESC");
             chatWindow.SetReplyKeys(Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"));
             var outcome=session.PendingConversationOutcome;
+            if(FestivalChatWindow.LiveChat(state,player)!=null)heardInChat=player.SpeechDeliveryId;
             bool live=!covered&&(sellerTalk.Follow(state,player,Time.unscaledTime,session.Profile.Data.ReducedMotion)
                 ||outcome==null&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
             if(!covered&&outcome!=null)
@@ -1703,6 +1711,8 @@ namespace Festival.Presentation
                 if(chatWindow.OutcomeDisplayed)session.AcknowledgeConversationOutcome(outcome);
                 if(!chatWindow.Open)session.DismissConversationOutcome(outcome.DeliveryId);
             }
+            // Runs after the follow, so a window that starts to linger on the frame the guard speaks never shows.
+            if(chatWindow.Lingering&&SecurityCutsIn(state,player,heardInChat))chatWindow.Dismiss();
             var shown=FestivalChatWindow.LiveChat(state,player);
             if(live&&chatWindow.Open&&shown!=null)session.AcknowledgeConversationTurn(shown);
             if(world!=null&&world.CampSeller!=null)sellerTalk.Face(world.CampSeller,player,Time.unscaledDeltaTime);
