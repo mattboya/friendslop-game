@@ -121,7 +121,7 @@ namespace Festival.Tests
             LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;var host=new GameObject("impl-U25 stage host");
             try
             {
-                var session=host.AddComponent<FestivalSession>();session.enabled=false;session.Host("Stage test",8610);
+                var session=host.AddComponent<FestivalSession>();session.enabled=false;session.Host("Stage test",0);
                 Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
                 var game=Pair();game.State.LevelIndex=3;var interaction=Start(game,"Conversation");
                 var p0=game.Player("p0");Assert.That(JsonUtility.ToJson(interaction),Does.Contain("\"StageTrack\":"+StageMusic.TrackAt(game.State,p0.X,p0.Z)),"real trust command selected the nearer stage's song");

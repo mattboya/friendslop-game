@@ -288,7 +288,7 @@ namespace Festival.Tests
             var root=new GameObject("fix-U7 quiet acks");
             try
             {
-                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Ack host",8597);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
+                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Ack host",0);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
                 var game=Pair(0,out var player,out var partner);var talk=Start(game,player,partner);
                 typeof(FestivalSession).GetField("simulation",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,game);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,player.Id);
                 const string Sold="SOLD Tongue Stamps  •  +$20";

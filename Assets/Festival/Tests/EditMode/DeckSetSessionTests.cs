@@ -106,7 +106,7 @@ namespace Festival.Tests
             var go=new GameObject("impl-U26 deck host");
             try
             {
-                var session=go.AddComponent<FestivalSession>();session.enabled=false;session.Host("Deck test",8611);Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
+                var session=go.AddComponent<FestivalSession>();session.enabled=false;session.Host("Deck test",0);Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
                 var game=Deck(out var deck,1);var note=RhythmChart.For(deck).Notes.Find(n=>n.HoldSeconds>0);Assert.That(note,Is.Not.Null,"setup: this fixed real chart contains a hold");
                 typeof(FestivalSession).GetField("simulation",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,game);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,"p0");typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(game,"p0"));session.Profile.Data.TimingCalibrationMs=60;
                 double anchor=deck.StageFirstHeadWorldSeconds;game.State.SimulationSeconds=deck.StartSeconds+note.TimeSeconds+.06;session.Rhythm(note.Direction,note.TimeSeconds+.06);

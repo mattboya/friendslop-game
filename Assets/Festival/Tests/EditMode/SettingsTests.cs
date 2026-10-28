@@ -306,7 +306,7 @@ namespace Festival.Tests
             try
             {
                 var session=host.AddComponent<FestivalSession>();if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
-                session.enabled=false;session.Host("Input test",8641);Assert.That(session.Connected,Is.True,session.Message);session.MenuOpen=false;
+                session.enabled=false;session.Host("Input test",0);Assert.That(session.Connected,Is.True,session.Message);session.MenuOpen=false;
                 session.Profile.Data.VoiceMode="PushToTalk";
                 InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.T));InputSystem.Update();
                 Assert.That(keyboard.tKey.isPressed,Is.True,"fixture delivered the player T key");Assert.That(session.Controls.PushToTalk.IsPressed(),Is.True);

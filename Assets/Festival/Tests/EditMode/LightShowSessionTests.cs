@@ -81,7 +81,7 @@ namespace Festival.Tests
             yield return new EnterPlayMode();string previous=LocalProfile.Folder,scope=FestivalInput.PreferencesScope;string folder=Path.Combine(Path.GetTempPath(),"impl-U29-light-host-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;var go=new GameObject("impl-U29 light host");
             try
             {
-                var session=go.AddComponent<FestivalSession>();session.enabled=false;session.Host("Light test",8614);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
+                var session=go.AddComponent<FestivalSession>();session.enabled=false;session.Host("Light test",0);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
                 var game=Started();game.Tick(21);typeof(FestivalSession).GetField("simulation",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,game);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,"p0");typeof(FestivalSession).GetProperty("State").SetValue(session,FestivalSession.ViewFor(game,"p0"));
                 session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.LightShowAnswer,amount:2,direction:0);Assert.That(session.LastLocalCommandResult.Accepted,Is.True,session.Message);Assert.That(Host(game,"p0").Answers,Is.EqualTo(new[]{2}));
                 session.Command(FestivalSimulation.MinigameKind,item:FestivalSimulation.LightShowAnswer,amount:1,direction:0);Assert.That(session.LastLocalCommandResult.Accepted,Is.False,"the session cannot overwrite a sent answer");Assert.That(Host(game,"p0").Answers,Is.EqualTo(new[]{2}));

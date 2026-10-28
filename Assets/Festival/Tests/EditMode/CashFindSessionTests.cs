@@ -94,7 +94,7 @@ namespace Festival.Tests
             var root=new GameObject("impl-U19 cash host");
             try
             {
-                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Cash host",8583);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
+                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Cash host",0);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
                 var game=Playing();var drop=game.State.Drops.Find(d=>d.CashFind);var owner=game.Player("owner");var friend=game.Player("friend");owner.X=friend.X=drop.X;owner.Z=friend.Z=drop.Z;
                 owner.Inventory.AddRange(new[]{new ItemStack{ItemId="poi",Count=1},new ItemStack{ItemId="confetti",Count=1},new ItemStack{ItemId="stock_lsd",Count=1}});int cash=owner.Cash,other=friend.Cash;
                 var stale=Wire(game,friend.Id).Drops.Find(d=>d.Id==drop.Id);Assert.That(stale,Is.Not.Null);
