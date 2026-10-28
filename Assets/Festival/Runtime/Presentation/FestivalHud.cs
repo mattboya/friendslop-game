@@ -605,7 +605,7 @@ namespace Festival.Presentation
             rhythmTiming=Label(rhythmPanel.transform,"Timing",20,TextAnchor.MiddleCenter);rhythmTiming.color=MutedPaper;Place(rhythmTiming.rectTransform,.06f,.315f,.94f,.37f);
             var progressTrack=Panel(rhythmPanel.transform,"Step progress track",new Color(.33f,.43f,.44f,1),new Vector2(.08f,.055f),new Vector2(.92f,.071f));progressTrack.GetComponent<Image>().raycastTarget=false;
             rhythmProgressFill=Panel(rhythmPanel.transform,"Step progress",Mint,new Vector2(.08f,.055f),new Vector2(.08f,.071f)).GetComponent<Image>();rhythmProgressFill.raycastTarget=false;
-            rhythmControls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);rhythmControls.text="ARROWS OR WASD";rhythmControls.color=MutedPaper;Place(rhythmControls.rectTransform,.06f,.005f,StopHoldLeft-.02f,.049f);
+            rhythmControls=Label(rhythmPanel.transform,"Controls",17,TextAnchor.MiddleCenter);rhythmControls.text="ARROWS OR WASD";rhythmControls.color=MutedPaper;Place(rhythmControls.rectTransform,.06f,.005f,StopHoldLeft-.02f,.049f);ShrinkToFit(rhythmControls,11);
             // DANCE-12: only a held G stops a challenge; the fill under the words grows while it's held (ShowStopHold).
             stopHoldFill=Panel(rhythmPanel.transform,"Stop hold fill",new Color(Orange.r,Orange.g,Orange.b,.5f),new Vector2(StopHoldLeft,.008f),new Vector2(StopHoldLeft,.046f)).GetComponent<Image>();stopHoldFill.raycastTarget=false;stopHoldFill.gameObject.SetActive(false);
             stopHoldLabel=Label(rhythmPanel.transform,"Stop hold",17,TextAnchor.MiddleCenter);stopHoldLabel.text=FestivalHudText.HoldToStop;Place(stopHoldLabel.rectTransform,StopHoldLeft,.005f,StopHoldRight,.049f);
@@ -1935,14 +1935,16 @@ namespace Festival.Presentation
         {
             for(int lane=0;lane<4;lane++)rhythmKeys[lane].text=controls.NoteKey(lane);
             // The bottom line names the keys in W-A-S-D order (up, left, down, right): the arrows as one word while none is moved.
-            string arrows="",alternates="";bool moved=false;
+            var arrows=new string[4];var alternates=new string[4];bool moved=false;int at=0;
             foreach(int lane in new[]{2,0,1,3})
             {
                 var arrow=controls.Notes[lane].bindings[0];moved|=arrow.effectivePath!=arrow.path;
-                arrows+=FestivalInput.Label(controls.Notes[lane],0);alternates+=controls.NoteKey(lane);
+                arrows[at]=FestivalInput.Label(controls.Notes[lane],0);alternates[at++]=controls.NoteKey(lane);
             }
-            rhythmControls.text=((moved?arrows:"ARROWS")+" OR "+alternates).ToUpperInvariant();
+            rhythmControls.text=((moved?KeyRun(arrows):"ARROWS")+" OR "+KeyRun(alternates)).ToUpperInvariant();
         }
+        // A name longer than one letter (MOUSE BACK, LEFT) would run into its neighbours, so then every name stands apart.
+        private static string KeyRun(string[] keys){foreach(var key in keys)if(key.Length!=1)return string.Join(" / ",keys);return string.Concat(keys);}
 
         // Places a note's view `remaining` seconds before its time, with `lead` seconds of look-ahead under the effect: it rises
         // from just above the step progress bar onto its lane's outline arrow, and a missed one fades out as it rises past it.

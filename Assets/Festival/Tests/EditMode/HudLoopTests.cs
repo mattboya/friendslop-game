@@ -337,6 +337,15 @@ namespace Festival.Tests
                 var screen=new FestivalSettingsScreen(session.Profile,session.Settings,new Festival.Integrations.UnavailableVoiceSession(),session.Controls,null,new MicrophoneMonitorTests.Fixture());
                 Assert.That(screen.Value(System.Linq.Enumerable.First(FestivalSettingsScreen.Rows,r=>r.Tab==FestivalSettingsScreen.Tab.Controls&&r.Label=="DROP")),Is.EqualTo("MOUSE BACK"),"the CONTROLS row");
             });
+            // An action with more than one binding (a dance lane's arrow and its other key, the four move keys) names each key as
+            // the rest of the game does.
+            WithReboundHud(keys=>{keys.Notes[0].ApplyBindingOverride(1,"<Mouse>/backButton");keys.Move.ApplyBindingOverride(1,"<Mouse>/forwardButton");},(session,hud,go)=>
+            {
+                var input=session.Controls;string block=null;foreach(var (title,text) in FestivalHudText.HowToPlay(input))if(title=="KEYS")block=text;
+                var rows=block.Split('\n');
+                Assert.That(rows,Has.Some.EqualTo(FestivalInput.Label(input.Notes[0],0)+" | Mouse Back  dance lane: left"),"How to Play's lane row: "+block);
+                Assert.That(rows,Has.Some.EqualTo("Mouse Forward/"+FestivalInput.Label(input.Move,3)+"/"+FestivalInput.Label(input.Move,2)+"/"+FestivalInput.Label(input.Move,4)+"  move"),"How to Play's move row: "+block);
+            });
         }
 
         [Test] public void BannerNamesTheFestivalAndLevel()
