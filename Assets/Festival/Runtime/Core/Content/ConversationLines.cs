@@ -7,7 +7,8 @@ namespace Festival.Core
     // then your three Replies. Grades holds each reply's grade (ConversationLines.Smooth, SoSo or Awkward); a Garbled reply's
     // longer words' interior letters are jumbled, as a dosed player says it. Pick is the reply chosen: -1 until one is,
     // and for good once the turn has run out, a silence.
-    [Serializable] public sealed class ConversationTurn { public string Reaction="",Line=""; public string[] Replies=new string[3]; public int[] Grades=new int[3]; public bool[] Garbled=new bool[3]; public int Pick=-1; public List<string> GrammarKeys=new List<string>(); }
+    [Serializable] public sealed class ConversationTurn { public string Reaction="",Line=""; public string[] Replies=new string[3]; public int[] Grades=new int[3]; public bool[] Garbled=new bool[3]; public int Pick=-1; public List<string> GrammarKeys=new List<string>();
+        public ConversationTurn Copy(){var c=(ConversationTurn)MemberwiseClone();c.Replies=(string[])Replies.Clone();c.Grades=(int[])Grades.Clone();c.Garbled=(bool[])Garbled.Clone();c.GrammarKeys=new List<string>(GrammarKeys);return c;} }
 
     // DIALOG-3: what's said in a talk, built by a LineGrammar (DIALOG-4) that holds FestivalLines' parts as well as these.
     // - Topics: a chat (Conversation) is "talk", a sale "sale", a buy "buy" and a talk with security "security".

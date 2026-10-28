@@ -76,6 +76,7 @@ public static class MoneyGuardTests
         new[]{"MysteryCups.cs","State.StashCash+=b.Pot-share*crew.Count","everyone: the minigame card '$Y to the stash'"},
         new[]{"SecurityStops.cs","State.Drops.Remove(d)","crew: 'SECURITY TOOK the ditched Tongue Stamps'"},
         new[]{"SplitObjective.cs","State.StashCash+=FriendReward","crew: 'STASH  •  +$20  •  Sam found a lost friend'"},
+        new[]{"State.cs","c.Items=Items.ConvertAll(i=>i.Copy())","nobody: a view's own copy of a stash, which leaves the host's stash as it was"},
         new[]{"StockBuys.cs","p.Cash-=price","buyer: the price is held under the talk card; the end says BuyReply or 'NO DEAL  •  +$5'"},
         new[]{"StockBuys.cs","Add(p,item,1)","buyer: BuyReply 'Bought Tongue Stamps for $5' (full hands: 'HANDS FULL  •  ... dropped at your feet')"},
         new[]{"Visions.cs","State.StashCash+=SecretStashCash","finder: VisionStashNotice; crew: 'STASH  •  +$15  •  Ash found a hidden stash'"},

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using Festival.Core;
 public static class SimulationTests {
@@ -106,7 +107,30 @@ public static class SimulationTests {
   }
  }
  static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
+ // FestivalSession.ViewFor gives the host's own view these copies, so each copy carries every field and shares no list,
+ // array or object with the host's state, all the way down.
+ static void ViewCopiesCarryEveryFieldAndShareNothing(){
+  var options=new JsonSerializerOptions{IncludeFields=true};
+  var doing=new InteractionState{Id="sale",PlayerId="a",TargetId="n",Kind="Sale",ChartSeed=3,Hunch="h",HeadStart=2,HintedReply=1,Ask=10,TrustDance=true};
+  doing.Inputs.Add(new RhythmInput{Direction=2,TimeSeconds=1.5,Release=true});doing.WitnessIds.Add("w");doing.Chat.Opener="o";doing.Chat.Questions[1]="q";doing.Chat.Answers[2]="an";
+  var turn=new ConversationTurn{Reaction="re",Line="li",Pick=1};turn.Replies[0]="r";turn.Grades[2]=-1;turn.Garbled[1]=true;turn.GrammarKeys.Add("k");doing.Turns.Add(turn);
+  var stash=new StashState{Id="s",X=1,Z=2};stash.Items.Add(new ItemStack{ItemId="x",Count=2});
+  var shop=new ShopStockState{ItemId="x",CampAvailable=1,MarketAvailable=2};var dose=new PlayerDose{PlayerId="a",Substance="lsd",Dose=3};var body=new BodyState{PlayerId="b",X=1,Z=2};
+  var offer=new TransferOffer{Id="t",FromId="a",ToId="b",ItemId="x",Amount=1,ExpiresAt=9};var vote=new CampReviewVote{PlayerId="a",TargetId="b",Award=2};
+  foreach(var (source,copy) in new (object,object)[]{(doing,doing.Copy()),(stash,stash.Copy()),(shop,shop.Copy()),(dose,dose.Copy()),(body,body.Copy()),(offer,offer.Copy()),(vote,vote.Copy())}){
+   string name=source.GetType().Name,was=JsonSerializer.Serialize(source,options);
+   Assert(JsonSerializer.Serialize(copy,options)==was,"a "+name+" copy carries every field: "+JsonSerializer.Serialize(copy,options));
+   var reached=new HashSet<object>(ReferenceEqualityComparer.Instance);Reach(source,reached);var mine=new HashSet<object>(ReferenceEqualityComparer.Instance);Reach(copy,mine);
+   Assert(!mine.Overlaps(reached),"a "+name+" copy shares a list, array or object with its source");
+  }
+ }
+ static void Reach(object at,HashSet<object> seen){
+  if(at==null||at is string||at.GetType().IsValueType||!seen.Add(at))return;
+  if(at is System.Collections.IList list){foreach(var item in list)Reach(item,seen);return;}
+  foreach(var f in at.GetType().GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance))if(!f.FieldType.IsValueType)Reach(f.GetValue(at),seen);
+ }
  public static void Run(){
+  ViewCopiesCarryEveryFieldAndShareNothing();
   ConfettiTellsThePlayerHowManyItDistracted();ConfettiSaysWhyItFooledNobody();FooledFestivalgoersFaceTheBurst();CampConfettiIsAFreePartyTrick();OlderSnapshotsCountBurstsFromZero();RestoreRefusesANegativeEventCount();
   var capacity=new FestivalSimulation();for(int i=0;i<8;i++)capacity.AddPlayer(i.ToString(),"P");bool denied=false;try{capacity.AddPlayer("9","P");}catch(InvalidOperationException){denied=true;}Assert(denied&&capacity.State.Players.Count==8,"capacity");
   var shop=new FestivalSimulation();var p=shop.AddPlayer("a","A");var shelf=Catalog.ShopPoint(true,shop.State.VendorOffers.IndexOf("medical_voucher"));p.X=shelf.X;p.Z=shelf.Z;Assert(shop.Execute("a",C("HoldOffer","medical_voucher")).Accepted,"hold shelf copy");Assert(!shop.Execute("a",C("HoldOffer","poi_practice")).Accepted,"one held item");p.X=0;p.Z=7;var buy=C("Buy","medical_voucher",amount:1);Assert(shop.Execute("a",buy).Accepted,"buy");shop.Execute("a",buy);Assert(p.Cash==15&&p.Inventory[0].Count==1,"buy exactly once");Assert(!shop.Execute("a",C("Buy","medical_voucher",amount:-1)).Accepted,"negative buy");

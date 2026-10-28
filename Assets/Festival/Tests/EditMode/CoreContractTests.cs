@@ -423,6 +423,55 @@ namespace Festival.Tests
             Assert.That(restored.Player("host").VisualConfettiBurstSequence,Is.EqualTo(1),"and the count goes on from zero");
         }
 
+        // The host's own view is a copy, as each client's is. No list or object in it is one of simulation.State's, so a
+        // presentation bug on the host can never change the rules there alone.
+        [Test] public void TheHostsOwnViewSharesNoListOrObjectWithItsSimulation()
+        {
+            var game=new FestivalSimulation(21);var host=game.AddPlayer("host","Host");var mate=game.AddPlayer("mate","Mate");var s=game.State;
+            s.Phase="Playing";s.TripperId=host.Id;s.Doses.Add(new PlayerDose{PlayerId=host.Id,Dose=2,Substance="lsd"});
+            s.Bodies.Add(new BodyState{PlayerId=mate.Id,X=1});s.Transfers.Add(new TransferOffer{Id="offer",FromId=host.Id,ToId=mate.Id,ItemId="map",Amount=1});
+            s.Stashes.Add(new StashState{Id="stash",Items=new System.Collections.Generic.List<ItemStack>{new ItemStack{ItemId="stock_lsd",Count=1}}});
+            // A revealed debrief, so every vote is public; a found friend and a found second friend, so both spots are.
+            s.ReviewAwards.Add(CampFeatures.BestAwards[0]);s.ReviewWinners.Add(host.Id);s.ReviewVotes.Add(new CampReviewVote{PlayerId=mate.Id,TargetId=host.Id});
+            s.FriendFound=true;s.SecondFriend.Active=s.SecondFriend.Found=true;
+            foreach(var kind in new[]{"Dance",FestivalSimulation.RideWheelKind,"ConfirmChat","Conversation",FestivalSimulation.DrumPartKind})
+            {
+                var doing=new InteractionState{Id="doing_"+kind,PlayerId=host.Id,Kind=kind};doing.Inputs.Add(new RhythmInput{Direction=1});doing.WitnessIds.Add(mate.Id);
+                var turn=new ConversationTurn();turn.GrammarKeys.Add("key");doing.Turns.Add(turn);s.Interactions.Add(doing);
+            }
+            var view=Festival.Network.FestivalSession.ViewFor(game,host.Id);
+            Assert.That(view.Stashes.Count>0&&view.Transfers.Count>0&&view.Bodies.Count>0&&view.Doses.Count>0&&view.ShopStock.Count>0&&view.ReviewVotes.Count>0&&view.Interactions.Count==5&&view.FriendPosition!=null,Is.True,"setup: the host's view carries every list");
+            var hosts=Reach(s,"State");var shared=new System.Collections.Generic.List<string>();
+            foreach(var seen in Reach(view,"view"))if(hosts.TryGetValue(seen.Key,out string at))shared.Add(seen.Value+" is "+at);
+            Assert.That(shared,Is.Empty,"the host's view shares these with its simulation: "+string.Join(", ",shared));
+            // So changing every list and every item in the view leaves the host's state as it was.
+            string before=UnityEngine.JsonUtility.ToJson(s);
+            foreach(var seen in Reach(view,"view").Keys)
+            {
+                if(seen is System.Collections.IList list){if(!list.IsFixedSize)list.Clear();continue;}
+                foreach(var field in seen.GetType().GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance))if(field.FieldType==typeof(string))field.SetValue(seen,"changed");else if(field.FieldType==typeof(int))field.SetValue(seen,99);
+            }
+            Assert.That(UnityEngine.JsonUtility.ToJson(s),Is.EqualTo(before),"changing the host's view changed its simulation");
+        }
+        // Every object reachable from root through fields and list items, strings and values aside, with the path that first reached it.
+        static System.Collections.Generic.Dictionary<object,string> Reach(object root,string path)
+        {
+            var seen=new System.Collections.Generic.Dictionary<object,string>(new Same());Walk(root,path,seen);return seen;
+        }
+        static void Walk(object at,string path,System.Collections.Generic.Dictionary<object,string> seen)
+        {
+            if(at==null||at is string||at.GetType().IsValueType||seen.ContainsKey(at))return;
+            seen.Add(at,path);
+            if(at is System.Collections.IList list){for(int i=0;i<list.Count;i++)Walk(list[i],path+"["+i+"]",seen);return;}
+            foreach(var field in at.GetType().GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance))
+                if(!field.FieldType.IsValueType)Walk(field.GetValue(at),path+"."+field.Name,seen);
+        }
+        sealed class Same:System.Collections.Generic.IEqualityComparer<object>
+        {
+            public new bool Equals(object a,object b)=>ReferenceEquals(a,b);
+            public int GetHashCode(object o)=>System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(o);
+        }
+
         private static GameCommand Command(string id,string kind)=>new GameCommand{Id=id,Kind=kind};
     }
 }

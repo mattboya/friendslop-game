@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Festival.Core
 {
     /// <summary>A crew member who died on Night 2 lies here until revived. The crew carries it back to camp.</summary>
-    [Serializable] public sealed class BodyState { public string PlayerId=""; public float X,Z; }
+    [Serializable] public sealed class BodyState { public string PlayerId=""; public float X,Z; public BodyState Copy()=>(BodyState)MemberwiseClone(); }
 
     /// <summary>Night 2 finale: nobody is left behind. Bodies, carrying them, and who counts as home.</summary>
     public sealed partial class FestivalSimulation

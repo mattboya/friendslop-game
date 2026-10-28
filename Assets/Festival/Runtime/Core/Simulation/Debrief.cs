@@ -12,8 +12,9 @@ namespace Festival.Core
         const double ShotSeconds=90;
         // Solo practice draws no awards, so its (empty) verdict counts as revealed and the host can move straight on.
         public static bool ReviewRevealed(RoundState s)=>s.ReviewWinners.Count==s.ReviewAwards.Count;
-        // Before the reveal a viewer sees their own picks and who else has voted, never whom anyone else picked.
-        public static List<CampReviewVote> VisibleReviewVotes(RoundState s,string viewer)=>ReviewRevealed(s)?s.ReviewVotes:s.ReviewVotes.ConvertAll(v=>v.PlayerId==viewer?v:new CampReviewVote{PlayerId=v.PlayerId,Award=v.Award});
+        // Before the reveal a viewer sees their own picks and who else has voted, never whom anyone else picked. Each vote is a copy,
+        // so no view holds one of the host's.
+        public static List<CampReviewVote> VisibleReviewVotes(RoundState s,string viewer)=>s.ReviewVotes.ConvertAll(v=>ReviewRevealed(s)||v.PlayerId==viewer?v.Copy():new CampReviewVote{PlayerId=v.PlayerId,Award=v.Award});
         // Whether a player has picked a friend for every award. It reads only who voted on what, which every view carries.
         public static bool VotedOnEveryAward(RoundState s,string playerId){for(int slot=0;slot<s.ReviewAwards.Count;slot++)if(!s.ReviewVotes.Exists(v=>v.PlayerId==playerId&&v.Award==slot))return false;return true;}
         // Winning a worst award pours its winner a shot as the next level starts.

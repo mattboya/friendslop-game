@@ -187,6 +187,26 @@ namespace Festival.Tests
             presenter.Clear();Draw();Assert.That(Text(),Is.Null);
             Assert.That(presenter.Deliveries.RegisterLocal("check:9","speaker","FESTIVALGOER","Stale",0,7),Is.Null);
         }
+        // The host's own view is a new copy each frame, as a client's is each snapshot. A private check follows the check in
+        // the view it came from, matched by reference there, so each frame's copy keeps its opener up and a check from an older view
+        // speaks for none.
+        [Test]public void APrivateCheckFollowsEachHostViewsOwnCopyOfTheCheck()
+        {
+            var game=new FestivalSimulation(7);var owner=game.AddPlayer("owner","Owner");game.State.Phase="Playing";game.State.SimulationSeconds=5;game.State.Npcs.Clear();
+            game.State.Npcs.Add(new NpcState{Id="goer_0",Role="Regular",CanTalk=true,Z=1.5f,Yaw=180,Twist=FestivalSimulation.VipGuard});owner.X=owner.Z=0;
+            game.HasLineOfSight=(ax,az,bx,bz)=>false;game.Navigate=(x,z,tx,tz,step)=>new WorldPoint(x,z);
+            var start=game.Execute(owner.Id,new GameCommand{Id="check",Kind="ConfirmChat",TargetId="goer_0"});Assert.That(start.Accepted,Is.True,start.Reason);
+            var first=Festival.Network.FestivalSession.ViewFor(game,owner.Id);var second=Festival.Network.FestivalSession.ViewFor(game,owner.Id);
+            PlayerState Owner(RoundState view)=>view.Players.Find(p=>p.Id==owner.Id);
+            var check=FestivalChatWindow.LiveChat(first,Owner(first));Assert.That(check?.Kind,Is.EqualTo("ConfirmChat"),"setup: the host's view carries the check");
+            string opener=first.RoundId+":check:"+check.Id+":opener";
+            presenter.FollowCheck(first,Owner(first),check,0,5);
+            Assert.That(presenter.Deliveries.Find(opener)?.Retracted,Is.False,"the check's opener speaks");
+            presenter.FollowCheck(second,Owner(second),FestivalChatWindow.LiveChat(second,Owner(second)),0,5);
+            Assert.That(presenter.Deliveries.Find(opener).Retracted,Is.False,"the next view's own copy of the check keeps it speaking");
+            presenter.FollowCheck(second,Owner(second),check,0,5);
+            Assert.That(presenter.Deliveries.Find(opener).Retracted,Is.True,"a check from an older view is not this view's check");
+        }
         [Test]
         public void EssentialResourcesResolveAndRenderFallbackAndRuntimeFestivalText()
         {

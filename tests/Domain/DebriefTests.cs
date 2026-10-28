@@ -77,8 +77,13 @@ public static class DebriefTests
         Check(seenByC.Count==8&&seenByC.FindAll(v=>v.PlayerId!="c").TrueForAll(v=>v.TargetId==""),"c sees that a and b voted, never whom they picked");
         Check(seenByC.Exists(v=>v.PlayerId=="c"&&v.Award==1&&v.TargetId=="a"),"c sees their own picks");
         Check(s.State.ReviewVotes.TrueForAll(v=>v.TargetId!=""),"hiding votes from a viewer keeps them on the host");
+        // A view's votes are its own copies, so changing them changes no vote on the host, before the reveal or after.
+        foreach(var vote in seenByC)vote.TargetId="b";seenByC.Clear();
+        Check(s.State.ReviewVotes.Count==8&&s.State.ReviewVotes.Find(v=>v.PlayerId=="c"&&v.Award==1).TargetId=="a","a view's votes before the reveal are copies");
         Check(Act(s,"c","ReviewVote","a",2).Accepted&&FestivalSimulation.ReviewRevealed(s.State)&&s.State.ReviewWinners.Count==3,"the last vote reveals every award together");
         Check(FestivalSimulation.VisibleReviewVotes(s.State,"c").Exists(v=>v.PlayerId=="a"&&v.Award==0&&v.TargetId=="b"),"after the reveal everyone sees who voted for whom");
+        var revealed=FestivalSimulation.VisibleReviewVotes(s.State,"c");foreach(var vote in revealed)vote.TargetId="c";revealed.Clear();
+        Check(s.State.ReviewVotes.Count==9&&s.State.ReviewVotes.Find(v=>v.PlayerId=="a"&&v.Award==0).TargetId=="b","and after it");
         Check(!Act(s,"a","ReviewVote","a",0).Accepted&&s.State.ReviewVotes.Find(v=>v.PlayerId=="a"&&v.Award==0).TargetId=="b","votes are locked once revealed");
         Check(!Act(s,"b","FinishReview").Accepted&&Act(s,"a","FinishReview").Accepted&&s.State.Phase=="Shopping","after the reveal the host opens the shop");
     }

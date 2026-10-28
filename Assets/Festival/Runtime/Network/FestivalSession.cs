@@ -989,7 +989,8 @@ namespace Festival.Network
         // Static so EditMode tests can check the whitelist without a network session.
         public static RoundState ViewFor(FestivalSimulation simulation,string viewer)
         {
-            // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials.
+            // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials. Every list and object
+            // in the view is its own copy: the host's presentation reads its own view, so it can never change the rules.
             var source=simulation.State;var local=simulation.Player(viewer);bool spirit=local?.Life=="Spirit";
             // TRIP-4: everyone sees the clue cloud; only the tripper, once they have read it, is shown what it pictures, and when.
             int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
@@ -998,15 +999,15 @@ namespace Festival.Network
                 // Public: every view shows the crowd's cheer for the stage DJ.
                 StageCheerScore=source.StageCheerScore,StageCheerUntilWorldSeconds=source.StageCheerUntilWorldSeconds,
                 CampEggs=source.CampEggs.ConvertAll(e=>e.Copy()),
-                ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
+                ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=new List<string>(source.ReviewAwards),ReviewWinners=new List<string>(source.ReviewWinners),
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
                 // CROWD-2: a big crew's second lost friend, shown like the first. Its clue chain stays on the host.
                 SecondFriend=new LostFriendState{Active=source.SecondFriend.Active,GateOpened=source.SecondFriend.GateOpened,CluesRead=source.SecondFriend.CluesRead,Found=!spirit&&source.SecondFriend.Found,LeaderId=spirit?"":source.SecondFriend.LeaderId,Position=Spot(source.SecondFriend.GateOpened,source.SecondFriend.Found,source.SecondFriend.Position)},
                 // POLO-3: a Ferris wheel rider at night makes out only the square each lost friend is in, never their spot.
                 WheelFriendAreas=FestivalSimulation.WheelFriendAreas(source,viewer),
-                VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
+                VendorOffers=new List<string>(source.VendorOffers),ShopStock=source.ShopStock.ConvertAll(x=>x.Copy()),CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,TestMode=source.TestMode,
-                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
+                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses.ConvertAll(d=>d.Copy()),Bodies=source.Bodies.ConvertAll(b=>b.Copy()),
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
                 // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
                 CloudStashFinderId=source.CloudStashFinderId,
@@ -1052,7 +1053,7 @@ namespace Festival.Network
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
-                view.Drops=FestivalSimulation.VisibleDrops(source).ConvertAll(d=>new DropState{Id=d.Id,ItemId=d.ItemId,OwnerId=d.OwnerId,ClaimedBy=d.ClaimedBy,Count=d.Count,X=d.X,Z=d.Z,ClaimAt=d.ClaimAt,LandsAt=d.LandsAt,CashFind=d.CashFind});view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
+                view.Drops=FestivalSimulation.VisibleDrops(source).ConvertAll(d=>new DropState{Id=d.Id,ItemId=d.ItemId,OwnerId=d.OwnerId,ClaimedBy=d.ClaimedBy,Count=d.Count,X=d.X,Z=d.Z,ClaimAt=d.ClaimAt,LandsAt=d.LandsAt,CashFind=d.CashFind});view.Stashes=source.Stashes.ConvertAll(x=>x.Copy());view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer).ConvertAll(t=>t.Copy());
                 // GAS-2: the level's Giggle Tank, public to all but spirits.
                 view.GiggleTankSpot=source.GiggleTankSpot;view.GiggleTankFound=source.GiggleTankFound;
             }
@@ -1078,16 +1079,16 @@ namespace Festival.Network
             var receiptOwner=view.Players.Find(p=>p.Id==viewer);string tip=FestivalSimulation.DeckTipSpeech(source,local);
             if(receiptOwner!=null&&tip!=""&&receiptOwner.SpeechDeliveryId=="")
             {receiptOwner.NpcSpeech=tip;receiptOwner.NpcSpeaker="FESTIVALGOERS";receiptOwner.NpcSpeechUntil=source.Phase==FestivalSimulation.MinigamePhase?local.DeckTipUntilWorldSeconds:local.DeckTipUntilWorldSeconds+source.Booth.Seconds;}
-            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>i.Kind==FestivalSimulation.DrumPartKind?JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(i)):FestivalSimulation.Talks(i.Kind)?TalkView(i):i);return view;
+            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>FestivalSimulation.Talks(i.Kind)?TalkView(i):i.Copy());return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
             // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map, not even from
             // the Ferris wheel (POLO-3, WheelFriendAreas above).
-            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
+            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?new WorldPoint(at.X,at.Z):new WorldPoint(0,0);
             // The talker, the host included, gets a copy that keeps only the grade of each reply they picked: no client can read the
             // smooth reply before it picks.
             static InteractionState TalkView(InteractionState talk)
             {
-                var copy=JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(talk));
+                var copy=talk.Copy();
                 foreach(var turn in copy.Turns)for(int r=0;r<turn.Grades.Length;r++)if(r!=turn.Pick)turn.Grades[r]=-1;
                 return copy;
             }
