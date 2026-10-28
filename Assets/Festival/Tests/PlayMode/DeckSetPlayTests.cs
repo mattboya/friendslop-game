@@ -138,7 +138,8 @@ namespace Festival.Tests
 
         // A joined view lags the host. F turns the plain ride into a set on the host while the rider's view still shows the ride,
         // so E there still offers the way off. That Cancel names the ride, and the host refuses it: the set plays on, at no cost.
-        // The menu's CANCEL ACTION, a held G and Get up also name what the view shows.
+        // The menu's CANCEL ACTION, a held G and Get up also name what the view shows. A second F there asks the host for a
+        // second set, and the rider's notice says the set is already playing.
         [UnityTest]public IEnumerator AJoinedRidersLateECannotStopASetTheirViewHasNotShownYet()
         {
             UseAVirtualKeyboard("PLAYA-8 late keyboard");
@@ -168,6 +169,11 @@ namespace Festival.Tests
                 yield return Until(()=>Doing?.Kind==FestivalSimulation.DeckSetKind,3);var deck=Doing;
                 Assert.That(deck?.Kind,Is.EqualTo(FestivalSimulation.DeckSetKind),"setup: the rider's F plays the set on the host: "+rider.Message);
                 Assert.That(rider.LocalPlayer.InteractionId,Is.EqualTo(ride.Id),"setup: the rider's view still shows the plain ride");
+                yield return Tap(Key.F,.1f);
+                yield return Until(()=>rider.Message=="Your set is already playing",3);
+                Assert.That(deck.Status=="Active"&&player.InteractionId==deck.Id&&FestivalSimulation.ArtCarOf(sim.State,player.Id)==0,Is.True,"a second F leaves the set playing, aboard: "+rider.Message);
+                yield return null;
+                Assert.That(Shown(root,"Session notice")?Text(root,"Session notice/Notice"):"(no notice)",Is.EqualTo("Your set is already playing"),"the rider's notice says the set is already playing");
                 // Setup: a fan who has watched the set from the start, a little suspicious, and far enough off to see nothing new.
                 var fan=new NpcState{Id="playa8_fan",X=player.X+40,Z=player.Z};fan.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=40});
                 sim.State.Npcs.Add(fan);deck.WitnessIds.Add(fan.Id);
