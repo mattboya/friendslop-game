@@ -176,13 +176,15 @@ namespace Festival.Presentation
         public const float FrameHalfWidth=1.5f;
         // Keeps a pulled tag off the camera's near plane.
         private const float MaxPull=.9f;
-        // Seen from outside the frame, a rider's tag slides along its line to the eye until it clears the frame, and shrinks by the
-        // same ratio, so it covers the same pixels in front of the spokes and legs. It stays depth-tested against everything else.
-        public static void InFrontOfFrame(Transform tag,Vector3 eye)
+        // A rider's tag slides along its line to the eye and shrinks by the same ratio, so it covers the same pixels in front of the
+        // wheel: from outside the frame until it clears the frame, and from the boarding steps inside its width MaxPull of the way,
+        // since the gondolas below and the spokes stand in that line wherever the tag is. A riding eye leaves it be: from the next
+        // gondola the viewer's own cabin still hides it. It stays depth-tested against everything else.
+        public static void InFrontOfFrame(Transform tag,Vector3 eye,bool riding)
         {
             var at=tag.position;float side=eye.x-Festivals.WheelX,from=at.x-Festivals.WheelX;
-            if(Mathf.Abs(side)<=FrameHalfWidth||Mathf.Abs(from)>=FrameHalfWidth)return;
-            float pull=Mathf.Min((Mathf.Sign(side)*FrameHalfWidth-from)/(side-from),MaxPull);
+            if(riding||Mathf.Abs(from)>=FrameHalfWidth)return;
+            float pull=Mathf.Abs(side)<=FrameHalfWidth?MaxPull:Mathf.Min((Mathf.Sign(side)*FrameHalfWidth-from)/(side-from),MaxPull);
             tag.position=Vector3.Lerp(at,eye,pull);tag.localScale*=1-pull;
         }
 

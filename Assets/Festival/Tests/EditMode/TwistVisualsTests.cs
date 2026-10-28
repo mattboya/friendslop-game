@@ -321,6 +321,45 @@ namespace Festival.Tests
             }
         }
 
+        // A riding friend's tag slides along its line to the eye, shrinking by the same ratio, until no part of the wheel (made solid
+        // here) stands between them: from the side, 1 m off the plane and the boarding steps, early and late in the turn. From the next
+        // gondola the viewer's own cabin still hides it, so a riding eye leaves the tag where it is.
+        [Test]public void ARidingFriendsTagReadsFromAllRoundTheBase()
+        {
+            var grounds=Grounds();var twists=new FestivalTwistVisuals(grounds);var round=Round(Festivals.PoloFestival);
+            var wheel=Part(Part(grounds,FestivalTwistVisuals.PoloRootName),"Ferris wheel");
+            foreach(var mesh in wheel.GetComponentsInChildren<MeshFilter>())mesh.gameObject.AddComponent<MeshCollider>().sharedMesh=mesh.sharedMesh;
+            var rider=new PlayerState{Id="rider",VisualWheelSince=0};round.Players.Add(rider);
+            var tag=new GameObject("Tag").transform;made.Add(tag.gameObject);
+            var spots=new (string Name,float X,float Z)[]{("the steps 2 m out",0,-2),("the steps 3 m out",0,-3),("the steps 4 m out",0,-4),("the steps 5 m out",0,-5),
+                ("the steps, .5 m aside",.5f,-3),("1 m off the plane, in front",1,-3),("1 m off the plane, behind",1,3),("the side",3.5f,0),("the side, behind",2.5f,2.5f)};
+            var blocked=new List<string>();int looked=0;
+            foreach(double into in new[]{.7,1.4,16.6,17,17.5,17.9,18.3,18.7,19.2,19.6})
+            {
+                round.SimulationSeconds=into;twists.Apply(round,0);Physics.SyncTransforms();
+                var seat=FestivalTwistVisuals.Seat(round,rider,twists.WheelClock);var at=seat+Vector3.up*TagOverSeat;
+                foreach(var spot in spots)
+                {
+                    var eye=new Vector3(Festivals.WheelX+spot.X,EyeHeight,Festivals.WheelZ+spot.Z);float range=Vector3.Distance(eye,seat);
+                    if(range<=1.1f||range>=7)continue;
+                    tag.position=at;tag.localScale=Vector3.one;FestivalTwistVisuals.InFrontOfFrame(tag,eye,false);looked++;
+                    string when=into+" s into the turn, from "+spot.Name+": ";
+                    Assert.That(Vector3.Cross((at-eye).normalized,(tag.position-eye).normalized).magnitude,Is.LessThan(1e-4f),when+"the tag stays on its line to the eye");
+                    Assert.That(tag.localScale.x,Is.EqualTo(Vector3.Distance(tag.position,eye)/Vector3.Distance(at,eye)).Within(1e-4f),when+"and shrinks as it comes closer, so it covers the same pixels");
+                    if(Physics.Linecast(eye,tag.position,out var hit)&&hit.transform.IsChildOf(wheel))blocked.Add(when+hit.transform.parent.name+"/"+hit.transform.name+" stands between the eye and the tag");
+                }
+            }
+            Assert.That(looked,Is.GreaterThan(30),"setup: the friend is near enough for their tag to show from most spots");
+            Assert.That(blocked,Is.Empty,"A riding friend's tag is blocked by the wheel:\n"+string.Join("\n",blocked));
+            round.SimulationSeconds=2.5;twists.Apply(round,0);var mine=new PlayerState{Id="next gondola",VisualWheelSince=2.5};round.Players.Add(mine);
+            var theirs=FestivalTwistVisuals.Seat(round,rider,twists.WheelClock)+Vector3.up*TagOverSeat;var myEye=FestivalTwistVisuals.Seat(round,mine,twists.WheelClock)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight;
+            tag.position=theirs;tag.localScale=Vector3.one;FestivalTwistVisuals.InFrontOfFrame(tag,myEye,true);
+            Assert.That(tag.position,Is.EqualTo(theirs),"from the next gondola the tag stays over its rider");
+            Assert.That(tag.localScale,Is.EqualTo(Vector3.one),"at its own size");
+        }
+        // FestivalSession's NameTagHeight over a body of shape 1 drawn at .82, the tag's height over its seat, and the eye standing.
+        private const float TagOverSeat=2.65f*.82f,EyeHeight=1.65f;
+
         // POLO-2: a gold-trimmed sign over the night market's stock stall says where the rules sell wristbands, and for how much.
         // Its lettering is depth-tested, so its board hides it from behind (WorldTextTests).
         [Test]public void AGoldSignMarksTheNightMarketsVipStall()
