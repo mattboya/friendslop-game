@@ -13,7 +13,7 @@ public static class EscalationTests
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
             DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
-            ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,
+            ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,NothingCarriesADraggerOff,
             AStopWaitsForAWheelRider,GDitchesOneAtATimeAndSaysWhatIsLeft,GDitchesMidChat,
             OneGuardKeepsTwoStops,AGuardHearsATalkOutThroughAnArrest,AGuardHearsATalkOutBeforeTheCrewOrder,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
@@ -512,6 +512,39 @@ public static class EscalationTests
         Check(off.Accepted&&a.DragTargetId=="","4 m from the body the dragger still lets go (\""+off.Reason+"\")");
         Check(!s.Execute("c",Command("Drag","b")).Accepted,"a friend 10 m off can't take hold of the body");
         Check(!s.Execute("a",Command("Drag","b")).Accepted,"nor can the dragger once they've let go, from 4 m");
+    }
+    // The stage deck and the rides take you off with your hands free, so a dragged friend never jumps after you and you can
+    // always let go (a ride or a set holds you, and Drag waits for it). Carrying a body is the same.
+    static void NothingCarriesADraggerOff()
+    {
+        FestivalSimulation Holding(int festival,float x,float z,bool carry)
+        {
+            var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();s.State.FestivalIndex=festival;
+            var a=s.Player("a");var b=s.Player("b");a.X=x;a.Z=z;a.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+            if(carry){b.Life="Spirit";s.State.Bodies.Add(new BodyState{PlayerId="b",X=x,Z=z-1});a.CarryBodyId="b";}
+            else{b.Life="Downed";b.DownedRemaining=1e6;b.X=x;b.Z=z-1;Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");}
+            return s;
+        }
+        var car=Festivals.ArtCarAt(0,0);var missed=new List<string>();
+        foreach(var (what,festival,x,z,kind,refusal) in new[]{("the DJ set",Festivals.PoloFestival,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,"Dj","Let go of your friend before you take the stage"),
+            ("the Ferris wheel",Festivals.PoloFestival,Festivals.WheelX,Festivals.WheelZ+1,FestivalSimulation.RideWheelKind,"Let go of your friend before you climb aboard"),
+            ("an art car",Festivals.PlayaFestival,car.X,car.Z,FestivalSimulation.RideCarKind,"Let go of your friend before you climb aboard")})
+        foreach(bool carry in new[]{false,true})
+        try
+        {
+            var s=Holding(festival,x,z,carry);var a=s.Player("a");string who=(carry?"carrying a body, ":"dragging a friend, ")+what;
+            float bx=carry?s.State.Bodies[0].X:s.Player("b").X,bz=carry?s.State.Bodies[0].Z:s.Player("b").Z;
+            var start=s.Execute("a",Command(kind));
+            Check(!start.Accepted&&start.Reason==refusal,who+" is refused with \""+refusal+"\" (got "+start.Accepted+" \""+start.Reason+"\")");
+            Check(a.InteractionId==""&&a.X==x&&a.Z==z&&s.Player("a").Inventory.Exists(i=>i.ItemId=="stage_pass"&&i.Count==1),who+": nothing starts, a stays put and keeps the pass");
+            s.TryMove("a",a.X,a.Z,0,1.0/30);
+            float nx=carry?s.State.Bodies[0].X:s.Player("b").X,nz=carry?s.State.Bodies[0].Z:s.Player("b").Z;
+            Check(Dist(bx,bz,nx,nz)<=1.01,who+": the body stays by where it was, not on the deck or the ride ("+bx+","+bz+" -> "+nx+","+nz+")");
+            var off=s.Execute("a",Command(carry?"DropBody":"Drag",carry?"":"b"));Check(off.Accepted&&a.DragTargetId==""&&a.CarryBodyId=="",who+": a can let go ("+off.Reason+")");
+            var free=s.Execute("a",Command(kind));Check(free.Accepted,who+": with hands free it starts (\""+free.Reason+"\")");
+        }
+        catch(Exception e){missed.Add(e.Message);}
+        Check(missed.Count==0,string.Join("\n",missed));
     }
     // ESC-3 item 1: up on the Ferris wheel nobody can talk, ditch, walk or cancel, so a stop waits for the rider: its clock stands
     // still for the turn, with the guard waiting at the base, and runs on from where it was once the rider is down. Stopped as

@@ -179,7 +179,6 @@ namespace Festival.Core
             if(State.FestivalIndex!=Festivals.PlayaFestival)return Reject("There are no art cars at this festival");
             int car=ArtCarBeside(State,p);
             if(car<0)return Reject("Catch an art car as it rolls past");
-            if(p.DragTargetId!=""||p.CarryBodyId!="")return Reject("Let go of your friend before you climb aboard");
             NewInteraction(p,RideCarKind,car.ToString(),State.DurationSeconds);RideArtCar(p,car);
             return Ok("Aboard the art car: the crowd can't see you up here. Hop off any time");
         }

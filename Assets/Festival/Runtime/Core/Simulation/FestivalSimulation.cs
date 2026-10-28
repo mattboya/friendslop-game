@@ -124,6 +124,9 @@ namespace Festival.Core
             // chat. Not mid-dance (G stops it), mid-talk with the guard or up on the Ferris wheel (the stop waits there, Pursue).
             if(c.Kind=="Drop"&&p.InteractionId!=""&&Stopped(p)&&UntimedChat(Interaction(p.InteractionId)))return Drop(p,c);
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
+            // The stage deck and the rides take you off with your hands free, so a dragged friend or a carried body never jumps
+            // after you, and nothing holds you while you hold them (Drag and DropBody wait for a set or a ride to end).
+            if((c.Kind=="Dj"||c.Kind==RideWheelKind||c.Kind==RideCarKind)&&(p.DragTargetId!=""||p.CarryBodyId!=""))return Reject("Let go of your friend before you "+(c.Kind=="Dj"?"take the stage":"climb aboard"));
             switch(c.Kind) {
                 case "Consume": return Consume(p,c);
                 case "Use": return Use(p,c);
@@ -189,7 +192,8 @@ namespace Festival.Core
             if(target!=null&&target.Life=="Downed"){var trail=Trail(target.X,target.Z,x,z);target.X=trail.X;target.Z=trail.Z;}return true;
         }
         // ESC-6: only Free lets anyone out of the closed security building, so the body slides to its nearest face; the fence is ESC-5's.
-        // ponytail: a straight pull cuts a corner by a few centimetres; only the security building pushes the body back out.
+        // ponytail: a straight pull takes the body's centre through a tree trunk, a plinth or a booth for up to about 2.5 m of a
+        // lap; only the security building pushes it back out. The upgrade is a physics push-out hook from FestivalSession, as HasLineOfSight.
         static WorldPoint Trail(float bx,float bz,float x,float z)
         {
             double gap=Distance(bx,bz,x,z);if(gap>1){bx=x+(float)((bx-x)/gap);bz=z+(float)((bz-z)/gap);}
