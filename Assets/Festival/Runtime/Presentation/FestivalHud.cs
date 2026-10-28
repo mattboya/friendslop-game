@@ -177,7 +177,7 @@ namespace Festival.Presentation
         // whether it sits beside the pass (the menu is open) rather than in play's spot.
         private FestivalChatWindow chatWindow;
         private int chatConnectionGeneration=-1;
-        // The newest line said to the player (PlayerState.SpeechDeliveryId) while their chat was live.
+        // The newest line said to the player (PlayerState.SpeechDeliveryId) while their chat, or the talk's trust dance before it, was live.
         private string heardInChat="";
         // CAMP-1: Marigold's talk at camp, on the chat window, and the world she stands in (FestivalWorld.CampSeller).
         private readonly CampSellerTalk sellerTalk=new CampSellerTalk(Environment.TickCount);
@@ -1024,8 +1024,9 @@ namespace Festival.Presentation
             ShowSaleStamp(state,uncovered,Time.unscaledDeltaTime);
             // ESC-2: a security stop on you says why in the session notice, once, as soon as nothing covers it (a dance, the map or
             // the menu would). Clearing lastNotice shows it again for a second stop, even with the first's still the last message.
+            // It waits behind a money line, as queued money news does: a trust dance cut mid-stop sets its sale's line on this frame.
             if(FestivalHudText.StoppedBy(state,player)==null)stopNoticed=false;
-            else if(!stopNoticed&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf){stopNoticed=true;session.SetMessage(FestivalHudText.StopNotice);lastNotice="";}
+            else if(!stopNoticed&&!showMenu&&!mapPanel.activeSelf&&!rhythmPanel.activeSelf&&Time.unscaledTime>=moneyNoticeAt){stopNoticed=true;session.SetMessage(FestivalHudText.StopNotice);lastNotice="";}
             // TRIP-8: whoever walks onto the cloud's stash is told so the same way, once.
             if(state.CloudStashFinderId!=player.Id)stashNoticed=false;
             else if(!stashNoticed&&uncovered){stashNoticed=true;session.SetMessage(FestivalHudText.CloudStashNotice);lastNotice="";}
@@ -1694,8 +1695,8 @@ namespace Festival.Presentation
         }
 
         /// <summary>Whether security has cut in on p since the chat they were last in: a guard's line to p other than `heard`, the
-        /// newest line p's view showed while that chat was live, or an arrest warning on p, which says nothing. A waved-on talk takes
-        /// its guard lines back, so its chat lingers.</summary>
+        /// newest line p's view showed while that chat or its trust dance was live, or an arrest warning on p, which says nothing. A
+        /// waved-on talk takes its guard lines back, so its chat lingers.</summary>
         public static bool SecurityCutsIn(RoundState s,PlayerState p,string heard)=>p.NpcSpeaker=="SECURITY"&&p.NpcSpeech!=""&&p.SpeechDeliveryId!=heard
             ||s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
         private void UpdateChat(RoundState state,PlayerState player,bool showMenu)
@@ -1706,7 +1707,8 @@ namespace Festival.Presentation
             chatWindow.CloseKey=Bound(session?.Controls?.Menu,"ESC");
             chatWindow.SetReplyKeys(Bound(session?.Controls?.Slot1,"1"),Bound(session?.Controls?.Slot2,"2"),Bound(session?.Controls?.Slot3,"3"));
             var outcome=session.PendingConversationOutcome;
-            if(FestivalChatWindow.LiveChat(state,player)!=null)heardInChat=player.SpeechDeliveryId;
+            if(FestivalChatWindow.LiveChat(state,player)!=null||state.Interactions.Exists(i=>i.Id==player.InteractionId&&i.Status=="Active"&&FestivalSimulation.TrustDancing(i)))
+                heardInChat=player.SpeechDeliveryId;
             bool live=!covered&&(sellerTalk.Follow(state,player,Time.unscaledTime,session.Profile.Data.ReducedMotion)
                 ||outcome==null&&chatWindow.Follow(state,player,session.EstimatedSimulationSeconds,Time.unscaledTime,session.Profile.Data.ReducedMotion));
             if(!covered&&outcome!=null)

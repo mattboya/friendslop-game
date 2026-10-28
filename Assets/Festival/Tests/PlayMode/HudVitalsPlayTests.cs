@@ -385,5 +385,57 @@ namespace Festival.Tests
             }
             yield return null;
         }
+        // A guard's call-out during a sale's trust dance comes before the chat, so the SALE OFF card a worked-up buyer's cut opens
+        // stays up, and the stop's notice waits its turn behind the sale's own line, which says where the unit went.
+        [UnityTest]public IEnumerator AGuardsLineDuringATrustDanceLeavesTheCutSalesCard()
+        {
+            const string StopBark="HEY! What's in the bag?",HandedBack="SALE OFF  •  Tongue Stamps back in your hand";
+            var world=new GameObject("Cut sale world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Cut sale HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            var failures=new List<string>();
+            string Notice(){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name=="Notice")return text.text;return "(hidden)";}
+            try
+            {
+                session.Host("Tester",HostPort);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(session.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,"host has a local player: "+session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                yield return StartLevel(session);session.MenuOpen=false;sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;
+                sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");sim.Tick(25);player.X=0;player.Z=0;player.Effects.Clear();
+                player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});player.EquippedItemId="stock_lsd";
+                var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");sim.State.Npcs.RemoveAll(n=>n.Kind=="Cop"&&n!=cop);cop.Evidence.Clear();cop.X=60;cop.Z=60;
+                var buyer=new NpcState{Id="cut_sale_buyer",Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true};sim.State.Npcs.Add(buyer);
+                buyer.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion,LastSeenSeconds=sim.State.SimulationSeconds});
+                var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
+                Assert.That(sim.Execute(player.Id,new GameCommand{Id="cut_sale",Kind="StartSale",TargetId=buyer.Id,ItemId="stock_lsd",Amount=FestivalSimulation.FairAsk}).Accepted,Is.True,"setup: the sale starts");
+                var sale=sim.Interaction(player.InteractionId);
+                Assert.That(FestivalSimulation.TrustDancing(sale),Is.True,"setup: the wary buyer asks for the trust dance");
+                yield return new WaitForSeconds(.3f);
+                cop.X=2;cop.Z=0;cop.Yaw=-90;
+                for(deadline=Time.realtimeSinceStartup+2;player.NpcSpeech!=StopBark&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(player.NpcSpeech,Is.EqualTo(StopBark),"setup: the guard calls you out mid-dance");
+                yield return new WaitForSeconds(.3f);
+                var shouter=new NpcState{Id="cut_sale_shouter",Kind="Wook",X=3,Z=1.5f,Yaw=-90};sim.State.Npcs.Add(shouter);
+                shouter.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=95,LastSeenSeconds=sim.State.SimulationSeconds});
+                for(deadline=Time.realtimeSinceStartup+2;sale.Status=="Active"&&Time.realtimeSinceStartup<deadline;)yield return null;
+                Assert.That(sale.Status,Is.EqualTo("They're too agitated to chat"),"setup: the worked-up buyer cuts the trust dance");
+                yield return new WaitForSeconds(.4f);
+                Assert.That(player.NpcSpeech,Is.EqualTo(StopBark),"setup: no guard spoke since the call-out");
+                var notes=new List<string>();for(int i=0;i<window.Bubbles;i++)if(window.IsNote(i))notes.Add(window.Shown(i));
+                if(!window.Lingering||!notes.Contains(HandedBack))failures.Add("the cut sale's card stays up with \""+HandedBack+"\": open "+window.Open+", header \""+window.Header+"\", notes ["+string.Join(" ; ",notes)+"]");
+                if(Notice()!=HandedBack)failures.Add("the notice says where the unit went: \""+Notice()+"\"");
+                yield return new WaitForSeconds(FestivalHudText.MoneyNewsSeconds);
+                if(Notice()!=StopNotice)failures.Add("the stop's notice follows the sale's line: \""+Notice()+"\"");
+                Assert.That(failures,Is.Empty,string.Join("\n",failures));
+            }
+            finally
+            {
+                session.Leave();
+                foreach(var name in new[]{"First-person camera","Authoritative actor presentation"}){var leftover=GameObject.Find(name);if(leftover!=null)Object.Destroy(leftover);}
+                Object.Destroy(hud);Object.Destroy(world);
+            }
+            yield return null;
+        }
     }
 }
