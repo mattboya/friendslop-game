@@ -1,4 +1,5 @@
 import {readFileSync, existsSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -58,9 +59,20 @@ if(readme.includes('PLAYTEST_2026-09-24'))docProblems.push('README.md sends read
 const smokeEnd='CONNECTION UI CAPTURE PASSED';
 if(!readme.includes(smokeEnd)||!text('scripts/native-smoke.mjs').includes(`'${smokeEnd} in '`))docProblems.push(`README.md must name ${smokeEnd}, the last line that scripts/native-smoke.mjs prints on a pass`);
 if(!text('docs/CHARACTER_QUALITY_PASS.md').includes('GPU (Batched) mesh deformation')||!text('Assets/Festival/Editor/ProjectBootstrap.cs').includes('MeshDeformation.GPUBatched'))docProblems.push('docs/CHARACTER_QUALITY_PASS.md must name the GPU (Batched) mesh deformation mode that ProjectBootstrap.cs sets');
+// GitHub serves only tracked files, with the exact letter case, so a link to anything else must fail here. A copy with no
+// git (a plain archive) falls back to the disk, which on this Mac ignores letter case.
+const git=existsSync(path.join(root,'.git'))?spawnSync('git',['-C',root,'ls-files','-z'],{encoding:'utf8',maxBuffer:64*1024*1024}):null;
+const tracked=git?.status===0?git.stdout.split('\0').filter(Boolean):null;
+const linked=(file,target)=>
+{
+  const bare=target.split('#')[0],want=bare?path.posix.normalize(path.posix.join(path.posix.dirname(file),bare)).replace(/\/$/,''):file;
+  return tracked?tracked.some(name=>name===want||name.startsWith(want+'/')):existsSync(path.join(root,want));
+};
+if(!tracked)console.log('No git here: docs links were checked on the disk, which does not check letter case.');
+if(tracked&&(!linked('README.md','README.md')||!linked('README.md','docs/')||linked('README.md','readme.md')||linked('README.md','.git/HEAD')))throw new Error('Docs link negative-control checker is broken');
 for(const [file,body] of [['README.md',readme],['IMPLEMENTATION_STATUS.md',status]])
   for(const [,target] of body.matchAll(/\]\(([^)\s]+)\)/g))
-    if(!/^[a-z]+:/i.test(target)&&!existsSync(path.join(root,path.dirname(file),target.split('#')[0])))docProblems.push(`${file} links ${target}, which does not exist`);
+    if(!/^[a-z]+:/i.test(target)&&!linked(file,target))docProblems.push(`${file} links ${target}, which ${tracked?'is not a tracked file with that exact letter case, so GitHub cannot open it':'does not exist'}`);
 if(docProblems.length)throw new Error('Docs do not match this commit:\n- '+docProblems.join('\n- '));
 console.log(`Verified ${sourceFiles.length} Festival C# source files and pinned native packages.`);
 console.log('PROJECT STATIC CHECKS PASSED');
