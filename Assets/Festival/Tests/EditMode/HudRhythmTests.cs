@@ -174,7 +174,31 @@ namespace Festival.Tests
                 Assert.That(bottom.text,Is.EqualTo("ARROWS OR "+alternates),"the bottom line names the alternates as bound, in W-A-S-D order");
                 input.Notes[2].ApplyBindingOverride(0,"<Keyboard>/t");
                 hud.ShowRhythmKeys(input);
-                Assert.That(bottom.text,Does.StartWith(KeyName("<Keyboard>/t").ToUpperInvariant()).And.EndWith(" OR "+alternates),"a moved arrow names the arrow keys as bound");
+                string arrows=string.Join(" / ",KeyName("<Keyboard>/t"),KeyName("<Keyboard>/leftArrow"),KeyName("<Keyboard>/downArrow"),KeyName("<Keyboard>/rightArrow")).ToUpperInvariant();
+                Assert.That(bottom.text,Is.EqualTo(arrows+" OR "+alternates),"a moved arrow names each arrow key as bound, apart");
+            }
+        }
+
+        // A key whose name is longer than one letter stands apart on the bottom line, and the longest line still fits.
+        [Test]public void ALongKeyNameStandsApartOnTheBottomLine()
+        {
+            var hud=Hud();var lane=LaneOf(hud);var bottom=lane.Find("Controls").GetComponent<Text>();
+            using(var input=new FestivalInput("hud-rhythm-keys-test"))
+            {
+                input.Notes[0].ApplyBindingOverride(1,"<Mouse>/backButton");
+                hud.ShowRhythmKeys(input);
+                string w=KeyName("<Keyboard>/w").ToUpperInvariant(),s=KeyName("<Keyboard>/s").ToUpperInvariant(),d=KeyName("<Keyboard>/d").ToUpperInvariant();
+                Assert.That(bottom.text,Is.EqualTo("ARROWS OR "+w+" / MOUSE BACK / "+s+" / "+d),"the side button reads apart from the letters");
+                input.Notes[2].ApplyBindingOverride(0,"<Keyboard>/t");input.Notes[3].ApplyBindingOverride(1,"<Mouse>/forwardButton");
+                hud.ShowRhythmKeys(input);
+                var canvas=hud.GetComponentInChildren<Canvas>();canvas.renderMode=RenderMode.WorldSpace;((RectTransform)canvas.transform).sizeDelta=new Vector2(1920,1080);canvas.transform.localScale=Vector3.one;
+                Canvas.ForceUpdateCanvases();var measure=new TextGenerator();var reflow=typeof(FestivalHud).GetMethod("ApplyTextReflow",BindingFlags.Instance|BindingFlags.NonPublic);
+                foreach(float scale in new[]{1f,1.3f})
+                {
+                    reflow.Invoke(hud,new object[]{scale});
+                    measure.Populate(bottom.text,bottom.GetGenerationSettings(bottom.rectTransform.rect.size));
+                    Assert.That(measure.characterCountVisible,Is.EqualTo(bottom.text.Length),"at "+scale+"x text, \""+bottom.text+"\" fits its "+bottom.rectTransform.rect.size+" box");
+                }
             }
         }
 

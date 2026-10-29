@@ -6,6 +6,7 @@ using Festival.Network;
 using Festival.Presentation;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -275,6 +276,37 @@ namespace Festival.Tests
                 Assert.That((RenderSettings.fog,RenderSettings.fogMode,RenderSettings.fogColor,RenderSettings.fogStartDistance,RenderSettings.fogEndDistance),Is.EqualTo(fog),"and puts the fog back");
             }
             finally{Application.logMessageReceived-=log;foreach(var renderer in hidden)if(renderer!=null)renderer.enabled=true;session.Leave();Object.Destroy(holder);Object.Destroy(world);}
+        }
+        // A spirit's look drains the grade's saturation by 60, which would turn the probe's magenta grey.
+        [UnityTest]public IEnumerator TheFogCheckSeesTheFogThroughASpiritsDrainedGrade()
+        {
+            var world=new GameObject("spirit fog world");var festival=world.AddComponent<FestivalWorld>();yield return null;
+            var holder=new GameObject("spirit fog session");var session=holder.AddComponent<FestivalSession>();holder.AddComponent<FestivalHud>();yield return null;
+            string passed=null;
+            Application.LogCallback log=(message,stack,type)=>{if(message.StartsWith("FESTIVAL SMOKE FOG RENDER PASSED: "))passed=message;};
+            Application.logMessageReceived+=log;
+            try
+            {
+                yield return HostALevel(session);
+                var game=Simulation(session);var me=game.Player(session.LocalPlayerId);game.State.TripperId="";
+                me.Effects.RemoveAll(e=>e.Id==FestivalSimulation.DoseEffect);me.Life="Spirit";
+                yield return null;yield return null;yield return null;
+                var lighting=typeof(FestivalWorld).GetField("lighting",Private).GetValue(festival);
+                var grade=(ColorAdjustments)typeof(FestivalNightLighting).GetField("grade",Private).GetValue(lighting);
+                Assert.That(session.State.Players.Find(p=>p.Id==me.Id).Life,Is.EqualTo("Spirit"),"setup: you are a spirit");
+                Assert.That(grade.saturation.value,Is.LessThan(-50f),"setup: the spirit look drains the grade");
+                var smoke=holder.AddComponent<DevelopmentSmoke>();smoke.enabled=false;
+                typeof(DevelopmentSmoke).GetField("captureCamera",Private).SetValue(smoke,session.ViewCamera);
+                var data=session.ViewCamera.GetUniversalAdditionalCameraData();bool post=data.renderPostProcessing;
+                var fog=(RenderSettings.fog,RenderSettings.fogMode,RenderSettings.fogColor,RenderSettings.fogStartDistance,RenderSettings.fogEndDistance);
+                yield return FogCheck(smoke);
+                TestContext.WriteLine("SPIRIT FOG: saturation="+grade.saturation.value+" failed="+Failed(smoke)+" passed="+passed);
+                Assert.That(Failed(smoke),Is.Null,"the fog check passes as a spirit");
+                Assert.That(passed,Does.Match("^FESTIVAL SMOKE FOG RENDER PASSED: [0-9]+% of the screen fogged$"),"and says so");
+                Assert.That(data.renderPostProcessing,Is.EqualTo(post),"then puts back the camera's post-processing");
+                Assert.That((RenderSettings.fog,RenderSettings.fogMode,RenderSettings.fogColor,RenderSettings.fogStartDistance,RenderSettings.fogEndDistance),Is.EqualTo(fog),"and the level's fog");
+            }
+            finally{Application.logMessageReceived-=log;session.Leave();Object.Destroy(holder);Object.Destroy(world);}
         }
         // The smoke's own fog check, run on the smoke as the native smokes run it, within 5 s.
         static IEnumerator FogCheck(DevelopmentSmoke smoke)

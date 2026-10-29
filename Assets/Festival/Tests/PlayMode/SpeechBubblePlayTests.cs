@@ -116,6 +116,51 @@ namespace Festival.Tests
             yield return null;
             Assert.That(failures,Is.Empty,"Speech bubbles in a first-person view:\n"+string.Join("\n",failures));
         }
+        // TRIP-23: through Pony Dust's sleepy eyes, a near speaker's stack keeps under the line where the resting upper lid is half dark
+        // down the middle of the view, so its top line is read through the eye's opening. Couch Lock's lighter lids rest above the band.
+        [UnityTest]public IEnumerator ANearStackKeepsUnderPonyDustsLids()
+        {
+            var root=new GameObject("Lidded speech");var presenter=root.AddComponent<FestivalSpeechBubbles>();
+            var body=new GameObject("Lidded speaker");var head=new GameObject("Head");head.transform.SetParent(body.transform,false);head.transform.localPosition=Vector3.up*1.8f;
+            var eye=new GameObject("Lidded eye");var camera=eye.AddComponent<Camera>();camera.fieldOfView=75;camera.nearClipPlane=.05f;camera.aspect=16f/9;camera.enabled=false;
+            var state=new RoundState{RoundId="lidded",Phase="Playing",SimulationSeconds=1};var you=new PlayerState{Id="you",Name="You"};state.Players.Add(you);
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="lidded:speech:1",Sequence=1,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Have you seen the cups? Someone said the night market has them.",ExpiresAtWorldSeconds=9});
+            state.PublicSpeech.Add(new PublicSpeechState{DeliveryId="lidded:speech:2",Sequence=2,SpeakerId="speaker",Speaker="FESTIVALGOER",Text="Or was it the art car? Ask the guy in the hat.",ExpiresAtWorldSeconds=9});
+            var failures=new List<string>();
+            // The lowest height on the screen where the upper lid is half dark down the middle, read off the lid's own shading
+            // (FestivalTrip.EyeShade across the eye's opening, which spans the resting aperture round the screen's middle).
+            float HalfShut(string substance,int dose)
+            {
+                float open=1-FestivalTrip.EyeRest(substance,dose);
+                for(float y=.5f;y<1;y+=.0005f)if(FestivalTrip.EyeShade(0,(y-.5f)/(open/2),1,FestivalTrip.EyeSoftness(substance))>=.5f)return y;
+                return 1;
+            }
+            void Dose(string substance,int dose){you.Effects.Clear();if(dose>0)you.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,InstanceId="lidded_dose",Intensity=dose,Substance=substance,RemainingSeconds=500});}
+            float Top(float distance)
+            {
+                eye.transform.SetPositionAndRotation(new Vector3(0,1.65f,-distance),Quaternion.identity);
+                presenter.Apply(state,id=>body.transform,eye.transform,eye.transform.position,"you",true);
+                var texts=SpeechTexts(root);if(texts.Length!=2)failures.Add(distance+" m: "+texts.Length+" bubbles, not 2");
+                float high=0;
+                foreach(var text in texts)foreach(var corner in new[]{new Vector3(-.5f,.5f),new Vector3(.5f,.5f)})high=Mathf.Max(high,camera.WorldToViewportPoint(text.transform.parent.Find("Bubble backing").TransformPoint(corner)).y);
+                return high;
+            }
+            try
+            {
+                Dose("",0);float sober=Top(1.5f);
+                Assert.That(sober,Is.GreaterThan(HalfShut("ketamine",4)),"setup: sober, a stack 1.5 m away reaches above Pony Dust's lids");
+                foreach(int dose in new[]{1,2,3,4})
+                {
+                    Dose("ketamine",dose);float line=HalfShut("ketamine",dose);
+                    foreach(float distance in new[]{1f,1.5f}){float top=Top(distance);if(top>line)failures.Add("Pony Dust x"+dose+", "+distance+" m: the stack's top at "+top.ToString("F3")+" runs up into the lid, half dark at "+line.ToString("F3"));}
+                }
+                Dose("weed",4);float couch=Top(1.5f);
+                if(Mathf.Abs(couch-sober)>.001f)failures.Add("Couch Lock x4: the stack's top moved from "+sober.ToString("F3")+" to "+couch.ToString("F3")+", though its lids rest above the band (half dark at "+HalfShut("weed",4).ToString("F3")+")");
+            }
+            finally{presenter.Clear();UnityEngine.Object.Destroy(root);UnityEngine.Object.Destroy(body);UnityEngine.Object.Destroy(eye);}
+            yield return null;
+            Assert.That(failures,Is.Empty,"Speech bubbles under sleepy lids:\n"+string.Join("\n",failures));
+        }
         // On Night 2 at 130% text, a crew of four on their doses grows the dose card down the screen's centre, pushing a notice under
         // it, and the checklist grows the crew card on the right. Two bubbles face to face, or off to the right, keep under them all.
         [UnityTest]public IEnumerator BubblesKeepUnderTheCardsThatHangIntoTheBand()

@@ -173,20 +173,24 @@ namespace Festival.Tests
                     var rider=sim.Player(id);rider.X=Festivals.WheelX;rider.Z=Festivals.WheelZ+1.5f;
                     Assert.That(sim.Execute(id,new GameCommand{Id=id+" boards",Kind=FestivalSimulation.RideWheelKind}).Accepted,Is.True,"setup: "+id+" boards the wheel");
                 }
-                // Crew c boarded (c-1.5)/8 of a turn either side of half a turn ago: the wheel hangs eight gondolas, so each crew has
-                // its own, and crews 1 and 2 are just either side of the top. The level runs until the first crew can have boarded
-                // that long ago, as a ride starts on the rules' clock (a VisualWheelSince under 0 is off the wheel).
+                // Crew c boarded (c-1.5)/8 of a turn either side of half a turn ago, in the gondola at the platform then: the wheel
+                // hangs eight gondolas, so each crew has its own, and crews 1 and 2 are just either side of the top. The level runs
+                // until the first crew can have boarded that long ago, as a ride starts on the rules' clock (a VisualWheelSince under
+                // 0 is off the wheel).
                 double earliest=Festivals.WheelRideSeconds*(.5+1.5/8);
                 for(deadline=Time.realtimeSinceStartup+30;sim.State.SimulationSeconds<earliest&&Time.realtimeSinceStartup<deadline;)yield return null;
                 Assert.That(sim.State.SimulationSeconds,Is.GreaterThanOrEqualTo(earliest),"setup: the level has run "+earliest+" s");
                 foreach(var ride in sim.State.Interactions)
                     for(int c=0;c<crews.Length;c++)
                         if(ride.Kind==FestivalSimulation.RideWheelKind&&ride.Status=="Active"&&System.Array.IndexOf(crews[c],ride.PlayerId)>=0)
+                        {
                             ride.StartSeconds=sim.State.SimulationSeconds-Festivals.WheelRideSeconds*(.5+(c-1.5)/8);
+                            ride.TargetId=FestivalSimulation.PlatformGondola(FestivalSimulation.WorldSeconds(sim.State,ride.StartSeconds)).ToString();
+                        }
                 yield return new WaitForSeconds(1.2f);
                 foreach(var crew in crews)foreach(var id in crew)Assert.That(FestivalSimulation.OnWheel(sim.State,id),Is.True,"setup: "+id+" is still on the wheel");
                 Transform Cabin(Vector3 at){foreach(var g in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))if(g.name=="Gondola"&&g.gameObject.activeInHierarchy&&Encased(g).Contains(at))return g;return null;}
-                var taken=new List<Transform>();
+                var taken=new List<Transform>();float axle=GameObject.Find("Wheel rotor").transform.position.y;
                 for(int c=0;c<crews.Length;c++)
                 {
                     Transform theirs=null;
@@ -199,7 +203,7 @@ namespace Festival.Tests
                         Transform hips=null;foreach(var t in body.GetComponentsInChildren<Transform>())if(t.name=="Hips")hips=t;
                         var cabin=hips==null?null:Cabin(hips.position);
                         if(cabin==null){failures.Add(who+": the hips are in no gondola");continue;}
-                        if(theirs==null){Assert.That(taken.Contains(cabin),Is.False,"setup: each crew rides its own gondola");theirs=cabin;taken.Add(cabin);}
+                        if(theirs==null){Assert.That(taken.Contains(cabin),Is.False,"setup: each crew rides its own gondola");theirs=cabin;taken.Add(cabin);if(c==1||c==2)Assert.That(cabin.position.y,Is.GreaterThan(axle),"setup: crew "+c+" rides near the top, above the axle");}
                         else if(cabin!=theirs)failures.Add(who+" is not in their crew's gondola");
                         foreach(var part in OutsideItsGondola(body,cabin))failures.Add(who+": "+part);
                     }
@@ -260,8 +264,8 @@ namespace Festival.Tests
                 {
                     yield return null;
                     var state=session.State;
-                    bodyOff.Add(Vector3.Distance(body.transform.position,twists.Seat(state,state.Players.Find(p=>p.Id==friend),twists.WheelClock)));
-                    eyeOff.Add(Vector3.Distance(session.EyePosition,twists.Seat(state,session.LocalPlayer,twists.WheelClock)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight));
+                    bodyOff.Add(Vector3.Distance(body.transform.position,FestivalTwistVisuals.Seat(state,state.Players.Find(p=>p.Id==friend),twists.WheelClock)));
+                    eyeOff.Add(Vector3.Distance(session.EyePosition,FestivalTwistVisuals.Seat(state,session.LocalPlayer,twists.WheelClock)+Vector3.up*FestivalTwistVisuals.SeatedEyeHeight));
                     frames.Add(Time.unscaledDeltaTime);
                 }
                 foreach(var id in riders)Assert.That(FestivalSimulation.OnWheel(sim.State,id),Is.True,"setup: "+id+" is still on the wheel");
@@ -286,8 +290,9 @@ namespace Festival.Tests
         // Holds this machine's frames near 30 a second, as a slow one runs them.
         private sealed class SlowFrames:MonoBehaviour{private void Update()=>System.Threading.Thread.Sleep(30);}
 
-        // Seen from the grass beside the wheel, a riding friend's name tag floats clear of their gondola's roof. Solids hide tags, so
-        // this counts the pixels the tag lights with that gondola drawn against those it lights with the gondola hidden.
+        // Seen from the grass beside the wheel, a riding friend's name tag floats clear of their gondola's roof, and a second into the
+        // ride the wheel's spokes, rims and A-frame legs between it and you hide none of it either. Solids hide tags, so this
+        // counts the pixels the tag lights with the wheel drawn against those it lights with the whole wheel hidden.
         [UnityTest]public IEnumerator ARidingFriendsNameTagShowsAboveTheirGondolasRoof()
         {
             var world=new GameObject("Tag world");world.AddComponent<FestivalWorld>();yield return null;
@@ -331,11 +336,11 @@ namespace Festival.Tests
                     return lit;
                 }
                 int held=Lit();
-                var parts=cabin.GetComponentsInChildren<Renderer>();foreach(var part in parts)part.enabled=false;
+                var parts=GameObject.Find("Ferris wheel").GetComponentsInChildren<Renderer>();foreach(var part in parts)part.enabled=false;
                 int alone=Lit();
                 foreach(var part in parts)part.enabled=true;camera.fieldOfView=zoom;
                 Assert.That(alone,Is.GreaterThan(30),"setup: the tag is in view");
-                Assert.That(held,Is.GreaterThanOrEqualTo(alone*.9f),friend+"'s gondola hides "+(alone-held)+" of the "+alone+" pixels their name tag lights");
+                Assert.That(held,Is.GreaterThanOrEqualTo(alone*.9f),"the Ferris wheel (its gondolas, spokes, rims and legs) hides "+(alone-held)+" of the "+alone+" pixels "+friend+"'s name tag lights");
             }
             finally
             {

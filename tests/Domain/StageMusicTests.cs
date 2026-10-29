@@ -14,7 +14,8 @@ public static class StageMusicTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{TwoStagesNeverShareASongAndEveryLoopComesUp,ThePickHoldsThroughTheLevelARejoinAndARestore,EachLevelShufflesAgain,
-            EachPerformanceChartsToTheNearerStage,ADeckSetFollowsTheStageNearerWhereItStarts,TheTwoStagesStandWellApart})
+            EachPerformanceChartsToTheNearerStage,ADeckSetFollowsTheStageNearerWhereItStarts,TheTwoStagesStandWellApart,
+            TheSmallStageIsHeardOnlyNearItsFront,TheCrewArrivesOutOfTheSmallStagesEarshot})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" stage music test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -90,7 +91,8 @@ public static class StageMusicTests
     static void EachPerformanceChartsToTheNearerStage()
     {
         var spots=new[]{("the small stage's front",StageMusic.SmallX,StageMusic.SmallZ+3,StageMusic.Small),("the main stage's front",StageMusic.MainX,StageMusic.MainZ-3,StageMusic.Main),
-            ("the camp gate",Festivals.CampGateX,Festivals.CampGateZ,StageMusic.Small),("the effigy",Festivals.EffigyX,Festivals.EffigyZ,StageMusic.Main)};
+            ("the camp gate",Festivals.CampGateX,Festivals.CampGateZ,StageMusic.Small),("the effigy",Festivals.EffigyX,Festivals.EffigyZ,StageMusic.Main),
+            ("the west lawn, nearer the small stage but out of its earshot",StageMusic.SmallX,StageMusic.SmallZ+StageMusic.SmallHearingRadius+2,StageMusic.Main)};
         foreach(var (where,x,z,stage) in spots)foreach(var kind in new[]{"Dance","ConfirmDance","Conversation","Poi"})
         {
             var s=Floor(x,z);if(kind=="Conversation")s.State.Npcs[0].Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
@@ -115,6 +117,40 @@ public static class StageMusicTests
             Check(Act(s,"p0","RideCar").Accepted&&Act(s,"p0","DeckSet").Accepted,"setup: a deck set starts on "+where);
             int expected=StageMusic.Track(s.State,stage),got=s.Interaction(p.InteractionId).StageTrack;
             Check(got==expected,"a deck set on "+where+" rides the "+(stage==StageMusic.Small?"small":"main")+" stage's song "+expected+", got "+got);
+        }
+    }
+
+    // The small stage is heard only within SmallHearingRadius of its front, and a performance charts to the song heard where it
+    // starts: past that edge the main stage's song, even where the small front is the nearer one.
+    static void TheSmallStageIsHeardOnlyNearItsFront()
+    {
+        double apart=Math.Sqrt(Math.Pow(StageMusic.MainX-StageMusic.SmallX,2)+Math.Pow(StageMusic.MainZ-StageMusic.SmallZ,2));
+        Check(StageMusic.SmallHearingRadius>0&&StageMusic.SmallHearingRadius<apart/2,"the earshot ends short of halfway, so a spot as far from both fronts is the main stage's, got "+StageMusic.SmallHearingRadius+" of "+apart+" m");
+        for(int k=0;k<36;k++)
+        {
+            double angle=k*Math.PI/18;float dx=(float)Math.Sin(angle),dz=(float)Math.Cos(angle);
+            foreach(var (reach,stage) in new[]{(StageMusic.SmallHearingRadius-.05f,StageMusic.Small),(StageMusic.SmallHearingRadius+.05f,StageMusic.Main),(StageMusic.SmallHearingRadius*1.3f,StageMusic.Main)})
+            {
+                float x=StageMusic.SmallX+dx*reach,z=StageMusic.SmallZ+dz*reach;
+                Check(StageMusic.Nearer(x,z)==stage,(stage==StageMusic.Small?"inside":"outside")+" the earshot at "+x.ToString("0.00")+", "+z.ToString("0.00")+" the "+(stage==StageMusic.Small?"small":"main")+" stage's song plays");
+            }
+        }
+        Check(StageMusic.Nearer(StageMusic.SmallX,StageMusic.SmallZ)==StageMusic.Small,"right at the small front its own song plays");
+    }
+
+    // A level opens on the main stage's song: every one of up to eight crew lands out of the small stage's earshot, in the spots
+    // Festivals.Arrival gives, inside the fence and apart from each other.
+    static void TheCrewArrivesOutOfTheSmallStagesEarshot()
+    {
+        var s=Leave(23,crew:8);Arrive(s);
+        for(int index=0;index<s.State.Players.Count;index++)
+        {
+            var p=s.State.Players[index];var at=Festivals.Arrival(index);string who=p.Id+" at "+p.X+", "+p.Z;
+            Check(p.X==at.X&&p.Z==at.Z,p.Id+" lands at arrival spot "+index+" ("+at.X+", "+at.Z+"), got "+p.X+", "+p.Z);
+            double small=Math.Sqrt(Math.Pow(p.X-StageMusic.SmallX,2)+Math.Pow(p.Z-StageMusic.SmallZ,2));
+            Check(small>StageMusic.SmallHearingRadius+.5&&StageMusic.Nearer(p.X,p.Z)==StageMusic.Main,who+" is out of the small stage's earshot ("+small.ToString("0.0")+" m from its front) and hears the main stage");
+            Check(Math.Abs(p.X)<=38&&Math.Abs(p.Z)<=38,who+" is inside the fence");
+            for(int other=0;other<index;other++){var q=s.State.Players[other];Check(Math.Sqrt(Math.Pow(p.X-q.X,2)+Math.Pow(p.Z-q.Z,2))>=1.5,who+" stands apart from "+q.Id);}
         }
     }
 

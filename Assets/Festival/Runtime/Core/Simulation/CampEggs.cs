@@ -27,9 +27,13 @@ namespace Festival.Core
         {
             var chair=State.CampEggs.Find(e=>e.Id=="chair");if(chair!=null&&chair.SeatedPlayerId==playerId){chair.SeatedPlayerId="";chair.SeatedUntil=0;}
         }
+        // The chair faces -z. A seat that runs out stands its headliner this far in front, so no body or backpack stands in the chair.
+        const float ChairStandOff=.7f;
         void CampEggTick()
         {
-            var chair=State.CampEggs.Find(e=>e.Id=="chair");if(chair!=null&&chair.SeatedPlayerId!=""&&!CampSeated(State,chair.SeatedPlayerId))ReleaseCampSeat(chair.SeatedPlayerId);
+            var chair=State.CampEggs.Find(e=>e.Id=="chair");if(chair==null||chair.SeatedPlayerId==""||CampSeated(State,chair.SeatedPlayerId))return;
+            var p=Player(chair.SeatedPlayerId);if(p!=null&&chair.SeatedUntil<=State.SimulationSeconds)p.Z=chair.Z-ChairStandOff;
+            ReleaseCampSeat(chair.SeatedPlayerId);
         }
         static List<CampEggState> CreateCampEggs(int seed)
         {

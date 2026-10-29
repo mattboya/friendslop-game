@@ -2,7 +2,11 @@ using System;
 
 namespace Festival.Core
 {
-    [Serializable] public sealed class Conversation { public string Opener=""; public string[] Questions=new string[3],Answers=new string[3]; public string Doorman=""; }
+    [Serializable] public sealed class Conversation
+    {
+        public string Opener=""; public string[] Questions=new string[3],Answers=new string[3]; public string Doorman="";
+        public Conversation Copy(){var c=(Conversation)MemberwiseClone();c.Questions=(string[])Questions.Clone();c.Answers=(string[])Answers.Clone();return c;}
+    }
     // A chat is an opener (persona), three questions the tripper asks (small talk, the sales pitch, the lost friend)
     // and one answer to each: a persona interjection plus a line for the NPC's role. A rope chat with the VIP guard (Rope)
     // is the opener and a Doorman line instead, with no questions and no answers. DIALOG-4: every line but the interjections

@@ -50,8 +50,9 @@ namespace Festival.Presentation
                     :DayPayout(s,p,b)+", counted as sales.";
                 return ("+"+Money(s,p,b.Pot),paid+again);
             }
-            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\nCall it any time to bank the pot."
-                +"\nThe spiked cup loses the pot and doses whoever drinks it.");
+            // A spirit or a detained player watches and never gets a turn, so their rules say so.
+            if(b.Drunk.Count==0&&b.Seconds<b.TurnAt)return (MinigameName(b.Kind),"One of these "+b.Cups+" cups is spiked. Each safe cup grows the pot.\n"
+                +(b.PlayerIds.Contains(p.Id)?"On your turn, call it to bank the pot.":"You're watching: the players call it on their turn.")+"\nThe spiked cup loses the pot and doses whoever drinks it.");
             string up=FestivalSimulation.CupsTurn(s),seconds=WholeSeconds(b.TurnAt+FestivalSimulation.CupTurnSeconds-b.Seconds)+" s",next=Money(s,p,FestivalSimulation.NextCupPays(b)),pot=Money(s,p,b.Pot);
             string hunch=b.Hint>=0&&!b.Drunk.Contains(b.Hint)?" Your trip says cup "+(b.Hint+1)+"… trips like yours are right "+HunchOdds(FestivalSimulation.HunchReliability(s))+".":"";
             return ((MinigameName(b.Kind)+Dot+"POT "+pot).ToUpperInvariant(),
@@ -71,16 +72,17 @@ namespace Festival.Presentation
             return b.Drunk.Contains(b.Hint)?" Your hunch was wrong: cup "+(b.Hint+1)+" was safe.":" Nobody drank cup "+(b.Hint+1)+", so your hunch stays a guess.";
         }
         /// <summary>MINI-2: the Drum Circle on the card. While it runs, every part's live accuracy in roster order, the viewer's own as
-        /// "You". Once scored: the worst part's verdict, whose part it was, what the result did to the clock and the crowd, and when the
-        /// festival starts again. The verdict follows the worst part's band (DrumCircle.ClockChange), which the fifteen-second floor
-        /// can shrink on the clock but never on the crowd.</summary>
+        /// "You", each name cut to its first 10 letters so eight parts fit at the largest text. Once scored: the worst part's
+        /// verdict, whose part it was in full, what the result did to the clock and the crowd, and when the festival starts again. The
+        /// verdict follows the worst part's band (DrumCircle.ClockChange), which the fifteen-second floor can shrink on the clock but
+        /// never on the crowd.</summary>
         static (string Title,string Detail) DrumCard(RoundState s,PlayerState p)
         {
             var b=s.Booth;
             if(b.ScoredAt<0)
             {
                 var parts=new System.Collections.Generic.List<string>();
-                foreach(string id in b.PlayerIds)parts.Add((id==p.Id?"You":NameOf(s,id))+" "+Percent(DrumAccuracy(b,id)));
+                foreach(string id in b.PlayerIds)parts.Add((id==p.Id?"You":ShortName(NameOf(s,id)))+" "+Percent(DrumAccuracy(b,id)));
                 return (MinigameName(b.Kind),string.Join(Dot,parts)+"\nThe worst drummer sets the clock.");
             }
             int band=DrumBand(b);
@@ -163,14 +165,17 @@ namespace Festival.Presentation
         static int DrumBand(MinigameState b)=>b.Kind!=FestivalSimulation.DrumCircleGame||b.DrumWorstScore<0?0:DrumCircle.ClockChange(new[]{b.DrumWorstScore});
         static double DrumAccuracy(MinigameState b,string id)=>b.DrumAccuracies?.Find(x=>x.PlayerId==id)?.Accuracy??0;
         static string Percent(double accuracy)=>(int)Math.Round(accuracy*100)+"%";
+        static string ShortName(string name)=>name.Length>10?name.Substring(0,10).TrimEnd()+"…":name;
         /// <summary>A game's name as its booth sign and card read it; "MINIGAME" for one this build cannot name.</summary>
         public static string MinigameName(string kind)=>kind==FestivalSimulation.MysteryCupsGame?"MYSTERY CUPS":kind==FestivalSimulation.DrumCircleGame?"DRUM CIRCLE":kind==FestivalSimulation.LightShowGame?"LIGHT SHOW":"MINIGAME";
-        // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash.
+        // The day's split as MysteryCups.CallIt pays it: an even share to each player, the odd amount to the stash. A watcher gets
+        // nothing, so their line names who was paid instead of reading "each".
         static string DayPayout(RoundState s,PlayerState p,MinigameState b)
         {
             int crew=Math.Max(1,b.PlayerIds.Count),share=b.Pot/crew,stash=b.Pot-share*crew;
             if(share==0)return "Called it: the whole "+Money(s,p,b.Pot)+" pot goes to the stash";
-            return "Called it: "+Money(s,p,share)+" each"+(stash>0?", "+Money(s,p,stash)+" to the stash":"");
+            string paid=b.PlayerIds.Count==1?" to "+(b.PlayerIds[0]==p.Id?"you":NameOf(s,b.PlayerIds[0])):b.PlayerIds.Contains(p.Id)?" each":" to each player";
+            return "Called it: "+Money(s,p,share)+paid+(stash>0?", "+Money(s,p,stash)+" to the stash":"");
         }
         // A player's name as the view has it, else as the game captured it at its start: a spirit's view lists only spirits.
         static string NameOf(RoundState s,string id)=>s.Players.Find(x=>x.Id==id)?.Name??s.Booth.Participants?.Find(x=>x.Id==id)?.Name??"A friend";

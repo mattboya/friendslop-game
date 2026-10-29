@@ -30,7 +30,8 @@ namespace Festival.Core
         public LightShowState LightShow=new LightShowState();
         // MINI-4, Mystery Cups (MysteryCups.cs); untouched in any other game. Cups: how many are on the table. Turns: who drinks when,
         // a seeded order that goes round; Turn: how many turns have passed, so Turns[Turn % count] is up, since TurnAt on the game's
-        // clock. Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
+        // clock. The first turn's TurnAt lies CupsIntroSeconds (3 s) after the pour, ahead of Seconds while the card reads the rules.
+        // Drunk: the cups drunk, in order. Pot: what calling it pays, or what the spiked cup lost. SpikedBy: who drank it, ""
         // nobody. Spiked: which cup is, -1 before; it never leaves the host. Hint: the cup the tripper is shown as spiked, sent to them
         // alone, -1 in everyone else's view (FestivalSimulation.VisibleBooth).
         public int Cups,Turn,Pot,Spiked=-1,Hint=-1; public double TurnAt; public string SpikedBy="";
@@ -50,9 +51,9 @@ namespace Festival.Core
     /// Opting in is physical: once every connected living player has stood in its MinigameRingRadius ring for MinigameRingSeconds
     /// in a row, with nobody downed or busy, the game starts and the round's phase is MinigamePhase. Then the level clock and
     /// every danger timer stop (Step does nothing else, handoff expiry included), nobody moves (TryMove), and only the game's
-    /// own commands go through (Paused). It runs at most MinigameMaxSeconds; its result changes the level's length and shows for
-    /// MinigameBannerSeconds; then every deadline on the simulation clock, which ran on, moves on by the pause (ShiftClock), play
-    /// resumes and the booth is spent. Unplayed, it is gone with the level.</summary>
+    /// own commands go through (Paused), with a test build host's TEST MODE switch. It runs at most MinigameMaxSeconds; its
+    /// result changes the level's length and shows for MinigameBannerSeconds; then every deadline on the simulation clock, which
+    /// ran on, moves on by the pause (ShiftClock), play resumes and the booth is spent. Unplayed, it is gone with the level.</summary>
     public sealed partial class FestivalSimulation
     {
         public const string MinigamePhase="Minigame",MinigameKind="Minigame";
@@ -116,6 +117,8 @@ namespace Festival.Core
         {
             var i=Interaction(p.InteractionId);
             if(c.Kind=="Cancel"&&i!=null&&i.Kind==DrumPartKind&&i.Status=="Active"){Cancel(p,"Cancelled");return Ok("Withdrew from drum part");}
+            // TEST MODE lifts only the time limit, which no game checks; TestCommand keeps the host and test-build checks.
+            if(c.Kind==TestModeKind)return TestCommand(p,c);
             return c.Kind==MinigameKind?PlayMinigame(p,c):c.Kind=="Rhythm"&&p.Life=="Alive"?Submit(p,c):Reject("Wait: the festival is paused for a minigame");
         }
         CommandResult PlayMinigame(PlayerState p,GameCommand c)

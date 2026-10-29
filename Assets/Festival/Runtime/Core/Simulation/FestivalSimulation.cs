@@ -38,7 +38,7 @@ namespace Festival.Core
         public InteractionState Interaction(string id) {return State.Interactions.Find(i=>i.Id==id);}
         public void Restore(RoundState state) {
             if(state==null||state.SchemaVersion<1||state.SchemaVersion>RoundState.CurrentSchemaVersion||state.Players==null||state.Players.Count>8||!Finite(state.SimulationSeconds)||!Finite(state.DurationSeconds)||state.DurationSeconds<=0)throw new ArgumentException("Unsupported or invalid snapshot");
-            var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.StarterStockBought<0||p.StarterStockBought>1||p.VisualGiggleTakeSequence<0||p.VisualConfettiBurstSequence<0||p.GiggleTankBankSequence<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
+            var ids=new HashSet<string>();foreach(var p in state.Players)if(p==null||!ids.Add(p.Id)||p.Cash<0||p.StarterStockBought<0||p.StarterStockBought>1||p.VisualGiggleTakeSequence<0||p.VisualConfettiBurstSequence<0||p.GiggleTankBankSequence<0||p.SpeechSequence<0||p.VisualDanceStepSequence<0||p.VisualReceiptSequence<0||p.DialogueRevision<0||p.ConversationOutcomeSequence<0||p.ConversationDismissedSequence<0||p.MoneyNewsSequence<0||p.Inventory==null||p.Effects==null||!Finite(p.X)||!Finite(p.Z))throw new ArgumentException("Invalid snapshot player");
             if(state.Npcs==null||state.Interactions==null||state.Interactions.Exists(i=>i!=null&&(i.Ask<FairAsk||i.Ask>GreedyAsk))||state.Commands==null||state.Drops==null||state.Transfers==null||state.Stashes==null||state.VendorOffers==null||state.ShopStock==null||state.FriendPosition==null||state.SecondFriend==null||state.SecondFriend.ClueChain==null||state.SecondFriend.Position==null||state.ReviewVotes==null||state.Doses==null||state.TripperBag==null||state.Visions==null||state.ClueChain==null||state.Bodies==null||state.ReviewAwards==null||state.ReviewWinners==null||state.ReviewWinners.Count!=0&&state.ReviewWinners.Count!=state.ReviewAwards.Count||state.Booth==null||state.Booth.PlayerIds==null||state.Booth.Drunk==null||state.Booth.Turns==null||state.MinigameBag==null||state.StashCash<0||state.GrossSales<0||state.LevelSales<0)throw new ArgumentException("Incomplete snapshot");
             if(state.UnlockedFestivalCount<1||state.UnlockedFestivalCount>Festivals.Count||state.FestivalIndex<0||state.FestivalIndex>=(DevelopmentFestivalSelection?Festivals.Count:state.UnlockedFestivalCount)||state.LevelIndex<0||state.LevelIndex>=Festivals.LevelCount||state.EncoreTier<0)throw new ArgumentException("Invalid weekend position");
             if(state.TestMode&&!DevelopmentFestivalSelection)throw new ArgumentException("Test mode is only in test builds");
@@ -47,6 +47,7 @@ namespace Festival.Core
             // a current round from here on, so saving it again does not re-read a weekend Day 1 as an old rescue.
             if(state.SchemaVersion==1&&state.Phase!="Lobby"&&state.Phase!="Shopping"){state.LevelIndex=1;state.GateOpened=true;}
             foreach(var interaction in state.Interactions)if(interaction==null||!RhythmChart.ValidStageAnchor(interaction))throw new ArgumentException("Invalid snapshot stage chart");
+            if(!state.Interactions.TrueForAll(ValidWheelRide))throw new ArgumentException("Invalid snapshot wheel ride");
             ValidateDeathState(state);
             ValidateCashFindState(state);
             state.SchemaVersion=RoundState.CurrentSchemaVersion;
@@ -69,10 +70,15 @@ namespace Festival.Core
         /// <summary>HUD-4: whether players can act in this phase: at camp shopping and at the festival. The host refuses any other
         /// action as "Round is not interactive", and the HUD offers none then (the wheels spinning, the festival loading).</summary>
         public static bool Interactive(string phase)=>phase=="Playing"||phase=="Shopping";
+        /// <summary>A Cancel's Direction when the HUD sends it from the lanes: it stops only what is still on them.</summary>
+        public const int LanesStop=1;
         CommandResult Apply(PlayerState p,GameCommand c) {
             // PLAYA-8: a joined view lags the host, so a Cancel can name an interaction that has already ended or been replaced
             // (F turns a plain ride into a deck set). Refuse it at no cost. A Cancel that names nothing keeps its old meaning.
             if(c.Kind=="Cancel"&&c.TargetId!=""&&c.TargetId!=p.InteractionId)return Reject("That action already ended");
+            // A trust dance becomes its talk on the same interaction, so a stop sent from the dance can arrive after it, where it would
+            // walk off the talk at a pushed ask's cost.
+            if(c.Kind=="Cancel"&&c.Direction==LanesStop&&!(Interaction(p.InteractionId) is InteractionState on&&on.Status=="Active"&&IsRhythm(on)))return Reject("That action already ended");
             if(State.Phase==MinigamePhase)return Paused(p,c);
             if(c.Kind=="Ready") {if(State.Phase!="Shopping"&&State.Phase!="Lobby")return Reject("Not shopping");if(!Near(p,0,19,3.2))return Reject("Ready at the lit trailhead gate");ReleaseCampSeat(p.Id);p.Ready=!p.Ready;State.LaunchAtSeconds=0;return Ok(p.Ready?"Ready at the trailhead":"Not ready");}
             if(c.Kind=="Start") {
@@ -82,7 +88,7 @@ namespace Festival.Core
                 var connected=State.Players.FindAll(x=>x.Connected);if(connected.Count<required||connected.Exists(x=>!x.Ready))return Reject("Every connected player must be ready at the trailhead");
                 StartRound(connected);return Ok();
             }
-            if(c.Kind=="MapReady") {if(State.Phase!="Loading")return Reject("Map is not loading");p.MapReady=true;if(!State.Players.Exists(x=>x.Connected&&!x.MapReady)){for(int index=0;index<State.Players.Count;index++){var teammate=State.Players[index];teammate.X=-7+2*index;teammate.Z=-29;}State.Phase="Playing";PourShots();}return Ok();}
+            if(c.Kind=="MapReady") {if(State.Phase!="Loading")return Reject("Map is not loading");p.MapReady=true;if(!State.Players.Exists(x=>x.Connected&&!x.MapReady)){for(int index=0;index<State.Players.Count;index++){var teammate=State.Players[index];var at=Festivals.Arrival(index);teammate.X=at.X;teammate.Z=at.Z;}State.Phase="Playing";PourShots();}return Ok();}
             if(c.Kind=="Reset") {if(p.Id!=State.HostPlayerId||State.Phase!="Results")return Reject("Host can bring the crew back after results");BeginCampReview();return Ok();}
             if(c.Kind=="ReviewVote")return VoteForReview(p,c);
             if(c.Kind=="FinishReview")return FinishCampReview(p);
@@ -115,7 +121,13 @@ namespace Festival.Core
             if(c.Kind=="Use"&&c.ItemId==ConfettiItem&&State.Phase=="Shopping")return Use(p,c);
             if(State.Phase!="Playing")return Reject("Start the round first");
             if(c.Kind==DeckSetKind)return BeginDeckSet(p);
+            // ESC-3: a chat holds you as long as you like while a stop's clock runs, and the card still says DITCH IT (G), so G ditches mid
+            // chat. Not mid-dance (G stops it), mid-talk with the guard or up on the Ferris wheel (the stop waits there, Pursue).
+            if(c.Kind=="Drop"&&p.InteractionId!=""&&Stopped(p)&&UntimedChat(Interaction(p.InteractionId)))return Drop(p,c);
             if(p.InteractionId!="")return Reject("Finish or cancel the current interaction");
+            // The rides and the stage deck (BeginDj) take you off with your hands free, so a dragged friend or a carried body never
+            // jumps after you, and nothing holds you while you hold them (Drag and DropBody wait for a set or a ride to end).
+            if((c.Kind==RideWheelKind||c.Kind==RideCarKind)&&(p.DragTargetId!=""||p.CarryBodyId!=""))return Reject("Let go of your friend before you climb aboard");
             switch(c.Kind) {
                 case "Consume": return Consume(p,c);
                 case "Use": return Use(p,c);
@@ -178,9 +190,21 @@ namespace Festival.Core
             if(distance/deltaSeconds>4.2)p.SprintUntil=State.SimulationSeconds+.3;
             if(Distance(p.X,p.Z,x,z)>.001)ReleaseCampSeat(p.Id);
             p.X=x;p.Z=z;if(!HoldsFacing(p))p.Yaw=yaw%360;var target=Player(p.DragTargetId);
-            // A dragged body skips the walls, and only Free lets anyone out of the closed security building, so the body waits outside.
-            // ponytail: it can jump round a corner when it follows again; route the body if that reads badly.
-            if(target!=null&&target.Life=="Downed"&&!Festivals.SecurityBuilding.Contains(x-1,z,.4f)){target.X=x-1;target.Z=z;}return true;
+            if(target!=null&&target.Life=="Downed"){var trail=Trail(target.X,target.Z,x,z);target.X=trail.X;target.Z=trail.Z;}return true;
+        }
+        // ESC-6: only Free lets anyone out of the closed security building, so the body slides to its nearest face; the fence is ESC-5's.
+        // ponytail: a straight pull takes the body's centre through a tree trunk, a plinth or a booth for up to about 2.5 m of a
+        // lap; only the security building pushes it back out. The upgrade is a physics push-out hook from FestivalSession, as HasLineOfSight.
+        static WorldPoint Trail(float bx,float bz,float x,float z)
+        {
+            double gap=Distance(bx,bz,x,z);if(gap>1){bx=x+(float)((bx-x)/gap);bz=z+(float)((bz-z)/gap);}
+            var b=Festivals.SecurityBuilding;const float clear=.4f;
+            if(b.Contains(bx,bz,clear))
+            {
+                float west=bx-b.MinX,east=b.MaxX-bx,front=bz-b.MinZ,back=b.MaxZ-bz,least=Math.Min(Math.Min(west,east),Math.Min(front,back));
+                if(least==west)bx=b.MinX-clear;else if(least==east)bx=b.MaxX+clear;else if(least==front)bz=b.MinZ-clear;else bz=b.MaxZ+clear;
+            }
+            return new WorldPoint(Math.Max(-39,Math.Min(39,bx)),Math.Max(-39,Math.Min(39,bz)));
         }
         /// <summary>How fast p may move now, in metres a second. FestivalSession.ApplyMovement moves at it and TryMove refuses faster
         /// steps, so the host's two movement paths share one rule. A poi spin ignores Sprint, so it can't be held all game for free.</summary>

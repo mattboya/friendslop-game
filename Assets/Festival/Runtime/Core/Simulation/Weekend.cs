@@ -20,7 +20,8 @@ namespace Festival.Core
                 Free(p);return Ok("Freed (test)");
             }
             if(p.Id!=State.HostPlayerId)return Reject("Only the host runs test mode");
-            if(c.Kind==TestModeKind){State.TestMode=!State.TestMode;return Ok(State.TestMode?"TEST MODE on":"TEST MODE off");}
+            // The results heading reads TestMode, so the mode a level ended in holds until camp.
+            if(c.Kind==TestModeKind){if(State.Phase=="Results")return Reject("Switch test mode while a level plays or at camp");State.TestMode=!State.TestMode;return Ok(State.TestMode?"TEST MODE on":"TEST MODE off");}
             if(!State.TestMode)return Reject("Test mode is off");
             if(State.Phase!="Playing")return Reject("Clear a level while it plays");
             End("Success");return Ok("Level cleared (test)");
@@ -34,7 +35,7 @@ namespace Festival.Core
             // TEST MODE lifts only the time limit: the clock runs on, so the schedules that read ElapsedSeconds keep their times.
             if(!TestModeOn&&State.ElapsedSeconds>=State.DurationSeconds)return DayLevel?SundownResult():"Time expired";
             var connected=State.Players.FindAll(p=>p.Connected);
-            bool soloCanRecover=connected.Count==1&&(connected[0].Life=="Downed"||connected[0].Life=="Spirit"&&connected[0].RevivalCount<2);
+            bool soloCanRecover=connected.Count==1&&(connected[0].Life=="Downed"||connected[0].Life=="Spirit"&&FestivalGuidance.RevivalsLeft(connected[0])>0);
             if(!connected.Exists(p=>p.Life=="Alive"||p.Life=="Detained")&&!soloCanRecover)return WipedOut;
             return "";
         }

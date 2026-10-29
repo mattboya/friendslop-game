@@ -14,6 +14,7 @@ public static class WeekendTests
         DevelopmentCapabilityIsNotRestoredOrCommandSettable();
         DevelopmentSessionNeverAdvancesEarnedUnlocksOnRealWins();
         DevelopmentHostCanPickWithoutEarningUnlocks();
+        TestModeHoldsThroughTheResults();
         DroppedGearNamesTheItem();
         DeathGearLossHasAnOwnerSequence();
         FestivalTable();
@@ -133,6 +134,22 @@ public static class WeekendTests
         Check(s.State.UnlockedFestivalCount==1,"clearing test-selected Night 2 never earns a persistent unlock");
         s.State.Phase="Shopping";
         Check(Act(s,"a","ChooseFestival",1).Accepted,"test flag survives the camp round rebuild");
+    }
+
+    // The results heading says whether a clear was a test (FestivalHudText.OutcomeTitle reads TestMode), so TEST MODE holds
+    // through the results: the host switches it while a level plays or at camp, and a clear keeps the mode it ended in.
+    static void TestModeHoldsThroughTheResults()
+    {
+        var s=Crew(94);s.DevelopmentFestivalSelection=true;s.State.Phase="Playing";
+        Check(Act(s,"a",FestivalSimulation.TestModeKind).Accepted&&s.State.TestMode,"setup: the host turns test mode on");
+        Check(Act(s,"a",FestivalSimulation.TestClearLevelKind).Accepted&&s.State.Phase=="Results"&&s.State.Result=="Success","setup: the host clears Day 1 in test mode");
+        var off=Act(s,"a",FestivalSimulation.TestModeKind);
+        Check(!off.Accepted&&s.State.TestMode,"the results keep a test clear marked as a test, got "+off.Accepted+" "+off.Reason);
+        Check(off.Reason=="Switch test mode while a level plays or at camp","the host is told when it switches, got "+off.Reason);
+        Check(Act(s,"a","Reset").Accepted,"setup: back to camp");
+        Check(Act(s,"a",FestivalSimulation.TestModeKind).Accepted&&!s.State.TestMode,"at camp the switch works again");
+        s.State.Phase="Results";s.State.Result="Success";
+        Check(!Act(s,"a",FestivalSimulation.TestModeKind).Accepted&&!s.State.TestMode,"nor does a real clear's results turn test mode on");
     }
 
     static int sequence;

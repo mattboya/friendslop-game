@@ -76,7 +76,7 @@ namespace Festival.Tests
 
                 // Its result, for 4 s, the world still stopped.
                 Assert.That(Find("Minigame title")?.text,Is.EqualTo("+$5"),"the banner shows what the pot paid: "+session.Message);
-                Assert.That(Find("Minigame detail")?.text,Does.StartWith("Called it: $5 each, counted as sales."));
+                Assert.That(Find("Minigame detail")?.text,Does.StartWith("Called it: $5 to you, counted as sales."),"alone at the table, the pot paid you");
                 Assert.That(Find("Prompt")==null||Find("Prompt").text=="",Is.True,"nothing more to press");
                 deadline=Time.realtimeSinceStartup+5;
                 while(session.State.Phase==FestivalSimulation.MinigamePhase&&Time.realtimeSinceStartup<deadline)yield return null;

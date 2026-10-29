@@ -449,6 +449,60 @@ namespace Festival.Tests
             finally{friend.Leave();host.Leave();Object.Destroy(friendObject);Object.Destroy(hostObject);Object.Destroy(world);}
             yield return null;
         }
+        [UnityTest]public IEnumerator AJoinedFriendSeesTheHostInTheCrewScarf()
+        {
+            var host=new GameObject("Crew scarf host").AddComponent<FestivalSession>();
+            var friend=new GameObject("Crew scarf friend").AddComponent<FestivalSession>();yield return null;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);
+                float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);friend.Join("Friend","127.0.0.1",port);
+                while((friend.LocalPlayer==null||!Actors(friend).ContainsKey(host.LocalPlayerId)||!Actors(host).ContainsKey(friend.LocalPlayerId))&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(friend.LocalPlayer,Is.Not.Null,friend.Message);
+                foreach(var (view,id,who) in new[]{(friend,host.LocalPlayerId,"the friend's view of the host"),(host,friend.LocalPlayerId,"the host's view of the friend")})
+                {
+                    Assert.That(Actors(view).ContainsKey(id),Is.True,who+" draws the body");
+                    var scarf=System.Array.Find(Actors(view)[id].GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.name=="Accessory_2");
+                    Assert.That(scarf!=null&&scarf.enabled&&scarf.gameObject.activeInHierarchy,Is.True,who+" wears the crew scarf");
+                    Assert.That(scarf.sharedMaterial.color==FestivalCharacter.CrewColor,Is.True,who+": in the crew colour, not "+scarf.sharedMaterial.color);
+                }
+            }
+            finally{friend.Leave();host.Leave();Object.Destroy(friend.gameObject);Object.Destroy(host.gameObject);}
+            yield return null;
+        }
+        // Following or searching for a friend, you mostly see their back, and past name-tag range only the scarf says who they are.
+        [UnityTest]public IEnumerator TheCrewScarfShowsFromBehindAt15MetresWhateverShirtTheIdDraws()
+        {
+            const int width=1280,height=720;
+            var root=new GameObject("Crew scarf from behind");float timeScale=Time.timeScale;var ambient=RenderSettings.ambientLight;var mode=RenderSettings.ambientMode;
+            var target=new RenderTexture(width,height,24);var picture=new Texture2D(width,height,TextureFormat.RGBA32,false);
+            try
+            {
+                var sun=new GameObject("Sun").AddComponent<Light>();sun.transform.SetParent(root.transform);sun.type=LightType.Directional;sun.transform.rotation=Quaternion.Euler(50,-30,0);
+                RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Flat;RenderSettings.ambientLight=new Color(.5f,.5f,.55f);
+                var eye=new GameObject("Eye").AddComponent<Camera>();eye.transform.SetParent(root.transform);eye.enabled=false;
+                eye.clearFlags=CameraClearFlags.SolidColor;eye.backgroundColor=new Color(.36f,.43f,.58f);eye.fieldOfView=75;eye.aspect=16f/9f;eye.targetTexture=target;
+                eye.transform.position=new Vector3(0,1.5f,15);eye.transform.LookAt(new Vector3(0,1.25f,0));
+                Color32[] Shot(){eye.Render();var was=RenderTexture.active;RenderTexture.active=target;picture.ReadPixels(new Rect(0,0,width,height),0,0);RenderTexture.active=was;return picture.GetPixels32();}
+                Time.timeScale=0;
+                for(int shirt=0;shirt<4;shirt++)
+                {
+                    string id=null;for(int i=0;id==null;i++)if(FestivalAppearance.For("player_"+i).Shirt==shirt)id="player_"+i;
+                    var friend=FestivalCharacter.Create(root.transform,id,Color.white,FestivalCharacter.CrewRole);
+                    friend.transform.rotation=Quaternion.Euler(0,180,0);friend.transform.localScale=Vector3.Scale(Vector3.one*.82f,friend.ShapeScale);friend.UpdateDetailForDistance(15);
+                    var scarf=System.Array.Find(friend.GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.enabled&&r.name=="Accessory_2");
+                    yield return null;yield return null;var worn=Shot();
+                    scarf.enabled=false;yield return null;yield return null;var bare=Shot();
+                    int seen=0;for(int p=0;p<worn.Length;p++)if(Mathf.Abs(worn[p].r-bare[p].r)+Mathf.Abs(worn[p].g-bare[p].g)+Mathf.Abs(worn[p].b-bare[p].b)>24)seen++;
+                    Assert.That(seen,Is.GreaterThanOrEqualTo(12),id+", who draws shirt "+shirt+" in the crowd: scarf pixels from 15 m behind");
+                    Object.Destroy(friend.gameObject);
+                }
+            }
+            finally{Time.timeScale=timeScale;RenderSettings.ambientLight=ambient;RenderSettings.ambientMode=mode;Object.Destroy(root);Object.Destroy(target);Object.Destroy(picture);}
+            yield return null;
+        }
         [UnityTest]public IEnumerator ResidentDjHandsStayOnTheConsole()
         {
             var root=new GameObject("DJ contact test");
@@ -704,8 +758,9 @@ namespace Festival.Tests
             try
             {
                 var camera=cameraObject.AddComponent<Camera>();
-                const string id="hands_player_7";
-                var look=FestivalAppearance.For(id);
+                // In the crowd this id draws the hoodie, which no crew body wears.
+                const string id="hands_player_0";
+                var look=FestivalAppearance.For(id,FestivalCharacter.CrewRole);
                 var hands=FestivalHands.Create(camera,id);
                 Assert.That(hands,Is.Not.Null);
                 yield return null;

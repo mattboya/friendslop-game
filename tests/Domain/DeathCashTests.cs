@@ -9,7 +9,7 @@ public static class DeathCashTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{PublicHistoryRetainsTwentyFourActualDeathsAndResets,PublicHistoryUsesImmutableWorldTimeThroughARealBooth,LegacySnapshotsDoNotSynthesizePublicDeaths})
+        foreach(var test in new Action[]{PublicHistoryRetainsEveryActualDeathAndResets,PublicHistoryUsesImmutableWorldTimeThroughARealBooth,LegacySnapshotsDoNotSynthesizePublicDeaths})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+": "+error.Message);}
         Check(failures.Count==0,string.Join("\n",failures));
         EveryDeathEmitsItsFrozenPublicRecord();
@@ -24,6 +24,7 @@ public static class DeathCashTests
         CashPilesRejectInvalidAmountsWithoutSpendingThePile();
         RefundsAndReturnedGearSettleBeforeDeath();
         ZeroCashAndRealRevivalLimits();
+        AloneWithNoRevivalsLeftTheDownedHintSaysTheLevelEnds();
         TheDownedCardCountsDownAndAloneNamesTheTent();
     }
     static void EveryDeathEmitsItsFrozenPublicRecord()
@@ -72,21 +73,23 @@ public static class DeathCashTests
         var restored=new FestivalSimulation();restored.Restore(zero);
         Check(restored.State.DeathSpins.Count==1&&restored.State.DeathSpins[0].AtWorldSeconds==0&&restored.State.DeathSpins[0].Seed==276,"a valid time-zero public death restores without normalization or a new RNG draw");
     }
-    static void PublicHistoryRetainsTwentyFourActualDeathsAndResets()
+    static void PublicHistoryRetainsEveryActualDeathAndResets()
     {
         var s=new FestivalSimulation(43);
         for(int k=0;k<8;k++)s.AddPlayer("player-"+k,"Friend "+k);
         s.State.Phase="Playing";s.State.Npcs.Clear();s.State.SpinSeed=4;
         string firstId="";double firstAt=0;int firstSeed=0,firstOutcome=0;
-        for(int death=1;death<=3;death++)for(int k=0;k<8;k++)
+        // Each friend dies once more than a level's revivals allow, so the history fills whatever RevivalsPerLevel is.
+        int deaths=FestivalGuidance.RevivalsPerLevel+1,all=8*deaths;
+        for(int death=1;death<=deaths;death++)for(int k=0;k<8;k++)
         {
             // A multiplayer wipe ends before the last downed expiry. Disconnect the seven spirits before the final solo death.
-            if(death==3&&k==7)for(int gone=0;gone<7;gone++)s.Disconnect("player-"+gone);
+            if(death==deaths&&k==7)for(int gone=0;gone<7;gone++)s.Disconnect("player-"+gone);
             var owner=s.Player("player-"+k);var helper=s.Player(k==0?"player-1":"player-0");owner.Cash=40;owner.X=helper.X=0;owner.Z=helper.Z=0;
             Die(s,owner);
             Check(s.State.DeathSpins.Count==(death-1)*8+k+1,"each real death is appended even when no view polls between deaths");
             if(death==1&&k==0){firstId=s.State.DeathSpins[0].Id;firstAt=s.State.DeathSpins[0].AtWorldSeconds;firstSeed=s.State.DeathSpins[0].Seed;firstOutcome=s.State.DeathSpins[0].CashDropped;owner.Name="Changed";}
-            if(death<3)
+            if(death<deaths)
             {
                 var band=s.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==owner.Id);
                 Check(s.Execute(helper.Id,new GameCommand{Id="band-"+death+"-"+k,Kind="Pickup",TargetId=band.Id}).Accepted,"setup: living helper claims the actual wristband");
@@ -95,11 +98,11 @@ public static class DeathCashTests
                 s.Tick(10.1);Check(owner.Life=="Alive"&&owner.RevivalCount==death,"the actual revival completes without consuming death history");
             }
         }
-        Check(s.State.DeathSpins.Count==24,"eight players with two actual revivals retain the full bounded twenty-four-event history");
+        Check(s.State.DeathSpins.Count==all,"eight players with "+(deaths-1)+" actual revivals each retain the full bounded "+all+"-event history");
         var first=s.State.DeathSpins[0];Check(first.Id==firstId&&first.AtWorldSeconds==firstAt&&first.Name=="Friend 0"&&first.Amount==40&&first.Seed==firstSeed&&first.CashDropped==firstOutcome,"later positive deaths and name changes cannot rewrite earlier immutable records");
         s.Disconnect("player-0");s.AddPlayer("player-0","Rejoined");
         var restored=new FestivalSimulation();restored.Restore(Saved(s.State));
-        Check(restored.State.DeathSpins.Count==24&&restored.State.DeathSpins[0].Id==firstId,"disconnect, reconnect and System.Text.Json restore retain every emitted record");
+        Check(restored.State.DeathSpins.Count==all&&restored.State.DeathSpins[0].Id==firstId,"disconnect, reconnect and System.Text.Json restore retain every emitted record");
         string round=s.State.RoundId;s.State.Phase="Results";s.State.Result="Failure";
         Check(s.Execute("player-0",new GameCommand{Id="new-round",Kind="Reset"}).Accepted&&s.State.RoundId!=round&&s.State.DeathSpins.Count==0,"the actual round reset discards old public deaths");
     }
@@ -287,21 +290,39 @@ public static class DeathCashTests
         Check(FestivalGuidance.RevivalsLeft(owner)==0&&FestivalGuidance.Headline(s.State,owner)=="SPIRIT • NO REVIVALS LEFT","both used: \""+FestivalGuidance.Headline(s.State,owner)+"\"");
         Check(FestivalGuidance.Hint(s.State,owner)=="No revivals left this level: you stay a spirit until it ends.","and nobody is sent to the tent for nothing");
     }
+    // Alone with every revival used, the downed time running out ends the level (Weekend.LevelEndCheck), not a trip to the tent.
+    static void AloneWithNoRevivalsLeftTheDownedHintSaysTheLevelEnds()
+    {
+        var s=Crew(4);var owner=s.Player("owner");s.Disconnect("friend");
+        owner.Life="Downed";owner.DownedRemaining=27.2;owner.RevivalCount=FestivalGuidance.RevivalsPerLevel-1;
+        Check(FestivalGuidance.Hint(s.State,owner)=="Nobody can help you up alone. When the time runs out, you become a spirit and can come back at the medical tent.","one revival left: the hint names the tent");
+        owner.DownedRemaining=.05;s.Tick(.1);
+        Check(owner.Life=="Spirit"&&s.State.Phase=="Playing","one revival left: alone, the spirit can still come back and the level goes on: phase "+s.State.Phase+", result \""+s.State.Result+"\"");
+        var last=Crew(4);owner=last.Player("owner");last.Disconnect("friend");
+        owner.Life="Downed";owner.DownedRemaining=27.2;owner.RevivalCount=FestivalGuidance.RevivalsPerLevel;
+        string hint=FestivalGuidance.Hint(last.State,owner);
+        Check(hint=="Nobody can help you up alone, and you have no revivals left: when the time runs out, the level ends.","none left: the hint tells the truth: \""+hint+"\"");
+        Check(FestivalGuidance.Headline(last.State,owner)=="DOWNED • 28 s","the card still counts the downed seconds");
+        owner.DownedRemaining=.05;last.Tick(.1);
+        Check(owner.Life=="Spirit"&&last.State.Phase=="Results"&&last.State.Result==FestivalSimulation.WipedOut,"none left: when the time runs out, the level ends: phase "+last.State.Phase+", result \""+last.State.Result+"\"");
+    }
     static void ZeroCashAndRealRevivalLimits()
     {
         var empty=Crew(4);var owner=empty.Player("owner");owner.Cash=0;Die(empty,owner);
         Check(owner.DeathSpinAt==-1&&owner.DeathSpinSequence==0&&owner.DeathSpinAmount==0&&empty.State.Drops.TrueForAll(d=>d.ItemId!="cash"),"zero cash records no spin and no cash pile");
         var s=Crew(4);owner=s.Player("owner");var friend=s.Player("friend");
-        for(int death=1;death<=3;death++)
+        // A player can die once more than the level's revivals.
+        int limit=FestivalGuidance.RevivalsPerLevel+1;
+        for(int death=1;death<=limit;death++)
         {
             owner.Cash=40;owner.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});friend.X=owner.X;friend.Z=owner.Z;Die(s,owner);
-            Check(owner.DeathSpinSequence==death&&owner.GearLossSequence==death,"each of the three real deaths has a new independent sequence");
+            Check(owner.DeathSpinSequence==death&&owner.GearLossSequence==death,"each real death has a new independent sequence");
             new FestivalSimulation().Restore(Saved(s.State));
             var band=s.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==owner.Id);
             Check(s.Execute(friend.Id,new GameCommand{Id="band-"+death,Kind="Pickup",TargetId=band.Id}).Accepted,"setup: living friend claims the owner's wristband");
             friend.X=owner.X=24;friend.Z=owner.Z=-20;
             var revival=s.Execute(friend.Id,new GameCommand{Id="revive-"+death,Kind="BeginRevival",TargetId=owner.Id});
-            if(death==3)Check(!revival.Accepted&&owner.Life=="Spirit","a third real revival is refused without a fourth death sequence");
+            if(death==limit)Check(!revival.Accepted&&owner.Life=="Spirit","a revival past the level's "+FestivalGuidance.RevivalsPerLevel+" is refused without another death sequence");
             else{Check(revival.Accepted,"setup: actual free revival begins");s.Tick(10.1);Check(owner.Life=="Alive"&&owner.RevivalCount==death,"the real revival finishes and counts the use");}
         }
     }

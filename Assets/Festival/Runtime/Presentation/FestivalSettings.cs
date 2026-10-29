@@ -52,8 +52,10 @@ namespace Festival.Presentation
         }
         private UniversalRenderPipelineAsset runtimePipeline;
         // Live instances (each holds a runtime pipeline) share the first capture, and the last Dispose restores it: a session torn
-        // down first leaves a newer one's graphics alone. An instance that is never disposed blocks every later restore.
-        private static int live;
+        // down first leaves a newer one's graphics alone. An instance that is never disposed blocks every later restore. Any other
+        // teardown moves epoch: it may leave a shared quality slot on its destroyed pipeline, so each live instance sets its own again.
+        private static int live,epoch;
+        private int appliedEpoch;
         private static readonly Dictionary<int,RenderPipelineAsset> originalPipelines=new Dictionary<int,RenderPipelineAsset>();
         private static readonly Dictionary<int,int> originalVsync=new Dictionary<int,int>();
         private static int originalQuality,initialVsync,initialFrameCap;
@@ -90,7 +92,7 @@ namespace Festival.Presentation
         // Only runtime clones are edited; every touched quality slot is restored on teardown.
         public void ApplyGraphics()
         {
-            if(runtimePipeline!=null&&appliedPreset==Data.QualityPreset&&appliedScale==Data.RenderScale&&appliedVsync==Data.VSyncCount&&appliedCap==Data.FrameCap&&appliedMode==Data.DisplayMode&&appliedWidth==Data.ResolutionWidth&&appliedHeight==Data.ResolutionHeight)return;
+            if(runtimePipeline!=null&&appliedEpoch==epoch&&appliedPreset==Data.QualityPreset&&appliedScale==Data.RenderScale&&appliedVsync==Data.VSyncCount&&appliedCap==Data.FrameCap&&appliedMode==Data.DisplayMode&&appliedWidth==Data.ResolutionWidth&&appliedHeight==Data.ResolutionHeight)return;
             Validate(Data);
             if(runtimePipeline==null)
             {
@@ -102,6 +104,12 @@ namespace Festival.Presentation
                 runtimePipeline.hideFlags=HideFlags.HideAndDontSave;live++;
             }
             bool changed=appliedPreset!=Data.QualityPreset;
+            if(!changed&&appliedEpoch!=epoch)
+            {
+                int level=Array.IndexOf(QualitySettings.names,appliedPreset);
+                if(level>=0){QualitySettings.SetQualityLevel(level,false);QualitySettings.renderPipeline=runtimePipeline;}
+            }
+            appliedEpoch=epoch;
             if(changed)
             {
                 if(appliedPreset!=null)Data.RenderScale=PresetScale(Data.QualityPreset);
@@ -158,6 +166,7 @@ namespace Festival.Presentation
                 QualitySettings.SetQualityLevel(originalQuality,false);QualitySettings.vSyncCount=initialVsync;Application.targetFrameRate=initialFrameCap;
                 originalPipelines.Clear();originalVsync.Clear();
             }
+            else epoch++;
             if(displayApplied&&(requestedMode!=initialMode||requestedWidth!=initialWidth||requestedHeight!=initialHeight))display.SetResolution(initialWidth,initialHeight,initialMode);
             if(Application.isPlaying)UnityEngine.Object.Destroy(runtimePipeline);else UnityEngine.Object.DestroyImmediate(runtimePipeline);
             runtimePipeline=null;appliedPreset=null;displayApplied=false;

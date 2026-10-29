@@ -26,6 +26,9 @@ namespace Festival.Core
         // A set starts and ends on the lawn at the takeover spot, and is played at the resident's mixer up on the riser.
         // StageCheerRange is measured from the takeover spot.
         public const float StageDjX=0f,StageDjZ=30.84f,StageCheerRange=20f;
+        // The front face of the main stage's backdrop (FestivalWorld's "Stage backdrop", z 35.75-36.25): the DJ on the riser is in
+        // plain view only in front of it.
+        public const float StageBackdropZ=35.75f;
         public static readonly ItemDefinition[] Items = {
             Item("little_spoon", "Little Spoon", "A tiny spoon on a necklace cord.",1,1,"Equipment","Passive","Self",0,0,0,false),
             // POLO-2, ECON-1: a clean sale pays $10 (FestivalSimulation.PerfectSalePay) at dose 1, and dose, VIP zones, double
@@ -34,7 +37,7 @@ namespace Festival.Core
             // festivalgoers remain the source of further stock (StockBuys.cs).
             Item("stock_lsd", "Tongue Stamps", "Clean sales pay $10 and up; ask High or Greedy for more. Or take: 60s of warped cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"lsd"),
             Item("stock_mushrooms", "Fun Guys", "Clean sales pay $10 and up; ask High or Greedy for more. Or take: 60s of curved cues and slower, drifting steps.",5,5,"Stock","Consume/Sale","Self/Wook",0,60,3,true,"mushrooms"),
-            Item("stage_pass", "Stage pass", "At the stage, sustain a 30-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
+            Item("stage_pass", "Stage pass", "At the main stage, sustain a 40-second DJ routine to give friends rescue openings.",15,1,"Performance","Stage","StageConsole",0,30,3,true),
             Item("confetti", "Confetti cannon", "Turns calm festivalgoers within 8 m to the burst for 4 s; accusers and swarms ignore it. Free party trick at camp.",5,1,"Distraction","World","NearbyWooks",0,4,8,true),
             Item("merch_bag", "Official merch bag", "Hide stock from casual inspection; witnessed sales and searches still count.",5,1,"Equipment","Passive","Self",0,0,0,false),
             Item("stash_box", "Lockable stash box", "Place shared storage; return within 2.5 metres to move cash or stock.",10,1,"Storage","Place","Ground",0,0,2.5,true),

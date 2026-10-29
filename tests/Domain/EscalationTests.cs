@@ -12,7 +12,10 @@ public static class EscalationTests
         var failures=new List<string>();
         foreach(var scenario in new Action[]{SuspicionBuildsFasterLaterInTheWeekend,OnlyGainsScale,CopsPatrolTheCrowdEdge,EvidenceStillComesFirst,CopsWaitForAChat,TwoCopsEveryLevel,
             AStopCallsYouOutAndHolds,AnIgnoredStopEndsInAnArrest,DitchingTheStockEndsTheStop,BoltingOutOfSightEndsTheStop,TalkingYourWayOut,TheWarningWaitsForATalk,SellingTheLastStockUnseenEndsTheStop,AnOldSnapshotsStopStartsAtLoad,StopsEndWhenDownedOrWithTheLevel,
-            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding})
+            DetentionHoldsYouInsideTheSecurityBuilding,TheSecurityBuildingStandsClearOfTheGrounds,ADraggedFriendStaysOutsideTheSecurityBuilding,
+            ADraggedFriendStaysInsideTheFence,ADraggedFriendFollowsAlongTheWalls,ADraggerLetsGoFromAnyDistance,NothingCarriesADraggerOff,
+            AStopWaitsForAWheelRider,GDitchesOneAtATimeAndSaysWhatIsLeft,GDitchesMidChat,
+            OneGuardKeepsTwoStops,AGuardHearsATalkOutThroughAnArrest,AGuardHearsATalkOutBeforeTheCrewOrder,AGuardWithTwoStopsSeesNothingBehindIt,AGuardWithTwoStopsSeesStockInFront,TheLastChanceComesAfterAWalkOut,AGuardByDitchedStockFacesATalker,AnEscAfterATalkEndedIsNoChatToEnd})
             try{scenario();}catch(Exception e){failures.Add(e.Message);}
         if(failures.Count>0)throw new Exception(string.Join("\n",failures));
     }
@@ -279,15 +282,22 @@ public static class EscalationTests
         Check(talk.Status=="Complete"&&talk.Score>=.75&&talk.Score<.85,"setup: the talk scores .75 or a little more (got "+talk.Score+")");
         for(int tick=0;tick<20;tick++){InFront(cop,a,3);s.Tick(.1);}
         Check(cop.Mode=="Patrol"&&cop.TargetId==""&&!cop.Evidence.Exists(e=>e.Kind=="VisibleStock"),"a talk scoring .75 clears the stop: 2 s on, stock right in front of the guard, it lets them be (mode "+cop.Mode+")");
+        Check(cop.Evidence.Exists(e=>e.PlayerId=="a"&&e.Kind=="WavedOn")&&FestivalSimulation.CaseOn(s.State,cop,"a")=="","waved on and still in the guard's sight, a's own view shows no case (\""+FestivalSimulation.CaseOn(s.State,cop,"a")+"\")");
         open=false;s.Tick(.1);open=true;InFront(cop,a,3);s.Tick(.1);
         Check(cop.Mode=="Stop","once the guard has lost sight of them, stock in view starts a fresh stop (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);double began=s.State.SimulationSeconds;s.Tick(1);
-        talk=Talk(s,a,cop,Smooth,SoSo,Awkward,SoSo);Finish(s,talk);
+        talk=Talk(s,a,cop,Smooth,SoSo,Awkward,Smooth);Finish(s,talk);
         Check(talk.Status=="Complete"&&talk.Score>=.5&&talk.Score<.75,"setup: the talk scores .5 or a little more, under .75 (got "+talk.Score+")");
         s.Tick(.1);Check(cop.Mode=="Stop","a talk scoring .5 keeps the stop (mode "+cop.Mode+")");
         s.Tick(19.85-(s.State.SimulationSeconds-began));Check(cop.Mode=="Stop","its clock runs on: a stop until 20 s (mode "+cop.Mode+")");
         s.Tick(.3);Check(cop.Mode=="ArrestWarning","and an arrest warning at 20 s (mode "+cop.Mode+")");
+
+        // An awkward reply costs a point, so three smooth replies and an awkward one (5 of 8) do not wave them on.
+        s=Stopped(out cop,out a);s.Tick(1);
+        talk=Talk(s,a,cop,Smooth,Smooth,Smooth,Awkward);Finish(s,talk);
+        Check(talk.Status=="Complete"&&Math.Abs(talk.Score-.625)<1e-9,"setup: three smooth replies and an awkward one score 5 of 8 (got "+talk.Score+")");
+        s.Tick(.1);Check(cop.Mode=="Stop"&&!cop.Evidence.Exists(e=>e.Kind=="WavedOn"),"heard out, not waved on: the stop holds (mode "+cop.Mode+")");
 
         s=Stopped(out cop,out a);began=s.State.SimulationSeconds;s.Tick(17);
         talk=Talk(s,a,cop,Silence);bool warned=false,free=true;
@@ -317,7 +327,7 @@ public static class EscalationTests
         s.Tick(8);talk=Talk(s,a,cop);s.Tick(2);Reply(s,a,talk,Smooth);s.Tick(2.5);Reply(s,a,talk,Awkward);Reply(s,a,talk,Awkward);Reply(s,a,talk,Awkward);
         Check(talk.Status=="Complete"&&talk.Score<.75,"setup: a poor talk (score "+talk.Score+")");
         Check(Says(a,LastChance)&&a.NpcSpeechUntil>s.State.SimulationSeconds,"a poor talk over at "+Held()+" s, past 12 s: the guard warns them as it ends (\""+a.NpcSpeech+"\")");
-        s.Tick(.1);Check(cop.Mode=="Stop","and the stop holds (mode "+cop.Mode+")");
+        var said=a.SpeechSequence;s.Tick(.1);Check(cop.Mode=="Stop"&&a.SpeechSequence==said,"and the stop holds, the warning said once (mode "+cop.Mode+", "+a.SpeechSequence+" lines, was "+said+")");
 
         s=Stopped(out cop,out a);began=s.State.SimulationSeconds;
         s.Tick(11);talk=Talk(s,a,cop,Silence);Finish(s,talk);
@@ -442,7 +452,301 @@ public static class EscalationTests
         }
         Walk(East+.35f,a.Z);Walk(East+.35f,(Front+Back)/2);
         Check(b.Life=="Downed"&&a.DragTargetId=="b","the friend is still downed and dragged beside the east wall");
-        Walk(East+.35f,Back+1.5f);
-        Check(b.X==a.X-1&&b.Z==a.Z,"past the back the friend follows at the dragger's side again ("+b.X+", "+b.Z+")");
+        Walk(East+.35f,Back+1.5f);Walk(East+.35f,Back+3);
+        Check(Math.Abs(Dist(a.X,a.Z,b.X,b.Z)-1)<.01&&b.Z<a.Z,"past the back the friend follows a metre behind again ("+b.X+", "+b.Z+"; dragger at "+a.X+", "+a.Z+")");
+    }
+    // ESC-5: a dragger walking along the west fence keeps the friend inside the grounds (|x| <= 39), and once rescued the friend
+    // walks off east.
+    static void ADraggedFriendStaysInsideTheFence()
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();
+        var a=s.Player("a");var b=s.Player("b");b.Life="Downed";b.DownedRemaining=35;a.X=-38.4f;a.Z=0;b.X=-37.4f;b.Z=0;
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+        for(float x=-38.4f;x>-38.68f;){x=Math.Max(-38.68f,x-2f/30);Check(s.TryMove("a",x,0,0,1.0/30),"the dragger's step to "+x+" is taken");}
+        Check(Math.Abs(b.X)<=39&&Math.Abs(b.Z)<=39,"the dragged friend stays inside the fence ("+b.X+", "+b.Z+"; dragger at "+a.X+")");
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a lets go");
+        Check(s.Execute("a",Command("Rescue","b")).Accepted,"setup: a rescues them");s.Tick(3.1);
+        Check(b.Life=="Alive","setup: the friend is back on their feet ("+b.Life+")");
+        Check(s.TryMove("b",b.X+4f/30,b.Z,0,1.0/30),"the rescued friend's step east is taken (from "+b.X+")");
+    }
+    // ESC-6: a dragged friend trails a metre behind the dragger, so they follow along a wall of the security building and round
+    // its corners: walked right round it both ways at the host's 1/30 s steps, the body never jumps or falls behind, and never
+    // lands inside. The dragger keeps to Slide's .3-.35 m off each wall, as in the built world.
+    static void ADraggedFriendFollowsAlongTheWalls()
+    {
+        float w=West-.35f,f=Front-.3f,e=East+.35f,k=Back+.33f;
+        var loop=new[]{(w,f),(e,f),(e,k),(w,k),(w,f)};
+        foreach(bool reverse in new[]{false,true})
+        {
+            var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();
+            var a=s.Player("a");var b=s.Player("b");b.Life="Downed";b.DownedRemaining=1e6;
+            var route=new List<(float X,float Z)>(loop);if(reverse)route.Reverse();
+            a.X=route[0].X;a.Z=route[0].Z;b.X=a.X-(reverse?0:1);b.Z=a.Z-(reverse?1:0);
+            Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+            double jump=0,gap=0;string worst="";
+            for(int leg=1;leg<route.Count;leg++)
+            {
+                var (fx,fz)=(a.X,a.Z);var (tx,tz)=route[leg];int steps=(int)Math.Ceiling(Dist(fx,fz,tx,tz)/(2.0/30));
+                for(int i=1;i<=steps;i++)
+                {
+                    float x=fx+(tx-fx)*i/steps,z=fz+(tz-fz)*i/steps,bx=b.X,bz=b.Z;
+                    Check(s.TryMove("a",x,z,0,1.0/30),"the dragger's step to "+x+", "+z+" is taken");
+                    if(Festivals.SecurityBuilding.Contains(b.X,b.Z,.32f))throw new Exception("Escalation: the dragged friend lands inside the security building at "+b.X+", "+b.Z+" (dragger at "+a.X+", "+a.Z+")");
+                    double moved=Dist(bx,bz,b.X,b.Z);if(moved>jump){jump=moved;worst=bx+","+bz+" -> "+b.X+","+b.Z+" (dragger at "+a.X+","+a.Z+")";}
+                    gap=Math.Max(gap,Dist(a.X,a.Z,b.X,b.Z));
+                }
+            }
+            string way=reverse?"anticlockwise":"clockwise";
+            Check(jump<=.6,way+": the body follows step by step, never jumping more than .6 m (a corner's slide out is the largest, about .45 m) (largest "+jump+" m, "+worst+")");
+            Check(gap<=1.5,way+": the body keeps within 1.5 m of the dragger, well inside the 2.5 m reach of Drag and Rescue (largest gap "+gap+" m)");
+        }
+    }
+    // ESC-6: the dragger can always let go, however far the body has fallen behind; claiming a body still needs its reach.
+    static void ADraggerLetsGoFromAnyDistance()
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.AddPlayer("c","C");s.State.Phase="Playing";s.State.Npcs.Clear();
+        var a=s.Player("a");var b=s.Player("b");var c=s.Player("c");b.Life="Downed";b.DownedRemaining=35;a.X=0;a.Z=0;b.X=-1;b.Z=0;c.X=10;c.Z=10;
+        Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");
+        b.X=-4;Check(Dist(a.X,a.Z,b.X,b.Z)>=4,"setup: the body lies 4 m off");
+        var off=s.Execute("a",Command("Drag","b"));
+        Check(off.Accepted&&a.DragTargetId=="","4 m from the body the dragger still lets go (\""+off.Reason+"\")");
+        Check(!s.Execute("c",Command("Drag","b")).Accepted,"a friend 10 m off can't take hold of the body");
+        Check(!s.Execute("a",Command("Drag","b")).Accepted,"nor can the dragger once they've let go, from 4 m");
+    }
+    // The stage deck and the rides take you off with your hands free, so a dragged friend never jumps after you and you can
+    // always let go (a ride or a set holds you, and Drag waits for it). Carrying a body is the same.
+    static void NothingCarriesADraggerOff()
+    {
+        FestivalSimulation Holding(int festival,float x,float z,bool carry)
+        {
+            var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";s.State.Npcs.Clear();s.State.FestivalIndex=festival;
+            var a=s.Player("a");var b=s.Player("b");a.X=x;a.Z=z;a.Inventory.Add(new ItemStack{ItemId="stage_pass",Count=1});
+            if(carry){b.Life="Spirit";s.State.Bodies.Add(new BodyState{PlayerId="b",X=x,Z=z-1});a.CarryBodyId="b";}
+            else{b.Life="Downed";b.DownedRemaining=1e6;b.X=x;b.Z=z-1;Check(s.Execute("a",Command("Drag","b")).Accepted,"setup: a drags their downed friend");}
+            return s;
+        }
+        var car=Festivals.ArtCarAt(0,0);var missed=new List<string>();
+        foreach(var (what,festival,x,z,kind,item,refusal) in new[]{("the DJ set",Festivals.PoloFestival,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,"Dj","","Let go of your friend before you take the stage"),
+            ("the DJ set from the pass in hand (Q)",Festivals.PoloFestival,Catalog.StageTakeoverX,Catalog.StageTakeoverZ,"Use","stage_pass","Let go of your friend before you take the stage"),
+            ("the Ferris wheel",Festivals.PoloFestival,Festivals.WheelX,Festivals.WheelZ+1,FestivalSimulation.RideWheelKind,"","Let go of your friend before you climb aboard"),
+            ("an art car",Festivals.PlayaFestival,car.X,car.Z,FestivalSimulation.RideCarKind,"","Let go of your friend before you climb aboard")})
+        foreach(bool carry in new[]{false,true})
+        try
+        {
+            var s=Holding(festival,x,z,carry);var a=s.Player("a");string who=(carry?"carrying a body, ":"dragging a friend, ")+what;
+            float bx=carry?s.State.Bodies[0].X:s.Player("b").X,bz=carry?s.State.Bodies[0].Z:s.Player("b").Z;
+            var start=s.Execute("a",Command(kind,"",item));
+            Check(!start.Accepted&&start.Reason==refusal,who+" is refused with \""+refusal+"\" (got "+start.Accepted+" \""+start.Reason+"\")");
+            Check(a.InteractionId==""&&a.X==x&&a.Z==z&&s.Player("a").Inventory.Exists(i=>i.ItemId=="stage_pass"&&i.Count==1),who+": nothing starts, a stays put and keeps the pass");
+            s.TryMove("a",a.X,a.Z,0,1.0/30);
+            float nx=carry?s.State.Bodies[0].X:s.Player("b").X,nz=carry?s.State.Bodies[0].Z:s.Player("b").Z;
+            Check(Dist(bx,bz,nx,nz)<=1.01,who+": the body stays by where it was, not on the deck or the ride ("+bx+","+bz+" -> "+nx+","+nz+")");
+            var off=s.Execute("a",Command(carry?"DropBody":"Drag",carry?"":"b"));Check(off.Accepted&&a.DragTargetId==""&&a.CarryBodyId=="",who+": a can let go ("+off.Reason+")");
+            var free=s.Execute("a",Command(kind,"",item));Check(free.Accepted,who+": with hands free it starts (\""+free.Reason+"\")");
+        }
+        catch(Exception e){missed.Add(e.Message);}
+        Check(missed.Count==0,string.Join("\n",missed));
+    }
+    // ESC-3 item 1: up on the Ferris wheel nobody can talk, ditch, walk or cancel, so a stop waits for the rider: its clock stands
+    // still for the turn, with the guard waiting at the base, and runs on from where it was once the rider is down. Stopped as
+    // they board, or stopped at the base and boarding 5 s later, nobody is warned or arrested on the wheel.
+    static void AStopWaitsForAWheelRider()
+    {
+        foreach(double before in new[]{0,5})
+        {
+            var s=Level(1);s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=s.State.Npcs[0];cop.X=Festivals.WheelX;cop.Z=Festivals.WheelZ+6;cop.Yaw=180;
+            var a=s.Player("a");a.X=Festivals.WheelX;a.Z=Festivals.WheelZ+1;a.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});a.EquippedItemId="stock_lsd";
+            string when=before==0?"stopped as they board":"stopped 5 s before boarding";
+            if(before==0)Check(s.Execute("a",Command(FestivalSimulation.RideWheelKind)).Accepted,"setup: a boards the wheel");
+            s.Tick(.1);Check(cop.Mode=="Stop","setup: "+when+" (mode "+cop.Mode+")");
+            if(before>0){s.Tick(before);a.X=Festivals.WheelX;a.Z=Festivals.WheelZ+1;Check(s.Execute("a",Command(FestivalSimulation.RideWheelKind)).Accepted,"setup: a boards the wheel 5 s into the stop");}
+            bool warned=false;
+            while(FestivalSimulation.OnWheel(s.State,"a")){s.Tick(.1);warned|=Says(a,LastChance);Check(cop.Mode=="Stop"&&a.Life=="Alive",when+": no arrest warning on the wheel (mode "+cop.Mode+", "+a.Life+")");}
+            Check(!warned,when+": no last chance on the wheel either");
+            Check(Dist(cop.X,cop.Z,a.X,a.Z)<=2.05,when+": the guard waits at the base ("+Dist(cop.X,cop.Z,a.X,a.Z)+" m off)");
+            double held=before;double Left(double at)=>at-held;
+            s.Tick(Left(11.85));Check(!Says(a,LastChance)&&cop.Mode=="Stop",when+": down again, the stop runs on from "+held+" s, unwarned before 12 s (\""+a.NpcSpeech+"\")");
+            s.Tick(.3);Check(Says(a,LastChance),when+": the last chance at 12 s of the stop's own clock (\""+a.NpcSpeech+"\")");
+            s.Tick(7.6);Check(cop.Mode=="Stop",when+": the stop holds until 20 s of its clock (mode "+cop.Mode+")");
+            s.Tick(.3);Check(cop.Mode=="ArrestWarning",when+": ignored to 20 s of its clock, an arrest warning (mode "+cop.Mode+")");
+        }
+    }
+    // ESC-3 item 3: during a stop G ditches one unit at a time and says how many are left, so a player carrying two isn't told
+    // the stock is gone while the stop goes on. The stop ends with the last one.
+    static void GDitchesOneAtATimeAndSaysWhatIsLeft()
+    {
+        var s=Stopped(out var cop,out var a);a.Inventory.Find(i=>i.ItemId=="stock_lsd").Count=2;
+        var first=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(first.Accepted&&Count(a,"stock_lsd")==1&&first.Reason=="DITCHED 1 Tongue Stamps  •  1 left","one G ditches one of two and says one is left (\""+first.Reason+"\")");
+        s.Tick(.1);Check(cop.Mode=="Stop","with one still in hand the stop holds (mode "+cop.Mode+")");
+        var last=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(last.Accepted&&Count(a,"stock_lsd")==0&&last.Reason=="DITCHED 1 Tongue Stamps  •  0 left","the next G ditches the last and says so (\""+last.Reason+"\")");
+        s.Tick(.1);Check(cop.Mode=="Patrol"&&Says(a,"Fine. Move along."),"and the stop is over (mode "+cop.Mode+")");
+        s=Stopped(out cop,out a,()=>false);a.Inventory.Add(new ItemStack{ItemId="poi_practice",Count=1});a.EquippedItemId="poi_practice";
+        var plain=s.Execute("a",Command("Drop",item:"poi_practice"));
+        Check(plain.Accepted&&plain.Reason=="Dropped Practice poi","out of a stop G drops what's in hand, as ever (\""+plain.Reason+"\")");
+    }
+    // ESC-3 item 2: a chat check holds you as long as you like while the stop's clock runs, and the card still says DITCH IT (G),
+    // so mid chat G ditches the stock and the chat goes on. Out of a stop the chat still keeps G from dropping anything.
+    static void GDitchesMidChat()
+    {
+        FestivalSimulation Chatting(out NpcState cop,out PlayerState a,bool stopped)
+        {
+            var s=Stopped(out cop,out a,stopped?null:(Func<bool>)(()=>false));s.State.TripperId="a";
+            s.State.Npcs.Add(new NpcState{Id="seen",Role="Buyer",X=a.X+1,Z=a.Z,Yaw=-90});s.State.Visions.Add(new VisionState{Id="v",Kind="Buyer",NpcId="seen"});
+            var chat=s.Execute("a",Command("ConfirmChat","seen"));Check(chat.Accepted,"setup: the tripper starts a chat check (\""+chat.Reason+"\")");return s;
+        }
+        var s=Chatting(out var cop,out var a,true);Check(cop.Mode=="Stop","setup: the stop is on (mode "+cop.Mode+")");
+        var mid=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(mid.Accepted&&Count(a,"stock_lsd")==0&&s.Interaction(a.InteractionId)?.Kind=="ConfirmChat","mid chat check G ditches the stock, and the chat goes on (\""+mid.Reason+"\")");
+        s.Tick(.1);Check(cop.Mode=="Patrol"&&Says(a,"Fine. Move along."),"ditched in the guard's sight, the stop is over (mode "+cop.Mode+", \""+a.NpcSpeech+"\")");
+        // So does a talk with a festivalgoer, waiting on your reply.
+        s=Stopped(out cop,out a);var partner=new NpcState{Id="talker",Role="Regular",CanTalk=true,X=a.X+1,Z=a.Z,Yaw=-90};s.State.Npcs.Add(partner);
+        var talk=s.Execute("a",Command("Conversation","talker"));Check(talk.Accepted&&!s.Interaction(a.InteractionId).TrustDance,"setup: the stopped player talks to a festivalgoer, no dance first (\""+talk.Reason+"\")");
+        Check(s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted&&Count(a,"stock_lsd")==0,"mid talk with a festivalgoer G ditches the stock too");
+        // But not mid-talk with the guard who stopped you: that talk keeps time, and G there ditches nothing.
+        s=Stopped(out cop,out a);s.Tick(1);var asked=s.Execute("a",Command("Police",cop.Id));Check(asked.Accepted,"setup: the stopped player talks to the guard (\""+asked.Reason+"\")");
+        var police=s.Execute("a",Command("Drop",item:"stock_lsd"));
+        Check(!police.Accepted&&Count(a,"stock_lsd")==1,"mid-talk with the guard G ditches nothing (\""+police.Reason+"\")");
+        s=Chatting(out cop,out a,false);Check(cop.Mode=="Patrol","setup: no stop");
+        Check(!s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted&&Count(a,"stock_lsd")==1,"with no stop on, a chat check still keeps G from dropping anything");
+    }
+    // ESC-3 item 5: one guard walks after one of two stopped players, yet each stop keeps its own clocks, its 12 s last chance
+    // and its 20 s arrest warning. b is stopped first; a (first in the crew's order) 10 s later.
+    static void OneGuardKeepsTwoStops()
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.State.Phase="Playing";
+        s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
+        var a=s.Player("a");var b=s.Player("b");a.X=30;a.Z=30;b.X=0;b.Z=5;
+        foreach(var p in new[]{a,b}){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
+        s.Tick(.1);Check(cop.Mode=="Stop"&&cop.TargetId=="b","setup: the guard stops b (mode "+cop.Mode+", on "+cop.TargetId+")");double bAt=s.State.SimulationSeconds;
+        s.Tick(9.9);a.X=1;a.Z=6;s.Tick(.1);
+        Check(cop.Evidence.Exists(e=>e.PlayerId=="a"&&e.Kind=="VisibleStock")&&cop.TargetId=="a","setup: 10 s on it stops a too, and turns to a (on "+cop.TargetId+")");double aAt=s.State.SimulationSeconds;
+        double To(PlayerState p)=>Math.Atan2(p.X-cop.X,p.Z-cop.Z)*180/Math.PI;
+        a.X=-4;a.Z=6;b.X=4;b.Z=6;s.Tick(.1);
+        Check(Math.Abs(cop.Yaw-To(a))<1,"split up, the guard faces a, whom it walks after, not b (yaw "+cop.Yaw+", a at "+To(a)+", b at "+To(b)+")");
+        bool bWarned=false,aWarned=false;
+        while(s.State.SimulationSeconds-bAt<12.3){s.Tick(.1);bWarned|=Says(b,LastChance);}
+        Check(bWarned,"b hears the last chance at 12 s of b's stop, though the guard is on a (\""+b.NpcSpeech+"\")");
+        while(s.State.SimulationSeconds-bAt<19.8){s.Tick(.1);Check(cop.Evidence.Exists(e=>e.PlayerId=="b"),"b's stop holds while b stays in the guard's sight ("+(s.State.SimulationSeconds-bAt)+" s)");}
+        Check(b.Life=="Alive"&&!cop.Evidence.Exists(e=>e.PlayerId=="b"&&e.Kind!="VisibleStock"),"no arrest warning for b before 20 s");
+        s.Tick(.3);Check(cop.Evidence.Exists(e=>e.PlayerId=="b"&&e.Kind=="IgnoredStop"),"at 20 s b's stop is an arrest warning ("+string.Join(",",cop.Evidence.ConvertAll(e=>e.PlayerId+":"+e.Kind))+")");
+        Check(cop.TargetId=="b"&&cop.Mode=="ArrestWarning","an arrest to make comes first: the guard goes after b (mode "+cop.Mode+", on "+cop.TargetId+")");
+        Check(Math.Abs(cop.Yaw-To(b))<1,"and faces b, not a (yaw "+cop.Yaw+", b at "+To(b)+", a at "+To(a)+")");
+        while(s.State.SimulationSeconds-aAt<12.3){s.Tick(.1);aWarned|=Says(a,LastChance);}
+        Check(aWarned,"a hears the last chance at 12 s of a's own stop (\""+a.NpcSpeech+"\")");
+        s.Tick(24.1-(s.State.SimulationSeconds-bAt));Check(b.Life=="Detained"&&a.Life=="Alive","4 s after its warning b is detained, a still free ("+b.Life+", a "+a.Life+")");
+        Check(FestivalSimulation.CaseOn(s.State,cop,"a")=="Stop"&&FestivalSimulation.CaseOn(s.State,cop,"b")=="","a's view keeps its stop, and detained b's shows no case ("+FestivalSimulation.CaseOn(s.State,cop,"a")+", "+FestivalSimulation.CaseOn(s.State,cop,"b")+")");
+    }
+    // K2 with two stops: the guard stands by a talker and hears the talk out, though the other stop turns into an arrest
+    // mid-talk, or comes first in the crew's order. The other arrest still lands on time.
+    static void AGuardHearsATalkOutThroughAnArrest()=>HearsATalkOut(false);
+    static void AGuardHearsATalkOutBeforeTheCrewOrder()=>HearsATalkOut(true);
+    static void HearsATalkOut(bool bFirst)
+    {
+        var s=new FestivalSimulation(1);if(bFirst)s.AddPlayer("b","B");s.AddPlayer("a","A");if(!bFirst)s.AddPlayer("b","B");s.State.Phase="Playing";
+        s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");var cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
+        var a=s.Player("a");var b=s.Player("b");a.X=0;a.Z=2;b.X=-6;b.Z=6;string when=bFirst?" (b first in the crew)":" (b's arrest warning mid-talk)";
+        foreach(var p in new[]{a,b}){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
+        s.Tick(.1);double began=s.State.SimulationSeconds;
+        Check(cop.Evidence.FindAll(e=>e.Kind=="VisibleStock").Count==2,"setup: the guard stops a and b"+when);
+        s.Tick(bFirst?.1:16.9);var talk=Talk(s,a,cop,Smooth);
+        void Hears()=>Check(talk.Status=="Active"&&cop.TargetId=="a"&&Off(To(cop,a),cop.Yaw)<1,"the guard stays on a and faces a mid-talk"+when+" at "+(s.State.SimulationSeconds-began)+" s (talk "+talk.Status+", on "+cop.TargetId+", yaw "+cop.Yaw+", a at "+To(cop,a)+")");
+        s.Tick(3);Hears();Reply(s,a,talk,Smooth);s.Tick(3);
+        Check(bFirst||cop.Evidence.Exists(e=>e.PlayerId=="b"&&e.Kind=="IgnoredStop"),"setup: b's stop is an arrest warning by "+(s.State.SimulationSeconds-began)+" s");
+        Hears();
+        Reply(s,a,talk,Smooth);Reply(s,a,talk,Smooth);
+        Check(talk.Status=="Complete"&&cop.Evidence.Exists(e=>e.PlayerId=="a"&&e.Kind=="WavedOn")&&a.Life=="Alive","a smooth talk waves a on"+when+" (talk "+talk.Status+", score "+talk.Score+", a "+a.Life+")");
+        if(bFirst)Check(FestivalSimulation.CaseOn(s.State,cop,"b")=="Stop","b's stop is still on (\""+FestivalSimulation.CaseOn(s.State,cop,"b")+"\")");
+        else{s.Tick(24.2-(s.State.SimulationSeconds-began));Check(b.Life=="Detained"&&a.Life=="Alive","4 s after b's warning b is detained on time, a still free (b "+b.Life+", a "+a.Life+")");}
+    }
+    // ESC-3: with two stops open, the guard sees a third player's stock in the way it faces (toward a, whom it walks after), not
+    // toward the last stop it checked (b).
+    static void AGuardWithTwoStopsSeesNothingBehindIt()
+    {
+        var s=TwoStopsSplitUp(out var cop,out var b,out var c);c.X=cop.X+8;c.Z=cop.Z+3;
+        Check(Off(To(cop,c),cop.Yaw)>100&&Off(To(cop,c),To(cop,b))<60,"setup: c behind the guard, toward b (c at "+To(cop,c)+", yaw "+cop.Yaw+", b at "+To(cop,b)+")");
+        s.Tick(.1);Check(!cop.Evidence.Exists(e=>e.PlayerId=="c"),"stock behind the guard's back starts no stop, though b stands that way (\""+c.NpcSpeech+"\")");
+    }
+    static void AGuardWithTwoStopsSeesStockInFront()
+    {
+        var s=TwoStopsSplitUp(out var cop,out var b,out var c);c.X=cop.X-7;c.Z=cop.Z+2;
+        Check(Off(To(cop,c),cop.Yaw)<60&&Off(To(cop,c),To(cop,b))>100,"setup: c in front of the guard, away from b (c at "+To(cop,c)+", yaw "+cop.Yaw+", b at "+To(cop,b)+")");
+        s.Tick(.2);Check(cop.Evidence.Exists(e=>e.PlayerId=="c"&&e.Kind=="VisibleStock"),"stock in plain view in front of the guard starts a stop ("+string.Join(",",cop.Evidence.ConvertAll(e=>e.PlayerId+":"+e.Kind))+")");
+    }
+    // a and b stopped by one guard and split up, the guard on a (first in the crew's order); c, with stock, far off.
+    static FestivalSimulation TwoStopsSplitUp(out NpcState cop,out PlayerState b,out PlayerState c)
+    {
+        var s=new FestivalSimulation(1);s.AddPlayer("a","A");s.AddPlayer("b","B");s.AddPlayer("c","C");s.State.Phase="Playing";
+        s.State.Npcs.RemoveAll(n=>n.Id!="cop_0");cop=s.State.Npcs[0];cop.X=0;cop.Z=0;cop.Yaw=0;
+        var a=s.Player("a");b=s.Player("b");c=s.Player("c");a.X=0;a.Z=5;b.X=30;b.Z=30;c.X=-30;c.Z=-30;
+        foreach(var p in new[]{a,b,c}){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
+        s.Tick(.1);b.X=1;b.Z=6;s.Tick(.1);a.X=-5;a.Z=6;b.X=5;b.Z=6;s.Tick(.1);
+        Check(cop.TargetId=="a"&&cop.Evidence.FindAll(e=>e.Kind=="VisibleStock").Count==2&&Off(To(cop,a),cop.Yaw)<1,"setup: the guard stops a and b and faces a (on "+cop.TargetId+", yaw "+cop.Yaw+")");
+        return s;
+    }
+    static double To(NpcState n,PlayerState p)=>Math.Atan2(p.X-n.X,p.Z-n.Z)*180/Math.PI;
+    static double Off(double a,double b){double d=Math.Abs(a-b)%360;return d>180?360-d:d;}
+    // A stop's last chance is said once, whenever the guard is free to say it: walking out of a talk with the guard past 12 s,
+    // the next tick says it (K2 held it for the talk's end, which only a finished talk reached).
+    static void TheLastChanceComesAfterAWalkOut()
+    {
+        var s=Stopped(out var cop,out var a);double began=s.State.SimulationSeconds;
+        s.Tick(8);var talk=Talk(s,a,cop);Reply(s,a,talk,Smooth);s.Tick(14-(s.State.SimulationSeconds-began));
+        Check(talk.Status=="Active"&&!Says(a,LastChance),"setup: 14 s into the stop, mid-talk, no warning yet (\""+a.NpcSpeech+"\")");
+        Check(s.Execute("a",Command("Cancel")).Accepted,"setup: a walks out of the talk");s.Tick(.1);
+        Check(Says(a,LastChance),"walked out past 12 s, the guard gives the last chance at once (\""+a.NpcSpeech+"\")");
+        var said=a.SpeechSequence;s.Tick(3);
+        Check(a.SpeechSequence==said,"and says it once ("+a.SpeechSequence+" lines, was "+said+")");
+    }
+    // A joined client's Esc can reach the host just after a talk ended there. The session keeps the message that ended the talk
+    // only when the refusal is exactly FestivalSimulation.NoChatToEnd, so every way a talk ends must answer a late EndChat with it.
+    static void AnEscAfterATalkEndedIsNoChatToEnd()
+    {
+        void Late(string end,FestivalSimulation s,PlayerState a,InteractionState talk)
+        {
+            Check(talk.Status!="Active"&&a.InteractionId=="","setup: "+end+" ("+talk.Status+")");
+            string before=a.Life+" $"+a.Cash+" stock "+Count(a,"stock_lsd")+" outcomes "+a.ConversationOutcomes.Count+" speech "+a.SpeechSequence;
+            var late=s.Execute("a",Command("EndChat",talk.Id));
+            string after=a.Life+" $"+a.Cash+" stock "+Count(a,"stock_lsd")+" outcomes "+a.ConversationOutcomes.Count+" speech "+a.SpeechSequence;
+            Check(!late.Accepted&&late.Reason==FestivalSimulation.NoChatToEnd,end+": a late Esc is refused as \""+FestivalSimulation.NoChatToEnd+"\", got "+late.Accepted+" \""+late.Reason+"\"");
+            Check(after==before,end+": and changes nothing ("+before+" -> "+after+")");
+        }
+        var s=Stopped(out var cop,out var a);s.Tick(1);var talk=Talk(s,a,cop,Awkward,Awkward,Awkward,Awkward);Finish(s,talk);
+        Late("a talk with security heard out",s,a,talk);
+        s=Stopped(out cop,out a);s.Tick(1);talk=Talk(s,a,cop,Smooth);
+        Check(s.Execute("a",Command("EndChat",talk.Id)).Accepted,"setup: a walks out of the talk with security");
+        Late("a talk with security walked out of",s,a,talk);
+
+        // `guard` keeps cop_0 and puts it in sight of the deal; otherwise no guard is left to see it.
+        FestivalSimulation Sale(bool guard,out PlayerState seller,out NpcState buyer,out InteractionState sale)
+        {
+            var game=Level(1);game.State.Npcs.RemoveAll(n=>!guard||n.Id!="cop_0");seller=game.Player("a");seller.X=0;seller.Z=5;
+            if(guard){var watching=game.State.Npcs[0];watching.X=0;watching.Z=0;watching.Yaw=0;}
+            string id="esc_buyer_0";for(int k=1;DialogueGrammar.PersonaFor(id,"")!="Wook";k++)id="esc_buyer_"+k;
+            buyer=new NpcState{Id=id,Kind="Wook",Role="Buyer",X=0,Z=6.5f,Yaw=180,CanTalk=true};game.State.Npcs.Add(buyer);
+            seller.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=2});seller.EquippedItemId="stock_lsd";
+            Check(game.Execute("a",Command("StartSale",id,"stock_lsd")).Accepted,"setup: a offers the buyer a Tongue Stamp");
+            sale=game.Interaction(seller.InteractionId);return game;
+        }
+        s=Sale(false,out a,out var walker,out talk);walker.X=8;s.Tick(.1);
+        Check(talk.Status=="Moved away or target changed","setup: the buyer walks off ("+talk.Status+")");
+        Late("a sale the buyer walked off from",s,a,talk);
+        s=Sale(true,out a,out _,out talk);for(int guard=0;a.Life=="Alive"&&guard<100;guard++)s.Tick(.1);
+        Check(talk.Status=="Police bust","setup: the guard who saw the deal busts a ("+talk.Status+", "+a.Life+")");
+        Late("a sale busted by a guard who saw the deal",s,a,talk);
+    }
+    // ESC-3: a guard standing by stock it saw ditched turns to a player who starts a talk with it, as a patrolling guard does,
+    // and back to the stock when the talk is over.
+    static void AGuardByDitchedStockFacesATalker()
+    {
+        var s=Stopped(out var cop,out var a);
+        Check(s.Execute("a",Command("Drop",item:"stock_lsd")).Accepted,"setup: a ditches the stock");s.Tick(.1);
+        Check(s.State.Drops.Exists(d=>d.ClaimedBy==cop.Id),"setup: the guard claims it");
+        a.X=cop.X+2;a.Z=cop.Z;var talk=Talk(s,a,cop);s.Tick(.1);
+        Check(Math.Abs(cop.Yaw-90)<1,"mid-talk the guard faces the talker, not the stock (yaw "+cop.Yaw+")");
+        for(int turn=0;turn<FestivalSimulation.ConversationTurns;turn++)Reply(s,a,talk,Smooth);
+        Check(talk.Status=="Complete","setup: the talk is over");s.Tick(.1);
+        Check(s.State.Drops.Exists(d=>d.ClaimedBy==cop.Id)&&Math.Abs(cop.Yaw)<1,"talk over, it turns back to the stock it is waiting to take (yaw "+cop.Yaw+")");
     }
 }

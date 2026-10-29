@@ -23,6 +23,8 @@ namespace Festival.Presentation
             foreach(var renderer in root.GetComponentsInChildren<Renderer>(true))
                 if(renderer.GetComponentInParent<FestivalCharacter>(true)==null)renderer.renderingLayerMask|=SurfaceLayer;
         }
+        /// <summary>For scenery that moves: the pattern lies on world planes, so it would stay put while the thing slid through it.</summary>
+        public static void Unmark(Transform root){foreach(var renderer in root.GetComponentsInChildren<Renderer>(true))renderer.renderingLayerMask&=~SurfaceLayer;}
 
         private readonly Pass pass;
         private Camera view;

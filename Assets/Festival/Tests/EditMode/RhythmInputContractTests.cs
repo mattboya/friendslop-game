@@ -41,7 +41,7 @@ namespace Festival.Tests
             try
             {
                 var session=host.AddComponent<FestivalSession>();session.enabled=false;
-                session.Host("Calibration test",8641);Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
+                session.Host("Calibration test",0);Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
                 foreach(var sample in new[]{(Offset:60f,Raw:2.06),(Offset:-80f,Raw:1.92),(Offset:350f,Raw:2.2)})
                 {
                     var game=Floor();var interaction=game.Interaction(game.Player("p0").InteractionId);var before=RhythmChart.For(interaction).Notes[0].TimeSeconds;

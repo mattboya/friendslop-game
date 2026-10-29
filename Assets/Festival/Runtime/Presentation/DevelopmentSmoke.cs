@@ -6,6 +6,7 @@ using System.IO;
 using Festival.Core;
 using Festival.Network;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 using TMPro;
 
@@ -164,6 +165,7 @@ namespace Festival.Presentation
                 if(sim.State.Players.Count<2){Fail("camp peers");yield break;}
                 sim.State.Players[0].X=-1;sim.State.Players[0].Z=6;
                 sim.State.Players[1].X=1;sim.State.Players[1].Z=6;
+                StartCoroutine(SmoothTalks(sim,sim.State.Players.Find(p=>p.Id!=sim.State.HostPlayerId).Id));
             }
             float campX=session.IsHost?-1:1;
             yield return Until(session,"camp placement",()=>Near(session.LocalPlayer,campX,6),CampSeconds);
@@ -756,17 +758,20 @@ namespace Festival.Presentation
             var gallery=new FestivalCharacter[6];
             var roles=new[]{"Security","Medic","Friend","Vendor0","Vendor1","Vendor2"};
             var poses=new[]{"Accusing","Rescue","ReadClue","Idle","Dance","Extract"};
+            captureCamera.fieldOfView=LineupFieldOfView;capturePosition=LineupCameraPosition;captureRotation=LineupCameraRotation;
             for(int i=0;i<gallery.Length;i++)
             {
                 var id=GalleryId(i%2,i/2,-1,-1);
                 gallery[i]=FestivalCharacter.Create(transform,id,Color.white,roles[i]);
-                gallery[i].transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
-                gallery[i].transform.rotation=Quaternion.Euler(0,180,0);
-                gallery[i].transform.localScale=Vector3.Scale(Vector3.one*.84f,gallery[i].ShapeScale);
+                StandInLineup(gallery[i],i);
                 gallery[i].Pose=poses[i];
                 if(i==0)gallery[i].SetLittleSpoon(true);
             }
             yield return new WaitForSeconds(1);
+            // Read once the frame is done: FestivalSession.Update puts the camera back at the eye, and LateUpdate here aims it again.
+            yield return new WaitForEndOfFrame();
+            var rolesOut=LineupOutOfFrame(captureCamera,gallery);
+            if(rolesOut!=null){Fail("fit gallery out of frame: roles, "+rolesOut);yield break;}
             var rolePath=Path.Combine(dir,session.IsHost?"host-fit-roles.png":"client-fit-roles.png");
             ScreenCapture.CaptureScreenshot(rolePath);
             yield return new WaitForSeconds(1);
@@ -778,12 +783,13 @@ namespace Festival.Presentation
             {
                 var id=GalleryId(i%2,i/2,i%4,(i+1)%4);
                 gallery[i]=FestivalCharacter.Create(transform,id,Color.white);
-                gallery[i].transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
-                gallery[i].transform.rotation=Quaternion.Euler(0,180,0);
-                gallery[i].transform.localScale=Vector3.Scale(Vector3.one*.84f,gallery[i].ShapeScale);
+                StandInLineup(gallery[i],i);
                 gallery[i].Pose=i%2==0?"Dance":"Rescue";
             }
             yield return new WaitForSeconds(1);
+            yield return new WaitForEndOfFrame();
+            var outfitsOut=LineupOutOfFrame(captureCamera,gallery);
+            if(outfitsOut!=null){Fail("fit gallery out of frame: outfits, "+outfitsOut);yield break;}
             var outfitPath=Path.Combine(dir,session.IsHost?"host-fit-outfits.png":"client-fit-outfits.png");
             ScreenCapture.CaptureScreenshot(outfitPath);
             yield return new WaitForSeconds(1);
@@ -1305,15 +1311,30 @@ namespace Festival.Presentation
                         if(!File.Exists(capture)){failed="conversation card render";yield break;}
                         capture=null;
                     }
-                    replied=turn;session.Command("Reply",amount:SmoothReply(talk.Turns[turn]),direction:turn);
+                    // A view carries no grade of a reply not yet picked, so the host reads its own talk. A joined client has none to read
+                    // and says the first reply, which the host's smoke made smooth (SmoothTalks).
+                    var own=session.DevelopmentSimulation?.Interaction(id);
+                    replied=turn;session.Command("Reply",amount:own!=null&&own.Turns.Count>turn?SmoothReply(own.Turns[turn]):0,direction:turn);
                 }
                 if(!Holds(session,wait))yield break;
                 yield return null;
             }
             End(session,wait);
         }
-        /// <summary>DIALOG-3: the reply the smokes pick on a talk's turn: the smooth one, as a player who reads the person well would.</summary>
+        /// <summary>The reply the smokes pick on a talk's turn: the smooth one, as a player who reads the person well would. Give it
+        /// the host's own turn: a view carries no grade of a reply not yet picked.</summary>
         public static int SmoothReply(ConversationTurn turn)=>Array.IndexOf(turn.Grades,ConversationLines.Smooth);
+        // A joined client's smoke can't read a grade, so it says the first reply. Every host frame, each reply that player's live talk
+        // has not picked turns smooth: a pick reaches the host a round trip after its turn, so never before this has run.
+        static IEnumerator SmoothTalks(FestivalSimulation sim,string id)
+        {
+            for(;;)
+            {
+                var talk=sim.State.Interactions.Find(i=>i.PlayerId==id&&i.Status=="Active"&&FestivalSimulation.Talks(i.Kind));
+                if(talk!=null)foreach(var turn in talk.Turns)if(turn.Pick<0)for(int r=0;r<turn.Grades.Length;r++)turn.Grades[r]=ConversationLines.Smooth;
+                yield return null;
+            }
+        }
         // ECON-2: buys a unit of this kind from the festivalgoer the host stood at (x, z), dancing it perfectly, as a sale is.
         IEnumerator BuyStock(FestivalSession session,string kind,float x,float z)
         {
@@ -1407,14 +1428,16 @@ namespace Festival.Presentation
         // TWISTVIS-1: the evening haze and Ember Playa's dust storms are fog, which the editor always draws but a player only draws
         // when its build kept the fog shaders (ProjectBootstrap). Closes a magenta fog in a metre out and checks the screen turns
         // magenta, then puts the fog back. It counts the capture camera's own render at its capture pose, so the overlays drawn over the
-        // screen (Pony Dust's and Couch Lock's sleepy eyes, the HUD) never count against the fog.
+        // screen (Pony Dust's and Couch Lock's sleepy eyes, the HUD) never count against the fog. That render skips post-processing,
+        // so a drained colour grade (a spirit's look, a minigame's freeze, Giggle Gas) never turns the magenta grey.
         IEnumerator CheckFogDraws()
         {
             bool fog=RenderSettings.fog;var mode=RenderSettings.fogMode;var color=RenderSettings.fogColor;float start=RenderSettings.fogStartDistance,end=RenderSettings.fogEndDistance;
             RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=Color.magenta;RenderSettings.fogStartDistance=0;RenderSettings.fogEndDistance=1;
             var view=captureCamera;view.transform.SetPositionAndRotation(capturePosition,captureRotation);
             var target=RenderTexture.GetTemporary(Screen.width,Screen.height,24);var shot=new Texture2D(target.width,target.height,TextureFormat.RGBA32,false);var was=RenderTexture.active;
-            var aimed=view.targetTexture;view.targetTexture=target;view.Render();view.targetTexture=aimed;
+            var data=view.GetUniversalAdditionalCameraData();bool post=data.renderPostProcessing;data.renderPostProcessing=false;
+            var aimed=view.targetTexture;view.targetTexture=target;view.Render();view.targetTexture=aimed;data.renderPostProcessing=post;
             RenderTexture.active=target;shot.ReadPixels(new Rect(0,0,target.width,target.height),0,0);RenderTexture.active=was;RenderTexture.ReleaseTemporary(target);
             RenderSettings.fog=fog;RenderSettings.fogMode=mode;RenderSettings.fogColor=color;RenderSettings.fogStartDistance=start;RenderSettings.fogEndDistance=end;
             var pixels=shot.GetPixels32();Destroy(shot);
@@ -1474,6 +1497,34 @@ namespace Festival.Presentation
                 if((look.Face>=3)==deadpan&&look.Headgear<0&&look.Sunglasses<0&&look.FacialHair<0&&look.Accessory!=3&&found++==ordinal)return id;
             }
             throw new System.InvalidOperationException("Face gallery profile unavailable");
+        }
+        // Six people 1.4 m apart fill the 16:9 capture's width from 6.1 m at this field of view.
+        public const float LineupFieldOfView=48;
+        public static readonly Vector3 LineupCameraPosition=new Vector3(0,1.3f,-11.6f);
+        public static readonly Quaternion LineupCameraRotation=Quaternion.LookRotation(new Vector3(0,1,-5.5f)-LineupCameraPosition);
+        public static void StandInLineup(FestivalCharacter person,int i)
+        {
+            person.transform.position=new Vector3(-3.5f+i*1.4f,0,-5.5f);
+            person.transform.rotation=Quaternion.Euler(0,180,0);
+            person.transform.localScale=Vector3.Scale(Vector3.one*.84f,person.ShapeScale);
+        }
+        // The first person whose drawn bounds leave the view, with the corner's viewport point, or null when all are whole in frame.
+        public static string LineupOutOfFrame(Camera camera,FestivalCharacter[] people)
+        {
+            foreach(var person in people)
+            {
+                Bounds? whole=null;
+                foreach(var renderer in person.GetComponentsInChildren<Renderer>())
+                    if(renderer.enabled){var b=whole??renderer.bounds;b.Encapsulate(renderer.bounds);whole=b;}
+                if(whole==null)return person.name+" draws nothing";
+                var min=whole.Value.min;var max=whole.Value.max;
+                for(int corner=0;corner<8;corner++)
+                {
+                    var point=camera.WorldToViewportPoint(new Vector3((corner&1)==0?min.x:max.x,(corner&2)==0?min.y:max.y,(corner&4)==0?min.z:max.z));
+                    if(point.z<=0||point.x<0||point.x>1||point.y<0||point.y>1)return person.name+" at viewport "+point;
+                }
+            }
+            return null;
         }
         static string GalleryId(int gender,int shape,int shirt,int pants)
         {

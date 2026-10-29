@@ -120,9 +120,33 @@ namespace Festival.Presentation
             }
         }
         private InputAction Button(string name,string binding) => Map.AddAction(name,InputActionType.Button,binding);
-        public string Label(InputAction action) => action==Look&&action.bindings[0].effectivePath=="<Mouse>/delta"?"Mouse":action.GetBindingDisplayString();
+        // Names each binding through Label(action,binding), so a side button reads Mouse Back here too, joined as the Input System
+        // joins them. ponytail: Move's 2D vector is the only composite (up/left/down/right); another composite kind needs its own order.
+        public string Label(InputAction action)
+        {
+            if(action==Look&&action.bindings[0].effectivePath=="<Mouse>/delta")return "Mouse";
+            var keys=new List<string>();
+            for(int index=0;index<action.bindings.Count;index++)
+            {
+                var binding=action.bindings[index];
+                if(binding.isPartOfComposite)continue;
+                if(!binding.isComposite){keys.Add(Label(action,index));continue;}
+                var parts=new List<string>();
+                foreach(string part in new[]{"up","left","down","right"})
+                    for(int at=index+1;at<action.bindings.Count&&action.bindings[at].isPartOfComposite;at++)
+                        if(string.Equals(action.bindings[at].name,part,StringComparison.OrdinalIgnoreCase))parts.Add(Label(action,at));
+                keys.Add(string.Join("/",parts));
+            }
+            return string.Join(" | ",keys);
+        }
+        // Every key name starts here, so friendlier short names belong in this switch too. The Input System calls the side buttons
+        // Back and Forward, which read like a way to walk.
+        public static string Label(InputAction action,int binding)=>action.bindings[binding].effectivePath switch
+        {
+            "<Mouse>/backButton"=>"Mouse Back","<Mouse>/forwardButton"=>"Mouse Forward",_=>action.GetBindingDisplayString(binding),
+        };
         // A rhythm lane's WASD key as bound now: binding 1 (binding 0 is its arrow), overrides included.
-        public string NoteKey(int lane) => Notes[lane].GetBindingDisplayString(1);
+        public string NoteKey(int lane) => Label(Notes[lane],1);
         // A changed profile (including RESET TAB) reaches this same live map without losing its authored identity.
         public void SynchronizeBindings()
         {

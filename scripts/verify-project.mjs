@@ -1,4 +1,5 @@
 import {readFileSync, existsSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -47,5 +48,31 @@ if(!sources.includes('PreviewItem'))throw new Error('Isolated item preview bound
 
 const core=sourceFiles.filter(file=>file.includes(`${path.sep}Runtime${path.sep}Core${path.sep}`)).map(file=>readFileSync(file,'utf8')).join('\n');
 if(/UnityEngine|UnityEditor|Unity\.Netcode/.test(core))throw new Error('Core simulation is coupled to Unity runtime');
+
+// Each check reads a claim in the docs and the code it names, so it fails when either one moves.
+const text=file=>readFileSync(path.join(root,file),'utf8');
+const readme=text('README.md'),status=text('IMPLEMENTATION_STATUS.md'),docProblems=[];
+const versionRow=status.split('\n').find(line=>line.includes('a different game version is turned away'))??'';
+const versionSuites=[...versionRow.matchAll(/`(\w+Tests)`/g)].map(match=>match[1]);
+if(!sourceFiles.some(file=>versionSuites.includes(path.basename(file,'.cs'))&&readFileSync(file,'utf8').includes('FestivalSession.AcceptsHello(')))docProblems.push('IMPLEMENTATION_STATUS.md needs a row that says a different game version is turned away and names a suite that calls FestivalSession.AcceptsHello (DebriefSessionTests, ConfirmSessionTests)');
+if(readme.includes('PLAYTEST_2026-09-24'))docProblems.push('README.md sends readers to docs/PLAYTEST_2026-09-24.md, the guide to the 24 September build');
+const smokeEnd='CONNECTION UI CAPTURE PASSED';
+if(!readme.includes(smokeEnd)||!text('scripts/native-smoke.mjs').includes(`'${smokeEnd} in '`))docProblems.push(`README.md must name ${smokeEnd}, the last line that scripts/native-smoke.mjs prints on a pass`);
+if(!text('docs/CHARACTER_QUALITY_PASS.md').includes('GPU (Batched) mesh deformation')||!text('Assets/Festival/Editor/ProjectBootstrap.cs').includes('MeshDeformation.GPUBatched'))docProblems.push('docs/CHARACTER_QUALITY_PASS.md must name the GPU (Batched) mesh deformation mode that ProjectBootstrap.cs sets');
+// GitHub serves only tracked files, with the exact letter case, so a link to anything else must fail here. A copy with no
+// git (a plain archive) falls back to the disk, which on this Mac ignores letter case.
+const git=existsSync(path.join(root,'.git'))?spawnSync('git',['-C',root,'ls-files','-z'],{encoding:'utf8',maxBuffer:64*1024*1024}):null;
+const tracked=git?.status===0?git.stdout.split('\0').filter(Boolean):null;
+const linked=(file,target)=>
+{
+  const bare=target.split('#')[0],want=bare?path.posix.normalize(path.posix.join(path.posix.dirname(file),bare)).replace(/\/$/,''):file;
+  return tracked?tracked.some(name=>name===want||name.startsWith(want+'/')):existsSync(path.join(root,want));
+};
+if(!tracked)console.log('No git here: docs links were checked on the disk, which does not check letter case.');
+if(tracked&&(!linked('README.md','README.md')||!linked('README.md','docs/')||linked('README.md','readme.md')||linked('README.md','.git/HEAD')))throw new Error('Docs link negative-control checker is broken');
+for(const [file,body] of [['README.md',readme],['IMPLEMENTATION_STATUS.md',status]])
+  for(const [,target] of body.matchAll(/\]\(([^)\s]+)\)/g))
+    if(!/^[a-z]+:/i.test(target)&&!linked(file,target))docProblems.push(`${file} links ${target}, which ${tracked?'is not a tracked file with that exact letter case, so GitHub cannot open it':'does not exist'}`);
+if(docProblems.length)throw new Error('Docs do not match this commit:\n- '+docProblems.join('\n- '));
 console.log(`Verified ${sourceFiles.length} Festival C# source files and pinned native packages.`);
 console.log('PROJECT STATIC CHECKS PASSED');

@@ -14,7 +14,7 @@ public static class DjSetTests
             GreysComeFromNightOneAndLaterPhrasesGetBusier,CatchingEveryBlockAndDodgingEveryGreyScoresOne,StayingInOneLaneScoresAboutAThird,
             AGreyHitCostsATenthAndOnlyLaneChangesCount,ALaneChangeThatCatchesNothingCostsATenth,BlindMashingNeverEarnsTheCrowd,
             AGoodPhraseDistractsTheCrowdAndEveryPhraseIsCheered,TheDjIsNotTrespassingOnStage,TheCrowdAndTheCopsSeeTheDjOnTheRiser,
-            ASwarmStrikesTheDjFromTheStageFront})
+            TheBackdropHidesTheDjFromWatchersBehindIt,ASwarmStrikesTheDjFromTheStageFront,APassAtTheSmallStageSendsYouToTheMainStage})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" DJ set test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -72,11 +72,15 @@ public static class DjSetTests
         Check(i.Status=="Interrupted"&&p.X==Catalog.StageTakeoverX&&p.Z==Catalog.StageTakeoverZ,"an interrupted set puts you back on the lawn");
     }
 
+    // One spin seed for each of the eight levels, picked so the main stage plays loops 1-7 (and 3 again): the ride rides every loop's beat grid.
+    static readonly int[] LoopSeeds={5,1,11,0,2,13,12,11};
     static void TheRideRidesTheStageSongsBeatInThreeLanes()
     {
+        var mains=new HashSet<int>();foreach(int seed in LoopSeeds)mains.Add(StageMusic.Track(seed,StageMusic.Main));
+        Check(mains.Count==StageBeats.Tracks.Length,"setup: the eight levels' seeds put all seven loops on the main stage, got "+string.Join(",",mains));
         foreach(int festival in new[]{0,1})for(int level=0;level<Festivals.LevelCount;level++)
         {
-            var game=Floor(festival,level);game.State.SpinSeed=festival*Festivals.LevelCount+level;double world=FestivalSimulation.WorldSeconds(game.State);var i=Start(game);
+            var game=Floor(festival,level);game.State.SpinSeed=LoopSeeds[festival*Festivals.LevelCount+level];double world=FestivalSimulation.WorldSeconds(game.State);var i=Start(game);
             int choice=StageMusic.Track(game.State,StageMusic.Main);
             Check(Math.Abs(i.StartSeconds-(game.State.SimulationSeconds+2))<1e-9,"a 2 s countdown, as before");
             var track=StageBeats.For(i.StageTrack);
@@ -267,6 +271,33 @@ public static class DjSetTests
         Check(cop.Evidence.Exists(e=>e.PlayerId=="p0"&&e.Kind=="VisibleStock"),"a cop facing the riser sees the stock in the DJ's hand");
         game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=24,Yaw=0};game.State.Npcs.Add(cam);
         Start(game);Check(game.IsOnCamera(cam,p),"an influencer filming the riser has the DJ in frame");
+    }
+
+    // The small stage has a riser, a deck and a resident DJ of its own, but a stage pass plays the main stage's takeover deck,
+    // so the pass and its refusal both name the main stage.
+    static void APassAtTheSmallStageSendsYouToTheMainStage()
+    {
+        string text=Catalog.FindItem("stage_pass").Description;
+        Check(text.StartsWith("At the main stage, ",StringComparison.Ordinal),"the pass says which stage it plays, got: "+text);
+        var game=Floor();var p=game.Player("p0");p.X=StageMusic.SmallX;p.Z=StageMusic.SmallZ+1.5f;
+        var result=game.Execute("p0",new GameCommand{Id="dj-small"+(sequence++),Kind="Use",ItemId="stage_pass"});
+        Check(!result.Accepted&&result.Reason=="Move up to the main stage's front deck with a pass","at the small stage's lip the pass sends you to the main stage, got "+result.Accepted+" '"+result.Reason+"'");
+        Check(p.Inventory.Exists(x=>x.ItemId=="stage_pass")&&p.InteractionId=="","and you keep the pass, with no set started");
+    }
+
+    // The backdrop behind the riser is a wall: a festivalgoer, a cop or an influencer's phone behind it never sees the DJ through
+    // it, though the lawn in front keeps its view under the same blocked sight line (TheCrowdAndTheCopsSeeTheDjOnTheRiser).
+    static void TheBackdropHidesTheDjFromWatchersBehindIt()
+    {
+        var game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;var p=game.Player("p0");
+        var watcher=new NpcState{Id="watcher",Kind="Wook",X=0,Z=38,Yaw=180};var seen=new ObserverState{PlayerId="p0",Suspicion=40};watcher.Observers.Add(seen);game.State.Npcs.Add(watcher);
+        Start(game);double before=seen.LastSeenSeconds;for(int t=0;t<200;t++)game.Tick(.05);
+        Check(p.InteractionId!=""&&seen.LastSeenSeconds==before,"a festivalgoer behind the backdrop never sees the DJ through it, last saw them at "+seen.LastSeenSeconds+" of "+game.State.SimulationSeconds);
+        game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cop=new NpcState{Id="cop_0",Kind="Cop",X=3,Z=38,Yaw=180};game.State.Npcs.Add(cop);
+        Start(game);p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";game.Tick(.05);
+        Check(!cop.Evidence.Exists(e=>e.PlayerId=="p0"),"a cop behind the backdrop never sees the stock in the DJ's hand");
+        game=Floor();game.HasLineOfSight=(ax,az,bx,bz)=>false;p=game.Player("p0");var cam=new NpcState{Id="cam",Twist=FestivalSimulation.Influencer,X=0,Z=37,Yaw=180};game.State.Npcs.Add(cam);
+        Start(game);Check(!game.IsOnCamera(cam,p),"an influencer behind the backdrop never has the DJ in frame");
     }
 
     // The riser is out of the crowd's reach: a swarm strikes the DJ from the stage front, as it did when the set was played there,

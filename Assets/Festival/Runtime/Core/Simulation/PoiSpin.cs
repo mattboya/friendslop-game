@@ -13,6 +13,8 @@ namespace Festival.Core
         public const string SpinWords="Hold {Spin} to spin them in front of you, {SpinSides} at your sides.";
         /// <summary>Whether p may spin the poi in hand: alive, doing nothing else (no performance, check, ride or lying down), holding no
         /// friend or body, and with poi in hand: an unpaid shelf item over what is equipped, as the hands show it.</summary>
-        public static bool CanSpinPoi(PlayerState p)=>p.Life=="Alive"&&p.InteractionId==""&&p.DragTargetId==""&&p.CarryBodyId==""&&IsPoi(p.HeldOfferId!=""?p.HeldOfferId:p.EquippedItemId);
+        public static bool CanSpinPoi(PlayerState p)=>CanSpinPoi(p,p.EquippedItemId);
+        /// <summary>The same with `item` equipped: a gear swap the host has not confirmed yet.</summary>
+        public static bool CanSpinPoi(PlayerState p,string item)=>p.Life=="Alive"&&p.InteractionId==""&&p.DragTargetId==""&&p.CarryBodyId==""&&IsPoi(p.HeldOfferId!=""?p.HeldOfferId:item);
     }
 }

@@ -164,7 +164,7 @@ namespace Festival.Presentation
         {
             var control=input?.Map.FindAction(action);
             if(control==null)return "";
-            string key=control==input.Look?input.Label(control):control.GetBindingDisplayString(binding);
+            string key=control==input.Look?input.Label(control):FestivalInput.Label(control,binding);
             return string.IsNullOrEmpty(key)?"NOT BOUND":key.ToUpperInvariant();
         }
         private string Rebind(string label,string action,int binding)

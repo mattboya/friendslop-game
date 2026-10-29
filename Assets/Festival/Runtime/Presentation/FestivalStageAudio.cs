@@ -23,14 +23,12 @@ namespace Festival.Presentation
 
         public static FestivalMusic.Track For(RoundState state)=>For(state,StageMusic.Main);
         public static FestivalMusic.Track For(RoundState state,int stage)=>state!=null&&(state.Phase=="Playing"||state.Phase==FestivalSimulation.MinigamePhase||state.Phase=="Results")?FestivalMusic.For(StageMusic.Track(state,stage)):null;
-        /// <summary>A stage's share of the music where the listener stands: an equal-power cross-fade on the distances to the two
-        /// fronts, 1 at a stage's own front and 0 at the other's.</summary>
+        /// <summary>A stage's share of the music where the listener stands: an equal-power cross-fade inside the small stage's
+        /// earshot, the small song full at its front. Everywhere else the main stage has it all.</summary>
         public static float Mix(float x,float z,int stage)
         {
-            float main=Mathf.Sqrt((x-StageMusic.MainX)*(x-StageMusic.MainX)+(z-StageMusic.MainZ)*(z-StageMusic.MainZ));
-            float small=Mathf.Sqrt((x-StageMusic.SmallX)*(x-StageMusic.SmallX)+(z-StageMusic.SmallZ)*(z-StageMusic.SmallZ));
-            float towardSmall=main/Mathf.Max(main+small,1e-4f);
-            return stage==StageMusic.Small?Mathf.Sin(towardSmall*Mathf.PI/2):Mathf.Cos(towardSmall*Mathf.PI/2);
+            float into=(float)StageMusic.IntoSmall(x,z)*Mathf.PI/2;
+            return stage==StageMusic.Small?Mathf.Sin(into):Mathf.Cos(into);
         }
         /// <summary>0-1 while the host's cheer for the DJ's last phrase lasts: nothing for a flop, a murmur at 0.4, the full roar
         /// for a perfect phrase. A booth game freezes the cheer's clock, so the roar waits with the held song.</summary>

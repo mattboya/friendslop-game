@@ -359,6 +359,50 @@ namespace Festival.Tests
             finally{Object.Destroy(root);}
         }
 
+        // The generated palm faces the body's front in the bind pose, so the palm axis is the hand's local forward at rest.
+        // The rig's L and R bones are mirrored (HandL sits on +X), so inward comes from where each hand is, not its name.
+        [UnityTest]public IEnumerator StandingArmsHangWithThePalmsTowardTheThighs()
+        {
+            var root=new GameObject("Hanging arms test");
+            try
+            {
+                var actors=new Dictionary<int,FestivalCharacter>();var palms=new Dictionary<Transform,Vector3>();
+                foreach(int style in new[]{0,1,2})
+                {
+                    string name=null;for(int i=0;name==null;i++)if(FestivalAppearance.Pick("Hanging arms "+i,"idle",3)==style)name="Hanging arms "+i;
+                    var actor=Walker(root,name);actor.transform.position=Vector3.right*2.5f*style;actor.Pose="Idle";actors[style]=actor;
+                    foreach(var side in new[]{"L","R"}){var hand=Bone(actor,"Hand"+side);palms[hand]=hand.InverseTransformDirection(actor.transform.forward);}
+                }
+                yield return new WaitForSeconds(1);
+                float worstHang=0,worstPalm=0;string worst="",hips="";
+                for(float start=Time.time;Time.time-start<3;)
+                {
+                    yield return null;
+                    foreach(var pair in actors)foreach(var side in new[]{"L","R"})
+                    {
+                        var actor=pair.Value;var forearm=Bone(actor,"Forearm"+side);var hand=Bone(actor,"Hand"+side);
+                        var wrist=actor.transform.InverseTransformPoint(hand.position);
+                        if(pair.Key==1)
+                        {
+                            // On the hips: out at the waist's side, at its height, and not held out in front.
+                            if(Mathf.Abs(wrist.x)<.3f||Mathf.Abs(wrist.x)>.5f||wrist.y<.9f||wrist.y>1.15f||wrist.z>.08f)hips=side+" wrist at "+wrist.ToString("F2");
+                            continue;
+                        }
+                        float hang=Vector3.Angle(hand.position-forearm.position,-actor.transform.up);
+                        var inward=-Mathf.Sign(wrist.x)*actor.transform.right;
+                        float palm=Vector3.Angle(hand.TransformDirection(palms[hand]),inward);
+                        if(hang>worstHang){worstHang=hang;worst=actor.name+" "+side;}
+                        worstPalm=Mathf.Max(worstPalm,palm);
+                    }
+                }
+                Debug.Log($"[Festival.Test] standing arms: worst hang={worstHang:F1} ({worst}) worst palm={worstPalm:F1} hips={hips}");
+                Assert.That(worstHang,Is.LessThan(25f),"each forearm hangs within 25 degrees of straight down ("+worst+")");
+                Assert.That(worstPalm,Is.LessThan(45f),"each palm faces the thigh");
+                Assert.That(hips,Is.Empty,"idle style 1's hands rest on the hips");
+            }
+            finally{Object.Destroy(root);}
+        }
+
         // PLAYA-2: an Ember Playa art car carries its rider round at ArtCarSpeed, and the gait read the car's motion as their own,
         // so they walked in place on the deck. Beside them a walker at the car's pace shows the stride this looks for.
         [UnityTest]public IEnumerator ARiderStandsStillOnTheArtCarWhileItCarriesThem()

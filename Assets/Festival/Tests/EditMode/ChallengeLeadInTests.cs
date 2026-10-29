@@ -75,16 +75,41 @@ namespace Festival.Tests
         {
             var incoming=JsonUtility.FromJson<InteractionState>("{\"Kind\":\"Dance\",\"ChartSeed\":17,\"NoteCount\":16,\"ChartDifficulty\":3,\"BeatSeconds\":0.5,\"StageTrack\":1,\"StageFirstHeadWorldSeconds\":10,\"StageFirstHeadDelaySeconds\":2.23,\"StageBeatStride\":1}");
             var chart=RhythmChart.For(incoming);Assert.That(chart.Notes[0].TimeSeconds,Is.EqualTo(2.23).Within(.000001),"JSON drives the production For entry point");
-            // Spin seed 1 puts DISCO HOUSE (2) on the main stage, the song this owner-view decode was first checked on. JsonUtility
-            // writes a few doubles one unit in the last place off, so another song's anchor can decode a hair from the host's.
-            var game=Pair();game.State.SpinSeed=1;game.State.Players.Add(new PlayerState{Id="p1",Name="Friend"});var interaction=Start(game,"ConfirmDance");
-            var owner=JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,"p0")));
-            var p0=game.Player("p0");Assert.That(interaction.StageTrack,Is.EqualTo(StageMusic.TrackAt(game.State,p0.X,p0.Z)),"the check rides the nearer stage's song");
-            Assert.That(JsonUtility.ToJson(owner.Interactions[0]),Does.Contain("\"StageTrack\":"+interaction.StageTrack));
-            Assert.That(JsonUtility.ToJson(RhythmChart.For(owner.Interactions[0])),Is.EqualTo(JsonUtility.ToJson(RhythmChart.For(interaction))),"host and owner decode the same chart");
-            Assert.That(FestivalSession.ViewFor(game,"p1").Interactions,Is.Empty,"private check charts remain owner-only");
-            var restored=new FestivalSimulation();restored.Restore(JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(game.State)));
-            Assert.That(JsonUtility.ToJson(RhythmChart.For(restored.Interaction(interaction.Id))),Is.EqualTo(JsonUtility.ToJson(RhythmChart.For(interaction))));
+            // The production pick finds each loop's first spin seed, so the case follows any change to the pick.
+            var seeds=new List<int>();
+            for(int track=1;track<=StageBeats.Tracks.Length;track++)
+            {
+                int seed=0;while(seed<1000&&StageMusic.Track(seed,StageMusic.Main)!=track)seed++;
+                Assert.That(seed,Is.LessThan(1000),"setup: a spin seed puts loop "+track+" on the main stage");seeds.Add(seed);
+            }
+            seeds.Sort();Assert.That(seeds[0],Is.EqualTo(0),"setup: spin seed 0, whose decode drifted first, comes first");
+            foreach(int seed in seeds)
+            {
+                string at="spin seed "+seed+" (main loop "+StageMusic.Track(seed,StageMusic.Main)+")";
+                var game=Pair();game.State.SpinSeed=seed;game.State.Players.Add(new PlayerState{Id="p1",Name="Friend"});var interaction=Start(game,"ConfirmDance");
+                var owner=JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(FestivalSession.ViewFor(game,"p0")));
+                var p0=game.Player("p0");Assert.That(interaction.StageTrack,Is.EqualTo(StageMusic.TrackAt(game.State,p0.X,p0.Z)),at+": the check rides the nearer stage's song");
+                Assert.That(interaction.StageTrack,Is.EqualTo(StageMusic.Track(seed,StageMusic.Main)),at+": the main stage's song");
+                Assert.That(JsonUtility.ToJson(owner.Interactions[0]),Does.Contain("\"StageTrack\":"+interaction.StageTrack),at);
+                SameChart(RhythmChart.For(owner.Interactions[0]),RhythmChart.For(interaction),at+": host and owner decode the same chart");
+                Assert.That(FestivalSession.ViewFor(game,"p1").Interactions,Is.Empty,at+": private check charts remain owner-only");
+                var restored=new FestivalSimulation();restored.Restore(JsonUtility.FromJson<RoundState>(JsonUtility.ToJson(game.State)));
+                SameChart(RhythmChart.For(restored.Interaction(interaction.Id)),RhythmChart.For(interaction),at+": a restored snapshot decodes the same chart");
+            }
+        }
+        // JsonUtility writes a few doubles one unit in the last place off, so a decoded chart's times can sit about 1e-16 s from the
+        // host's. Every other field is exact.
+        static void SameChart(RhythmChart decoded,RhythmChart host,string why)
+        {
+            Assert.That(decoded.Notes.Count,Is.EqualTo(host.Notes.Count),why+": note count");
+            Assert.That(decoded.DurationSeconds,Is.EqualTo(host.DurationSeconds).Within(1e-9),why+": length");
+            for(int i=0;i<host.Notes.Count;i++)
+            {
+                RhythmNote a=decoded.Notes[i],b=host.Notes[i];
+                Assert.That((a.Id,a.Direction,a.Grey),Is.EqualTo((b.Id,b.Direction,b.Grey)),why+": note "+i);
+                Assert.That(a.TimeSeconds,Is.EqualTo(b.TimeSeconds).Within(1e-9),why+": note "+i+" time");
+                Assert.That(a.HoldSeconds,Is.EqualTo(b.HoldSeconds).Within(1e-9),why+": note "+i+" hold");
+            }
         }
 
         [UnityTearDown]public IEnumerator LeaveOwnedPlayMode(){if(Application.isPlaying)yield return new ExitPlayMode();}
@@ -96,7 +121,7 @@ namespace Festival.Tests
             LocalProfile.Folder=folder;FestivalInput.PreferencesScope=folder;var host=new GameObject("impl-U25 stage host");
             try
             {
-                var session=host.AddComponent<FestivalSession>();session.enabled=false;session.Host("Stage test",8610);
+                var session=host.AddComponent<FestivalSession>();session.enabled=false;session.Host("Stage test",0);
                 Assert.That(session.Connected&&session.IsHost,Is.True,session.Message);
                 var game=Pair();game.State.LevelIndex=3;var interaction=Start(game,"Conversation");
                 var p0=game.Player("p0");Assert.That(JsonUtility.ToJson(interaction),Does.Contain("\"StageTrack\":"+StageMusic.TrackAt(game.State,p0.X,p0.Z)),"real trust command selected the nearer stage's song");

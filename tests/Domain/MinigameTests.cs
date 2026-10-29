@@ -35,7 +35,7 @@ public static class MinigameTests
         foreach(var test in new Action[]{EveryLevelPlacesOneBoothOnASeededSpot,BoothGamesComeOutOfAWeekendBag,TheBoothSpotsKeepClearOfEveryRoute,TheCashFindSpotsKeepFullRouteMargins,
             TheCountdownNeedsEveryLivingPlayerInTheRing,NobodyDownedOrBusyMayStartIt,ABodyCarrierPassingThroughTheRingDoesNotOptIn,TheClockStopsForEverything,AHandoffKeepsItsSecondsThroughAMinuteLongGame,
             EveryClockDeadlineMovesOnByThePause,TheGameEndsAtNinetySecondsAndItsResultShowsForFour,ALossNeverLeavesUnderFifteenSeconds,ThePlayedBoothIsSpent,
-            SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame,TheCommonStartCapturesOnlyParticipantNames,ParticipantNamesSurviveSnapshotsAndLegacyDefaults})
+            SnapshotsKeepTheBoothAndOlderOnesHaveNone,TheWorldsClockStandsStillThroughAGame,TheCommonStartCapturesOnlyParticipantNames,ParticipantNamesSurviveSnapshotsAndLegacyDefaults,TheTestBuildHostsSwitchWorksThroughAGame})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" minigame test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -165,7 +165,7 @@ public static class MinigameTests
             ("the Ferris wheel",Festivals.WheelX,Festivals.WheelZ,8),
             // Visions.cs's secret spots, which take in SplitObjective.cs's lost friends' spots.
             ("a secret spot",16,-4,2.5),("a secret spot",-16,5,2.5),("a secret spot",-24,25,2.5),("a secret spot",25,24,2.5),("a secret spot",18,5,2.5)};
-        for(int i=0;i<8;i++){var shelf=Catalog.ShopPoint(false,i);stands.Add(("a night-market shelf",shelf.X,shelf.Z,2.5));stands.Add(("the level's spawn row",-7+2*i,-29,1));}
+        for(int i=0;i<8;i++){var shelf=Catalog.ShopPoint(false,i);stands.Add(("a night-market shelf",shelf.X,shelf.Z,2.5));var arrival=Festivals.Arrival(i);stands.Add(("the level's spawn row",arrival.X,arrival.Z,1));}
         foreach(var tank in Festivals.GiggleTankSpots)stands.Add(("a Giggle Tank spot",tank.X,tank.Z,Festivals.GiggleTankReach));
         foreach(var landmark in CloudShapes.Landmarks)stands.Add(("the "+landmark.Name+"'s cloud stash",landmark.Stash.X,landmark.Stash.Z,2.5));
         // Festivalgoers start up to .3 m off their places, and a sale or a dance is made within 2.5 m of them.
@@ -329,7 +329,7 @@ public static class MinigameTests
         {"RoundState.NextCashFindAt","Playing elapsed deadline: never a simulation timestamp"},
         {"RoundState.StageCheerScore","a score"},{"RoundState.StageCheerUntilWorldSeconds","the crowd's cheer expiry on the pause-safe world clock"},
         {"ObserverState.Suspicion","suspicion"},{"NpcState.Suspicion","suspicion"},
-        {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"InteractionState.BeatSeconds","a length"},
+        {"InteractionState.DurationSeconds","a length"},{"InteractionState.GoodWindowSeconds","a length"},{"InteractionState.Score","a score"},{"ConversationOutcome.Score","a settled talk's score"},{"InteractionState.BeatSeconds","a length"},
         {"InteractionState.StageFirstHeadWorldSeconds","authored stage world clock: the pause leaves music at the same position"},
         {"InteractionState.StageFirstHeadDelaySeconds","chart-relative lead, independent of simulation pause"},{"InteractionState.StageBeatStride","musical beat count, not a timestamp"},
         {"RhythmInput.TimeSeconds","seconds into its interaction"},
@@ -457,5 +457,18 @@ public static class MinigameTests
         Check(Same(FestivalSimulation.WorldSeconds(s.State),stopped+2),"then it runs on with play");
         p.SprintUntil=s.State.SimulationSeconds+4;
         Check(Same(FestivalSimulation.WorldSeconds(s.State,p.SprintUntil),FestivalSimulation.WorldSeconds(s.State)+4),"a time stamped after the game reads as far on as it is");
+    }
+
+    // TEST MODE lifts only the time limit, which no game checks, so letting the host switch it gives the pause nothing away.
+    static void TheTestBuildHostsSwitchWorksThroughAGame()
+    {
+        var s=Play(131,2);s.DevelopmentFestivalSelection=true;Ring(s,"p0","p1");Check(StartsWithin(s,3.5),"setup: the game starts");Endless(s);
+        string host=s.State.HostPlayerId,friend=s.State.Players.Find(p=>p.Id!=host).Id;
+        var on=Act(s,host,FestivalSimulation.TestModeKind);
+        Check(on.Accepted&&s.State.TestMode,"the host turns test mode on during the game, got "+on.Reason);
+        Check(Running(s),"and the game runs on");
+        Check(!Act(s,friend,FestivalSimulation.TestModeKind).Accepted&&s.State.TestMode,"a friend cannot turn it off");
+        Check(!Act(s,host,FestivalSimulation.TestClearLevelKind).Accepted&&Running(s),"nobody clears the level mid-game");
+        Check(Act(s,host,FestivalSimulation.TestModeKind).Accepted&&!s.State.TestMode&&Running(s),"the host turns it off again");
     }
 }

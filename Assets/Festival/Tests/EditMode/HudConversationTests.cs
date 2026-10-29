@@ -230,7 +230,8 @@ namespace Festival.Tests
             for(int guard=0;talk.Turns.Count==0&&guard<200;guard++)game.Tick(.1);
             Assert.That(talk.Status=="Active"&&talk.Turns.Count==1,Is.True,"setup: a good dance wins their trust, and the talk follows");
             Assert.That(Follow(window,game,you.Id,1),Is.True,"now the window opens");
-            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+talk.Turns[0].Line}),"on their first line");
+            Assert.That(talk.Turns[0].Reaction,Is.Not.Empty,"setup: their first turn reacts to the dance");
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+talk.Turns[0].Reaction,"< "+talk.Turns[0].Line}),"on their word on the dance, then their first line");
             Assert.That(window.Replies,Is.EqualTo(3),"with your three replies");
         }
 
@@ -312,11 +313,12 @@ namespace Festival.Tests
             Assert.That(Stops(you.Id),Is.True,"holding G stops the dance, as any dance");
         }
 
-        // A meter under the title line shows how the talk is going. It starts in the middle and moves the moment you pick,
-        // up for a smooth reply and down for an awkward one, with its word (COLD, IFFY, WARM or VIBING) and its colour, red to green,
-        // which their reaction bubble takes too. The last pick moves it as well, so it shows where the talk lands, the talk's own
-        // score, before it settles.
-        [Test] public void TheMeterShowsHowTheTalkIsGoingAfterEveryPick()
+        // A meter under the title line shows how the talk is going. It starts in the middle and moves when the host's echo of your
+        // pick comes back (one snapshot later on a joined client), never at the pick itself: up for a smooth reply and down
+        // for an awkward one, with its word (COLD, IFFY, WARM or VIBING) and its colour, red to green, which their reaction bubble
+        // takes too. The last pick has no echo, as the talk settles on it: the meter lands on the score the host settled
+        // (ConversationOutcome.Score).
+        [Test] public void TheMeterMovesOnTheHostsEchoOfEveryPick()
         {
             var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);
             Follow(window,game,you.Id,0);
@@ -324,28 +326,30 @@ namespace Festival.Tests
             Assert.That(window.Going,Is.EqualTo(.5f),"it starts in the middle");
             Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Iffy));
             Assert.That(window.Need,Is.EqualTo(-1f),"a chat needs no score, so the meter has no mark");
-            // Smooth first and last, awkward between: WARM, IFFY, then COLD, and up again on the last pick.
-            string[] words={FestivalChatWindow.Warm,FestivalChatWindow.Iffy,FestivalChatWindow.Cold};int final=FestivalSimulation.ConversationTurns-1;
+            // Smooth first and last, awkward between, in points of 8 with each turn still to come as so-so: 5 WARM, 3 COLD, then 1
+            // COLD as each echo comes back.
+            string[] words={FestivalChatWindow.Warm,FestivalChatWindow.Cold,FestivalChatWindow.Cold};int final=FestivalSimulation.ConversationTurns-1;
             for(int t=0;t<=final;t++)
             {
-                if(t>0)
-                {
-                    Follow(window,game,you.Id,t);int reaction=window.Bubbles-2;
-                    Assert.That(window.IsTheirs(reaction)&&window.Shown(reaction)==talk.Turns[t].Reaction,Is.True,"setup: turn "+(t+1)+" opens on their reaction");
-                    Assert.That(window.BubbleColor(reaction),Is.EqualTo(FestivalChatWindow.ReactionColour(window.Going)),"their reaction to reply "+t+" takes the meter's colour");
-                }
                 var turn=talk.Turns[t];bool smooth=t==0||t==final;float before=window.Going;
                 Assert.That(window.Pick(System.Array.IndexOf(turn.Grades,smooth?ConversationLines.Smooth:ConversationLines.Awkward)),Is.True,"reply "+(t+1)+" picked");
-                Assert.That(window.Going,smooth?Is.GreaterThan(before):Is.LessThan(before),"the meter moves the moment you pick: "+(smooth?"up for a smooth reply":"down for an awkward one")+" (turn "+(t+1)+")");
-                if(t<words.Length&&t<final)Assert.That(window.GoingWord,Is.EqualTo(words[t]),"turn "+(t+1)+"'s word");
-                Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Word(window.Going)));
+                Assert.That(window.Going,Is.EqualTo(before),"the pick alone leaves the meter where it was (turn "+(t+1)+")");
+                if(t==final)break;
+                Follow(window,game,you.Id,t+1);int reaction=window.Bubbles-2;
+                Assert.That(window.Going,smooth?Is.GreaterThan(before):Is.LessThan(before),"the host's echo moves it: "+(smooth?"up for a smooth reply":"down for an awkward one")+" (turn "+(t+1)+")");
+                Assert.That(window.GoingWord,Is.EqualTo(words[t]),"turn "+(t+1)+"'s word");
                 Assert.That(window.GoingColor,Is.EqualTo(FestivalChatWindow.Colour(window.Going)),"the meter's colour follows how it's going");
+                Assert.That(window.IsTheirs(reaction)&&window.Shown(reaction)==talk.Turns[t+1].Reaction,Is.True,"setup: turn "+(t+2)+" opens on their reaction");
+                Assert.That(window.BubbleColor(reaction),Is.EqualTo(FestivalChatWindow.ReactionColour(window.Going)),"their reaction to reply "+(t+1)+" takes the meter's colour");
             }
             Assert.That(talk.Status,Is.EqualTo("Complete"),"setup: the last reply ends the chat");
-            Assert.That(window.Going,Is.EqualTo((float)talk.Score).Within(1e-6),"after the last pick, before it settles, the meter shows where the talk lands");
+            float unsettled=window.Going;
             Assert.That(Follow(window,game,you.Id,FestivalSimulation.ConversationTurns),Is.False,"setup: the chat is over");
+            Assert.That(window.Going,Is.EqualTo(unsettled),"no outcome yet, so the meter waits");
             var outcome=you.ConversationOutcomes[0];float settled=FestivalSimulation.ConversationTurns;
             window.FollowOutcome(outcome,settled,false,false);window.FollowOutcome(outcome,settled+FestivalChatWindow.Typed(outcome.Reaction)+.1f,false,false);
+            Assert.That(window.Going,Is.EqualTo((float)talk.Score).Within(1e-6),"the meter lands on the score the host settled");
+            Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Word((float)talk.Score)));
             int last=-1;for(int i=0;i<window.Bubbles;i++)if(window.IsTheirs(i)&&window.Shown(i)==outcome.Reaction)last=i;
             Assert.That(last,Is.GreaterThanOrEqualTo(0),"setup: their closing reaction is shown");
             Assert.That(window.BubbleColor(last),Is.EqualTo(FestivalChatWindow.ReactionColour((float)talk.Score)),"their closing reaction takes the colour the talk landed on");
@@ -353,8 +357,160 @@ namespace Festival.Tests
             Assert.That(FestivalChatWindow.Colour(1).g>FestivalChatWindow.Colour(1).r&&FestivalChatWindow.Colour(0).r>FestivalChatWindow.Colour(0).g,Is.True,"it runs from red to green");
         }
 
-        // The talker's own view carries every reply's grade (FestivalSession.ViewFor sends their talk whole). The meter reads only the
-        // replies already picked, so it gives nothing away: change every grade of a reply not picked, and it reads the same.
+        // A wary festivalgoer's trust dance, danced with `share` of its notes, then the talk it leads on to.
+        static InteractionState AfterADance(FestivalSimulation game,PlayerState you,NpcState them,double share)
+        {
+            them.Observers.Add(new ObserverState{PlayerId=you.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="dance_talk",Kind="Conversation",TargetId=them.Id}).Accepted,Is.True,"setup: the chat starts");
+            var talk=game.Interaction(you.InteractionId);Assert.That(talk.TrustDance,Is.True,"setup: they ask for a dance first");
+            var notes=RhythmChart.For(talk).Notes;foreach(var note in notes.GetRange(0,(int)System.Math.Round(notes.Count*share)))talk.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int guard=0;FestivalSimulation.TrustDancing(talk)&&guard<200;guard++)game.Tick(.1);
+            Assert.That(talk.Status=="Active"&&talk.Turns.Count==1,Is.True,"setup: the talk follows the dance");
+            return talk;
+        }
+
+        // The meter counts points from where the dance left the talk. A failed dance starts it 2 points down (2 of 8 with every turn
+        // still to come as so-so), COLD, and their word on the dance opens the thread in that colour.
+        [Test] public void TheMeterCountsPointsFromWhereTheDanceLeftIt()
+        {
+            var game=Day(out var you,out var them);var talk=AfterADance(game,you,them,0);var window=Window(game,you);
+            Assert.That(talk.HeadStart,Is.EqualTo(FestivalSimulation.FailedDanceStart),"setup: a failed dance");
+            Follow(window,game,you.Id,0);
+            Assert.That(window.Going,Is.EqualTo(.25f).Within(1e-6),"a failed dance starts the meter at 2 of 8");
+            Assert.That(window.GoingWord,Is.EqualTo(FestivalChatWindow.Cold));
+            Assert.That(Thread(window),Is.EqualTo(new[]{"< "+talk.Turns[0].Reaction,"< "+talk.Turns[0].Line}),"their word on the dance, then their first line");
+            Assert.That(window.BubbleColor(0),Is.EqualTo(FestivalChatWindow.ReactionColour(.25f)),"their word on the dance takes the meter's colour");
+            Assert.That(window.Pick(Smooth(talk.Turns[0])),Is.True,"setup: a smooth first reply");Follow(window,game,you.Id,1);
+            Assert.That(window.Going,Is.EqualTo(.375f).Within(1e-6),"a smooth reply's echo lifts it by 2 points less the so-so it stood for: 3 of 8");
+        }
+
+        // A nailed trust dance marks round 1's best reply on the talker's screen, and only there: not on another reply, not once
+        // picked, not in round 2, and never after a talk with no dance. The reply's own words stay as dealt.
+        [Test] public void ANailedDanceMarksRoundOnesBestReplyOnly()
+        {
+            var game=Day(out var you,out var them);var talk=AfterADance(game,you,them,1);var window=Window(game,you);
+            int best=Smooth(talk.Turns[0]);Assert.That(talk.HintedReply,Is.EqualTo(best),"setup: a nailed dance hints the smooth reply");
+            Follow(window,game,you.Id,0);
+            Assert.That(window.Hinted,Is.EqualTo(best),"the hinted reply carries the mark");
+            for(int i=0;i<3;i++)
+            {
+                Assert.That(window.HintLabel(i),Is.EqualTo(i==best?FestivalChatWindow.HintMark:""),"reply "+(i+1)+(i==best?" is marked":" is not"));
+                Assert.That(window.ReplyLabel(i),Is.EqualTo(talk.Turns[0].Replies[i]),"reply "+(i+1)+" reads as dealt");
+            }
+            Assert.That(window.Going,Is.EqualTo(.5f),"a nailed dance starts the talk level");
+            Assert.That(window.Pick(best),Is.True,"setup: the hinted reply picked");
+            Assert.That(window.Hinted,Is.EqualTo(-1),"a picked turn drops the mark");
+            Follow(window,game,you.Id,1);
+            Assert.That(window.Hinted==-1&&window.HintLabel(0)==""&&window.HintLabel(1)==""&&window.HintLabel(2)=="",Is.True,"round 2 has no mark");
+            Object.DestroyImmediate(canvas);
+            var plain=Day(out var me,out var someone);Talk(plain,me,someone);var other=Window(plain,me);Follow(other,plain,me.Id,0);
+            Assert.That(other.Hinted,Is.EqualTo(-1),"a talk with no dance has no mark");
+        }
+
+        // A joined client's last pick in a security talk reaches the host after the turn's time ran out. The host
+        // refuses it and counts a silence, and the meter lands on the host's score, not on the refused pick.
+        [Test] public void ALatePickOnTheLastSecurityTurnLeavesTheMeterOnTheHostsScore()
+        {
+            var game=Day(out var you,out _);var cop=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=cop.X+.3f;you.Z=cop.Z;
+            var talk=Talk(game,you,cop,"Police");var window=Window(game,you);bool late=false;
+            GameCommand held=null;window.Send=c=>{c.Id="hud_talk_"+sent.Count;if(!late)sent.Add(game.Execute(you.Id,c));else held=c;};
+            int[] wanted={ConversationLines.Smooth,ConversationLines.Smooth,ConversationLines.Awkward,ConversationLines.Smooth};
+            for(int t=0;t<FestivalSimulation.ConversationTurns;t++)
+            {
+                Assert.That(Follow(window,game,you.Id,t),Is.True,"turn "+(t+1)+" shows");
+                late=t==FestivalSimulation.ConversationTurns-1;
+                Assert.That(window.Pick(System.Array.IndexOf(talk.Turns[t].Grades,wanted[t])),Is.True,"reply "+(t+1)+" picked");
+                game.Tick(.1);
+            }
+            for(int guard=0;talk.Status=="Active"&&guard<100;guard++)game.Tick(.1);
+            Assert.That(talk.Status=="Complete"&&talk.Turns[FestivalSimulation.ConversationTurns-1].Pick<0,Is.True,"setup: the last turn ran out on the host, a silence");
+            var view=View(game,you.Id);var me=Me(view,you.Id);
+            Assert.That(window.Follow(view,me,view.SimulationSeconds,10,false),Is.False,"setup: the talk is over");
+            window.FollowOutcome(me.ConversationOutcomes.Find(o=>o.InteractionId==talk.Id),10,false,false);
+            Assert.That(window.Going,Is.EqualTo((float)talk.Score).Within(1e-6),"the meter lands on the host's score, "+talk.Score+", not on the refused pick ("+window.GoingWord+")");
+            // The held pick reaches the host after the talk ended, and the thread drops it too.
+            var last=talk.Turns[FestivalSimulation.ConversationTurns-1];string mine="> "+last.Replies[System.Array.IndexOf(last.Grades,wanted[FestivalSimulation.ConversationTurns-1])];
+            Assert.That(Thread(window),Does.Contain(mine),"setup: the last pick was said");
+            var refused=game.Execute(you.Id,held);Assert.That(refused.Accepted,Is.False,"setup: the host refuses the pick that came after the talk ended ("+refused.Reason+")");
+            window.Refused(refused);
+            Assert.That(Thread(window),Does.Not.Contain(mine),"the thread drops the last reply the host never heard: "+string.Join(" | ",Thread(window)));
+            Assert.That(Thread(window),Does.Contain("= "+FestivalChatWindow.NotHeard),"and says so where it stood");
+        }
+
+        // A security turn's bar empty on your screen takes no pick, so the thread never shows a reply the host
+        // will refuse.
+        [Test] public void AnEmptyBarTakesNoPick()
+        {
+            var game=Day(out var you,out _);var cop=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=cop.X+.3f;you.Z=cop.Z;
+            var talk=Talk(game,you,cop,"Police");var window=Window(game,you);var view=View(game,you.Id);
+            window.Follow(view,Me(view,you.Id),view.SimulationSeconds,0,false);
+            Assert.That(window.CanReply(0),Is.True,"setup: a fresh turn takes a pick");
+            window.Follow(view,Me(view,you.Id),talk.StartSeconds+talk.DurationSeconds+.05,1,false);
+            Assert.That(window.TimeLeft,Is.EqualTo(0),"setup: the bar reads empty");
+            for(int i=0;i<3;i++)Assert.That(window.CanReply(i),Is.False,"reply "+(i+1)+" can't be picked once the bar is empty");
+            Assert.That(window.Pick(0),Is.False,"and 1 picks nothing");
+            Assert.That(sent,Is.Empty,"nor sends anything");
+        }
+
+        // A talk cut short (here by a down) after a nailed dance lingers with every reply dimmed, and none of them keeps the
+        // mark: a talk that is over has no reply to recommend.
+        [Test] public void ACutTalksLingeringCardDropsTheMark()
+        {
+            var game=Day(out var you,out var them);var talk=AfterADance(game,you,them,1);var window=Window(game,you);
+            int best=Smooth(talk.Turns[0]);Follow(window,game,you.Id,0);
+            Assert.That(window.Hinted,Is.EqualTo(best),"setup: the nailed dance's mark shows");
+            you.Life="Downed";you.DownedRemaining=35;game.Tick(.1);
+            Assert.That(talk.Status,Is.EqualTo("Interrupted"),"setup: the down cuts the talk");
+            Follow(window,game,you.Id,1);
+            Assert.That(window.Lingering&&!window.CanReply(best),Is.True,"setup: the card lingers, its replies dimmed ("+window.Header+")");
+            Assert.That(window.Hinted==-1&&window.HintLabel(best)=="",Is.True,"the over card shows no mark (Hinted "+window.Hinted+", \""+window.HintLabel(best)+"\")");
+        }
+
+        // A joined client's clock lags the host's, so a security pick taken just before its bar empties can reach the host
+        // after the turn ran out. The host refuses it and counts a silence; the HUD hands the refusal to the window (Refused), and your
+        // reply turns into a note that they didn't hear it, in its place, so the thread never shows a reply the host counted as a
+        // silence. A reply the host heard keeps its place.
+        [Test] public void ALatePickTheHostRefusedTurnsIntoANote()
+        {
+            var game=Day(out var you,out _);var cop=game.State.Npcs.Find(n=>n.Kind=="Cop");you.X=cop.X+.3f;you.Z=cop.Z;
+            var talk=Talk(game,you,cop,"Police");var window=Window(game,you);GameCommand inFlight=null;window.Send=c=>inFlight=c;
+            double deadline=talk.StartSeconds+talk.DurationSeconds;var view=View(game,you.Id);
+            window.Follow(view,Me(view,you.Id),deadline-.08,0,false);
+            int pick=Smooth(talk.Turns[0]);string mine="> "+talk.Turns[0].Replies[pick];
+            Assert.That(window.CanReply(pick)&&window.Pick(pick),Is.True,"setup: the bar shows time left, so the pick is taken");
+            Assert.That(Thread(window),Does.Contain(mine),"setup: the pick is said at once");
+            while(game.State.SimulationSeconds<deadline+.05)game.Tick(1.0/30);
+            inFlight.Id="late";var result=game.Execute(you.Id,inFlight);
+            Assert.That(!result.Accepted&&talk.Turns[0].Pick<0&&talk.Turns.Count==2,Is.True,"setup: the host refused the late pick and counted a silence ("+result.Reason+")");
+            view=View(game,you.Id);window.Follow(view,Me(view,you.Id),view.SimulationSeconds,1,false);
+            window.Refused(result);
+            var thread=Thread(window);
+            Assert.That(thread,Does.Not.Contain(mine),"the thread drops the reply the host counted as a silence: "+string.Join(" | ",thread));
+            Assert.That(thread,Is.EqualTo(new[]{"< "+talk.Turns[0].Line,"= "+FestivalChatWindow.NotHeard,"< "+talk.Turns[1].Reaction,"< "+talk.Turns[1].Line}),"it says so where the reply stood: "+string.Join(" | ",thread));
+            Assert.That(window.Going,Is.EqualTo(.25f).Within(1e-6),"the meter counts the silence: -1 where so-so stood, 2 of 8");
+            int next=Smooth(talk.Turns[1]);Assert.That(window.Pick(next),Is.True,"setup: the next pick in time");
+            inFlight.Id="next";var heard=game.Execute(you.Id,inFlight);Assert.That(heard.Accepted,Is.True,"setup: the host hears it");window.Refused(heard);
+            window.Refused(new CommandResult{Accepted=false,Reason="NPC is busy"});
+            Assert.That(Thread(window),Does.Contain("> "+talk.Turns[1].Replies[next]),"a reply the host heard, or another command's refusal, changes no reply");
+        }
+
+        // A sale that a bust cuts short has no score, so the meter stays where it stood.
+        [Test] public void ACutSaleLeavesTheMeterWhereItStood()
+        {
+            var game=Day(out var you,out var them,"Buyer");foreach(var dose in game.State.Doses)dose.Dose=1;you.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            Assert.That(game.Execute(you.Id,new GameCommand{Id="sale",Kind="StartSale",TargetId=them.Id,ItemId="stock_lsd"}).Accepted,Is.True,"setup: the sale starts");
+            var talk=game.Interaction(you.InteractionId);var window=Window(game,you);
+            for(int t=0;t<2;t++){Follow(window,game,you.Id,t);Assert.That(window.Pick(Smooth(talk.Turns[t])),Is.True,"reply "+(t+1));}
+            Follow(window,game,you.Id,2);float before=window.Going;string word=window.GoingWord;
+            game.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",X=you.X+1,Z=you.Z,Evidence=new List<EvidenceState>{new EvidenceState{PlayerId=you.Id,Kind="WitnessedDeal",DetainAt=game.State.SimulationSeconds}}});game.Tick(.1);
+            var view=View(game,you.Id);var me=Me(view,you.Id);var outcome=me.ConversationOutcomes.Find(o=>o.InteractionId==talk.Id);
+            Assert.That(outcome?.Result,Is.EqualTo("BUSTED"),"setup: a bust mid-sale");
+            Assert.That(window.FollowOutcome(outcome,3,false,false,FestivalHudText.MoneyText(view,me,outcome.Notice)),Is.True,"setup: the window stays up on the bust");
+            Assert.That(window.Going,Is.EqualTo(before).Within(1e-6),"a cut sale has no score: the meter stays at "+before+" ("+word+"), got "+window.Going+" ("+window.GoingWord+")");
+        }
+
+        // The meter reads only the replies already picked (the talker's view carries no other grade, SpeechPrivacyTests), so even
+        // a view that carried them would give nothing away: change every grade of a reply not picked, and it reads the same.
         [Test] public void TheMeterReadsOnlyTheRepliesYouPicked()
         {
             var game=Day(out var you,out var them);var talk=Talk(game,you,them);var window=Window(game,you);

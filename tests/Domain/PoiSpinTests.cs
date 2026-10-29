@@ -15,7 +15,7 @@ public static class PoiSpinTests
     public static void Run()
     {
         var failures=new List<string>();
-        foreach(var test in new Action[]{PoiInHandSpin,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes,CampPoiEquipOnlyOffersTheSpin,HoldingShelfPoiExplainsTheSpin,BuyingPoiExplainsTheSpin,SpinnersBlendIn,NoSprintingWhileSpinning})
+        foreach(var test in new Action[]{PoiInHandSpin,ASwapOnItsWaySpinsWhatItBrings,AnUnpaidShelfItemWinsOverWhatIsEquipped,OnlyTheLivingSpin,NobodyBusySpins,EquipSaysWhatTheItemDoes,CampPoiEquipOnlyOffersTheSpin,HoldingShelfPoiExplainsTheSpin,BuyingPoiExplainsTheSpin,SpinnersBlendIn,NoSprintingWhileSpinning})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" poi spin test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -40,6 +40,16 @@ public static class PoiSpinTests
         foreach(var poi in new[]{"poi_practice","poi_led"}){Check(Act(s,p.Id,"Equip",poi).Accepted,"setup: equip "+poi);Check(FestivalSimulation.CanSpinPoi(p),poi+" in hand spin");}
         Check(Act(s,p.Id,"Equip","confetti").Accepted,"setup: equip confetti");Check(!FestivalSimulation.CanSpinPoi(p),"confetti in hand doesn't");
         Check(Act(s,p.Id,"Equip").Accepted,"setup: hands free");Check(!FestivalSimulation.CanSpinPoi(p),"hands free, nothing spins");
+    }
+
+    // Until the host's view confirms a gear swap, the HUD shows the item on its way, not the one the view still holds.
+    static void ASwapOnItsWaySpinsWhatItBrings()
+    {
+        var s=Festival();var p=s.Player("p0");Check(Act(s,p.Id,"Equip","confetti").Accepted,"setup: equip confetti");
+        Check(FestivalSimulation.CanSpinPoi(p,"poi_practice"),"a swap to poi spins them before the view has them");
+        Check(Act(s,p.Id,"Equip","poi_led").Accepted,"setup: equip LED poi");
+        Check(!FestivalSimulation.CanSpinPoi(p,"confetti")&&!FestivalSimulation.CanSpinPoi(p,""),"a swap away from poi, or to free hands, spins nothing");
+        p.Life="Downed";Check(!FestivalSimulation.CanSpinPoi(p,"poi_practice"),"the other rules still hold");
     }
 
     // At camp, an unpaid item off the shelf is what's in hand (FestivalHands shows it over the equipped one).

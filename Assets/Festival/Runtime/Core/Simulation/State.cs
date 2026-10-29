@@ -6,7 +6,7 @@ namespace Festival.Core
     [Serializable] public sealed class GameCommand { public string Id="", Kind="", TargetId="", ItemId=""; public int Amount, Direction; public double TimeSeconds; }
     [Serializable] public sealed class CommandResult { public bool Accepted; public string Reason="", Id=""; public long Sequence; }
     [Serializable] public sealed class CommittedCommand { public string PlayerId="", Id=""; public CommandResult Result=new CommandResult(); }
-    [Serializable] public sealed class ItemStack { public string ItemId=""; public int Count; }
+    [Serializable] public sealed class ItemStack { public string ItemId=""; public int Count; public ItemStack Copy()=>(ItemStack)MemberwiseClone(); }
     // TRIP-5: Substance is what the spinner's dose was (a catalog effect id, FestivalSimulation.Substances); "" on every other effect and in older snapshots.
     [Serializable] public sealed class ActiveEffect { public string Id="", InstanceId="", SourceCommandId="", Substance=""; public double RemainingSeconds, StartSeconds; public int Intensity; }
     [Serializable] public sealed class PlayerState {
@@ -32,6 +32,10 @@ namespace Festival.Core
         // POLO-5: view-only, never set on the host: FestivalSession.ViewFor sets it to the SimulationSeconds this player boarded
         // the Ferris wheel, so every client seats them in the same gondola; -1 off the wheel and in older snapshots.
         public double VisualWheelSince=-1;
+        // View-only, never set on the host: FestivalSession.ViewFor sets it to the gondola the host seated this player in as
+        // they boarded (FestivalSimulation.WheelGondola), so every client seats them there, whenever it first sees them; -1 off the
+        // wheel and in older snapshots.
+        public int VisualWheelGondola=-1;
         // POLO-6: view-only, never set on the host: FestivalSession.ViewFor fills it on the viewer's own copy alone with the
         // influencers filming them (FestivalSimulation.Films), for their ON CAMERA line and those phones' REC; empty otherwise and in
         // older snapshots.
@@ -77,12 +81,13 @@ namespace Festival.Core
         public string OwnerId="",InteractionId="";
     }
     // Result: the short stamp a sale ends on ("SOLD +$10", "NO SALE", "BUSTED"), in dollars; "" for other talks and in older snapshots.
+    // Score: the talk's settled score, where the chat window's meter lands; -1 for a talk cut short and in older snapshots.
     [Serializable] public sealed class ConversationOutcome {
         public string RoundId="",InteractionId="",DeliveryId="",Kind="",TargetId="",Speaker="",Reaction="",Notice="",Hunch="",Result="";
-        public long Sequence; public List<string> GrammarKeys=new List<string>();
+        public long Sequence; public List<string> GrammarKeys=new List<string>(); public double Score=-1;
     }
-    // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind is what the HUD flashes: Cash, Stash,
-    // Sales or Items.
+    // One change, in dollars ("$5") like the host's replies, for the HUD's MoneyText. Kind sorts it: Cash, Stash, Sales or Items.
+    // The HUD lights a card figure when its value moves, never by Kind, so Stash also covers stock into the stash.
     [Serializable] public sealed class MoneyNews { public long Sequence; public string Kind="",Text=""; }
     // RefusesSales: PlayerId's High or Greedy ask failed with this festivalgoer, who buys nothing more from them this level.
     // Host-only, as ViewFor copies only Suspicion; false in older snapshots.
@@ -90,7 +95,8 @@ namespace Festival.Core
     // A cop's case on a player (Danger.cs, SecurityStops.cs): Kind VisibleStock is a security stop, WavedOn one talked down,
     // and WitnessedDeal or IgnoredStop an arrest warning, detaining at DetainAt. ESC-2: a stop runs from StartSeconds, and the
     // cop last saw them at SeenSeconds; -1 in older snapshots, whose stops are timed from the load.
-    [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt, StartSeconds=-1, SeenSeconds=-1; }
+    // ESC-3: Warned marks a stop whose last chance the guard has said (false in older snapshots, which may say it once more).
+    [Serializable] public sealed class EvidenceState { public string PlayerId="", Kind=""; public double DetainAt, StartSeconds=-1, SeenSeconds=-1; public bool Warned; }
     [Serializable] public sealed class NpcState {
         public string Id="",Kind="Wook",Mode="Blending",TargetId="",IdlePose="Idle"; public float X,Z,Yaw;
         // TRIP-2: Buyer, Narc, Regular or (at night) ClueHolder, dealt as the crew leaves camp; never sent to clients. "" is not
@@ -111,7 +117,7 @@ namespace Festival.Core
         public bool Tipped;
         public List<ObserverState> Observers=new List<ObserverState>(); public List<EvidenceState> Evidence=new List<EvidenceState>();
     }
-    [Serializable] public sealed class RhythmInput { public int Direction; public double TimeSeconds; public bool Release; }
+    [Serializable] public sealed class RhythmInput { public int Direction; public double TimeSeconds; public bool Release; public RhythmInput Copy()=>(RhythmInput)MemberwiseClone(); }
     [Serializable] public sealed class InteractionState {
         public string Id="",PlayerId="",TargetId="",Kind="",Status="Active",ReservedItemId="",DialogueId="",DialogueText="",PartnerId="";
         public int ChartSeed,NoteCount=8,Phrase,ReservedCash; public double StartSeconds,DurationSeconds,GoodWindowSeconds=.15,Score,BeatSeconds=.5;
@@ -130,7 +136,18 @@ namespace Festival.Core
         public List<ConversationTurn> Turns=new List<ConversationTurn>(); public bool TrustDance; public string Hunch="";
         // A sale's ask (FestivalSimulation.FairAsk, HighAsk or GreedyAsk), from StartSale's Amount; Fair in older snapshots.
         // ReservedEquipped: the unit on offer left the seller's hand, so a handed-back one is equipped again; false in older snapshots.
-        public int Ask; public bool ReservedEquipped;
+        // ReservedSlot: where its stack sat in the seller's gear, so a handed-back last unit takes that slot (and key) again; -1, the
+        // end of the bar, in older snapshots.
+        public int Ask; public bool ReservedEquipped; public int ReservedSlot=-1;
+        // HeadStart: the points a talk starts on after its trust dance; HintedReply: the round-1 reply a nailed dance hints, -1 for
+        // none. ViewFor sends both to the talker alone. 0 and -1 in older snapshots.
+        public int HeadStart,HintedReply=-1;
+        // FestivalSession.ViewFor's copy for the host's own view: a list or object field added above must be copied here too.
+        public InteractionState Copy()
+        {
+            var c=(InteractionState)MemberwiseClone();c.Inputs=Inputs.ConvertAll(i=>i.Copy());c.WitnessIds=new List<string>(WitnessIds);
+            c.Chat=Chat.Copy();c.Turns=Turns.ConvertAll(t=>t.Copy());return c;
+        }
     }
     // ESC-2: ClaimedBy is the cop who saw this stock ditched, taking it at ClaimAt unless someone has first; "" unclaimed (and in
     // older snapshots).
@@ -141,12 +158,12 @@ namespace Festival.Core
     [Serializable] public sealed class DeathSpinState {
         public string Id="",RoundId="",PlayerId="",Name=""; public long Sequence; public int Amount,Seed,CashDropped; public double AtWorldSeconds=-1;
     }
-    [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; }
-    [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); }
-    [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; }
+    [Serializable] public sealed class TransferOffer { public string Id="",FromId="",ToId="",ItemId=""; public int Amount; public double ExpiresAt; public TransferOffer Copy()=>(TransferOffer)MemberwiseClone(); }
+    [Serializable] public sealed class StashState { public string Id=""; public float X,Z; public List<ItemStack> Items=new List<ItemStack>(); public StashState Copy(){var c=(StashState)MemberwiseClone();c.Items=Items.ConvertAll(i=>i.Copy());return c;} }
+    [Serializable] public sealed class ShopStockState { public string ItemId=""; public int CampAvailable, MarketAvailable; public ShopStockState Copy()=>(ShopStockState)MemberwiseClone(); }
     // One debrief vote: PlayerId picked TargetId for award slot Award (an index into RoundState.ReviewAwards).
-    [Serializable] public sealed class CampReviewVote { public string PlayerId="", TargetId=""; public int Award; }
-    [Serializable] public sealed class PlayerDose { public string PlayerId="", Substance=""; public int Dose; }
+    [Serializable] public sealed class CampReviewVote { public string PlayerId="", TargetId=""; public int Award; public CampReviewVote Copy()=>(CampReviewVote)MemberwiseClone(); }
+    [Serializable] public sealed class PlayerDose { public string PlayerId="", Substance=""; public int Dose; public PlayerDose Copy()=>(PlayerDose)MemberwiseClone(); }
     [Serializable] public sealed class RoundState {
         // Schema 2 is festival weekends. A schema 1 round, saved before them, is still restored (FestivalSimulation.Restore).
         public const int CurrentSchemaVersion=2;

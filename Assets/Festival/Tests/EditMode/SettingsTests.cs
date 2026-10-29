@@ -306,7 +306,7 @@ namespace Festival.Tests
             try
             {
                 var session=host.AddComponent<FestivalSession>();if(session.Profile==null)typeof(FestivalSession).GetMethod("Awake",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(session,null);
-                session.enabled=false;session.Host("Input test",8641);Assert.That(session.Connected,Is.True,session.Message);session.MenuOpen=false;
+                session.enabled=false;session.Host("Input test",0);Assert.That(session.Connected,Is.True,session.Message);session.MenuOpen=false;
                 session.Profile.Data.VoiceMode="PushToTalk";
                 InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.T));InputSystem.Update();
                 Assert.That(keyboard.tKey.isPressed,Is.True,"fixture delivered the player T key");Assert.That(session.Controls.PushToTalk.IsPressed(),Is.True);
@@ -1099,7 +1099,10 @@ namespace Festival.Tests
             }
         }
 
-        [Test]public void OverlappingSettingsKeepTheLiveGraphicsAndTheLastRestoresTheFirstCapture()
+        // The newer session's teardown leaves the shared High slot on its destroyed pipeline, so the older one takes the slot back on
+        // its next ApplyGraphics (FestivalSession.Update runs it every frame). The older teardown must leave the live graphics at once.
+        [TestCase(false)][TestCase(true)]
+        public void OverlappingSettingsKeepTheLiveGraphicsAndTheLastRestoresTheFirstCapture(bool newerFirst)
         {
             int initialLevel=QualitySettings.GetQualityLevel(),initialCap=Application.targetFrameRate,start=Array.IndexOf(QualitySettings.names,"Very High"),high=Array.IndexOf(QualitySettings.names,"High");
             var before=Enumerable.Range(0,QualitySettings.names.Length).Select(QualitySettings.GetRenderPipelineAssetAt).ToArray();
@@ -1107,12 +1110,14 @@ namespace Festival.Tests
             try
             {
                 QualitySettings.SetQualityLevel(start,false);int startVsync=QualitySettings.vSyncCount;Application.targetFrameRate=37;
-                older.ApplyGraphics();newer.ApplyGraphics();var live=QualitySettings.renderPipeline;
+                older.ApplyGraphics();var olderPipeline=QualitySettings.renderPipeline;newer.ApplyGraphics();var newerPipeline=QualitySettings.renderPipeline;
                 Assert.That(QualitySettings.GetQualityLevel(),Is.EqualTo(high),"setup: both apply the saved High preset");
-                older.Dispose();
-                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("High"),"the older teardown leaves the live session's level");
-                Assert.That(QualitySettings.renderPipeline,Is.SameAs(live),"and its pipeline");Assert.That(live!=null,Is.True,"a pipeline that still exists");
-                newer.Dispose();
+                Assert.That(newerPipeline,Is.Not.SameAs(olderPipeline),"setup: each session has its own pipeline");
+                var first=newerFirst?newer:older;var last=newerFirst?older:newer;var live=newerFirst?olderPipeline:newerPipeline;
+                first.Dispose();if(newerFirst)last.ApplyGraphics();
+                Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("High"),"the first teardown leaves the live session's level");
+                Assert.That(QualitySettings.renderPipeline,Is.SameAs(live),"and its own pipeline");Assert.That(QualitySettings.renderPipeline!=null,Is.True,"a pipeline that still exists");
+                last.Dispose();
                 Assert.That(QualitySettings.names[QualitySettings.GetQualityLevel()],Is.EqualTo("Very High"),"the last teardown restores the level that the first one found");
                 Assert.That(QualitySettings.vSyncCount,Is.EqualTo(startVsync),"and its vsync");Assert.That(Application.targetFrameRate,Is.EqualTo(37),"and its frame cap");
                 for(int i=0;i<before.Length;i++)Assert.That(QualitySettings.GetRenderPipelineAssetAt(i),Is.SameAs(before[i]),QualitySettings.names[i]+" gets its own pipeline back");

@@ -139,7 +139,8 @@ namespace Festival.Presentation
             ProxyBox("Stage",new Vector3(0,.7f,32),new Vector3(18,1.4f,9),dark);
             ProxyBox("Stage backdrop",new Vector3(0,4,36),new Vector3(18,6,.5f),dark);
             Visual("FestivalStage",new Vector3(0,0,32));
-            Sign("AFTER HOURS",new Vector3(0,6.50f,27.10f),gold,.20f);
+            // Under the stage's front canvas drops (6.70 m up, in front of the legend), so they hide none of the grown board.
+            Sign("AFTER HOURS",new Vector3(0,6.20f,27.10f),gold,.20f);
             Visual("FestivalDJRiser",new Vector3(0,1.40f,30.15f));
             var djConsole=Visual("FestivalDJDeck",new Vector3(0,1.62f,30.15f));
             var stageDj=FestivalCharacter.Create(owned,"resident_stage_dj",Color.white,"Attendee");
@@ -346,6 +347,9 @@ namespace Festival.Presentation
             PoloDressing=new FestivalPoloDressing(owned,groundTrees,earth);
             // TRIP-11: here, so the Giggle Tank, the clouds and the goods built after stay clean of a dose's pattern.
             FestivalTripSurfaces.Mark(owned);
+            // But not what moves: the twists' turning, driving and burning parts and the sweeping stage lamps.
+            foreach(var part in twists.Moving())FestivalTripSurfaces.Unmark(part);
+            foreach(var lamp in stageLights)FestivalTripSurfaces.Unmark(lamp.transform);
             // GAS-2: hidden until a view has a Giggle Tank (SetTwists).
             giggleTank=FestivalGiggleTank.Build(owned);giggleTank.gameObject.SetActive(false);
             // LIGHT-2: the day sky's clouds hang under the festival, so camp has none.
@@ -516,9 +520,10 @@ namespace Festival.Presentation
             }
             ProxyBox("Seller table collision",new Vector3(0,.62f,8.8f),new Vector3(3.4f,1.2f,1),wood);
             Visual("FestivalCampShop",new Vector3(0,0,9.15f));
-            // Sign text origins sit .0475 in front of each Blender backing so the Sign board lies flush.
+            // Sign text origins sit .0475 in front of each Blender backing so the Sign board lies flush. CAMP SUPPLIES sits at
+            // the middle of its backing (2.17-2.70 m), so its grown board stays under the shop's crest.
             Visual("FestivalSupplySign",new Vector3(0,0,9.15f));
-            Sign("CAMP SUPPLIES",new Vector3(0,2.5f,9.3825f),gold,.075f);
+            Sign("CAMP SUPPLIES",new Vector3(0,2.435f,9.3825f),gold,.075f);
             Visual("FestivalCounterGoods",new Vector3(0,0,9.15f));
             foreach(float x in new[]{-4.65f,4.65f})
             {
@@ -812,7 +817,7 @@ namespace Festival.Presentation
         public Vector3 WheelSeat(RoundState state,PlayerState rider,float rate)
         {
             float lead=GlideLead(rate,Time.unscaledDeltaTime);
-            return twists!=null?twists.Seat(state,rider,twists.WheelClock+lead):FestivalTwistVisuals.Seat(state,rider,FestivalSimulation.WorldSeconds(state)+lead,null);
+            return FestivalTwistVisuals.Seat(state,rider,(twists!=null?twists.WheelClock:FestivalSimulation.WorldSeconds(state))+lead);
         }
         /// <summary>POLO-7: how many seconds ahead of a target moving at a steady pace to aim a glide that closes 1-exp(-rate·dt) of
         /// the gap each dt-second frame, so it keeps up with the target: dt·q/(1-q), q=exp(-rate·dt). Under 1/rate by less than half a
@@ -1073,8 +1078,9 @@ namespace Festival.Presentation
                 if(name=="Vendor")canopy.GetComponent<Renderer>().enabled=false;
             }
             bool locationEntrance=name=="Medical";
+            // A location entrance's board grows up from its bottom edge, so it hides no more of the clinic's cross.
             Sign(label,p+(locationEntrance?new Vector3(0,3.02f,.1f):new Vector3(0,2.4f,2.2f)),
-                accent,locationEntrance ? .12f : .055f);
+                accent,locationEntrance ? .12f : .055f,keepBottom:locationEntrance);
         }
         // The model merges every part of one paint into one mesh, so its walls and windows can only hide whole: the back and
         // sides are rebuilt solid in its blue, and the front is bars. The walls, bars and door are placeholders until the art pass.
@@ -1121,16 +1127,17 @@ namespace Festival.Presentation
             Visual(label=="SUN"?"FestivalSun":"FestivalMoon",position);
             Sign(label,position+new Vector3(0,2.95f,-.65f),accent,.075f);
         }
-        private void Sign(string label,Vector3 position,Material material,float size,float yaw=0,float backZ=0)
+        private void Sign(string label,Vector3 position,Material material,float size,float yaw=0,float backZ=0,bool keepBottom=false)
         {
             var go=new GameObject(label+" sign");go.transform.SetParent(owned,false);go.transform.localPosition=position;go.transform.localRotation=Quaternion.Euler(0,yaw,0);
             // Leave real painted board behind the entire legend at every angle. The guess from the legend's length runs short of
             // Boogaloo's wide glyphs, so a legend drawn past it gets a board from its drawn quads.
             var drawn=DrawnHalfSize(SignFace(go.transform,label,size,new Vector3(0,0,-.050f),0));
             float width=Mathf.Max(.98f,label.Length*size*1.45f+.50f);
-            float height=Mathf.Max(.29f,size*2.25f+.13f);
+            float height=Mathf.Max(.29f,size*2.25f+.13f),guessed=height;
             // Only a board its legend runs off grows: the boards it already covers keep their look until a playtest.
             if(2*drawn.x>width||2*drawn.y>height){width=Mathf.Max(width,2*drawn.x+.50f);height=Mathf.Max(height,2*drawn.y+.13f);}
+            if(keepBottom)go.transform.localPosition+=Vector3.up*(height-guessed)/2;
             var border=GameObject.CreatePrimitive(PrimitiveType.Cube);border.name="Label bubble rim";border.transform.SetParent(go.transform,false);
             border.transform.localPosition=new Vector3(0,0,.025f);border.transform.localScale=new Vector3(width+.075f,height+.075f,.045f);
             border.GetComponent<Renderer>().sharedMaterial=material;var borderCollider=border.GetComponent<Collider>();borderCollider.enabled=false;Dispose(borderCollider);

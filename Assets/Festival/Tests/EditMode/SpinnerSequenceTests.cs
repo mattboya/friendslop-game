@@ -446,7 +446,8 @@ namespace Festival.Tests
             FestivalSpinner.ShownDeaths(view,first+Wheel+FestivalSpinner.DeathResultSeconds+.05,shown);Assert.That(shown.Select(s=>s.PlayerId),Is.EqualTo(new[]{"friend"}),"then the later one alone");
         }
 
-        // The corner reel never takes a click from the HUD or the menu over it, nor moves the camera or opens anything.
+        // The corner reel draws over the trip's look and under the HUD. It never takes a click from the HUD or the menu over it, nor moves
+        // the camera or opens anything.
         [Test] public void TheDeathReelDrawsUnderTheHudAndTakesNoClicks()
         {
             var root=new GameObject("Death reel canvas");var spinner=root.AddComponent<FestivalSpinner>();
@@ -461,6 +462,10 @@ namespace Festival.Tests
                 Assert.That(canvas.gameObject.activeInHierarchy,Is.True);
                 var hudCanvas=root.GetComponentsInChildren<Canvas>(true).Single(c=>c.name=="Festival HUD");
                 Assert.That(canvas.sortingOrder,Is.LessThan(hudCanvas.sortingOrder),"under the HUD");
+                // Over the trip's overlay, so the spirit look's dark edges never dim the money a reel lands on.
+                var trip=root.AddComponent<FestivalTrip>();trip.Apply(null,"friend",null,null,false,0,0);
+                var tripCanvas=root.GetComponentsInChildren<Canvas>(true).Single(c=>c.name=="Festival trip");
+                Assert.That(canvas.sortingOrder,Is.GreaterThan(tripCanvas.sortingOrder),"over the trip's look");
                 Assert.That(canvas.GetComponentsInChildren<UnityEngine.UI.GraphicRaycaster>(true),Is.Empty,"no raycaster: clicks pass through to the HUD");
                 foreach(var graphic in canvas.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))Assert.That(graphic.raycastTarget,Is.False,graphic.name+" takes no clicks");
                 Assert.That(canvas.renderMode,Is.EqualTo(RenderMode.ScreenSpaceOverlay));

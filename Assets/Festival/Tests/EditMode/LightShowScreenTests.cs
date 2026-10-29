@@ -229,7 +229,7 @@ namespace Festival.Tests
             var go=new GameObject("impl-U63 light show host");FestivalCharacter world=null;
             try
             {
-                var session=go.AddComponent<FestivalSession>();session.Host("Light show test",8732);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
+                var session=go.AddComponent<FestivalSession>();session.Host("Light show test",0);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
                 var lights=go.GetComponent<FestivalLightShowView>();Assert.That(lights,Is.Not.Null,"every session draws the Light Show");
                 var game=Started();typeof(FestivalSession).GetField("simulation",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(session,game);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,"p0");
                 world=FestivalCharacter.Create(null,"impl-U63 world rig",Color.white);world.Pose="Dance";

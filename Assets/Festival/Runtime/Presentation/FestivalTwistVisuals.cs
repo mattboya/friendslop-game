@@ -21,7 +21,7 @@ namespace Festival.Presentation
         private const float PostSpacing=2.2f,RopeHeight=.88f;
         // The wheel turns once a ride (Festivals.WheelRideSeconds), its gondolas hanging level below the rim.
         private const float AxleHeight=7.5f,WheelRadius=6,GondolaDrop=.75f;
-        private const int Gondolas=8;
+        private const int Gondolas=Festivals.WheelGondolas;
         // POLO-5: the wheel turns on the rules' clock, the one a ride's StartSeconds is on, so every client draws each gondola where
         // every other does. Between snapshots it runs on with the frame, eased onto each new one at WheelPull, and jumps to one
         // further out than WheelSnap seconds.
@@ -29,7 +29,7 @@ namespace Festival.Presentation
         // POLO-5: a rider sits in ART-1's gondola, over its floor CabinFloor below the model's middle (the point it hangs from, less
         // GondolaDrop), and CabinAhead forward of that middle, toward the way they face (-z). Their eye is SeatedEyeHeight above that
         // floor: in the open cabin, under the canopy roof .74 m above the floor that a standing eye poked through, and above the
-        // walls' tops (.38 m). A gondola seats Seats side by side across the middle CabinSpread of its 1.2 m width: two sit .48 m
+        // walls' tops (.38 m). A gondola seats Festivals.WheelSeats side by side across the middle CabinSpread of its 1.2 m width: two sit .48 m
         // apart, which bodies drawn at RiderScale clear whatever they wear (the widest look reaches .24 m either side of its middle),
         // both inside the walls (.57 m out inside). A third would sit .32 m from the next, in one another.
         // The cabin is far too low for a seated body at full size: the tallest seated look (body shape 0 in hat 1) reaches 1.68 m
@@ -40,7 +40,6 @@ namespace Festival.Presentation
         // ponytail: back to 1 once ART-2 gives the gondola a seated person's headroom.
         public const float SeatedEyeHeight=.56f,RiderScale=.42f;
         private const float CabinFloor=.37f,CabinAhead=.025f,CabinSpread=.96f;
-        private const int Seats=2;
         // A car is the camp van at VanScale pulling a party deck. The rider stands on the deck at the car's point in the rules,
         // just behind its front edge, and the van's rear bumper (2.81 m behind its centre at full size) sits right ahead of that.
         // Kept this short, the car reaches 3 m ahead of its point, so as it turns toward where its loop takes it TurnLookahead
@@ -68,7 +67,6 @@ namespace Festival.Presentation
         private readonly List<(Transform Flame,Vector3 Size)> flames=new List<(Transform,Vector3)>();
         private float clock;
         private double carClock,wheelClock;
-        private readonly Dictionary<string,(double Since,int Gondola)> riding=new Dictionary<string,(double,int)>();
         /// <summary>POLO-5: the world's clock (FestivalSimulation.WorldSeconds: the rules' clock, stopped through a minigame, MINI-1)
         /// as this wheel is drawn at it, for Seat.</summary>
         public double WheelClock=>wheelClock;
@@ -105,6 +103,8 @@ namespace Festival.Presentation
             for(int i=0;i<flames.Count;i++)flames[i].Flame.localScale=Vector3.Scale(flames[i].Size,new Vector3(1,1+FlickerDepth*Mathf.Sin(clock*FlickerHz+i*1.7f),1));
             fireLight.intensity=FireGlow*(1+.15f*Mathf.Sin(clock*13));
         }
+        /// <summary>Every part Apply moves. A new moving part belongs here too, or a dose's pattern slides over it.</summary>
+        public IEnumerable<Transform> Moving(){yield return rotor;foreach(var gondola in gondolas)yield return gondola;foreach(var car in cars)yield return car;yield return fire;}
 
         // Brass posts round the zone's edge, a velvet rope between them; the knobs glow so the ropes read at night.
         private static void Ropes(Transform ropes,Festivals.Area zone)
@@ -152,46 +152,43 @@ namespace Festival.Presentation
             float angle=Angle(wheelClock);rotor.localRotation=Quaternion.Euler(angle,0,0);
             for(int k=0;k<Gondolas;k++)gondolas[k].localPosition=Hung(k,angle);
         }
-        /// <summary>Seat, with every rider on this wheel kept in the gondola it gave them until their ride ends.</summary>
-        public Vector3 Seat(RoundState state,PlayerState rider,double now)=>Seat(state,rider,now,riding);
-        /// <summary>POLO-5: where rider sits at now (on the rules' clock), in the world, on the floor of their gondola. A ride is
-        /// exactly one turn, so it brings them back round to where they boarded. Everyone in state on the wheel is seated in the order
-        /// they boarded (their VisualWheelSince, then id, so every client seats them alike), each in the gondola that hung nearest the
-        /// platform then; once its Seats are taken, in the next one round to come down to it, the one that has just gone up, the one
-        /// after next, and so on. Those sharing a gondola sit side by side across it. MINI-1: now is on the world's clock (WheelClock), and
-        /// so is the platform each boarded at. kept holds the gondola each rider was given, by id, with when they boarded: they keep it
-        /// to the end of that ride, so nobody moves into a seat that a rider ahead of them frees. With no kept, all are seated afresh.</summary>
-        public static Vector3 Seat(RoundState state,PlayerState rider,double now,Dictionary<string,(double Since,int Gondola)> kept)
+        /// <summary>POLO-5: where rider sits at now (on the world's clock, WheelClock), in the world, on the floor of their gondola. A
+        /// ride is exactly one turn, so it brings them back round to where they boarded. The host seats each rider as they
+        /// board (FestivalSimulation.WheelGondola) and every view carries that gondola (VisualWheelGondola), so every client seats every
+        /// rider where the host did, whenever it first saw them: one that joined or came back mid-ride, or was a spirit as they
+        /// boarded, too. A rider without one (-1, in a hand-built state) sits in the gondola that hung at the platform as they boarded.
+        /// Those sharing a gondola sit side by side across it in the order they boarded (their VisualWheelSince, then id).</summary>
+        public static Vector3 Seat(RoundState state,PlayerState rider,double now)
         {
-            kept??=new Dictionary<string,(double,int)>();
             var aboard=state.Players.FindAll(p=>p.Id!=rider.Id&&p.VisualWheelSince>=0);aboard.Add(rider);
             aboard.Sort((a,b)=>a.VisualWheelSince!=b.VisualWheelSince?a.VisualWheelSince.CompareTo(b.VisualWheelSince):string.CompareOrdinal(a.Id,b.Id));
-            // The world's clock: as a minigame ends it moves VisualWheelSince on by the game's length but leaves this, to within rounding.
-            double Boarding(PlayerState p)=>FestivalSimulation.WorldSeconds(state,p.VisualWheelSince);
-            var left=new List<string>();foreach(var pair in kept)if(!aboard.Exists(p=>p.Id==pair.Key&&System.Math.Abs(Boarding(p)-pair.Value.Since)<1e-3))left.Add(pair.Key);
-            foreach(var id in left)kept.Remove(id);
-            var seated=new int[Gondolas];foreach(var pair in kept)seated[pair.Value.Gondola]++;
-            foreach(var p in aboard)
-            {
-                if(kept.ContainsKey(p.Id))continue;
-                double since=Boarding(p);int boarded=Boarded(since),k=boarded;
-                for(int j=1;seated[k]>=Seats&&j<Gondolas;j++)k=(boarded+(j%2==1?(j+1)/2:Gondolas-j/2))%Gondolas;
-                kept[p.Id]=(since,k);seated[k]++;
-            }
-            int gondola=kept[rider.Id].Gondola,place=0;
-            foreach(var p in aboard){if(p.Id==rider.Id)break;if(kept[p.Id].Gondola==gondola)place++;}
-            return new Vector3(Festivals.WheelX+((place+.5f)/seated[gondola]-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
+            int gondola=Gondola(state,rider),place=0,sharing=0;
+            foreach(var p in aboard)if(Gondola(state,p)==gondola){if(p.Id==rider.Id)place=sharing;sharing++;}
+            return new Vector3(Festivals.WheelX+((place+.5f)/sharing-.5f)*CabinSpread,-CabinFloor,Festivals.WheelZ-CabinAhead)+Hung(gondola,Angle(now));
         }
-        private static int Boarded(double since)
-        {
-            float boarding=Angle(since);int nearest=0;
-            for(int k=1;k<Gondolas;k++)if(Hung(k,boarding).y<Hung(nearest,boarding).y)nearest=k;
-            return nearest;
-        }
+        // MINI-1: the platform a rider boarded at is on the world's clock: as a minigame ends it moves VisualWheelSince on by the
+        // game's length but leaves this, to within rounding.
+        private static int Gondola(RoundState state,PlayerState p)=>p.VisualWheelGondola>=0&&p.VisualWheelGondola<Gondolas?p.VisualWheelGondola:FestivalSimulation.PlatformGondola(FestivalSimulation.WorldSeconds(state,p.VisualWheelSince));
         // Where gondola k hangs from the wheel's base with the wheel turned angle degrees, and the angle it turns to at a clock reading.
         private static Vector3 Hung(int k,float angle)=>Vector3.up*AxleHeight+Quaternion.Euler(angle,0,0)*Rim(360f*k/Gondolas)-Vector3.up*GondolaDrop;
         private static Vector3 Rim(float degrees)=>new Vector3(0,WheelRadius*Mathf.Sin(degrees*Mathf.Deg2Rad),WheelRadius*Mathf.Cos(degrees*Mathf.Deg2Rad));
         private static float Angle(double seconds)=>(float)(seconds%Festivals.WheelRideSeconds/Festivals.WheelRideSeconds*360);
+
+        // The legs and bearings stand 1.1 m out of the wheel's plane (1.28 m with their thickness), the rims .8 m, the axle 1.2 m.
+        public const float FrameHalfWidth=1.5f;
+        // Keeps a pulled tag off the camera's near plane.
+        private const float MaxPull=.9f;
+        // A rider's tag slides along its line to the eye and shrinks by the same ratio, so it covers the same pixels in front of the
+        // wheel: from outside the frame until it clears the frame, and from the boarding steps inside its width MaxPull of the way,
+        // since the gondolas below and the spokes stand in that line wherever the tag is. A riding eye leaves it be: from the next
+        // gondola the viewer's own cabin still hides it. It stays depth-tested against everything else.
+        public static void InFrontOfFrame(Transform tag,Vector3 eye,bool riding)
+        {
+            var at=tag.position;float side=eye.x-Festivals.WheelX,from=at.x-Festivals.WheelX;
+            if(riding||Mathf.Abs(from)>=FrameHalfWidth)return;
+            float pull=Mathf.Abs(side)<=FrameHalfWidth?MaxPull:Mathf.Min((Mathf.Sign(side)*FrameHalfWidth-from)/(side-from),MaxPull);
+            tag.position=Vector3.Lerp(at,eye,pull);tag.localScale*=1-pull;
+        }
 
         // The camp van (existing vehicle art, its front at the model's -z) pulls a neon-railed party deck.
         private static Transform ArtCar(Transform car,int k)

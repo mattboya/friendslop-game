@@ -7,19 +7,29 @@ namespace Festival.Core
     /// pick one of three replies with the Reply command (Amount the reply 0-2, Direction the turn 0-3). DIALOG-9 waits for each pick;
     /// only Police turns count silence after ReplySeconds. One reply is smooth, one so-so and one awkward by the person's taste
     /// (ConversationLines),
-    /// and a dose garbles one of them a turn, two from dose 3. Smooth counts 1, so-so .5, awkward or nothing 0, and the average
-    /// is the talk's Score, which settles it as the dance used to: a sale's pay, a buy, security waving off a stop, and every
-    /// partner's and watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
-    /// first asks for a dance (TrustAsk): eight beats on the talk's own chart, danced and watched like any dance. TrustScore or
-    /// better wins their trust and the talk follows; less and they walk off, the talk over at 0. A chat or a buy reads the
+    /// and a dose garbles one of them a turn, two from dose 3. Each reply is worth Points (smooth 2, so-so 1, awkward or nothing
+    /// -1), and the total over TalkPoints, never below 0, is the talk's Score, which settles it as the dance used to: a sale's pay,
+    /// a buy, security waving off a stop, and every partner's and watcher's RhythmDelta. A festivalgoer wary of you (TrustDanceSuspicion), or one of the ravers and burners who always are,
+    /// first asks for a dance (TrustAsk): eight beats on the talk's own chart, danced and watched like any dance. The talk always
+    /// follows, and their first line reacts to the dance (ConversationLines.DanceReaction). Under TrustScore the talk starts
+    /// FailedDanceStart points down (InteractionState.HeadStart); at NailedScore or better round 1's smooth reply is hinted to
+    /// the talker alone (InteractionState.HintedReply); in between it starts level. A chat or a buy reads the
     /// person: a reply that lands draws out a line with their role's tell, more often the smoother it was (TellOdds), and the
     /// first tell shown sets the Hunch the talk leaves, as its last turn begins. A narc asked to sell talks too, its tells in its
     /// lines; finishing the buy busts you (StockBuys.cs).</summary>
     public sealed partial class FestivalSimulation
     {
         public const int ConversationTurns=4;
-        public const double ReplySeconds=4,TrustDanceSuspicion=40,TrustScore=.6;
+        public const double ReplySeconds=4,TrustDanceSuspicion=40,TrustScore=.6,NailedScore=.9;
+        public const int FailedDanceStart=-2;
         public const string TrustAsk="Dance with me first, then we talk.";
+        /// <summary>A Reply the host refuses as too late for its turn, or once the talk is over. The chat window matches these reasons.</summary>
+        public const string LateReply="Too late: that moment has passed",NoTalkToReply="No conversation to reply in";
+        /// <summary>What a reply of this grade (ConversationLines.Smooth, SoSo, Awkward or Silence) is worth. A talk's Score is its
+        /// points over TalkPoints, never below 0, so every line keeps its place: a Fair sale's full price at 6, a buy at 4, security
+        /// waving you on at 6.</summary>
+        public static int Points(int grade)=>grade==ConversationLines.Smooth?2:grade==ConversationLines.SoSo?1:-1;
+        public const int TalkPoints=2*ConversationTurns;
         public static bool Talks(string kind)=>kind=="Sale"||kind=="Buy"||kind=="Conversation"||kind=="Police";
         /// <summary>Whether talk i is still in the dance a wary festivalgoer asked for, before its first turn.</summary>
         public static bool TrustDancing(InteractionState i)=>Talks(i.Kind)&&i.TrustDance&&i.Turns.Count==0;
@@ -33,7 +43,7 @@ namespace Festival.Core
             bool wary=Wary(npc,p);if(wary)GiveDanceRoom(p,npc);
             var i=NewInteraction(p,kind,npc.Id,0);p.ConversationThreadId=i.Id;
             foreach(var n in State.Npcs)if(n.Kind=="Wook"&&Sees(n,p))i.WitnessIds.Add(n.Id);
-            if(kind=="Sale"){i.ReservedEquipped=p.EquippedItemId==c.ItemId;Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
+            if(kind=="Sale"){i.ReservedEquipped=p.EquippedItemId==c.ItemId;i.ReservedSlot=p.Inventory.FindIndex(s=>s.ItemId==c.ItemId);Take(p,c.ItemId,1);i.ReservedItemId=c.ItemId;i.Ask=c.Amount;}
             if(kind=="Buy")HoldPrice(p,i);
             if(kind=="Sale"||kind=="Buy")foreach(var cop in State.Npcs)if(cop.Kind=="Cop"&&Sees(cop,p))RecordDeal(cop,p);
             if(wary){i.TrustDance=true;ScheduleStageRhythm(i);i.DialogueText=TrustAsk;PublishSpeech(p,npc.Id,"FESTIVALGOER",TrustAsk,i.StartSeconds+i.DurationSeconds-State.SimulationSeconds,i.Id);}else AddTurn(i,p);
@@ -52,9 +62,9 @@ namespace Festival.Core
         CommandResult Reply(PlayerState p,GameCommand c)
         {
             var i=Interaction(p.InteractionId);
-            if(i==null||i.Status!="Active"||!Talks(i.Kind)||i.Turns.Count==0)return Reject("No conversation to reply in");
+            if(i==null||i.Status!="Active"||!Talks(i.Kind)||i.Turns.Count==0)return Reject(NoTalkToReply);
             var turn=i.Turns[i.Turns.Count-1];
-            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject("Too late: that moment has passed");
+            if(c.Direction!=i.Turns.Count-1||turn.Pick>=0||!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds)return Reject(LateReply);
             if(c.Amount<0||c.Amount>2)return Reject("Pick reply 1, 2 or 3");
             AcknowledgeGrammar(p,turn.GrammarKeys,i.Id+":"+(i.Turns.Count-1));
             turn.Pick=c.Amount;PublishSpeech(p,p.Id,p.Name,turn.Replies[c.Amount],7,i.Id);
@@ -96,13 +106,19 @@ namespace Festival.Core
             if(TrustDancing(i))
             {
                 double danced=Judge(i);int delta=RhythmDelta(danced);
-                foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,delta);
-                if(danced<TrustScore){i.Score=0;p.LastRhythmScore=0;p.Performances++;PublishSpeech(p,i.TargetId,"FESTIVALGOER","Nah. Not feeling it.",7,i.Id);return true;}
-                i.DialogueText="";i.DurationSeconds=State.SimulationSeconds-i.StartSeconds;AddTurn(i,p);return false;
+                // K2: the talk that follows roots p, so the dance lifts no one to WookTick's accusing 70 (a watcher's shout would
+                // carry it to the partner); the talk's own Score moves them again once p is free.
+                foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId){var o=Observe(n,p);double before=o.Suspicion;Adjust(n,p,delta);if(before<70&&o.Suspicion>=70)o.Suspicion=69;}
+                i.HeadStart=danced<TrustScore?FailedDanceStart:0;
+                i.DialogueText="";i.DurationSeconds=State.SimulationSeconds-i.StartSeconds;AddTurn(i,p);
+                var first=i.Turns[0];var history=new DialogueHistory{Seen=new System.Collections.Generic.List<string>(p.Dialogue.Seen??new System.Collections.Generic.List<string>())};
+                first.Reaction=ConversationLines.DanceReaction(danced<TrustScore?0:danced<NailedScore?1:2,State.FestivalIndex,new ContentRandom(unchecked(TurnSeed(i,0)^0x44616e63)),history,out var key);first.GrammarKeys.Add(key);
+                if(danced>=NailedScore)i.HintedReply=Array.IndexOf(first.Grades,ConversationLines.Smooth);
+                return false;
             }
             if(i.Turns.Count<ConversationTurns){AddTurn(i,p);return false;}
-            double total=0;foreach(var turn in i.Turns){int grade=Graded(turn);total+=grade==ConversationLines.Smooth?1:grade==ConversationLines.SoSo?.5:0;}
-            i.Score=total/ConversationTurns;p.LastRhythmScore=i.Score;p.Performances++;
+            int total=i.HeadStart;foreach(var turn in i.Turns)total+=Points(Graded(turn));
+            i.Score=Math.Max(0,total)/(double)TalkPoints;p.LastRhythmScore=i.Score;p.Performances++;
             int moved=RhythmDelta(i.Score);foreach(var n in State.Npcs)if(i.WitnessIds.Contains(n.Id)||n.Id==i.TargetId)Adjust(n,p,moved);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ChatDiagnostic?.Invoke("TalkSettled",i.Kind,State.RoundId,State.SimulationSeconds);
@@ -146,9 +162,8 @@ namespace Festival.Core
             if(p.ConversationThreadId=="")p.ConversationThreadId=i.Id;
             if(p.ConversationOutcomes==null)p.ConversationOutcomes=new System.Collections.Generic.List<ConversationOutcome>();
             if(p.ConversationOutcomes.Exists(o=>o.RoundId==State.RoundId&&o.InteractionId==i.Id))return;
-            var outcome=new ConversationOutcome{RoundId=State.RoundId,InteractionId=i.Id,DeliveryId=State.RoundId+":"+i.Id,Kind=i.Kind,TargetId=i.TargetId,Speaker=i.Kind=="Police"?"SECURITY":"FESTIVALGOER",Hunch=i.Hunch,Result=result,Sequence=++p.ConversationOutcomeSequence};
+            var outcome=new ConversationOutcome{RoundId=State.RoundId,InteractionId=i.Id,DeliveryId=State.RoundId+":"+i.Id,Kind=i.Kind,TargetId=i.TargetId,Speaker=i.Kind=="Police"?"SECURITY":"FESTIVALGOER",Hunch=i.Hunch,Result=result,Score=cut?-1:i.Score,Sequence=++p.ConversationOutcomeSequence};
             if(cut){}
-            else if(i.TrustDance&&i.Turns.Count==0){outcome.Reaction="Nah. Not feeling it.";outcome.Notice="They walk off.";}
             else
             {
                 var npc=State.Npcs.Find(n=>n.Id==i.TargetId);string persona=i.Kind=="Police"?ConversationLines.Security:DialogueGrammar.PersonaFor(i.TargetId,npc?.Twist??"");
@@ -158,7 +173,7 @@ namespace Festival.Core
             }
             if(notice!="")outcome.Notice=notice;
             p.ConversationOutcomes.Add(outcome);while(p.ConversationOutcomes.Count>8)p.ConversationOutcomes.RemoveAt(0);
-            if(!cut&&i.Kind!="Police"&&!(i.TrustDance&&i.Turns.Count==0)){p.SpeechDeliveryId="";p.SpeechById="";p.SpeechSequence=0;p.SpeechAtWorldSeconds=p.SpeechUntilWorldSeconds=-1;p.NpcSpeaker=outcome.Speaker;p.NpcSpeech=outcome.Notice==NarcBust?NarcBust:outcome.Reaction;p.NpcSpeechUntil=State.SimulationSeconds+7;}
+            if(!cut&&i.Kind!="Police"){p.SpeechDeliveryId="";p.SpeechById="";p.SpeechSequence=0;p.SpeechAtWorldSeconds=p.SpeechUntilWorldSeconds=-1;p.NpcSpeaker=outcome.Speaker;p.NpcSpeech=outcome.Notice==NarcBust?NarcBust:outcome.Reaction;p.NpcSpeechUntil=State.SimulationSeconds+7;}
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ChatDiagnostic?.Invoke("OutcomeDelivered",i.Kind,State.RoundId,State.SimulationSeconds);
 #endif
@@ -177,19 +192,20 @@ namespace Festival.Core
                     p.Cash+=payout;State.GrossSales+=payout;State.LevelSales+=payout;CrewNews(p,"Sales",MoneyNotice("SALES",payout)+"  •  "+p.Name+" sold "+name);if(npc!=null)npc.Sales++;
                     notice=MoneyNotice("SOLD "+name,payout)+(pay<SalePay(i.Ask,1)?"  •  talked down from $"+full:"");result="SOLD +$"+payout;i.ReservedItemId="";
                 }
-                else{PushedAskFailed(i,p);if(i.ReservedItemId!=""){notice=HandBack(i,p,i.TrustDance&&i.Turns.Count==0?"They walk off":"NO SALE");result="NO SALE";}}
+                else{PushedAskFailed(i,p);if(i.ReservedItemId!=""){notice=HandBack(i,p,"NO SALE");result="NO SALE";}}
             }
             if(i.Kind=="Buy")SettleBuy(i,p);
             if(i.Kind=="Police"){if(i.Score>=.75)WaveOn(i.TargetId,p);else HeardOut(i.TargetId,p);}
             DeliverConversationOutcome(i,p,notice,result);
         }
-        // A sale's unit back from a failed or cut talk: in the seller's gear, in their hand again if it left it, or at their feet
-        // when their hands filled meanwhile. Returns head and where the unit went.
+        // A sale's unit back from a failed or cut talk: in the seller's gear (a last unit in the slot its stack left), in their hand
+        // again if it left it, or at their feet when their hands filled meanwhile. Returns head and where the unit went.
         string HandBack(InteractionState i,PlayerState p,string head)
         {
             string item=i.ReservedItemId,name=Catalog.FindItem(item)?.Name??item;i.ReservedItemId="";
             if(!CanAdd(p,item,1)){State.Drops.Add(new DropState{Id=Id("drop"),ItemId=item,Count=1,X=p.X,Z=p.Z});return head+"  •  "+name+" dropped at your feet";}
-            Add(p,item,1);if(i.ReservedEquipped)p.EquippedItemId=item;return head+"  •  "+name+" back in your hand";
+            if(Count(p,item)==0&&i.ReservedSlot>=0)p.Inventory.Insert(Math.Min(i.ReservedSlot,p.Inventory.Count),new ItemStack{ItemId=item,Count=1});else Add(p,item,1);
+            if(i.ReservedEquipped)p.EquippedItemId=item;return head+"  •  "+name+(p.EquippedItemId==item?" back in your hand":" back in your gear");
         }
     }
 }

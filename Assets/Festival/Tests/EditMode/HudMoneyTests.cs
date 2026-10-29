@@ -171,7 +171,8 @@ namespace Festival.Tests
             news.Follow(game.State,ash,2);Assert.That(news.Take(0)?.Text,Is.EqualTo("GIGGLE TANK LOST"),"a new level's news is all new, the loss its start made included");
         }
         // A money line that another line replaces inside its MoneyNewsSeconds comes back before the rest of the queue. A line that had
-        // its slot, or that a clear wiped, does not, and a new level forgets it.
+        // its slot does not. A clear (an accepted reply) inside the slot gives the line straight back to the notice, and one after it
+        // does not. A clear followed by another line inside the slot brings it back. A new level forgets it.
         [Test] public void AMoneyLineCutShortComesBackFirst()
         {
             var game=Hosted(0);var ash=game.Player("ash");var news=new FestivalHudText.MoneyNewsFollower();news.Follow(game.State,ash,1);
@@ -183,19 +184,47 @@ namespace Festival.Tests
             Assert.That(news.Take(12.9f)?.Text,Is.EqualTo(Friend),"the friend's line cut at .4 s shows again, before the stash line");
             news.Watch(Friend,13f);news.Watch(Sold,12.9f+FestivalHudText.MoneyNewsSeconds+.1f);
             Assert.That(news.Take(16)?.Text,Is.EqualTo(Stash),"a line that had its slot does not show again");
-            news.Watch("",16.5f);news.Watch(Sold,16.6f);
+            Assert.That(news.Watch("",16.5f),Is.EqualTo(Stash),"an accepted reply's clear inside the slot gives the line straight back");
+            news.Watch(Sold,16.6f);
             Assert.That(news.Take(19)?.Text,Is.EqualTo(Stash),"a line cleared by your last reply's key and then cut by your sale shows again");
-            news.Watch("",19.5f);news.Watch(Sold,19+FestivalHudText.MoneyNewsSeconds+.1f);
+            news.Watch("",19.5f);
+            Assert.That(news.Watch("",19+FestivalHudText.MoneyNewsSeconds+.05f),Is.Null,"a clear after the slot gives nothing back");
+            news.Watch(Sold,19+FestivalHudText.MoneyNewsSeconds+.1f);
             Assert.That(news.Take(23),Is.Null,"a clear with no other line inside the slot is not another line");
             Log(Friend);Assert.That(news.Take(24)?.Text,Is.EqualTo(Friend),"setup: the line is up");
             game.State.RoundId="next-level";ash.MoneyNewsLog.Clear();news.Follow(game.State,ash,1);news.Watch(Sold,24.4f);
             Assert.That(news.Take(27),Is.Null,"a new level forgets the last level's line");
         }
-        // A change to your cash or the level's SALES lights the card's money as a paid sale does; the stash and items have no flash.
-        [Test] public void OnlyCashAndSalesNewsFlashTheCard()
+        // The card lights each figure whose value moved, whoever moved it and whatever told you, and nothing else. A change made
+        // while the card is hidden lights as it comes back; a join, a rejoin and a new level only take note.
+        [Test] public void TheCardLightsEachFigureThatMovedAndNothingElse()
         {
-            foreach(var (kind,flashes) in new[]{("Cash",true),("Sales",true),("Stash",false),("Items",false)})
-                Assert.That(FestivalHudText.FlashesMoney(new MoneyNews{Kind=kind}),Is.EqualTo(flashes),kind);
+            var game=Hosted(0);var ash=game.Player("ash");var sam=game.Player("sam");ash.Cash=sam.Cash=40;
+            game.State.Stashes.Add(new StashState{Id="box",X=ash.X,Z=ash.Z});ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            var mine=new FestivalHudText.MoneyFlash();var theirs=new FestivalHudText.MoneyFlash();float now=10;int command=0;
+            // The card's money, up to the life (a tripper's dose follows it).
+            string Card(FestivalHudText.MoneyFlash flash,PlayerState p,bool shown=true,int connection=1){flash.Watch(game.State,p,connection,shown,now);string card=FestivalHudText.Vitals(game.State,p,lit:flash.Lit(now,true)).Replace("\n"," | ");return card.Substring(0,card.IndexOf("  •  ALIVE",System.StringComparison.Ordinal));}
+            void Run(string id,string kind,string item,int amount){now+=2;Assert.That(game.Execute(id,new GameCommand{Id="flash-"+(command++),Kind=kind,TargetId="box",ItemId=item,Amount=amount}).Accepted,Is.True,"setup: "+id+" "+kind+" "+item+amount);}
+            const string Money="HP 100  •  {0}  •  {1} | {2}";
+            string Lit(string figure)=>"<color=#FC7741>"+figure+"</color>";
+            Assert.That(Card(mine,ash),Is.EqualTo(string.Format(Money,"$40","STASH $0","SALES $0")),"a first view only takes note");Card(theirs,sam);
+            Run("ash","Deposit","stock_lsd",1);
+            Assert.That(Card(theirs,sam),Is.EqualTo(string.Format(Money,"$40","STASH $0","SALES $0")),"a friend's stock into the stash lights nothing on Sam's card");
+            Assert.That(Card(mine,ash),Is.EqualTo(string.Format(Money,"$40","STASH $0","SALES $0")),"nor on Ash's");
+            Run("ash","Deposit","",5);
+            Assert.That(Card(mine,ash),Is.EqualTo(string.Format(Money,Lit("$35"),Lit("STASH $5"),"SALES $0")),"your own cash into the stash lights your cash and the STASH");
+            Assert.That(Card(theirs,sam),Is.EqualTo(string.Format(Money,"$40",Lit("STASH $5"),"SALES $0")),"a friend's lights only the STASH");
+            now+=FestivalHudText.SaleStampSeconds;
+            Assert.That(Card(mine,ash),Is.EqualTo(string.Format(Money,"$35","STASH $5","SALES $0")),"each for the stamp's 1.5 s");
+            Run("ash","Withdraw","",5);
+            Assert.That(Card(theirs,sam,shown:false),Does.Not.Contain("<color"),"setup: Sam's card is under the pass");now+=5;
+            Assert.That(Card(theirs,sam),Is.EqualTo(string.Format(Money,"$40",Lit("STASH $0"),"SALES $0")),"a change made under the pass lights as the card comes back");
+            now+=2;game.State.LevelSales+=10;
+            Assert.That(Card(theirs,sam),Is.EqualTo(string.Format(Money,"$40","STASH $0",Lit("SALES $10"))),"a friend's sale lights only SALES");
+            now+=2;ash.Cash+=5;
+            Assert.That(Card(mine,ash,connection:2),Does.Not.Contain("<color"),"a rejoin takes note");
+            now+=2;game.State.RoundId="next-level";game.State.LevelSales=0;
+            Assert.That(Card(theirs,sam),Does.Not.Contain("<color"),"a new level's fresh SALES takes note");
         }
         [Test] public void TheShelfsThankYouNamesThePrice()
         {
@@ -206,7 +235,7 @@ namespace Festival.Tests
 
         // A sale's outcome reads in your money wherever it shows, from what the host wrote in dollars: its notice in the HUD's message
         // and the chat window, its result on the stamp. A paid sale flashes your cash and SALES on the player card, lit every other
-        // quarter-second for the stamp's 1.5 s.
+        // quarter-second for the stamp's 1.5 s; with Reduced Motion on they stay lit for the 1.5 s, with no blink.
         [Test] public void ASalesResultReadsInYourMoneyAndFlashesTheCard()
         {
             var game=new FestivalSimulation(7);game.AddPlayer("ash","Ash");var sam=game.AddPlayer("sam","Sam");game.State.FestivalIndex=1;game.State.Phase="Playing";game.State.Npcs.Clear();
@@ -219,9 +248,14 @@ namespace Festival.Tests
             Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Notice),Is.EqualTo("SOLD Tongue Stamps  •  +20 ramen packets"));
             Assert.That(FestivalHudText.MoneyText(game.State,sam,outcome.Result),Is.EqualTo("SOLD +20 ramen packets"));
             var palm=Day(0);var you=Crew(palm,"you",1);you.Cash=87;palm.StashCash=5;palm.LevelSales=120;
-            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:true),Is.EqualTo("HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE"),"cash and SALES lit");
-            Assert.That(FestivalHudText.Vitals(palm,you,flashMoney:false),Is.EqualTo("HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE"),"unlit as before");
-            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(FestivalHudText.MoneyFlashOn),Is.EqualTo(new[]{true,true,false,true,false,false,false}),"lit on the even quarter-seconds of the stamp's 1.5 s");
+            const string Lit="HP 100  •  <color=#FC7741>$87</color>  •  STASH $5\n<color=#FC7741>SALES $120</color>  •  ALIVE",Unlit="HP 100  •  $87  •  STASH $5\nSALES $120  •  ALIVE";
+            Assert.That(FestivalHudText.Vitals(palm,you,lit:(true,false,true)),Is.EqualTo(Lit),"cash and SALES lit");
+            Assert.That(FestivalHudText.Vitals(palm,you),Is.EqualTo(Unlit),"unlit as before");
+            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(t=>FestivalHudText.MoneyFlashOn(t)),Is.EqualTo(new[]{true,true,false,true,false,false,false}),"lit on the even quarter-seconds of the stamp's 1.5 s");
+            Assert.That(new[]{0f,.1f,.3f,.5f,1.4f,1.5f,-1f}.Select(t=>FestivalHudText.MoneyFlashOn(t,true)),Is.EqualTo(new[]{true,true,true,true,true,false,false}),"Reduced Motion: lit through the 1.5 s, no blink");
+            var sold=new FestivalHudText.MoneyFlash();you.Cash-=10;palm.LevelSales-=10;sold.Watch(palm,you,0,true,9);you.Cash+=10;palm.LevelSales+=10;sold.Watch(palm,you,0,true,10);
+            foreach(float t in new[]{10f,10.3f,10.8f,11.3f,11.45f})Assert.That(FestivalHudText.Vitals(palm,you,lit:sold.Lit(t,true)),Is.EqualTo(Lit),"Reduced Motion keeps the sale's cash and SALES lit at "+(t-10)+" s");
+            Assert.That(FestivalHudText.Vitals(palm,you,lit:sold.Lit(11.5f,true)),Is.EqualTo(Unlit),"and unlit once the 1.5 s end");
             Assert.That(FestivalHudText.SaleStampSeconds,Is.EqualTo(1.5f));
         }
 
@@ -252,7 +286,9 @@ namespace Festival.Tests
         }
 
         // The chat window is open on the sale's last line while the stamp shows, and the stamp overlaps its top-left corner. Drawn
-        // over it, the stamp hides while the pass, the map or a dance covers the screen.
+        // over it, the stamp hides while the pass, the map or a dance covers the screen. It catches no clicks, and it waits while a
+        // card it would draw over shows. Its 1.5 s run only while it shows, so a card up longer than that (a first-time tip, 6 s)
+        // holds the whole stamp until it goes; a level that ends under a card drops it.
         [Test] public void TheSaleStampDrawsOverTheChatWindowAndHidesUnderThePass()
         {
             const System.Reflection.BindingFlags Private=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
@@ -263,13 +299,72 @@ namespace Festival.Tests
                 var stamp=hud.transform.Find("Festival HUD/Sale stamp");var chat=hud.transform.Find("Festival HUD/Chat window");
                 Assert.That(stamp!=null&&chat!=null,Is.True,"setup: the HUD builds both");
                 Assert.That(stamp.GetSiblingIndex(),Is.GreaterThan(chat.GetSiblingIndex()),"the stamp is drawn after the chat window");
-                typeof(FestivalHud).GetField("saleStampAt",Private).SetValue(hud,UnityEngine.Time.unscaledTime);
-                var show=typeof(FestivalHud).GetMethod("ShowSaleStamp",Private);var day=Day(0);
-                show.Invoke(hud,new object[]{day,true});Assert.That(stamp.gameObject.activeSelf,Is.True,"a sale just stamped, with nothing over it");
-                show.Invoke(hud,new object[]{day,false});Assert.That(stamp.gameObject.activeSelf,Is.False,"under the pass");
+                var show=typeof(FestivalHud).GetMethod("ShowSaleStamp",Private);var track=typeof(FestivalHud).GetMethod("TrackSale",Private);
+                var day=Day(0);day.RoundId="day_1";var you=Crew(day,"you",0);
+                void Sell(){track.Invoke(hud,new object[]{day,you});you.ConversationOutcomes.Add(new ConversationOutcome{RoundId=day.RoundId,InteractionId="talk_"+you.ConversationOutcomes.Count,Kind="Sale",Result="SOLD +$10",Sequence=++you.ConversationOutcomeSequence});track.Invoke(hud,new object[]{day,you});}
+                bool Shows(bool uncovered,float seconds){show.Invoke(hud,new object[]{day,uncovered,seconds});return stamp.gameObject.activeSelf;}
+                Assert.That(stamp.GetComponentsInChildren<UnityEngine.UI.Graphic>(true).Where(g=>g.raycastTarget).Select(g=>g.name),Is.Empty,"the stamp catches no clicks");
+                var covered=new[]{"Light Show questions","First-time tip card","Counter price confirmation","Life banner","Held item label"}.Select(name=>hud.transform.Find("Festival HUD/"+name)).ToArray();
+                Assert.That(covered,Has.None.Null,"setup: the HUD builds each card the stamp would cover");
+                foreach(var card in covered)card.gameObject.SetActive(false);
+                Assert.That(Shows(true,0),Is.False,"no stamp before a sale");
+                Sell();Assert.That(Shows(true,0),Is.True,"a sale just stamped, with nothing over it");
+                foreach(var card in covered)
+                {
+                    card.gameObject.SetActive(true);Assert.That(Shows(true,0),Is.False,"hidden while the "+card.name+" shows");
+                    card.gameObject.SetActive(false);
+                }
+                Assert.That(Shows(true,0),Is.True,"back once the card goes");
+                Assert.That(Shows(false,0),Is.False,"under the pass");
+                var tip=covered[1].gameObject;Sell();tip.SetActive(true);
+                for(int frame=0;frame<4;frame++)Assert.That(Shows(true,.5f),Is.False,"setup: under the tip for "+(frame+1)*.5f+" s");
+                tip.SetActive(false);
+                Assert.That(new[]{Shows(true,.5f),Shows(true,.5f),Shows(true,.5f),Shows(true,.5f)},Is.EqualTo(new[]{true,true,true,false}),"a stamp a tip held for 2 s shows its whole 1.5 s once the tip goes");
+                Sell();tip.SetActive(true);Shows(true,.5f);day.Phase="Results";Shows(true,.5f);tip.SetActive(false);day.Phase="Playing";
+                Assert.That(Shows(true,0),Is.False,"a level that ends under the tip drops its stamp");
             }
             finally{UnityEngine.Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();}
         }
+
+        // In the Esc menu's CREW + NEARBY list, a deposit keeps the menu open for the next click, and a dance shuts it so the dance
+        // has your keys.
+        [Test] public void TheMenusListStaysOpenForADepositAndShutsForADance()
+        {
+            const System.Reflection.BindingFlags Private=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
+            var go=new UnityEngine.GameObject("Menu list HUD");FestivalSession session=null;
+            try
+            {
+                session=go.AddComponent<FestivalSession>();typeof(FestivalSession).GetMethod("Awake",Private).Invoke(session,null);
+                var hud=go.AddComponent<FestivalHud>();typeof(FestivalHud).GetMethod("Awake",Private).Invoke(hud,null);
+                var day=Day(0);var you=Crew(day,"you",0);you.Cash=40;
+                day.Stashes.Add(new StashState{Id="box",X=0,Z=1});day.Npcs.Add(new NpcState{Id="buyer_1",Role="Buyer",X=0,Z=1.5f,Yaw=180});
+                typeof(FestivalHud).GetMethod("UpdateActions",Private).Invoke(hud,new object[]{day,you});
+                var rows=go.GetComponentsInChildren<UnityEngine.UI.Button>(true).Where(b=>b.gameObject.activeSelf&&b.name.StartsWith("Action:")).ToList();
+                var deposit=rows.Find(b=>b.name=="Action:Deposit $5 in shared stash");var dance=rows.Find(b=>b.name=="Action:Dance with festivalgoer");
+                Assert.That(deposit!=null&&dance!=null,Is.True,"setup: the list offers both: "+string.Join(" | ",rows.Select(b=>b.name)));
+                session.MenuOpen=true;deposit.onClick.Invoke();
+                Assert.That(session.MenuOpen,Is.True,"a deposit keeps the menu open for the next click");
+                dance.onClick.Invoke();
+                Assert.That(session.MenuOpen,Is.False,"a dance shuts it, so the dance has your keys");
+            }
+            finally
+            {
+                if(session!=null){session.Controls?.Dispose();(typeof(FestivalSession).GetProperty("Settings")?.GetValue(session) as System.IDisposable)?.Dispose();
+                    if(session.ViewCamera!=null)UnityEngine.Object.DestroyImmediate(session.ViewCamera.gameObject);
+                    var actors=typeof(FestivalSession).GetField("actorRoot",Private).GetValue(session) as UnityEngine.Transform;if(actors!=null)UnityEngine.Object.DestroyImmediate(actors.gameObject);}
+                UnityEngine.Object.DestroyImmediate(go);UnityEditor.EditorUtility.UnloadUnusedAssetsImmediate();
+            }
+        }
+        // Every command the list sends: a click on one that starts something shuts the menu, and any other keeps it open.
+        [TestCase("Dance",true)][TestCase("Conversation",true)][TestCase("StartSale",true)][TestCase("StartBuy",true)]
+        [TestCase("ConfirmDance",true)][TestCase("ConfirmChat",true)][TestCase("Police",true)]
+        [TestCase(FestivalSimulation.RideWheelKind,true)][TestCase(FestivalSimulation.RideCarKind,true)][TestCase(FestivalSimulation.DeckSetKind,true)][TestCase("Dj",true)]
+        [TestCase("Extract",true)][TestCase("LostProperty",true)][TestCase("FindFriend",true)][TestCase("BeginRelease",true)][TestCase("BeginRevival",true)]
+        [TestCase("Rescue",true)][TestCase("Drag",true)][TestCase("CarryBody",true)][TestCase("HelpSelf",true)][TestCase("Use",true)]
+        [TestCase(FestivalSimulation.LieDownKind,true)][TestCase("Cancel",true)][TestCase(FestivalSimulation.TestFreeKind,true)]
+        [TestCase("Deposit",false)][TestCase("Withdraw",false)][TestCase("Pickup",false)][TestCase("Transfer",false)][TestCase("AcceptTransfer",false)]
+        [TestCase("CancelTransfer",false)][TestCase("Chime",false)][TestCase("Buy",false)][TestCase(FestivalSimulation.GrabGiggleTankKind,false)][TestCase("",false)]
+        public void AListedCommandShutsTheMenuOnlyWhenItStartsSomething(string kind,bool closes)=>Assert.That(FestivalHudText.ClosesMenu(kind),Is.EqualTo(closes),kind==""?"a line that does nothing":kind);
 
         [Test] public void TheHudLeavesEveryAmountToTheFormatter()
         {

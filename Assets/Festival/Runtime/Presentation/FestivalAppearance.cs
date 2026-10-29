@@ -14,6 +14,8 @@ namespace Festival.Presentation
             Role=role;
             Gender=Pick(id,"gender",2);Shape=Pick(id,"shape",3);Face=Pick(id,"face",6);
             Shirt=Pick(id,"shirt",4);Pants=PickWeighted(id,"pants",PantsWeights);Shoes=Pick(id,"shoes",4);
+            // The hoodie's folded hood covers the back of the crew scarf, so the crew never wears it.
+            if(role==FestivalCharacter.CrewRole&&Shirt==1)Shirt=new[]{0,2,3}[Pick(id,"crewshirt",3)];
             Headgear=Optional(id,"headgear",4);Sunglasses=Optional(id,"sunglasses",4);
             FacialHair=Gender==0?Optional(id,"facialhair",4):-1;
             Hairstyle=Pick(id,"hairstyle",4);Accessory=Optional(id,"accessory",4);
@@ -74,7 +76,12 @@ namespace Festival.Presentation
             new Color(.95f,.94f,.72f),new Color(.33f,.73f,.98f),new Color(.91f,.49f,.24f),new Color(.30f,.36f,.40f)};
 
         public Color SkinTint => Skin[SkinColor];
-        public Color SleeveTint => Role=="Friend"?new Color(.99f,.44f,.22f):Role=="Security"?new Color(.30f,.48f,.72f):Cloth[ShirtColor];
+        public Color SleeveTint => Role=="Friend"?FriendOrange:Role=="Security"?new Color(.30f,.48f,.72f):Cloth[ShirtColor];
+        static readonly Color FriendOrange=new Color(.99f,.44f,.22f);
+        // Slot 7 cuts the guard's vest, the friend's jacket and the stall aprons, so those roles must not take a random accent.
+        // The vendor colours are FestivalArtView's CanvasRose and CanvasGold, the colours of their stall signs.
+        public Color AccentTint => Role=="Medic"?new Color(.20f,.92f,.71f):Role=="Security"?new Color(.86f,.95f,.16f):Role=="Friend"?FriendOrange
+            :Role=="Vendor0"?new Color(.93f,.26f,.47f):Role=="Vendor2"?new Color(.98f,.68f,.21f):Accent[AccentColor];
         // CROWD-4: the dark, muted green a suspicious festivalgoer's skin turns. It stays darker and greyer than VISION-5's neon
         // TRUE glow, so the two never read alike.
         static readonly Color ZombieGreen=new Color(.38f,.50f,.32f);
@@ -95,7 +102,7 @@ namespace Festival.Presentation
             var shirt=SleeveTint;
             var pants=Cloth[PantsColor];
             var colors=new[]{Skin[SkinColor],shirt,pants,Cloth[ShoeColor],new Color(.98f,.95f,.82f),
-                new Color(.035f,.04f,.08f),Hair[HairColor],Role=="Medic"?new Color(.20f,.92f,.71f):Accent[AccentColor]};
+                new Color(.035f,.04f,.08f),Hair[HairColor],AccentTint};
             // Garment seams belong to the fabric. Reserve the vivid palette for
             // accessories and role markers instead of outlining every panel.
             if(garment)colors[7]=Color.Lerp(shirt,colors[7],.18f);

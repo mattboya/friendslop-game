@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using Festival.Core;
 public static class SimulationTests {
@@ -81,15 +82,22 @@ public static class SimulationTests {
   Assert(q.VisualConfettiBurstSequence==0,"an older snapshot counts no burst");
   Assert(old.Execute(q.Id,C("Use","confetti")).Accepted&&q.VisualConfettiBurstSequence==1,"its next burst counts one, got "+q.VisualConfettiBurstSequence);
  }
- // Restore refuses a negative public event count on any player, as it refuses a negative CampEggSequence, and keeps the
+ // Restore refuses a negative event count on any player, as it refuses a negative CampEggSequence, and keeps the
  // round it had. A count of zero or more restores as saved.
  static void RestoreRefusesANegativeEventCount(){
   var options=new JsonSerializerOptions{IncludeFields=true};var s=new FestivalSimulation();s.AddPlayer("a","A");s.AddPlayer("b","B");
   string json=JsonSerializer.Serialize(s.State,options);
-  foreach(var counter in new (string Name,Action<PlayerState,int> Set,Func<PlayerState,int> Get)[]{
-   ("VisualGiggleTakeSequence",(p,v)=>p.VisualGiggleTakeSequence=v,p=>p.VisualGiggleTakeSequence),
-   ("VisualConfettiBurstSequence",(p,v)=>p.VisualConfettiBurstSequence=v,p=>p.VisualConfettiBurstSequence),
-   ("GiggleTankBankSequence",(p,v)=>p.GiggleTankBankSequence=v,p=>p.GiggleTankBankSequence)}){
+  foreach(var counter in new (string Name,Action<PlayerState,long> Set,Func<PlayerState,long> Get)[]{
+   ("VisualGiggleTakeSequence",(p,v)=>p.VisualGiggleTakeSequence=(int)v,p=>p.VisualGiggleTakeSequence),
+   ("VisualConfettiBurstSequence",(p,v)=>p.VisualConfettiBurstSequence=(int)v,p=>p.VisualConfettiBurstSequence),
+   ("GiggleTankBankSequence",(p,v)=>p.GiggleTankBankSequence=(int)v,p=>p.GiggleTankBankSequence),
+   ("SpeechSequence",(p,v)=>p.SpeechSequence=v,p=>p.SpeechSequence),
+   ("VisualDanceStepSequence",(p,v)=>p.VisualDanceStepSequence=(int)v,p=>p.VisualDanceStepSequence),
+   ("VisualReceiptSequence",(p,v)=>p.VisualReceiptSequence=(int)v,p=>p.VisualReceiptSequence),
+   ("DialogueRevision",(p,v)=>p.DialogueRevision=v,p=>p.DialogueRevision),
+   ("ConversationOutcomeSequence",(p,v)=>p.ConversationOutcomeSequence=v,p=>p.ConversationOutcomeSequence),
+   ("ConversationDismissedSequence",(p,v)=>p.ConversationDismissedSequence=v,p=>p.ConversationDismissedSequence),
+   ("MoneyNewsSequence",(p,v)=>p.MoneyNewsSequence=v,p=>p.MoneyNewsSequence)}){
    var good=JsonSerializer.Deserialize<RoundState>(json,options);counter.Set(good.Players[1],3);
    var restored=new FestivalSimulation();restored.Restore(good);Assert(counter.Get(restored.Player("b"))==3,counter.Name+" = 3 restores as saved");
    var bad=JsonSerializer.Deserialize<RoundState>(json,options);counter.Set(bad.Players[1],-1);
@@ -99,7 +107,30 @@ public static class SimulationTests {
   }
  }
  static int Count(PlayerState p,string item)=>p.Inventory.Find(i=>i.ItemId==item)?.Count??0;
+ // FestivalSession.ViewFor gives the host's own view these copies, so each copy carries every field and shares no list,
+ // array or object with the host's state, all the way down.
+ static void ViewCopiesCarryEveryFieldAndShareNothing(){
+  var options=new JsonSerializerOptions{IncludeFields=true};
+  var doing=new InteractionState{Id="sale",PlayerId="a",TargetId="n",Kind="Sale",ChartSeed=3,Hunch="h",HeadStart=2,HintedReply=1,Ask=10,TrustDance=true};
+  doing.Inputs.Add(new RhythmInput{Direction=2,TimeSeconds=1.5,Release=true});doing.WitnessIds.Add("w");doing.Chat.Opener="o";doing.Chat.Questions[1]="q";doing.Chat.Answers[2]="an";
+  var turn=new ConversationTurn{Reaction="re",Line="li",Pick=1};turn.Replies[0]="r";turn.Grades[2]=-1;turn.Garbled[1]=true;turn.GrammarKeys.Add("k");doing.Turns.Add(turn);
+  var stash=new StashState{Id="s",X=1,Z=2};stash.Items.Add(new ItemStack{ItemId="x",Count=2});
+  var shop=new ShopStockState{ItemId="x",CampAvailable=1,MarketAvailable=2};var dose=new PlayerDose{PlayerId="a",Substance="lsd",Dose=3};var body=new BodyState{PlayerId="b",X=1,Z=2};
+  var offer=new TransferOffer{Id="t",FromId="a",ToId="b",ItemId="x",Amount=1,ExpiresAt=9};var vote=new CampReviewVote{PlayerId="a",TargetId="b",Award=2};
+  foreach(var (source,copy) in new (object,object)[]{(doing,doing.Copy()),(stash,stash.Copy()),(shop,shop.Copy()),(dose,dose.Copy()),(body,body.Copy()),(offer,offer.Copy()),(vote,vote.Copy())}){
+   string name=source.GetType().Name,was=JsonSerializer.Serialize(source,options);
+   Assert(JsonSerializer.Serialize(copy,options)==was,"a "+name+" copy carries every field: "+JsonSerializer.Serialize(copy,options));
+   var reached=new HashSet<object>(ReferenceEqualityComparer.Instance);Reach(source,reached);var mine=new HashSet<object>(ReferenceEqualityComparer.Instance);Reach(copy,mine);
+   Assert(!mine.Overlaps(reached),"a "+name+" copy shares a list, array or object with its source");
+  }
+ }
+ static void Reach(object at,HashSet<object> seen){
+  if(at==null||at is string||at.GetType().IsValueType||!seen.Add(at))return;
+  if(at is System.Collections.IList list){foreach(var item in list)Reach(item,seen);return;}
+  foreach(var f in at.GetType().GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance))if(!f.FieldType.IsValueType)Reach(f.GetValue(at),seen);
+ }
  public static void Run(){
+  ViewCopiesCarryEveryFieldAndShareNothing();
   ConfettiTellsThePlayerHowManyItDistracted();ConfettiSaysWhyItFooledNobody();FooledFestivalgoersFaceTheBurst();CampConfettiIsAFreePartyTrick();OlderSnapshotsCountBurstsFromZero();RestoreRefusesANegativeEventCount();
   var capacity=new FestivalSimulation();for(int i=0;i<8;i++)capacity.AddPlayer(i.ToString(),"P");bool denied=false;try{capacity.AddPlayer("9","P");}catch(InvalidOperationException){denied=true;}Assert(denied&&capacity.State.Players.Count==8,"capacity");
   var shop=new FestivalSimulation();var p=shop.AddPlayer("a","A");var shelf=Catalog.ShopPoint(true,shop.State.VendorOffers.IndexOf("medical_voucher"));p.X=shelf.X;p.Z=shelf.Z;Assert(shop.Execute("a",C("HoldOffer","medical_voucher")).Accepted,"hold shelf copy");Assert(!shop.Execute("a",C("HoldOffer","poi_practice")).Accepted,"one held item");p.X=0;p.Z=7;var buy=C("Buy","medical_voucher",amount:1);Assert(shop.Execute("a",buy).Accepted,"buy");shop.Execute("a",buy);Assert(p.Cash==15&&p.Inventory[0].Count==1,"buy exactly once");Assert(!shop.Execute("a",C("Buy","medical_voucher",amount:-1)).Accepted,"negative buy");
@@ -118,7 +149,7 @@ public static class SimulationTests {
   Assert(!s.Execute("a",C("FinishReview")).Accepted,"review blocks shopping until votes");for(int award=0;award<3;award++)Assert(s.Execute("a",C("ReviewVote",target:"b",amount:award)).Accepted,"host votes a friend for each award");Assert(!s.Execute("a",C("FinishReview")).Accepted,"wait for connected crew");for(int award=0;award<3;award++)Assert(s.Execute("b",C("ReviewVote",target:"a",amount:award)).Accepted,"crew votes a friend for each award");Assert(!s.Execute("b",C("FinishReview")).Accepted,"only host opens shop");Assert(s.Execute("a",C("FinishReview")).Accepted&&s.State.Phase=="Shopping","review precedes next shop");
   s=Game();s.State.LevelIndex=1;s.State.DurationSeconds=.2;s.Tick(.3);Assert(s.State.Result=="Time expired","night deadline");
   s=Game();p=s.Player("a");var witness=s.State.Npcs[0];witness.X=p.X;witness.Z=p.Z+1;witness.Yaw=180;var nonWitness=s.State.Npcs[10];nonWitness.X=35;nonWitness.Z=35;
-  Assert(s.Execute("a",C("Dance",target:witness.Id)).Accepted,"local dance starts");s.Tick(9);
+  Assert(s.Execute("a",C("Dance",target:witness.Id)).Accepted,"local dance starts");for(int k=0;k<400&&p.InteractionId!="";k++)s.Tick(.05);
   var localSuspicion=witness.Observers.Find(o=>o.PlayerId==p.Id);var remoteSuspicion=nonWitness.Observers.Find(o=>o.PlayerId==p.Id);
   Assert(localSuspicion!=null&&localSuspicion.Suspicion>0&&remoteSuspicion!=null&&remoteSuspicion.Suspicion==0,"suspicion is observer-local");
   s=Game();p=s.Player("a");s.State.Npcs.Clear();p.X=0;p.Z=0;var listener=new NpcState{Id="listener",X=0,Z=1,Yaw=180,CanTalk=true};listener.Observers.Add(new ObserverState{PlayerId=p.Id,Suspicion=40});s.State.Npcs.Add(listener);

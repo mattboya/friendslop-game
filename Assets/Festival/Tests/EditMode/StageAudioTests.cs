@@ -12,8 +12,6 @@ namespace Festival.Tests
     // changing calibrated input time. After each phrase of a set the crowd roars with its score.
     public sealed class StageAudioTests
     {
-        private static string Clip(FestivalMusic.Track track)=>track==null?"nothing":track.Clip;
-
         // At quit Unity can destroy the speakers before the stage audio's OnDisable stops them (native smoke, 2026-10-16).
         [Test]public void StoppingAfterTheSpeakersAreGoneThrowsNothing()
         {
@@ -140,7 +138,8 @@ namespace Festival.Tests
             return stage;
         }
         static AudioSource[] SmallDecks(FestivalStageAudio stage)=>(AudioSource[])typeof(FestivalStageAudio).GetField("smallDecks",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);
-        static void RemoveStage(GameObject host)
+        // EditMode skips OnDestroy, so every test that wakes a FestivalStageAudio cleans up its speakers and crowd roar here.
+        internal static void RemoveStage(GameObject host)
         {
             var stage=host.GetComponent<FestivalStageAudio>();if(stage!=null&&Decks(stage)!=null)UnityEngine.Object.DestroyImmediate(Decks(stage)[0].gameObject);
             if(stage!=null&&SmallDecks(stage)!=null)UnityEngine.Object.DestroyImmediate(SmallDecks(stage)[0].gameObject);
@@ -180,7 +179,8 @@ namespace Festival.Tests
             }
             finally{RemoveStage(host);}
         }
-        // The cross-fade times Unity's inverse rolloff past minDistance 12, the loudness each stage's crowd hears.
+        // The cross-fade times Unity's inverse rolloff past minDistance 12, the loudness each stage's crowd hears. The small stage is
+        // heard only within its earshot (StageMusic.SmallHearingRadius); inside it the songs slide from one to the other.
         [Test]public void AListenerAtEachStageHearsMostlyItsOwnSong()
         {
             float Heard(float x,float z,int stage)
@@ -193,20 +193,33 @@ namespace Festival.Tests
             {
                 int other=1-own;
                 Assert.That(FestivalStageAudio.Mix(x,z,own),Is.GreaterThan(.95f),who+" gets nearly all of its own stage");
-                Assert.That(Heard(x,z,own),Is.GreaterThan(20*Heard(x,z,other)),who+" hears its own song over 20 times louder than the other");
+                Assert.That(Heard(x,z,own),Is.GreaterThan(15*Heard(x,z,other)),who+" hears its own song over 15 times louder than the other");
             }
-            float lastMain=2,lastSmall=-1;
-            for(int k=0;k<=20;k++)
+            Assert.That(FestivalStageAudio.Mix(StageMusic.SmallX,StageMusic.SmallZ,StageMusic.Small),Is.EqualTo(1).Within(1e-4f),"the small stage's song is full at its front");
+            Assert.That(FestivalStageAudio.Mix(StageMusic.SmallX,StageMusic.SmallZ,StageMusic.Main),Is.EqualTo(0).Within(1e-4f),"with none of the main stage's");
+            float halfX=(StageMusic.MainX+StageMusic.SmallX)/2,halfZ=(StageMusic.MainZ+StageMusic.SmallZ)/2;
+            Assert.That(FestivalStageAudio.Mix(halfX,halfZ,StageMusic.Main),Is.GreaterThan(FestivalStageAudio.Mix(halfX,halfZ,StageMusic.Small)),"halfway between the fronts the main stage wins");
+            for(int k=0;k<72;k++)
             {
-                float t=k/20f,x=Mathf.Lerp(StageMusic.MainX,StageMusic.SmallX,t),z=Mathf.Lerp(StageMusic.MainZ,StageMusic.SmallZ,t);
-                float main=FestivalStageAudio.Mix(x,z,StageMusic.Main),small=FestivalStageAudio.Mix(x,z,StageMusic.Small);
-                Assert.That(main*main+small*small,Is.EqualTo(1).Within(1e-4f),"equal power at step "+k);
-                Assert.That(main,Is.LessThan(lastMain));Assert.That(small,Is.GreaterThan(lastSmall),"the songs trade places step by step, "+k);lastMain=main;lastSmall=small;
+                float angle=k*Mathf.PI/36,x=StageMusic.SmallX+Mathf.Sin(angle)*(StageMusic.SmallHearingRadius+.05f),z=StageMusic.SmallZ+Mathf.Cos(angle)*(StageMusic.SmallHearingRadius+.05f);
+                Assert.That(FestivalStageAudio.Mix(x,z,StageMusic.Main),Is.EqualTo(1),"past the small stage's earshot at "+x+", "+z+" the main stage has it all");
+                Assert.That(FestivalStageAudio.Mix(x,z,StageMusic.Small),Is.EqualTo(0),"and the small stage none");
             }
-            Assert.That(FestivalStageAudio.Mix(StageMusic.MainX,StageMusic.MainZ,StageMusic.Main),Is.EqualTo(1).Within(1e-4f));
-            Assert.That(FestivalStageAudio.Mix(StageMusic.SmallX,StageMusic.SmallZ,StageMusic.Main),Is.EqualTo(0).Within(1e-4f));
+            for(int i=0;i<8;i++){var at=Festivals.Arrival(i);Assert.That(FestivalStageAudio.Mix(at.X,at.Z,StageMusic.Main),Is.EqualTo(1),"crew member "+i+" arrives to the main stage's song alone");Assert.That(FestivalStageAudio.Mix(at.X,at.Z,StageMusic.Small),Is.EqualTo(0));}
+            // A walk from the main front to the small one, half a metre a step: a smooth, equal-power slide that only ever trades one way.
+            var from=new Vector2(StageMusic.MainX,StageMusic.MainZ);var to=new Vector2(StageMusic.SmallX,StageMusic.SmallZ);int steps=Mathf.CeilToInt(Vector2.Distance(from,to)/.5f);
+            float lastMain=1,lastSmall=0;
+            for(int k=0;k<=steps;k++)
+            {
+                var at=Vector2.Lerp(from,to,k/(float)steps);float main=FestivalStageAudio.Mix(at.x,at.y,StageMusic.Main),small=FestivalStageAudio.Mix(at.x,at.y,StageMusic.Small);
+                Assert.That(main*main+small*small,Is.EqualTo(1).Within(1e-4f),"equal power at step "+k);
+                Assert.That(main,Is.LessThanOrEqualTo(lastMain).And.GreaterThanOrEqualTo(lastMain-.05f),"the main stage's song fades by .05 or less a step, "+k);
+                Assert.That(small,Is.GreaterThanOrEqualTo(lastSmall).And.LessThanOrEqualTo(lastSmall+.05f),"the small stage's song comes up by .05 or less a step, "+k);
+                Assert.That(small>0,Is.EqualTo(StageMusic.Nearer(at.x,at.y)==StageMusic.Small),"a performance at step "+k+" charts to the song heard there");
+                lastMain=main;lastSmall=small;
+            }
         }
-        static RoundState Clock(double world,string phase="Playing")=>new RoundState{Phase=phase,RoundId="same-song",SimulationSeconds=world,FestivalIndex=0,LevelIndex=1};
+        static RoundState Clock(double world,string phase="Playing")=>new RoundState{Phase=phase,RoundId="same-song",SimulationSeconds=world};
         static int Expected(FestivalMusic.Track track,double world)=>(int)Math.Floor(RhythmChart.StageSampleAtWorld(track.Beats,world));
         [Test]public void TwoViewsScheduleTheProjectedSharedWorldSampleIncludingLoopJoins()
         {

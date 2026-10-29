@@ -22,7 +22,7 @@ public sealed partial class FestivalSimulation {
         foreach(var p in State.Players){foreach(var e in p.Effects.ToArray()){e.RemainingSeconds-=dt;if(e.RemainingSeconds<=0)p.Effects.Remove(e);}if(p.Life=="Downed"){p.DownedRemaining-=dt;if(p.DownedRemaining<=0)Die(p);}if(p.DragTargetId!=""){var target=Player(p.DragTargetId);if(p.Life!="Alive"||target==null||target.Life!="Downed")p.DragTargetId="";}}
         // Evidence/arrests precede all financial settlement within a simulation tick.
         RideArtCars();RefreshCrowdApproaches();foreach(var n in State.Npcs)if(n.Kind=="Cop")PoliceTick(n,dt);else WookTick(n,dt);Film(dt);GatherAtBurn(dt);BankGiggleTanks();
-        foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0)){
+        foreach(var i in State.Interactions.ToArray())if(i.Status=="Active"){var p=Player(i.PlayerId);if(p==null||!p.Connected||(p.Life!="Alive"&&!(i.Kind=="Revival"&&p.Life=="Spirit"&&i.TargetId==p.Id))){if(p!=null)Cancel(p,"Interrupted");continue;}if(PartnerWorkedUp(i)){Cancel(p,Agitated(i.Kind));continue;}if(!TaskStillValid(i,p)){Cancel(p,"Moved away or target changed");continue;}if(!UntimedChat(i)&&State.SimulationSeconds>=i.StartSeconds+i.DurationSeconds+(IsRhythm(i)?.75:0)){
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(Talks(i.Kind))ChatDiagnostic?.Invoke("ChatTimeout",i.Kind,State.RoundId,State.SimulationSeconds);
 #endif
@@ -35,8 +35,10 @@ public sealed partial class FestivalSimulation {
     // only a few metres (ShoutRange).
     bool Sees(NpcState n,PlayerState p){double dist=Distance(n.X,n.Z,p.X,p.Z);if(dist>SightRange(n)||p.Life!="Alive"||Hidden(n,p))return false;if(dist>.1){double angle=n.Yaw*Math.PI/180;double dot=(Math.Sin(angle)*(p.X-n.X)+Math.Cos(angle)*(p.Z-n.Z))/dist;if(dot<.5)return false;}return ClearSight(n.X,n.Z,p);}
     // The set's DJ stands up on the riser, inside the stage's solid block, where the host's waist-high sight line never reaches,
-    // so they are in plain view of anyone in range who faces them, an influencer's phone included (InFrame).
-    bool ClearSight(float x,float z,PlayerState p)=>HasLineOfSight==null||Djing(p)||HasLineOfSight(x,z,p.X,p.Z);
+    // so they are in plain view of anyone in range in front of the backdrop who faces them, an influencer's phone included
+    // (InFrame). Behind it the host's sight line decides, and it always meets the backdrop or the stage block.
+    // ponytail: the backdrop's line, not its ends, so a watcher just past either end and behind that line loses the DJ too.
+    bool ClearSight(float x,float z,PlayerState p)=>HasLineOfSight==null||Djing(p)&&z<Catalog.StageBackdropZ||HasLineOfSight(x,z,p.X,p.Z);
     bool Djing(PlayerState p)=>Interaction(p.InteractionId)?.Kind=="Dj";
     // The riser is out of the crowd's reach, so it closes in on the set's DJ, strikes and gives up the chase at the stage front.
     WorldPoint CrowdReach(PlayerState p)=>Djing(p)?new WorldPoint(Catalog.StageTakeoverX,Catalog.StageTakeoverZ):new WorldPoint(p.X,p.Z);
@@ -72,12 +74,18 @@ public sealed partial class FestivalSimulation {
     void RecordDeal(NpcState cop,PlayerState p){var e=cop.Evidence.Find(x=>x.PlayerId==p.Id);if(e==null){e=new EvidenceState{PlayerId=p.Id};cop.Evidence.Add(e);}e.Kind="WitnessedDeal";e.DetainAt=State.SimulationSeconds+4;}
     // ESC-2 (SecurityStops.cs): being downed, detained or gone ends a stop; an arrest warning stands. A stopping cop follows
     // only while the player is within its sight range (12 m, 5 m in a dust storm); one with an arrest to make, all the way.
-    void PoliceTick(NpcState cop,double dt){foreach(var p in State.Players){var e=cop.Evidence.Find(x=>x.PlayerId==p.Id);if(!p.Connected||p.Life!="Alive"){if(e!=null&&!Arrests(e))cop.Evidence.Remove(e);continue;}if(e==null&&StockVisible(p)&&Sees(cop,p))e=StartStop(cop,p);if(e==null||!Pursue(cop,p,e,dt))continue;cop.TargetId=p.Id;cop.Mode=Arrests(e)?"ArrestWarning":"Stop";if(Arrests(e)&&State.SimulationSeconds>=e.DetainAt){Detain(p);cop.Mode="Patrol";return;}double dist=Distance(cop.X,cop.Z,p.X,p.Z);if(dist>2&&(Arrests(e)||dist<=SightRange(cop))){var point=Move(cop.X,cop.Z,p.X,p.Z,3*dt);cop.X=point.X;cop.Z=point.Z;}return;}if(!Confiscate(cop,dt))Patrol(cop,dt);}
+    // ESC-3: every case keeps its clocks and detains on time, but the cop walks after one: its talker first (K2: it hears a talk
+    // out), then an arrest, then the first in the crew's order (each view shows its player their own case, CaseOn). With only a
+    // detention it stands that tick, as before.
+    // Pursue turns the cop to each case in turn, so every player is seen from the facing the tick began with, the one on screen.
+    void PoliceTick(NpcState cop,double dt){PlayerState chase=null,busted=null;EvidenceState chased=null;float look=cop.Yaw;foreach(var p in State.Players){cop.Yaw=look;var e=cop.Evidence.Find(x=>x.PlayerId==p.Id);if(!p.Connected||p.Life!="Alive"){if(e!=null&&!Arrests(e))cop.Evidence.Remove(e);continue;}if(e==null&&StockVisible(p)&&Sees(cop,p))e=StartStop(cop,p);if(e==null||!Pursue(cop,p,e,dt))continue;if(Arrests(e)&&State.SimulationSeconds>=e.DetainAt){Detain(p);busted=p;continue;}if(chase==null||!TalkingTo(chase,cop)&&(TalkingTo(p,cop)||Arrests(e)&&!Arrests(chased))){chase=p;chased=e;}}if(chase==null){if(busted!=null){cop.TargetId=busted.Id;cop.Mode="Patrol";}else if(!Confiscate(cop,dt))Patrol(cop,dt);return;}cop.Yaw=Bearing(cop.X,cop.Z,chase.X,chase.Z);cop.TargetId=chase.Id;cop.Mode=Arrests(chased)?"ArrestWarning":"Stop";double dist=Distance(cop.X,cop.Z,chase.X,chase.Z);if(dist>2&&(Arrests(chased)||dist<=SightRange(cop))){var point=Move(cop.X,cop.Z,chase.X,chase.Z,3*dt);cop.X=point.X;cop.Z=point.Z;}}
     static string DetainNews(int fine,List<ItemStack> taken){var parts=new List<string>();if(fine>0)parts.Add(MoneyNotice("SECURITY FINE",-fine));if(taken.Count>0)parts.Add("SECURITY TOOK "+string.Join(", ",taken.ConvertAll(x=>x.Count+" "+(Catalog.FindItem(x.ItemId)?.Name??x.ItemId))));return string.Join("  •  ",parts);}
     void Detain(PlayerState p){if(p.Life!="Alive")return;var i=Interaction(p.InteractionId);string held=i!=null&&i.Kind=="Sale"?i.ReservedItemId:"";if(held!="")i.ReservedItemId="";Cancel(p,"Police bust");LoseGiggleTank(p);ReturnOffers(p.Id);var taken=p.Inventory.FindAll(x=>Stock(x.ItemId));p.Inventory.RemoveAll(x=>Stock(x.ItemId));if(held!=""){var s=taken.Find(x=>x.ItemId==held);if(s==null)taken.Add(new ItemStack{ItemId=held,Count=1});else s.Count++;}if(!p.Inventory.Exists(x=>x.ItemId==p.EquippedItemId))p.EquippedItemId="";int fine=Math.Min(p.Cash,10);p.Cash-=fine;if(fine>0||taken.Count>0)News(p,fine>0?"Cash":"Items",DetainNews(fine,taken));p.Life="Detained";p.EscapeProgress=0;p.X=Festivals.SecurityBuilding.CentreX;p.Z=Festivals.SecurityBuilding.CentreZ;p.DragTargetId="";}
     void ClearEvidence(string id){foreach(var n in State.Npcs)n.Evidence.RemoveAll(e=>e.PlayerId==id);}
     public const double DeathWheelSeconds=2.5;
-    public const int DeathSpinLimit=24; // Eight players, each with at most two revivals and three deaths per round.
+    // A player dies at most once more than the level's revivals, and eight players at that many deaths bound the history.
+    const int DeathsPerLevel=FestivalGuidance.RevivalsPerLevel+1;
+    public const int DeathSpinLimit=8*DeathsPerLevel;
     // The independent death stream freezes only after cancellation/refunds and returned handoffs.
     void FreezeDeathCash(PlayerState p)
     {
@@ -98,18 +106,18 @@ public sealed partial class FestivalSimulation {
         foreach(var p in state.Players)
         {
             bool spin=p.DeathSpinSequence>0;
-            if(!Finite(p.DeathSpinAt)||p.DeathSpinSequence<0||p.DeathSpinSequence>3||p.DeathSpinAmount<0||p.DeathCashDropped<0||p.DeathCashDropped!=0&&p.DeathCashDropped!=p.DeathSpinAmount
+            if(!Finite(p.DeathSpinAt)||p.DeathSpinSequence<0||p.DeathSpinSequence>DeathsPerLevel||p.DeathSpinAmount<0||p.DeathCashDropped<0||p.DeathCashDropped!=0&&p.DeathCashDropped!=p.DeathSpinAmount
                 ||p.DeathSpinId==null||p.DeathSpinRoundId==null||p.DeathSpinName==null||p.DeathSpinName.Length>24
                 ||spin&&(p.DeathSpinAt<0||p.DeathSpinAmount==0||p.DeathSpinRoundId!=state.RoundId||p.DeathSpinId!=state.RoundId+":death:"+p.Id+":"+p.DeathSpinSequence)
                 ||!spin&&(p.DeathSpinAt!=-1||p.DeathSpinAmount!=0||p.DeathCashDropped!=0||p.DeathSpinSeed!=0||p.DeathSpinId!=""||p.DeathSpinRoundId!=""||p.DeathSpinName!="")
-                ||p.GearLossSequence<0||p.GearLossSequence>3||p.GearLossKind!=(p.GearLossSequence>0?"Death":"")||p.GearLossNotice!=(p.GearLossSequence>0?DeathGearLossNotice:""))throw new ArgumentException("Invalid snapshot death event");
+                ||p.GearLossSequence<0||p.GearLossSequence>DeathsPerLevel||p.GearLossKind!=(p.GearLossSequence>0?"Death":"")||p.GearLossNotice!=(p.GearLossSequence>0?DeathGearLossNotice:""))throw new ArgumentException("Invalid snapshot death event");
         }
         if(state.DeathSpins==null||state.DeathSpins.Count>DeathSpinLimit)throw new ArgumentException("Invalid snapshot death history");
         var deathIds=new HashSet<string>();var deathSequences=new Dictionary<string,long>();double lastDeathAt=-1,now=WorldSeconds(state);
         foreach(var spin in state.DeathSpins)
         {
             var owner=spin==null?null:state.Players.Find(p=>p.Id==spin.PlayerId);
-            if(spin==null||owner==null||string.IsNullOrEmpty(spin.RoundId)||spin.RoundId!=state.RoundId||spin.Sequence<1||spin.Sequence>3||spin.Sequence>owner.DeathSpinSequence
+            if(spin==null||owner==null||string.IsNullOrEmpty(spin.RoundId)||spin.RoundId!=state.RoundId||spin.Sequence<1||spin.Sequence>DeathsPerLevel||spin.Sequence>owner.DeathSpinSequence
                 ||spin.Id!=state.RoundId+":death:"+spin.PlayerId+":"+spin.Sequence||!deathIds.Add(spin.Id)||string.IsNullOrEmpty(spin.Name)||spin.Name.Length>24
                 ||spin.Amount<=0||spin.CashDropped!=0&&spin.CashDropped!=spin.Amount||!Finite(spin.AtWorldSeconds)||spin.AtWorldSeconds<0||!Finite(now)||spin.AtWorldSeconds>now+1e-6||spin.AtWorldSeconds<lastDeathAt
                 ||deathSequences.TryGetValue(spin.PlayerId,out var previous)&&spin.Sequence<=previous)throw new ArgumentException("Invalid snapshot death history event");
@@ -147,11 +155,12 @@ public sealed partial class FestivalSimulation {
         if(!State.Drops.Exists(d=>d.ItemId=="wristband"&&d.OwnerId==p.Id)&&!State.Players.Exists(x=>x.Wristbands.Contains(p.Id)))State.Drops.Add(new DropState{Id=Id("band"),ItemId="wristband",OwnerId=p.Id,Count=1,X=p.X,Z=p.Z});
     }
     bool AttackerNear(PlayerState p,double range){return State.Npcs.Exists(n=>n.Kind=="Wook"&&n.Mode=="Swarming"&&n.DistractedUntil<=State.SimulationSeconds&&Distance(n.X,n.Z,p.X,p.Z)<=range);}
-    CommandResult Drag(PlayerState p,GameCommand c){var t=Player(c.TargetId);if(t==null||t.Life!="Downed"||p.CarryBodyId!=""||!Near(p,t.X,t.Z)||State.Players.Exists(x=>x!=p&&x.DragTargetId==t.Id))return Reject("Choose nearby unclaimed downed friend");p.DragTargetId=p.DragTargetId==t.Id?"":t.Id;return Ok();}
+    // ESC-6: letting go needs no reach, so a dragger always can; taking hold of a body does.
+    CommandResult Drag(PlayerState p,GameCommand c){if(p.DragTargetId!=""&&p.DragTargetId==c.TargetId){p.DragTargetId="";return Ok();}var t=Player(c.TargetId);if(t==null||t.Life!="Downed"||p.CarryBodyId!=""||!Near(p,t.X,t.Z)||State.Players.Exists(x=>x!=p&&x.DragTargetId==t.Id))return Reject("Choose nearby unclaimed downed friend");p.DragTargetId=t.Id;return Ok();}
     CommandResult Rescue(PlayerState p,GameCommand c){var t=Player(c.TargetId);if(t==null||t.Life!="Downed"||!Near(p,t.X,t.Z)||AttackerNear(t,3)||RecoveryClaimed(t.Id))return Reject("Distract attackers and reach downed friend");return BeginTask(p,"Rescue",t.Id,3);}
     bool RecoveryClaimed(string id){return State.Interactions.Exists(i=>i.Status=="Active"&&i.TargetId==id&&(i.Kind=="Rescue"||i.Kind=="Revival"||i.Kind=="Release"));}
     CommandResult Release(PlayerState p,GameCommand c){var t=Player(c.TargetId);bool paid=c.Amount==1;if(t==null||t.Life!="Detained"||RecoveryClaimed(t.Id)||!Near(p,paid?27:-28,paid?5:16)||(paid&&p.Cash<10))return Reject("Release: $10 at holding desk or free task at lost property");var i=NewInteraction(p,"Release",t.Id,paid?3:10);if(paid){p.Cash-=10;i.ReservedCash=10;News(p,"Cash",MoneyNotice("RELEASE FOR "+t.Name,-i.ReservedCash));}return Ok();}
-    CommandResult Revive(PlayerState p,GameCommand c){var t=Player(c.TargetId);bool paid=c.Amount==1;bool self=t==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(State.Phase!="Playing"||t==null||t.Life!="Spirit"||t.RevivalCount>=2||(!self&&!p.Wristbands.Contains(t.Id))||!Near(p,24,-20)||RecoveryClaimed(t.Id)||(paid&&p.Cash<10)||p.Life!=(self?"Spirit":"Alive"))return Reject("Bring a wristband to medical; a lone spirit can complete a longer self-revival task");var i=NewInteraction(p,"Revival",t.Id,self?15:paid?3:10);if(paid){p.Cash-=10;i.ReservedCash=10;News(p,"Cash",MoneyNotice(self?"YOUR REVIVAL":"REVIVAL FOR "+t.Name,-i.ReservedCash));}return Ok();}
+    CommandResult Revive(PlayerState p,GameCommand c){var t=Player(c.TargetId);bool paid=c.Amount==1;bool self=t==p&&State.Players.FindAll(x=>x.Connected).Count==1;if(State.Phase!="Playing"||t==null||t.Life!="Spirit"||FestivalGuidance.RevivalsLeft(t)==0||(!self&&!p.Wristbands.Contains(t.Id))||!Near(p,24,-20)||RecoveryClaimed(t.Id)||(paid&&p.Cash<10)||p.Life!=(self?"Spirit":"Alive"))return Reject("Bring a wristband to medical; a lone spirit can complete a longer self-revival task");var i=NewInteraction(p,"Revival",t.Id,self?15:paid?3:10);if(paid){p.Cash-=10;i.ReservedCash=10;News(p,"Cash",MoneyNotice(self?"YOUR REVIVAL":"REVIVAL FOR "+t.Name,-i.ReservedCash));}return Ok();}
     // A level that ends in TEST MODE earns no cosmetic: it would save into every player's profile, a joined friend's too.
     void End(string result){if(State.Phase=="Results")return;BankGiggleTanks();State.Phase="Results";State.Result=result;ResetCashFinds();if(result=="Success"&&!State.RewardCommitted){State.RewardCommitted=true;State.Survivors=State.Players.FindAll(p=>p.Connected&&p.Life=="Alive"&&Near(p,Festivals.CampGateX,Festivals.CampGateZ,Festivals.CampGateRadius)).Count;State.SurvivorBonus=Math.Max(0,State.Survivors-1)*10;State.StashCash+=State.SurvivorBonus;if(State.SurvivorBonus>0)CrewNews(null,"Stash",MoneyNotice("STASH",State.SurvivorBonus)+"  •  survivor bonus");if(!TestModeOn)foreach(var p in State.Players)p.HasCosmetic=true;UnlockNextFestival(State);}foreach(var p in State.Players){Cancel(p,"Round ended");p.Badge="";}foreach(var t in State.Transfers.ToArray())ReturnOffer(t);foreach(var n in State.Npcs)if(n.Kind=="Cop"){n.Evidence.Clear();n.Mode="Patrol";n.TargetId="";}}
 }

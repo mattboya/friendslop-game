@@ -29,7 +29,7 @@ namespace Festival.Core
         static void HoldPrice(PlayerState p,InteractionState i){int price=Catalog.FindItem(SellerStock(i.TargetId)).Price;p.Cash-=price;i.ReservedCash=price;}
         // Settled on the talk's score alone: BuyScore or more spends the held price on one unit, equipped as a shop purchase is (at the
         // buyer's feet if their hands filled meanwhile); below that it comes back. A buy talked through with a narc, however it
-        // went, is a bust (Detain gives the price back first); one whose trust dance failed never got that far.
+        // went, is a bust (Detain gives the price back first), even after a failed trust dance: the talk always follows it.
         void SettleBuy(InteractionState i,PlayerState p)
         {
             var seller=State.Npcs.Find(n=>n.Id==i.TargetId);

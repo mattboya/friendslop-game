@@ -305,7 +305,8 @@ namespace Festival.Tests
             yield return null;yield return null;
         }
 
-        [UnityTest] public IEnumerator MissedActiveViewsStillShowPrivateReactionsWalkOffAndNarcReason()
+        // A wary partner's missed trust dance leads on to the talk, so each "trust" scenario talks it through too.
+        [UnityTest] public IEnumerator MissedActiveViewsStillShowPrivateReactionsAfterAnyDanceAndNarcReason()
         {
             UseAVirtualKeyboard();
             var world=new GameObject("Retained outcome world");world.AddComponent<FestivalWorld>();yield return null;
@@ -323,15 +324,15 @@ namespace Festival.Tests
                 var window=hud.GetComponentInChildren<FestivalChatWindow>(true);
                 foreach(string scenario in new[]{"smooth","so-so","awkward","Sale trust","Buy trust","Conversation trust","narc"})
                 {
-                    view.enabled=false;player.Life="Alive";player.X=14.3f;player.Z=14;player.Cash=50;player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});npc.StockSold=0;npc.Observers.Clear();npc.Role=scenario=="narc"?"Narc":scenario=="Sale trust"?"Buyer":"Regular";
+                    view.enabled=false;player.Life="Alive";player.X=14.3f;player.Z=14;player.Cash=50;player.Inventory.Clear();player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});npc.StockSold=0;npc.Observers.Clear();npc.Mode="Blending";npc.TargetId="";npc.Role=scenario=="narc"?"Narc":scenario=="Sale trust"?"Buyer":"Regular";
                     bool trust=scenario.EndsWith("trust");if(trust)npc.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=FestivalSimulation.TrustDanceSuspicion});
                     string kind=scenario=="narc"||scenario=="Buy trust"?"Buy":scenario=="Sale trust"?"Sale":"Conversation";
                     session.Command(kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,item:kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");yield return null;
                     var talk=sim.Interaction(player.InteractionId);Assert.That(talk,Is.Not.Null,scenario+": "+session.Message);
-                    if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;talk.Status=="Active"&&n<400;n++)sim.Tick(.1);}
-                    else for(int t=0;t<FestivalSimulation.ConversationTurns;t++){int grade=scenario=="awkward"?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
+                    if(trust){Assert.That(talk.TrustDance,Is.True);for(int n=0;FestivalSimulation.TrustDancing(talk)&&n<400;n++)sim.Tick(.1);Assert.That(talk.Status=="Active"&&talk.HeadStart==FestivalSimulation.FailedDanceStart,Is.True,scenario+": the missed dance leads on to the talk");}
+                    for(int t=0;t<FestivalSimulation.ConversationTurns;t++){int grade=scenario=="awkward"||trust?ConversationLines.Awkward:scenario=="so-so"?ConversationLines.SoSo:ConversationLines.Smooth;session.Command("Reply",amount:System.Array.IndexOf(talk.Turns[t].Grades,grade),direction:t);}
                     Assert.That(player.InteractionId,Is.Empty);var outcome=player.ConversationOutcomes.Last();
-                    if(trust){Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"They walk off  •  Tongue Stamps back in your hand":"They walk off."));Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));}
+                    if(trust)Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your gear":""),scenario+": the talk after the dance ends as a talk");
                     if(scenario=="narc")Assert.That(player.Life,Is.EqualTo("Detained"));
                     view.enabled=true;yield return null;yield return new WaitForSeconds(.7f);
                     Assert.That(window.Open&&window.Lingering,Is.True,scenario+": a terminal delivery survives an entirely missed live view");
@@ -342,8 +343,7 @@ namespace Festival.Tests
                     Assert.That(session.Profile.Data.SeenDialogue,Is.SupersetOf(outcome.GrammarKeys),"displayed terminal grammar is remembered privately");
                     var friendView=FestivalSession.ViewFor(sim,"private_friend");string friendJson=JsonUtility.ToJson(friendView);
                     Assert.That(friendJson,Does.Not.Contain(outcome.DeliveryId));
-                    if(trust)Assert.That(friendView.PublicSpeech.Any(d=>d.SpeakerId==npc.Id&&d.Text==outcome.Reaction&&!d.Retracted),Is.True,"the neutral failed-trust rejection is intentionally spoken publicly");
-                    else Assert.That(friendJson,Does.Not.Contain(outcome.Reaction),"authored final grades remain private");
+                    Assert.That(friendJson,Does.Not.Contain(outcome.Reaction),"authored final grades remain private");
                     var remoteOwner=friendView.Players.Find(p=>p.Id==player.Id);Assert.That(remoteOwner.ConversationOutcomes,Is.Empty);Assert.That(remoteOwner.Dialogue.Seen,Is.Empty);
                     foreach(string key in outcome.GrammarKeys)Assert.That(friendJson,Does.Not.Contain(key),"private terminal grammar is never public speech metadata");
                     if(outcome.Notice!="")Assert.That(friendJson,Does.Not.Contain(outcome.Notice));

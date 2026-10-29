@@ -8,8 +8,8 @@ using Festival.Core;
 // DIALOG-3: selling, buying, chatting and talking to security are conversations, not dances. Each is four turns (the greeting,
 // small talk, the ask and the close, each with replies of its own): they say a line and you pick one of three replies (1-3).
 // Only Police replies time out after ReplySeconds. One reply is smooth, one so-so and one
-// awkward, by the taste of the person you're talking to, which their opener hints at; a dose garbles some. The average of
-// the turns is the talk's score, and settles it as the dance did. A wary festivalgoer asks for a dance first.
+// awkward, by the taste of the person you're talking to, which their opener hints at; a dose garbles some. The replies'
+// points are the talk's score, and settle it as the dance did. A wary festivalgoer asks for a dance first.
 public static class ConversationTests
 {
     static int sequence;
@@ -22,13 +22,13 @@ public static class ConversationTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EachTalkIsFourRoundsOfThreeReplies,TheirLineFollowsTheRound,ASeedRepeatsItsTalk,TheOpenerAndTheRepliesFollowThePerson,
-            ATalkScoresTheAverageOfItsReplies,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
-            ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
+            ATalkScoresItsRepliesPoints,ALateOrPastReplyIsRefused,TheScoreSettlesTheTalkAsTheDanceDid,ADoseGarblesReplies,
+            ATrustDanceGivesTheFirstArrowTimeToEnter,AWaryFestivalgoerAsksForADanceFirst,ADanceMovesWhereTheTalkStarts,SomeRaversAndBurnersAlwaysDanceFirst,EveryLineIsCleanAndShort,AnOlderSnapshotRestores,
             ATalkReadsThePerson,ARegularTellLeavesASellerHunch,AClueHolderNamesALandmark,ASellerHunchUsesTheHostCategoryNotRemainingStock,ANoTellTalkKeepsMusicAndOtherTellsKeepTheirHunches,
             OnlyAFestivalgoerTalkLeavesAHunch,ANarcSellerTalksAndFinishingTheBuyBusts,
-            AWorkedUpFestivalgoerWontTalk,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
+            AWorkedUpFestivalgoerWontTalkOrDance,AFestivalgoerWorkedUpMidTalkEndsIt,AFlopWorksNoOneUpForTheTalkItLeadsTo,TheirReactionsRarelyRepeat,ASmoothTalkCalmsItsPartnerEvenFacingAway,ASlurKeepsWordsAndTheirReadableEdges,
             ATalkSettlesItsPartnerAndWitnessesOnce,GrammarDrawsWaitForOwnerAcknowledgment,TheLastReplyHasAClosingReaction,
-            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded})
+            EachAskPaysByItsTable,APushedAskThatFailsRaisesSuspicion,AFailedTrustDanceIsNotAFailedAsk,AStopFromTheDanceNeverWalksOffItsTalk,ASaleKeepsItsAskThroughASnapshot,AHandedBackUnitGoesBackInYourHand,ASaleSaysHowItEnded,AnOutcomeCarriesItsSettledScore})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" conversation test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -101,13 +101,13 @@ public static class ConversationTests
 
     // A festivalgoer id that talks like this persona (DialogueGrammar.PersonaFor goes by the id alone).
     static string Goer(string persona){for(int n=0;;n++)if(DialogueGrammar.PersonaFor("goer_"+n,"")==persona)return "goer_"+n;}
-    // p0 alone on Palm Mirage's Day 1, 1.5 m in front of `id`, who faces them: a cop for security, a buyer to sell to, a regular to
-    // buy from, a regular to chat with. A wook never asks for a dance first unless wary, so the talks start talking.
+    // p0 alone on Palm Mirage's Day 1, 1.5 m in front of `id`, who faces them: a cop for security, a buyer to sell to (the unit in
+    // hand), a regular to buy from, a regular to chat with. A wook never asks for a dance first unless wary, so the talks start talking.
     static FestivalSimulation Pair(string kind,int seed=7,string id=null)
     {
         var s=new FestivalSimulation(seed);s.AddPlayer("p0","P0");s.State.Phase="Playing";s.State.Npcs.Clear();
         s.State.Npcs.Add(new NpcState{Id=id??Goer("Wook"),Kind=kind=="Police"?"Cop":"Wook",Role=kind=="Sale"?"Buyer":"Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true});
-        var p=s.Player("p0");p.X=0;p.Z=0;if(kind=="Sale")p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var p=s.Player("p0");p.X=0;p.Z=0;if(kind=="Sale"){p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});p.EquippedItemId="stock_lsd";}
         return s;
     }
     static NpcState Partner(FestivalSimulation s)=>s.State.Npcs[0];
@@ -188,11 +188,11 @@ public static class ConversationTests
         }
     }
 
-    // K2: someone worked up about you (accusing you, or swarming you) is too agitated to chat, sell or buy, as Talk's bark and the
-    // chat check already said: a talk roots you, and they would hit you while you stand in it. Nothing is taken or held.
-    static void AWorkedUpFestivalgoerWontTalk()
+    // Someone worked up about you (accusing you, or swarming you) is too agitated to chat, sell, buy or dance, as Talk's bark and
+    // the chat check already said: each roots you, and they would hit you while you stand in it. Nothing is taken or held.
+    static void AWorkedUpFestivalgoerWontTalkOrDance()
     {
-        foreach(var kind in new[]{"Conversation","Sale","Buy"})foreach(bool swarming in new[]{false,true})
+        foreach(var kind in new[]{"Conversation","Sale","Buy","Dance"})foreach(bool swarming in new[]{false,true})
         {
             var s=Pair(kind);var npc=Partner(s);var p=s.Player("p0");p.Cash=20;
             npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=0});
@@ -200,8 +200,56 @@ public static class ConversationTests
             string mode=npc.Mode;Check(mode==(swarming?"Swarming":"Accusing"),"setup: they are "+(swarming?"swarming":"accusing")+" p0 (mode "+mode+")");
             int cash=p.Cash,stock=p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0;
             var started=Act(s,"p0",kind=="Sale"?"StartSale":kind=="Buy"?"StartBuy":kind,npc.Id,kind=="Sale"?"stock_lsd":kind=="Buy"?FestivalSimulation.SellerStock(npc.Id):"");
-            Check(!started.Accepted&&started.Reason=="They're too agitated to chat","a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
+            string refusal=kind=="Dance"?"They're too agitated to dance":"They're too agitated to chat";
+            Check(!started.Accepted&&started.Reason==refusal,"a "+kind+" with someone "+mode+" is refused as too agitated (accepted "+started.Accepted+", \""+started.Reason+"\")");
             Check(p.InteractionId==""&&p.Cash==cash&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==stock,"and nothing starts, held or taken ("+p.InteractionId+", $"+p.Cash+")");
+        }
+    }
+
+    // A partner worked up mid-way (here by a shout from a watcher at 95) ends the talk, its trust dance, the dance or the check at
+    // once with the start's refusal, before they swarm you where you stand. It is their doing, so it costs no pushed ask.
+    static void AFestivalgoerWorkedUpMidTalkEndsIt()
+    {
+        foreach(var kind in new[]{"Conversation","Sale","Buy","Dance","TrustDance","ConfirmChat","ConfirmDance"})
+        {
+            string start=kind=="TrustDance"?"Sale":kind;var s=Pair(start);var npc=Partner(s);var p=s.Player("p0");p.Cash=20;
+            npc.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=kind=="TrustDance"?FestivalSimulation.TrustDanceSuspicion:30,LastSeenSeconds=0});
+            if(start.StartsWith("Confirm",StringComparison.Ordinal)){s.State.TripperId="p0";s.State.Visions.Add(new VisionState{Id="vision",Kind="Buyer",NpcId=npc.Id});}
+            var i=start=="Sale"?Sale(s,FestivalSimulation.HighAsk):Start(s,start);int held=i.ReservedCash;
+            Check(i.TrustDance==(kind=="TrustDance")&&i.Status=="Active"&&(held>0)==(start=="Buy"),"setup: the "+kind+" is under way ("+i.Status+", $"+held+" held)");
+            var shouter=new NpcState{Id="shouter",Kind="Wook",X=3,Z=1.5f,Yaw=-90};shouter.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=95,LastSeenSeconds=0});s.State.Npcs.Add(shouter);
+            // The shout lifts them to 70 after their own tick, so they turn Accusing on the next.
+            s.Tick(.2);
+            Check(npc.Mode=="Accusing","setup: the shout works their partner up ("+npc.Mode+" at "+npc.Observers.Find(o=>o.PlayerId=="p0").Suspicion+")");
+            string refusal=kind=="Dance"||kind=="ConfirmDance"?"They're too agitated to dance":"They're too agitated to chat";
+            Check(i.Status==refusal&&p.InteractionId=="","a "+kind+" whose partner gets worked up ends at once, as their refusal (\""+i.Status+"\", p0 in \""+p.InteractionId+"\")");
+            if(start=="Sale")
+            {
+                var o=p.ConversationOutcomes.Find(x=>x.InteractionId==i.Id);
+                Check(o!=null&&o.Notice=="SALE OFF  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE"&&(p.Inventory.Find(x=>x.ItemId=="stock_lsd")?.Count??0)==1,"the sale hands its unit back and says so (\""+o?.Notice+"\")");
+                Check(!npc.Observers.Find(x=>x.PlayerId=="p0").RefusesSales,"and the pushed ask costs nothing: they still buy from p0");
+            }
+            if(start=="Buy"){string news=p.MoneyNewsLog[p.MoneyNewsLog.Count-1].Text;Check(p.Cash==20&&news=="NO DEAL  •  +$"+held,"the buy's held price comes back and says so ($"+p.Cash+", was $20; \""+news+"\")");}
+        }
+    }
+
+    // K2: the talk after a trust dance roots you too, so a flop before a crew of four (+34 a head) works up neither the wary buyer
+    // nor a watcher at 50, whose accusation would carry to the buyer. You stand in the talk 12 s unhit.
+    static void AFlopWorksNoOneUpForTheTalkItLeadsTo()
+    {
+        var s=new FestivalSimulation(7);for(int k=0;k<4;k++)s.AddPlayer("p"+k,"P"+k);s.State.Phase="Playing";s.State.Npcs.Clear();
+        var buyer=new NpcState{Id=Goer("Wook"),Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true};s.State.Npcs.Add(buyer);
+        buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+        var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=50});s.State.Npcs.Add(watcher);
+        for(int k=0;k<4;k++){var q=s.Player("p"+k);q.X=k==0?0:-1.5f+k;q.Z=k==0?0:-2;}
+        var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var i=Sale(s,FestivalSimulation.FairAsk);Check(i.TrustDance&&i.WitnessIds.Contains(watcher.Id),"setup: a wary buyer asks for a watched dance first");
+        for(int guard=0;FestivalSimulation.TrustDancing(i)&&i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+        string Mode(NpcState n)=>n.Mode+" at "+n.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+        for(int tick=1;tick<=120;tick++)
+        {
+            s.Tick(.1);
+            Check(i.Status=="Active"&&buyer.Mode!="Accusing"&&buyer.Mode!="Swarming"&&watcher.Mode!="Accusing"&&watcher.Mode!="Swarming"&&p.Health==100,"+"+tick/10.0+" s into the talk after a flop, no one is worked up and you are unhit (talk "+i.Status+", buyer "+Mode(buyer)+", watcher "+Mode(watcher)+", health "+p.Health+")");
         }
     }
 
@@ -283,18 +331,21 @@ public static class ConversationTests
         }
     }
 
-    // Smooth scores 1, so-so .5 and awkward or silence 0, averaged over the four turns. Only Police silence lets each turn run its 4 s.
-    static void ATalkScoresTheAverageOfItsReplies()
+    // Smooth scores 2 points, so-so 1 and awkward or silence -1, and the score is the total over 8, never below 0. Only Police
+    // silence lets each turn run its 4 s.
+    static void ATalkScoresItsRepliesPoints()
     {
+        Check(FestivalSimulation.Points(Smooth)==2&&FestivalSimulation.Points(SoSo)==1&&FestivalSimulation.Points(Awkward)==-1&&FestivalSimulation.Points(Silence)==-1&&FestivalSimulation.TalkPoints==8,"replies are worth 2, 1, -1 and -1, out of 8");
         foreach(var kind in Kinds)
         {
-            var s=Pair(kind);var all=Talk(s,Start(s,kind),Every(Smooth));Check(all.Score==1,"an all-smooth "+kind+" scores 1, got "+all.Score);
+            var s=Pair(kind);var all=Talk(s,Start(s,kind),Every(Smooth));Check(all.Score==1,"an all-smooth "+kind+" scores 8 of 8, got "+all.Score);
             s=Pair(kind);var i=Start(s,kind);double began=s.State.SimulationSeconds;Talk(s,i,Every(Awkward));
-            Check(i.Score==0,"an all-awkward "+kind+" scores 0, got "+i.Score);
+            Check(i.Score==0,"an all-awkward "+kind+" scores -4, held at 0, got "+i.Score);
             if(kind=="Police"){s=Pair(kind);i=Start(s,kind);began=s.State.SimulationSeconds;Talk(s,i,Every(Silence));Check(i.Score==0&&i.Turns.Count==4&&i.Turns.All(t=>t.Pick==-1)&&Math.Abs(s.State.SimulationSeconds-began-4*FestivalSimulation.ReplySeconds)<.11,"Police alone scores four silent turns after 16 seconds");}
-            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward,Smooth);Check(Math.Abs(mixed.Score-.625)<1e-9,"smooth, so-so, awkward and smooth average .625, got "+mixed.Score);
-            s=Pair(kind);var good=Talk(s,Start(s,kind),Smooth,Awkward,SoSo,SoSo);Check(Math.Abs(good.Score-.5)<1e-9,"smooth, awkward and two so-so average .5, got "+good.Score);
-            s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-.875)<1e-9,"three smooth and a so-so average .875, got "+sure.Score);
+            s=Pair(kind);var mixed=Talk(s,Start(s,kind),Smooth,SoSo,Awkward,Smooth);Check(Math.Abs(mixed.Score-.5)<1e-9,"smooth, so-so, awkward and smooth score 4 of 8, got "+mixed.Score);
+            s=Pair(kind);var poor=Talk(s,Start(s,kind),Smooth,Awkward,SoSo,SoSo);Check(Math.Abs(poor.Score-.375)<1e-9,"smooth, awkward and two so-so score 3 of 8, got "+poor.Score);
+            s=Pair(kind);var split=Talk(s,Start(s,kind),Smooth,Smooth,Awkward,Awkward);Check(Math.Abs(split.Score-.25)<1e-9,"two smooth and two awkward score 2 of 8, got "+split.Score);
+            s=Pair(kind);var sure=Talk(s,Start(s,kind),Smooth,Smooth,Smooth,SoSo);Check(Math.Abs(sure.Score-.875)<1e-9,"three smooth and a so-so score 7 of 8, as the old average did, got "+sure.Score);
             Check(s.Player("p0").LastRhythmScore==sure.Score,"the talk's score is the player's last result");
         }
     }
@@ -319,26 +370,30 @@ public static class ConversationTests
         Check(!Act(s,"p0","Reply",amount:0,direction:0).Accepted,"a dance takes no reply");
     }
 
-    // The score settles a talk as the dance's did: a sale pays in full at .75 and half at .4, and returns the stock below; a buy
-    // hands over a unit at .4 and refunds below; security at .75 waves off a stop; and the watchers move by RhythmDelta.
+    // Totals at and just under each line settle a talk as the dance's score did: a sale's pay (the stock back only on no sale), a
+    // buy at 4 points, security waving off a stop at 6, and the watchers' RhythmDelta.
     static void TheScoreSettlesTheTalkAsTheDanceDid()
     {
-        int Sold(params int[] grades){var s=Pair("Sale");var p=s.Player("p0");int cash=p.Cash;var i=Talk(s,Start(s,"Sale"),grades);Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(i.Score<.4),"a sale scoring "+i.Score+" keeps the stock only below .4");return p.Cash-cash;}
-        Check(Sold(Smooth,Smooth,Smooth,SoSo)==FestivalSimulation.PerfectSalePay,"a sale at .875 pays in full");
-        Check(Sold(Smooth,SoSo,Awkward,SoSo)==5,"a sale at .5 pays half");
-        Check(Sold(Smooth,Awkward,Awkward,SoSo)==0,"a sale at .375 pays nothing and returns the stock");
-        foreach(var (grades,bought) in new[]{(new[]{Smooth,SoSo,Awkward,SoSo},true),(new[]{SoSo,Awkward,Awkward,Awkward},false)})
+        int Fair=FestivalSimulation.FairAsk,High=FestivalSimulation.HighAsk,Greedy=FestivalSimulation.GreedyAsk;
+        int[] seven={Smooth,Smooth,Smooth,SoSo},six={Smooth,Smooth,SoSo,SoSo},five={Smooth,Smooth,Smooth,Awkward},four={Smooth,Smooth,SoSo,Awkward},three={Smooth,SoSo,SoSo,Awkward},two={Smooth,Smooth,Awkward,Awkward};
+        foreach(var (ask,grades,paid) in new[]{(Fair,six,10),(Fair,five,5),(Fair,four,5),(Fair,three,0),(High,six,15),(High,five,10),(High,four,10),(High,three,0),(Greedy,seven,20),(Greedy,six,10),(Greedy,five,10),(Greedy,four,0),(Fair,two,0)})
+        {
+            var s=Pair("Sale");var p=s.Player("p0");int cash=p.Cash;var i=Talk(s,Sale(s,ask),grades);
+            Check(p.Cash-cash==paid,"ask "+ask+" at "+(i.Score*FestivalSimulation.TalkPoints)+" points pays "+paid+", got "+(p.Cash-cash));
+            Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(paid==0),"ask "+ask+" at "+i.Score+": only a no-sale hands the stock back");
+        }
+        foreach(var (grades,bought) in new[]{(four,true),(three,false)})
         {
             var s=Pair("Buy");var p=s.Player("p0");string kind=FestivalSimulation.SellerStock(Partner(s).Id);var i=Talk(s,Start(s,"Buy"),grades);
-            Check(p.Inventory.Exists(x=>x.ItemId==kind)==bought&&p.Cash==(bought?15:20),"a buy scoring "+i.Score+(bought?" hands over a unit for $5":" refunds the $5")+" ($"+p.Cash+")");
+            Check(p.Inventory.Exists(x=>x.ItemId==kind)==bought&&p.Cash==(bought?15:20),"a buy at "+(i.Score*FestivalSimulation.TalkPoints)+" points"+(bought?" hands over a unit for $5":" refunds the $5")+" ($"+p.Cash+")");
         }
-        foreach(var (grades,waved) in new[]{(new[]{Smooth,Smooth,Smooth,SoSo},true),(new[]{Smooth,SoSo,SoSo,SoSo},false)})
+        foreach(var (grades,waved) in new[]{(six,true),(five,false),(new[]{Smooth,Smooth,Smooth,Silence},false)})
         {
             var s=Pair("Police");var cop=Partner(s);s.Player("p0").Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});s.Player("p0").EquippedItemId="stock_lsd";cop.Evidence.Add(new EvidenceState{PlayerId="p0",Kind="VisibleStock",StartSeconds=0,SeenSeconds=0});
             var i=Talk(s,Start(s,"Police"),grades);
-            Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+i.Score+(waved?" waves the stop off":" keeps the stop"));
+            Check(cop.Evidence.Exists(e=>e.Kind=="VisibleStock")!=waved,"security at "+(i.Score*FestivalSimulation.TalkPoints)+" points"+(waved?" waves the stop off":" keeps the stop"));
         }
-        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward,SoSo},3)})
+        foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,Smooth,Awkward,SoSo},3)})
         {
             var s=Pair("Conversation");var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
             var i=Talk(s,Start(s,"Conversation"),grades);
@@ -378,7 +433,7 @@ public static class ConversationTests
     static void ATalkSettlesItsPartnerAndWitnessesOnce()
     {
         foreach(var kind in Kinds)foreach(float yaw in new[]{0f,180f})
-            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,SoSo,Awkward,SoSo},3)})
+            foreach(var (grades,moved) in new[]{(new[]{Smooth,Smooth,Smooth,Smooth},-15),(new[]{Awkward,Awkward,Awkward,Awkward},20),(new[]{Smooth,Smooth,Awkward,SoSo},3)})
             {
                 var s=Pair(kind);var partner=Partner(s);partner.Yaw=yaw;
                 partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=30});
@@ -432,9 +487,8 @@ public static class ConversationTests
     }
 
     // A festivalgoer whose suspicion of you is 40 or more asks you to dance first: TrustAsk, then eight beats on the talk's own
-    // chart, danced and witnessed like a dance. At .6 or more they trust you: everyone watching, and they, move by the dance's
-    // RhythmDelta, and the talk follows. Below .6 they walk off: the talk ends at 0, a sale's stock and a buy's cash come back,
-    // and the watchers move once, for the dance. Security never asks.
+    // chart, danced and witnessed like a dance. Everyone watching, and they, move once by the dance's RhythmDelta. The talk always
+    // follows, the stock or the price still held: level after a good dance, two points down under .6. Security never asks.
     static void AWaryFestivalgoerAsksForADanceFirst()
     {
         Check(FestivalSimulation.TrustDanceSuspicion==40&&FestivalSimulation.TrustScore==.6,"the trust dance comes at 40 and passes at .6");
@@ -469,16 +523,42 @@ public static class ConversationTests
             var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
             var i=Start(s,kind);var notes=RhythmChart.For(i).Notes;int under=(int)Math.Ceiling(TrustScoreNotes(notes.Count))-1;
             foreach(var note in notes.Take(under))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
-            for(int guard=0;i.Status=="Active"&&guard<100;guard++)s.Tick(.1);
-            Check(i.Status=="Complete"&&i.Score==0&&i.Turns.Count==0,"a "+kind+" danced under .6 ends at 0 with no talk ("+i.Status+", "+i.Score+")");
-            Check(p.NpcSpeech=="Nah. Not feeling it."&&p.NpcSpeaker=="FESTIVALGOER"&&p.NpcSpeechUntil>s.State.SimulationSeconds,"failed trust dance gives the owner a readable partner rejection for "+kind+": speech=\""+p.NpcSpeech+"\"");
-            Check(p.Cash==cash&&p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(kind=="Sale")&&p.Inventory.Count==(kind=="Sale"?1:0),"they walk off: the stock or the cash comes back");
+            for(int guard=0;i.Turns.Count==0&&i.Status=="Active"&&guard<100;guard++)s.Tick(.1);
+            Check(i.Status=="Active"&&i.Turns.Count==1&&i.HeadStart==FestivalSimulation.FailedDanceStart,"a "+kind+" danced under .6 goes on to its talk, two points down ("+i.Status+", "+i.Turns.Count+" turns, head start "+i.HeadStart+")");
+            Check(p.Cash==cash-(kind=="Buy"?5:0)&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"the stock or the price stays held for the talk ($"+p.Cash+")");
             double score=(double)under/notes.Count;int moved=(int)Math.Round(20-35*score,MidpointRounding.AwayFromZero);
             Check(watcher.Observers[0].Suspicion==20+moved&&Partner(s).Observers[0].Suspicion==40+moved,"the watcher and they move once, by the dance's RhythmDelta "+moved+" (watcher "+watcher.Observers[0].Suspicion+", partner "+Partner(s).Observers[0].Suspicion+")");
         }
     }
     // The fewest of `count` perfect notes that score .6.
     static double TrustScoreNotes(int count)=>FestivalSimulation.TrustScore*count;
+
+    // A failed dance (under .6) starts the talk two points down, a nailed one (.9 or better) hints round 1's smooth reply
+    // (HintedReply), and one between starts it level. Before the ask, a Greedy sale's suspicion moves by the dance alone.
+    static void ADanceMovesWhereTheTalkStarts()
+    {
+        foreach(var (how,share) in new[]{(0,.5),(1,.8),(2,1.0)})
+        {
+            var s=Pair("Sale");var buyer=Partner(s);buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});var p=s.Player("p0");int cash=p.Cash;
+            var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+            var i=Sale(s,FestivalSimulation.GreedyAsk);Check(i.TrustDance,"setup: a wary buyer asks for a dance first");
+            var notes=RhythmChart.For(i).Notes;int danced=(int)Math.Round(notes.Count*share);
+            foreach(var note in notes.Take(danced))i.Inputs.Add(new RhythmInput{Direction=note.Direction,TimeSeconds=note.TimeSeconds});
+            for(int guard=0;FestivalSimulation.TrustDancing(i)&&i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+            string verdict=new[]{"a failed","an all-right","a nailed"}[how]+" dance ("+danced+" of "+notes.Count+" notes)";
+            Check(i.Status=="Active"&&i.Turns.Count==1,verdict+" goes on to the talk ("+i.Status+")");
+            Check(i.HeadStart==(how==0?FestivalSimulation.FailedDanceStart:0),verdict+" starts it "+(how==0?"two points down":"level")+", got "+i.HeadStart);
+            Check(i.HintedReply==(how==2?Array.IndexOf(i.Turns[0].Grades,Smooth):-1),verdict+(how==2?" hints the first round's smooth reply":" hints nothing")+", got "+i.HintedReply);
+            Check(ConversationLines.Parts["react.dance."+how].Contains(i.Turns[0].Reaction),verdict+": their first line reacts to it, got \""+i.Turns[0].Reaction+"\"");
+            string danceKey=i.Turns[0].GrammarKeys.Find(k=>k.StartsWith("react.dance."+how+"_"));
+            Check(danceKey!=null&&!p.Dialogue.Seen.Contains(danceKey),verdict+": turn 0 carries the reaction's history key, unseen until you reply ("+string.Join(",",i.Turns[0].GrammarKeys)+")");
+            int moved=(int)Math.Round(20-35*(double)danced/notes.Count,MidpointRounding.AwayFromZero);
+            Check(buyer.Observers[0].Suspicion==40+moved&&watcher.Observers[0].Suspicion==20+moved&&!buyer.Observers[0].RefusesSales,verdict+" moves the buyer and the watcher by the dance alone ("+moved+"), no ask's 30 before the ask (buyer "+buyer.Observers[0].Suspicion+", watcher "+watcher.Observers[0].Suspicion+")");
+            Talk(s,i,Every(Smooth));
+            Check(i.Turns.Count==FestivalSimulation.ConversationTurns&&p.Cash-cash==(how==0?10:20),verdict+" then four smooth replies: "+(how==0?"6 of 8, talked down to $10":"8 of 8, the Greedy $20")+", got $"+(p.Cash-cash)+" at "+i.Score);
+            Check(p.Dialogue.Seen.Contains(danceKey),verdict+": replying to turn 0 marks its dance reaction heard, so it rarely comes back");
+        }
+    }
 
     // Seeded per festivalgoer, 1 in 4 ravers and burners want a dance before any talk, however calm; no one else does.
     static void SomeRaversAndBurnersAlwaysDanceFirst()
@@ -629,9 +709,10 @@ public static class ConversationTests
         Check(w.Life=="Alive"&&w.Cash==20&&off.Status!="Active","walking off a narc's buy is safe, the $5 back ("+w.Life+", $"+w.Cash+")");
         var stop=Pair("Buy");Partner(stop).Role="Narc";var q=stop.Player("p0");Start(stop,"Buy");
         Check(Act(stop,"p0","Cancel").Accepted&&q.Life=="Alive"&&q.Cash==20,"stopping a narc's buy is safe, the $5 back");
-        var shy=Pair("Buy");Partner(shy).Role="Narc";Partner(shy).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});var r=shy.Player("p0");var walked=Start(shy,"Buy");
-        for(int guard=0;walked.Status=="Active"&&guard<100;guard++)shy.Tick(.1);
-        Check(walked.TrustDance&&walked.Turns.Count==0&&r.Life=="Alive"&&r.Cash==20,"a narc who walks off after a poor trust dance busts no one ("+r.Life+", $"+r.Cash+")");
+        var shy=Pair("Buy");Partner(shy).Role="Narc";Partner(shy).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});var r=shy.Player("p0");var danced=Start(shy,"Buy");
+        for(int guard=0;FestivalSimulation.TrustDancing(danced)&&guard<100;guard++)shy.Tick(.1);
+        Check(danced.TrustDance&&danced.Status=="Active"&&danced.Turns.Count==1&&r.Life=="Alive"&&r.Cash==15,"a poor trust dance with a narc leads on to the talk: no bust yet, the $5 held ("+r.Life+", $"+r.Cash+")");
+        Check(Act(shy,"p0","Cancel").Accepted&&r.Life=="Alive"&&r.Cash==20,"and walking out of it is safe, the $5 back");
     }
 
     // A sale makes an ask (StartSale's Amount): Fair $10, High $15 or Greedy $20 before the multipliers. Fair pays in full at .75
@@ -657,7 +738,7 @@ public static class ConversationTests
             Check(Act(s,"p0","StartSale",Partner(s).Id,"stock_lsd",amount:bad).Reason=="Ask Fair, High or Greedy","the ask is checked before the stock");
         }
         // At dose 2 (x1.25), whole talks: all smooth (1) pays the ask's price, all so-so (.5) Fair's half, High talked down to Fair's
-        // price, Greedy nothing; all awkward (0) is no sale at any ask.
+        // price, Greedy nothing; all awkward (0) is no sale at any ask. A sale talked down names the full price at the same x1.25.
         foreach(var (ask,smooth,soso) in new[]{(Fair,13,6),(High,19,13),(Greedy,25,0)})
             foreach(var (grade,expected) in new[]{(Smooth,smooth),(SoSo,soso),(Awkward,0)})
             {
@@ -666,6 +747,8 @@ public static class ConversationTests
                 if(grade==Smooth)Check(FestivalSimulation.SalePrice(s.State,p,Partner(s),ask)==expected,"ask "+ask+"'s offer names what a full sale pays, "+expected+", got "+FestivalSimulation.SalePrice(s.State,p,Partner(s),ask));
                 Talk(s,i,Every(grade));
                 Check(p.Cash-cash==expected&&s.State.LevelSales-sales==expected,"ask "+ask+" at "+i.Score+" pays "+expected+" at dose 2, got "+(p.Cash-cash));
+                string notice=p.ConversationOutcomes.Find(o=>o.InteractionId==i.Id)?.Notice??"";
+                Check(grade==SoSo&&expected>0?notice.EndsWith("  •  talked down from $"+smooth):!notice.Contains("talked down"),"ask "+ask+" at "+i.Score+" names the full price of $"+smooth+" only when talked down: \""+notice+"\"");
                 Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd")==(expected==0),"only a no-sale hands the stock back");
             }
     }
@@ -693,10 +776,68 @@ public static class ConversationTests
                 Check(again.Accepted==(extra==0)&&(extra==0||again.Reason=="Not after that ask. They won't buy from you again."),end+" at ask "+ask+": the buyer "+(extra==0?"hears your next offer":"won't buy from you again")+": "+again.Reason);
                 if(extra>0)Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"a refused offer keeps the stock");
             }
-        // Another seller is still welcome.
-        var crew=Pair("Sale");crew.State.Phase="Shopping";crew.AddPlayer("p1","P1");crew.State.Phase="Playing";var friend=crew.Player("p1");friend.X=0;friend.Z=0;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        // Another seller is still welcome. In a crew of three within 5 m the talk's 20 grows with the pack (x1.35, to 27), but the
+        // pushed ask's 30 does not.
+        var crew=Pair("Sale");crew.State.Phase="Shopping";crew.AddPlayer("p1","P1");crew.AddPlayer("p2","P2");crew.State.Phase="Playing";var friend=crew.Player("p1");friend.X=0;friend.Z=0;friend.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+        var third=crew.Player("p2");third.X=3;third.Z=0;
         Talk(crew,Sale(crew,FestivalSimulation.GreedyAsk),Every(Awkward));
+        double heat=Partner(crew).Observers.Find(o=>o.PlayerId=="p0")?.Suspicion??0;
+        Check(Math.Abs(heat-(20*1.35+30))<1e-9,"in a crew of three the failed Greedy ask adds exactly 30 to the buyer, beside the talk's packed 27, got "+heat);
         Check(crew.Execute("p1",new GameCommand{Id="talk"+(sequence++),Kind="StartSale",TargetId=Partner(crew).Id,ItemId="stock_lsd"}).Accepted,"a friend can still sell to them");
+    }
+
+    // A wary buyer's trust dance comes before any reply, so a dance you miss, or a sale you call off in it, is no failed ask: a
+    // Greedy ask leaves the buyer and each watcher where a Fair one does, and the buyer still hears you.
+    static void AFailedTrustDanceIsNotAFailedAsk()
+    {
+        foreach(bool cancel in new[]{false,true})
+        {
+            string After(int ask)
+            {
+                var s=Pair("Sale");var buyer=Partner(s);buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+                var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+                var i=Sale(s,ask);Check(i.TrustDance&&i.WitnessIds.Contains("watcher")&&i.WitnessIds.Contains(buyer.Id),"setup: they ask for a dance first, and the watcher sees it");
+                if(cancel)Check(Act(s,"p0","Cancel").Accepted&&i.Status=="Cancelled","setup: you call the sale off in the dance");
+                else for(int guard=0;FestivalSimulation.TrustDancing(i)&&i.Status=="Active"&&guard<200;guard++)s.Tick(.1);
+                Check(!FestivalSimulation.TrustDancing(i)||i.Status!="Active","setup: the dance is over");
+                var seen=buyer.Observers.Find(o=>o.PlayerId=="p0");
+                return "buyer "+seen.Suspicion+(seen.RefusesSales?" refusing":"")+", watcher "+watcher.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+            }
+            string fair=After(FestivalSimulation.FairAsk),greedy=After(FestivalSimulation.GreedyAsk);
+            Check(greedy==fair,(cancel?"calling it off in the dance":"a missed dance")+" at Greedy leaves them as at Fair ("+fair+"), got "+greedy);
+        }
+    }
+
+    // A joined seller's stop of the trust dance can reach the host after the dance became its talk on the same interaction. Sent from
+    // the lanes, it calls the sale off inside the dance at no ask cost, and after it the host refuses it. A plain Cancel still walks off.
+    static void AStopFromTheDanceNeverWalksOffItsTalk()
+    {
+        foreach(int ask in new[]{FestivalSimulation.FairAsk,FestivalSimulation.GreedyAsk})
+            foreach(string when in new[]{"in the dance","after the dance","plain, after the dance"})
+            {
+                var s=Pair("Sale");var buyer=Partner(s);buyer.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});
+                var watcher=new NpcState{Id="watcher",X=0,Z=6,Yaw=180};watcher.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=20});s.State.Npcs.Add(watcher);
+                var i=Sale(s,ask);Check(i.TrustDance&&i.WitnessIds.Contains("watcher"),"setup: they ask for a watched dance first");
+                if(when!="in the dance")for(int guard=0;FestivalSimulation.TrustDancing(i)&&guard<300;guard++)s.Tick(.05);
+                Check(FestivalSimulation.TrustDancing(i)==(when=="in the dance")&&i.Status=="Active","setup: "+when+" ("+i.Turns.Count+" turns)");
+                var p=s.Player("p0");double Of(NpcState n)=>n.Observers.Find(o=>o.PlayerId=="p0").Suspicion;
+                double heard=Of(buyer),seen=Of(watcher);int outcomes=p.ConversationOutcomes.Count;
+                var stop=Act(s,"p0","Cancel",i.Id,direction:when=="plain, after the dance"?0:FestivalSimulation.LanesStop);
+                string at="ask "+ask+", "+when+": ";
+                if(when=="after the dance")
+                {
+                    Check(!stop.Accepted&&stop.Reason=="That action already ended",at+"the host refuses the stop, got "+stop.Accepted+" '"+stop.Reason+"'");
+                    Check(i.Status=="Active"&&p.InteractionId==i.Id&&i.Turns.Count==1,at+"the talk goes on at its first turn ("+i.Status+")");
+                    Check(Of(buyer)==heard&&Of(watcher)==seen&&!buyer.Observers[0].RefusesSales,at+"no one grows more suspicious and the buyer still hears you, got buyer "+heard+" -> "+Of(buyer)+", watcher "+seen+" -> "+Of(watcher));
+                    Check(p.ConversationOutcomes.Count==outcomes&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),at+"no outcome, and the unit stays offered");
+                }
+                else
+                {
+                    Check(stop.Accepted&&i.Status=="Cancelled",at+"the stop ends the sale ("+stop.Reason+")");
+                    bool pushed=when!="in the dance"&&ask==FestivalSimulation.GreedyAsk;
+                    Check(Of(buyer)==Math.Min(100,heard+20+(pushed?30:0))&&buyer.Observers[0].RefusesSales==pushed,at+"the walk-off costs "+(pushed?"the talk's 20 and the ask's 30":"the talk's 20 only")+", up to 100, got "+heard+" -> "+Of(buyer));
+                }
+            }
     }
 
     // A snapshot keeps a sale's ask; one from before asks restores it as Fair, and an ask outside Fair to Greedy is refused.
@@ -714,17 +855,34 @@ public static class ConversationTests
     }
 
     // Offering your last unit from your hand puts your next gear in your hand for the talk. A talk that fails, or that you walk
-    // away from, gives the unit back to the hand it left, equipped again. A unit offered from the pocket goes back there.
+    // away from, gives the unit back to the hand it left, equipped again. A unit offered from the pocket goes back there, and the
+    // notice says which. Either way it goes back to its own slot of the gear bar, so its key still picks it.
     static void AHandedBackUnitGoesBackInYourHand()
     {
         foreach(bool walk in new[]{false,true})foreach(bool held in new[]{true,false})
         {
-            var s=Pair("Sale");var p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});p.EquippedItemId=held?"stock_lsd":"merch_bag";
+            var s=Pair("Sale");var p=s.Player("p0");p.Inventory.Insert(0,new ItemStack{ItemId="map",Count=1});p.Inventory.Add(new ItemStack{ItemId="merch_bag",Count=1});p.EquippedItemId=held?"stock_lsd":"map";
             var i=Sale(s,FestivalSimulation.FairAsk);
-            Check(p.EquippedItemId=="merch_bag"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"setup: the last unit is on offer and the merch bag is in your hand");
+            Check(p.EquippedItemId=="map"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd"),"setup: the last unit is on offer and the map is in your hand");
             if(walk)Check(Act(s,"p0","EndChat",i.Id).Accepted,"setup: you walk away from the sale");else Talk(s,i,Every(Awkward));
             Check(p.Inventory.Exists(x=>x.ItemId=="stock_lsd"&&x.Count==1),"the unit comes back");
-            Check(p.EquippedItemId==(held?"stock_lsd":"merch_bag"),(walk?"walking away":"a failed talk")+(held?" puts the unit back in your hand":" leaves the pocketed unit in your pocket")+", holding "+p.EquippedItemId);
+            Check(p.EquippedItemId==(held?"stock_lsd":"map"),(walk?"walking away":"a failed talk")+(held?" puts the unit back in your hand":" leaves the pocketed unit in your pocket")+", holding "+p.EquippedItemId);
+            string gear=string.Join(",",p.Inventory.Select(x=>x.ItemId)),notice=p.ConversationOutcomes.Find(o=>o.InteractionId==i.Id)?.Notice??"";
+            Check(notice==(walk?"You walked off":"NO SALE")+"  •  Tongue Stamps back in your "+(held?"hand":"gear"),"the notice says where the unit went: \""+notice+"\"");
+            Check(gear=="map,stock_lsd,merch_bag",(walk?"walking away":"a failed talk")+" puts the unit back in its own slot, got "+gear);
+        }
+        // A unit whose stack stays (two on offer from the pocket) joins it in place. A sale from an older snapshot, with no
+        // ReservedSlot, hands the last unit back at the end of the bar.
+        {
+            var s=Pair("Sale");var p=s.Player("p0");p.Inventory[0].Count=2;p.Inventory.Insert(0,new ItemStack{ItemId="map",Count=1});p.EquippedItemId="map";
+            var i=Sale(s,FestivalSimulation.FairAsk);Talk(s,i,Every(Awkward));
+            Check(string.Join(",",p.Inventory.Select(x=>x.ItemId+"x"+x.Count))=="mapx1,stock_lsdx2","a unit from a stack that stayed joins it in place, got "+string.Join(",",p.Inventory.Select(x=>x.ItemId+"x"+x.Count)));
+            s=Pair("Sale");p=s.Player("p0");p.Inventory.Add(new ItemStack{ItemId="map",Count=1});p.EquippedItemId="stock_lsd";i=Sale(s,FestivalSimulation.FairAsk);
+            var json=JsonNode.Parse(JsonSerializer.Serialize(s.State,new JsonSerializerOptions{IncludeFields=true}));
+            json["Interactions"].AsArray().Single(x=>x["Id"].GetValue<string>()==i.Id).AsObject().Remove("ReservedSlot");
+            var older=new FestivalSimulation();older.Restore(JsonSerializer.Deserialize<RoundState>(json.ToJsonString(),new JsonSerializerOptions{IncludeFields=true}));
+            var talk=older.Interaction(i.Id);Talk(older,talk,Every(Awkward));
+            Check(string.Join(",",older.Player("p0").Inventory.Select(x=>x.ItemId))=="map,stock_lsd"&&older.Player("p0").EquippedItemId=="stock_lsd","an older sale hands the unit back at the end of the bar and in your hand, got "+string.Join(",",older.Player("p0").Inventory.Select(x=>x.ItemId)));
         }
     }
 
@@ -756,11 +914,29 @@ public static class ConversationTests
         s=Pair("Sale");p=s.Player("p0");i=Sale(s,FestivalSimulation.FairAsk);
         s.State.Npcs.Add(new NpcState{Id="cop",Kind="Cop",Mode="ArrestWarning",X=p.X+1,Z=p.Z,Evidence=new List<EvidenceState>{new EvidenceState{PlayerId="p0",Kind="WitnessedDeal",DetainAt=s.State.SimulationSeconds}}});s.Tick(.1);o=Ended(s,i);
         Check(p.Life=="Detained"&&!p.Inventory.Exists(x=>x.ItemId=="stock_lsd")&&o!=null&&o.Notice=="BUSTED  •  security took your stock"&&o.Result=="BUSTED"&&o.Reaction=="","a bust mid-sale says BUSTED: \""+o?.Notice+"\"");
-        // A wary buyer you lose in the dance first walks off, and it says so.
+        // A wary buyer you lose in the dance first still talks; a talk that then fails is no sale, and it says so.
         s=Pair("Sale");Partner(s).Observers.Add(new ObserverState{PlayerId="p0",Suspicion=FestivalSimulation.TrustDanceSuspicion});i=Sale(s,FestivalSimulation.FairAsk);Check(i.TrustDance,"setup: they ask for a dance first");
-        for(int guard=0;i.Status=="Active"&&guard<200;guard++)s.Tick(.1);o=Ended(s,i);
-        Check(o.Notice=="They walk off  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a lost trust dance says they walk off, and where the unit went: \""+o.Notice+"\"");
+        for(int guard=0;FestivalSimulation.TrustDancing(i)&&guard<200;guard++)s.Tick(.1);
+        Check(i.Status=="Active"&&Ended(s,i)==null,"setup: a lost trust dance leads on to the talk");Talk(s,i,Every(Awkward));o=Ended(s,i);
+        Check(o.Notice=="NO SALE  •  Tongue Stamps back in your hand"&&o.Result=="NO SALE","a talk that fails after a lost dance says NO SALE, and where the unit went: \""+o.Notice+"\"");
         Check(FestivalSimulation.MoneyNotice("LOST PROPERTY RETURNED",5)=="LOST PROPERTY RETURNED  •  +$5"&&FestivalSimulation.MoneyNotice("SECURITY FINE",-10)=="SECURITY FINE  •  −$10","the money notice every change of cash uses");
+    }
+
+    // A settled talk's outcome carries its Score, so the chat window's meter lands where the host settled it. A talk
+    // cut short (walked away from, busted) has no score, -1, so the meter stays where it stood; so has an outcome from before.
+    static void AnOutcomeCarriesItsSettledScore()
+    {
+        ConversationOutcome Ended(FestivalSimulation s,InteractionState i)=>s.Player("p0").ConversationOutcomes.Find(o=>o.InteractionId==i.Id);
+        foreach(var kind in Kinds)
+        {
+            var s=Pair(kind);var i=Talk(s,Start(s,kind),Smooth,SoSo,Smooth,Awkward);var o=Ended(s,i);
+            Check(i.Score>0&&o!=null&&o.Score==i.Score,"a settled "+kind+"'s outcome carries its score, "+i.Score+", got "+o?.Score);
+        }
+        var cut=Pair("Sale");var sale=Sale(cut,FestivalSimulation.FairAsk);Check(Say(cut,sale,Smooth).Accepted,"setup: a smooth first reply");
+        Check(Act(cut,"p0","EndChat",sale.Id).Accepted,"setup: you walk away");
+        Check(Ended(cut,sale)?.Score==-1,"a sale walked away from has no score, got "+Ended(cut,sale)?.Score);
+        var older=JsonSerializer.Deserialize<ConversationOutcome>("{\"DeliveryId\":\"old\"}",new JsonSerializerOptions{IncludeFields=true});
+        Check(older.Score==-1,"an outcome from before scores has none, got "+older.Score);
     }
 
     // A talk in a snapshot from before conversations (no turns, no trust dance) restores, and carries on as a conversation.

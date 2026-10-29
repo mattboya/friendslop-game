@@ -82,7 +82,7 @@ namespace Festival.Tests
                 Fits("Crew status");foreach(var button in actions){var text=button.transform.Find("Text").GetComponent<Text>();var measured=new TextGenerator();measured.Populate(text.text,text.GetGenerationSettings(text.rectTransform.rect.size));int visible=Mathf.Max(0,measured.characterCountVisible);if(visible<text.text.Length&&text.text.Substring(visible).Trim().Length>0)failures.Add("menu action clipped: "+text.text);}
                 var scroll=actions[0].GetComponentInParent<ScrollRect>();Assert.That(scroll,Is.Not.Null);scroll.verticalNormalizedPosition=0;Canvas.ForceUpdateCanvases();
                 var last=actions.Find(b=>b.name=="Action:Offer Tongue Stamps to "+mates[6].Name);Assert.That(last,Is.Not.Null);last.onClick.Invoke();yield return null;yield return null;
-                Assert.That(session.MenuOpen,Is.False,"choosing an overflowed handoff closes the actual menu");Assert.That(game.State.Transfers.Exists(t=>t.FromId==player.Id&&t.ToId==mates[6].Id&&t.ItemId=="stock_lsd"),Is.True,"the hidden-strip action remains executable");session.Command("CancelTransfer",game.State.Transfers.Find(t=>t.FromId==player.Id).Id);
+                Assert.That(session.MenuOpen,Is.True,"choosing an overflowed handoff keeps the menu open for the next click");Assert.That(game.State.Transfers.Exists(t=>t.FromId==player.Id&&t.ToId==mates[6].Id&&t.ItemId=="stock_lsd"),Is.True,"the hidden-strip action remains executable");session.Command("CancelTransfer",game.State.Transfers.Find(t=>t.FromId==player.Id).Id);session.MenuOpen=false;
                 game.State.LevelIndex=3;game.State.FriendFound=true;foreach(var mate in mates){mate.X=0;mate.Z=19;}player.X=0;player.Z=19;yield return new WaitForSeconds(.3f);Fits("Roster");
             }
             finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
@@ -282,23 +282,52 @@ namespace Festival.Tests
             yield return null;
         }
 
+        // At 130% text, near sundown, with three friends dying beside you, the banner keeps under the sundown warning and the tag
+        // keeps under all four death reels. A first-time tip that comes up as you come back waits for the banner.
         [UnityTest]public IEnumerator DyingShowsTheBannerAndTheSpiritLookAndARevivalClearsBoth()
         {
             var world=new GameObject("Life banner world");world.AddComponent<FestivalWorld>();yield return null;
             var root=new GameObject("Life banner HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
             GameObject Shown(string name){foreach(var rect in root.GetComponentsInChildren<RectTransform>(false))if(rect.name==name)return rect.gameObject;return null;}
-            Rect Area(GameObject go){var corners=new Vector3[4];((RectTransform)go.transform).GetWorldCorners(corners);return new Rect(corners[0].x,corners[0].y,corners[2].x-corners[0].x,corners[2].y-corners[0].y);}
+            // The HUD and the death reels each laid out on a 1920x1080 screen; a part's rect as shares of its own canvas.
+            RectTransform Screen1080(string name)
+            {
+                foreach(var canvas in root.GetComponentsInChildren<Canvas>(true))
+                {
+                    if(canvas.name!=name)continue;
+                    canvas.renderMode=RenderMode.WorldSpace;var rect=(RectTransform)canvas.transform;rect.sizeDelta=new Vector2(1920,1080);rect.localScale=Vector3.one;return rect;
+                }
+                Assert.Fail("setup: no canvas "+name);return null;
+            }
+            Rect Share(GameObject go)
+            {
+                var canvas=(RectTransform)go.GetComponentInParent<Canvas>().transform;var corners=new Vector3[4];((RectTransform)go.transform).GetWorldCorners(corners);
+                Vector2 low=canvas.InverseTransformPoint(corners[0]),high=canvas.InverseTransformPoint(corners[2]),size=canvas.rect.size;
+                return Rect.MinMaxRect(low.x/size.x+canvas.pivot.x,low.y/size.y+canvas.pivot.y,high.x/size.x+canvas.pivot.x,high.y/size.y+canvas.pivot.y);
+            }
+            string F(Rect r)=>"x "+r.xMin.ToString("F3")+"-"+r.xMax.ToString("F3")+", y "+r.yMin.ToString("F3")+"-"+r.yMax.ToString("F3");
+            float textScale=1;
             try
             {
                 session.Host("Ghost",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
-                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);yield return StartLevel(session);
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);
+                var mates=new List<PlayerState>();foreach(var name in new[]{"Sam","Kim","Jo","Riya"}){var mate=game.AddPlayer("life_"+name.ToLowerInvariant(),name);mate.Ready=true;mates.Add(mate);}
+                yield return StartLevel(session);
+                textScale=session.Profile.Data.TextScale;session.Profile.Data.TextScale=1.3f;
+                Screen1080("Festival HUD");Screen1080(FestivalSpinner.DeathCanvasName);
                 var player=game.Player(session.LocalPlayerId);QuietDropGround(game,player);player.Cash=40;
-                // No tripper, so KeepTripper never doses the view while it is checked.
-                game.State.TripperId="";yield return new WaitForSeconds(.3f);yield return null;yield return null;
+                // No tripper, so KeepTripper never doses the view while it is checked. Day 1, 50 s from sundown with nothing sold.
+                game.State.TripperId="";game.State.LevelSales=0;game.State.ElapsedSeconds=game.State.DurationSeconds-50;
+                foreach(var mate in mates){mate.Effects.Clear();mate.Cash=40;mate.X=6;mate.Z=0;}
+                yield return new WaitForSeconds(.3f);yield return null;yield return null;
                 Assert.That(Shown("Life banner"),Is.Null,"setup: alive, no banner");Assert.That(Shown("Spirit tag"),Is.Null,"and no tag");
+                Assert.That(Shown("Sundown warning"),Is.Not.Null,"setup: the sundown warning is up");
                 var trip=root.transform.Find("Festival trip");Assert.That(trip==null||!trip.gameObject.activeSelf,"setup: a sober view");
+                // Riya lives on, so the level goes on with four of the crew dead.
+                for(int i=0;i<3;i++){mates[i].Life="Downed";mates[i].DownedRemaining=.05;}
+                yield return new WaitForSeconds(.3f);
                 player.Life="Downed";player.DownedRemaining=.05;yield return new WaitForSeconds(.4f);yield return null;yield return null;
-                Assert.That(player.Life,Is.EqualTo("Spirit"),"setup: alone, the downed time runs out");
+                Assert.That(player.Life,Is.EqualTo("Spirit"),"setup: the downed time runs out");Assert.That(game.State.Phase,Is.EqualTo("Playing"),"setup: Riya keeps the level going");
                 Assert.That(DropText(root,"Life title")?.text,Is.EqualTo("YOU DIED"),"dying is a moment");
                 Assert.That(DropText(root,"Life detail")?.text,Does.Contain("float through anything").And.Contain("(2 revivals left)"));
                 Assert.That(DropText(root,"Spirit tag text")?.text,Is.EqualTo("SPIRIT"),"the tag is up");
@@ -306,16 +335,90 @@ namespace Festival.Tests
                 var look=FestivalTrip.Spirit(FestivalNightLighting.IsNight(session.State));
                 foreach(var image in trip.GetComponentsInChildren<RawImage>(false))if(image.name=="Trip vignette")Assert.That(image.color.a,Is.EqualTo(look.Vignette),"with the spirit's soft edges");
                 foreach(var image in trip.GetComponentsInChildren<Image>(false))if(image.name=="Trip tint")Assert.That(image.color,Is.EqualTo(look.Tint),"and its cool cast");
-                GameObject reel=null;foreach(var rect in root.GetComponentsInChildren<RectTransform>(false))if(rect.name=="Death card 0")reel=rect.gameObject;
-                Assert.That(reel,Is.Not.Null,"setup: a death with $40 spins the death reel");
-                Assert.That(Area(Shown("Life banner")).Overlaps(Area(reel.transform.Find("Card").gameObject)),Is.False,"the banner leaves the death reel clear");
-                player.X=24;player.Z=-20;
-                var revive=game.Execute(player.Id,new GameCommand{Id="life_hud_revive",Kind="BeginRevival",TargetId=player.Id});Assert.That(revive.Accepted,Is.True,revive.Reason);
-                game.State.Interactions.Find(i=>i.Kind=="Revival"&&i.Status=="Active").StartSeconds-=15;yield return new WaitForSeconds(.4f);yield return null;yield return null;
-                Assert.That(player.Life,Is.EqualTo("Alive"),"setup: the self-revival finishes");
+                Canvas.ForceUpdateCanvases();
+                var banner=Share(Shown("Life banner"));var sundown=Shown("Sundown warning");
+                Assert.That(sundown,Is.Not.Null,"setup: the sundown warning is still up as you die");
+                Assert.That(banner.Overlaps(Share(sundown)),Is.False,"at 130% the banner ("+F(banner)+") keeps under the sundown warning ("+F(Share(sundown))+")");
+                var tag=Share(Shown("Spirit tag"));var word=DropText(root,"Spirit tag text");
+                Assert.That(word.cachedTextGenerator.characterCountVisible,Is.EqualTo(word.text.Length),"at 130% the tag shows its whole word");
+                for(int i=0;i<4;i++)
+                {
+                    var reel=Shown("Death card "+i);Assert.That(reel,Is.Not.Null,"setup: four deaths with $40 spin four death reels; no reel "+i);
+                    var card=Share(reel.transform.Find("Card").gameObject);
+                    Assert.That(card.Overlaps(banner),Is.False,"the banner ("+F(banner)+") leaves death reel "+i+" ("+F(card)+") clear");
+                    Assert.That(card.Overlaps(tag),Is.False,"the SPIRIT tag ("+F(tag)+") leaves death reel "+i+" ("+F(card)+") clear");
+                }
+                // The tag keeps its word on short and wide screens, each as the HUD canvas's logical size there
+                // (ScaleWithScreenSize 1920x1080, match .5): a 1080p window, 21:9 and 32:9, which cut it even at 100% text.
+                var hudCanvas=Screen1080("Festival HUD");var missed=new List<string>();
+                foreach(var (screen,size,scale) in new[]{("a 1080p window",new Vector2(2047,1013),1.3f),("21:9",new Vector2(2217,935),1.3f),("32:9",new Vector2(2715,764),1.3f),("32:9",new Vector2(2715,764),1f)})
+                {
+                    session.Profile.Data.TextScale=scale;hudCanvas.sizeDelta=size;yield return null;yield return null;Canvas.ForceUpdateCanvases();
+                    word=DropText(root,"Spirit tag text");
+                    if(word.cachedTextGenerator.characterCountVisible!=word.text.Length)missed.Add("on "+screen+" at "+Mathf.RoundToInt(scale*100)+"% text the tag shows "+word.cachedTextGenerator.characterCountVisible+" of its "+word.text.Length+" letters (box "+word.rectTransform.rect.height.ToString("F1")+" px, font "+word.fontSize+")");
+                }
+                session.Profile.Data.TextScale=1.3f;hudCanvas.sizeDelta=new Vector2(1920,1080);yield return null;yield return null;
+                // While it shows, the banner keeps its place or lowers: the sundown warning that ends under it never snaps it up.
+                Canvas.ForceUpdateCanvases();float top=Share(Shown("Life banner")).yMax;bool sundownGone=false;int after=0;
+                for(float until=Time.realtimeSinceStartup+7;after<10&&Time.realtimeSinceStartup<until;)
+                {
+                    yield return null;var shown=Shown("Life banner");if(shown==null)break;
+                    if(Shown("Sundown warning")==null){sundownGone=true;after++;}
+                    Canvas.ForceUpdateCanvases();float now=Share(shown).yMax;
+                    if(now>top+.0005f)missed.Add("the banner moves up while it shows (top "+top.ToString("F3")+" -> "+now.ToString("F3")+(sundownGone?", the sundown warning gone":"")+")");
+                    top=now;
+                }
+                Assert.That(sundownGone,Is.True,"setup: the sundown warning ends while the banner shows");
+                Assert.That(missed,Is.Empty,"short and wide screens, and the banner's place:\n"+string.Join("\n",missed));
+                // Riya brings your wristband to the medical tent.
+                var band=game.State.Drops.Find(d=>d.ItemId=="wristband"&&d.OwnerId==player.Id);Assert.That(band,Is.Not.Null,"setup: your wristband drops where you fell");
+                var riya=mates[3];riya.X=band.X;riya.Z=band.Z;
+                var claim=game.Execute(riya.Id,new GameCommand{Id="life_hud_band",Kind="Pickup",TargetId=band.Id});Assert.That(claim.Accepted,Is.True,claim.Reason);
+                riya.X=24;riya.Z=-20;
+                var revive=game.Execute(riya.Id,new GameCommand{Id="life_hud_revive",Kind="BeginRevival",TargetId=player.Id});Assert.That(revive.Accepted,Is.True,revive.Reason);
+                // As you come back, Riya trips: the first time on this machine, so "Only Riya can see the visions" is due.
+                session.Profile.Data.SeenTips.Clear();riya.Effects.Add(new ActiveEffect{Id=FestivalSimulation.DoseEffect,Intensity=1,RemainingSeconds=600});game.State.TripperId=riya.Id;
+                game.State.Interactions.Find(i=>i.Kind=="Revival"&&i.Status=="Active").StartSeconds-=10;yield return new WaitForSeconds(.4f);yield return null;yield return null;
+                Assert.That(player.Life,Is.EqualTo("Alive"),"setup: the revival finishes");
                 Assert.That(DropText(root,"Life title")?.text,Is.EqualTo("YOU'RE BACK"),"coming back is clear");
                 Assert.That(Shown("Spirit tag"),Is.Null,"the tag goes");
                 Assert.That(trip.gameObject.activeSelf,Is.False,"and so does the ghostly view");
+                Assert.That(Shown("First-time tip card"),Is.Null,"no tip covers YOU'RE BACK");
+                Assert.That(session.Profile.Data.SeenTips,Does.Not.Contain("friend"),"and the tip is not spent while it waits");
+                yield return new WaitForSeconds(6.2f);
+                Assert.That(Shown("Life banner"),Is.Null,"setup: the banner goes after its 6 s");
+                Assert.That(DropText(root,"First-time tip")?.text,Does.StartWith("Only Riya can see the visions."),"then the tip shows");
+            }
+            finally{session.Profile.Data.TextScale=textScale;session.Leave();Object.Destroy(root);Object.Destroy(world);}
+            yield return null;
+        }
+
+        // While you drag a friend, their row says it lets go, in the strip under the prompt and in the Esc menu's list,
+        // and a click on it lets go.
+        [UnityTest]public IEnumerator ADraggerSeesHowToLetGo()
+        {
+            var world=new GameObject("Drag world");world.AddComponent<FestivalWorld>();yield return null;
+            var root=new GameObject("Drag HUD");var session=root.AddComponent<FestivalSession>();root.AddComponent<FestivalHud>();yield return null;
+            Button Row(string label){foreach(var b in root.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name=="Action:"+label)return b;return null;}
+            string Listed(){var listed=new List<string>();foreach(var b in root.GetComponentsInChildren<Button>(true))if(b.gameObject.activeSelf&&b.name.StartsWith("Action:"))listed.Add(b.name.Substring(7));return string.Join(" | ",listed);}
+            try
+            {
+                session.Host("Dragger",HostPort);for(float until=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<until;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);var game=Simulation(session);
+                var sam=game.AddPlayer("drag_sam","Sam");sam.Ready=true;
+                yield return StartLevel(session);
+                var player=game.Player(session.LocalPlayerId);game.State.Npcs.Clear();game.State.Visions.Clear();
+                player.X=0;player.Z=0;sam.X=-1;sam.Z=0;sam.Life="Downed";sam.DownedRemaining=1e6;
+                yield return new WaitForSeconds(.4f);
+                Assert.That(Row("Drag Sam"),Is.Not.Null,"setup: beside a downed friend you can drag them (listed: "+Listed()+")");
+                session.Command("Drag",sam.Id);yield return new WaitForSeconds(.4f);
+                Assert.That(player.DragTargetId,Is.EqualTo(sam.Id),"setup: you drag Sam ("+session.Message+")");
+                Assert.That(Row("Drag Sam"),Is.Null,"dragging, no row still says Drag (listed: "+Listed()+")");
+                var off=Row("Let go of Sam");Assert.That(off,Is.Not.Null,"dragging, the row says it lets go (listed: "+Listed()+")");
+                Assert.That(DropText(root,"Nearby")?.text,Does.Contain("Let go of Sam"),"and the strip under the prompt shows it");
+                off.onClick.Invoke();yield return new WaitForSeconds(.4f);
+                Assert.That(player.DragTargetId,Is.Empty,"a click on it lets go");
+                Assert.That(Row("Drag Sam"),Is.Not.Null,"and the row offers the drag again (listed: "+Listed()+")");
             }
             finally{session.Leave();Object.Destroy(root);Object.Destroy(world);}
             yield return null;
@@ -883,6 +986,11 @@ namespace Festival.Tests
                 Expect("night 2","Roster","HOME  0 / 2\nYOU  •  AWAY\nSAM  •  BODY AWAY");
                 Expect("night 2 beside a body","Prompt","Carry Sam's body");
                 Fits("night 2","Roster");
+                var actors=(Dictionary<string,Transform>)typeof(FestivalSession).GetField("actors",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(session);
+                var corpse=actors["body_"+mate.Id].GetComponent<FestivalCharacter>();
+                if(!corpse.Appearance.Equals(actors[mate.Id].GetComponent<FestivalCharacter>().Appearance))failures.Add("night 2: Sam's body wears another look than Sam ("+corpse.Appearance.Role+")");
+                var corpseScarf=System.Array.Find(corpse.GetComponentsInChildren<SkinnedMeshRenderer>(true),r=>r.enabled&&r.name=="Accessory_2");
+                if(corpseScarf==null||corpseScarf.sharedMaterial.color!=FestivalCharacter.CrewColor)failures.Add("night 2: Sam's body wears no crew scarf");
                 PressE();yield return new WaitForSeconds(.6f);
                 if(player.CarryBodyId!=mate.Id)failures.Add("night 2 beside a body: E does not pick it up ("+session.Message+")");
                 Expect("night 2 carrying a body","Prompt","Put down Sam's body");

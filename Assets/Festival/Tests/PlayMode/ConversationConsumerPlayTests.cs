@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Festival.Core;
 using Festival.Network;
@@ -45,7 +46,8 @@ namespace Festival.Tests
                     }
                     Assert.That(visible,Is.Not.Null);Assert.That(visible.Turns.Count,Is.EqualTo(turn+1));
                     client.AcknowledgeConversationTurn(visible);
-                    client.Command("Reply",amount:Array.IndexOf(visible.Turns[turn].Grades,ConversationLines.Smooth),direction:turn);
+                    // A view carries no grade of a reply not picked, so the smooth one is read from the host's talk.
+                    client.Command("Reply",amount:Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth),direction:turn);
                     while(talk.Status=="Active"&&talk.Turns.Count==turn+1&&Time.realtimeSinceStartup<deadline)yield return null;
                 }
                 Assert.That(owner.Life,Is.EqualTo("Detained"));game.State.Interactions.Clear();
@@ -109,7 +111,7 @@ namespace Festival.Tests
                     Assert.That(visible,Is.Not.Null);Assert.That(visible.Turns.Count,Is.EqualTo(turn+1));
                     if(turn==FestivalSimulation.ConversationTurns-1)Assert.That(visible.Hunch,Is.EqualTo(hunch));
                     Assert.That(window.Follow(session.State,session.LocalPlayer,session.State.SimulationSeconds,turn,false),Is.True);
-                    Assert.That(window.Pick(Array.IndexOf(visible.Turns[turn].Grades,ConversationLines.Smooth)),Is.True);
+                    Assert.That(window.Pick(Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth)),Is.True);
                 }
                 for(float deadline=Time.realtimeSinceStartup+5;talk.Status=="Active"&&Time.realtimeSinceStartup<deadline;)yield return null;
                 Assert.That(talk.Status,Is.EqualTo("Complete"));yield return null;
@@ -172,7 +174,7 @@ namespace Festival.Tests
                             else{Assert.That(heard[0],Is.EqualTo(word.Value[0]));Assert.That(heard[heard.Length-1],Is.EqualTo(word.Value[word.Length-1]));}
                         }
                     }
-                    int pick=Array.IndexOf(choices.Grades,ConversationLines.Smooth);
+                    int pick=Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Smooth);
                     Assert.That(window.Pick(pick),Is.True);
                     Assert.That(sober.Execute(player.Id,new GameCommand{Id="plain_reply_"+turn,Kind="Reply",Direction=turn,Amount=pick}).Accepted,Is.True);
                 }
@@ -245,6 +247,42 @@ namespace Festival.Tests
                 Assert.That(failures,Is.Empty,string.Join("\n",failures));
             }
             finally{session.Leave();UnityEngine.Object.Destroy(hud);UnityEngine.Object.Destroy(world);}
+        }
+
+        // A joined client's smoke has no grade to read (its view carries none for a reply it has not picked), so it says the first
+        // reply. The host's smoke makes every reply of that client's live talk smooth, so the client's buy still goes perfectly.
+        [UnityTest] public IEnumerator AJoinedClientsSmokeBuysSmoothlyWithNoGradeToRead()
+        {
+            var world=new GameObject("Smoke buy world");world.AddComponent<FestivalWorld>();yield return null;
+            var hostObject=new GameObject("Smoke buy host");var host=hostObject.AddComponent<FestivalSession>();
+            var clientObject=new GameObject("Smoke buy client");var client=clientObject.AddComponent<FestivalSession>();yield return null;
+            var smoke=clientObject.AddComponent<DevelopmentSmoke>();smoke.enabled=false;var mine=BindingFlags.Instance|BindingFlags.NonPublic;
+            try
+            {
+                ushort port=FreePort();host.Host("Host",port);float deadline=Time.realtimeSinceStartup+30;
+                while(host.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(host.LocalPlayer,Is.Not.Null,host.Message);client.Join("Buyer","127.0.0.1",port);
+                while(client.LocalPlayer==null&&Time.realtimeSinceStartup<deadline)yield return null;
+                Assert.That(client.LocalPlayer,Is.Not.Null,client.Message);
+                var game=Simulation(host);var buyer=game.Player(client.LocalPlayerId);buyer.X=0;buyer.Z=19;client.Command("Ready");
+                while(!buyer.Ready&&Time.realtimeSinceStartup<deadline)yield return null;yield return StartLevel(host,buyer.Id);
+                game.State.Npcs.Clear();game.State.Seed=7;game.State.EntitySequence=0;game.HasLineOfSight=(ax,az,bx,bz)=>false;
+                buyer.X=0;buyer.Z=0;buyer.Effects.Clear();buyer.Cash=50;buyer.Inventory.Clear();buyer.EquippedItemId="";
+                string id="smoke_seller_0";for(int n=1;DialogueGrammar.PersonaFor(id,"")!="Wook";n++)id="smoke_seller_"+n;
+                string stock=FestivalSimulation.SellerStock(id);
+                game.State.Npcs.Add(new NpcState{Id=id,Kind="Wook",Role="Regular",X=0,Z=1.5f,Yaw=180,CanTalk=true});
+                host.MenuOpen=client.MenuOpen=false;yield return new WaitForSeconds(.3f);
+                host.StartCoroutine((IEnumerator)typeof(DevelopmentSmoke).GetMethod("SmoothTalks",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{game,buyer.Id}));
+                yield return (IEnumerator)typeof(DevelopmentSmoke).GetMethod("Interact",mine).Invoke(smoke,new object[]{client,"StartBuy",id,stock,Time.realtimeSinceStartup+20});
+                Assert.That((string)typeof(DevelopmentSmoke).GetField("failed",mine).GetValue(smoke),Is.Null,"the client's smoke talks the buy through: "+client.Message);
+                var talk=game.Interaction(((InteractionState)typeof(DevelopmentSmoke).GetField("finished",mine).GetValue(smoke))?.Id??"");
+                Assert.That(talk?.Status,Is.EqualTo("Complete"),"setup: the host settled the buy");
+                Assert.That(talk.Turns.Select(t=>t.Pick),Is.All.EqualTo(0),"with no grade to read, the client said the first reply every turn");
+                Assert.That(talk.Score,Is.EqualTo(1),"and the host's smoke had made each of them smooth");
+                Assert.That(buyer.Inventory.Exists(i=>i.ItemId==stock),Is.True,"so the buy went through");
+            }
+            finally{client.Leave();host.Leave();UnityEngine.Object.Destroy(clientObject);UnityEngine.Object.Destroy(hostObject);UnityEngine.Object.Destroy(world);}
+            yield return null;
         }
     }
 }

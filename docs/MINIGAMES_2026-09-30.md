@@ -135,8 +135,9 @@ A shady bartender sets out cups. One is spiked. It's push-your-luck with a share
 - **The tripper's hunch:** the tripper alone sees one cup shimmer amber, with a line that says how far to trust it
   ("Your trip says cup 3… trips like yours are right about 3 times in 4"). It marks the spiked cup at the tripper's
   vision reliability (75 / 50 / 25 / 10% by dose); otherwise it marks a safe cup. They relay it over voice, and the
-  crew decides how much to trust it. Alone at the table nobody argues it over, so a solo hunch is one step less sure
-  (50 / 25 / 10 / 10%): it can't hand a lone player a free pot.
+  crew decides how much to trust it. A tripper alone at the table has nobody to argue it over, so their solo hunch is one
+  step less sure (50 / 25 / 10 / 10%): it can't hand a lone player a free pot. A friend alone at the table while the
+  tripper is away from it (detained, say) keeps the crew's odds: the tripper can still relay the hunch.
 
 As built (MINI-4): the cups, which one is spiked, the turn order and the hint come from one stream that mixes in the host's
 secret deal seed, so no client can work them out; the spiked cup never leaves the host, and the hint reaches only the
@@ -149,13 +150,18 @@ the player up drinks the cup under the aim dot with E and calls it with F; the t
 view alone (lit throughout with reduced motion).
 
 As built (MINI-10): the first turn's clock starts 3 s after the pour (`CupsIntroSeconds`), and until then the card reads
-the rules in three lines: one cup is spiked and each safe cup grows the pot; call it any time to bank the pot; the spiked
+the rules in three lines: one cup is spiked and each safe cup grows the pot; on your turn, call it to bank the pot; the spiked
 cup loses the pot and doses whoever drinks it. The player up may still drink or call it at once. During play the card shows
 the pot, whose turn it is and their seconds, what the next safe cup adds, what calling it banks, and "1 spiked among N
 left"; the tripper's card adds the hunch and its odds (`HunchReliability`), never "is spiked" flat. The end card says what
 became of the pot and, to the tripper, whether the hunch was right, as far as the table shows it: the spiked cup drunk, or
 the last cup left; a hunch cup drunk safely was wrong; one nobody drank before the call stays a guess, because the spiked
 cup never leaves the host.
+
+As built (MINI-13): a spirit or a detained player watches without a turn, so their rules' middle line reads "You're
+watching: the players call it on their turn.", and the end card names whom the day's pot paid: "$5 each" to the players at
+a table of two or more, "$5 to you" or "$5 to Sam" at a table of one, and "$5 to each player" to a watcher. F on someone
+else's turn asks the host, and its refusal is the notice: "It's Sam's turn", or "You're watching this one".
 
 ## Rejected ideas
 

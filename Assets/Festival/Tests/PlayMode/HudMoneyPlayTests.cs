@@ -106,7 +106,8 @@ namespace Festival.Tests
                 player.Effects.Clear();player.Cash=187;sim.State.StashCash=45;sim.State.LevelSales=12;player.X=0;player.Z=0;mate.X=30;mate.Z=0;
                 sim.State.Npcs.RemoveAll(n=>n.Kind=="Wook");
                 var cop=sim.State.Npcs.Find(n=>n.Kind=="Cop");cop.X=1.5f;cop.Z=0;cop.Evidence.Add(new EvidenceState{PlayerId=player.Id,Kind="WitnessedDeal",DetainAt=sim.State.SimulationSeconds+300});
-                yield return new WaitForSeconds(.4f);
+                // The card lights each figure the setup just moved, so read it once the flash is over.
+                yield return new WaitForSeconds(FestivalHudText.SaleStampSeconds+.2f);
                 Expect("Day 1","Vitals","HP 100  •  187 FRIENDSHIP BRACELETS  •  STASH 45 FRIENDSHIP BRACELETS\nSALES 12 FRIENDSHIP BRACELETS  •  ALIVE  •  ARREST WARNING");
                 int quota=FestivalSimulation.DayQuota(sim.State);
                 Expect("Day 1","Objective title","DAY QUOTA  12 FRIENDSHIP BRACELETS / "+quota+" FRIENDSHIP BRACELETS");
@@ -385,6 +386,96 @@ namespace Festival.Tests
             string timeline=string.Join(" -> ",log);
             Assert.That(friendFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds),"the friend's sale line shows "+friendFor.ToString("0.00")+" s in all: "+timeline);
             Assert.That(mineFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"your sale's notice shows "+mineFor.ToString("0.00")+" s: "+timeline);
+        }
+
+        // Esc opens the menu on the CREW + NEARBY list. A deposit clicked there keeps it open, and the list's heading reads
+        // the deposit's line with its amount, since the notice line hides under the pass. A withdrawal clicked .3 s later follows
+        // it: its accepted reply clears the notice, yet each line holds the heading for its time. A dance clicked there shuts the
+        // menu, so the dance has your keys.
+        [UnityTest]public IEnumerator TheMenusListStaysOpenForADepositAndReadsItsLine()
+        {
+            UseAVirtualKeyboard("Menu list keyboard");
+            var world=new GameObject("Menu list world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Menu list HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            Button Row(string label)=>hud.GetComponentsInChildren<Button>(false).FirstOrDefault(b=>b.name=="Action:"+label);
+            string Listed()=>string.Join(" | ",hud.GetComponentsInChildren<Button>(false).Where(b=>b.name.StartsWith("Action:")).Select(b=>b.name.Substring(7)));
+            string Heading()=>hud.GetComponentsInChildren<Text>(false).FirstOrDefault(t=>t.name=="Actions heading")?.text??"(hidden)";
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                yield return StartLevel(session);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);
+                sim.State.Npcs.Clear();sim.State.Visions.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.X=0;player.Z=0;player.Cash=40;
+                sim.State.Stashes.Add(new StashState{Id="menu_box",X=0,Z=1});sim.State.Npcs.Add(new NpcState{Id="menu_buyer_2",Role="Buyer",X=0,Z=1.5f,Yaw=180});
+                yield return new WaitForSeconds(.6f);
+                yield return Tap(Key.Escape);yield return new WaitForSeconds(.3f);
+                Assert.That(session.MenuOpen,Is.True,"setup: Esc opens the menu");
+                Assert.That(Heading(),Is.EqualTo("NEARBY / CREW"),"setup: the list's heading");
+                const string Deposited="INTO THE STASH  •  −$5",Withdrawn="FROM THE STASH  •  +$5";
+                float depositedFor=0,withdrawnFor=0,start=Time.realtimeSinceStartup;string last=null;var timeline=new List<string>();
+                void Note()
+                {
+                    string h=Heading();if(h==Deposited)depositedFor+=Time.unscaledDeltaTime;else if(h==Withdrawn)withdrawnFor+=Time.unscaledDeltaTime;
+                    if(h!=last){last=h;timeline.Add((Time.realtimeSinceStartup-start).ToString("0.00")+"s "+h);}
+                }
+                foreach(var (label,cash) in new[]{("Deposit $5 in shared stash",35),("Withdraw $5 from shared stash",40)})
+                {
+                    var row=Row(label);for(float end=Time.realtimeSinceStartup+1;row==null&&Time.realtimeSinceStartup<end;){yield return null;Note();row=Row(label);}
+                    Assert.That(row,Is.Not.Null,"the list offers \""+label+"\" (listed: \""+Listed()+"\")");
+                    row.onClick.Invoke();
+                    Assert.That(player.Cash,Is.EqualTo(cash),"setup: "+label+" moved your cash");
+                    for(float end=Time.realtimeSinceStartup+.3f;Time.realtimeSinceStartup<end;){yield return null;Note();}
+                    Assert.That(session.MenuOpen,Is.True,label+" keeps the menu open");
+                }
+                for(float end=Time.realtimeSinceStartup+2*FestivalHudText.MoneyNewsSeconds;Time.realtimeSinceStartup<end;){yield return null;Note();}
+                Assert.That(depositedFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"the deposit's line holds the list's heading: "+string.Join(" -> ",timeline));
+                Assert.That(withdrawnFor,Is.GreaterThanOrEqualTo(FestivalHudText.MoneyNewsSeconds-.5f),"the withdrawal's line follows it: "+string.Join(" -> ",timeline));
+                var dance=Row("Dance with festivalgoer");Assert.That(dance,Is.Not.Null,"the list offers the dance (listed: \""+Listed()+"\")");
+                dance.onClick.Invoke();yield return null;
+                Assert.That(session.MenuOpen,Is.False,"a dance shuts the menu");
+                Assert.That(sim.Interaction(player.InteractionId)?.Kind,Is.EqualTo("Dance"),"setup: the dance started ("+session.Message+")");
+                session.Command("Cancel");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
+        }
+
+        // A friend's sale lights SALES on the running card, never your cash, which it did not change.
+        [UnityTest]public IEnumerator AFriendsSaleLightsSalesButNotYourCash()
+        {
+            var world=new GameObject("Friend's sale world");world.AddComponent<FestivalWorld>();yield return null;
+            var hud=new GameObject("Friend's sale HUD");var session=hud.AddComponent<FestivalSession>();hud.AddComponent<FestivalHud>();yield return null;
+            string Read(string name){foreach(var text in hud.GetComponentsInChildren<Text>(false))if(text.name==name)return text.text;return "(hidden)";}
+            try
+            {
+                session.Host("Tester",HostPort);
+                for(float end=Time.realtimeSinceStartup+30;session.LocalPlayer==null&&Time.realtimeSinceStartup<end;)yield return null;
+                Assert.That(session.LocalPlayer,Is.Not.Null,session.Message);
+                var sim=Simulation(session);var player=sim.Player(session.LocalPlayerId);var mate=sim.AddPlayer("lit_mate","Sam");mate.Ready=true;
+                yield return StartLevel(session);
+                sim.State.Npcs.Clear();sim.State.ElapsedSeconds=FestivalHudText.BriefingSeconds+1;player.X=0;player.Z=0;mate.X=20;mate.Z=0;
+                mate.Inventory.Clear();mate.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});mate.EquippedItemId="stock_lsd";
+                string buyer="lit_buyer_0";for(int k=1;DialogueGrammar.PersonaFor(buyer,"")=="Raver"||DialogueGrammar.PersonaFor(buyer,"")=="Burner";k++)buyer="lit_buyer_"+k;
+                sim.State.Npcs.Add(new NpcState{Id=buyer,Role="Buyer",X=20,Z=1.5f,Yaw=180});
+                yield return new WaitForSeconds(.6f);
+                int cash=player.Cash;
+                Assert.That(sim.Execute(mate.Id,new GameCommand{Id="lit_sale",Kind="StartSale",TargetId=buyer,ItemId="stock_lsd",Amount=FestivalSimulation.FairAsk}).Accepted,Is.True,"setup: their sale");
+                var talk=sim.Interaction(mate.InteractionId);
+                for(int n=0;talk.Status=="Active";n++){var turn=talk.Turns[talk.Turns.Count-1];Assert.That(sim.Execute(mate.Id,new GameCommand{Id="lit_reply_"+n,Kind="Reply",Amount=System.Array.IndexOf(turn.Grades,ConversationLines.Smooth),Direction=talk.Turns.Count-1}).Accepted,Is.True,"setup: their reply");}
+                string cashLit="",salesLit="";
+                for(float end=Time.realtimeSinceStartup+3;Time.realtimeSinceStartup<end;)
+                {
+                    string card=Read("Vitals");
+                    if(card.Contains("<color=#FC7741>$"+cash+"</color>"))cashLit=card;
+                    if(card.Contains("<color=#FC7741>SALES "))salesLit=card;
+                    yield return null;
+                }
+                Assert.That(player.Cash,Is.EqualTo(cash),"setup: your cash is unchanged");
+                Assert.That(cashLit,Is.Empty,"a friend's sale lit your unchanged cash: "+cashLit.Replace("\n"," | "));
+                Assert.That(salesLit,Is.Not.Empty,"a friend's sale lights SALES");
+            }
+            finally{session.Leave();Object.Destroy(hud);Object.Destroy(world);}
         }
 
         // LOOP-4: a real joined friend dies with $40 and the roll drops it. The host and the dead friend both see the corner reel name

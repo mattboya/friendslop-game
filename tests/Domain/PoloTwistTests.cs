@@ -23,7 +23,8 @@ public static class PoloTwistTests
         var failures=new List<string>();
         foreach(var test in new Action[]{ThreeInfluencersFilmOnPalmMirageOnly,APlayerInFrameAlertsEveryWookNearby,OnlyTheFrameCounts,
             FramesAreAPassiveGain,TwistTagsSurviveASnapshot,VipZonesKeepOutAnyoneWithoutAWristband,VipSalesPayDouble,
-            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,EveryNightHasAVipGuard,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight,TheWheelShowsOnlyARoughArea})
+            TheNightMarketSellsWristbands,TheVipGuardTalksAnyoneIn,EveryNightHasAVipGuard,TheFerrisWheelLocksItsRiderForOneTurn,TheRiderSeesTheFriendAtNight,TheWheelShowsOnlyARoughArea,
+            TheHostSeatsEachRiderFromThePlatformOut,ARiderWhoLeavesEarlyFreesTheirSeat,ANewLevelStartsWithEveryGondolaFree,TheWheelsGondolasSurviveASnapshot})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
         if(failures.Count>0)throw new Exception(failures.Count+" polo twist test(s) failed:\n"+string.Join("\n",failures));
     }
@@ -201,6 +202,12 @@ public static class PoloTwistTests
         Check(Sale(1,-11,-11)==plain,"Ember Playa has no VIP zones, got "+Sale(1,-11,-11));
         var s=Vip();int doubled=Sell(s,s.Player("p0"),Npc(s,"buyer"));
         Check(s.State.LevelSales==doubled&&s.State.GrossSales==doubled,"the double pay counts toward the day's quota");
+        foreach(var (x,fair,high,greedy) in new[]{(-11f,20,30,40),(0f,10,15,20)})
+        {
+            var offer=Vip();var buyer=Npc(offer,"buyer");buyer.X=x;Place(offer,0,x,22.5);var p=offer.Player("p0");
+            int[] named={FestivalSimulation.SalePrice(offer.State,p,buyer,FestivalSimulation.FairAsk),FestivalSimulation.SalePrice(offer.State,p,buyer,FestivalSimulation.HighAsk),FestivalSimulation.SalePrice(offer.State,p,buyer,FestivalSimulation.GreedyAsk)};
+            Check(named[0]==fair&&named[1]==high&&named[2]==greedy,"at x "+x+" the offer names Fair, High and Greedy at $"+fair+", $"+high+", $"+greedy+", got $"+string.Join(", $",named));
+        }
     }
 
     static void TheNightMarketSellsWristbands()
@@ -332,6 +339,87 @@ public static class PoloTwistTests
         Check(s.TryMove(p.Id,x+.05f,z,0,.1),"and walks off");
         var playa=Start(4,0,1);var refused=Board(playa,playa.Player("p0"));
         Check(!refused.Accepted&&!FestivalSimulation.OnWheel(playa.State,"p0"),"Ember Playa has no Ferris wheel: "+refused.Reason);
+    }
+
+    // The host seats each rider as they board, so every client draws them in the same gondola whenever it first sees them.
+    static int Gondola(FestivalSimulation s,string id)=>FestivalSimulation.WheelGondola(s.State,id);
+    // Ticks on until a gondola hangs right at the platform, a whole step (2.5 s) from either neighbour, and returns which.
+    static int AtThePlatform(FestivalSimulation s)
+    {
+        double step=Festivals.WheelRideSeconds/Festivals.WheelGondolas,world=FestivalSimulation.WorldSeconds(s.State);
+        s.Tick(step-world%step);return FestivalSimulation.PlatformGondola(FestivalSimulation.WorldSeconds(s.State));
+    }
+    // Gondola k hangs 360k/8 degrees round the rim from the axle's level ahead, and the wheel turns once a ride, so at 0 s gondola 6
+    // hangs at the bottom, by the platform, and each 2.5 s the next one round (7, then 0) comes down to it. A crew of eight boarding
+    // at once fills the platform's gondola two to a gondola, then the next one round to come down to it, the one that has just
+    // gone up, the one after next: nobody shares past the WheelSeats.
+    static void TheHostSeatsEachRiderFromThePlatformOut()
+    {
+        Check(Festivals.WheelGondolas==8&&Festivals.WheelSeats==2,"the wheel has eight gondolas of two seats");
+        foreach(var (at,k) in new[]{(0.0,6),(1.2,6),(1.3,7),(2.5,7),(5.0,0),(10.0,2),(19.9,6),(20.0,6),(47.5,1)})
+            Check(FestivalSimulation.PlatformGondola(at)==k,"at "+at+" s gondola "+k+" hangs at the platform (got "+FestivalSimulation.PlatformGondola(at)+")");
+        var s=Start(8,0,0,8);int platform=AtThePlatform(s);
+        foreach(var p in s.State.Players)Check(Gondola(s,p.Id)==-1,"setup: "+p.Id+" is on the ground, in no gondola");
+        foreach(var p in s.State.Players)Check(Board(s,p).Accepted,"setup: "+p.Id+" boards");
+        var expected=new[]{0,0,1,1,-1,-1,2,2};var seated=new int[Festivals.WheelGondolas];
+        for(int r=0;r<8;r++)
+        {
+            int k=Gondola(s,"p"+r),want=(platform+expected[r]+8)%8;seated[Math.Max(0,k)]++;
+            Check(k==want,"p"+r+", boarding "+(r+1)+(r==0?"st":r==1?"nd":r==2?"rd":"th")+", sits in gondola "+want+" (got "+k+")");
+        }
+        Check(Array.TrueForAll(seated,n=>n<=Festivals.WheelSeats),"no gondola seats more than two: "+string.Join(",",seated));
+    }
+    // Two friends fill the platform's gondola; one is downed by the swarm (or drops out) 5 s in, and a third boards
+    // two ticks before the turn ends, with the gondola back at the platform. The seat that left is free, so the third sits beside
+    // the friend still aboard. Had both stayed, the third would ride the next one round to come down.
+    static void ARiderWhoLeavesEarlyFreesTheirSeat()
+    {
+        foreach(string how in new[]{"stays","drops out","is downed"})
+        {
+            var s=Start(9,0,0,3);int platform=AtThePlatform(s);double boarded=FestivalSimulation.WorldSeconds(s.State);Check(Board(s,s.Player("p0")).Accepted&&Board(s,s.Player("p1")).Accepted,"setup: p0 and p1 board");
+            Check(Gondola(s,"p0")==platform&&Gondola(s,"p1")==platform,"setup: p0 and p1 share the platform's gondola "+platform);
+            s.Tick(5);
+            if(how=="drops out")s.Disconnect("p1");
+            if(how=="is downed"){s.Player("p1").Life="Downed";s.Tick(.1);}
+            Check(FestivalSimulation.OnWheel(s.State,"p1")==(how=="stays")&&Gondola(s,"p1")==(how=="stays"?platform:-1),"setup: p1 "+how+(how=="stays"?" aboard":", off the wheel and out of the gondola"));
+            s.Tick(boarded+Festivals.WheelRideSeconds-2/30.0-FestivalSimulation.WorldSeconds(s.State));
+            Check(FestivalSimulation.OnWheel(s.State,"p0")&&FestivalSimulation.PlatformGondola(FestivalSimulation.WorldSeconds(s.State))==platform,"setup: two ticks before p0's turn ends, their gondola is back at the platform");
+            Check(Board(s,s.Player("p2")).Accepted,"setup: p2 boards");
+            int want=how=="stays"?(platform+1)%8:platform;
+            Check(Gondola(s,"p2")==want,"when p1 "+how+", p2 sits in gondola "+want+" (got "+Gondola(s,"p2")+")");
+        }
+    }
+    // A new level is a new round, with nobody on the wheel, so its first rider takes the platform's gondola, even at
+    // the clock reading at which the last level's riders filled it.
+    static void ANewLevelStartsWithEveryGondolaFree()
+    {
+        var s=Start(10,0,0,3);int platform=AtThePlatform(s);double at=s.State.SimulationSeconds;
+        Check(Board(s,s.Player("p0")).Accepted&&Board(s,s.Player("p1")).Accepted&&Gondola(s,"p1")==platform,"setup: p0 and p1 fill gondola "+platform);
+        s.State.Phase="Results";Check(Act(s,"p0","Reset").Accepted&&s.State.Phase=="CampReview","setup: the host brings the crew back to camp");
+        s.State.Phase="Playing";s.State.FestivalIndex=Festivals.PoloFestival;s.State.SimulationSeconds=at;
+        Check(!FestivalSimulation.OnWheel(s.State,"p0")&&!FestivalSimulation.OnWheel(s.State,"p1"),"the last level's riders are off the wheel");
+        Check(Board(s,s.Player("p2")).Accepted&&Gondola(s,"p2")==platform,"the next level's first rider sits in the platform's gondola "+platform+" (got "+Gondola(s,"p2")+")");
+    }
+    // A ride's gondola is its TargetId. A snapshot keeps it; one naming no gondola is refused. A snapshot from before the host
+    // picked gondolas names the wheel instead ("wheel") and has no VisualWheelGondola: its rider sits in the gondola that hung at
+    // the platform when they boarded, and holds that seat.
+    static void TheWheelsGondolasSurviveASnapshot()
+    {
+        var s=Start(11,0,0,3);int platform=AtThePlatform(s);Check(Board(s,s.Player("p0")).Accepted,"setup: p0 boards");
+        var restored=new FestivalSimulation();restored.Restore(JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json));
+        Check(Gondola(restored,"p0")==platform,"p0's gondola survives a snapshot");
+        foreach(string bad in new[]{"8","-1","wheel 3",""})
+        {
+            var broken=JsonSerializer.Deserialize<RoundState>(JsonSerializer.Serialize(s.State,Json),Json);broken.Interactions.Find(i=>i.Kind==FestivalSimulation.RideWheelKind).TargetId=bad;
+            try{new FestivalSimulation().Restore(broken);Check(false,"a ride in gondola \""+bad+"\" is refused");}catch(ArgumentException){}
+        }
+        var legacy=JsonNode.Parse(JsonSerializer.Serialize(s.State,Json)).AsObject();
+        foreach(var i in legacy["Interactions"].AsArray())if((string)i["Kind"]==FestivalSimulation.RideWheelKind)i["TargetId"]="wheel";
+        foreach(var p in legacy["Players"].AsArray())Check(p.AsObject().Remove("VisualWheelGondola"),"setup: a snapshot names each player's gondola");
+        var old=new FestivalSimulation();old.Restore(JsonSerializer.Deserialize<RoundState>(legacy.ToJsonString(),Json));
+        Check(Gondola(old,"p0")==platform,"an older snapshot's rider sits in the gondola at the platform when they boarded (got "+Gondola(old,"p0")+")");
+        Check(Board(old,old.Player("p1")).Accepted&&Board(old,old.Player("p2")).Accepted,"setup: p1 and p2 board after the restore");
+        Check(Gondola(old,"p1")==platform&&Gondola(old,"p2")==(platform+1)%8,"p0 holds their seat: p1 sits beside them and p2 rides the next gondola ("+Gondola(old,"p1")+", "+Gondola(old,"p2")+")");
     }
 
     static void TheRiderSeesTheFriendAtNight()

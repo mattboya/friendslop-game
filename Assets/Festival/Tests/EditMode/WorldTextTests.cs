@@ -119,6 +119,25 @@ namespace Festival.Tests
             Assert.That(outside,Is.Empty,"Sign legends that run off their board:\n"+string.Join("\n",outside));
         }
 
+        // A board that grew to hold its legend keeps clear of the art around it. The heights come from the art: the supply sign's
+        // backing tops out at 2.70 m (generate_camp_shop_dressing.py, sign b) and the stage's front canvas drops start at 6.70 m
+        // (generate_festival_world_assets.py). MEDICAL + keeps its ungrown 2.7825 m bottom edge, so it hides no more of the clinic's
+        // cross. New art moves all three lines.
+        [Test]public void AGrownSignBoardKeepsClearOfTheArtAroundIt()
+        {
+            root=new GameObject("Sign clearance world");var world=root.AddComponent<FestivalWorld>();world.Build();
+            float Rim(string label,float side)
+            {
+                var sign=root.GetComponentsInChildren<Transform>(true).First(t=>t.name==label+" sign");var rim=sign.Find("Label bubble rim");
+                return sign.TransformPoint(0,side*rim.localScale.y/2,0).y;
+            }
+            var clipping=new List<string>();
+            if(Rim("CAMP SUPPLIES",1)>2.70f)clipping.Add("CAMP SUPPLIES' rim top is "+Rim("CAMP SUPPLIES",1).ToString("0.000")+" m, over its 2.70 m backing and into the shop's crest");
+            if(Rim("AFTER HOURS",1)>=6.70f)clipping.Add("AFTER HOURS' rim top is "+Rim("AFTER HOURS",1).ToString("0.000")+" m, behind the stage's front canvas drops from 6.70 m");
+            if(Rim("MEDICAL +",-1)<2.7825f-1e-4f)clipping.Add("MEDICAL +'s rim bottom is "+Rim("MEDICAL +",-1).ToString("0.000")+" m, under the 2.7825 m it had before it grew, over more of the clinic's cross");
+            Assert.That(clipping,Is.Empty,"Sign boards that cover the art around them:\n"+string.Join("\n",clipping));
+        }
+
         // A sign seen from in front reads; an opaque wall between it and the eye hides it, and from behind it shows nothing mirrored
         // (its board hides it there in play; here the board is left out of the picture).
         [Test]public void ASignBehindAWallIsHidden()

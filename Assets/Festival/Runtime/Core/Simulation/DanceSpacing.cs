@@ -15,8 +15,9 @@ namespace Festival.Core
         /// dances (reversing DANCE-2), save for the trust dance a wary festivalgoer asks for first (Dancing).</summary>
         public static bool DancesVisibly(string kind)=>kind=="Dance"||kind=="ConfirmDance";
         // TryMove leaves p's yaw alone while this holds, so the camera can't turn a dancer away from their partner. TRIP-4: nor
-        // spin someone lying on the grass round on their back as they look about, nor turn the set's DJ from the crowd.
-        bool HoldsFacing(PlayerState p){var i=p.InteractionId==""?null:Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&(Dancing(i)||i.Kind==LieDownKind||i.Kind=="Dj");}
+        // spin someone lying on the grass round on their back as they look about, nor turn the set's DJ from the crowd, nor
+        // turn the headliner in the camp chair away from the way it faces.
+        bool HoldsFacing(PlayerState p){var i=p.InteractionId==""?null:Interaction(p.InteractionId);return i!=null&&i.Status=="Active"&&(Dancing(i)||i.Kind==LieDownKind||i.Kind=="Dj")||CampSeated(State,p.Id);}
         // Called once a dance is accepted and before its witnesses are counted, so they judge the dancer where they dance.
         void GiveDanceRoom(PlayerState p,NpcState partner)
         {

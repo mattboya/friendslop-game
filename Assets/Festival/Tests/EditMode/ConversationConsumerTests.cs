@@ -88,22 +88,27 @@ namespace Festival.Tests
             try{Assert.That(session.PendingConversationOutcome,Is.Null,"host acknowledgment keeps the dismissed outcome closed after reconnect");}
             finally{UnityEngine.Object.DestroyImmediate(root);}
         }
+        // A failed trust dance leads on to the talk, two points down, with the stock or the price still held. The talk then
+        // settles as any talk does, and its outcome stays the talker's alone.
         [TestCase("Sale")] [TestCase("Buy")] [TestCase("Conversation")]
-        public void FailedTrustRefundsAndRetainsThePrivateWalkOff(string kind)
+        public void AFailedTrustDanceLeadsOnToAPrivateTalk(string kind)
         {
             var game=Pair(0,out var player,out var partner);partner.Role=kind=="Sale"?"Buyer":"Regular";
             partner.Observers.Add(new ObserverState{PlayerId=player.Id,Suspicion=40});game.HasLineOfSight=(ax,az,bx,bz)=>false;
             if(kind=="Sale")player.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});int cash=player.Cash;
             var result=game.Execute(player.Id,new GameCommand{Id="trust_start",Kind=kind=="Conversation"?kind:"Start"+kind,TargetId=partner.Id,ItemId=kind=="Sale"?"stock_lsd":FestivalSimulation.SellerStock(partner.Id)});
             Assert.That(result.Accepted,Is.True,result.Reason);var talk=game.Interaction(player.InteractionId);Assert.That(talk.TrustDance,Is.True);
-            for(int n=0;talk.Status=="Active"&&n<100;n++)game.Tick(.1);
-            Assert.That(talk.Status,Is.EqualTo("Complete"));Assert.That(player.Cash,Is.EqualTo(cash));
-            Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
-            var outcome=player.ConversationOutcomes.Single();Assert.That(outcome.Reaction,Is.EqualTo("Nah. Not feeling it."));
-            // A sale's walk-off also says where the unit went.
-            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"They walk off  •  Tongue Stamps back in your hand":"They walk off."));
-            game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Notice,Is.EqualTo(outcome.Notice));
-            Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Notice));
+            for(int n=0;FestivalSimulation.TrustDancing(talk)&&n<100;n++)game.Tick(.1);
+            Assert.That(talk.Status=="Active"&&talk.Turns.Count==1&&talk.HeadStart==FestivalSimulation.FailedDanceStart,Is.True,"the talk follows the missed dance, two points down");
+            Assert.That(talk.Turns[0].Reaction,Is.Not.Empty,"their first line reacts to the dance");
+            Assert.That(player.ConversationOutcomes,Is.Empty,"nothing has ended");
+            for(int turn=0;talk.Status=="Active";turn++)Assert.That(game.Execute(player.Id,new GameCommand{Id="trust_reply_"+turn,Kind="Reply",Direction=turn,Amount=Array.IndexOf(talk.Turns[turn].Grades,ConversationLines.Awkward)}).Accepted,Is.True);
+            Assert.That(player.Cash,Is.EqualTo(cash));Assert.That(player.Inventory.Exists(i=>i.ItemId=="stock_lsd"),Is.EqualTo(kind=="Sale"));
+            var outcome=player.ConversationOutcomes.Single();
+            // A sale also says where the unit went: this seller held nothing, so back in the gear.
+            Assert.That(outcome.Notice,Is.EqualTo(kind=="Sale"?"NO SALE  •  Tongue Stamps back in your gear":""));Assert.That(outcome.Reaction,Is.Not.Empty);
+            game.State.Interactions.Clear();game.Tick(20);Assert.That(View(game,player.Id).Players.Find(p=>p.Id==player.Id).ConversationOutcomes.Single().Reaction,Is.EqualTo(outcome.Reaction));
+            Assert.That(JsonUtility.ToJson(View(game,"friend")),Does.Not.Contain(outcome.Reaction).And.Not.Contain(outcome.DeliveryId));
         }
         [Test] public void ExplicitNarcBustKeepsItsExplanationAfterDetentionTeleport()
         {
@@ -283,7 +288,7 @@ namespace Festival.Tests
             var root=new GameObject("fix-U7 quiet acks");
             try
             {
-                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Ack host",8597);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
+                var session=root.AddComponent<FestivalSession>();session.enabled=false;session.Host("Ack host",0);Assert.That(session.IsHost&&session.Connected,Is.True,session.Message);
                 var game=Pair(0,out var player,out var partner);var talk=Start(game,player,partner);
                 typeof(FestivalSession).GetField("simulation",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(session,game);typeof(FestivalSession).GetProperty("LocalPlayerId").SetValue(session,player.Id);
                 const string Sold="SOLD Tongue Stamps  •  +$20";
@@ -300,6 +305,12 @@ namespace Festival.Tests
                 Finish(game,player,talk);var outcome=player.ConversationOutcomes.Single();
                 Quietly("the outcome's acknowledgement",()=>session.AcknowledgeConversationOutcome(outcome));
                 Quietly("the outcome's dismissal",()=>session.DismissConversationOutcome(outcome.DeliveryId));
+                // A line outside a talk, such as a dance line, is also acknowledged in the background.
+                Assert.That(game.Execute(player.Id,new GameCommand{Id="dance",Kind="Dance",TargetId=partner.Id}).Accepted,Is.True,"setup: a dance with the festivalgoer");
+                var dance=game.Interaction(player.InteractionId);Assert.That(dance.DialogueId,Is.Not.Empty,"setup: the dance shows a line");
+                Quietly("a dance line's acknowledgement",()=>session.AcknowledgeDisplayedDialogue(dance));
+                session.SetMessage(Sold);session.AcknowledgeDisplayedDialogue(new InteractionState{Id="dance_gone",Kind="Dance",PlayerId=player.Id,DialogueId="line_gone"});
+                Assert.That(session.LastLocalCommandResult.Accepted,Is.False,"setup: the host refuses a line it does not show");Assert.That(session.Message,Is.EqualTo("Dialogue is not active"),"a refused line acknowledgement says why");
             }
             finally{UnityEngine.Object.DestroyImmediate(root);LocalProfile.Folder=previous;FestivalInput.PreferencesScope=scope;if(Directory.Exists(folder))Directory.Delete(folder,true);}
             yield return new ExitPlayMode();

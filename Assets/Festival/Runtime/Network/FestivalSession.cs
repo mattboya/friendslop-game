@@ -157,7 +157,39 @@ namespace Festival.Network
         // NET-8: ProtocolGuardTests records both stage fronts and the pick for fixed spin seeds.
         // HUD-16: snapshots carry each player's own money news (PlayerState.MoneyNewsLog and MoneyNewsSequence, owner-only in
         // views); a version-9 client ignores it.
-        public const int ProtocolVersion=10;
+        // 11: wave 2026-10-26 starts a new semantic boundary; published version-10 peers are rejected.
+        // Subsequent units append only the version-11 changes they actually land.
+        // DIALOG-19: ConversationOutcome.Score carries a settled talk's score (-1 for a talk cut short, and in older snapshots), and
+        // the chat window's meter lands on it, not on its own count.
+        // DIALOG-18: a talk reaches its talker as a copy in which every reply not picked has grade -1, so the meter moves on the
+        // host's echo of a pick and no client can read the smooth reply ahead.
+        // ESC-3: a view shows each cop's case on its viewer (Mode Stop or ArrestWarning, TargetId the viewer) whoever the cop walks
+        // after, and snapshots mark a stop whose last chance was said (EvidenceState.Warned, false in older rounds).
+        // DIALOG-20: a talk's Score is its replies' points (smooth 2, so-so 1, awkward or silent -1) over 8, never below 0, so every
+        // line keeps its place; a version-10 client's meter would count the old average.
+        // DIALOG-20: a trust dance never ends its talk: under TrustScore it starts InteractionState.HeadStart (-2) points down,
+        // counted in its Score; at NailedScore or better InteractionState.HintedReply names round 1's smooth reply to the talker
+        // alone (0 and -1 in older snapshots); turn 0's Reaction is their word on the dance. A version-10 client would wait for a
+        // walk-off that never comes.
+        // MINI-12: the tripper's Booth.Hint is one reliability step lower only when the tripper is the one player at the table; a
+        // friend alone at the table while the tripper is detained keeps the crew's odds, so a version-10 client's card would name the
+        // solo odds.
+        // MUSIC-8: the small stage is heard, and charts, only within StageMusic.SmallHearingRadius of its front, so Drum Circles at
+        // booths 0 and 2 now chart to the main stage's song, and the crew arrives at Festivals.Arrival; a version-10 client would
+        // drum to the wrong song.
+        // ECON-14: InteractionState.ReservedSlot keeps the offered stack's gear slot (-1, the end of the bar, in older snapshots), so
+        // a handed-back last unit returns to it; it reaches only the seller's own view, and a version-10 client ignores it.
+        // 12: wave 2026-10-28 starts a new semantic boundary; version-11 peers are rejected.
+        // Subsequent units append only the version-12 changes they actually land.
+        // ECON-15: a Cancel whose Direction is FestivalSimulation.LanesStop (1) was sent from the lanes (a held G, or a stop while the
+        // view shows a dance); the host refuses it as 'That action already ended' unless the sender's interaction is still on the
+        // lanes, so a stop from a trust dance that arrives after the dance never walks off its talk. A version-11 host would take it
+        // as a walk-off.
+        // POLO-11: the host seats each Ferris wheel rider as they board: a RideWheel's TargetId names their gondola (0-7; "wheel" in
+        // older snapshots, read as the one at the platform when they boarded), and every view carries it as
+        // PlayerState.VisualWheelGondola (-1 off the wheel), so every client seats every rider where the host did; a version-11 client
+        // ignores it and seats riders from what it has seen.
+        public const int ProtocolVersion=12;
         public RoundState State {get;private set;}
         static readonly HashSet<FestivalSession> activeSessions=new HashSet<FestivalSession>();
         /// <summary>The festival holds its world rigs through a game and its banner, including another local view leaving.</summary>
@@ -540,8 +572,8 @@ namespace Festival.Network
             =>SendCommand(kind,target,item,amount,direction,time);
         /// <summary>The exact issued identity lets local callers match a rejection even when another reply arrives immediately afterward.</summary>
         public string SendCommand(string kind,string target="",string item="",int amount=0,int direction=0,double time=0)=>Send(kind,target,item,amount,direction,time);
-        // A quiet command is a talk acknowledgement, which goes out on its own as lines show: accepted, it leaves the message, so a
-        // sale's or a buy's result stays up.
+        // A quiet command is a line's acknowledgement (TalkAck, or DialogueAck for a line outside a talk), which goes out on its own as
+        // lines show: accepted, it leaves the message, so a sale's or a buy's result, or a money line, stays up.
         string Send(string kind,string target="",string item="",int amount=0,int direction=0,double time=0,bool quiet=false)
         {
             if(!Connected||LocalPlayer==null)return "";
@@ -571,7 +603,9 @@ namespace Festival.Network
         void ReceiveLocalCommandResult(CommandResult result)
         {
             bool quiet=result.Id!=null&&quietCommands.Remove(result.Id);
-            if(!quiet||!result.Accepted)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
+            // An EndChat that raced the talk's end to the host finds the window already closed, and the message
+            // already holds what ended the talk, such as the sale's result.
+            if((!quiet||!result.Accepted)&&result.Reason!=FestivalSimulation.NoChatToEnd)Message=result.Accepted?(result.Reason=="Accepted"?"":result.Reason):result.Reason;
             lastLocalCommandResult=CopyResult(result);
             var listeners=LocalCommandResultReceived;
             if(listeners!=null)foreach(Action<CommandResult> listener in listeners.GetInvocationList())listener(CopyResult(result));
@@ -791,7 +825,7 @@ namespace Festival.Network
             if(interaction==null||interaction.PlayerId!=LocalPlayerId)return;
             if(FestivalSimulation.Talks(interaction.Kind)&&interaction.Turns.Count>0){AcknowledgeConversationTurn(interaction);return;}
             if(string.IsNullOrEmpty(interaction.DialogueId)||acknowledgedDialogue==interaction.Id+interaction.DialogueId)return;
-            acknowledgedDialogue=interaction.Id+interaction.DialogueId;Command("DialogueAck",interaction.DialogueId);
+            acknowledgedDialogue=interaction.Id+interaction.DialogueId;Send("DialogueAck",interaction.DialogueId,quiet:true);
         }
         public void AcknowledgeConversationTurn(InteractionState interaction)
         {
@@ -959,7 +993,8 @@ namespace Festival.Network
         // Static so EditMode tests can check the whitelist without a network session.
         public static RoundState ViewFor(FestivalSimulation simulation,string viewer)
         {
-            // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials.
+            // DTO whitelist: never ship command history, hidden evidence, other players' dialogue or credentials. Every list and object
+            // in the view is its own copy: the host's presentation reads its own view, so it can never change the rules.
             var source=simulation.State;var local=simulation.Player(viewer);bool spirit=local?.Life=="Spirit";
             // TRIP-4: everyone sees the clue cloud; only the tripper, once they have read it, is shown what it pictures, and when.
             int landmark=FestivalSimulation.VisibleCloudLandmark(source,viewer);
@@ -968,15 +1003,15 @@ namespace Festival.Network
                 // Public: every view shows the crowd's cheer for the stage DJ.
                 StageCheerScore=source.StageCheerScore,StageCheerUntilWorldSeconds=source.StageCheerUntilWorldSeconds,
                 CampEggs=source.CampEggs.ConvertAll(e=>e.Copy()),
-                ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=source.ReviewAwards,ReviewWinners=source.ReviewWinners,
+                ReviewResult=source.ReviewResult,ReviewSales=source.ReviewSales,ReviewFestivalIndex=source.ReviewFestivalIndex,ReviewSurvivors=source.ReviewSurvivors,ReviewAntics=source.ReviewAntics,ReviewVotes=FestivalSimulation.VisibleReviewVotes(source,viewer),ReviewAwards=new List<string>(source.ReviewAwards),ReviewWinners=new List<string>(source.ReviewWinners),
                 FriendFound=!spirit&&source.FriendFound,FriendLeaderId=spirit?"":source.FriendLeaderId,FriendPosition=Spot(source.GateOpened,source.FriendFound,source.FriendPosition),
                 // CROWD-2: a big crew's second lost friend, shown like the first. Its clue chain stays on the host.
                 SecondFriend=new LostFriendState{Active=source.SecondFriend.Active,GateOpened=source.SecondFriend.GateOpened,CluesRead=source.SecondFriend.CluesRead,Found=!spirit&&source.SecondFriend.Found,LeaderId=spirit?"":source.SecondFriend.LeaderId,Position=Spot(source.SecondFriend.GateOpened,source.SecondFriend.Found,source.SecondFriend.Position)},
                 // POLO-3: a Ferris wheel rider at night makes out only the square each lost friend is in, never their spot.
                 WheelFriendAreas=FestivalSimulation.WheelFriendAreas(source,viewer),
-                VendorOffers=source.VendorOffers,ShopStock=source.ShopStock,CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
+                VendorOffers=new List<string>(source.VendorOffers),ShopStock=source.ShopStock.ConvertAll(x=>x.Copy()),CluesRead=source.CluesRead,GateOpened=source.GateOpened,ObjectiveReward=source.ObjectiveReward,SurvivorBonus=source.SurvivorBonus,Survivors=source.Survivors,ConnectedCrewCount=source.Players.FindAll(p=>p.Connected).Count,
                 FestivalIndex=source.FestivalIndex,LevelIndex=source.LevelIndex,EncoreTier=source.EncoreTier,UnlockedFestivalCount=source.UnlockedFestivalCount,TestMode=source.TestMode,
-                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses,Bodies=source.Bodies,
+                TripperId=source.TripperId,SpinSeed=source.SpinSeed,SpinEndsAt=source.SpinEndsAt,Doses=source.Doses.ConvertAll(d=>d.Copy()),Bodies=source.Bodies.ConvertAll(b=>b.Copy()),
                 CloudClueStart=source.CloudClueStart,CloudClueLandmark=landmark,CloudClueReadAt=landmark>=0?source.CloudClueReadAt:-1,
                 // TRIP-8: who found the cloud's stash, for their notice; it has gone by then, so this gives no spot away.
                 CloudStashFinderId=source.CloudStashFinderId,
@@ -1005,6 +1040,8 @@ namespace Festival.Network
                 copy.VisualGiggling=FestivalSimulation.Giggling(p,source.SimulationSeconds);
                 // POLO-5: when their turn on the Ferris wheel began, for every client to seat them in the same gondola; -1 off it.
                 copy.VisualWheelSince=source.Interactions.Find(i=>i.PlayerId==p.Id&&i.Kind==FestivalSimulation.RideWheelKind&&i.Status=="Active")?.StartSeconds??-1;
+                // The gondola the host seated them in, so a client that first sees them late seats them there too; -1 off it.
+                copy.VisualWheelGondola=FestivalSimulation.WheelGondola(source,p.Id);
                 // POLO-6: the influencers filming this player, on the viewer's own copy alone: nobody learns who else is on camera.
                 copy.VisualFilmedBy=p.Id==viewer?source.Npcs.FindAll(n=>simulation.IsOnCamera(n,p)).ConvertAll(n=>n.Id):new List<string>();
                 if(p.Id!=viewer){copy.MoneyNewsLog=new List<MoneyNews>();copy.MoneyNewsSequence=0;copy.ConversationOutcomes=new List<ConversationOutcome>();copy.ConversationOutcomeSequence=0;copy.ConversationDismissedSequence=0;copy.ConversationThreadId="";copy.ConversationDismissedId="";copy.Inventory.Clear();copy.Effects.Clear();copy.Wristbands.Clear();copy.Cash=0;copy.StarterStockBought=0;copy.FoundCampEggMask=0;copy.DeckTipAmount=0;copy.DeckTipDeliveryId="";copy.DeckTipAtWorldSeconds=copy.DeckTipUntilWorldSeconds=-1;copy.GearLossSequence=0;copy.GearLossKind=copy.GearLossNotice="";copy.GiggleTankBankSequence=0;copy.DeathSpinAt=-1;copy.DeathSpinSeed=copy.DeathSpinAmount=copy.DeathCashDropped=0;copy.DeathSpinSequence=0;copy.DeathSpinId=copy.DeathSpinRoundId=copy.DeathSpinName="";}copy.NpcSpeech="";copy.NpcSpeaker="";copy.NpcSpeechUntil=0;copy.SpeechById="";copy.SpeechDeliveryId="";copy.SpeechSequence=0;copy.SpeechAtWorldSeconds=copy.SpeechUntilWorldSeconds=-1;view.Players.Add(copy);
@@ -1015,12 +1052,14 @@ namespace Festival.Network
                 {
                     // CROWD-3: a festivalgoer scattering from an arrest does so in every client's view; whom it suspects stays masked.
                     // A distracted one dances in every view too; only its target still learns whom it suspects.
+                    // ESC-3: a cop shows each player their own case, Stop or ArrestWarning, whoever it is walking after.
                     bool scattering=npc.Mode==FestivalSimulation.Scattering,targetsViewer=!scattering&&npc.TargetId==viewer,shown=scattering||npc.Mode=="Distracted";
-                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=targetsViewer||shown?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
+                    string own=npc.Kind=="Cop"?FestivalSimulation.CaseOn(source,npc,viewer):"";
+                    var copy=new NpcState{Id=npc.Id,Kind=npc.Kind,Mode=own!=""?own:targetsViewer||shown?npc.Mode:(npc.Kind=="Cop"?"Patrol":"Blending"),TargetId=own!=""||targetsViewer?viewer:"",X=npc.X,Z=npc.Z,Yaw=npc.Yaw,IdlePose=npc.IdlePose,HighlyIntoxicated=npc.HighlyIntoxicated,RedEyes=npc.RedEyes,CanTalk=npc.CanTalk,Twist=npc.Twist,Busy=FestivalSimulation.Engaged(source,npc)};
                     var observer=npc.Observers.Find(o=>o.PlayerId==viewer);copy.Suspicion=observer?.Suspicion??0;view.Npcs.Add(copy);
                 }
                 view.Visions=FestivalSimulation.VisibleVisions(source,viewer);
-                view.Drops=FestivalSimulation.VisibleDrops(source).ConvertAll(d=>new DropState{Id=d.Id,ItemId=d.ItemId,OwnerId=d.OwnerId,ClaimedBy=d.ClaimedBy,Count=d.Count,X=d.X,Z=d.Z,ClaimAt=d.ClaimAt,LandsAt=d.LandsAt,CashFind=d.CashFind});view.Stashes=source.Stashes;view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer);
+                view.Drops=FestivalSimulation.VisibleDrops(source).ConvertAll(d=>new DropState{Id=d.Id,ItemId=d.ItemId,OwnerId=d.OwnerId,ClaimedBy=d.ClaimedBy,Count=d.Count,X=d.X,Z=d.Z,ClaimAt=d.ClaimAt,LandsAt=d.LandsAt,CashFind=d.CashFind});view.Stashes=source.Stashes.ConvertAll(x=>x.Copy());view.Transfers=source.Transfers.FindAll(t=>t.FromId==viewer||t.ToId==viewer).ConvertAll(t=>t.Copy());
                 // GAS-2: the level's Giggle Tank, public to all but spirits.
                 view.GiggleTankSpot=source.GiggleTankSpot;view.GiggleTankFound=source.GiggleTankFound;
             }
@@ -1046,11 +1085,19 @@ namespace Festival.Network
             var receiptOwner=view.Players.Find(p=>p.Id==viewer);string tip=FestivalSimulation.DeckTipSpeech(source,local);
             if(receiptOwner!=null&&tip!=""&&receiptOwner.SpeechDeliveryId=="")
             {receiptOwner.NpcSpeech=tip;receiptOwner.NpcSpeaker="FESTIVALGOERS";receiptOwner.NpcSpeechUntil=source.Phase==FestivalSimulation.MinigamePhase?local.DeckTipUntilWorldSeconds:local.DeckTipUntilWorldSeconds+source.Booth.Seconds;}
-            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>i.Kind==FestivalSimulation.DrumPartKind?JsonUtility.FromJson<InteractionState>(JsonUtility.ToJson(i)):i);return view;
+            view.Interactions=source.Interactions.FindAll(i=>i.PlayerId==viewer&&i.Status=="Active").ConvertAll(i=>FestivalSimulation.Talks(i.Kind)?TalkView(i):i.Copy());return view;
             // A lost friend's spot reaches the living once they are found. Before that, only once their trail is finished, and then
             // only the tripper (the trail's last link, TRIP-2) or someone within local sight range: never the full map, not even from
             // the Ferris wheel (POLO-3, WheelFriendAreas above).
-            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?at:new WorldPoint(0,0);
+            WorldPoint Spot(bool trailDone,bool found,WorldPoint at)=>!spirit&&(found||trailDone&&local!=null&&(viewer==source.TripperId||Vector2.Distance(new Vector2(local.X,local.Z),new Vector2(at.X,at.Z))<12&&simulation.HasLineOfSight(local.X,local.Z,at.X,at.Z)))?new WorldPoint(at.X,at.Z):new WorldPoint(0,0);
+            // The talker, the host included, gets a copy that keeps only the grade of each reply they picked: no client can read the
+            // smooth reply before it picks.
+            static InteractionState TalkView(InteractionState talk)
+            {
+                var copy=talk.Copy();
+                foreach(var turn in copy.Turns)for(int r=0;r<turn.Grades.Length;r++)if(r!=turn.Pick)turn.Grades[r]=-1;
+                return copy;
+            }
         }
         /// <summary>How a client poses an NPC it is shown: its Mode, or its idle pose while blending in (CROWD-3: "Scattering" runs).</summary>
         public static string NpcPose(NpcState n)=>n.Mode=="Blending"?n.IdlePose:n.Mode;
@@ -1067,10 +1114,11 @@ namespace Festival.Network
             return s.StageCheerScore>=.4?((hash&1)==0?"Dance":pose):"Idle";
         }
         // Local click prediction yields to the captured host state throughout the game and banner. Internal: the HUD sets the
-        // first-person hands during a pending gear swap after this session does, so it must pass the same spins.
-        internal bool PresentedPoiSpin(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpin;
+        // first-person hands during a pending gear swap after this session does, so it must pass the same spins, for the item on its
+        // way to your hands (item), not the one the view still holds.
+        internal bool PresentedPoiSpin(PlayerState player,string item=null)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?(spinHeld||spinSidesHeld)&&FestivalSimulation.CanSpinPoi(player,item??player.EquippedItemId):player.VisualPoiSpin;
         // POI-7: left click wins when both are held, as on the host (ApplyMovement).
-        internal bool PresentedPoiSpinSides(PlayerState player)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player):player.VisualPoiSpinSides;
+        internal bool PresentedPoiSpinSides(PlayerState player,string item=null)=>player.Id==LocalPlayerId&&State.Phase!=FestivalSimulation.MinigamePhase?spinSidesHeld&&!spinHeld&&FestivalSimulation.CanSpinPoi(player,item??player.EquippedItemId):player.VisualPoiSpinSides;
         private void UpdateActors()
         {
             var local=LocalPlayer;bool spirit=local.Life=="Spirit";var seen=new HashSet<string>();
@@ -1088,7 +1136,7 @@ namespace Festival.Network
                 bool djing=p.VisualPose=="Dj"&&p.Life=="Alive";
                 Actor(p.Id,FestivalHudText.Nameplate(State,p),at.x,at.z,djing?180:wheel?180:p.Yaw,
                     p.Life=="Downed"?new Color(.9f,.3f,.3f):PlayerColor(p.Id),p.Life=="Downed"?.4f:.9f,
-                    p.Life=="Alive"?p.VisualPose:p.Life,"Attendee",0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
+                    p.Life=="Alive"?p.VisualPose:p.Life,FestivalCharacter.CrewRole,0,p.WearingLittleSpoon,p.VisualWideEyes,p.VisualRedEyes,
                     string.IsNullOrEmpty(p.HeldOfferId)?p.EquippedItemId:p.HeldOfferId,y:djing?FestivalWorld.StageDjHeight:at.y);
                 var exchangeCharacter=actors[p.Id].GetComponent<FestivalCharacter>();
                 if(exchangeCharacter!=null)
@@ -1096,7 +1144,10 @@ namespace Festival.Network
                     // Before anything here can remake a held item, so the body's scale and its RideScale always agree.
                     exchangeCharacter.Ride(wheel?FestivalTwistVisuals.RiderScale:1);
                     // A rider's tag keeps its own size and height over the shrunk body, so it floats above the gondola's roof, not inside it.
+                    // It reads in front of the wheel from the ground all round the base, the boarding steps too; from the next gondola the
+                    // viewer's own cabin still hides it.
                     var tag=names[p.Id].transform.parent;tag.localPosition=Vector3.up*NameTagHeight/exchangeCharacter.RideScale;tag.localScale/=exchangeCharacter.RideScale;
+                    if(wheel)FestivalTwistVisuals.InFrontOfFrame(tag,ViewCamera.transform.position,local.VisualWheelSince>=0);
                     var peer=string.IsNullOrEmpty(p.VisualOfferTarget)?State.Players.Find(other=>other.VisualOfferTarget==p.Id):State.Players.Find(other=>other.Id==p.VisualOfferTarget);
                     bool exchange=peer!=null&&peer.Connected&&p.Life=="Alive"&&peer.Life=="Alive"&&p.CampVisitId==peer.CampVisitId;
                     var contact=exchange?new Vector3(togetherInside?(p.CampInteriorX+peer.CampInteriorX)*.5f:(p.X+peer.X)*.5f,1.08f,togetherInside?(p.CampInteriorZ+peer.CampInteriorZ)*.5f:(p.Z+peer.Z)*.5f):Vector3.zero;
@@ -1130,17 +1181,17 @@ namespace Festival.Network
                 // A drop floats its display name ("Tongue Stamps", THEME-2), a cash pile its amount in the viewer's money; its id still picks the model.
                 foreach(var d in State.Drops){Actor(d.Id,FestivalHudText.DropLabel(State,local,d),d.X,d.Z,0,Color.yellow,.2f,model:d.ItemId);seen.Add(d.Id);}
                 // Night 2 bodies lie in the downed pose (and play the dragged motion while carried) until a revival lifts them.
-                foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed");seen.Add(id);}
+                foreach(var b in State.Bodies){string id="body_"+b.PlayerId;Actor(id,(State.Players.Find(x=>x.Id==b.PlayerId)?.Name??"Friend")+"'s body",b.X,b.Z,0,new Color(.45f,.45f,.5f),.4f,"Downed",FestivalCharacter.CrewRole,look:b.PlayerId);seen.Add(id);}
             }
             foreach(var pair in actors)pair.Value.gameObject.SetActive(seen.Contains(pair.Key));
             ViewCamera.backgroundColor=spirit?new Color(.08f,.2f,.24f):new Color(.13f,.1f,.22f);
         }
-        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null,float y=0,bool filming=false,bool recording=false)
+        private void Actor(string id,string label,float x,float z,float angle,Color color,float height,string pose="Idle",string role="Attendee",float threat=0,bool littleSpoon=false,bool highlyIntoxicated=false,bool redEyes=false,string equippedItem="",bool showLabel=true,string model=null,float y=0,bool filming=false,bool recording=false,string look=null)
         {
             if(!actors.TryGetValue(id,out var tr))
             {
                 GameObject go;
-                if(height>.25f)go=FestivalCharacter.Create(actorRoot,id,color,role).gameObject;
+                if(height>.25f)go=FestivalCharacter.Create(actorRoot,id,color,role,look).gameObject;
                 else
                 {
                     string resource=DropModel(model??label);

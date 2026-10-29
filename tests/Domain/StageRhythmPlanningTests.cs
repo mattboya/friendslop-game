@@ -83,11 +83,15 @@ public static class StageRhythmPlanningTests
     {
         var result=game.Execute(who,new GameCommand{Id=Guid.NewGuid().ToString("N"),Kind=kind,TargetId=target});Check(result.Accepted,"setup: "+kind+": "+result.Reason);return game.Interaction(game.Player(who).InteractionId);
     }
+    // One spin seed for each of the eight levels, picked so the main stage plays loops 1-7 (and 3 again): every command starts on every loop's beat grid.
+    static readonly int[] LoopSeeds={5,1,11,0,2,13,12,11};
     static void CommandsShareOneStageInitializer()
     {
+        var mains=new HashSet<int>();foreach(int seed in LoopSeeds)mains.Add(StageMusic.Track(seed,StageMusic.Main));
+        Check(mains.Count==StageBeats.Tracks.Length,"setup: the eight levels' seeds put all seven loops on the main stage, got "+string.Join(",",mains));
         foreach(int festival in new[]{0,1})foreach(int level in new[]{0,1,2,3})foreach(string kind in new[]{"Dance","Poi","ConfirmDance","Conversation"})
         {
-            var game=Floor(festival,level);game.State.SpinSeed=festival*Festivals.LevelCount+level;var partner=game.State.Npcs[0];if(kind=="Conversation")partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});
+            var game=Floor(festival,level);game.State.SpinSeed=LoopSeeds[festival*Festivals.LevelCount+level];var partner=game.State.Npcs[0];if(kind=="Conversation")partner.Observers.Add(new ObserverState{PlayerId="p0",Suspicion=40});
             double press=game.State.SimulationSeconds;var i=Start(game,kind);var at=game.Player("p0");int choice=StageMusic.TrackAt(game.State,at.X,at.Z);
             Check((int)Field(i,"StageTrack")==choice,kind+" uses the nearer stage's song");
             Check(i.StartSeconds==press+2,kind+" preserves its simulation countdown");

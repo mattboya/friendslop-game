@@ -22,7 +22,7 @@ public static class PlayaTwistTests
     {
         var failures=new List<string>();
         foreach(var test in new Action[]{EmberPlayaCountsInOddObjects,EachPlayerKeepsTheirOwnObjects,DustStormsBlowOnASeededSchedule,
-            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,APlainRiderStartsAnExclusiveDeckSet,DeckOwnershipIsRequired,DeckChartsUseTheSharedGridAndHolds,DeckWitnessesAccumulateByRangeAndLos,StormsLimitDeckWitnesses,DeckTipsSettleExactlyOnce,AnotherRiderCannotCollectOldTips,TheFullTipThresholdIsInclusive,TheMinimumTipThresholdIsInclusive,HalfAndFailedDecksKeepTheirRules,CancellingADeckNeverPays,AStaleCancelLeavesANewDeckSetAlone,PoliceAndLifecycleInterruptionsNeverPay,InvalidRestoredDecksAreRetired,OldAndTippedSnapshotsRestore,DecksStayOutsideGroupJudging,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
+            StormsCutEveryonesSightTo5m,ArtCarsCrawlRoundTheirLoops,APlainRiderStartsAnExclusiveDeckSet,DeckOwnershipIsRequired,ASecondDeckSetSaysTheSetIsAlreadyPlaying,DeckChartsUseTheSharedGridAndHolds,DeckWitnessesAccumulateByRangeAndLos,StormsLimitDeckWitnesses,DeckTipsSettleExactlyOnce,AnotherRiderCannotCollectOldTips,TheFullTipThresholdIsInclusive,TheMinimumTipThresholdIsInclusive,HalfAndFailedDecksKeepTheirRules,CancellingADeckNeverPays,AStaleCancelLeavesANewDeckSetAlone,PoliceAndLifecycleInterruptionsNeverPay,InvalidRestoredDecksAreRetired,OldAndTippedSnapshotsRestore,DecksStayOutsideGroupJudging,ArtCarsCarryRidersOutOfSight,ASwarmTrailsARiderThenGivesUp,ARiderWhoHopsOffMidTrailIsSwarmedAgain,
             TheEffigyBurnsForTheLastThreeMinutesOfNightTwo,TheCrowdGathersAtTheBurn,BurnWalkersKeepGapAcrossAnotherWalker,AnAccusationInTheCrushReachesOnlyNeighbours,AFestivalgoerFinishesAChatBeforeHeadingOver,
             TheCrushSlowsEveryStep,SuspicionCoolsFasterInTheCrush})
             try{test();}catch(Exception error){failures.Add(test.Method.Name+" -> "+error.Message);}
@@ -242,6 +242,14 @@ public static class PlayaTwistTests
         p.Life="Downed";Check(!Act(s,p.Id,"DeckSet").Accepted,"downed riders cannot start");p.Life="Alive";
         var old=s.Interaction(p.InteractionId);Check(Act(s,p.Id,"DeckSet").Accepted,"own plain ride starts");Check(Heat(s,"fan0",p.Id)==40,"replacement adds no cancel penalty");
         Check(!Act(s,p.Id,"DeckSet").Accepted&&old.Status=="Complete","a deck cannot replace itself");
+    }
+    // A joined rider's view shows the plain ride for a moment after F, so a second F sends a second DeckSet. The host
+    // refuses it in words that fit what the rider is doing, and the set plays on.
+    static void ASecondDeckSetSaysTheSetIsAlreadyPlaying()
+    {
+        var s=DeckFloor();var i=Deck(s);var again=Act(s,"p0","DeckSet");
+        Check(!again.Accepted&&again.Reason=="Your set is already playing","a second DeckSet says the set is playing, not \""+again.Reason+"\"");
+        Check(i.Status=="Active"&&s.Player("p0").InteractionId==i.Id&&FestivalSimulation.ArtCarOf(s.State,"p0")==0,"and the set plays on, aboard the car");
     }
     static void DeckChartsUseTheSharedGridAndHolds()
     {

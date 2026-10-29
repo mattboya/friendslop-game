@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using Festival.Core;
 using Festival.Network;
@@ -109,8 +110,10 @@ namespace Festival.Tests
         }
 
         static int Expected(FestivalMusic.Track track,double world)=>(int)Math.Floor(RhythmChart.StageSampleAtWorld(track.Beats,world));
+        static int Roars()=>UnityEngine.Object.FindObjectsByType<AudioSource>(FindObjectsInactive.Include,FindObjectsSortMode.None).Count(s=>s.gameObject.name=="Stage crowd roar");
         [Test]public void TheCirclesSongPlaysOnFromTheStagesHeldSampleByTheGameClock()
         {
+            int roars=Roars();
             var state=new RoundState{Phase=FestivalSimulation.MinigamePhase,RoundId="drum-round",FestivalIndex=0,LevelIndex=1,SimulationSeconds=72.5,Booth=new MinigameState{Kind=FestivalSimulation.DrumCircleGame,Spot=1,Seconds=4.25}};
             Assert.That(FestivalDrumAudio.SongSeconds(state,4.5),Is.EqualTo(68.25+4.5).Within(1e-9),"the held world position, on by the game's own seconds");
             var host=new GameObject("Drum song under test");
@@ -133,18 +136,17 @@ namespace Festival.Tests
                     drums.Follow(other,4.5,AudioSettings.dspTime);Assert.That(drums.Music,Is.Null,why+": the song stops");
                 }
                 drums.Follow(state,4.5,AudioSettings.dspTime);drums.Follow(null,0,AudioSettings.dspTime);Assert.That(drums.Music,Is.Null,"leaving the session stops it");
-                state.Booth.Spot=0;var small=FestivalMusic.For(StageMusic.Track(state,StageMusic.Small));
-                Assert.That(FestivalSimulation.DrumCircleTrack(state),Is.EqualTo(StageMusic.Track(state,StageMusic.Small)),"setup: the west booth is nearer the small stage");
-                drums.Follow(state,4.5,AudioSettings.dspTime);Assert.That(drums.Music.clip,Is.SameAs(small.Audio),"the circle plays the small stage's song");
+                state.Booth.Spot=0;
+                Assert.That(FestivalSimulation.DrumCircleTrack(state),Is.EqualTo(StageMusic.Track(state,StageMusic.Main)),"the west booth is nearer the small stage's front but out of its earshot");
+                drums.Follow(state,4.5,AudioSettings.dspTime);Assert.That(drums.Music.clip,Is.SameAs(track.Audio),"so its circle plays the main stage's song, the one heard there");
             }
             finally
             {
-                var stage=host.GetComponent<FestivalStageAudio>();
-                foreach(var field in new[]{"decks","smallDecks"}){var decks=(AudioSource[])typeof(FestivalStageAudio).GetField(field,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(stage);if(decks!=null)UnityEngine.Object.DestroyImmediate(decks[0].gameObject);}
                 var drums=host.GetComponent<FestivalDrumAudio>();var own=(AudioSource[])typeof(FestivalDrumAudio).GetField("decks",BindingFlags.Instance|BindingFlags.NonPublic)?.GetValue(drums);
                 if(own!=null)UnityEngine.Object.DestroyImmediate(own[0].gameObject);
-                UnityEngine.Object.DestroyImmediate(host);
+                StageAudioTests.RemoveStage(host);
             }
+            Assert.That(Roars(),Is.EqualTo(roars),"the cleanup leaves no stage crowd roar behind");
         }
     }
 }

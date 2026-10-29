@@ -91,7 +91,7 @@ namespace Festival.Presentation
         /// <summary>POLO-5: draws this body at <paramref name="scale"/> times the size FestivalSession.Actor has just given it.</summary>
         public void Ride(float scale){transform.localScale*=scale;RideScale=scale;}
         Material ownedMaterial;
-        Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial;
+        Material garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial,crewMaterial;
         float lastAppliedThreat=-1;
         int skinStep;
         float lastAnimationTime;
@@ -125,8 +125,9 @@ namespace Festival.Presentation
         Texture2D ownedPalette,garmentPalette,skinPalette;
         Renderer eyeRenderer;
         Renderer spoonRenderer;
-        // The worn backpack (Accessory_0), slipped off in the headliner's chair: it reaches about .2 m through the chair's back.
-        Renderer backpackRenderer;
+        // The worn bag, slipped off in the headliner's chair: a backpack (Accessory_0) reaches about .2 m through the chair's back, and a
+        // crossbody pouch (Accessory_1) hangs .45-.56 m out at the front, through the armrests and legs.
+        Renderer bagRenderer;
         SkinnedMeshRenderer faceRenderer;
         int blinkIndex=-1;
         int intoxicatedEyesIndex=-1;
@@ -172,13 +173,17 @@ namespace Festival.Presentation
             if(sequence==suppressedReceiptSequence||age<0||age>1||string.IsNullOrEmpty(item))return;
             receivedItem=item;receiptAt=AnimationSeconds-age;RefreshEquipment();
         }
-        public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee")
+        public const string CrewRole="Crew";
+        // No accent, staff role or stall wears this magenta. The glow keeps it readable at night.
+        public static readonly Color CrewColor=new Color(.96f,.16f,.82f);
+        public static FestivalCharacter Create(Transform parent,string name,Color tint,string role="Attendee",string look=null)
         {
+            look??=name;
             var asset=Resources.Load<GameObject>("FestivalCharacter");
             var go=asset!=null?Instantiate(asset,parent):new GameObject(name);
             go.name=name;go.transform.SetParent(parent,false);
             var actor=go.AddComponent<FestivalCharacter>();
-            actor.Appearance=FestivalAppearance.For(name,role);
+            actor.Appearance=FestivalAppearance.For(look,role);
             actor.fitName="Fit_"+actor.Appearance.Gender+"_"+actor.Appearance.Shape;
             if(distantMeshes==null)
             {
@@ -189,7 +194,7 @@ namespace Festival.Presentation
             var template=Resources.Load<Material>("FestivalLit");
             if(template==null)template=new Material(Shader.Find("Standard"));
             actor.HeightScale=actor.Appearance.Scale.y;
-            actor.danceStyle=FestivalAppearance.Pick(name,"dance",3);
+            actor.danceStyle=FestivalAppearance.Pick(look,"dance",3);
             actor.ownedPalette=actor.Appearance.CreatePalette();
             actor.ownedMaterial=new Material(template){name="Festival actor palette"};
             actor.ownedMaterial.mainTexture=actor.ownedPalette;
@@ -205,6 +210,11 @@ namespace Festival.Presentation
             actor.lensMaterial=new Material(actor.ownedMaterial){name="Festival eyewear"};actor.lensMaterial.SetFloat("_Smoothness",.68f);
             actor.scleraMaterial=new Material(template){name="Festival eye whites",mainTexture=Texture2D.whiteTexture,color=new Color(.98f,.95f,.88f)};
             actor.scleraMaterial.SetFloat("_Smoothness",.22f);
+            if(role==CrewRole)
+            {
+                actor.crewMaterial=new Material(actor.ownedMaterial){name="Festival crew scarf",mainTexture=Texture2D.whiteTexture,color=CrewColor};
+                if(actor.crewMaterial.HasProperty("_EmissionColor")){actor.crewMaterial.EnableKeyword("_EMISSION");actor.crewMaterial.SetColor("_EmissionColor",CrewColor*.45f);}
+            }
             foreach(var renderer in go.GetComponentsInChildren<Renderer>(true))
             {
                 if(renderer.name=="EyeGlow")
@@ -222,7 +232,7 @@ namespace Festival.Presentation
                     else renderer.sharedMaterial=actor.SurfaceFor(renderer.name);
                     renderer.enabled=actor.KeepMesh(renderer.name);
                     if(renderer.name=="Equipment_LittleSpoon")actor.spoonRenderer=renderer;
-                    if(renderer.name=="Accessory_0"&&renderer.enabled)actor.backpackRenderer=renderer;
+                    if((renderer.name=="Accessory_0"||renderer.name=="Accessory_1")&&renderer.enabled)actor.bagRenderer=renderer;
                 }
                 if(renderer is SkinnedMeshRenderer skin && !renderer.name.StartsWith("Body_"))
                 {
@@ -242,7 +252,7 @@ namespace Festival.Presentation
             // Never reset the presentation root: its facing belongs to the session.
             foreach(var t in go.GetComponentsInChildren<Transform>())if(animatedBones.Contains(t.name)&&!actor.bones.ContainsKey(t.name)){actor.bones[t.name]=t;actor.rest[t.name]=t.localRotation;}
             if(actor.bones.TryGetValue("Hips",out var pelvis))actor.restHips=pelvis.localPosition;
-            actor.idleStyle=FestivalAppearance.Pick(name,"idle",3);
+            actor.idleStyle=FestivalAppearance.Pick(look,"idle",3);
             if(actor.bones.Count==15)
                 actor.footPlant=new FestivalFootPlant(actor.transform,actor.bones["Hips"],
                     actor.bones["LegL"],actor.bones["ShinL"],actor.bones["FootL"],
@@ -259,7 +269,7 @@ namespace Festival.Presentation
                 var key=actor.faceRenderer.sharedMesh.GetBlendShapeName(i);
                 if(key.EndsWith("Smile"))actor.smileIndex=i;if(key.EndsWith("Concern"))actor.concernIndex=i;
             }
-            actor.phase=FestivalAppearance.Pick(name,"phase",100)*.137f;
+            actor.phase=FestivalAppearance.Pick(look,"phase",100)*.137f;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if(actor.bones.Count<15 || actor.eyeRenderer==null)Debug.LogWarning("[Festival.Art] Modular character asset is missing bones or eye mesh: "+name);
             if(actor.blinkIndex<0||actor.detailParts.Count==0)Debug.LogWarning("[Festival.Art] Facial animation or distant character meshes are missing: "+name);
@@ -281,12 +291,13 @@ namespace Festival.Presentation
             if(mesh.StartsWith("HairTop_"))return mesh=="HairTop_"+look.Hairstyle && look.Headgear<0;
             if(mesh=="HairUnderHat")return look.Headgear==2 || look.Headgear==3;
             if(mesh.StartsWith("Hairstyle_"))return mesh=="Hairstyle_"+look.Hairstyle;
-            if(mesh.StartsWith("Accessory_"))return mesh=="Accessory_"+look.Accessory;
+            if(mesh.StartsWith("Accessory_"))return mesh=="Accessory_"+look.Accessory||mesh=="Accessory_2"&&look.Role==CrewRole;
             if(mesh.StartsWith("Role_"))return mesh=="Role_"+look.Role;
             return false;
         }
         Material SurfaceFor(string mesh)
         {
+            if(mesh=="Accessory_2"&&crewMaterial!=null)return crewMaterial;
             if(mesh.StartsWith("Shirt_")||mesh.StartsWith("Pants_"))return garmentMaterial;
             if(mesh.StartsWith("Body_")||mesh.StartsWith("Face_"))return skinMaterial;
             if(mesh.StartsWith("Hair")||mesh.StartsWith("FacialHair_"))return hairMaterial;
@@ -431,7 +442,7 @@ namespace Festival.Presentation
             // the ground it rolls over. PLAYA-5: a deck set dances up there the same way. POLO-5: a Ferris wheel rider sits in their
             // gondola as it carries them round.
             bool seated=Pose==FestivalSimulation.RideWheelKind,chair=Pose==FestivalSimulation.CampChairPose,decking=Pose==FestivalSimulation.DeckSetKind,riding=seated||chair||decking||Pose==FestivalSimulation.RideCarKind;
-            if(backpackRenderer!=null)backpackRenderer.enabled=!chair;
+            if(bagRenderer!=null)bagRenderer.enabled=!chair;
             float measuredSpeed=hasPrevious&&delta.magnitude<2&&!riding?Mathf.Min(6,delta.magnitude/animationDelta):0;
             float previousSpeed=speed;
             speed=Mathf.Lerp(speed,measuredSpeed,1-Mathf.Exp(-12*animationDelta));
@@ -694,9 +705,14 @@ namespace Festival.Presentation
                 if(key=="Idle"||key=="")Layer("Head",new Vector3(nod*10f*still,look*28f*still,0));
                 if(idleStyle==1&&key=="Idle"&&equippedProp==null&&carriedPoi=="")
                 {
-                    // Hands on hips.
+                    // Hands on hips: the forearms turn in about Z, since a bend about X holds them out in front like a tray.
                     Aim("ArmL",new Vector3(12*still,0,-8+42*still));Aim("ArmR",new Vector3(12*still,0,8-42*still));
-                    Aim("ForearmL",new Vector3(-95*still,0,-20*still));Aim("ForearmR",new Vector3(-95*still,0,20*still));
+                    Aim("ForearmL",new Vector3(0,0,-105*still));Aim("ForearmR",new Vector3(0,0,105*still));
+                }
+                else if((key=="Idle"||key==""||key=="Walk")&&equippedProp==null&&carriedPoi==""&&(phone==null||!phone.Shown))
+                {
+                    // The generated palm faces the front in the bind pose, so each wrist yaws it in toward the thigh ("L" bones sit on +X).
+                    Layer("HandL",new Vector3(0,-80*still,0));Layer("HandR",new Vector3(0,80*still,0));
                 }
             }
             // Carry a prop with a bent elbow instead of swinging it through the
@@ -918,7 +934,7 @@ namespace Festival.Presentation
             if(garmentPalette!=null){if(Application.isPlaying)Destroy(garmentPalette);else DestroyImmediate(garmentPalette);}
             if(skinPalette!=null){if(Application.isPlaying)Destroy(skinPalette);else DestroyImmediate(skinPalette);}
             if(eyeMaterial!=null){if(Application.isPlaying)Destroy(eyeMaterial);else DestroyImmediate(eyeMaterial);}
-            foreach(var material in new[]{garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial})
+            foreach(var material in new[]{garmentMaterial,skinMaterial,hairMaterial,gearMaterial,lensMaterial,scleraMaterial,crewMaterial})
                 if(material!=null){if(Application.isPlaying)Destroy(material);else DestroyImmediate(material);}
         }
     }

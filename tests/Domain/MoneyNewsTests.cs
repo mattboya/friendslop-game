@@ -90,6 +90,23 @@ public static class MoneyNewsTests
         Check(ash.Cash==20,"the cancel gives it back");Heard(ash,"Cash: REVIVAL CALLED OFF  •  +$10","the payer");
         game.Disconnect("friend");ash.Life="Spirit";
         Check(Act(game,"host","BeginRevival","host",1).Accepted,"setup: a lone spirit pays for their own revival");Heard(ash,"Cash: YOUR REVIVAL  •  −$10","the lone spirit");
+        // A paid release or revival that ends with nothing to do gives the $10 back and says so: Sam is out before the release ends
+        // (the fourth escape step, or TEST MODE's Free me), or a friend joins during a lone spirit's revival.
+        foreach(bool testMode in new[]{false,true})
+        {
+            game=Play();ash=game.Player("host");sam=game.Player("friend");game.DevelopmentFestivalSelection=testMode;
+            if(testMode)Check(Act(game,"host",FestivalSimulation.TestModeKind).Accepted,"setup: test mode on");
+            sam.Life="Detained";sam.EscapeProgress=3;sam.HelpUntil=0;ash.Cash=20;ash.X=27;ash.Z=5;
+            Check(Act(game,"host","BeginRelease","friend",1).Accepted&&ash.Cash==10,"setup: a paid release holds the $10");
+            game.Tick(1);Check(Act(game,"friend",testMode?FestivalSimulation.TestFreeKind:"HelpSelf").Accepted&&sam.Life=="Alive","setup: Sam gets out first");
+            game.Tick(2.5);Check(game.State.Interactions.Find(i=>i.Kind=="Release").Status!="Active","setup: the release ends");
+            Check(ash.Cash==20,"a release with nobody to free gives the $10 back"+(testMode?" (Free me)":"")+", cash $"+ash.Cash);Heard(ash,"Cash: RELEASE CALLED OFF  •  +$10","the payer"+(testMode?" (Free me)":""));
+        }
+        game=Play();ash=game.Player("host");game.Disconnect("friend");ash.Life="Spirit";ash.Cash=20;ash.X=24;ash.Z=-20;
+        Check(Act(game,"host","BeginRevival","host",1).Accepted&&ash.Cash==10,"setup: a lone spirit pays for their own revival");
+        game.Tick(5);game.AddPlayer("friend","Sam");game.Tick(10.5);
+        Check(game.State.Interactions.Find(i=>i.Kind=="Revival").Status!="Active"&&ash.Life=="Spirit","setup: the revival ends with no revive once a friend is back");
+        Check(ash.Cash==20,"a revival that revives nobody gives the $10 back, cash $"+ash.Cash);Heard(ash,"Cash: REVIVAL CALLED OFF  •  +$10","the spirit");
     }
     static void AFailedBuyGivesThePriceBack()
     {
@@ -119,11 +136,15 @@ public static class MoneyNewsTests
         Heard(sam,"Stash: STASH  •  +$15  •  Ash found the cloud's stash","the crew");Check(ash.MoneyNewsLog.Count==0,"the finder keeps their CloudStashNotice, not a second line");
         Call(game,"Recruited",new InteractionState{TargetId="friend"},sam);
         Heard(ash,"Stash: STASH  •  +$20  •  Sam found a lost friend","the crew");Heard(sam,"Stash: STASH  •  +$20  •  Sam found a lost friend","the recruiter too");
-        ash.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.GiggleTankItem,Count=1});ash.X=Festivals.CampGateX;ash.Z=Festivals.CampGateZ;Call(game,"BankGiggleTanks");
+        ash.Inventory.Add(new ItemStack{ItemId=FestivalSimulation.GiggleTankItem,Count=1});ash.X=Festivals.CampGateX;ash.Z=Festivals.CampGateZ;int carrierLines=ash.MoneyNewsLog.Count;Call(game,"BankGiggleTanks");
         Heard(sam,"Stash: STASH  •  +$"+Festivals.GiggleTankCash+"  •  Ash brought the Giggle Tank home","the crew");
+        Check(ash.MoneyNewsLog.Count==carrierLines,"the carrier keeps their GiggleTankHome notice, not a second line: got '"+Last(ash)+"'");
         sam.X=ash.X;sam.Z=ash.Z;Call(game,"End","Success");
         Check(game.State.SurvivorBonus==10,"setup: two survivors bank $10");
         Heard(ash,"Stash: STASH  •  +$10  •  survivor bonus","everyone");Heard(sam,"Stash: STASH  •  +$10  •  survivor bonus","everyone");
+        var lone=Play();ash=lone.Player("host");sam=lone.Player("friend");ash.X=Festivals.CampGateX;ash.Z=Festivals.CampGateZ;sam.X=30;sam.Z=0;Call(lone,"End","Success");
+        Check(lone.State.Survivors==1&&lone.State.SurvivorBonus==0,"setup: one survivor at the gate banks nothing");
+        foreach(var p in lone.State.Players)Check(p.MoneyNewsLog.Count==0,"no bonus, no survivor line: "+p.Name+" got '"+Last(p)+"'");
     }
     // The seller reads the sale's own outcome ("SOLD Tongue Stamps  •  +$10"); the rest of the crew read what it added to SALES.
     static void ASaleTellsTheCrewWhatItMade()
@@ -131,7 +152,7 @@ public static class MoneyNewsTests
         foreach(bool sold in new[]{true,false})
         {
             var game=new FestivalSimulation(7);game.AddPlayer("host","Ash");game.AddPlayer("friend","Sam");game.State.Phase="Playing";
-            var ash=game.Player("host");var sam=game.Player("friend");ash.X=0;ash.Z=0;ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});
+            var ash=game.Player("host");var sam=game.Player("friend");ash.X=0;ash.Z=0;ash.Inventory.Add(new ItemStack{ItemId="stock_lsd",Count=1});ash.EquippedItemId="stock_lsd";
             string goer="";for(int n=0;goer=="";n++)if(DialogueGrammar.PersonaFor("goer_"+n,"")=="Wook")goer="goer_"+n;
             game.State.Npcs.Clear();game.State.Npcs.Add(new NpcState{Id=goer,Kind="Wook",Role="Buyer",X=0,Z=1.5f,Yaw=180,CanTalk=true});
             Check(game.Execute("host",new GameCommand{Id="news"+(sequence++),Kind="StartSale",TargetId=goer,ItemId="stock_lsd",Amount=FestivalSimulation.FairAsk}).Accepted,"setup: the sale starts");

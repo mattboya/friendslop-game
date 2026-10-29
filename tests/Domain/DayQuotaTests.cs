@@ -96,12 +96,13 @@ public static class DayQuotaTests
     }
 
     // Random sales on a real Palm Mirage Day 1, on fixed seeds: its cops, narcs and buyers, wary festivalgoers' trust dances
-    // danced perfectly or skipped, random asks and replies with time between them, walk-offs, and hands that fill mid-talk. Every sale ends
-    // one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says, the unit gone), handed back (the unit
-    // in your hand again, equipped if it was), dropped at your feet, or busted (detained, the stock gone).
+    // danced perfectly or skipped (a talk follows either way), random asks and replies with time between them, walk-offs, and hands
+    // that fill mid-talk. Every sale ends one way, says so and leaves nothing active: paid (cash and SALES up by what the notice says,
+    // the unit gone), handed back (the unit in its own slot, and in your hand again if it left it), dropped at your feet, or busted
+    // (detained, the stock gone).
     static void EverySaleEndsOneClearWay()
     {
-        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};
+        var endings=new Dictionary<string,int>{["paid"]=0,["back"]=0,["walked off"]=0,["dropped"]=0,["busted"]=0};int talkedDown=0;
         foreach(int seed in new[]{3,17,29,41,53,67})
         {
             var s=new FestivalSimulation(seed);var p=s.AddPlayer("p0","P0");p.X=0;p.Z=19;Act(s,"p0","Ready");s.Tick(5.2+FestivalSimulation.SpinSeconds+.1);Act(s,"p0","MapReady");
@@ -116,7 +117,7 @@ public static class DayQuotaTests
                 p.EquippedItemId=random.Next(3)==0?"merch_bag":item;
                 // Half the offers go to a buyer, the rest to anyone: a regular turns it down, a narc busts you.
                 var npcs=s.State.Npcs.FindAll(n=>n.Kind=="Wook"&&(random.Next(2)==0||n.Role=="Buyer"));var npc=npcs[random.Next(npcs.Count)];p.X=npc.X;p.Z=npc.Z-1;
-                int cash=p.Cash,sales=s.State.LevelSales,units=p.Inventory.Find(x=>x.ItemId==item).Count,drops=s.State.Drops.FindAll(d=>d.ItemId==item).Count;string held=p.EquippedItemId;
+                int cash=p.Cash,sales=s.State.LevelSales,units=p.Inventory.Find(x=>x.ItemId==item).Count,drops=s.State.Drops.FindAll(d=>d.ItemId==item).Count,slot=p.Inventory.FindIndex(x=>x.ItemId==item);string held=p.EquippedItemId;
                 var started=s.Execute("p0",new GameCommand{Id="quota_"+(++sequence),Kind="StartSale",TargetId=npc.Id,ItemId=item,Amount=random.Next(3)});
                 if(!started.Accepted)continue;
                 var i=s.Interaction(p.InteractionId);bool dance=random.Next(3)>0;
@@ -139,16 +140,21 @@ public static class DayQuotaTests
                 {
                     Check(p.Cash-cash==s.State.LevelSales-sales&&left==units-1&&!dropped,where+": a paid sale counts its pay and takes one unit");
                     Check(outcome?.Result=="SOLD +$"+(p.Cash-cash)&&notice.StartsWith("SOLD ")&&notice.Contains("+$"+(p.Cash-cash)),where+": a paid sale says SOLD and its pay, +$"+(p.Cash-cash));endings["paid"]++;
+                    // A sale talked down names a full price above what it paid, its multipliers and all (EachAskPaysByItsTable pins one).
+                    int down=notice.IndexOf("  •  talked down from $",StringComparison.Ordinal);
+                    if(down>=0){talkedDown++;Check(int.Parse(notice.Substring(down+"  •  talked down from $".Length))>p.Cash-cash,where+": talked down from more than it paid");}
                 }
                 else if(dropped){Check(left==units-1&&s.State.LevelSales==sales&&notice.EndsWith("dropped at your feet")&&outcome.Result=="NO SALE",where+": a unit with no room is at your feet, and it says so");endings["dropped"]++;}
                 else
                 {
-                    Check(left==units&&p.Cash==cash&&s.State.LevelSales==sales&&notice.EndsWith("back in your hand")&&outcome.Result=="NO SALE",where+": otherwise the unit is back, and it says so");
-                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);endings[notice.StartsWith("They walk off")?"walked off":"back"]++;
+                    Check(left==units&&p.Cash==cash&&s.State.LevelSales==sales&&notice.EndsWith(held==item?"back in your hand":"back in your gear")&&outcome.Result=="NO SALE",where+": otherwise the unit is back, and it says where");
+                    Check(held!=item||p.EquippedItemId==item,where+": a unit offered from your hand is in your hand again, not "+p.EquippedItemId);
+                    Check(p.Inventory.FindIndex(x=>x.ItemId==item)==slot,where+": the unit is back in its own slot "+slot);endings[notice.StartsWith("You walked off")||notice.StartsWith("They walk off")?"walked off":"back"]++;
                 }
             }
         }
         foreach(var ending in endings)Check(ending.Value>0,"the fuzz reaches every ending, but none was "+ending.Key+": "+string.Join(", ",endings));
+        Check(talkedDown>0,"the fuzz reaches a sale talked down");
     }
 
     static void ExtractWaitsForTheQuota()

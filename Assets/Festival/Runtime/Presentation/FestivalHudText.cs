@@ -224,26 +224,28 @@ namespace Festival.Presentation
         {
             // The HUD runs this every frame, and the regex allocates.
             if(text.IndexOf("ress ",StringComparison.Ordinal)>=0&&!(interact=="E"&&chat=="F"&&drop=="G"&&use=="Q"))
-                text=PressedKey.Replace(text,m=>m.Groups[1].Value+(m.Groups[2].Value=="E"?interact:m.Groups[2].Value=="F"?chat:m.Groups[2].Value=="G"?drop:use));
+                text=PressedKey.Replace(text,m=>m.Groups[1].Value+Spoken(m.Groups[2].Value=="E"?interact:m.Groups[2].Value=="F"?chat:m.Groups[2].Value=="G"?drop:use));
             // After the letters, so a slot bound to E is not read again as Interact.
             if(text.IndexOf('{')<0)return text;
             return ActionToken.Replace(text,m=>Spoken(m.Groups[1].Value=="Slot1"?slot1:m.Groups[1].Value=="Slot2"?slot2:m.Groups[1].Value=="Slot3"?slot3:m.Groups[1].Value=="Spin"?spin:sides));
         }
         static readonly Regex PressedKey=new Regex(@"\b([Pp]ress )([EFGQ])\b");
         static readonly Regex ActionToken=new Regex(@"\{(Slot1|Slot2|Slot3|Spin|SpinSides)\}");
-        // A mouse button's short name, as CONTROLS lists it ("LMB"), reads as a click in a sentence. The side buttons have no short
-        // name, and their own reads like a way to walk.
+        // A mouse button's short name, as CONTROLS lists it ("LMB", "MOUSE BACK": FestivalInput.Label), reads as a click or a button
+        // in a sentence.
         static string Spoken(string key)=>key=="LMB"?"left click":key=="RMB"?"right click":key=="MMB"?"middle click"
-            :key=="BACK"?"the mouse back button":key=="FORWARD"?"the mouse forward button":key;
+            :key=="MOUSE BACK"?"the mouse back button":key=="MOUSE FORWARD"?"the mouse forward button":key;
         // A range of rebound keys would hide the middle one, so only today's 1, 2, 3 read as a range.
         static string SlotKeys(string slot1,string slot2,string slot3,string or)=>slot1=="1"&&slot2=="2"&&slot3=="3"?"1–3":slot1+", "+slot2+or+slot3;
         /// <summary>Only a ground gear drop offers pickup; stop ditch and shared-stash results keep their destination.</summary>
         public static string DropNotice(string message,FestivalInput input)=>message.StartsWith("Dropped ",StringComparison.Ordinal)?message+Dot+input.Label(input.Interact).ToUpperInvariant()+" to pick it up":message;
 
-        /// <summary>Results heading: the level the crew cleared, or that the weekend is over.</summary>
+        /// <summary>Results heading: the level the crew cleared, or that the weekend is over. A test-mode win claims no quota or
+        /// rescue, since CLEAR LEVEL (TEST) ends a level as a success with neither.</summary>
         public static string OutcomeTitle(RoundState s)
         {
             if(s.Result!="Success")return "WEEKEND OVER"+Dot+"BACK TO DAY 1";
+            if(s.TestMode)return Cleared(s)+" (TEST)";
             return (!Festivals.For(s).Night?"QUOTA MET":s.LevelIndex==Festivals.LevelCount-1?"EVERYONE HOME":s.SecondFriend.Active?"FRIENDS RESCUED":"FRIEND RESCUED")+Dot+Cleared(s);
         }
         // A win's "DAY 1 CLEARED", or the whole festival's once Night 2 is.
@@ -260,11 +262,12 @@ namespace Festival.Presentation
         }
 
         /// <summary>LOOP-5: the results banner's heading, in the middle of the screen for the whole results: why the weekend is over
-        /// ("MISSED THE QUOTA", "TIME EXPIRED", "THE CREW WAS WIPED OUT"), or the level or festival cleared. "" until results.</summary>
+        /// ("MISSED THE QUOTA", "TIME EXPIRED", "THE CREW WAS WIPED OUT"), or the level or festival cleared, with OutcomeTitle's
+        /// " (TEST)" mark on a test clear. "" until results.</summary>
         public static string ResultsBannerTitle(RoundState s)
         {
             if(s.Phase!="Results")return "";
-            if(s.Result=="Success")return Cleared(s);
+            if(s.Result=="Success")return Cleared(s)+(s.TestMode?" (TEST)":"");
             return (s.Result==FestivalSimulation.WipedOut?"The crew was wiped out":s.Result).ToUpperInvariant();
         }
         /// <summary>LOOP-5: under the banner's heading, a loss says what a day sold of its quota in the viewer's money and that the
@@ -432,6 +435,18 @@ namespace Festival.Presentation
 
         /// <summary>ESC-2: the cop stopping p over visible stock, or null. A view shows a cop's real mode only to the player it targets.</summary>
         public static NpcState StoppedBy(RoundState s,PlayerState p)=>s.Npcs.Find(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="Stop");
+        /// <summary>ESC-3: whether G ditches stock for p now, as the host's Drop takes it in a stop: with nothing under way, or mid chat
+        /// (FestivalSimulation.UntimedChat). Never mid-talk with the guard, mid-dance (G stops it) or up on the Ferris wheel.</summary>
+        public static bool DitchesOnG(RoundState s,PlayerState p)=>StoppedBy(s,p)!=null&&(p.InteractionId==""||FestivalSimulation.UntimedChat(s.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active")));
+        /// <summary>ESC-3: the stop's line mid-talk with the guard who stopped you (no TALK key to press), and up on the Ferris wheel,
+        /// where the stop's clock waits for you (FestivalSimulation.Pursue).</summary>
+        public const string StopTalking="SECURITY STOP • TALKING",StopOnWheel="SECURITY STOP • GUARD WAITING BELOW";
+        static string StopLine(RoundState s,PlayerState p,NpcState stopper,string talk,string ditch)
+        {
+            if(FestivalSimulation.OnWheel(s,p.Id))return StopOnWheel;
+            var doing=s.Interactions.Find(i=>i.Id==p.InteractionId&&i.Status=="Active");
+            return doing!=null&&doing.Kind=="Police"&&doing.TargetId==stopper.Id?StopTalking:"SECURITY STOP • TALK ("+talk+") • DITCH IT ("+ditch+") • OR WALK AWAY";
+        }
         /// <summary>ESC-2: the session notice as security stops you: why, the three ways out, and what ignoring it costs.</summary>
         public static readonly string StopNotice="SECURITY SAW YOUR STOCK: talk, ditch it or walk away within "+FestivalSimulation.StopArrestSeconds+" s, or you're arrested";
         /// <summary>TRIP-8: the session notice for whoever finds the cloud's stash (RoundState.CloudStashFinderId), in dollars like the
@@ -472,8 +487,25 @@ namespace Festival.Presentation
         public const float MoneyNewsSeconds=2.5f;
         /// <summary>The camp shelf's thank-you, with what the buy cost, in dollars for MoneyText.</summary>
         public static string PocketUpdated(int spent)=>"Oh, hey, thanks!  •  −$"+spent+"  •  POCKET UPDATED";
-        /// <summary>Whether a notice lights the card's cash and SALES, as a paid sale does (MoneyFlashOn). The stash and items have no flash.</summary>
-        public static bool FlashesMoney(MoneyNews n)=>n.Kind=="Cash"||n.Kind=="Sales";
+        /// <summary>Lights on the player card each figure whose value moved, each for the stamp's 1.5 s (MoneyFlashOn): your cash,
+        /// the crew's STASH and the level's SALES, whoever moved it and whatever told you. Watch compares only while the card shows,
+        /// so a change under the pass, the map or a dance lights as the card comes back. The first view of a connection or a round
+        /// only takes note, so a join or a level's fresh SALES never lights.</summary>
+        public sealed class MoneyFlash
+        {
+            float cashAt=-100,stashAt=-100,salesAt=-100;
+            string round;
+            int connection=-1,cash,stash,sales;
+            public void Watch(RoundState s,PlayerState viewer,int connectionGeneration,bool shown,float now)
+            {
+                if(round!=s.RoundId||connection!=connectionGeneration){round=s.RoundId;connection=connectionGeneration;cash=viewer.Cash;stash=s.StashCash;sales=s.LevelSales;return;}
+                if(!shown)return;
+                if(viewer.Cash!=cash){cash=viewer.Cash;cashAt=now;}
+                if(s.StashCash!=stash){stash=s.StashCash;stashAt=now;}
+                if(s.LevelSales!=sales){sales=s.LevelSales;salesAt=now;}
+            }
+            public (bool Cash,bool Stash,bool Sales) Lit(float now,bool reducedMotion)=>(MoneyFlashOn(now-cashAt,reducedMotion),MoneyFlashOn(now-stashAt,reducedMotion),MoneyFlashOn(now-salesAt,reducedMotion));
+        }
         /// <summary>Follows the viewer's own money news (PlayerState.MoneyNewsLog, owner-only in views). The first view of a
         /// connection only takes note, so a join or a rejoin never replays old news; a new round's news all shows, since a level's
         /// start can itself lose a Giggle Tank. Take gives each new notice once, oldest first, and Watch gives back one cut short.</summary>
@@ -499,13 +531,15 @@ namespace Festival.Presentation
                 line=due[0];due.RemoveAt(0);lineUntil=now+MoneyNewsSeconds;return line;
             }
             /// <summary>Reads the notice line each frame. When another line replaces the notice Take gave before its MoneyNewsSeconds
-            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) alone gives nothing back.</summary>
-            public void Watch(string message,float now)
+            /// end, that notice goes back to the head of the queue. A clear ("", an accepted command's reply) before that end returns
+            /// the notice's text to put straight back; null otherwise.</summary>
+            public string Watch(string message,float now)
             {
+                if(line==null||message==line.Text)return null;
                 // A clear keeps the watch: a 1-3 reply key, or a client's result, clears the line a frame before the sale's notice.
-                if(line==null||message==line.Text||string.IsNullOrEmpty(message))return;
+                if(string.IsNullOrEmpty(message))return now<lineUntil?line.Text:null;
                 if(now<lineUntil)due.Insert(0,line);
-                line=null;
+                line=null;return null;
             }
         }
         /// <summary>The life banner's headings: as you become a spirit, and as a revival brings you back.</summary>
@@ -553,7 +587,8 @@ namespace Festival.Presentation
             // alert, so ON CAMERA leads the storm line, joined as one warning; the two above still take the whole line.
             bool arrest=s.Npcs.Exists(n=>n.Kind=="Cop"&&n.TargetId==p.Id&&n.Mode=="ArrestWarning");
             string storm=FestivalWorld.ShowsFestival(s.Phase)&&p.Life=="Alive"&&FestivalSimulation.DustStorm(s)?"DUST STORM: SEEN ONLY WITHIN "+Festivals.DustStormSightRange+" M":"";
-            string warning=arrest?"ARREST WARNING":StoppedBy(s,p)!=null?"SECURITY STOP • TALK ("+talk+") • DITCH IT ("+ditch+") • OR WALK AWAY"
+            var stopper=StoppedBy(s,p);
+            string warning=arrest?"ARREST WARNING":stopper!=null?StopLine(s,p,stopper,talk,ditch)
                 :p.VisualFilmedBy.Count>0?(storm==""?"ON CAMERA":"ON CAMERA • "+storm):storm;
             if(p.Effects.Count==0)return warning;
             string effects=Catalog.EffectsLine(p.Effects).ToUpperInvariant();
@@ -583,20 +618,20 @@ namespace Festival.Presentation
 
         /// <summary>
         /// The player card: health, pocket and the crew's stash, then the level's sales, life and the warning (Condition). The warning
-        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does. flashMoney lights your
-        /// cash and the level's SALES in the HUD's orange, as a paid sale flashes them (MoneyFlashOn).
+        /// leads and the effects trail it, so a long effects list wraps off the card before the warning does. lit lights your cash,
+        /// the crew's STASH and the level's SALES in the HUD's orange, each on its own, as a change to it flashes it (MoneyFlash).
         /// </summary>
-        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G",bool flashMoney=false)
+        public static string Vitals(RoundState s,PlayerState p,string talk="E",string ditch="G",(bool Cash,bool Stash,bool Sales) lit=default)
         {
             string condition=Condition(s,p,talk,ditch);
-            string Lit(string text)=>flashMoney?"<color=#FC7741>"+text+"</color>":text;
-            return "HP "+p.Health+Dot+Lit(Money(s,p,p.Cash).ToUpperInvariant())+Dot+("STASH "+Money(s,p,s.StashCash)).ToUpperInvariant()+"\n"
-                +Lit(("SALES "+Money(s,p,s.LevelSales)).ToUpperInvariant())+Dot+p.Life.ToUpperInvariant()+(condition==""?"":Dot+condition);
+            static string Lit(bool on,string text)=>on?"<color=#FC7741>"+text+"</color>":text;
+            return "HP "+p.Health+Dot+Lit(lit.Cash,Money(s,p,p.Cash).ToUpperInvariant())+Dot+Lit(lit.Stash,("STASH "+Money(s,p,s.StashCash)).ToUpperInvariant())+"\n"
+                +Lit(lit.Sales,("SALES "+Money(s,p,s.LevelSales)).ToUpperInvariant())+Dot+p.Life.ToUpperInvariant()+(condition==""?"":Dot+condition);
         }
         /// <summary>How long a sale's result stays stamped mid-screen, and whether a paid one's flash is lit `since` seconds after it:
-        /// on the even quarter-seconds of the stamp.</summary>
+        /// on the even quarter-seconds of the stamp, or the whole stamp with no blink under Reduced Motion.</summary>
         public const float SaleStampSeconds=1.5f;
-        public static bool MoneyFlashOn(float since)=>since>=0&&since<SaleStampSeconds&&(int)(since*4)%2==0;
+        public static bool MoneyFlashOn(float since,bool reducedMotion=false)=>since>=0&&since<SaleStampSeconds&&(reducedMotion||(int)(since*4)%2==0);
         /// <summary>Follows the viewer's own conversation outcomes for the sale stamp. Follow gives the newest sale that ended with a
         /// Result since the last call, once; null otherwise. It reads the outcomes, not the chat window, so a sale whose window Esc
         /// shut is stamped too. The first view of a connection or a round only takes note, so a rejoin replays no sale.</summary>
@@ -662,6 +697,15 @@ namespace Festival.Presentation
             if(n.CanTalk&&CheckTarget(s,p)==null)actions[0]=(actions[0].Label+Dot+chat+" CHAT",actions[0].Command);
             return actions;
         }
+
+        /// <summary>Whether a click on a command in the Esc menu's CREW + NEARBY list shuts the menu: one that starts or ends what you
+        /// are doing does, so it has your keys. Any other kind keeps the menu open, so a new list command needs its row here and in
+        /// HudMoneyTests.AListedCommandShutsTheMenuOnlyWhenItStartsSomething.</summary>
+        public static bool ClosesMenu(string kind)=>MenuClosers.Contains(kind);
+        static readonly HashSet<string> MenuClosers=new HashSet<string>{"Dance","Conversation","StartSale","StartBuy","ConfirmDance","ConfirmChat","Police",
+            FestivalSimulation.RideWheelKind,FestivalSimulation.RideCarKind,FestivalSimulation.DeckSetKind,"Dj","Extract","LostProperty","FindFriend","BeginRelease",
+            "BeginRevival","Rescue","Drag","CarryBody","HelpSelf","Use",FestivalSimulation.LieDownKind,"Cancel",FestivalSimulation.TestFreeKind};
+        public const string ActionsHeading="NEARBY / CREW";
 
         /// <summary>A sale's three asks by name, as the offer and the talk's title line say them.</summary>
         public static readonly string[] AskNames={"Fair","High","Greedy"};

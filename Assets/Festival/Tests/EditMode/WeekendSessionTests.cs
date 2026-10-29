@@ -250,7 +250,7 @@ namespace Festival.Tests
         }
 
         // The Editor's own host bootstrap, so the capability comes from where a test build's host gets it. A spirit's view is
-        // filtered apart from a living player's, so both must carry the flag.
+        // filtered apart from a living player's, so both must carry the flag. A test clear's results heading says it was a test.
         [Test] public void TestModeReachesEveryViewAndClearingNightTwoEarnsNothing()
         {
             string id="dev_test_mode_"+Guid.NewGuid().ToString("N").Substring(0,12);
@@ -267,6 +267,8 @@ namespace Festival.Tests
                 friend.Life="Alive";game.State.LevelIndex=Festivals.LevelCount-1;game.State.Phase="Playing";
                 Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-clear",Kind=FestivalSimulation.TestClearLevelKind}).Accepted,Is.True,"the host clears Night 2");
                 Assert.That(game.State.Result,Is.EqualTo("Success"));
+                Assert.That(FestivalHudText.OutcomeTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("PALM MIRAGE CLEARED (TEST)"),"the results say the clear was a test, not that everyone got home");
+                Assert.That(FestivalHudText.ResultsBannerTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("PALM MIRAGE CLEARED (TEST)"),"and so does the banner in the middle");
                 profile.RememberUnlocks(game.State);
                 Assert.That(game.State.UnlockedFestivalCount,Is.EqualTo(1),"clearing Night 2 in test mode unlocks nothing");
                 Assert.That(new LocalProfile(id).Data.UnlockedFestivalCount,Is.EqualTo(1),"the saved profile still says 1 unlocked");
@@ -274,6 +276,12 @@ namespace Festival.Tests
                 Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-next",Kind="Reset"}).Accepted,Is.True);
                 Assert.That(game.State.FestivalIndex==1&&game.State.LevelIndex==0,Is.True,"the crew moves on to the next festival's Day 1, at "+game.State.FestivalIndex+" level "+game.State.LevelIndex);
                 Assert.That(FestivalSession.ViewFor(game,friend.Id).TestMode,Is.True,"still in test mode");
+                game.State.Phase="Playing";
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-clear-day",Kind=FestivalSimulation.TestClearLevelKind}).Accepted,Is.True,"the host clears Day 1 with nothing sold");
+                Assert.That(FestivalHudText.OutcomeTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("DAY 1 CLEARED (TEST)"),"a test clear never says QUOTA MET");
+                Assert.That(game.Execute(host.Id,new GameCommand{Id="dev-off-in-results",Kind=FestivalSimulation.TestModeKind}).Accepted,Is.False,"test mode holds through the results");
+                Assert.That(FestivalHudText.OutcomeTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("DAY 1 CLEARED (TEST)"),"so the heading never turns into QUOTA MET");
+                Assert.That(FestivalHudText.ResultsBannerTitle(FestivalSession.ViewFor(game,friend.Id)),Is.EqualTo("DAY 1 CLEARED (TEST)"),"and the banner agrees with it");
             }
             finally{if(File.Exists(file))File.Delete(file);}
         }

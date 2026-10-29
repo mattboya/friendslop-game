@@ -79,7 +79,7 @@ The client sends each input through `FestivalSession.Rhythm`, which applies the 
 - the Drum Circle: the worst part sets the clock change (`DrumCircle.cs:86-89`).
 
 **The beat.** `ScheduleStageRhythm` (`Core/Simulation/ChallengeTiming.cs:7-10`) anchors a chart to the measured beats of
-the song of the nearer stage (`StageMusic.TrackAt`, MUSIC-7) through `RhythmChart.InitializeStage`. A deck set and a Drum
+the song heard where it starts (`StageMusic.TrackAt`, MUSIC-7 and MUSIC-8) through `RhythmChart.InitializeStage`. A deck set and a Drum
 Circle part anchor the same way (`DeckSets.cs:26`, `DrumCircle.cs:59`).
 
 **The dose twist.** A dose bends how the notes travel, never when they must be hit:

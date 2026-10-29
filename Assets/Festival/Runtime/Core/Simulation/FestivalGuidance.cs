@@ -44,8 +44,10 @@ namespace Festival.Core
             // The slot keys by action: the HUD reads in the bound keys (FestivalHudText.PressKeys).
             if(state.Phase=="CampReview")return !FestivalSimulation.ReviewRevealed(state)?"Click a friend for each award, or press {Slot1}, {Slot2} or {Slot3}. Then the host opens the camp shop."
                 :player.Id==state.HostPlayerId?"Once the verdict has played, press E to open the camp shop.":"Waiting for the host to open the camp shop.";
-            if(player.Life=="Downed")return CrewCount(state)==1?"Nobody can help you up alone. When the time runs out, you become a spirit and can come back at the medical tent."
-                :"Press E to distract attackers; a teammate can rescue or drag you.";
+            // Alone with no revival left, the downed time running out ends the level (Weekend.LevelEndCheck).
+            if(player.Life=="Downed")return CrewCount(state)!=1?"Press E to distract attackers; a teammate can rescue or drag you."
+                :RevivalsLeft(player)==0?"Nobody can help you up alone, and you have no revivals left: when the time runs out, the level ends."
+                :"Nobody can help you up alone. When the time runs out, you become a spirit and can come back at the medical tent.";
             if(player.Life=="Detained")return "Press E to work on escape, or ask a teammate for release.";
             if(player.Life=="Spirit"&&RevivalsLeft(player)==0)return "No revivals left this level: you stay a spirit until it ends.";
             if(player.Life=="Spirit")return "Medical tent "+Route(player,24,-20)+(CrewCount(state)==1?". Press E there for a 15-second self-revival task.":". Ask a teammate with your wristband to revive you.");
@@ -121,7 +123,7 @@ namespace Festival.Core
 
         private static PlayerState Escort(RoundState state,string id) => state.Players.Find(p=>p.Id==id&&p.Connected&&p.Life=="Alive");
 
-        /// <summary>Revivals each player gets in a level. Danger.Revive, the Revival interaction and Weekend still check a literal 2.</summary>
+        /// <summary>Revivals each player gets in a level.</summary>
         public const int RevivalsPerLevel=2;
         public static int RevivalsLeft(PlayerState player)=>Math.Max(0,RevivalsPerLevel-player.RevivalCount);
 
